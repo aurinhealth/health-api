@@ -1,6 +1,6 @@
 {
   "name": "health-api",
-  "main": "src/index.js",
+  "main": "src/v323.js",
   "compatibility_date": "2026-09-15",
 
   "observability": {
