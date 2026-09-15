@@ -1,8 +1,12 @@
+javascript
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
+    // --------------------------------------------------
     // Basic health check
+    // --------------------------------------------------
+
     if (url.pathname === "/") {
       return Response.json({
         status: "ok",
@@ -10,15 +14,29 @@ export default {
       });
     }
 
+    // --------------------------------------------------
     // Google OAuth test
+    // --------------------------------------------------
+
     if (url.pathname === "/auth-test") {
       return await testGoogleAuth(env);
     }
 
-    // Get today's total calories from Google Health
+    // --------------------------------------------------
+    // Get today's calories from Google Health
     // and save them to D1
+    // --------------------------------------------------
+
     if (url.pathname === "/health/today") {
       return await getTodayCalories(env);
+    }
+
+    // --------------------------------------------------
+    // Read today's calories from D1
+    // --------------------------------------------------
+
+    if (url.pathname === "/health/db") {
+      return await getTodayFromDatabase(env);
     }
 
     return Response.json(
@@ -32,23 +50,33 @@ export default {
 };
 
 
-/**
- * Get a fresh Google OAuth access token
- * using the stored refresh token.
- */
+// ======================================================
+// GOOGLE OAUTH
+// ======================================================
+
 async function getGoogleAccessToken(env) {
   const response = await fetch(
     "https://oauth2.googleapis.com/token",
     {
       method: "POST",
+
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type":
+          "application/x-www-form-urlencoded"
       },
+
       body: new URLSearchParams({
-        client_id: env.GOOGLE_CLIENT_ID,
-        client_secret: env.GOOGLE_CLIENT_SECRET,
-        refresh_token: env.GOOGLE_REFRESH_TOKEN,
-        grant_type: "refresh_token"
+        client_id:
+          env.GOOGLE_CLIENT_ID,
+
+        client_secret:
+          env.GOOGLE_CLIENT_SECRET,
+
+        refresh_token:
+          env.GOOGLE_REFRESH_TOKEN,
+
+        grant_type:
+          "refresh_token"
       })
     }
   );
@@ -67,20 +95,20 @@ async function getGoogleAccessToken(env) {
 }
 
 
-/**
- * Test Google OAuth.
- *
- * IMPORTANT:
- * The actual access token is never returned to the browser.
- */
+// ======================================================
+// AUTH TEST
+// ======================================================
+
 async function testGoogleAuth(env) {
   try {
-    const accessToken = await getGoogleAccessToken(env);
+    const accessToken =
+      await getGoogleAccessToken(env);
 
     return Response.json({
       status: "ok",
       google_oauth: "working",
-      has_access_token: Boolean(accessToken)
+      has_access_token:
+        Boolean(accessToken)
     });
 
   } catch (error) {
@@ -95,45 +123,51 @@ async function testGoogleAuth(env) {
 }
 
 
-/**
- * Get today's date in Europe/Prague.
- */
-function getPragueDate() {
-  const now = new Date();
+// ======================================================
+// DATE HELPERS
+// ======================================================
 
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Prague",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(now);
+function getPragueDate() {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Europe/Prague",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }
+  ).format(new Date());
 }
 
 
-/**
- * Get tomorrow's date in Europe/Prague.
- */
 function getTomorrowPragueDate(today) {
-  const tomorrowDate = new Date(
-    `${today}T00:00:00+02:00`
+  const date =
+    new Date(
+      `${today}T00:00:00+02:00`
+    );
+
+  date.setDate(
+    date.getDate() + 1
   );
 
-  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Prague",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  }).format(tomorrowDate);
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Europe/Prague",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }
+  ).format(date);
 }
 
 
-/**
- * Convert YYYY-MM-DD into Google Health date object.
- */
 function googleDate(dateString) {
-  const [year, month, day] = dateString
+  const [
+    year,
+    month,
+    day
+  ] = dateString
     .split("-")
     .map(Number);
 
@@ -143,6 +177,7 @@ function googleDate(dateString) {
       month,
       day
     },
+
     time: {
       hours: 0,
       minutes: 0,
@@ -153,14 +188,15 @@ function googleDate(dateString) {
 }
 
 
-/**
- * Get today's total calories from Google Health
- * and save the result into D1.
- */
+// ======================================================
+// GOOGLE HEALTH → TOTAL CALORIES → D1
+// ======================================================
+
 async function getTodayCalories(env) {
   try {
+
     // --------------------------------------------------
-    // 1. Get Google access token
+    // 1. Google access token
     // --------------------------------------------------
 
     const accessToken =
@@ -168,16 +204,18 @@ async function getTodayCalories(env) {
 
 
     // --------------------------------------------------
-    // 2. Determine today's date
+    // 2. Dates
     // --------------------------------------------------
 
-    const today = getPragueDate();
+    const today =
+      getPragueDate();
+
     const tomorrow =
       getTomorrowPragueDate(today);
 
 
     // --------------------------------------------------
-    // 3. Google Health API request
+    // 3. Google Health endpoint
     // --------------------------------------------------
 
     const endpoint =
@@ -188,8 +226,11 @@ async function getTodayCalories(env) {
 
     const body = {
       range: {
-        start: googleDate(today),
-        end: googleDate(tomorrow)
+        start:
+          googleDate(today),
+
+        end:
+          googleDate(tomorrow)
       },
 
       windowSizeDays: 1,
@@ -199,37 +240,46 @@ async function getTodayCalories(env) {
     };
 
 
-    const response = await fetch(
-      endpoint,
-      {
-        method: "POST",
+    // --------------------------------------------------
+    // 4. Call Google Health
+    // --------------------------------------------------
 
-        headers: {
-          "Authorization":
-            `Bearer ${accessToken}`,
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method: "POST",
 
-          "Content-Type":
-            "application/json"
-        },
+          headers: {
+            "Authorization":
+              `Bearer ${accessToken}`,
 
-        body: JSON.stringify(body)
-      }
-    );
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify(body)
+        }
+      );
 
 
-    const data = await response.json();
+    const data =
+      await response.json();
 
 
     // --------------------------------------------------
-    // 4. Handle Google API error
+    // 5. Google API error
     // --------------------------------------------------
 
     if (!response.ok) {
       return Response.json(
         {
           status: "error",
-          google_status: response.status,
-          google_response: data
+          google_status:
+            response.status,
+          google_response:
+            data
         },
         { status: 500 }
       );
@@ -237,27 +287,36 @@ async function getTodayCalories(env) {
 
 
     // --------------------------------------------------
-    // 5. Extract calories
+    // 6. Extract calories
     // --------------------------------------------------
 
+    const rollup =
+      data.rollupDataPoints?.[0];
+
+
     const calories =
-      data
-        .rollupDataPoints?.[0]
+      rollup
         ?.totalCalories
         ?.kcalSum ?? null;
 
 
     // --------------------------------------------------
-    // 6. No calorie data available
+    // 7. No data
     // --------------------------------------------------
 
     if (calories === null) {
       return Response.json({
         status: "ok",
         date: today,
-        source: "google-wearables",
-        total_calories: null,
-        saved_to_database: false,
+        source:
+          "google-wearables",
+
+        total_calories:
+          null,
+
+        saved_to_database:
+          false,
+
         message:
           "No calorie data available"
       });
@@ -265,7 +324,7 @@ async function getTodayCalories(env) {
 
 
     // --------------------------------------------------
-    // 7. Create unique ID
+    // 8. Unique ID
     // --------------------------------------------------
 
     const externalId =
@@ -273,66 +332,101 @@ async function getTodayCalories(env) {
 
 
     // --------------------------------------------------
-    // 8. Save / update D1 record
+    // 9. Save to D1
     // --------------------------------------------------
 
-    await env.DB
-      .prepare(`
-        INSERT INTO health_datapoints (
-          source_family,
-          data_type,
-          external_id,
-          sample_time,
-          start_time,
-          end_time,
-          value_numeric,
-          value_unit,
-          payload_json
+    const result =
+      await env.DB
+        .prepare(`
+          INSERT INTO health_datapoints (
+            source_family,
+            data_type,
+            external_id,
+            sample_time,
+            start_time,
+            end_time,
+            value_numeric,
+            value_unit,
+            payload_json
+          )
+
+          VALUES (
+            ?, ?, ?, ?, ?, ?, ?, ?, ?
+          )
+
+          ON CONFLICT(
+            source_family,
+            data_type,
+            external_id
+          )
+
+          DO UPDATE SET
+            sample_time =
+              excluded.sample_time,
+
+            start_time =
+              excluded.start_time,
+
+            end_time =
+              excluded.end_time,
+
+            value_numeric =
+              excluded.value_numeric,
+
+            value_unit =
+              excluded.value_unit,
+
+            payload_json =
+              excluded.payload_json,
+
+            updated_at =
+              CURRENT_TIMESTAMP
+        `)
+
+        .bind(
+          "google-wearables",
+          "total-calories",
+          externalId,
+
+          today,
+
+          `${today}T00:00:00+02:00`,
+
+          `${tomorrow}T00:00:00+02:00`,
+
+          calories,
+
+          "kcal",
+
+          JSON.stringify(data)
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 
-        ON CONFLICT(
-          source_family,
-          data_type,
-          external_id
-        )
-
-        DO UPDATE SET
-          sample_time = excluded.sample_time,
-          start_time = excluded.start_time,
-          end_time = excluded.end_time,
-          value_numeric = excluded.value_numeric,
-          value_unit = excluded.value_unit,
-          payload_json = excluded.payload_json,
-          updated_at = CURRENT_TIMESTAMP
-      `)
-
-      .bind(
-        "google-wearables",
-        "total-calories",
-        externalId,
-        today,
-        `${today}T00:00:00+02:00`,
-        `${tomorrow}T00:00:00+02:00`,
-        calories,
-        "kcal",
-        JSON.stringify(data)
-      )
-
-      .run();
+        .run();
 
 
     // --------------------------------------------------
-    // 9. Return result
+    // 10. Return result
     // --------------------------------------------------
 
     return Response.json({
       status: "ok",
+
       date: today,
-      source: "google-wearables",
-      total_calories: calories,
-      unit: "kcal",
-      saved_to_database: true
+
+      source:
+        "google-wearables",
+
+      total_calories:
+        calories,
+
+      unit:
+        "kcal",
+
+      saved_to_database:
+        true,
+
+      database_success:
+        result.success
     });
 
 
@@ -341,7 +435,76 @@ async function getTodayCalories(env) {
     return Response.json(
       {
         status: "error",
-        message: error.message
+        message:
+          error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+// ======================================================
+// READ TODAY FROM D1
+// ======================================================
+
+async function getTodayFromDatabase(env) {
+  try {
+
+    const today =
+      getPragueDate();
+
+
+    const result =
+      await env.DB
+        .prepare(`
+          SELECT
+            id,
+            source_family,
+            data_type,
+            external_id,
+            sample_time,
+            start_time,
+            end_time,
+            value_numeric,
+            value_unit,
+            created_at,
+            updated_at
+          FROM health_datapoints
+          WHERE data_type = ?
+            AND sample_time = ?
+          ORDER BY id DESC
+        `)
+
+        .bind(
+          "total-calories",
+          today
+        )
+
+        .all();
+
+
+    return Response.json({
+      status: "ok",
+
+      date:
+        today,
+
+      count:
+        result.results.length,
+
+      data:
+        result.results
+    });
+
+
+  } catch (error) {
+
+    return Response.json(
+      {
+        status: "error",
+        message:
+          error.message
       },
       { status: 500 }
     );
