@@ -7,7 +7,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-2"
+          version: "final-3"
         });
       }
 
