@@ -60,6 +60,26 @@ function wrapDB(db) {
   };
 }
 
+function patchedResponse(response) {
+  return response.json().then(data => {
+    if (data?.final && Number.isFinite(Number(data.final.estimatedPlannedRideCalories))) {
+      // Keep the legacy aggregate field consistent with the corrected V3.2.3
+      // planned ride calculation. Actual completed activities still override
+      // planned workouts elsewhere in the core engine.
+      data.final.estimatedPlannedActivityCalories = Number(data.final.estimatedPlannedRideCalories);
+    }
+
+    if (Number.isFinite(Number(data?.plannedRideCalories)) && data?.trainingContext) {
+      data.plannedRideCalories = Number(data.plannedRideCalories);
+      if (data.trainingContext) {
+        data.trainingContext.plannedRideCalories = Number(data.plannedRideCalories);
+      }
+    }
+
+    return Response.json(data, { status: response.status, headers: response.headers });
+  });
+}
+
 function patchedEnv(env) {
   return { ...env, DB: wrapDB(env.DB) };
 }
@@ -71,13 +91,18 @@ export default {
 
   async fetch(request, env, ctx) {
     const response = await core.fetch(request, patchedEnv(env), ctx);
+    const pathname = new URL(request.url).pathname;
 
-    if (new URL(request.url).pathname === "/") {
+    if (pathname === "/") {
       return Response.json({
         status: "ok",
         service: "health-api",
         version: VERSION
       });
+    }
+
+    if (pathname === "/analysis/energy") {
+      return patchedResponse(response);
     }
 
     return response;
