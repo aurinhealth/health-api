@@ -17,7 +17,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5-cookbook-v3"
+          version: "final-5-cookbook-v3.2"
         });
       }
 
@@ -62,7 +62,12 @@ export default {
       }
 
       if (url.pathname === "/food/log") {
+        if (request.method === "DELETE") return await deleteFoodLog(env, url);
         return await foodLog(env, request, url);
+      }
+
+      if (url.pathname === "/food/log-text") {
+        return await foodLogText(env, request, url);
       }
 
       if (url.pathname === "/food/today") {
@@ -136,7 +141,18 @@ const CONFIG = {
   },
 
   minCalorieTarget: 2000,
-  maxCalorieTarget: 3200
+  maxCalorieTarget: 3200,
+
+  // Daily macro targets are derived from the calorie target rather than
+  // using a hard-coded carbohydrate number. This keeps carbs responsive
+  // to training load and the current calorie target.
+  fatGramsPerKg: 0.8,
+  defaultDailyCarbGramsPerKg: 3.0,
+  trainingDailyCarbGramsPerKg: 4.0,
+  enduranceDailyCarbGramsPerKg: 5.0,
+  postRideCarbPriority: 1.35,
+  postRideFatPenalty: 0.65,
+  recipeOvershootTolerance: 1.25
 };
 
 
@@ -1351,6 +1367,55 @@ function plannedWorkoutInfo(
 // DAILY ENERGY
 // ======================================================
 
+function activityIsCycling(activity) {
+  const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
+  return ["ride", "bike", "cycling", "cycle", "gravel", "mountain bike", "mtb", "road cycling", "indoor cycling"].some(x => text.includes(x));
+}
+
+function activityIsStrength(activity) {
+  const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
+  return ["weight", "strength", "gym", "lifting", "bodybuilding"].some(x => text.includes(x));
+}
+
+function dailyMacroTargets(weightKg, calorieTarget, context = {}) {
+  const kg = Number(weightKg) || 85.8;
+  const kcal = Number(calorieTarget) || 0;
+  const protein = Math.round(kg * CONFIG.proteinGramsPerKg);
+  const fat = Math.round(kg * CONFIG.fatGramsPerKg);
+
+  let carbPerKg = CONFIG.defaultDailyCarbGramsPerKg;
+  if (context.endurance) carbPerKg = CONFIG.enduranceDailyCarbGramsPerKg;
+  else if (context.training) carbPerKg = CONFIG.trainingDailyCarbGramsPerKg;
+
+  let carbs = Math.round(kg * carbPerKg);
+  const macroKcal = protein * 4 + fat * 9;
+  const calorieDerivedCarbs = Math.round(Math.max(0, (kcal - macroKcal) / 4));
+
+  // Use the calorie-derived value when it is higher, so the macro target
+  // actually remains compatible with the daily calorie target.
+  carbs = Math.max(carbs, calorieDerivedCarbs);
+
+  return { protein_g: protein, carbs_g: carbs, fat_g: fat };
+}
+
+function nutritionContext(energy) {
+  const actual = energy.completedActivities || [];
+  const planned = energy.unmatchedPlannedWorkouts || [];
+  const cycling = actual.find(activityIsCycling) || planned.find(x => x.cycling);
+  const strength = actual.some(activityIsStrength) || planned.some(activityIsStrength);
+  const totalEnduranceHours = actual.filter(activityIsCycling).reduce((sum, a) => sum + Number(a.durationHours || 0), 0) +
+    planned.filter(x => x.cycling).reduce((sum, x) => sum + Number(x.durationHours || 0), 0);
+
+  return {
+    cycling: Boolean(cycling),
+    strength,
+    endurance: Boolean(cycling) || totalEnduranceHours >= 1,
+    training: actual.length > 0 || planned.length > 0,
+    totalEnduranceHours,
+    postRide: actual.some(activityIsCycling)
+  };
+}
+
 async function energyForDate(env, date) {
   const google = await env.DB.prepare(`
     SELECT * FROM health_datapoints
@@ -1399,13 +1464,15 @@ async function energyForDate(env, date) {
       start: row.start_time,
       end: row.end_time,
       durationHours: hoursBetween(row.start_time, row.end_time),
-      pairedEventId: payload.paired_event_id || payload.pairedEventId || null,
+      pairedEventId: payload.paired_event_id || payload.pairedEventId || payload.event_id || payload.eventId || null,
+      plannedEventId: payload.paired_activity_id || payload.pairedActivityId || payload.activity_id || payload.activityId || null,
+      name: payload.name || payload.title || payload.description || "",
       payload
     };
   });
 
   const completedPairedIds = new Set(
-    completed.map(a => a.pairedEventId).filter(Boolean).map(String)
+    completed.flatMap(a => [a.pairedEventId, a.plannedEventId]).filter(Boolean).map(String)
   );
 
   const unmatchedPlanned = plannedWorkouts.filter(w => !completedPairedIds.has(String(w.id)));
@@ -1439,6 +1506,8 @@ async function energyForDate(env, date) {
 
   const deficit = CONFIG.weightLossTargetKgPerWeek * 7700 / 7;
   const target = Math.max(CONFIG.minCalorieTarget, Math.min(CONFIG.maxCalorieTarget, Math.round(estimatedTDEE - deficit)));
+  const context = nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned });
+  const macroTargets = dailyMacroTargets(weight ? Number(weight.value_numeric) : null, target, context);
 
   return {
     date,
@@ -1455,7 +1524,9 @@ async function energyForDate(env, date) {
     suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
     unmatchedPlannedWorkouts: unmatchedPlanned,
     estimatedTDEE,
-    calorieTarget: target
+    calorieTarget: target,
+    macroTargets,
+    nutritionContext: context
   };
 }
 
@@ -1504,14 +1575,10 @@ async function analysisDaily(
         )
       : null;
 
-  const actualRide = energy.completedActivities.find(x =>
-    String(x.type || "").toLowerCase().includes("ride") ||
-    String(x.type || "").toLowerCase().includes("bike") ||
-    String(x.type || "").toLowerCase().includes("cycling")
-  );
+  const actualRide = energy.completedActivities.find(activityIsCycling);
   const plannedRide =
     energy.plannedWorkouts.find(
-      x => x.cycling && !energy.completedActivities.some(a => String(a.pairedEventId || "") === String(x.id))
+      x => x.cycling && !energy.completedActivities.some(a => [a.pairedEventId, a.plannedEventId].some(id => String(id || "") === String(x.id)))
     );
 
   let fueling = null;
@@ -1931,19 +1998,57 @@ async function foodLog(env, request, url) {
   });
 }
 
-function rankCookbookRecipe(recipe, remaining, options) {
-  const kcalGap = Math.abs(Number(recipe.kcal) - Math.max(0, remaining.kcal));
-  const carbGap = Math.abs(Number(recipe.carbs_g) - Math.max(0, remaining.carbs_g));
-  const proteinGap = Math.abs(Number(recipe.protein_g) - Math.max(0, remaining.protein_g));
-  let score = 1000 - kcalGap * 0.6 - carbGap * 1.2 - proteinGap * 0.8;
+function recipeMinutes(recipe) {
+  return Number(String(recipe.time || "").match(/\d+/)?.[0] || 60);
+}
 
-  const minutes = Number(String(recipe.time || "").match(/\d+/)?.[0] || 60);
-  if (options.maxMinutes && minutes <= options.maxMinutes) score += 80;
-  if (options.postRide) score += Math.min(120, Number(recipe.carbs_g) * 0.8 + Number(recipe.protein_g) * 0.4);
-  if (recipe.meal_prep) score += 10;
-  if (recipe.level === "Easy") score += 15;
+function recipeFitScore(recipe, remaining, targets, options) {
+  const kcal = Number(recipe.kcal || 0);
+  const protein = Number(recipe.protein_g || 0);
+  const carbs = Number(recipe.carbs_g || 0);
+  const fat = Number(recipe.fat_g || 0);
+  const remainingKcal = Math.max(1, Number(remaining.kcal || 0));
+  const remainingProtein = Math.max(0, Number(remaining.protein_g || 0));
+  const remainingCarbs = Math.max(0, Number(remaining.carbs_g || 0));
 
-  return score;
+  // Score how much of the current deficit one serving fills.
+  const kcalFit = 100 - Math.min(100, Math.abs(kcal - Math.min(remainingKcal, kcal)) / Math.max(remainingKcal, 1) * 100);
+  const proteinFit = remainingProtein > 0 ? Math.min(100, protein / remainingProtein * 100) : 100;
+  const carbFit = remainingCarbs > 0 ? Math.min(100, carbs / remainingCarbs * 100) : 100;
+
+  let score = kcalFit * 0.30 + proteinFit * 0.25 + carbFit * 0.25;
+
+  if (options.postRide) {
+    score += Math.min(40, carbs * 0.35) * CONFIG.postRideCarbPriority;
+    score -= Math.max(0, fat - 20) * CONFIG.postRideFatPenalty;
+  } else {
+    score -= Math.max(0, fat - Math.max(20, targets.fat_g * 0.35)) * 0.25;
+  }
+
+  if (options.maxMinutes) {
+    const minutes = recipeMinutes(recipe);
+    if (minutes <= options.maxMinutes) score += 35;
+    else score -= Math.min(40, (minutes - options.maxMinutes) * 1.5);
+  }
+
+  if (recipe.meal_prep) score += 8;
+  if (recipe.level === "Easy") score += 10;
+
+  // Do not heavily reward a recipe that would overshoot the remaining calories.
+  if (remainingKcal > 0 && kcal > remainingKcal * CONFIG.recipeOvershootTolerance) {
+    score -= Math.min(70, (kcal - remainingKcal) * 0.15);
+  }
+
+  return Math.round(score * 10) / 10;
+}
+
+function recommendationReason(recipe, remaining, options) {
+  const reasons = [];
+  if (options.postRide && Number(recipe.carbs_g) >= 50) reasons.push("vyšší obsah sacharidů po kole");
+  if (remaining.protein_g > 0 && Number(recipe.protein_g) >= Math.min(40, remaining.protein_g * 0.35)) reasons.push("dobrý příjem bílkovin");
+  if (options.maxMinutes && recipeMinutes(recipe) <= options.maxMinutes) reasons.push("rychlá příprava");
+  if (recipe.meal_prep) reasons.push("Meal Prep");
+  return reasons.slice(0, 3).join(", ");
 }
 
 async function foodRecommend(env, url) {
@@ -1951,42 +2056,121 @@ async function foodRecommend(env, url) {
   const log = await foodLogForDate(env, date);
   const energy = await energyForDate(env, date);
   const targetKcal = Number(energy.calorieTarget || 0);
-  const proteinTarget = energy.currentWeight ? energy.currentWeight * CONFIG.proteinGramsPerKg : 0;
+  const targets = energy.macroTargets || dailyMacroTargets(energy.currentWeight, targetKcal, energy.nutritionContext || {});
   const remaining = {
     kcal: Math.max(0, targetKcal - log.totals.kcal),
-    protein_g: Math.max(0, proteinTarget - log.totals.protein_g),
-    carbs_g: Math.max(0, (url.searchParams.get("remaining_carbs") || 0) - log.totals.carbs_g)
+    protein_g: Math.max(0, targets.protein_g - log.totals.protein_g),
+    carbs_g: Math.max(0, targets.carbs_g - log.totals.carbs_g),
+    fat_g: Math.max(0, targets.fat_g - log.totals.fat_g)
   };
-  const postRide = url.searchParams.get("post_ride") === "1";
+
+  const explicitPostRide = url.searchParams.get("post_ride");
+  const postRide = explicitPostRide === "1" || (explicitPostRide !== "0" && energy.nutritionContext?.postRide);
   const maxMinutes = Number(url.searchParams.get("max_minutes") || 0);
-  const category = url.searchParams.get("category") || "";
+  const category = (url.searchParams.get("category") || "").trim();
+  const limit = Math.max(1, Math.min(10, Number(url.searchParams.get("limit") || 5)));
 
   const cookbookData = await getCookbook();
   const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
 
   let candidates = cookbook.filter(recipe => {
-    if (category && recipe.category.toLowerCase() !== category.toLowerCase()) return false;
-    if (maxMinutes) {
-      const minutes = Number(String(recipe.time || "").match(/\d+/)?.[0] || 60);
-      if (minutes > maxMinutes) return false;
-    }
+    if (category && String(recipe.category || "").toLowerCase() !== category.toLowerCase()) return false;
+    if (maxMinutes && recipeMinutes(recipe) > maxMinutes) return false;
     return true;
   });
 
   candidates = candidates
-    .map(recipe => ({ recipe, score: rankCookbookRecipe(recipe, remaining, { postRide, maxMinutes }) }))
+    .map(recipe => ({
+      recipe,
+      score: recipeFitScore(recipe, remaining, targets, { postRide, maxMinutes })
+    }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5)
-    .map(x => x.recipe);
+    .slice(0, limit)
+    .map(x => ({
+      ...x.recipe,
+      recommendation_score: x.score,
+      recommendation_reason: recommendationReason(x.recipe, remaining, { postRide, maxMinutes })
+    }));
 
   return Response.json({
     status: "ok",
     date,
     foodTotals: log.totals,
     calorieTarget: targetKcal,
+    macroTargets: targets,
     remaining,
+    nutritionContext: energy.nutritionContext || null,
     recommendations: candidates
   });
+}
+
+// ======================================================
+// FOOD LOG MANAGEMENT
+// ======================================================
+
+async function deleteFoodLog(env, url) {
+  const id = Number(url.searchParams.get("id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return Response.json({ status: "error", message: "Valid id is required" }, { status: 400 });
+  }
+  const result = await env.DB.prepare(`DELETE FROM food_logs WHERE id = ?`).bind(id).run();
+  return Response.json({ status: "ok", id, deleted: Number(result.meta.changes || 0) > 0 });
+}
+
+async function foodLogText(env, request, url) {
+  if (request.method !== "POST") {
+    return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
+  }
+
+  const body = await request.json();
+  const text = String(body.text || body.message || "").trim();
+  if (!text) return Response.json({ status: "error", message: "text is required" }, { status: 400 });
+
+  const date = body.date || pragueDate();
+  const pageNumbers = [...text.matchAll(/(?:str(?:án|a)n?\.?|p(?:age)?\.?)?\s*(\d{1,3})(?!\d)/gi)]
+    .map(m => Number(m[1]))
+    .filter(n => n > 0 && n < 1000);
+
+  const uniquePages = [...new Set(pageNumbers)];
+  const logged = [];
+  const errors = [];
+
+  for (const page of uniquePages) {
+    const recipe = await cookbookRecipeByPage(page);
+    if (!recipe) {
+      errors.push({ page, message: "Cookbook page not found" });
+      continue;
+    }
+    const scaled = scaleRecipe(recipe, 1);
+    const result = await env.DB.prepare(`
+      INSERT INTO food_logs (consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
+      VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'cookbook-text', ?)
+    `).bind(date, body.consumed_at || new Date().toISOString(), recipe.page, recipe.title, scaled.kcal, scaled.protein_g, scaled.carbs_g, scaled.fat_g, scaled.fiber_g, text).run();
+    logged.push({ id: result.meta.last_row_id, page: recipe.page, title: recipe.title, ...scaled });
+  }
+
+  // Lightweight manual-food support for common whole-fruit mentions.
+  const fruit = {
+    nektarinka: { name: "Nektarinka", kcal: 63, protein_g: 1.5, carbs_g: 15, fat_g: 0.5, fiber_g: 2.4 },
+    nektarinku: { name: "Nektarinka", kcal: 63, protein_g: 1.5, carbs_g: 15, fat_g: 0.5, fiber_g: 2.4 },
+    banán: { name: "Banán", kcal: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.3, fiber_g: 3.1 },
+    banan: { name: "Banán", kcal: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.3, fiber_g: 3.1 },
+    jablko: { name: "Jablko", kcal: 95, protein_g: 0.5, carbs_g: 25, fat_g: 0.3, fiber_g: 4.4 },
+    pomeranč: { name: "Pomeranč", kcal: 62, protein_g: 1.2, carbs_g: 15.4, fat_g: 0.2, fiber_g: 3.1 },
+    pomeranc: { name: "Pomeranč", kcal: 62, protein_g: 1.2, carbs_g: 15.4, fat_g: 0.2, fiber_g: 3.1 }
+  };
+  for (const [key, value] of Object.entries(fruit)) {
+    if (text.toLowerCase().includes(key)) {
+      const result = await env.DB.prepare(`
+        INSERT INTO food_logs (consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
+        VALUES (?, ?, NULL, ?, 1, ?, ?, ?, ?, ?, 'manual-text', ?)
+      `).bind(date, body.consumed_at || new Date().toISOString(), value.name, value.kcal, value.protein_g, value.carbs_g, value.fat_g, value.fiber_g, text).run();
+      logged.push({ id: result.meta.last_row_id, ...value, source: "manual-text" });
+      break;
+    }
+  }
+
+  return Response.json({ status: "ok", date, parsed_pages: uniquePages, logged, errors });
 }
 
 
