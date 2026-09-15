@@ -17,7 +17,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5"
+          version: "final-5-cookbook-v3"
         });
       }
 
@@ -1773,7 +1773,7 @@ async function cookbookSearchResults(url) {
   if (q) {
     results = results
       .map(recipe => {
-        const haystack = `${recipe.title} ${recipe.ingredients || ""}`.toLowerCase();
+        const haystack = `${recipe.title} ${recipe.ingredients || ""} ${(recipe.ingredients_clean || []).join(" ")}`.toLowerCase();
         let score = haystack.includes(q) ? 100 : 0;
         for (const word of q.split(/\s+/).filter(Boolean)) {
           if (recipe.title.toLowerCase().includes(word)) score += 20;
