@@ -25,6 +25,11 @@ export default {
       return await getTodaySleep(env);
     }
 
+    // Latest weight
+    if (url.pathname === "/health/weight") {
+    return await getLatestWeight(env);
+    }
+
     // Read today's calories from D1
     if (url.pathname === "/health/db") {
       return await getTodayFromDatabase(env);
@@ -646,6 +651,202 @@ async function getTodayFromDatabase(env) {
         result.results.length,
       data:
         result.results
+    });
+
+  } catch (error) {
+    return Response.json(
+      {
+        status: "error",
+        message: error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+// ======================================================
+// GOOGLE HEALTH → WEIGHT → D1
+// ======================================================
+
+async function getLatestWeight(env) {
+  try {
+    const accessToken =
+      await getGoogleAccessToken(env);
+
+    const today =
+      getPragueDate();
+
+    const endpoint =
+      "https://health.googleapis.com/v4/users/me/" +
+      "dataTypes/weight/dataPoints:reconcile";
+
+    const params =
+      new URLSearchParams();
+
+    params.set(
+      "dataSourceFamily",
+      "users/me/dataSourceFamilies/google-sources"
+    );
+
+    params.set(
+      "filter",
+      'weight.sample_time.civil_time >= "' +
+      today +
+      'T00:00:00"'
+    );
+
+    const url =
+      endpoint +
+      "?" +
+      params.toString();
+
+    const response =
+      await fetch(
+        url,
+        {
+          method: "GET",
+
+          headers: {
+            "Authorization":
+              "Bearer " + accessToken,
+
+            "Accept":
+              "application/json"
+          }
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      return Response.json(
+        {
+          status: "error",
+          google_status:
+            response.status,
+          google_response:
+            data
+        },
+        { status: 500 }
+      );
+    }
+
+    const dataPoints =
+      data.dataPoints || [];
+
+    if (dataPoints.length === 0) {
+      return Response.json({
+        status: "ok",
+        date: today,
+        source: "google-sources",
+        weight: null,
+        saved_to_database: false,
+        message:
+          "No weight data available"
+      });
+    }
+
+    const saved = [];
+
+    for (
+      const point of dataPoints
+    ) {
+      if (
+        !point.weight ||
+        !point.weight.weightGrams
+      ) {
+        continue;
+      }
+
+      const grams =
+        point.weight.weightGrams;
+
+      const kilograms =
+        grams / 1000;
+
+      const sampleTime =
+        point.weight.sampleTime &&
+        point.weight.sampleTime.physicalTime
+          ? point.weight.sampleTime.physicalTime
+          : point.weight.sampleTime &&
+            point.weight.sampleTime.civilTime
+            ? point.weight.sampleTime.civilTime
+            : null;
+
+      const externalId =
+        point.name ||
+        (
+          "weight:" +
+          String(grams) +
+          ":" +
+          String(sampleTime)
+        );
+
+      const result =
+        await env.DB
+          .prepare(
+            "INSERT INTO health_datapoints (" +
+            "source_family, " +
+            "data_type, " +
+            "external_id, " +
+            "sample_time, " +
+            "start_time, " +
+            "end_time, " +
+            "value_numeric, " +
+            "value_unit, " +
+            "payload_json" +
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+
+            "ON CONFLICT (" +
+            "source_family, " +
+            "data_type, " +
+            "external_id" +
+            ") DO UPDATE SET " +
+
+            "sample_time = excluded.sample_time, " +
+            "value_numeric = excluded.value_numeric, " +
+            "value_unit = excluded.value_unit, " +
+            "payload_json = excluded.payload_json, " +
+            "updated_at = CURRENT_TIMESTAMP"
+          )
+          .bind(
+            "google-sources",
+            "weight",
+            externalId,
+            sampleTime,
+            null,
+            null,
+            kilograms,
+            "kg",
+            JSON.stringify(point)
+          )
+          .run();
+
+      saved.push({
+        external_id:
+          externalId,
+
+        sample_time:
+          sampleTime,
+
+        weight_kg:
+          kilograms,
+
+        weight_grams:
+          grams,
+
+        database_success:
+          result.success
+      });
+    }
+
+    return Response.json({
+      status: "ok",
+      date: today,
+      source: "google-sources",
+      count: saved.length,
+      saved_to_database: true,
+      weight: saved
     });
 
   } catch (error) {
