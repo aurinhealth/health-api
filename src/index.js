@@ -18,7 +18,6 @@ export default {
           },
           body: new URLSearchParams({
             client_id: env.GOOGLE_CLIENT_ID,
-            client_secret: env.GOOGLE_CLIENT_SECRET,
             refresh_token: env.GOOGLE_REFRESH_TOKEN,
             grant_type: "refresh_token"
           })
