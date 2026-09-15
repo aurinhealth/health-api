@@ -675,6 +675,45 @@ async function getLatestWeight(env) {
     const today =
       getPragueDate();
 
+    const todayParts =
+      today.split("-");
+
+    const todayDate =
+      new Date(
+        Date.UTC(
+          Number(todayParts[0]),
+          Number(todayParts[1]) - 1,
+          Number(todayParts[2])
+        )
+      );
+
+    const startDate =
+      new Date(todayDate);
+
+    startDate.setUTCDate(
+      startDate.getUTCDate() - 30
+    );
+
+    const startYear =
+      startDate.getUTCFullYear();
+
+    const startMonth =
+      String(
+        startDate.getUTCMonth() + 1
+      ).padStart(2, "0");
+
+    const startDay =
+      String(
+        startDate.getUTCDate()
+      ).padStart(2, "0");
+
+    const startDateString =
+      startYear +
+      "-" +
+      startMonth +
+      "-" +
+      startDay;
+
     const endpoint =
       "https://health.googleapis.com/v4/users/me/" +
       "dataTypes/weight/dataPoints:reconcile";
@@ -690,8 +729,13 @@ async function getLatestWeight(env) {
     params.set(
       "filter",
       'weight.sample_time.civil_time >= "' +
-      today +
+      startDateString +
       'T00:00:00"'
+    );
+
+    params.set(
+      "pageSize",
+      "100"
     );
 
     const url =
@@ -739,114 +783,188 @@ async function getLatestWeight(env) {
         status: "ok",
         date: today,
         source: "google-sources",
+        search_period_days: 30,
         weight: null,
         saved_to_database: false,
         message:
-          "No weight data available"
+          "No weight data available in the last 30 days"
       });
     }
 
-    const saved = [];
+    const weights =
+      [];
 
     for (
       const point of dataPoints
     ) {
       if (
         !point.weight ||
-        !point.weight.weightGrams
+        point.weight.weightGrams === undefined
       ) {
         continue;
       }
 
       const grams =
-        point.weight.weightGrams;
+        Number(
+          point.weight.weightGrams
+        );
 
       const kilograms =
         grams / 1000;
 
-      const sampleTime =
+      let sampleTime =
+        null;
+
+      if (
         point.weight.sampleTime &&
         point.weight.sampleTime.physicalTime
-          ? point.weight.sampleTime.physicalTime
-          : point.weight.sampleTime &&
-            point.weight.sampleTime.civilTime
-            ? point.weight.sampleTime.civilTime
-            : null;
+      ) {
+        sampleTime =
+          point.weight.sampleTime.physicalTime;
+      }
 
-      const externalId =
-        point.name ||
-        (
-          "weight:" +
-          String(grams) +
-          ":" +
-          String(sampleTime)
-        );
+      if (
+        !sampleTime &&
+        point.weight.sampleTime &&
+        point.weight.sampleTime.civilTime
+      ) {
+        const civil =
+          point.weight.sampleTime.civilTime;
 
-      const result =
-        await env.DB
-          .prepare(
-            "INSERT INTO health_datapoints (" +
-            "source_family, " +
-            "data_type, " +
-            "external_id, " +
-            "sample_time, " +
-            "start_time, " +
-            "end_time, " +
-            "value_numeric, " +
-            "value_unit, " +
-            "payload_json" +
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+        if (
+          civil.date
+        ) {
+          const year =
+            civil.date.year;
 
-            "ON CONFLICT (" +
-            "source_family, " +
-            "data_type, " +
-            "external_id" +
-            ") DO UPDATE SET " +
+          const month =
+            String(
+              civil.date.month
+            ).padStart(2, "0");
 
-            "sample_time = excluded.sample_time, " +
-            "value_numeric = excluded.value_numeric, " +
-            "value_unit = excluded.value_unit, " +
-            "payload_json = excluded.payload_json, " +
-            "updated_at = CURRENT_TIMESTAMP"
-          )
-          .bind(
-            "google-sources",
-            "weight",
-            externalId,
-            sampleTime,
-            null,
-            null,
-            kilograms,
-            "kg",
-            JSON.stringify(point)
-          )
-          .run();
+          const day =
+            String(
+              civil.date.day
+            ).padStart(2, "0");
 
-      saved.push({
-        external_id:
-          externalId,
+          sampleTime =
+            year +
+            "-" +
+            month +
+            "-" +
+            day;
+        }
+      }
 
-        sample_time:
-          sampleTime,
-
-        weight_kg:
-          kilograms,
-
-        weight_grams:
-          grams,
-
-        database_success:
-          result.success
+      weights.push({
+        point: point,
+        grams: grams,
+        kilograms: kilograms,
+        sampleTime: sampleTime
       });
     }
+
+    if (weights.length === 0) {
+      return Response.json({
+        status: "ok",
+        date: today,
+        source: "google-sources",
+        search_period_days: 30,
+        weight: null,
+        saved_to_database: false,
+        message:
+          "Weight records found but could not be parsed"
+      });
+    }
+
+    weights.sort(
+      function (a, b) {
+        return String(b.sampleTime)
+          .localeCompare(
+            String(a.sampleTime)
+          );
+      }
+    );
+
+    const latest =
+      weights[0];
+
+    const point =
+      latest.point;
+
+    const externalId =
+      point.name ||
+      (
+        "weight:" +
+        String(
+          latest.sampleTime
+        )
+      );
+
+    const result =
+      await env.DB
+        .prepare(
+          "INSERT INTO health_datapoints (" +
+          "source_family, " +
+          "data_type, " +
+          "external_id, " +
+          "sample_time, " +
+          "start_time, " +
+          "end_time, " +
+          "value_numeric, " +
+          "value_unit, " +
+          "payload_json" +
+          ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+
+          "ON CONFLICT (" +
+          "source_family, " +
+          "data_type, " +
+          "external_id" +
+          ") DO UPDATE SET " +
+
+          "sample_time = excluded.sample_time, " +
+          "value_numeric = excluded.value_numeric, " +
+          "value_unit = excluded.value_unit, " +
+          "payload_json = excluded.payload_json, " +
+          "updated_at = CURRENT_TIMESTAMP"
+        )
+        .bind(
+          "google-sources",
+          "weight",
+          externalId,
+          latest.sampleTime,
+          null,
+          null,
+          latest.kilograms,
+          "kg",
+          JSON.stringify(point)
+        )
+        .run();
 
     return Response.json({
       status: "ok",
       date: today,
       source: "google-sources",
-      count: saved.length,
+      search_period_days: 30,
+      records_found:
+        weights.length,
       saved_to_database: true,
-      weight: saved
+      weight: {
+        external_id:
+          externalId,
+
+        sample_time:
+          latest.sampleTime,
+
+        weight_kg:
+          latest.kilograms,
+
+        weight_grams:
+          latest.grams,
+
+        database_success:
+          result.success
+      }
     });
 
   } catch (error) {
