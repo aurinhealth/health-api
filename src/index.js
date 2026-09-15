@@ -1,4 +1,12 @@
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      syncAll(env).catch(error => {
+        console.error("Scheduled sync failed:", error);
+      })
+    );
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
 
@@ -7,7 +15,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-3"
+          version: "final-4"
         });
       }
 
