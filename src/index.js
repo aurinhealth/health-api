@@ -1,4 +1,4 @@
-import { getCookbook } from "./cookbook.js";
+import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -1748,10 +1748,7 @@ async function analysisFueling(
 // ======================================================
 
 async function cookbookRecipeByPage(page) {
-  const n = Number(page);
-  if (!Number.isInteger(n)) return null;
-  const cookbook = await getCookbook();
-  return cookbook.find(recipe => recipe.page === n) || null;
+  return getCookbookRecipeByPage(page);
 }
 
 async function cookbookSearchResults(url) {
