@@ -8,7 +8,11 @@ export default {
         service: "health-api"
       });
     }
-
+    
+    if (url.pathname === "/test/intervals") {
+    return await testIntervals(env);
+    }
+    
     if (url.pathname === "/auth-test") {
       return await testGoogleAuth(env);
     }
@@ -1913,6 +1917,78 @@ async function getTodayFromDatabase(env) {
         status:
           "error",
 
+        message:
+          error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+async function testIntervals(env) {
+  try {
+    const apiKey =
+      env.INTERVALS_API_KEY;
+
+    if (!apiKey) {
+      return Response.json(
+        {
+          status: "error",
+          message:
+            "INTERVALS_API_KEY is not configured"
+        },
+        { status: 500 }
+      );
+    }
+
+    const credentials =
+      btoa("API_KEY:" + apiKey);
+
+    const response =
+      await fetch(
+        "https://intervals.icu/api/v1/athlete/0/profile",
+        {
+          method: "GET",
+
+          headers: {
+            "Authorization":
+              "Basic " + credentials,
+
+            "Accept":
+              "application/json"
+          }
+        }
+      );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+      return Response.json(
+        {
+          status: "error",
+          http_status:
+            response.status,
+          message:
+            data
+        },
+        { status: response.status }
+      );
+    }
+
+    return Response.json({
+      status: "ok",
+      source:
+        "intervals.icu",
+      api_connection:
+        "working",
+      athlete:
+        data
+    });
+
+  } catch (error) {
+    return Response.json(
+      {
+        status: "error",
         message:
           error.message
       },
