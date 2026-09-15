@@ -1,3 +1,5 @@
+import { getCookbook } from "./cookbook.js";
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
@@ -15,7 +17,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-4"
+          version: "final-5"
         });
       }
 
@@ -49,6 +51,26 @@ export default {
 
       if (url.pathname === "/analysis/fueling") {
         return await analysisFueling(env, url);
+      }
+
+      if (url.pathname === "/cookbook/page") {
+        return await cookbookPage(env, url);
+      }
+
+      if (url.pathname === "/cookbook/search") {
+        return await cookbookSearch(env, url);
+      }
+
+      if (url.pathname === "/food/log") {
+        return await foodLog(env, request, url);
+      }
+
+      if (url.pathname === "/food/today") {
+        return await foodLog(env, request, url);
+      }
+
+      if (url.pathname === "/food/recommend") {
+        return await foodRecommend(env, url);
       }
 
       if (url.pathname === "/health/weight") {
@@ -1308,7 +1330,9 @@ function plannedWorkoutInfo(
     text.includes("ride") ||
     text.includes("bike") ||
     text.includes("cycling") ||
-    text.includes("cycle");
+    text.includes("cycle") ||
+    text.includes("gravel") ||
+    text.includes("mountain bike");
 
   return {
     start,
@@ -1359,19 +1383,32 @@ async function energyForDate(env, date) {
     ORDER BY sample_time DESC, id DESC LIMIT 1
   `).first();
 
-  const plannedWorkouts = planned.results.map(r => plannedWorkoutInfo(JSON.parse(r.payload_json)));
+  const plannedWorkouts = planned.results.map(r => ({
+    id: r.external_id,
+    ...plannedWorkoutInfo(JSON.parse(r.payload_json))
+  }));
+
   const completed = activities.results.map(row => {
     const payload = JSON.parse(row.payload_json);
+    const actualCalories =
+      Number(payload.calories_kcal ?? payload.calories ?? payload.icu_calories ?? row.value_numeric ?? 0);
     return {
       id: row.external_id,
-      type: payload.type || "Unknown",
-      calories: row.value_numeric,
+      type: payload.type || payload.category || "Unknown",
+      calories: actualCalories,
       start: row.start_time,
       end: row.end_time,
       durationHours: hoursBetween(row.start_time, row.end_time),
+      pairedEventId: payload.paired_event_id || payload.pairedEventId || null,
       payload
     };
   });
+
+  const completedPairedIds = new Set(
+    completed.map(a => a.pairedEventId).filter(Boolean).map(String)
+  );
+
+  const unmatchedPlanned = plannedWorkouts.filter(w => !completedPairedIds.has(String(w.id)));
 
   // Historical complete days: Fitbit/Google total-calories is authoritative.
   // Today/future: total calories may be incomplete, so project from rest-day
@@ -1386,10 +1423,11 @@ async function energyForDate(env, date) {
   } else {
     let activityAdjustment = 0;
     for (const a of completed) {
-      const rate = CONFIG.activityKcalPerHour[a.type] || 400;
-      activityAdjustment += (a.durationHours || 0) * rate;
+      const rate = CONFIG.activityKcalPerHour[a.type] || (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
+      const actual = Number(a.calories);
+      activityAdjustment += actual > 0 ? actual : (a.durationHours || 0) * rate;
     }
-    for (const w of plannedWorkouts) {
+    for (const w of unmatchedPlanned) {
       if (w.durationHours) {
         const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
         const rate = CONFIG.activityKcalPerHour[type] || 400;
@@ -1408,11 +1446,14 @@ async function energyForDate(env, date) {
     googleTotalCalories: observed,
     completedActivities: completed,
     plannedWorkouts,
-    estimatedPlannedActivityCalories: Math.round(plannedWorkouts.reduce((sum, w) => {
+    estimatedPlannedActivityCalories: Math.round(unmatchedPlanned.reduce((sum, w) => {
       if (!w.durationHours) return sum;
       const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
       return sum + w.durationHours * (CONFIG.activityKcalPerHour[type] || 400);
     }, 0)),
+    actualActivityCalories: Math.round(completed.reduce((sum, a) => sum + Number(a.calories || 0), 0)),
+    suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
+    unmatchedPlannedWorkouts: unmatchedPlanned,
     estimatedTDEE,
     calorieTarget: target
   };
@@ -1463,19 +1504,30 @@ async function analysisDaily(
         )
       : null;
 
+  const actualRide = energy.completedActivities.find(x =>
+    String(x.type || "").toLowerCase().includes("ride") ||
+    String(x.type || "").toLowerCase().includes("bike") ||
+    String(x.type || "").toLowerCase().includes("cycling")
+  );
   const plannedRide =
     energy.plannedWorkouts.find(
-      x => x.cycling
+      x => x.cycling && !energy.completedActivities.some(a => String(a.pairedEventId || "") === String(x.id))
     );
 
   let fueling = null;
 
-  if (plannedRide) {
-    fueling =
-      calculateFueling(
-        energy.currentWeight,
-        plannedRide
-      );
+  if (actualRide) {
+    fueling = calculateFueling(
+      energy.currentWeight,
+      { durationHours: actualRide.durationHours || 0 }
+    );
+    fueling.source = "actual";
+  } else if (plannedRide) {
+    fueling = calculateFueling(
+      energy.currentWeight,
+      plannedRide
+    );
+    fueling.source = "planned";
   }
 
   return Response.json({
@@ -1507,7 +1559,9 @@ async function analysisDaily(
 
     nutrition: {
       protein:
-        protein
+        protein,
+      foodLog:
+        await foodLogForDate(env, date)
     },
 
     training: {
@@ -1552,7 +1606,16 @@ async function analysisEnergy(
         energy.estimatedTDEE,
 
       calorieTarget:
-        energy.calorieTarget
+        energy.calorieTarget,
+
+      actualActivityCalories:
+        energy.actualActivityCalories,
+
+      estimatedPlannedActivityCalories:
+        energy.estimatedPlannedActivityCalories,
+
+      suppressedPlannedWorkouts:
+        energy.suppressedPlannedWorkouts
     },
 
     completedActivities:
@@ -1676,6 +1739,254 @@ async function analysisFueling(
 
     dailyCalories:
       energy.calorieTarget
+  });
+}
+
+
+// ======================================================
+// COOKBOOK
+// ======================================================
+
+async function cookbookRecipeByPage(page) {
+  const n = Number(page);
+  if (!Number.isInteger(n)) return null;
+  const cookbook = await getCookbook();
+  return cookbook.find(recipe => recipe.page === n) || null;
+}
+
+async function cookbookSearchResults(url) {
+  const q = (url.searchParams.get("q") || "").trim().toLowerCase();
+  const category = (url.searchParams.get("category") || "").trim().toLowerCase();
+  const maxMinutes = Number(url.searchParams.get("max_minutes"));
+  const mealPrep = url.searchParams.get("meal_prep");
+  const limit = Math.max(1, Math.min(30, Number(url.searchParams.get("limit") || 10)));
+
+  const cookbook = await getCookbook();
+
+  let results = cookbook.filter(recipe => {
+    if (category && recipe.category.toLowerCase() !== category) return false;
+    if (Number.isFinite(maxMinutes) && maxMinutes > 0) {
+      const match = String(recipe.time || "").match(/(\d+)/);
+      if (match && Number(match[1]) > maxMinutes) return false;
+    }
+    if (mealPrep === "1" && !recipe.meal_prep) return false;
+    return true;
+  });
+
+  if (q) {
+    results = results
+      .map(recipe => {
+        const haystack = `${recipe.title} ${recipe.ingredients || ""}`.toLowerCase();
+        let score = haystack.includes(q) ? 100 : 0;
+        for (const word of q.split(/\s+/).filter(Boolean)) {
+          if (recipe.title.toLowerCase().includes(word)) score += 20;
+          else if (haystack.includes(word)) score += 5;
+        }
+        return { recipe, score };
+      })
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map(x => x.recipe);
+  }
+
+  return results.slice(0, limit);
+}
+
+async function cookbookPage(env, url) {
+  const page = url.searchParams.get("page");
+  const recipe = await cookbookRecipeByPage(page);
+
+  if (!recipe) {
+    return Response.json({
+      status: "error",
+      message: "Cookbook page not found",
+      page
+    }, { status: 404 });
+  }
+
+  return Response.json({
+    status: "ok",
+    recipe
+  });
+}
+
+async function cookbookSearch(env, url) {
+  const recipes = await cookbookSearchResults(url);
+  return Response.json({
+    status: "ok",
+    count: recipes.length,
+    recipes
+  });
+}
+
+// ======================================================
+// FOOD LOG
+// ======================================================
+
+function scaleRecipe(recipe, servings) {
+  const factor = Number(servings);
+  const s = Number.isFinite(factor) && factor > 0 ? factor : 1;
+
+  return {
+    kcal: Math.round(recipe.kcal * s),
+    protein_g: Math.round(recipe.protein_g * s * 10) / 10,
+    carbs_g: Math.round(recipe.carbs_g * s * 10) / 10,
+    fat_g: Math.round(recipe.fat_g * s * 10) / 10,
+    fiber_g: Math.round(recipe.fiber_g * s * 10) / 10
+  };
+}
+
+async function foodLogForDate(env, date) {
+  const rows = await env.DB.prepare(`
+    SELECT * FROM food_logs
+    WHERE consumed_date = ?
+    ORDER BY consumed_at, id
+  `).bind(date).all();
+
+  const entries = rows.results || [];
+  const totals = entries.reduce((sum, row) => {
+    sum.kcal += Number(row.kcal || 0);
+    sum.protein_g += Number(row.protein_g || 0);
+    sum.carbs_g += Number(row.carbs_g || 0);
+    sum.fat_g += Number(row.fat_g || 0);
+    sum.fiber_g += Number(row.fiber_g || 0);
+    return sum;
+  }, { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 });
+
+  for (const key of Object.keys(totals)) {
+    totals[key] = Math.round(totals[key] * 10) / 10;
+  }
+
+  return { entries, totals };
+}
+
+async function foodLog(env, request, url) {
+  if (request.method === "GET") {
+    const date = url.searchParams.get("date") || pragueDate();
+    const log = await foodLogForDate(env, date);
+    return Response.json({ status: "ok", date, ...log });
+  }
+
+  if (request.method !== "POST") {
+    return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
+  }
+
+  const body = await request.json();
+  const date = body.date || body.consumed_date || pragueDate();
+  const consumedAt = body.consumed_at || new Date().toISOString();
+  const servings = Number(body.servings || 1);
+
+  let recipe = null;
+  if (body.page != null) recipe = await cookbookRecipeByPage(body.page);
+  if (body.recipe_page != null) recipe = await cookbookRecipeByPage(body.recipe_page);
+
+  if (body.page != null && !recipe) {
+    return Response.json({ status: "error", message: "Cookbook page not found", page: body.page }, { status: 404 });
+  }
+
+  const scaled = recipe ? scaleRecipe(recipe, servings) : {
+    kcal: Number(body.kcal || 0),
+    protein_g: Number(body.protein_g || 0),
+    carbs_g: Number(body.carbs_g || 0),
+    fat_g: Number(body.fat_g || 0),
+    fiber_g: Number(body.fiber_g || 0)
+  };
+
+  const name = body.name || (recipe && recipe.title) || "Manual entry";
+  const source = recipe ? "cookbook" : (body.source || "manual");
+
+  if (!name || !Number.isFinite(scaled.kcal)) {
+    return Response.json({ status: "error", message: "name and kcal are required" }, { status: 400 });
+  }
+
+  const result = await env.DB.prepare(`
+    INSERT INTO food_logs (
+      consumed_date, consumed_at, cookbook_page, recipe_title,
+      servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    date,
+    consumedAt,
+    recipe ? recipe.page : null,
+    recipe ? recipe.title : null,
+    servings,
+    scaled.kcal,
+    scaled.protein_g,
+    scaled.carbs_g,
+    scaled.fat_g,
+    scaled.fiber_g,
+    source,
+    body.note || null
+  ).run();
+
+  return Response.json({
+    status: "ok",
+    id: result.meta.last_row_id,
+    date,
+    entry: {
+      name,
+      page: recipe ? recipe.page : null,
+      servings,
+      source,
+      ...scaled
+    }
+  });
+}
+
+function rankCookbookRecipe(recipe, remaining, options) {
+  const kcalGap = Math.abs(Number(recipe.kcal) - Math.max(0, remaining.kcal));
+  const carbGap = Math.abs(Number(recipe.carbs_g) - Math.max(0, remaining.carbs_g));
+  const proteinGap = Math.abs(Number(recipe.protein_g) - Math.max(0, remaining.protein_g));
+  let score = 1000 - kcalGap * 0.6 - carbGap * 1.2 - proteinGap * 0.8;
+
+  const minutes = Number(String(recipe.time || "").match(/\d+/)?.[0] || 60);
+  if (options.maxMinutes && minutes <= options.maxMinutes) score += 80;
+  if (options.postRide) score += Math.min(120, Number(recipe.carbs_g) * 0.8 + Number(recipe.protein_g) * 0.4);
+  if (recipe.meal_prep) score += 10;
+  if (recipe.level === "Easy") score += 15;
+
+  return score;
+}
+
+async function foodRecommend(env, url) {
+  const date = url.searchParams.get("date") || pragueDate();
+  const log = await foodLogForDate(env, date);
+  const energy = await energyForDate(env, date);
+  const targetKcal = Number(energy.calorieTarget || 0);
+  const proteinTarget = energy.currentWeight ? energy.currentWeight * CONFIG.proteinGramsPerKg : 0;
+  const remaining = {
+    kcal: Math.max(0, targetKcal - log.totals.kcal),
+    protein_g: Math.max(0, proteinTarget - log.totals.protein_g),
+    carbs_g: Math.max(0, (url.searchParams.get("remaining_carbs") || 0) - log.totals.carbs_g)
+  };
+  const postRide = url.searchParams.get("post_ride") === "1";
+  const maxMinutes = Number(url.searchParams.get("max_minutes") || 0);
+  const category = url.searchParams.get("category") || "";
+
+  const cookbook = await getCookbook();
+
+  let candidates = cookbook.filter(recipe => {
+    if (category && recipe.category.toLowerCase() !== category.toLowerCase()) return false;
+    if (maxMinutes) {
+      const minutes = Number(String(recipe.time || "").match(/\d+/)?.[0] || 60);
+      if (minutes > maxMinutes) return false;
+    }
+    return true;
+  });
+
+  candidates = candidates
+    .map(recipe => ({ recipe, score: rankCookbookRecipe(recipe, remaining, { postRide, maxMinutes }) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5)
+    .map(x => x.recipe);
+
+  return Response.json({
+    status: "ok",
+    date,
+    foodTotals: log.totals,
+    calorieTarget: targetKcal,
+    remaining,
+    recommendations: candidates
   });
 }
 
