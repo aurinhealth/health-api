@@ -1,0 +1,13 @@
+{
+  "name": "health-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-15",
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "health-data",
+      "database_id": "07caba2e-ba9a-4191-8a2e-e2fd4c5082cd"
+    }
+  ]
+}
