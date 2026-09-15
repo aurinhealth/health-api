@@ -17,7 +17,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5-cookbook-v3.2"
+          version: "final-5-cookbook-v3.2.1"
         });
       }
 
@@ -2118,11 +2118,26 @@ async function deleteFoodLog(env, url) {
 }
 
 async function foodLogText(env, request, url) {
-  if (request.method !== "POST") {
+  let body = {};
+
+  if (request.method === "POST") {
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      body = await request.json();
+    } else {
+      const raw = await request.text();
+      body = raw ? { text: raw } : {};
+    }
+  } else if (request.method === "GET") {
+    body = {
+      text: url.searchParams.get("text") || url.searchParams.get("message") || "",
+      date: url.searchParams.get("date") || null,
+      consumed_at: url.searchParams.get("consumed_at") || null
+    };
+  } else {
     return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
   }
 
-  const body = await request.json();
   const text = String(body.text || body.message || "").trim();
   if (!text) return Response.json({ status: "error", message: "text is required" }, { status: 400 });
 
