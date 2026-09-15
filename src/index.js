@@ -17,7 +17,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5-cookbook-v3.2.1"
+          version: "final-5-cookbook-v3.2.2"
         });
       }
 
@@ -1406,13 +1406,19 @@ function nutritionContext(energy) {
   const totalEnduranceHours = actual.filter(activityIsCycling).reduce((sum, a) => sum + Number(a.durationHours || 0), 0) +
     planned.filter(x => x.cycling).reduce((sum, x) => sum + Number(x.durationHours || 0), 0);
 
+  const cyclingActivities = actual.filter(activityIsCycling);
+  const latestRide = cyclingActivities.filter(a => a.end).sort((a,b) => new Date(b.end).getTime() - new Date(a.end).getTime())[0];
+  const hoursSinceRide = latestRide?.end ? hoursBetween(latestRide.end, new Date().toISOString()) : null;
+
   return {
     cycling: Boolean(cycling),
     strength,
     endurance: Boolean(cycling) || totalEnduranceHours >= 1,
     training: actual.length > 0 || planned.length > 0,
     totalEnduranceHours,
-    postRide: actual.some(activityIsCycling)
+    postRide: Boolean(latestRide && hoursSinceRide != null && hoursSinceRide >= 0 && hoursSinceRide <= 2.5),
+    latestRideEnd: latestRide?.end || null,
+    hoursSinceRide: hoursSinceRide != null ? Math.round(hoursSinceRide * 100) / 100 : null
   };
 }
 
@@ -2003,105 +2009,89 @@ function recipeMinutes(recipe) {
 }
 
 function recipeFitScore(recipe, remaining, targets, options) {
-  const kcal = Number(recipe.kcal || 0);
+  const kcal = Number(recipe.kcal);
   const protein = Number(recipe.protein_g || 0);
   const carbs = Number(recipe.carbs_g || 0);
   const fat = Number(recipe.fat_g || 0);
-  const remainingKcal = Math.max(1, Number(remaining.kcal || 0));
-  const remainingProtein = Math.max(0, Number(remaining.protein_g || 0));
-  const remainingCarbs = Math.max(0, Number(remaining.carbs_g || 0));
+  if (!Number.isFinite(kcal) || kcal <= 0) return -9999;
 
-  // Score how much of the current deficit one serving fills.
-  const kcalFit = 100 - Math.min(100, Math.abs(kcal - Math.min(remainingKcal, kcal)) / Math.max(remainingKcal, 1) * 100);
-  const proteinFit = remainingProtein > 0 ? Math.min(100, protein / remainingProtein * 100) : 100;
-  const carbFit = remainingCarbs > 0 ? Math.min(100, carbs / remainingCarbs * 100) : 100;
+  const remainingKcal = Number(remaining.kcal || 0);
+  const remainingProtein = Number(remaining.protein_g || 0);
+  const remainingCarbs = Number(remaining.carbs_g || 0);
+  let score = 0;
 
-  let score = kcalFit * 0.30 + proteinFit * 0.25 + carbFit * 0.25;
+  if (remainingKcal > 0) {
+    const ratio = kcal / remainingKcal;
+    score += Math.max(0, 45 - Math.abs(1 - ratio) * 45);
+    if (kcal <= remainingKcal * CONFIG.recipeOvershootTolerance) score += 15;
+    else score -= Math.min(60, (kcal - remainingKcal) * 0.25);
+  } else {
+    if (kcal <= 150) score += 45;
+    else if (kcal <= 250) score += 15;
+    else score -= Math.min(100, (kcal - 150) * 0.6);
+  }
+
+  if (remainingProtein > 0) score += Math.min(20, protein / remainingProtein * 20);
+  if (remainingCarbs > 0) score += Math.min(25, carbs / remainingCarbs * 25);
 
   if (options.postRide) {
-    score += Math.min(40, carbs * 0.35) * CONFIG.postRideCarbPriority;
-    score -= Math.max(0, fat - 20) * CONFIG.postRideFatPenalty;
+    score += Math.min(35, carbs * 0.35) * CONFIG.postRideCarbPriority;
+    score -= Math.max(0, fat - 15) * CONFIG.postRideFatPenalty;
   } else {
     score -= Math.max(0, fat - Math.max(20, targets.fat_g * 0.35)) * 0.25;
   }
-
   if (options.maxMinutes) {
     const minutes = recipeMinutes(recipe);
-    if (minutes <= options.maxMinutes) score += 35;
-    else score -= Math.min(40, (minutes - options.maxMinutes) * 1.5);
+    score += minutes <= options.maxMinutes ? 20 : -Math.min(30, (minutes-options.maxMinutes)*1.2);
   }
-
   if (recipe.meal_prep) score += 8;
-  if (recipe.level === "Easy") score += 10;
-
-  // Do not heavily reward a recipe that would overshoot the remaining calories.
-  if (remainingKcal > 0 && kcal > remainingKcal * CONFIG.recipeOvershootTolerance) {
-    score -= Math.min(70, (kcal - remainingKcal) * 0.15);
-  }
-
+  if (recipe.level === 'Easy') score += 10;
   return Math.round(score * 10) / 10;
 }
 
 function recommendationReason(recipe, remaining, options) {
-  const reasons = [];
-  if (options.postRide && Number(recipe.carbs_g) >= 50) reasons.push("vyšší obsah sacharidů po kole");
-  if (remaining.protein_g > 0 && Number(recipe.protein_g) >= Math.min(40, remaining.protein_g * 0.35)) reasons.push("dobrý příjem bílkovin");
-  if (options.maxMinutes && recipeMinutes(recipe) <= options.maxMinutes) reasons.push("rychlá příprava");
-  if (recipe.meal_prep) reasons.push("Meal Prep");
-  return reasons.slice(0, 3).join(", ");
+  const reasons=[];
+  if (options.postRide && Number(recipe.carbs_g)>=40) reasons.push('sacharidy po kole');
+  if (remaining.protein_g>0 && Number(recipe.protein_g)>=Math.min(40,remaining.protein_g*0.35)) reasons.push('dobrý příjem bílkovin');
+  if (options.maxMinutes && recipeMinutes(recipe)<=options.maxMinutes) reasons.push('rychlá příprava');
+  if (recipe.meal_prep) reasons.push('Meal Prep');
+  if (remaining.kcal<=0 && Number(recipe.kcal)<=150) reasons.push('malá svačina bez velkého navýšení kcal');
+  return reasons.slice(0,3).join(', ');
 }
 
 async function foodRecommend(env, url) {
-  const date = url.searchParams.get("date") || pragueDate();
+  const date = url.searchParams.get('date') || pragueDate();
   const log = await foodLogForDate(env, date);
   const energy = await energyForDate(env, date);
   const targetKcal = Number(energy.calorieTarget || 0);
   const targets = energy.macroTargets || dailyMacroTargets(energy.currentWeight, targetKcal, energy.nutritionContext || {});
-  const remaining = {
-    kcal: Math.max(0, targetKcal - log.totals.kcal),
-    protein_g: Math.max(0, targets.protein_g - log.totals.protein_g),
-    carbs_g: Math.max(0, targets.carbs_g - log.totals.carbs_g),
-    fat_g: Math.max(0, targets.fat_g - log.totals.fat_g)
-  };
-
-  const explicitPostRide = url.searchParams.get("post_ride");
-  const postRide = explicitPostRide === "1" || (explicitPostRide !== "0" && energy.nutritionContext?.postRide);
-  const maxMinutes = Number(url.searchParams.get("max_minutes") || 0);
-  const category = (url.searchParams.get("category") || "").trim();
-  const limit = Math.max(1, Math.min(10, Number(url.searchParams.get("limit") || 5)));
-
-  const cookbookData = await getCookbook();
-  const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
-
-  let candidates = cookbook.filter(recipe => {
-    if (category && String(recipe.category || "").toLowerCase() !== category.toLowerCase()) return false;
-    if (maxMinutes && recipeMinutes(recipe) > maxMinutes) return false;
+  const calorieDelta = targetKcal - log.totals.kcal;
+  const remaining = { kcal: Math.max(0, calorieDelta), protein_g: Math.max(0, targets.protein_g-log.totals.protein_g), carbs_g: Math.max(0, targets.carbs_g-log.totals.carbs_g), fat_g: Math.max(0, targets.fat_g-log.totals.fat_g) };
+  const explicitPostRide=url.searchParams.get('post_ride');
+  const postRide=explicitPostRide==='1' || (explicitPostRide!=='0' && energy.nutritionContext?.postRide);
+  const maxMinutes=Number(url.searchParams.get('max_minutes')||0);
+  const category=(url.searchParams.get('category')||'').trim();
+  const limit=Math.max(1,Math.min(10,Number(url.searchParams.get('limit')||5)));
+  const overCalories=calorieDelta<0;
+  const heavilyOverCalories=calorieDelta<-300;
+  const cookbookData=await getCookbook();
+  const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
+  let candidates=cookbook.filter(recipe=>{
+    const kcal=Number(recipe.kcal);
+    if(!Number.isFinite(kcal)||kcal<=0) return false;
+    if(category && String(recipe.category||'').toLowerCase()!==category.toLowerCase()) return false;
+    if(maxMinutes && recipeMinutes(recipe)>maxMinutes) return false;
+    if(heavilyOverCalories && kcal>150) return false;
+    if(overCalories && !heavilyOverCalories && kcal>250) return false;
     return true;
   });
-
-  candidates = candidates
-    .map(recipe => ({
-      recipe,
-      score: recipeFitScore(recipe, remaining, targets, { postRide, maxMinutes })
-    }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(x => ({
-      ...x.recipe,
-      recommendation_score: x.score,
-      recommendation_reason: recommendationReason(x.recipe, remaining, { postRide, maxMinutes })
-    }));
-
-  return Response.json({
-    status: "ok",
-    date,
-    foodTotals: log.totals,
-    calorieTarget: targetKcal,
-    macroTargets: targets,
-    remaining,
-    nutritionContext: energy.nutritionContext || null,
-    recommendations: candidates
-  });
+  candidates=candidates.map(recipe=>({recipe,score:recipeFitScore(recipe,remaining,targets,{postRide,maxMinutes})})).filter(x=>x.score>-9000).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({...x.recipe,recommendation_score:x.score,recommendation_reason:recommendationReason(x.recipe,remaining,{postRide,maxMinutes})}));
+  let coaching='';
+  if(heavilyOverCalories) coaching='Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.';
+  else if(overCalories) coaching='Kalorický cíl už je splněný/překročený. Pokud máš hlad, vybírej spíš malou svačinovou porci; další plnohodnotné jídlo není nutné jen kvůli makrům.';
+  else if(postRide) coaching='Jsi krátce po vytrvalostním tréninku. Pokud budeš ještě jíst, preferuj sacharidy a rozumný příjem bílkovin.';
+  else if(energy.nutritionContext?.endurance) coaching='Dnes máš vytrvalostní zátěž, takže při dalším jídle mají vyšší prioritu sacharidy.';
+  return Response.json({status:'ok',date,foodTotals:log.totals,calorieTarget:targetKcal,calorieDelta,macroTargets:targets,remaining,nutritionContext:energy.nutritionContext||null,coaching,recommendations:candidates});
 }
 
 // ======================================================
@@ -2149,6 +2139,8 @@ async function foodLogText(env, request, url) {
   const uniquePages = [...new Set(pageNumbers)];
   const logged = [];
   const errors = [];
+  const existingRecent = await env.DB.prepare(`SELECT id,cookbook_page,recipe_title,source FROM food_logs WHERE consumed_date=? AND note=? AND created_at>=datetime('now','-30 seconds')`).bind(date,text).all();
+  const existingKeys = new Set((existingRecent.results||[]).map(r=>`${r.cookbook_page||''}|${r.recipe_title||''}|${r.source||''}`));
 
   for (const page of uniquePages) {
     const recipe = await cookbookRecipeByPage(page);
@@ -2157,10 +2149,17 @@ async function foodLogText(env, request, url) {
       continue;
     }
     const scaled = scaleRecipe(recipe, 1);
+    const dedupKey = `${recipe.page||''}|${recipe.title||''}|cookbook-text`;
+    if (existingKeys.has(dedupKey)) {
+      const existing=(existingRecent.results||[]).find(r=>`${r.cookbook_page||''}|${r.recipe_title||''}|${r.source||''}`===dedupKey);
+      logged.push({id:existing.id,page:recipe.page,title:recipe.title,duplicate:true,...scaled});
+      continue;
+    }
     const result = await env.DB.prepare(`
       INSERT INTO food_logs (consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'cookbook-text', ?)
     `).bind(date, body.consumed_at || new Date().toISOString(), recipe.page, recipe.title, scaled.kcal, scaled.protein_g, scaled.carbs_g, scaled.fat_g, scaled.fiber_g, text).run();
+    existingKeys.add(dedupKey);
     logged.push({ id: result.meta.last_row_id, page: recipe.page, title: recipe.title, ...scaled });
   }
 
