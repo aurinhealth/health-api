@@ -30,7 +30,11 @@ export default {
     if (url.pathname === "/sync/google") {
       return await syncGoogleHealth(env);
     }
-
+    
+    // Google data type test
+    if (url.pathname === "/test/google-types") {
+    return await testGoogleDataTypes(env);
+    }
 
     // ==================================================
     // OLD CALORIE ENDPOINT
@@ -1595,6 +1599,224 @@ async function getTodayFromDatabase(env) {
 
   } catch (error) {
 
+    return Response.json(
+      {
+        status: "error",
+        message:
+          error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+async function testGoogleDataTypes(env) {
+  try {
+    const accessToken =
+      await getGoogleAccessToken(env);
+
+    const startDate =
+      getDateDaysAgo(1);
+
+    const configs = [
+      {
+        dataType: "active-minutes",
+        filterName: "active_minutes",
+        recordType: "interval",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "active-zone-minutes",
+        filterName: "active_zone_minutes",
+        recordType: "interval",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "daily-respiratory-rate",
+        filterName: "daily_respiratory_rate",
+        recordType: "daily",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "respiratory-rate-sleep-summary",
+        filterName: "respiratory_rate_sleep_summary",
+        recordType: "sample",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "daily-vo2-max",
+        filterName: "daily_vo2_max",
+        recordType: "daily",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "run-vo2-max",
+        filterName: "run_vo2_max",
+        recordType: "sample",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "vo2-max",
+        filterName: "vo2_max",
+        recordType: "sample",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "sedentary-period",
+        filterName: "sedentary_period",
+        recordType: "interval",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "time-in-heart-rate-zone",
+        filterName: "time_in_heart_rate_zone",
+        recordType: "interval",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "calories-in-heart-rate-zone",
+        filterName: "calories_in_heart_rate_zone",
+        recordType: "interval",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+      {
+        dataType: "daily-heart-rate-zones",
+        filterName: "daily_heart_rate_zones",
+        recordType: "daily",
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      }
+    ];
+
+    const results = [];
+
+    for (const config of configs) {
+      try {
+        const params =
+          new URLSearchParams();
+
+        params.set(
+          "dataSourceFamily",
+          config.sourceFamily
+        );
+
+        let filter = "";
+
+        if (config.recordType === "interval") {
+          filter =
+            config.filterName +
+            '.interval.civil_start_time >= "' +
+            startDate +
+            'T00:00:00"';
+        }
+
+        if (config.recordType === "sample") {
+          filter =
+            config.filterName +
+            '.sample_time.civil_time >= "' +
+            startDate +
+            'T00:00:00"';
+        }
+
+        if (config.recordType === "daily") {
+          filter =
+            config.filterName +
+            '.date >= "' +
+            startDate +
+            '"';
+        }
+
+        params.set(
+          "filter",
+          filter
+        );
+
+        const endpoint =
+          "https://health.googleapis.com/v4/users/me/" +
+          "dataTypes/" +
+          config.dataType +
+          "/dataPoints:reconcile?" +
+          params.toString();
+
+        const response =
+          await fetch(
+            endpoint,
+            {
+              method: "GET",
+              headers: {
+                "Authorization":
+                  "Bearer " +
+                  accessToken,
+                "Accept":
+                  "application/json"
+              }
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          results.push({
+            data_type:
+              config.dataType,
+            status: "error",
+            http_status:
+              response.status,
+            message:
+              data.error &&
+              data.error.message
+                ? data.error.message
+                : JSON.stringify(data)
+          });
+
+          continue;
+        }
+
+        const points =
+          data.dataPoints || [];
+
+        results.push({
+          data_type:
+            config.dataType,
+          status: "ok",
+          records_found:
+            points.length,
+          sample:
+            points.slice(0, 2)
+        });
+
+      } catch (error) {
+        results.push({
+          data_type:
+            config.dataType,
+          status: "error",
+          message:
+            error.message
+        });
+      }
+    }
+
+    return Response.json({
+      status: "ok",
+      test_start_date:
+        startDate,
+      test_end_date:
+        getPragueDate(),
+      results:
+        results
+    });
+
+  } catch (error) {
     return Response.json(
       {
         status: "error",
