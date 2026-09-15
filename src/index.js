@@ -1758,7 +1758,8 @@ async function cookbookSearchResults(url) {
   const mealPrep = url.searchParams.get("meal_prep");
   const limit = Math.max(1, Math.min(30, Number(url.searchParams.get("limit") || 10)));
 
-  const cookbook = await getCookbook();
+  const cookbookData = await getCookbook();
+  const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
 
   let results = cookbook.filter(recipe => {
     if (category && recipe.category.toLowerCase() !== category) return false;
@@ -1960,7 +1961,8 @@ async function foodRecommend(env, url) {
   const maxMinutes = Number(url.searchParams.get("max_minutes") || 0);
   const category = url.searchParams.get("category") || "";
 
-  const cookbook = await getCookbook();
+  const cookbookData = await getCookbook();
+  const cookbook = Array.isArray(cookbookData) ? cookbookData : (cookbookData?.recipes || []);
 
   let candidates = cookbook.filter(recipe => {
     if (category && recipe.category.toLowerCase() !== category.toLowerCase()) return false;
