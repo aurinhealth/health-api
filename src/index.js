@@ -2,7 +2,10 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Basic health check
+    // ==================================================
+    // BASIC
+    // ==================================================
+
     if (url.pathname === "/") {
       return Response.json({
         status: "ok",
@@ -10,30 +13,60 @@ export default {
       });
     }
 
-    // Google OAuth test
+
+    // ==================================================
+    // GOOGLE AUTH TEST
+    // ==================================================
+
     if (url.pathname === "/auth-test") {
       return await testGoogleAuth(env);
     }
 
-    // Today's calories
+
+    // ==================================================
+    // GOOGLE FULL SYNC
+    // ==================================================
+
+    if (url.pathname === "/sync/google") {
+      return await syncGoogleHealth(env);
+    }
+
+
+    // ==================================================
+    // OLD CALORIE ENDPOINT
+    // ==================================================
+
     if (url.pathname === "/health/today") {
       return await getTodayCalories(env);
     }
 
-    // Today's sleep
+
+    // ==================================================
+    // OLD SLEEP ENDPOINT
+    // ==================================================
+
     if (url.pathname === "/health/sleep") {
       return await getTodaySleep(env);
     }
 
-    // Latest weight
+
+    // ==================================================
+    // OLD WEIGHT ENDPOINT
+    // ==================================================
+
     if (url.pathname === "/health/weight") {
-    return await getLatestWeight(env);
+      return await getLatestWeight(env);
     }
 
-    // Read today's calories from D1
+
+    // ==================================================
+    // DATABASE TEST
+    // ==================================================
+
     if (url.pathname === "/health/db") {
       return await getTodayFromDatabase(env);
     }
+
 
     return Response.json(
       {
@@ -77,8 +110,10 @@ async function getGoogleAccessToken(env) {
     }
   );
 
+
   const data =
     await response.json();
+
 
   if (!response.ok) {
     throw new Error(
@@ -88,6 +123,7 @@ async function getGoogleAccessToken(env) {
       (data.error_description || "")
     );
   }
+
 
   return data.access_token;
 }
@@ -101,6 +137,7 @@ async function testGoogleAuth(env) {
   try {
     const accessToken =
       await getGoogleAccessToken(env);
+
 
     return Response.json({
       status: "ok",
@@ -138,12 +175,14 @@ function getPragueDate() {
       }
     ).formatToParts(new Date());
 
+
   const year =
     parts.find(
       function (part) {
         return part.type === "year";
       }
     ).value;
+
 
   const month =
     parts.find(
@@ -152,12 +191,14 @@ function getPragueDate() {
       }
     ).value;
 
+
   const day =
     parts.find(
       function (part) {
         return part.type === "day";
       }
     ).value;
+
 
   return (
     year +
@@ -169,53 +210,999 @@ function getPragueDate() {
 }
 
 
-function getTomorrowDate(dateString) {
+function getDateDaysAgo(days) {
+  const today =
+    getPragueDate();
+
   const parts =
-    dateString.split("-");
+    today.split("-");
 
-  const year =
-    Number(parts[0]);
-
-  const month =
-    Number(parts[1]);
-
-  const day =
-    Number(parts[2]);
 
   const date =
     new Date(
       Date.UTC(
-        year,
-        month - 1,
-        day + 1
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2]) - days
       )
     );
 
-  const nextYear =
-    date.getUTCFullYear();
-
-  const nextMonth =
-    String(
-      date.getUTCMonth() + 1
-    ).padStart(2, "0");
-
-  const nextDay =
-    String(
-      date.getUTCDate()
-    ).padStart(2, "0");
 
   return (
-    nextYear +
+    date.getUTCFullYear() +
     "-" +
-    nextMonth +
+    String(
+      date.getUTCMonth() + 1
+    ).padStart(2, "0") +
     "-" +
-    nextDay
+    String(
+      date.getUTCDate()
+    ).padStart(2, "0")
+  );
+}
+
+
+function getTomorrowDate(dateString) {
+  const parts =
+    dateString.split("-");
+
+
+  const date =
+    new Date(
+      Date.UTC(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2]) + 1
+      )
+    );
+
+
+  return (
+    date.getUTCFullYear() +
+    "-" +
+    String(
+      date.getUTCMonth() + 1
+    ).padStart(2, "0") +
+    "-" +
+    String(
+      date.getUTCDate()
+    ).padStart(2, "0")
   );
 }
 
 
 // ======================================================
-// GOOGLE HEALTH → TOTAL CALORIES → D1
+// GOOGLE CIVIL DATE
+// ======================================================
+
+function googleDate(dateString) {
+  const parts =
+    dateString.split("-");
+
+
+  return {
+    date: {
+      year:
+        Number(parts[0]),
+
+      month:
+        Number(parts[1]),
+
+      day:
+        Number(parts[2])
+    },
+
+    time: {
+      hours: 0,
+      minutes: 0,
+      seconds: 0,
+      nanos: 0
+    }
+  };
+}
+
+
+// ======================================================
+// SAVE GENERIC DATA POINT
+// ======================================================
+
+async function saveDataPoint(
+  env,
+  sourceFamily,
+  dataType,
+  point,
+  value,
+  unit,
+  sampleTime,
+  startTime,
+  endTime
+) {
+  const externalId =
+    point.name ||
+    (
+      dataType +
+      ":" +
+      String(
+        sampleTime ||
+        startTime ||
+        JSON.stringify(point)
+      )
+    );
+
+
+  const result =
+    await env.DB
+      .prepare(
+        "INSERT INTO health_datapoints (" +
+        "source_family, " +
+        "data_type, " +
+        "external_id, " +
+        "sample_time, " +
+        "start_time, " +
+        "end_time, " +
+        "value_numeric, " +
+        "value_unit, " +
+        "payload_json" +
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
+
+        "ON CONFLICT (" +
+        "source_family, " +
+        "data_type, " +
+        "external_id" +
+        ") DO UPDATE SET " +
+
+        "sample_time = excluded.sample_time, " +
+        "start_time = excluded.start_time, " +
+        "end_time = excluded.end_time, " +
+        "value_numeric = excluded.value_numeric, " +
+        "value_unit = excluded.value_unit, " +
+        "payload_json = excluded.payload_json, " +
+        "updated_at = CURRENT_TIMESTAMP"
+      )
+      .bind(
+        sourceFamily,
+        dataType,
+        externalId,
+        sampleTime || null,
+        startTime || null,
+        endTime || null,
+        value !== undefined &&
+        value !== null
+          ? value
+          : null,
+        unit || null,
+        JSON.stringify(point)
+      )
+      .run();
+
+
+  return {
+    external_id:
+      externalId,
+
+    database_success:
+      result.success
+  };
+}
+
+
+// ======================================================
+// GENERIC RECONCILE
+// ======================================================
+
+async function reconcileDataType(
+  env,
+  accessToken,
+  config,
+  startDate
+) {
+  const params =
+    new URLSearchParams();
+
+
+  params.set(
+    "dataSourceFamily",
+    config.sourceFamily
+  );
+
+
+  let filter = "";
+
+
+  if (config.recordType === "interval") {
+    filter =
+      config.filterName +
+      ".interval.civil_start_time >= \"" +
+      startDate +
+      "T00:00:00\"";
+  }
+
+
+  if (config.recordType === "sample") {
+    filter =
+      config.filterName +
+      ".sample_time.civil_time >= \"" +
+      startDate +
+      "T00:00:00\"";
+  }
+
+
+  if (config.recordType === "daily") {
+    filter =
+      config.filterName +
+      ".date >= \"" +
+      startDate +
+      "\"";
+  }
+
+
+  if (config.recordType === "exercise") {
+    filter =
+      "exercise.interval.civil_start_time >= \"" +
+      startDate +
+      "T00:00:00\"";
+  }
+
+
+  if (config.recordType === "sleep") {
+    filter =
+      "sleep.interval.civil_end_time >= \"" +
+      startDate +
+      "T00:00:00\"";
+  }
+
+
+  params.set(
+    "filter",
+    filter
+  );
+
+
+  const endpoint =
+    "https://health.googleapis.com/v4/users/me/" +
+    "dataTypes/" +
+    config.dataType +
+    "/dataPoints:reconcile?" +
+    params.toString();
+
+
+  const response =
+    await fetch(
+      endpoint,
+      {
+        method: "GET",
+
+        headers: {
+          "Authorization":
+            "Bearer " + accessToken,
+
+          "Accept":
+            "application/json"
+        }
+      }
+    );
+
+
+  const data =
+    await response.json();
+
+
+  if (!response.ok) {
+    throw new Error(
+      config.dataType +
+      " HTTP " +
+      response.status +
+      ": " +
+      JSON.stringify(data)
+    );
+  }
+
+
+  return data.dataPoints || [];
+}
+
+
+// ======================================================
+// EXTRACT COMMON VALUES
+// ======================================================
+
+function extractPointInfo(
+  dataType,
+  point
+) {
+  let value = null;
+  let unit = null;
+  let sampleTime = null;
+  let startTime = null;
+  let endTime = null;
+
+
+  // ----------------------------------------------
+  // INTERVAL
+  // ----------------------------------------------
+
+  if (
+    point.startTime
+  ) {
+    startTime =
+      point.startTime;
+  }
+
+
+  if (
+    point.endTime
+  ) {
+    endTime =
+      point.endTime;
+  }
+
+
+  // ----------------------------------------------
+  // SAMPLE TIME
+  // ----------------------------------------------
+
+  if (
+    point.sampleTime &&
+    point.sampleTime.physicalTime
+  ) {
+    sampleTime =
+      point.sampleTime.physicalTime;
+  }
+
+
+  if (
+    !sampleTime &&
+    point.sampleTime &&
+    point.sampleTime.civilTime &&
+    point.sampleTime.civilTime.date
+  ) {
+    const d =
+      point.sampleTime.civilTime.date;
+
+
+    sampleTime =
+      d.year +
+      "-" +
+      String(d.month).padStart(2, "0") +
+      "-" +
+      String(d.day).padStart(2, "0");
+  }
+
+
+  // ----------------------------------------------
+  // HEART RATE
+  // ----------------------------------------------
+
+  if (
+    dataType === "heart-rate" &&
+    point.heartRate
+  ) {
+    value =
+      point.heartRate.bpm;
+
+    unit =
+      "bpm";
+  }
+
+
+  // ----------------------------------------------
+  // WEIGHT
+  // ----------------------------------------------
+
+  if (
+    dataType === "weight" &&
+    point.weight
+  ) {
+    value =
+      Number(
+        point.weight.weightGrams
+      ) / 1000;
+
+    unit =
+      "kg";
+  }
+
+
+  // ----------------------------------------------
+  // BODY FAT
+  // ----------------------------------------------
+
+  if (
+    dataType === "body-fat" &&
+    point.bodyFat
+  ) {
+    value =
+      point.bodyFat.percentage;
+
+    unit =
+      "%";
+  }
+
+
+  // ----------------------------------------------
+  // OXYGEN SATURATION
+  // ----------------------------------------------
+
+  if (
+    dataType === "oxygen-saturation" &&
+    point.oxygenSaturation
+  ) {
+    value =
+      point.oxygenSaturation.percentage;
+
+    unit =
+      "%";
+  }
+
+
+  // ----------------------------------------------
+  // RESPIRATORY RATE
+  // ----------------------------------------------
+
+  if (
+    dataType === "respiratory-rate" &&
+    point.respiratoryRate
+  ) {
+    value =
+      point.respiratoryRate.breathsPerMinute;
+
+    unit =
+      "breaths/min";
+  }
+
+
+  return {
+    value:
+      value,
+
+    unit:
+      unit,
+
+    sampleTime:
+      sampleTime,
+
+    startTime:
+      startTime,
+
+    endTime:
+      endTime
+  };
+}
+
+
+// ======================================================
+// FULL GOOGLE HEALTH SYNC
+// ======================================================
+
+async function syncGoogleHealth(env) {
+  try {
+    const accessToken =
+      await getGoogleAccessToken(env);
+
+
+    const today =
+      getPragueDate();
+
+
+    const startDate =
+      getDateDaysAgo(1);
+
+
+    const results = [];
+
+
+    // ==================================================
+    // CONFIGURATION
+    // ==================================================
+
+    const configs = [
+
+      {
+        dataType:
+          "active-energy-burned",
+
+        filterName:
+          "active_energy_burned",
+
+        recordType:
+          "interval",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "steps",
+
+        filterName:
+          "steps",
+
+        recordType:
+          "interval",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "distance",
+
+        filterName:
+          "distance",
+
+        recordType:
+          "interval",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "floors",
+
+        filterName:
+          "floors",
+
+        recordType:
+          "interval",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "heart-rate",
+
+        filterName:
+          "heart_rate",
+
+        recordType:
+          "sample",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "heart-rate-variability",
+
+        filterName:
+          "heart_rate_variability",
+
+        recordType:
+          "sample",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "oxygen-saturation",
+
+        filterName:
+          "oxygen_saturation",
+
+        recordType:
+          "sample",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "respiratory-rate",
+
+        filterName:
+          "respiratory_rate",
+
+        recordType:
+          "sample",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "daily-resting-heart-rate",
+
+        filterName:
+          "daily_resting_heart_rate",
+
+        recordType:
+          "daily",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "daily-heart-rate-variability",
+
+        filterName:
+          "daily_heart_rate_variability",
+
+        recordType:
+          "daily",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "daily-oxygen-saturation",
+
+        filterName:
+          "daily_oxygen_saturation",
+
+        recordType:
+          "daily",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "sleep",
+
+        filterName:
+          "sleep",
+
+        recordType:
+          "sleep",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "exercise",
+
+        filterName:
+          "exercise",
+
+        recordType:
+          "exercise",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      },
+
+      {
+        dataType:
+          "weight",
+
+        filterName:
+          "weight",
+
+        recordType:
+          "sample",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-sources"
+      },
+
+      {
+        dataType:
+          "body-fat",
+
+        filterName:
+          "body_fat",
+
+        recordType:
+          "sample",
+
+        sourceFamily:
+          "users/me/dataSourceFamilies/google-sources"
+      }
+    ];
+
+
+    // ==================================================
+    // PROCESS DATA TYPES
+    // ==================================================
+
+    for (
+      const config of configs
+    ) {
+      try {
+
+        const points =
+          await reconcileDataType(
+            env,
+            accessToken,
+            config,
+            startDate
+          );
+
+
+        let saved =
+          0;
+
+
+        for (
+          const point of points
+        ) {
+          const info =
+            extractPointInfo(
+              config.dataType,
+              point
+            );
+
+
+          await saveDataPoint(
+            env,
+
+            config.sourceFamily
+              .replace(
+                "users/me/dataSourceFamilies/",
+                ""
+              ),
+
+            config.dataType,
+
+            point,
+
+            info.value,
+
+            info.unit,
+
+            info.sampleTime,
+
+            info.startTime,
+
+            info.endTime
+          );
+
+
+          saved++;
+        }
+
+
+        results.push({
+          data_type:
+            config.dataType,
+
+          records_found:
+            points.length,
+
+          records_saved:
+            saved,
+
+          status:
+            "ok"
+        });
+
+
+      } catch (error) {
+
+        results.push({
+          data_type:
+            config.dataType,
+
+          status:
+            "error",
+
+          message:
+            error.message
+        });
+      }
+    }
+
+
+    // ==================================================
+    // TOTAL CALORIES
+    // ==================================================
+
+    try {
+      const tomorrow =
+        getTomorrowDate(today);
+
+
+      const endpoint =
+        "https://health.googleapis.com/v4/users/me/" +
+        "dataTypes/total-calories/" +
+        "dataPoints:dailyRollUp";
+
+
+      const body = {
+        range: {
+          start:
+            googleDate(today),
+
+          end:
+            googleDate(tomorrow)
+        },
+
+        windowSizeDays:
+          1,
+
+        dataSourceFamily:
+          "users/me/dataSourceFamilies/google-wearables"
+      };
+
+
+      const response =
+        await fetch(
+          endpoint,
+          {
+            method: "POST",
+
+            headers: {
+              "Authorization":
+                "Bearer " + accessToken,
+
+              "Content-Type":
+                "application/json"
+            },
+
+            body:
+              JSON.stringify(body)
+          }
+        );
+
+
+      const data =
+        await response.json();
+
+
+      if (!response.ok) {
+        throw new Error(
+          "HTTP " +
+          response.status +
+          ": " +
+          JSON.stringify(data)
+        );
+      }
+
+
+      const rollup =
+        data.rollupDataPoints &&
+        data.rollupDataPoints[0];
+
+
+      const calories =
+        rollup &&
+        rollup.totalCalories &&
+        rollup.totalCalories.kcalSum;
+
+
+      if (
+        calories !== undefined &&
+        calories !== null
+      ) {
+        await saveDataPoint(
+          env,
+
+          "google-wearables",
+
+          "total-calories",
+
+          data,
+
+          calories,
+
+          "kcal",
+
+          today,
+
+          today + "T00:00:00",
+
+          tomorrow + "T00:00:00"
+        );
+      }
+
+
+      results.push({
+        data_type:
+          "total-calories",
+
+        records_found:
+          calories !== undefined &&
+          calories !== null
+            ? 1
+            : 0,
+
+        records_saved:
+          calories !== undefined &&
+          calories !== null
+            ? 1
+            : 0,
+
+        status:
+          "ok"
+      });
+
+
+    } catch (error) {
+
+      results.push({
+        data_type:
+          "total-calories",
+
+        status:
+          "error",
+
+        message:
+          error.message
+      });
+    }
+
+
+    // ==================================================
+    // RESPONSE
+    // ==================================================
+
+    let totalFound =
+      0;
+
+    let totalSaved =
+      0;
+
+    for (
+      const result of results
+    ) {
+      totalFound +=
+        result.records_found || 0;
+
+      totalSaved +=
+        result.records_saved || 0;
+    }
+
+
+    return Response.json({
+      status: "ok",
+
+      date:
+        today,
+
+      sync_start_date:
+        startDate,
+
+      sync_end_date:
+        today,
+
+      data_types_processed:
+        results.length,
+
+      total_records_found:
+        totalFound,
+
+      total_records_saved:
+        totalSaved,
+
+      results:
+        results
+    });
+
+
+  } catch (error) {
+
+    return Response.json(
+      {
+        status: "error",
+        message:
+          error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+// ======================================================
+// OLD CALORIE ENDPOINT
 // ======================================================
 
 async function getTodayCalories(env) {
@@ -229,47 +1216,29 @@ async function getTodayCalories(env) {
     const tomorrow =
       getTomorrowDate(today);
 
+
     const endpoint =
       "https://health.googleapis.com/v4/users/me/" +
       "dataTypes/total-calories/" +
       "dataPoints:dailyRollUp";
 
+
     const body = {
       range: {
-        start: {
-          date: {
-            year: Number(today.split("-")[0]),
-            month: Number(today.split("-")[1]),
-            day: Number(today.split("-")[2])
-          },
-          time: {
-            hours: 0,
-            minutes: 0,
-            seconds: 0,
-            nanos: 0
-          }
-        },
+        start:
+          googleDate(today),
 
-        end: {
-          date: {
-            year: Number(tomorrow.split("-")[0]),
-            month: Number(tomorrow.split("-")[1]),
-            day: Number(tomorrow.split("-")[2])
-          },
-          time: {
-            hours: 0,
-            minutes: 0,
-            seconds: 0,
-            nanos: 0
-          }
-        }
+        end:
+          googleDate(tomorrow)
       },
 
-      windowSizeDays: 1,
+      windowSizeDays:
+        1,
 
       dataSourceFamily:
         "users/me/dataSourceFamilies/google-wearables"
     };
+
 
     const response =
       await fetch(
@@ -290,8 +1259,10 @@ async function getTodayCalories(env) {
         }
       );
 
+
     const data =
       await response.json();
+
 
     if (!response.ok) {
       return Response.json(
@@ -306,93 +1277,35 @@ async function getTodayCalories(env) {
       );
     }
 
+
     const rollup =
       data.rollupDataPoints &&
       data.rollupDataPoints[0];
+
 
     const calories =
       rollup &&
       rollup.totalCalories &&
       rollup.totalCalories.kcalSum;
 
-    if (
-      calories === null ||
-      calories === undefined
-    ) {
-      return Response.json({
-        status: "ok",
-        date: today,
-        source: "google-wearables",
-        total_calories: null,
-        saved_to_database: false,
-        message:
-          "No calorie data available"
-      });
-    }
-
-    const externalId =
-      "total-calories:" +
-      today +
-      ":google-wearables";
-
-    const result =
-      await env.DB
-        .prepare(
-          "INSERT INTO health_datapoints (" +
-          "source_family, " +
-          "data_type, " +
-          "external_id, " +
-          "sample_time, " +
-          "start_time, " +
-          "end_time, " +
-          "value_numeric, " +
-          "value_unit, " +
-          "payload_json" +
-          ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-
-          "ON CONFLICT (" +
-          "source_family, " +
-          "data_type, " +
-          "external_id" +
-          ") DO UPDATE SET " +
-
-          "sample_time = excluded.sample_time, " +
-          "start_time = excluded.start_time, " +
-          "end_time = excluded.end_time, " +
-          "value_numeric = excluded.value_numeric, " +
-          "value_unit = excluded.value_unit, " +
-          "payload_json = excluded.payload_json, " +
-          "updated_at = CURRENT_TIMESTAMP"
-        )
-        .bind(
-          "google-wearables",
-          "total-calories",
-          externalId,
-          today,
-          today + "T00:00:00",
-          tomorrow + "T00:00:00",
-          calories,
-          "kcal",
-          JSON.stringify(data)
-        )
-        .run();
 
     return Response.json({
       status: "ok",
       date: today,
-      source: "google-wearables",
-      total_calories: calories,
-      unit: "kcal",
-      saved_to_database: true,
-      database_success:
-        result.success
+      source:
+        "google-wearables",
+      total_calories:
+        calories
     });
 
+
   } catch (error) {
+
     return Response.json(
       {
         status: "error",
-        message: error.message
+        message:
+          error.message
       },
       { status: 500 }
     );
@@ -401,7 +1314,7 @@ async function getTodayCalories(env) {
 
 
 // ======================================================
-// GOOGLE HEALTH → SLEEP → D1
+// OLD SLEEP ENDPOINT
 // ======================================================
 
 async function getTodaySleep(env) {
@@ -412,28 +1325,30 @@ async function getTodaySleep(env) {
     const today =
       getPragueDate();
 
-    const filter =
-      'sleep.interval.civil_end_time >= "' +
-      today +
-      '"';
 
     const params =
       new URLSearchParams();
+
 
     params.set(
       "dataSourceFamily",
       "users/me/dataSourceFamilies/google-wearables"
     );
 
+
     params.set(
       "filter",
-      filter
+      'sleep.interval.civil_end_time >= "' +
+      today +
+      'T00:00:00"'
     );
+
 
     const endpoint =
       "https://health.googleapis.com/v4/users/me/" +
       "dataTypes/sleep/dataPoints:reconcile?" +
       params.toString();
+
 
     const response =
       await fetch(
@@ -451,8 +1366,10 @@ async function getTodaySleep(env) {
         }
       );
 
+
     const data =
       await response.json();
+
 
     if (!response.ok) {
       return Response.json(
@@ -467,141 +1384,28 @@ async function getTodaySleep(env) {
       );
     }
 
-    const dataPoints =
-      data.dataPoints || [];
-
-    const saved =
-      [];
-
-    for (
-      const point of dataPoints
-    ) {
-      if (
-        !point.sleep ||
-        !point.sleep.interval
-      ) {
-        continue;
-      }
-
-      const sleep =
-        point.sleep;
-
-      const interval =
-        sleep.interval;
-
-      const startTime =
-        interval.startTime;
-
-      const endTime =
-        interval.endTime;
-
-      if (
-        !startTime ||
-        !endTime
-      ) {
-        continue;
-      }
-
-      const start =
-        new Date(startTime);
-
-      const end =
-        new Date(endTime);
-
-      const durationMinutes =
-        Math.round(
-          (end.getTime() -
-            start.getTime()) /
-          60000
-        );
-
-      const externalId =
-        point.name ||
-        (
-          "sleep:" +
-          startTime +
-          ":" +
-          endTime
-        );
-
-      const sampleTime =
-        endTime.substring(
-          0,
-          10
-        );
-
-      const result =
-        await env.DB
-          .prepare(
-            "INSERT INTO health_datapoints (" +
-            "source_family, " +
-            "data_type, " +
-            "external_id, " +
-            "sample_time, " +
-            "start_time, " +
-            "end_time, " +
-            "value_numeric, " +
-            "value_unit, " +
-            "payload_json" +
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-
-            "ON CONFLICT (" +
-            "source_family, " +
-            "data_type, " +
-            "external_id" +
-            ") DO UPDATE SET " +
-
-            "sample_time = excluded.sample_time, " +
-            "start_time = excluded.start_time, " +
-            "end_time = excluded.end_time, " +
-            "value_numeric = excluded.value_numeric, " +
-            "value_unit = excluded.value_unit, " +
-            "payload_json = excluded.payload_json, " +
-            "updated_at = CURRENT_TIMESTAMP"
-          )
-          .bind(
-            "google-wearables",
-            "sleep",
-            externalId,
-            sampleTime,
-            startTime,
-            endTime,
-            durationMinutes,
-            "minutes",
-            JSON.stringify(point)
-          )
-          .run();
-
-      saved.push({
-        external_id:
-          externalId,
-        start_time:
-          startTime,
-        end_time:
-          endTime,
-        duration_minutes:
-          durationMinutes,
-        sleep_type:
-          sleep.type,
-        database_success:
-          result.success
-      });
-    }
 
     return Response.json({
       status: "ok",
       date: today,
-      source: "google-wearables",
-      count: saved.length,
-      saved_to_database: true,
-      sleep: saved
+      source:
+        "google-wearables",
+      count:
+        data.dataPoints
+          ? data.dataPoints.length
+          : 0,
+      sleep:
+        data.dataPoints || []
     });
 
+
   } catch (error) {
+
     return Response.json(
       {
         status: "error",
-        message: error.message
+        message:
+          error.message
       },
       { status: 500 }
     );
@@ -610,13 +1414,148 @@ async function getTodaySleep(env) {
 
 
 // ======================================================
-// READ TODAY FROM D1
+// OLD WEIGHT ENDPOINT
+// ======================================================
+
+async function getLatestWeight(env) {
+  try {
+    const accessToken =
+      await getGoogleAccessToken(env);
+
+
+    const startDate =
+      getDateDaysAgo(30);
+
+
+    const params =
+      new URLSearchParams();
+
+
+    params.set(
+      "dataSourceFamily",
+      "users/me/dataSourceFamilies/google-sources"
+    );
+
+
+    params.set(
+      "filter",
+      'weight.sample_time.physical_time >= "' +
+      startDate +
+      'T00:00:00Z"'
+    );
+
+
+    const endpoint =
+      "https://health.googleapis.com/v4/users/me/" +
+      "dataTypes/weight/dataPoints:reconcile?" +
+      params.toString();
+
+
+    const response =
+      await fetch(
+        endpoint,
+        {
+          method: "GET",
+
+          headers: {
+            "Authorization":
+              "Bearer " + accessToken,
+
+            "Accept":
+              "application/json"
+          }
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (!response.ok) {
+      return Response.json(
+        {
+          status: "error",
+          google_status:
+            response.status,
+          google_response:
+            data
+        },
+        { status: 500 }
+      );
+    }
+
+
+    const points =
+      data.dataPoints || [];
+
+
+    const weights =
+      points.filter(
+        function (point) {
+          return (
+            point.weight &&
+            point.weight.weightGrams !==
+              undefined
+          );
+        }
+      );
+
+
+    if (
+      weights.length === 0
+    ) {
+      return Response.json({
+        status: "ok",
+        weight: null
+      });
+    }
+
+
+    const latest =
+      weights[
+        weights.length - 1
+      ];
+
+
+    const kilograms =
+      Number(
+        latest.weight.weightGrams
+      ) / 1000;
+
+
+    return Response.json({
+      status: "ok",
+      weight_kg:
+        kilograms,
+      source:
+        "google-sources"
+    });
+
+
+  } catch (error) {
+
+    return Response.json(
+      {
+        status: "error",
+        message:
+          error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+
+
+// ======================================================
+// DATABASE CHECK
 // ======================================================
 
 async function getTodayFromDatabase(env) {
   try {
     const today =
       getPragueDate();
+
 
     const result =
       await env.DB
@@ -634,344 +1573,33 @@ async function getTodayFromDatabase(env) {
           "created_at, " +
           "updated_at " +
           "FROM health_datapoints " +
-          "WHERE data_type = ? " +
-          "AND sample_time = ? " +
+          "WHERE sample_time LIKE ? " +
           "ORDER BY id DESC"
         )
         .bind(
-          "total-calories",
-          today
+          today + "%"
         )
         .all();
 
+
     return Response.json({
       status: "ok",
-      date: today,
+      date:
+        today,
       count:
         result.results.length,
       data:
         result.results
     });
 
+
   } catch (error) {
+
     return Response.json(
       {
         status: "error",
-        message: error.message
-      },
-      { status: 500 }
-    );
-  }
-}
-// ======================================================
-// GOOGLE HEALTH → WEIGHT → D1
-// ======================================================
-
-async function getLatestWeight(env) {
-  try {
-    const accessToken =
-      await getGoogleAccessToken(env);
-
-    const today =
-      getPragueDate();
-
-    const todayParts =
-      today.split("-");
-
-    const todayDate =
-      new Date(
-        Date.UTC(
-          Number(todayParts[0]),
-          Number(todayParts[1]) - 1,
-          Number(todayParts[2])
-        )
-      );
-
-    const startDate =
-      new Date(todayDate);
-
-    startDate.setUTCDate(
-      startDate.getUTCDate() - 30
-    );
-
-    const startYear =
-      startDate.getUTCFullYear();
-
-    const startMonth =
-      String(
-        startDate.getUTCMonth() + 1
-      ).padStart(2, "0");
-
-    const startDay =
-      String(
-        startDate.getUTCDate()
-      ).padStart(2, "0");
-
-    const startDateString =
-      startYear +
-      "-" +
-      startMonth +
-      "-" +
-      startDay;
-
-    const endpoint =
-      "https://health.googleapis.com/v4/users/me/" +
-      "dataTypes/weight/dataPoints:reconcile";
-
-    const params =
-      new URLSearchParams();
-
-    params.set(
-      "dataSourceFamily",
-      "users/me/dataSourceFamilies/google-sources"
-    );
-
-    params.set(
-      "filter",
-      'weight.sample_time.civil_time >= "' +
-      startDateString +
-      'T00:00:00"'
-    );
-
-    params.set(
-      "pageSize",
-      "100"
-    );
-
-    const url =
-      endpoint +
-      "?" +
-      params.toString();
-
-    const response =
-      await fetch(
-        url,
-        {
-          method: "GET",
-
-          headers: {
-            "Authorization":
-              "Bearer " + accessToken,
-
-            "Accept":
-              "application/json"
-          }
-        }
-      );
-
-    const data =
-      await response.json();
-
-    if (!response.ok) {
-      return Response.json(
-        {
-          status: "error",
-          google_status:
-            response.status,
-          google_response:
-            data
-        },
-        { status: 500 }
-      );
-    }
-
-    const dataPoints =
-      data.dataPoints || [];
-
-    if (dataPoints.length === 0) {
-      return Response.json({
-        status: "ok",
-        date: today,
-        source: "google-sources",
-        search_period_days: 30,
-        weight: null,
-        saved_to_database: false,
         message:
-          "No weight data available in the last 30 days"
-      });
-    }
-
-    const weights =
-      [];
-
-    for (
-      const point of dataPoints
-    ) {
-      if (
-        !point.weight ||
-        point.weight.weightGrams === undefined
-      ) {
-        continue;
-      }
-
-      const grams =
-        Number(
-          point.weight.weightGrams
-        );
-
-      const kilograms =
-        grams / 1000;
-
-      let sampleTime =
-        null;
-
-      if (
-        point.weight.sampleTime &&
-        point.weight.sampleTime.physicalTime
-      ) {
-        sampleTime =
-          point.weight.sampleTime.physicalTime;
-      }
-
-      if (
-        !sampleTime &&
-        point.weight.sampleTime &&
-        point.weight.sampleTime.civilTime
-      ) {
-        const civil =
-          point.weight.sampleTime.civilTime;
-
-        if (
-          civil.date
-        ) {
-          const year =
-            civil.date.year;
-
-          const month =
-            String(
-              civil.date.month
-            ).padStart(2, "0");
-
-          const day =
-            String(
-              civil.date.day
-            ).padStart(2, "0");
-
-          sampleTime =
-            year +
-            "-" +
-            month +
-            "-" +
-            day;
-        }
-      }
-
-      weights.push({
-        point: point,
-        grams: grams,
-        kilograms: kilograms,
-        sampleTime: sampleTime
-      });
-    }
-
-    if (weights.length === 0) {
-      return Response.json({
-        status: "ok",
-        date: today,
-        source: "google-sources",
-        search_period_days: 30,
-        weight: null,
-        saved_to_database: false,
-        message:
-          "Weight records found but could not be parsed"
-      });
-    }
-
-    weights.sort(
-      function (a, b) {
-        return String(b.sampleTime)
-          .localeCompare(
-            String(a.sampleTime)
-          );
-      }
-    );
-
-    const latest =
-      weights[0];
-
-    const point =
-      latest.point;
-
-    const externalId =
-      point.name ||
-      (
-        "weight:" +
-        String(
-          latest.sampleTime
-        )
-      );
-
-    const result =
-      await env.DB
-        .prepare(
-          "INSERT INTO health_datapoints (" +
-          "source_family, " +
-          "data_type, " +
-          "external_id, " +
-          "sample_time, " +
-          "start_time, " +
-          "end_time, " +
-          "value_numeric, " +
-          "value_unit, " +
-          "payload_json" +
-          ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-
-          "ON CONFLICT (" +
-          "source_family, " +
-          "data_type, " +
-          "external_id" +
-          ") DO UPDATE SET " +
-
-          "sample_time = excluded.sample_time, " +
-          "value_numeric = excluded.value_numeric, " +
-          "value_unit = excluded.value_unit, " +
-          "payload_json = excluded.payload_json, " +
-          "updated_at = CURRENT_TIMESTAMP"
-        )
-        .bind(
-          "google-sources",
-          "weight",
-          externalId,
-          latest.sampleTime,
-          null,
-          null,
-          latest.kilograms,
-          "kg",
-          JSON.stringify(point)
-        )
-        .run();
-
-    return Response.json({
-      status: "ok",
-      date: today,
-      source: "google-sources",
-      search_period_days: 30,
-      records_found:
-        weights.length,
-      saved_to_database: true,
-      weight: {
-        external_id:
-          externalId,
-
-        sample_time:
-          latest.sampleTime,
-
-        weight_kg:
-          latest.kilograms,
-
-        weight_grams:
-          latest.grams,
-
-        database_success:
-          result.success
-      }
-    });
-
-  } catch (error) {
-    return Response.json(
-      {
-        status: "error",
-        message: error.message
+          error.message
       },
       { status: 500 }
     );
