@@ -1,6 +1,8 @@
 const SHEET_NAME = "Dnešní trénink";
 const MAX_ROWS = 100;
 const COLS = 11;
+const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
+const SHEET_ID = 585189491;
 
 // Visible workout columns only. Internal substitution/execution metadata stays in D1/backend.
 // 0 Typ, 1 Cvik, 2 Série, 3 Plán kg, 4 Plán reps, 5 Skutečně kg,
@@ -10,7 +12,7 @@ function sheetRange(a1) {
 }
 
 async function sheetsRequest(accessToken, range, method = "GET", body = null, query = "") {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent("1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw")}/values/${encodeURIComponent(range)}${query}`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}${query}`;
   const response = await fetch(url, {
     method,
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -19,6 +21,57 @@ async function sheetsRequest(accessToken, range, method = "GET", body = null, qu
   const data = await response.json();
   if (!response.ok) throw new Error(`Google Sheets HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
   return data;
+}
+
+async function sheetsBatchUpdate(accessToken, body) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}:batchUpdate`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Google Sheets batchUpdate HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
+  return data;
+}
+
+async function configureHotovoCheckboxes(accessToken, rowCount) {
+  // Clear any old validation in the whole workout area first. This prevents stale
+  // checkboxes from remaining below a newly generated shorter workout.
+  await sheetsBatchUpdate(accessToken, {
+    requests: [
+      {
+        setDataValidation: {
+          range: {
+            sheetId: SHEET_ID,
+            startRowIndex: 7,
+            endRowIndex: 1000,
+            startColumnIndex: 8,
+            endColumnIndex: 9
+          },
+          rule: null
+        }
+      },
+      {
+        setDataValidation: {
+          range: {
+            sheetId: SHEET_ID,
+            startRowIndex: 7,
+            endRowIndex: 7 + rowCount,
+            startColumnIndex: 8,
+            endColumnIndex: 9
+          },
+          rule: {
+            condition: {
+              type: "BOOLEAN"
+            },
+            showCustomUi: true,
+            strict: true
+          }
+        }
+      }
+    ]
+  });
 }
 
 function normalizeRow(row) {
@@ -48,6 +101,10 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
   const writeRange = sheetRange(`A8:K${7 + normalizedRows.length}`);
   const result = await sheetsRequest(accessToken, writeRange, "PUT", { values: normalizedRows }, "?valueInputOption=USER_ENTERED");
 
+  // Hotovo is a user-controlled checkbox column. The API creates the checkbox validation
+  // for the newly generated rows and does not touch the column during normal syncing.
+  await configureHotovoCheckboxes(accessToken, normalizedRows.length);
+
   // Keep the existing metadata area and update only the explicit workout date.
   const dateRange = sheetRange("B3");
   await sheetsRequest(accessToken, dateRange, "PUT", { values: [[date]] }, "?valueInputOption=USER_ENTERED");
@@ -59,6 +116,7 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
     rowsWritten: normalizedRows.length,
     visibleColumns: COLS,
     updatedRange: result.updatedRange || writeRange,
+    checkboxesConfigured: true,
     previousWorkoutSynced: true
   };
 }
