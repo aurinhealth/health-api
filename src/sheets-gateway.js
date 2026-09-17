@@ -14,7 +14,7 @@ export default {
     if (url.pathname === "/test/google-sheets-auth") return testGoogleSheetsAuth(env);
     if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
-    if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
+    if (url.pathname === "/strength/sync" && (request.method === "POST" || request.method === "GET")) return syncStrength(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     return app.fetch(request, env, ctx);
