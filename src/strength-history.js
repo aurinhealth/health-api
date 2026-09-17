@@ -1,6 +1,7 @@
 const TZ = "Europe/Prague";
 const SHEET_NAME = "Dnešní trénink";
-const HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Náhrada cviku", "Provedení"];
+const VISIBLE_HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
+const LEGACY_HEADER_ROW = [...VISIBLE_HEADER_ROW, "Náhrada cviku", "Provedení"];
 
 function text(v) {
   return v == null ? "" : String(v).trim();
@@ -30,31 +31,31 @@ function isoDate(v) {
 function getSheetDate(values) {
   // Prefer the explicit "Datum" metadata row (row 3 in the current layout).
   for (const row of values.slice(0, 8)) {
-    if (text(row?.[0]).toLowerCase() === "datum") {
-      return isoDate(row?.[1]);
-    }
+    if (text(row?.[0]).toLowerCase() === "datum") return isoDate(row?.[1]);
   }
   return null;
 }
 
-function getHeaderIndex(values) {
-  const expected = HEADER_ROW.map(x => x.toLowerCase());
+function getHeader(values) {
+  const visible = VISIBLE_HEADER_ROW.map(x => x.toLowerCase());
+  const legacy = LEGACY_HEADER_ROW.map(x => x.toLowerCase());
   for (let i = 0; i < values.length; i++) {
     const row = (values[i] || []).map(x => text(x).toLowerCase());
-    if (expected.every((name, idx) => row[idx] === name)) return i;
+    if (legacy.every((name, idx) => row[idx] === name)) return { index: i, legacy: true };
+    if (visible.every((name, idx) => row[idx] === name)) return { index: i, legacy: false };
   }
-  return -1;
+  return { index: -1, legacy: false };
 }
 
 export function parseStrengthSheet(values) {
   if (!Array.isArray(values)) throw new Error("Sheet values must be a 2D array");
-  const headerIndex = getHeaderIndex(values);
-  if (headerIndex < 0) throw new Error(`Strength header row not found in ${SHEET_NAME}`);
+  const header = getHeader(values);
+  if (header.index < 0) throw new Error(`Strength header row not found in ${SHEET_NAME}`);
 
   const date = getSheetDate(values);
   const rows = [];
 
-  for (let i = headerIndex + 1; i < values.length; i++) {
+  for (let i = header.index + 1; i < values.length; i++) {
     const r = values[i] || [];
     const type = text(r[0]);
     const exercise = text(r[1]);
@@ -76,15 +77,17 @@ export function parseStrengthSheet(values) {
       completed: bool(r[8]),
       note: text(r[9]),
       video: text(r[10]),
-      replacement: text(r[11]),
-      execution: text(r[12])
+      // These remain backend history fields. New visible sheets simply leave them null.
+      replacement: header.legacy ? text(r[11]) : "",
+      execution: header.legacy ? text(r[12]) : ""
     });
   }
 
   return {
     sheet: SHEET_NAME,
     date,
-    headerRow: headerIndex + 1,
+    headerRow: header.index + 1,
+    legacyLayout: header.legacy,
     rows,
     completedRows: rows.filter(r => r.completed),
     completedCount: rows.filter(r => r.completed).length
@@ -125,15 +128,12 @@ export async function syncStrengthSheet(db, values) {
   const parsed = parseStrengthSheet(values);
   await ensureStrengthTable(db);
 
-  if (!parsed.date) {
-    return { status: "error", step: "strength_sync", message: "Workout date not found in sheet", parsed };
-  }
+  if (!parsed.date) return { status: "error", step: "strength_sync", message: "Workout date not found in sheet", parsed };
 
   let upserted = 0;
   let completed = 0;
 
   for (const row of parsed.rows) {
-    // History is keyed by workout date + physical sheet row. This makes repeated syncs idempotent.
     const sourceKey = `${parsed.date}:${row.sheetRow}`;
     await db.prepare(`
       INSERT INTO strength_sets (
@@ -184,6 +184,7 @@ export async function syncStrengthSheet(db, values) {
     status: "ok",
     workoutDate: parsed.date,
     headerRow: parsed.headerRow,
+    legacyLayout: parsed.legacyLayout,
     rowsSeen: parsed.rows.length,
     rowsUpserted: upserted,
     completedRows: completed
