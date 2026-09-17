@@ -1,5 +1,6 @@
 import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
+import { getStrengthHistory, syncStrengthSheet } from "./strength-history.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -13,6 +14,8 @@ export default {
     if (url.pathname === "/test/google-sheets-auth") return testGoogleSheetsAuth(env);
     if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
+    if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
+    if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     return app.fetch(request, env, ctx);
   }
@@ -30,6 +33,16 @@ async function getGoogleAccessToken(env) {
   return data.access_token;
 }
 
+async function fetchTodayValues(env) {
+  const accessToken = await getGoogleAccessToken(env);
+  const range = `'${SHEET_NAME.replace(/'/g, "''")}'`;
+  const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}`;
+  const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Google Sheets read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
+  return { range: data.range || range, values: data.values || [] };
+}
+
 async function testGoogleSheetsAuth(env) {
   try {
     const accessToken = await getGoogleAccessToken(env);
@@ -43,14 +56,9 @@ async function testGoogleSheetsAuth(env) {
 
 async function readTodaySheet(env) {
   try {
-    const accessToken = await getGoogleAccessToken(env);
-    const range = `'${SHEET_NAME.replace(/'/g, "''")}'`;
-    const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}`;
-    const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    const data = await response.json();
-    if (!response.ok) return Response.json({ status: "error", step: "sheets_read", google_status: response.status, error: data.error || null }, { status: 502 });
-    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, range: data.range || range, values: data.values || [] });
-  } catch (error) { return Response.json({ status: "error", message: error.message }, { status: 500 }); }
+    const data = await fetchTodayValues(env);
+    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, range: data.range, values: data.values });
+  } catch (error) { return Response.json({ status: "error", step: "sheets_read", message: error.message }, { status: 500 }); }
 }
 
 async function writeSheet(env, request) {
@@ -67,6 +75,22 @@ async function writeSheet(env, request) {
     if (!response.ok) return Response.json({ status: "error", step: "sheets_write", google_status: response.status, error: data.error || null }, { status: 502 });
     return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, updated_range: data.updatedRange || range, updated_rows: data.updatedRows || 0, updated_columns: data.updatedColumns || 0, updated_cells: data.updatedCells || 0 });
   } catch (error) { return Response.json({ status: "error", message: error.message }, { status: 500 }); }
+}
+
+async function syncStrength(env) {
+  try {
+    const data = await fetchTodayValues(env);
+    const result = await syncStrengthSheet(env.DB, data.values);
+    return Response.json({ ...result, sourceRange: data.range });
+  } catch (error) { return Response.json({ status: "error", step: "strength_sync", message: error.message }, { status: 500 }); }
+}
+
+async function strengthHistory(env, url) {
+  try {
+    const limit = url.searchParams.get("limit") || "100";
+    const rows = await getStrengthHistory(env.DB, limit);
+    return Response.json({ status: "ok", count: rows.length, rows });
+  } catch (error) { return Response.json({ status: "error", step: "strength_history", message: error.message }, { status: 500 }); }
 }
 
 async function strengthContext(env, url) {
