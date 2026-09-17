@@ -12,14 +12,32 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/test/google-sheets-auth") return testGoogleSheetsAuth(env);
+
+    if (url.pathname.startsWith("/strength/")) {
+      const auth = authorizeStrength(request, env);
+      if (auth) return auth;
+    }
+
     if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
-    if (url.pathname === "/strength/sync" && (request.method === "POST" || request.method === "GET")) return syncStrength(env);
+    if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     return app.fetch(request, env, ctx);
   }
 };
+
+function authorizeStrength(request, env) {
+  if (!env.STRENGTH_API_KEY) {
+    return Response.json({ status: "error", step: "strength_auth", message: "STRENGTH_API_KEY is not configured" }, { status: 503 });
+  }
+  const authorization = request.headers.get("Authorization") || "";
+  const expected = `Bearer ${env.STRENGTH_API_KEY}`;
+  if (authorization !== expected) {
+    return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
+  }
+  return null;
+}
 
 async function getGoogleAccessToken(env) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) throw new Error("Missing Google OAuth environment variables");
@@ -35,7 +53,7 @@ async function getGoogleAccessToken(env) {
 
 async function fetchTodayValues(env) {
   const accessToken = await getGoogleAccessToken(env);
-  const range = `'${SHEET_NAME.replace(/'/g, "''")}'`;
+  const range = `'${SHEET_NAME.replace(/'/g, "''")}'!A1:Z1000`;
   const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}`;
   const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await response.json();
@@ -61,6 +79,11 @@ async function readTodaySheet(env) {
   } catch (error) { return Response.json({ status: "error", step: "sheets_read", message: error.message }, { status: 500 }); }
 }
 
+function isAllowedStrengthWriteRange(range) {
+  const normalized = range.replace(/\s+/g, "");
+  return normalized === `'${SHEET_NAME}'!A3:M5` || normalized === `'${SHEET_NAME}'!A8:M1000`;
+}
+
 async function writeSheet(env, request) {
   try {
     const body = await request.json();
@@ -68,6 +91,10 @@ async function writeSheet(env, request) {
     const values = body?.values;
     if (!range) return Response.json({ status: "error", message: "Missing required field: range" }, { status: 400 });
     if (!Array.isArray(values)) return Response.json({ status: "error", message: "Missing required field: values (2D array)" }, { status: 400 });
+    if (!isAllowedStrengthWriteRange(range)) {
+      return Response.json({ status: "error", message: "Write range is not allowed for the strength sheet" }, { status: 403 });
+    }
+
     const accessToken = await getGoogleAccessToken(env);
     const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
     const response = await fetch(apiUrl, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ values }) });
