@@ -9,6 +9,7 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.0.0", endpoint: "/mcp", protocol: "2025-11-25" });
     if (url.pathname === "/mcp") return handleMcp(request, env);
     if (url.pathname === "/.well-known/openai-apps-challenge" && request.method === "GET") {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
