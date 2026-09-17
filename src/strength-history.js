@@ -29,7 +29,6 @@ function isoDate(v) {
 }
 
 function getSheetDate(values) {
-  // Prefer the explicit "Datum" metadata row (row 3 in the current layout).
   for (const row of values.slice(0, 8)) {
     if (text(row?.[0]).toLowerCase() === "datum") return isoDate(row?.[1]);
   }
@@ -77,7 +76,6 @@ export function parseStrengthSheet(values) {
       completed: bool(r[8]),
       note: text(r[9]),
       video: text(r[10]),
-      // These remain backend history fields. New visible sheets simply leave them null.
       replacement: header.legacy ? text(r[11]) : "",
       execution: header.legacy ? text(r[12]) : ""
     });
@@ -124,9 +122,22 @@ export async function ensureStrengthTable(db) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_date ON strength_sets(workout_date DESC)`).run();
 }
 
+async function purgeLegacyTestRows(db) {
+  // One-time cleanup for the artificial 51kg DB bench test. Restrict it to
+  // the exact test date/exercise/value so a real future 51kg performance is safe.
+  const result = await db.prepare(`
+    DELETE FROM strength_sets
+    WHERE workout_date = '2026-09-17'
+      AND lower(exercise) = 'db bench press'
+      AND (actual_kg = 51 OR planned_kg = 51)
+  `).run();
+  return Number(result.meta?.changes || 0);
+}
+
 export async function syncStrengthSheet(db, values) {
   const parsed = parseStrengthSheet(values);
   await ensureStrengthTable(db);
+  const purgedTestRows = await purgeLegacyTestRows(db);
 
   if (!parsed.date) return { status: "error", step: "strength_sync", message: "Workout date not found in sheet", parsed };
 
@@ -187,7 +198,8 @@ export async function syncStrengthSheet(db, values) {
     legacyLayout: parsed.legacyLayout,
     rowsSeen: parsed.rows.length,
     rowsUpserted: upserted,
-    completedRows: completed
+    completedRows: completed,
+    purgedLegacyTestRows: purgedTestRows
   };
 }
 
