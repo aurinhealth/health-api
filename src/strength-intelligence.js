@@ -24,7 +24,7 @@ function n(v) { const x = Number(v); return Number.isFinite(x) ? x : null; }
 function dateKey(v) { return String(v || "").slice(0, 10); }
 function latestByDate(rows) { return [...(rows || [])].sort((a, b) => String(b.workout_date).localeCompare(String(a.workout_date)) || Number(b.set_no || 0) - Number(a.set_no || 0)); }
 export function parseRepRange(value) { const m = String(value || "").match(/(\d+)\s*[–-]\s*(\d+)/); return m ? { min: Number(m[1]), max: Number(m[2]) } : null; }
-function completedRowsForExercise(history, exercise) { return (history || []).filter(r => String(r.exercise).toLowerCase() === String(exercise).toLowerCase() && Number(r.completed) === 1); }
+function completedRowsForExercise(history, exercise) { return (history || []).filter(r => String(r.exercise).toLowerCase() === String(exercise).toLowerCase() && String(r.type || "WORK").toUpperCase() === "WORK" && Number(r.completed) === 1); }
 function bestRecentSet(rows) { return latestByDate(rows).find(r => n(r.actual_kg) != null && n(r.actual_reps) != null) || null; }
 
 function scoreSimilarity(from, to) {
@@ -42,40 +42,61 @@ function scoreSimilarity(from, to) {
 function transferFactor(from, to) {
   const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
   if (!a || !b) return null;
-  if (a.loadUnit === b.loadUnit) return 1;
-  const key = `${a.loadUnit}->${b.loadUnit}`;
-  const table = {
-    [`${LOAD_UNITS.CABLE_STACK_KG}->${LOAD_UNITS.PER_HAND_KG}`]: 0.25,
-    [`${LOAD_UNITS.MACHINE_TOTAL_KG}->${LOAD_UNITS.PER_HAND_KG}`]: 0.10,
-    [`${LOAD_UNITS.PER_HAND_KG}->${LOAD_UNITS.CABLE_STACK_KG}`]: 3.0,
-    [`${LOAD_UNITS.PER_HAND_KG}->${LOAD_UNITS.MACHINE_TOTAL_KG}`]: 10.0
-  };
-  return table[key] ?? 0.75;
+  if (a.loadUnit === b.loadUnit && a.equipment === b.equipment && a.pattern === b.pattern) return 1;
+  return null;
+}
+
+function practicalStep(meta) {
+  if (!meta) return 2.5;
+  if (meta.loadUnit === LOAD_UNITS.PER_HAND_KG) return 1;
+  if (meta.loadUnit === LOAD_UNITS.MACHINE_PER_SIDE_KG) return 2.5;
+  if (meta.loadUnit === LOAD_UNITS.MACHINE_TOTAL_KG) return 5;
+  if (meta.loadUnit === LOAD_UNITS.CABLE_STACK_KG) return 2.5;
+  return 2.5;
+}
+
+function roundToStep(value, step) {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.max(step, Math.round(value / step) * step);
+}
+
+function progressionMultiplier(reps, rpe, targetReps) {
+  const range = parseRepRange(targetReps);
+  if (rpe == null) return 1;
+  if (rpe >= 9.5) return 0.92;
+  if (rpe >= 9) return 0.95;
+  if (range && reps != null && reps >= range.max && rpe <= 8) return 1.025;
+  if (rpe <= 6.5) return 1.05;
+  if (rpe <= 7.5) return 1.025;
+  return 1;
+}
+
+function recoveryMultiplier(loadFactor) { return clamp(0.92 + 0.08 * loadFactor, 0.92, 1); }
+
+function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
+  if (!own.length) return null;
+  const usable = latestByDate(own).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null).slice(0, 6);
+  if (!usable.length) return null;
+  const latestDate = dateKey(usable[0].workout_date);
+  const session = usable.filter(r => dateKey(r.workout_date) === latestDate);
+  const ref = [...session].sort((a, b) => {
+    const ar = n(a.rpe), br = n(b.rpe);
+    return (br == null ? 8 : br) - (ar == null ? 8 : ar) || (n(b.actual_reps) || 0) - (n(a.actual_reps) || 0);
+  })[0];
+  let kg = n(ref.actual_kg);
+  if (kg == null) return null;
+  kg *= progressionMultiplier(n(ref.actual_reps), n(ref.rpe), targetReps);
+  kg *= recoveryMultiplier(loadFactor);
+  const step = practicalStep(EXERCISE_INTELLIGENCE[exercise]);
+  const rounded = roundToStep(kg, step);
+  return { kg: rounded, source: "own-history", confidence: 1, referenceExercise: exercise, referenceKg: n(ref.actual_kg), referenceReps: n(ref.actual_reps), referenceRpe: n(ref.rpe), deltaPct: n(ref.actual_kg) ? Math.round((rounded / n(ref.actual_kg) - 1) * 1000) / 10 : 0 };
 }
 
 export function estimateStartingLoad({ exercise, history = [], targetReps = "8–15", fallbackKg = null, loadFactor = 1 }) {
   const def = EXERCISE_INTELLIGENCE[exercise];
   if (!def) return { kg: fallbackKg, source: fallbackKg == null ? "unknown" : "fallback", confidence: fallbackKg == null ? 0 : 0.2 };
-
-  const own = completedRowsForExercise(history, exercise);
-  const ownLatest = bestRecentSet(own);
-  if (ownLatest) {
-    let kg = n(ownLatest.actual_kg);
-    const reps = n(ownLatest.actual_reps), rpe = n(ownLatest.rpe);
-    if (kg != null) {
-      if (rpe != null) {
-        if (rpe <= 6.5) kg *= 1.05;
-        else if (rpe <= 7.5) kg *= 1.025;
-        else if (rpe >= 9.5) kg *= 0.92;
-        else if (rpe >= 9) kg *= 0.95;
-      }
-      const range = parseRepRange(targetReps);
-      if (range && reps != null && reps >= range.max && (rpe == null || rpe <= 8)) kg *= 1.025;
-      kg *= clamp(0.85 + 0.15 * loadFactor, 0.85, 1);
-      return { kg: Math.round(kg * 2) / 2, source: "own-history", confidence: 1.0, referenceExercise: exercise };
-    }
-  }
-
+  const ownEstimate = estimateFromOwnHistory(completedRowsForExercise(history, exercise), exercise, targetReps, loadFactor);
+  if (ownEstimate) return ownEstimate;
   const candidates = [];
   for (const name of Object.keys(EXERCISE_INTELLIGENCE)) {
     if (name === exercise) continue;
@@ -85,18 +106,19 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
     if (kg == null) continue;
     const similarity = scoreSimilarity(name, exercise);
     const factor = transferFactor(name, exercise);
-    if (similarity <= 0 || factor == null) continue;
-    candidates.push({ name, kg, rpe: n(best.rpe), similarity, factor, date: best.workout_date });
+    if (similarity < 0.85 || factor == null) continue;
+    candidates.push({ name, kg, rpe: n(best.rpe), reps: n(best.actual_reps), similarity, factor, date: best.workout_date });
   }
   candidates.sort((a, b) => b.similarity - a.similarity || String(b.date).localeCompare(String(a.date)));
   const ref = candidates[0];
   if (ref) {
     let kg = ref.kg * ref.factor;
-    kg *= clamp(0.90 + 0.10 * loadFactor, 0.90, 1);
-    return { kg: Math.max(0.5, Math.round(kg * 2) / 2), source: "cross-exercise-estimate", confidence: clamp(0.35 + ref.similarity * 0.55, 0.35, 0.90), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, similarity: ref.similarity, transferFactor: ref.factor };
+    kg *= progressionMultiplier(ref.reps, ref.rpe, targetReps);
+    kg *= recoveryMultiplier(loadFactor);
+    const rounded = roundToStep(kg, practicalStep(def));
+    return { kg: Math.max(practicalStep(def), rounded), source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, similarity: ref.similarity, transferFactor: ref.factor };
   }
-
-  if (fallbackKg != null) return { kg: Math.round(Number(fallbackKg) * 2) / 2, source: "catalogue-default", confidence: 0.25 };
+  if (fallbackKg != null) return { kg: roundToStep(Number(fallbackKg), practicalStep(def)), source: "catalogue-default", confidence: 0.25 };
   return { kg: null, source: "no-reference", confidence: 0 };
 }
 
