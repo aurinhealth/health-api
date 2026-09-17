@@ -1,6 +1,6 @@
 {
   "name": "health-api",
-  "main": "src/v400.js",
+  "main": "src/sheets-gateway.js",
   "compatibility_date": "2026-09-15",
 
   "observability": {
