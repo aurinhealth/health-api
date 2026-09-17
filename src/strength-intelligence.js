@@ -73,20 +73,27 @@ function progressionMultiplier(reps, rpe, targetReps) {
 function recoveryMultiplier(loadFactor) { return clamp(0.92 + 0.08 * loadFactor, 0.92, 1); }
 
 function selectReference(rows, targetReps) {
-  const usable = latestByDate(rows).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null).slice(0, 12);
+  const usable = latestByDate(rows).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null);
   if (!usable.length) return null;
+
+  // The latest completed workout for this exercise is the primary reference.
+  // Older sessions remain useful as history, but must not override the latest
+  // real performance just because they happened to have a better RPE/reps score.
+  const latestDate = String(usable[0].workout_date || "").slice(0, 10);
+  const latestWorkout = usable.filter(r => String(r.workout_date || "").slice(0, 10) === latestDate);
+  const candidates = latestWorkout.length ? latestWorkout : usable.slice(0, 12);
   const range = parseRepRange(targetReps);
-  const scored = usable.map(r => {
+
+  const scored = candidates.map(r => {
     const reps = n(r.actual_reps), rpe = n(r.rpe);
     let score = 0;
     if (range && reps >= range.min && reps <= range.max) score += 3;
     if (range && reps >= range.max) score += 1;
     if (rpe != null && rpe <= 8) score += 2;
     if (rpe != null && rpe >= 9.5) score -= 2;
-    score += Math.max(0, 1 - Math.min(14, Math.abs(Date.now() - new Date(`${dateKey(r.workout_date)}T12:00:00Z`).getTime()) / 86400000) / 14);
     return { r, score };
   });
-  scored.sort((a, b) => b.score - a.score || String(b.r.workout_date).localeCompare(String(a.r.workout_date)) || Number(b.r.set_no || 0) - Number(a.r.set_no || 0));
+  scored.sort((a, b) => b.score - a.score || Number(b.r.actual_reps || 0) - Number(a.r.actual_reps || 0) || Number(b.r.set_no || 0) - Number(a.r.set_no || 0));
   return scored[0].r;
 }
 
