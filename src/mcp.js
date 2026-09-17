@@ -145,7 +145,7 @@ async function callHealthApi(request, env, toolName, args) {
   };
   const route = routes[toolName];
   if (!route) throw new Error(`Unsupported tool: ${toolName}`);
-  const method = ["getStrengthContext", "getStrengthHistory", "getTodayStrengthSheet", "syncStrengthSheet"].includes(toolName) ? "GET" : "POST";
+  const method = ["getStrengthContext", "getStrengthHistory", "getTodayStrengthSheet"].includes(toolName) ? "GET" : "POST";
   const path = route();
   const headers = new Headers({ Accept: "application/json" });
   const internalKey = env.STRENGTH_API_KEY || env.MCP_API_KEY;
