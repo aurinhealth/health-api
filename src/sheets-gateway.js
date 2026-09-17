@@ -1,8 +1,9 @@
 import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { getStrengthHistory, syncStrengthSheet } from "./strength-history.js";
+import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet } from "./strength-history.js";
 import { writeStrengthPlan } from "./strength-plan-writer.js";
-import { generateStrengthPlan } from "./strength-generator.js";
+import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
+import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -25,6 +26,9 @@ export default {
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
+    if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
+    if (url.pathname === "/strength/alternatives" && request.method === "POST") return alternativesRoute(env, request);
+    if (url.pathname === "/strength/substitute" && request.method === "POST") return substituteRoute(env, request);
     return app.fetch(request, env, ctx);
   }
 };
@@ -119,7 +123,7 @@ async function generateStrengthPlanRoute(env, request, url) {
       const data = await fetchTodayValues(env);
       return syncStrengthSheet(env.DB, data.values);
     });
-    return Response.json({ ...result, planName: plan.planName, rationale: plan.rationale, loadFactor: plan.loadFactor });
+    return Response.json({ ...result, planName: plan.planName, rationale: plan.rationale, loadFactor: plan.loadFactor, loadEstimates: plan.loadEstimates });
   } catch (error) { return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 }); }
 }
 
@@ -144,4 +148,80 @@ async function strengthContext(env, url) {
     const date = url.searchParams.get("date") || null;
     return Response.json(await buildStrengthContext(env, date));
   } catch (error) { return Response.json({ status: "error", step: "strength_context", message: error.message }, { status: 500 }); }
+}
+
+async function analyzeStrengthRoute(env, request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const data = await fetchTodayValues(env);
+    const parsed = parseStrengthSheet(data.values);
+    const sync = await syncStrengthSheet(env.DB, data.values);
+    if (sync.status !== "ok") return Response.json(sync, { status: 500 });
+    const history = await getStrengthHistory(env.DB, 300);
+    const analysis = analyzeCompletedWorkout(parsed, history);
+    return Response.json({ status: "ok", command: body?.command || "analyze", sync, analysis });
+  } catch (error) { return Response.json({ status: "error", step: "strength_analyze", message: error.message }, { status: 500 }); }
+}
+
+async function alternativesRoute(env, request) {
+  try {
+    const body = await request.json();
+    const exercise = String(body?.exercise || "").trim();
+    const muscle = String(body?.muscle || "").trim() || null;
+    if (!exercise && !muscle) return Response.json({ status: "error", message: "Provide exercise or muscle" }, { status: 400 });
+    const history = await getStrengthHistory(env.DB, 300);
+    const alternatives = findExerciseAlternatives(exercise, history, muscle);
+    return Response.json({ status: "ok", exercise: exercise || null, muscle: muscle || EXERCISE_INTELLIGENCE[exercise]?.muscle || null, alternatives });
+  } catch (error) { return Response.json({ status: "error", step: "strength_alternatives", message: error.message }, { status: 500 }); }
+}
+
+async function substituteRoute(env, request) {
+  try {
+    const body = await request.json();
+    const from = String(body?.from || "").trim();
+    const to = String(body?.to || "").trim();
+    const muscle = String(body?.muscle || "").trim() || null;
+    if (!from) return Response.json({ status: "error", message: "Missing from exercise" }, { status: 400 });
+    if (!to && !muscle) return Response.json({ status: "error", message: "Provide to exercise or muscle" }, { status: 400 });
+
+    const target = to || findExerciseAlternatives(from, [], muscle)[0]?.name;
+    if (!target || !EXERCISES[target] || !EXERCISE_INTELLIGENCE[target]) return Response.json({ status: "error", message: `Replacement exercise is not in the active catalogue: ${target || "none"}` }, { status: 400 });
+    if (!EXERCISES[from] && !EXERCISE_INTELLIGENCE[from]) return Response.json({ status: "error", message: `Original exercise is not in the active catalogue: ${from}` }, { status: 400 });
+
+    const data = await fetchTodayValues(env);
+    const parsed = parseStrengthSheet(data.values);
+    if (!parsed.date) return Response.json({ status: "error", message: "Workout date not found in sheet" }, { status: 400 });
+    const history = await getStrengthHistory(env.DB, 300);
+    const context = await buildStrengthContext(env, parsed.date);
+    const factor = Number(context?.cycling ? 1 : 1);
+    const def = EXERCISES[target];
+    const estimate = estimateStartingLoad({ exercise: target, history, targetReps: def.reps, fallbackKg: def.baseKg, loadFactor: factor });
+
+    const sourceRows = parsed.rows.filter(r => r.exercise === from);
+    if (!sourceRows.length) return Response.json({ status: "error", message: `Exercise not found in today's sheet: ${from}` }, { status: 404 });
+    const sourceWork = sourceRows.filter(r => r.type === "WORK");
+    const rows = parsed.rows.map(r => {
+      if (r.exercise !== from) return [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : String(r.plannedKg).replace(".", ","), r.plannedReps, "", "", "", "FALSE", r.note, r.video, r.replacement, r.execution];
+      return null;
+    }).filter(Boolean);
+
+    const firstIndex = parsed.rows.findIndex(r => r.exercise === from);
+    const before = parsed.rows.slice(0, firstIndex).filter(r => r.exercise !== from);
+    const after = parsed.rows.slice(firstIndex).filter(r => r.exercise !== from);
+    const replacementRows = [];
+    if (def.warmup) {
+      const kg = estimate.kg ?? def.baseKg;
+      const fmt = x => x == null ? "" : String(x).replace(".", ",");
+      replacementRows.push(["WARMUP", target, "1", fmt(Math.max(2, Math.round(kg * 0.4 * 2) / 2)), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
+      replacementRows.push(["WARMUP", target, "2", fmt(Math.max(2, Math.round(kg * 0.65 * 2) / 2)), "5", "", "", "", "FALSE", "[WARMUP]", "", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
+      replacementRows.push(["WARMUP", target, "3", fmt(Math.max(2, Math.round(kg * 0.8 * 2) / 2)), "3", "", "", "", "FALSE", "[WARMUP]", "", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
+    }
+    const workCount = sourceWork.length || def.sets;
+    for (let i = 0; i < workCount; i++) replacementRows.push(["WORK", target, String(i + 1), estimate.kg == null ? "" : String(estimate.kg).replace(".", ","), def.reps, "", "", "", "FALSE", `${def.note}; náhrada za ${from}`, i === 0 ? "🎥 Video" : "", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
+
+    const finalRows = [...before.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : String(r.plannedKg).replace(".", ","), r.plannedReps, "", "", "", "FALSE", r.note, r.video, r.replacement, r.execution]), ...replacementRows, ...after.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : String(r.plannedKg).replace(".", ","), r.plannedReps, "", "", "", "FALSE", r.note, r.video, r.replacement, r.execution])];
+    const accessToken = await getGoogleAccessToken(env);
+    const result = await writeStrengthPlan(accessToken, { date: parsed.date, rows: finalRows }, async () => syncStrengthSheet(env.DB, data.values));
+    return Response.json({ ...result, replaced: from, replacement: target, loadEstimate: estimate });
+  } catch (error) { return Response.json({ status: "error", step: "strength_substitute", message: error.message }, { status: 500 }); }
 }
