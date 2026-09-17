@@ -1,6 +1,6 @@
 import app from "./sheets-gateway.js";
-import { handleMcp } from "./mcp.js";
-import { handleOAuth } from "./oauth.js";
+import { handleMcpCompat } from "./mcp-compat.js";
+import { handleOAuthCompat } from "./oauth-compat.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
@@ -11,11 +11,11 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.0.0", endpoint: "/mcp", protocol: "2025-11-25" });
+    if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.0.2", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
-    const oauthResponse = await handleOAuth(request, env, url.pathname);
+    const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
-    if (url.pathname === "/mcp") return handleMcp(request, env);
+    if (url.pathname === "/mcp") return handleMcpCompat(request, env);
     if (url.pathname === "/.well-known/openai-apps-challenge" && request.method === "GET") {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
       return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
@@ -45,10 +45,7 @@ async function handleStrengthAutomation(request, env, ctx) {
     const internalUrl = new URL("/strength/generate-plan", request.url);
     const internalRequest = new Request(internalUrl, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${env.STRENGTH_API_KEY}`,
-        "Content-Type": "application/json"
-      },
+      headers: { "Authorization": `Bearer ${env.STRENGTH_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ date, preview })
     });
     return app.fetch(internalRequest, env, ctx);
