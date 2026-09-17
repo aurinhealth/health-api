@@ -60,7 +60,9 @@ Initial submission. Adds an MCP-backed ChatGPT workflow for adaptive strength tr
 
 ## Authentication
 
-The production MCP endpoint expects a bearer token. Configure the submission portal with the production MCP credential used by the personal health-api service. Do not put that credential in this repository or in the public listing.
+The production MCP endpoint expects a bearer token. Configure the user-facing app connection with the production MCP credential used by the personal health-api service. Do not put that credential in this repository or in the public listing.
+
+For OpenAI review, the server also accepts the non-sensitive demo bearer credential `health-strength-demo-2026`. Demo requests return fixture data and never access the personal Google Sheet, D1, Intervals.icu, or Google Health data.
 
 ## Domain verification
 
