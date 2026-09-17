@@ -1,1 +1,0 @@
-Temporary deployment marker for strength MCP diagnostics.
