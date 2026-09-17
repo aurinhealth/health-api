@@ -1,13 +1,21 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
     "title": "Health API - Strength Coach",
-    "version": "1.0.0",
-    "description": "Private strength-training API for ChatGPT. Reads cycling/recovery context, strength history and today's Google Sheet, and can generate, analyze, sync and substitute exercises."
+    "version": "1.0.1",
+    "description": "Private strength-training API for ChatGPT."
   },
   "servers": [
     { "url": "https://health-api.chelseafc-czsk.workers.dev" }
   ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
   "security": [
     { "bearerAuth": [] }
   ],
@@ -16,11 +24,17 @@
       "get": {
         "operationId": "getStrengthContext",
         "summary": "Get integrated training context",
-        "description": "Returns current strength context including cycling load/plans, recovery signals and completed strength history.",
         "parameters": [
-          { "name": "date", "in": "query", "required": false, "schema": { "type": "string", "description": "Target date in YYYY-MM-DD format" } }
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" }
+          }
         ],
-        "responses": { "200": { "description": "Integrated context" } }
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/history": {
@@ -28,24 +42,31 @@
         "operationId": "getStrengthHistory",
         "summary": "Get completed strength history",
         "parameters": [
-          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 } }
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 }
+          }
         ],
-        "responses": { "200": { "description": "Completed WORK sets" } }
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/sheet/today": {
       "get": {
         "operationId": "getTodayStrengthSheet",
         "summary": "Read today's strength sheet",
-        "description": "Reads the current Dnešní trénink Google Sheet including plan and user-entered actuals.",
-        "responses": { "200": { "description": "Current sheet values" } }
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/generate-plan": {
       "post": {
         "operationId": "generateStrengthPlan",
         "summary": "Generate and write a strength workout",
-        "description": "Uses cycling load, recovery and completed WORK-set history to generate the appropriate workout and writes it directly to today's training sheet. Use preview=true only when a non-writing preview is requested.",
         "requestBody": {
           "required": false,
           "content": {
@@ -53,22 +74,25 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "date": { "type": "string", "description": "Target date in YYYY-MM-DD format. Omit for current target date." },
-                  "preview": { "type": "boolean", "default": false, "description": "If true, return the generated plan without writing it." }
-                },
-                "additionalProperties": false
+                  "date": { "type": "string" },
+                  "preview": { "type": "boolean", "default": false }
+                }
               }
             }
           }
         },
-        "responses": { "200": { "description": "Generated workout and write result" } }
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/sync": {
       "post": {
         "operationId": "syncStrengthSheet",
-        "summary": "Sync today's completed strength sets to D1",
-        "responses": { "200": { "description": "Sync result" } }
+        "summary": "Sync completed strength sets to D1",
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/analyze": {
@@ -77,9 +101,20 @@
         "summary": "Analyze completed workout",
         "requestBody": {
           "required": false,
-          "content": { "application/json": { "schema": { "type": "object", "properties": { "command": { "type": "string" } }, "additionalProperties": false } } }
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "command": { "type": "string" }
+                }
+              }
+            }
+          }
         },
-        "responses": { "200": { "description": "Workout analysis" } }
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/alternatives": {
@@ -95,21 +130,20 @@
                 "properties": {
                   "exercise": { "type": "string" },
                   "muscle": { "type": "string" }
-                },
-                "additionalProperties": false,
-                "anyOf": [ { "required": ["exercise"] }, { "required": ["muscle"] } ]
+                }
               }
             }
           }
         },
-        "responses": { "200": { "description": "Alternative exercises" } }
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     },
     "/strength/substitute": {
       "post": {
         "operationId": "substituteStrengthExercise",
         "summary": "Replace an exercise in today's workout",
-        "description": "Replaces an exercise in today's sheet with a specified catalogue exercise or a suitable exercise for a requested muscle group.",
         "requestBody": {
           "required": true,
           "content": {
@@ -121,22 +155,14 @@
                   "from": { "type": "string" },
                   "to": { "type": "string" },
                   "muscle": { "type": "string" }
-                },
-                "additionalProperties": false
+                }
               }
             }
           }
         },
-        "responses": { "200": { "description": "Substitution result" } }
-      }
-    }
-  },
-  "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "STRENGTH_API_KEY"
+        "responses": {
+          "200": { "description": "OK" }
+        }
       }
     }
   }
