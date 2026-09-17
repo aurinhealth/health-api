@@ -2,6 +2,7 @@ import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { getStrengthHistory, syncStrengthSheet } from "./strength-history.js";
 import { writeStrengthPlan } from "./strength-plan-writer.js";
+import { generateStrengthPlan } from "./strength-generator.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -13,15 +14,14 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/test/google-sheets-auth") return testGoogleSheetsAuth(env);
-
     if (url.pathname.startsWith("/strength/")) {
       const auth = authorizeStrength(request, env);
       if (auth) return auth;
     }
-
     if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
     if (url.pathname === "/strength/sheet/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
+    if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
@@ -104,6 +104,23 @@ async function writeStrengthPlanRoute(env, request) {
     });
     return Response.json(result);
   } catch (error) { return Response.json({ status: "error", step: "strength_write_plan", message: error.message }, { status: 500 }); }
+}
+
+async function generateStrengthPlanRoute(env, request, url) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const date = String(body?.date || url.searchParams.get("date") || "").trim() || null;
+    const context = await buildStrengthContext(env, date);
+    if (context.status !== "ok") throw new Error("Strength context is not ready");
+    const plan = generateStrengthPlan(context);
+    if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
+    const accessToken = await getGoogleAccessToken(env);
+    const result = await writeStrengthPlan(accessToken, { date: plan.date, rows: plan.rows }, async () => {
+      const data = await fetchTodayValues(env);
+      return syncStrengthSheet(env.DB, data.values);
+    });
+    return Response.json({ ...result, planName: plan.planName, rationale: plan.rationale, loadFactor: plan.loadFactor });
+  } catch (error) { return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 }); }
 }
 
 async function syncStrength(env) {
