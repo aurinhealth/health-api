@@ -199,7 +199,7 @@ export async function getStrengthHistory(db, limit = 100) {
            actual_kg, actual_reps, rpe, completed, note, replacement, execution,
            source, updated_at
     FROM strength_sets
-    WHERE completed = 1
+    WHERE completed = 1 AND type = 'WORK'
     ORDER BY workout_date DESC, sheet_row ASC
     LIMIT ?
   `).bind(safeLimit).all();
@@ -213,7 +213,7 @@ export async function getExerciseHistory(db, exercise, limit = 30) {
     SELECT workout_date, type, exercise, set_no, planned_kg, planned_reps,
            actual_kg, actual_reps, rpe, completed, note, replacement, execution
     FROM strength_sets
-    WHERE completed = 1 AND lower(exercise) = lower(?)
+    WHERE completed = 1 AND type = 'WORK' AND lower(exercise) = lower(?)
     ORDER BY workout_date DESC, set_no ASC
     LIMIT ?
   `).bind(text(exercise), safeLimit).all();
