@@ -1,5 +1,6 @@
 import app from "./sheets-gateway.js";
 import { handleMcp } from "./mcp.js";
+import { handleOAuth } from "./oauth.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -10,6 +11,8 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.0.0", endpoint: "/mcp", protocol: "2025-11-25" });
+    const oauthResponse = await handleOAuth(request, env, url.pathname);
+    if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcp(request, env);
     if (url.pathname === "/.well-known/openai-apps-challenge" && request.method === "GET") {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
