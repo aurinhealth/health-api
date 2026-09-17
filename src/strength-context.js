@@ -1,3 +1,5 @@
+import { getStrengthHistory } from "./strength-history.js";
+
 const TZ = "Europe/Prague";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
@@ -134,10 +136,11 @@ export async function buildStrengthContext(env, requestedDate = null) {
   const oldest = localDate(-DEFAULT_ACTIVITY_DAYS + 1);
   const newest = localDate(DEFAULT_PLANNED_DAYS);
 
-  const [activitiesRaw, eventsRaw, recovery] = await Promise.all([
+  const [activitiesRaw, eventsRaw, recovery, strengthHistory] = await Promise.all([
     intervalsGet(env, `/athlete/0/activities?oldest=${oldest}&newest=${newest}`),
     intervalsGet(env, `/athlete/0/events?oldest=${date}&newest=${newest}`),
-    d1Recovery(env, localDate(-7), localDate(1))
+    d1Recovery(env, localDate(-7), localDate(1)),
+    getStrengthHistory(env.DB, 150)
   ]);
 
   const activities = (Array.isArray(activitiesRaw) ? activitiesRaw : []).map(activityInfo);
@@ -164,9 +167,10 @@ export async function buildStrengthContext(env, requestedDate = null) {
     },
     recovery,
     strength: {
-      source: "google-sheet/d1-next",
-      historyReady: false,
-      note: "Strength history will be added from completed Google Sheet rows into D1."
+      source: "google-sheet/d1",
+      historyReady: true,
+      completedSetCount: strengthHistory.length,
+      recentCompletedSets: strengthHistory
     }
   };
 }
