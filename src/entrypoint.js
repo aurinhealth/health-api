@@ -1,6 +1,7 @@
 import app from "./sheets-gateway.js";
 import { handleMcp } from "./mcp.js";
 import { handleOAuth } from "./oauth.js";
+import { verifyGitHubActionsToken } from "./github-oidc.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -11,6 +12,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.0.0", endpoint: "/mcp", protocol: "2025-11-25" });
+    if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     const oauthResponse = await handleOAuth(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcp(request, env);
@@ -31,6 +33,29 @@ export default {
     return app.fetch(request, env, ctx);
   }
 };
+
+async function handleStrengthAutomation(request, env, ctx) {
+  if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
+  try {
+    await verifyGitHubActionsToken(request);
+    const body = await request.json().catch(() => ({}));
+    const date = body?.date == null || body.date === "" ? null : String(body.date).trim();
+    const preview = body?.preview === true;
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
+    const internalUrl = new URL("/strength/generate-plan", request.url);
+    const internalRequest = new Request(internalUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.STRENGTH_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ date, preview })
+    });
+    return app.fetch(internalRequest, env, ctx);
+  } catch (error) {
+    return Response.json({ status: "error", step: "github_actions_auth", message: error.message }, { status: 401 });
+  }
+}
 
 function policyPage(title, text) {
   return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>${title} — Health & Strength</title></head><body><main><h1>${title}</h1><p>${text}</p></main></body></html>`, { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600" } });
