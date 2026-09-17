@@ -117,7 +117,7 @@ async function simplifyStrengthSheet(env) {
       body: JSON.stringify({ requests: [
         {
           deleteDimension: {
-            range: { sheetId: Number(SHEET_GID), dimension: "COLUMNS", startIndex: 10, endIndex: 13 }
+            range: { sheetId: Number(SHEET_GID), dimension: "COLUMNS", startIndex: 11, endIndex: 13 }
           }
         }
       ] })
