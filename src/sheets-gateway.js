@@ -22,6 +22,7 @@ export default {
     if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
     if (url.pathname === "/strength/sheet/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
+    if (url.pathname === "/strength/sheet/simplify" && request.method === "POST") return simplifyStrengthSheet(env);
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
@@ -78,7 +79,7 @@ async function readTodaySheet(env) {
 
 function isAllowedStrengthWriteRange(range) {
   const normalized = range.replace(/\s+/g, "");
-  return normalized === `'${SHEET_NAME}'!A3:M5` || normalized === `'${SHEET_NAME}'!A8:M1000`;
+  return normalized === `'${SHEET_NAME}'!A3:M5` || normalized === `'${SHEET_NAME}'!A8:M1000` || normalized === `'${SHEET_NAME}'!A7:K7`;
 }
 
 async function writeSheet(env, request) {
@@ -96,6 +97,49 @@ async function writeSheet(env, request) {
     if (!response.ok) return Response.json({ status: "error", step: "sheets_write", google_status: response.status, error: data.error || null }, { status: 502 });
     return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, updated_range: data.updatedRange || range, updated_rows: data.updatedRows || 0, updated_columns: data.updatedColumns || 0, updated_cells: data.updatedCells || 0 });
   } catch (error) { return Response.json({ status: "error", message: error.message }, { status: 500 }); }
+}
+
+async function simplifyStrengthSheet(env) {
+  try {
+    const data = await fetchTodayValues(env);
+    const parsed = parseStrengthSheet(data.values);
+    if (!parsed.date) return Response.json({ status: "error", message: "Workout date not found in sheet" }, { status: 400 });
+
+    // Sync before structural changes so no completed set is lost.
+    const sync = await syncStrengthSheet(env.DB, data.values);
+    if (sync.status !== "ok") return Response.json(sync, { status: 500 });
+
+    const accessToken = await getGoogleAccessToken(env);
+    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}:batchUpdate`;
+    const response = await fetch(batchUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [
+        {
+          deleteDimension: {
+            range: { sheetId: Number(SHEET_GID), dimension: "COLUMNS", startIndex: 10, endIndex: 13 }
+          }
+        }
+      ] })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(`Google Sheets structural update HTTP ${response.status}: ${JSON.stringify(result.error || result)}`);
+
+    const headerRange = sheetRange("A7:K7");
+    await sheetsRequest(accessToken, headerRange, "PUT", { values: [["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"]] }, "?valueInputOption=USER_ENTERED");
+
+    return Response.json({ status: "ok", sheet: SHEET_NAME, workoutDate: parsed.date, syncedCompletedRows: sync.completedRows, removedColumns: ["Náhrada cviku", "Provedení"], visibleColumns: ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"] });
+  } catch (error) { return Response.json({ status: "error", step: "strength_sheet_simplify", message: error.message }, { status: 500 }); }
+}
+
+function sheetRange(a1) { return `'${SHEET_NAME.replace(/'/g, "''")}'!${a1}`; }
+
+async function sheetsRequest(accessToken, range, method = "GET", body = null, query = "") {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}${query}`;
+  const response = await fetch(url, { method, headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, ...(body == null ? {} : { body: JSON.stringify(body) }) });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Google Sheets HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
+  return data;
 }
 
 async function writeStrengthPlanRoute(env, request) {
@@ -200,28 +244,23 @@ async function substituteRoute(env, request) {
     const sourceRows = parsed.rows.filter(r => r.exercise === from);
     if (!sourceRows.length) return Response.json({ status: "error", message: `Exercise not found in today's sheet: ${from}` }, { status: 404 });
     const sourceWork = sourceRows.filter(r => r.type === "WORK");
-    const rows = parsed.rows.map(r => {
-      if (r.exercise !== from) return [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : String(r.plannedKg).replace(".", ","), r.plannedReps, "", "", "", "FALSE", r.note, r.video, r.replacement, r.execution];
-      return null;
-    }).filter(Boolean);
-
     const firstIndex = parsed.rows.findIndex(r => r.exercise === from);
     const before = parsed.rows.slice(0, firstIndex).filter(r => r.exercise !== from);
     const after = parsed.rows.slice(firstIndex).filter(r => r.exercise !== from);
     const replacementRows = [];
+    const fmt = x => x == null ? "" : String(x).replace(".", ",");
     if (def.warmup) {
       const kg = estimate.kg ?? def.baseKg;
-      const fmt = x => x == null ? "" : String(x).replace(".", ",");
-      replacementRows.push(["WARMUP", target, "1", fmt(Math.max(2, Math.round(kg * 0.4 * 2) / 2)), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
-      replacementRows.push(["WARMUP", target, "2", fmt(Math.max(2, Math.round(kg * 0.65 * 2) / 2)), "5", "", "", "", "FALSE", "[WARMUP]", "", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
-      replacementRows.push(["WARMUP", target, "3", fmt(Math.max(2, Math.round(kg * 0.8 * 2) / 2)), "3", "", "", "", "FALSE", "[WARMUP]", "", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
+      replacementRows.push(["WARMUP", target, "1", fmt(Math.max(2, Math.round(kg * 0.4 * 2) / 2)), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video"]);
+      replacementRows.push(["WARMUP", target, "2", fmt(Math.max(2, Math.round(kg * 0.65 * 2) / 2)), "5", "", "", "", "FALSE", "[WARMUP]", ""]);
+      replacementRows.push(["WARMUP", target, "3", fmt(Math.max(2, Math.round(kg * 0.8 * 2) / 2)), "3", "", "", "", "FALSE", "[WARMUP]", ""]);
     }
     const workCount = sourceWork.length || def.sets;
-    for (let i = 0; i < workCount; i++) replacementRows.push(["WORK", target, String(i + 1), estimate.kg == null ? "" : String(estimate.kg).replace(".", ","), def.reps, "", "", "", "FALSE", `${def.note}; náhrada za ${from}`, i === 0 ? "🎥 Video" : "", from, def.unilateral ? "UNILATERAL" : "BILATERAL"]);
+    for (let i = 0; i < workCount; i++) replacementRows.push(["WORK", target, String(i + 1), estimate.kg == null ? "" : fmt(estimate.kg), def.reps, "", "", "", "FALSE", "", ""]);
 
-    const finalRows = [...before.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : String(r.plannedKg).replace(".", ","), r.plannedReps, "", "", "", "FALSE", r.note, r.video, r.replacement, r.execution]), ...replacementRows, ...after.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : String(r.plannedKg).replace(".", ","), r.plannedReps, "", "", "", "FALSE", r.note, r.video, r.replacement, r.execution])];
+    const replacementPlan = [...before.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : fmt(r.plannedKg), r.plannedReps, "", "", "", "FALSE", r.note, r.video]), ...replacementRows, ...after.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : fmt(r.plannedKg), r.plannedReps, "", "", "", "FALSE", r.note, r.video])];
     const accessToken = await getGoogleAccessToken(env);
-    const result = await writeStrengthPlan(accessToken, { date: parsed.date, rows: finalRows }, async () => syncStrengthSheet(env.DB, data.values));
-    return Response.json({ ...result, replaced: from, replacement: target, loadEstimate: estimate });
+    const result = await writeStrengthPlan(accessToken, { date: parsed.date, rows: replacementPlan }, async () => syncStrengthSheet(env.DB, data.values));
+    return Response.json({ ...result, replaced: from, replacement: target, estimate });
   } catch (error) { return Response.json({ status: "error", step: "strength_substitute", message: error.message }, { status: 500 }); }
 }
