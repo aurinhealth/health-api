@@ -25,7 +25,6 @@ function dateKey(v) { return String(v || "").slice(0, 10); }
 function latestByDate(rows) { return [...(rows || [])].sort((a, b) => String(b.workout_date).localeCompare(String(a.workout_date)) || Number(b.set_no || 0) - Number(a.set_no || 0)); }
 export function parseRepRange(value) { const m = String(value || "").match(/(\d+)\s*[–-]\s*(\d+)/); return m ? { min: Number(m[1]), max: Number(m[2]) } : null; }
 function completedRowsForExercise(history, exercise) { return (history || []).filter(r => String(r.exercise).toLowerCase() === String(exercise).toLowerCase() && String(r.type || "WORK").toUpperCase() === "WORK" && Number(r.completed) === 1); }
-function bestRecentSet(rows) { return latestByDate(rows).find(r => n(r.actual_kg) != null && n(r.actual_reps) != null) || null; }
 
 function scoreSimilarity(from, to) {
   const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
@@ -73,23 +72,39 @@ function progressionMultiplier(reps, rpe, targetReps) {
 
 function recoveryMultiplier(loadFactor) { return clamp(0.92 + 0.08 * loadFactor, 0.92, 1); }
 
+function selectReference(rows, targetReps) {
+  const usable = latestByDate(rows).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null).slice(0, 12);
+  if (!usable.length) return null;
+  const range = parseRepRange(targetReps);
+  const scored = usable.map(r => {
+    const reps = n(r.actual_reps), rpe = n(r.rpe);
+    let score = 0;
+    if (range && reps >= range.min && reps <= range.max) score += 3;
+    if (range && reps >= range.max) score += 1;
+    if (rpe != null && rpe <= 8) score += 2;
+    if (rpe != null && rpe >= 9.5) score -= 2;
+    score += Math.max(0, 1 - Math.min(14, Math.abs(Date.now() - new Date(`${dateKey(r.workout_date)}T12:00:00Z`).getTime()) / 86400000) / 14);
+    return { r, score };
+  });
+  scored.sort((a, b) => b.score - a.score || String(b.r.workout_date).localeCompare(String(a.r.workout_date)) || Number(b.r.set_no || 0) - Number(a.r.set_no || 0));
+  return scored[0].r;
+}
+
 function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
   if (!own.length) return null;
-  const usable = latestByDate(own).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null).slice(0, 6);
-  if (!usable.length) return null;
-  const latestDate = dateKey(usable[0].workout_date);
-  const session = usable.filter(r => dateKey(r.workout_date) === latestDate);
-  const ref = [...session].sort((a, b) => {
-    const ar = n(a.rpe), br = n(b.rpe);
-    return (br == null ? 8 : br) - (ar == null ? 8 : ar) || (n(b.actual_reps) || 0) - (n(a.actual_reps) || 0);
-  })[0];
+  const ref = selectReference(own, targetReps);
+  if (!ref) return null;
   let kg = n(ref.actual_kg);
-  if (kg == null) return null;
   kg *= progressionMultiplier(n(ref.actual_reps), n(ref.rpe), targetReps);
   kg *= recoveryMultiplier(loadFactor);
   const step = practicalStep(EXERCISE_INTELLIGENCE[exercise]);
   const rounded = roundToStep(kg, step);
-  return { kg: rounded, source: "own-history", confidence: 1, referenceExercise: exercise, referenceKg: n(ref.actual_kg), referenceReps: n(ref.actual_reps), referenceRpe: n(ref.rpe), deltaPct: n(ref.actual_kg) ? Math.round((rounded / n(ref.actual_kg) - 1) * 1000) / 10 : 0 };
+  return {
+    kg: rounded, source: "own-history", confidence: 1, referenceExercise: exercise,
+    referenceKg: n(ref.actual_kg), referenceReps: n(ref.actual_reps), referenceRpe: n(ref.rpe),
+    referenceDate: ref.workout_date,
+    deltaPct: n(ref.actual_kg) ? Math.round((rounded / n(ref.actual_kg) - 1) * 1000) / 10 : 0
+  };
 }
 
 export function estimateStartingLoad({ exercise, history = [], targetReps = "8–15", fallbackKg = null, loadFactor = 1 }) {
@@ -100,14 +115,15 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
   const candidates = [];
   for (const name of Object.keys(EXERCISE_INTELLIGENCE)) {
     if (name === exercise) continue;
-    const best = bestRecentSet(completedRowsForExercise(history, name));
-    if (!best) continue;
-    const kg = n(best.actual_kg);
+    const rows = completedRowsForExercise(history, name);
+    const ref = selectReference(rows, targetReps);
+    if (!ref) continue;
+    const kg = n(ref.actual_kg);
     if (kg == null) continue;
     const similarity = scoreSimilarity(name, exercise);
     const factor = transferFactor(name, exercise);
     if (similarity < 0.85 || factor == null) continue;
-    candidates.push({ name, kg, rpe: n(best.rpe), reps: n(best.actual_reps), similarity, factor, date: best.workout_date });
+    candidates.push({ name, kg, rpe: n(ref.rpe), reps: n(ref.actual_reps), similarity, factor, date: ref.workout_date });
   }
   candidates.sort((a, b) => b.similarity - a.similarity || String(b.date).localeCompare(String(a.date)));
   const ref = candidates[0];
@@ -116,7 +132,7 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
     kg *= progressionMultiplier(ref.reps, ref.rpe, targetReps);
     kg *= recoveryMultiplier(loadFactor);
     const rounded = roundToStep(kg, practicalStep(def));
-    return { kg: Math.max(practicalStep(def), rounded), source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, similarity: ref.similarity, transferFactor: ref.factor };
+    return { kg: Math.max(practicalStep(def), rounded), source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, referenceDate: ref.date, similarity: ref.similarity, transferFactor: ref.factor };
   }
   if (fallbackKg != null) return { kg: roundToStep(Number(fallbackKg), practicalStep(def)), source: "catalogue-default", confidence: 0.25 };
   return { kg: null, source: "no-reference", confidence: 0 };
@@ -139,7 +155,7 @@ export function analyzeCompletedWorkout(parsed, history = []) {
     let action = "hold";
     if (avgRpe != null && avgRpe <= 7.5 && topReps != null) action = "increase_small";
     else if (avgRpe != null && avgRpe >= 9) action = "hold_or_reduce";
-    exercises.push({ exercise, sets: rows.length, plannedKg: planned, actualKg, avgRpe: avgRpe == null ? null : Math.round(avgRpe * 10) / 10, topReps, action });
+    exercises.push({ exercise, sets: rows.length, plannedKg: planned, actualKg, avgRpe: avgRpe == null ? null : Math.round(avgRpe * 10) / 10, topReps, action, loadUnit: EXERCISE_INTELLIGENCE[exercise]?.loadUnit || null });
     recommendations.push({ exercise, action, reason: action === "increase_small" ? "RPE byl kontrolovaný; příště lze zkusit malý nárůst, pokud se drží technika." : action === "hold_or_reduce" ? "RPE byl vysoký; příště držet nebo mírně snížit podle regenerace." : "Zátěž zatím ponechat a potvrdit další sérií výkonu." });
   }
   return { status: "ok", completedSets: work.length, workoutDate: parsed.date, summary: `Analyzováno ${work.length} dokončených pracovních sérií ve ${byExercise.size} cvicích.`, exercises, recommendations };
@@ -150,6 +166,6 @@ export function findExerciseAlternatives(exercise, history = [], requestedMuscle
   const targetMuscle = requestedMuscle || base?.muscle;
   return Object.entries(EXERCISE_INTELLIGENCE)
     .filter(([name, meta]) => name !== exercise && (!targetMuscle || meta.muscle === targetMuscle))
-    .map(([name, meta]) => ({ name, muscle: meta.muscle, pattern: meta.pattern, equipment: meta.equipment, unilateral: meta.unilateral, similarity: base ? scoreSimilarity(exercise, name) : 0 }))
+    .map(([name, meta]) => ({ name, muscle: meta.muscle, pattern: meta.pattern, equipment: meta.equipment, unilateral: meta.unilateral, loadUnit: meta.loadUnit, similarity: base ? scoreSimilarity(exercise, name) : 0 }))
     .sort((a, b) => b.similarity - a.similarity);
 }
