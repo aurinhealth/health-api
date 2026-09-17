@@ -63,50 +63,53 @@ const TOOLS = [
 
 export async function handleMcp(request, env) {
   const origin = request.headers.get("Origin");
-  if (origin && !isAllowedOrigin(origin)) return new Response("Forbidden", { status: 403 });
-  if (request.method === "GET") return new Response(null, { status: 405, headers: { Allow: "POST, GET" } });
-  if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: { Allow: "POST, GET" } });
+  const cors = corsHeaders(origin);
+  if (origin && !isAllowedOrigin(origin)) return new Response("Forbidden", { status: 403, headers: cors });
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Allow-Methods": "POST, GET, OPTIONS", "Access-Control-Allow-Headers": "Authorization, Content-Type, MCP-Protocol-Version, Mcp-Session-Id, Accept" } });
+  if (request.method === "GET") return new Response(null, { status: 405, headers: { ...cors, Allow: "POST, GET" } });
+  if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: { ...cors, Allow: "POST, GET" } });
 
   const expectedKey = env.MCP_API_KEY || env.STRENGTH_API_KEY;
-  if (!expectedKey) return json({ jsonrpc: "2.0", error: { code: -32603, message: "MCP authentication is not configured" } }, 500);
+  if (!expectedKey) return json({ jsonrpc: "2.0", error: { code: -32603, message: "MCP authentication is not configured" } }, 500, cors);
   const authorization = request.headers.get("Authorization") || "";
   const demoMode = authorization === `Bearer ${DEMO_API_KEY}`;
-  if (!demoMode && authorization !== `Bearer ${expectedKey}`) return new Response("Unauthorized", { status: 401, headers: { "WWW-Authenticate": 'Bearer realm="health-api-mcp"' } });
+  if (!demoMode && authorization !== `Bearer ${expectedKey}`) return new Response("Unauthorized", { status: 401, headers: { ...cors, "WWW-Authenticate": 'Bearer realm="health-api-mcp"' } });
 
   let message;
-  try { message = await request.json(); } catch { return json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" } }, 400); }
-  if (!message || message.jsonrpc !== "2.0" || typeof message.method !== "string") return json({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32600, message: "Invalid Request" } }, 400);
+  try { message = await request.json(); } catch { return json({ jsonrpc: "2.0", error: { code: -32700, message: "Parse error" } }, 400, cors); }
+  if (!message || message.jsonrpc !== "2.0" || typeof message.method !== "string") return json({ jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32600, message: "Invalid Request" } }, 400, cors);
 
   const protocolHeader = request.headers.get("MCP-Protocol-Version");
-  if (message.method !== "initialize" && protocolHeader && !isSupportedProtocol(protocolHeader)) return json({ jsonrpc: "2.0", id: message.id ?? null, error: { code: -32602, message: "Unsupported MCP protocol version" } }, 400);
+  if (message.method !== "initialize" && protocolHeader && !isSupportedProtocol(protocolHeader)) return json({ jsonrpc: "2.0", id: message.id ?? null, error: { code: -32602, message: "Unsupported MCP protocol version" } }, 400, cors);
 
   if (message.method === "initialize") {
     const requested = message.params?.protocolVersion;
     const protocolVersion = isSupportedProtocol(requested) ? requested : MCP_PROTOCOL_VERSION;
-    return json({ jsonrpc: "2.0", id: message.id, result: { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "health-api-strength-coach", title: "Health API Strength Coach", version: SERVER_VERSION, description: "Adaptive strength-training tools backed by the user's health-api service." }, instructions: "Use the strength context and completed strength history before generating a workout. generateStrengthPlan writes the adaptive workout to the user's Google Sheet unless preview=true." } });
+    const sessionId = crypto.randomUUID();
+    return json({ jsonrpc: "2.0", id: message.id, result: { protocolVersion, capabilities: { tools: {} }, serverInfo: { name: "health-api-strength-coach", title: "Health API Strength Coach", version: SERVER_VERSION, description: "Adaptive strength-training tools backed by the user's health-api service." }, instructions: "Use the strength context and completed strength history before generating a workout. generateStrengthPlan writes the adaptive workout to the user's Google Sheet unless preview=true." } }, 200, { ...cors, "Mcp-Session-Id": sessionId, "MCP-Protocol-Version": protocolVersion });
   }
 
   if (message.method === "notifications/initialized" || message.method === "notifications/cancelled" || message.method === "ping") {
-    if (message.id === undefined) return new Response(null, { status: 202 });
-    return json({ jsonrpc: "2.0", id: message.id, result: {} });
+    if (message.id === undefined) return new Response(null, { status: 202, headers: cors });
+    return json({ jsonrpc: "2.0", id: message.id, result: {} }, 200, cors);
   }
 
-  if (message.method === "tools/list") return json({ jsonrpc: "2.0", id: message.id, result: { tools: TOOLS } });
+  if (message.method === "tools/list") return json({ jsonrpc: "2.0", id: message.id, result: { tools: TOOLS } }, 200, cors);
 
   if (message.method === "tools/call") {
     const name = message.params?.name;
     const args = message.params?.arguments || {};
     const tool = TOOLS.find((item) => item.name === name);
-    if (!tool) return json({ jsonrpc: "2.0", id: message.id, error: { code: -32602, message: `Unknown tool: ${name}` } }, 400);
+    if (!tool) return json({ jsonrpc: "2.0", id: message.id, error: { code: -32602, message: `Unknown tool: ${name}` } }, 400, cors);
     try {
       const result = demoMode ? demoTool(name, args) : await callHealthApi(request, env, name, args);
-      return json({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result } });
+      return json({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result } }, 200, cors);
     } catch (error) {
-      return json({ jsonrpc: "2.0", id: message.id, result: { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] } });
+      return json({ jsonrpc: "2.0", id: message.id, result: { isError: true, content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }] } }, 200, cors);
     }
   }
 
-  return json({ jsonrpc: "2.0", id: message.id ?? null, error: { code: -32601, message: `Method not found: ${message.method}` } }, 404);
+  return json({ jsonrpc: "2.0", id: message.id ?? null, error: { code: -32601, message: `Method not found: ${message.method}` } }, 404, cors);
 }
 
 function isSupportedProtocol(value) { return value === "2025-11-25" || value === "2025-06-18"; }
@@ -116,6 +119,11 @@ function isAllowedOrigin(origin) {
     const url = new URL(origin);
     return url.protocol === "https:" && ["chatgpt.com", "chat.openai.com", "platform.openai.com"].includes(url.hostname);
   } catch { return false; }
+}
+
+function corsHeaders(origin) {
+  if (!origin) return {};
+  return { "Access-Control-Allow-Origin": origin, "Vary": "Origin" };
 }
 
 function demoTool(name, args) {
@@ -168,6 +176,6 @@ async function callHealthApi(request, env, toolName, args) {
   return data;
 }
 
-function json(value, status = 200) {
-  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+function json(value, status = 200, extraHeaders = {}) {
+  return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...extraHeaders } });
 }
