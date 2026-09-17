@@ -1,7 +1,10 @@
 const SHEET_NAME = "Dnešní trénink";
 const MAX_ROWS = 100;
-const COLS = 13;
+const COLS = 11;
 
+// Visible workout columns only. Internal substitution/execution metadata stays in D1/backend.
+// 0 Typ, 1 Cvik, 2 Série, 3 Plán kg, 4 Plán reps, 5 Skutečně kg,
+// 6 Skutečně reps, 7 RPE, 8 Hotovo, 9 Poznámka, 10 Video
 function sheetRange(a1) {
   return `'${SHEET_NAME.replace(/'/g, "''")}'!${a1}`;
 }
@@ -20,10 +23,11 @@ async function sheetsRequest(accessToken, range, method = "GET", body = null, qu
 
 function normalizeRow(row) {
   if (!Array.isArray(row)) throw new Error("Each workout row must be an array");
-  if (row.length > COLS) throw new Error(`Workout row has more than ${COLS} columns`);
-  const out = Array(COLS).fill("");
-  for (let i = 0; i < row.length; i++) out[i] = row[i] == null ? "" : row[i];
-  return out;
+  // Generator may still provide legacy 13-column rows. Keep only the user-facing fields,
+  // including Video, and intentionally discard backend-only Náhrada cviku / Provedení.
+  const source = Array(COLS).fill("");
+  for (let i = 0; i < Math.min(row.length, COLS); i++) source[i] = row[i] == null ? "" : row[i];
+  return source;
 }
 
 export async function writeStrengthPlan(accessToken, body, syncCurrent) {
@@ -33,7 +37,7 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
   if (!Array.isArray(rows) || rows.length < 1) throw new Error("rows must be a non-empty 2D array");
   if (rows.length > MAX_ROWS) throw new Error(`Too many workout rows; maximum is ${MAX_ROWS}`);
 
-  // Preserve the previous workout's completed actuals before replacing the visible plan.
+  // Sync the current visible sheet before replacing it so completed sets are preserved in D1.
   const current = await syncCurrent();
   if (current?.status === "error") throw new Error(`Could not sync current workout before replacement: ${current.message}`);
 
@@ -41,10 +45,10 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
   const clearRange = sheetRange("A8:M1000");
   await sheetsRequest(accessToken, clearRange, "POST", {}, ":clear");
 
-  const writeRange = sheetRange(`A8:M${7 + normalizedRows.length}`);
+  const writeRange = sheetRange(`A8:K${7 + normalizedRows.length}`);
   const result = await sheetsRequest(accessToken, writeRange, "PUT", { values: normalizedRows }, "?valueInputOption=USER_ENTERED");
 
-  // Keep the existing sheet metadata layout; only update the explicit workout date.
+  // Keep the existing metadata area and update only the explicit workout date.
   const dateRange = sheetRange("B3");
   await sheetsRequest(accessToken, dateRange, "PUT", { values: [[date]] }, "?valueInputOption=USER_ENTERED");
 
@@ -53,6 +57,7 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
     sheet: SHEET_NAME,
     workoutDate: date,
     rowsWritten: normalizedRows.length,
+    visibleColumns: COLS,
     updatedRange: result.updatedRange || writeRange,
     previousWorkoutSynced: true
   };
