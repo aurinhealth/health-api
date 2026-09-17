@@ -1,6 +1,7 @@
 import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { getStrengthHistory, syncStrengthSheet } from "./strength-history.js";
+import { writeStrengthPlan } from "./strength-plan-writer.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -20,6 +21,7 @@ export default {
 
     if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
+    if (url.pathname === "/strength/sheet/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
@@ -28,24 +30,15 @@ export default {
 };
 
 function authorizeStrength(request, env) {
-  if (!env.STRENGTH_API_KEY) {
-    return Response.json({ status: "error", step: "strength_auth", message: "STRENGTH_API_KEY is not configured" }, { status: 503 });
-  }
+  if (!env.STRENGTH_API_KEY) return Response.json({ status: "error", step: "strength_auth", message: "STRENGTH_API_KEY is not configured" }, { status: 503 });
   const authorization = request.headers.get("Authorization") || "";
-  const expected = `Bearer ${env.STRENGTH_API_KEY}`;
-  if (authorization !== expected) {
-    return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
-  }
+  if (authorization !== `Bearer ${env.STRENGTH_API_KEY}`) return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
   return null;
 }
 
 async function getGoogleAccessToken(env) {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) throw new Error("Missing Google OAuth environment variables");
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, refresh_token: env.GOOGLE_REFRESH_TOKEN, grant_type: "refresh_token" })
-  });
+  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, refresh_token: env.GOOGLE_REFRESH_TOKEN, grant_type: "refresh_token" }) });
   const data = await response.json();
   if (!response.ok || !data.access_token) throw new Error(`Google OAuth token error: ${data.error || response.status}`);
   return data.access_token;
@@ -91,10 +84,7 @@ async function writeSheet(env, request) {
     const values = body?.values;
     if (!range) return Response.json({ status: "error", message: "Missing required field: range" }, { status: 400 });
     if (!Array.isArray(values)) return Response.json({ status: "error", message: "Missing required field: values (2D array)" }, { status: 400 });
-    if (!isAllowedStrengthWriteRange(range)) {
-      return Response.json({ status: "error", message: "Write range is not allowed for the strength sheet" }, { status: 403 });
-    }
-
+    if (!isAllowedStrengthWriteRange(range)) return Response.json({ status: "error", message: "Write range is not allowed for the strength sheet" }, { status: 403 });
     const accessToken = await getGoogleAccessToken(env);
     const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
     const response = await fetch(apiUrl, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ values }) });
@@ -102,6 +92,18 @@ async function writeSheet(env, request) {
     if (!response.ok) return Response.json({ status: "error", step: "sheets_write", google_status: response.status, error: data.error || null }, { status: 502 });
     return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, updated_range: data.updatedRange || range, updated_rows: data.updatedRows || 0, updated_columns: data.updatedColumns || 0, updated_cells: data.updatedCells || 0 });
   } catch (error) { return Response.json({ status: "error", message: error.message }, { status: 500 }); }
+}
+
+async function writeStrengthPlanRoute(env, request) {
+  try {
+    const body = await request.json();
+    const accessToken = await getGoogleAccessToken(env);
+    const result = await writeStrengthPlan(accessToken, body, async () => {
+      const data = await fetchTodayValues(env);
+      return syncStrengthSheet(env.DB, data.values);
+    });
+    return Response.json(result);
+  } catch (error) { return Response.json({ status: "error", step: "strength_write_plan", message: error.message }, { status: 500 }); }
 }
 
 async function syncStrength(env) {
@@ -124,7 +126,5 @@ async function strengthContext(env, url) {
   try {
     const date = url.searchParams.get("date") || null;
     return Response.json(await buildStrengthContext(env, date));
-  } catch (error) {
-    return Response.json({ status: "error", step: "strength_context", message: error.message }, { status: 500 });
-  }
+  } catch (error) { return Response.json({ status: "error", step: "strength_context", message: error.message }, { status: 500 }); }
 }
