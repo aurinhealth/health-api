@@ -156,13 +156,39 @@ function choosePlan(context, options = {}) {
       })[0] || candidates.find(ex => !used.has(ex));
   }
 
+  // Prevent redundant movement patterns in the same session. For example,
+  // DB bench press + Chest flat press Prime are both horizontal pressing;
+  // the generator should prefer one of them rather than duplicating the pattern.
+  function patternOf(exercise) {
+    return EXERCISES[exercise]?.pattern || null;
+  }
+
+  function pickDiverse(pattern, used = new Set()) {
+    const candidates = candidatesByPattern[pattern] || [];
+    return candidates
+      .filter(ex => !used.has(ex) && notRecent(ex))
+      .sort((a, b) => {
+        const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
+        const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
+        return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
+      })[0] || candidates.find(ex => !used.has(ex));
+  }
+
+  function addDiverse(exercises, used, preferredPatterns) {
+    for (const pattern of preferredPatterns) {
+      const ex = pickDiverse(pattern, used);
+      if (ex) {
+        exercises.push(ex);
+        used.add(ex);
+      }
+    }
+    return exercises;
+  }
+
   function buildUpper() {
     const used = new Set();
     const exercises = [];
-    for (const pattern of ["horizontalPush", "horizontalPull", "verticalPush", "biceps", "triceps"]) {
-      const ex = pick(pattern, used);
-      if (ex) { exercises.push(ex); used.add(ex); }
-    }
+    addDiverse(exercises, used, ["horizontalPush", "horizontalPull", "verticalPush", "biceps", "triceps"]);
     return exercises;
   }
 
@@ -206,10 +232,7 @@ function choosePlan(context, options = {}) {
     .sort((a, b) => (muscleLoad.get(EXERCISES[a]?.muscle) || 0) - (muscleLoad.get(EXERCISES[b]?.muscle) || 0))[0];
   if (leg) used.add(leg);
   const upper = [];
-  for (const pattern of ["horizontalPush", "horizontalPull", "verticalPush", "core"]) {
-    const ex = pick(pattern, used);
-    if (ex) { upper.push(ex); used.add(ex); }
-  }
+  addDiverse(upper, used, ["horizontalPush", "horizontalPull", "verticalPush", "core"]);
   return {
     name: "Full Body",
     exercises: [leg, ...upper].filter(Boolean),
