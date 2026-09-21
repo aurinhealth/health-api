@@ -152,6 +152,12 @@ export function generateStrengthPlan(context, options = {}) {
   }
   const maxExercises = Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5);
   exercises = exercises.slice(0, maxExercises);
+
+  // Warm-up exercises must be the first exercises of the session. Keep the
+  // relative order otherwise, so each exercise's warm-up sets stay immediately
+  // before its work sets and no warm-up exercise is introduced later in the plan.
+  exercises = exercises.sort((a, b) => Number(EXERCISES[b]?.warmup === true) - Number(EXERCISES[a]?.warmup === true));
+
   const rows = [], loadEstimates = [];
   for (const exercise of exercises) {
     const work = workRows(exercise, historyMap, factor, chosen.protectedLegs);
