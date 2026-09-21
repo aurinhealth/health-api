@@ -210,15 +210,27 @@ function choosePlan(context, options = {}) {
 
   if (forceLower) {
     const used = new Set();
-    const legCandidates = ["Pivot leg press", "Pendulum squat", "DB Bulgarian split squat", "Leg extension Prime", "Prone leg curl Prime", "DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"];
-    const exercises = legCandidates
-      .filter(ex => notRecent(ex))
-      .sort((a, b) => (muscleLoad.get(EXERCISES[a]?.muscle) || 0) - (muscleLoad.get(EXERCISES[b]?.muscle) || 0))
-      .slice(0, 3);
+    const lowerPatterns = {
+      quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime"],
+      hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"],
+      posterior: ["Prone leg curl Prime"],
+      unilateral: ["DB Bulgarian split squat"]
+    };
+    const exercises = [];
+    // Lower Body gets movement-pattern diversity first: one knee-dominant
+    // movement, one hip-hinge/posterior-chain movement, then an accessory.
+    for (const group of ["quad", "hinge", "unilateral", "posterior"]) {
+      const ex = pick(group, used);
+      if (ex) {
+        exercises.push(ex);
+        used.add(ex);
+      }
+      if (exercises.length >= 3) break;
+    }
     return {
       name: "Lower Body",
       exercises: exercises.length ? exercises : ["Pivot leg press", "Prone leg curl Prime"],
-      rationale: "Požadavek uživatele soustředí trénink na dolní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže.",
+      rationale: "Požadavek uživatele soustředí trénink na dolní část těla; skladba nejprve zajišťuje různé pohybové vzory a teprve potom vybírá podle čerstvosti a nedávné svalové zátěže.",
       protectedLegs: false,
       recentWorkoutCount,
       muscleLoad
@@ -266,9 +278,14 @@ export function generateStrengthPlan(context, options = {}) {
   const excluded = new Set((options.excludeExercises || []).map(String));
   exercises = exercises.filter(ex => !excluded.has(ex));
   const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "Chest flat press Prime", "Shoulder press Prime", "DB bench press", "Low row", "Standing rowing machine", "Lat pulldown", "DB shoulder press", "Pec deck", "Rear delt pec deck", "Cable lateral raise", "Prone leg curl Prime", "Leg extension Prime", "DB Romanian deadlift", "DB Bulgarian split squat", "Hip thrust", "Pivot leg press", "Pendulum squat", "Abs bench crunch", "Cable crunch", "Pallof press"];
+  const selectedPatterns = new Set(exercises.map(ex => EXERCISES[ex]?.pattern).filter(Boolean));
   for (const candidate of candidates) {
     if (exercises.length >= (Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5))) break;
-    if (!exercises.includes(candidate) && !excluded.has(candidate)) exercises.push(candidate);
+    const candidatePattern = EXERCISES[candidate]?.pattern;
+    if (!exercises.includes(candidate) && !excluded.has(candidate) && (!candidatePattern || !selectedPatterns.has(candidatePattern))) {
+      exercises.push(candidate);
+      if (candidatePattern) selectedPatterns.add(candidatePattern);
+    }
   }
   const maxExercises = Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5);
   exercises = exercises.slice(0, maxExercises);
