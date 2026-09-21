@@ -94,7 +94,7 @@ export async function repairStrengthSheetVideoLinks(accessToken) {
       repaired++;
     }
   }
-  return { repairedVideoLinks: repaired };
+  return { repairedVideoLinks: repaired, videoLinkCandidates: links.size };
 }
 
 function hyperlinkFormula(url, label = "🎥 Video") {
