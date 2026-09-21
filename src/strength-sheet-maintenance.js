@@ -141,31 +141,60 @@ async function ensureGymExerciseCatalog(accessToken) {
   if (!meta.find(s => s.properties?.title === "Cviky")) {
     await sheetsBatchUpdate(accessToken, { requests: [{ addSheet: { properties: { title: "Cviky" } } }] });
   }
+
   const current = await valuesRequest(accessToken, "'Cviky'!A1:Q1000");
-  const values = current.values || [];
-  if (!values.length || String(values[0][1] || "").trim() !== "Cvik") {
-    await valuesRequest(accessToken, "'Cviky'!A1:Q1", "PUT", { values: [CVIKY_HEADERS] }, "?valueInputOption=USER_ENTERED");
+  const oldValues = current.values || [];
+  const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ").replace(/\s+/g, " ");
+
+  // Preserve existing video URLs by exercise name before rebuilding the master catalog.
+  const existingVideos = new Map();
+  for (const row of oldValues.slice(1)) {
+    const name = norm(row[1]);
+    if (!name) continue;
+    const url = String(row[16] || "").trim();
+    if (/^https?:\/\//i.test(url)) existingVideos.set(name, url);
   }
-  const existingNames = new Set(values.slice(1).map(r => String(r[1] || "").trim().toLocaleLowerCase("cs-CZ")).filter(Boolean));
-  let maxId = 0;
-  for (const r of values.slice(1)) {
-    const m = String(r[0] || "").match(/E(\d+)/i);
-    if (m) maxId = Math.max(maxId, Number(m[1]));
+
+  const rows = [CVIKY_HEADERS];
+  for (let i = 0; i < GYM_CATALOG.length; i++) {
+    const [name, muscle, pattern, role, priority, sets, minReps, maxReps, targetRpe, step, equipment, note] = GYM_CATALOG[i];
+    const id = "E" + String(i + 1).padStart(2, "0");
+    const fallback = "https://www.youtube.com/results?search_query=" + encodeURIComponent(name + " exercise technique");
+    const videoUrl = existingVideos.get(norm(name)) || fallback;
+    const videoLabel = "🎥 Video";
+    rows.push([
+      id, name, muscle, pattern, role, priority, sets, minReps, maxReps, targetRpe, step,
+      equipment, "AUTO", note, videoLabel, "🎥 " + name + " – technika", videoUrl
+    ]);
   }
-  const additions = [];
-  for (const item of GYM_CATALOG) {
-    const [name, muscle, pattern, role, priority, sets, minReps, maxReps, targetRpe, step, equipment, note] = item;
-    if (existingNames.has(name.toLocaleLowerCase("cs-CZ"))) continue;
-    maxId++;
-    additions.push(["E" + String(maxId).padStart(2,"0"),name,muscle,pattern,role,priority,sets,minReps,maxReps,targetRpe,step,equipment,"AUTO",note,"","",""]);
-    existingNames.add(name.toLocaleLowerCase("cs-CZ"));
+
+  await valuesRequest(accessToken, "'Cviky'!A1:Q1000", "POST", {}, ":clear");
+  await valuesRequest(
+    accessToken,
+    "'Cviky'!A1:Q" + rows.length,
+    "PUT",
+    { values: rows },
+    "?valueInputOption=USER_ENTERED"
+  );
+
+  // Turn the video column into actual clickable links and keep the raw URL in Q.
+  const catalogSheetId = (meta.find(s => s.properties?.title === "Cviky")?.properties?.sheetId);
+  if (!catalogSheetId) throw new Error("Cviky sheetId not found");
+  const requests = [];
+  for (let i = 1; i < rows.length; i++) {
+    const url = rows[i][16];
+    requests.push({
+      updateCells: {
+        range: { sheetId: catalogSheetId },
+        rows: [{ values: [{ userEnteredValue: { formulaValue: "=HYPERLINK(\"" + String(url).replace(/"/g, '""') + "\";\"🎥 Video\")" } }] }],
+        fields: "userEnteredValue",
+        start: { rowIndex: i, columnIndex: 14 }
+      }
+    });
   }
-  if (additions.length) {
-    const start = values.length + 1;
-    const end = start + additions.length - 1;
-    await valuesRequest(accessToken, "'Cviky'!A" + start + ":Q" + end, "PUT", { values: additions }, "?valueInputOption=USER_ENTERED");
-  }
-  return { added: additions.length, totalCatalogEntries: existingNames.size };
+  if (requests.length) await sheetsBatchUpdate(accessToken, { requests });
+
+  return { rebuilt: true, added: GYM_CATALOG.length, totalCatalogEntries: GYM_CATALOG.length, videosReady: GYM_CATALOG.length };
 }
 
 
@@ -218,6 +247,153 @@ async function refreshStrengthOverview(accessToken, db) {
   return { rowsWritten: rows.length, lastWorkout: last?.workout_date || null };
 }
 
+
+const UI = {
+  titleBg: { red: 0.11, green: 0.16, blue: 0.22 },
+  headerBg: { red: 0.88, green: 0.92, blue: 0.96 },
+  accentBg: { red: 0.94, green: 0.96, blue: 0.98 },
+  border: { red: 0.78, green: 0.82, blue: 0.86 },
+  white: { red: 1, green: 1, blue: 1 },
+  text: { red: 0.12, green: 0.14, blue: 0.16 }
+};
+
+function gridRange(sheetId, startRow, endRow, startCol, endCol) {
+  return { sheetId, startRowIndex: startRow, endRowIndex: endRow, startColumnIndex: startCol, endColumnIndex: endCol };
+}
+
+function repeatFormat(range, userEnteredFormat, fields) {
+  return { repeatCell: { range, cell: { userEnteredFormat }, fields: fields || "userEnteredFormat" } };
+}
+
+function columnWidth(sheetId, startCol, endCol, pixels) {
+  return {
+    updateDimensionProperties: {
+      range: { sheetId, dimension: "COLUMNS", startIndex: startCol, endIndex: endCol },
+      properties: { pixelSize: pixels },
+      fields: "pixelSize"
+    }
+  };
+}
+
+async function formatWorkbook(accessToken) {
+  const sheets = await spreadsheetMetadata(accessToken);
+  const byName = new Map(sheets.map(s => [s.properties?.title, s.properties?.sheetId]));
+  const requests = [];
+
+  const base = {
+    backgroundColor: UI.white,
+    textFormat: { fontFamily: "Arial", fontSize: 10, foregroundColor: UI.text },
+    verticalAlignment: "MIDDLE"
+  };
+
+  for (const [name, sheetId] of byName) {
+    if (!sheetId) continue;
+    requests.push(repeatFormat(gridRange(sheetId, 0, 1000, 0, 26), base));
+  }
+
+  // Dnešní trénink — compact workout UI with one strong title and one data header.
+  if (byName.has("Dnešní trénink")) {
+    const id = byName.get("Dnešní trénink");
+    requests.push(
+      { unmergeCells: { range: gridRange(id, 0, 7, 0, 11) } },
+      { mergeCells: { range: gridRange(id, 0, 1, 0, 11), mergeType: "MERGE_ALL" } },
+      repeatFormat(gridRange(id, 0, 1, 0, 11), {
+        backgroundColor: UI.titleBg, textFormat: { fontFamily: "Arial", fontSize: 16, bold: true, foregroundColor: UI.white },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE"
+      }),
+      repeatFormat(gridRange(id, 2, 3, 0, 11), {
+        backgroundColor: UI.accentBg, textFormat: { fontFamily: "Arial", fontSize: 10, foregroundColor: UI.text },
+        verticalAlignment: "MIDDLE"
+      }),
+      repeatFormat(gridRange(id, 6, 7, 0, 11), {
+        backgroundColor: UI.headerBg, textFormat: { fontFamily: "Arial", fontSize: 10, bold: true, foregroundColor: UI.text },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
+        borders: { bottom: { style: "SOLID_MEDIUM", color: UI.border } }
+      }),
+      { updateSheetProperties: { properties: { sheetId: id, gridProperties: { frozenRowCount: 7 } }, fields: "gridProperties.frozenRowCount" } },
+      columnWidth(id,0,1,105), columnWidth(id,1,2,210), columnWidth(id,2,3,55),
+      columnWidth(id,3,5,85), columnWidth(id,5,8,95), columnWidth(id,8,9,65),
+      columnWidth(id,9,10,300), columnWidth(id,10,11,90),
+      repeatFormat(gridRange(id, 7, 1000, 0, 11), { wrapStrategy: "WRAP", verticalAlignment: "MIDDLE" })
+    );
+  }
+
+  // Intervals — only user-relevant activity summary; backend ID remains in D1.
+  if (byName.has("Intervals")) {
+    const id = byName.get("Intervals");
+    requests.push(
+      { unmergeCells: { range: gridRange(id,0,3,0,26) } },
+      repeatFormat(gridRange(id,0,1,0,6), {
+        backgroundColor: UI.headerBg, textFormat: { fontFamily: "Arial", fontSize: 10, bold: true, foregroundColor: UI.text },
+        horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
+        borders: { bottom: { style: "SOLID_MEDIUM", color: UI.border } }
+      }),
+      { updateSheetProperties: { properties: { sheetId:id, gridProperties:{ frozenRowCount:1 } }, fields:"gridProperties.frozenRowCount" } },
+      columnWidth(id,0,1,100), columnWidth(id,1,2,250), columnWidth(id,2,3,110),
+      columnWidth(id,3,4,85), columnWidth(id,4,5,115), columnWidth(id,5,6,95),
+      repeatFormat(gridRange(id,1,1000,0,6), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" })
+    );
+  }
+
+  // Přehled — dashboard hierarchy.
+  if (byName.has("Přehled")) {
+    const id = byName.get("Přehled");
+    requests.push(
+      { unmergeCells: { range: gridRange(id,0,1,0,5) } },
+      { mergeCells: { range: gridRange(id,0,1,0,5), mergeType:"MERGE_ALL" } },
+      repeatFormat(gridRange(id,0,1,0,5), {
+        backgroundColor:UI.titleBg, textFormat:{fontFamily:"Arial",fontSize:15,bold:true,foregroundColor:UI.white},
+        horizontalAlignment:"CENTER", verticalAlignment:"MIDDLE"
+      }),
+      repeatFormat(gridRange(id,5,6,0,5), {
+        backgroundColor:UI.headerBg, textFormat:{fontFamily:"Arial",fontSize:10,bold:true,foregroundColor:UI.text}
+      }),
+      repeatFormat(gridRange(id,10,11,0,5), {
+        backgroundColor:UI.headerBg, textFormat:{fontFamily:"Arial",fontSize:10,bold:true,foregroundColor:UI.text}
+      }),
+      { updateSheetProperties:{properties:{sheetId:id,gridProperties:{frozenRowCount:1}},fields:"gridProperties.frozenRowCount"} },
+      columnWidth(id,0,1,210), columnWidth(id,1,2,115), columnWidth(id,2,4,95), columnWidth(id,4,5,70)
+    );
+  }
+
+  // History tables — same header treatment everywhere.
+  for (const name of ["Log","AllSets"]) {
+    if (!byName.has(name)) continue;
+    const id=byName.get(name);
+    const width=name==="Log" ? [105,100,220,55,85,90,65,300] : [105,90,220,55,85,85,95,95,65,75,300,90];
+    requests.push(
+      repeatFormat(gridRange(id,0,1,0,width.length), {
+        backgroundColor:UI.headerBg, textFormat:{fontFamily:"Arial",fontSize:10,bold:true,foregroundColor:UI.text},
+        horizontalAlignment:"CENTER", verticalAlignment:"MIDDLE",
+        borders:{bottom:{style:"SOLID_MEDIUM",color:UI.border}}
+      }),
+      { updateSheetProperties:{properties:{sheetId:id,gridProperties:{frozenRowCount:1}},fields:"gridProperties.frozenRowCount"} }
+    );
+    width.forEach((w,i)=>requests.push(columnWidth(id,i,i+1,w)));
+    requests.push(repeatFormat(gridRange(id,1,10000,0,width.length), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" }));
+  }
+
+  // Exercise master — dense, filterable, with video columns easy to scan.
+  if (byName.has("Cviky")) {
+    const id=byName.get("Cviky");
+    requests.push(
+      repeatFormat(gridRange(id,0,1,0,17), {
+        backgroundColor:UI.headerBg, textFormat:{fontFamily:"Arial",fontSize:10,bold:true,foregroundColor:UI.text},
+        horizontalAlignment:"CENTER", verticalAlignment:"MIDDLE",
+        borders:{bottom:{style:"SOLID_MEDIUM",color:UI.border}}
+      }),
+      { updateSheetProperties:{properties:{sheetId:id,gridProperties:{frozenRowCount:1}},fields:"gridProperties.frozenRowCount"} }
+    );
+    const widths=[55,210,110,150,85,65,55,75,75,80,75,220,75,280,95,220,260];
+    widths.forEach((w,i)=>requests.push(columnWidth(id,i,i+1,w)));
+    requests.push(repeatFormat(gridRange(id,1,1000,0,17), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" }));
+  }
+
+  if (!requests.length) return { status:"ok", requests:0 };
+  await sheetsBatchUpdate(accessToken, { requests });
+  return { status:"ok", requests:requests.length };
+}
+
 export async function maintainStrengthSheets(accessToken, db) {
   const sheets = await spreadsheetMetadata(accessToken);
   const deleteTitles = new Set(["List1", "List 1", "Návod"]);
@@ -229,6 +405,7 @@ export async function maintainStrengthSheets(accessToken, db) {
   const overview = await refreshStrengthOverview(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   const videoDebug = await inspectExerciseVideoSource(accessToken);
+  const formatting = await formatWorkbook(accessToken);
   const workbookAudit = await auditWorkbook(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, videoDebug, workbookAudit };
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, videoDebug, formatting, workbookAudit };
 }
