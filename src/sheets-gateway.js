@@ -27,7 +27,7 @@ export default {
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
-    if (url.pathname === "/strength/sheets/maintenance" && request.method === "POST") return maintainStrengthSheetsRoute(env);
+    if (url.pathname === "/strength/sheets/maintenance" && request.method === "POST") return maintainStrengthSheetsRoute(env, request);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
@@ -204,8 +204,10 @@ async function importStrengthHistoryRoute(env, request) {
   }
 }
 
-async function maintainStrengthSheetsRoute(env) {
+async function maintainStrengthSheetsRoute(env, request) {
   try {
+    const body = await request.json().catch(() => ({}));
+    if (body?.historyImport?.date && Array.isArray(body.historyImport.sets)) await importStrengthHistory(env.DB, body.historyImport);
     const accessToken = await getGoogleAccessToken(env);
     return Response.json(await maintainStrengthSheets(accessToken, env.DB));
   } catch (error) {
