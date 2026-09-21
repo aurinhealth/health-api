@@ -119,7 +119,7 @@ function fallbackVideoUrl(exercise) {
 function hyperlinkFormula(url, label = "🎥 Video") {
   const safeUrl = String(url).replace(/"/g, '""');
   const safeLabel = String(label).replace(/"/g, '""');
-  return `=HYPERLINK("${safeUrl}","${safeLabel}")`;
+  return `=HYPERLINK("${safeUrl}";"${safeLabel}")`;
 }
 async function configureHotovoCheckboxes(accessToken, rowCount) {
   // Clear any old validation in the whole workout area first. This prevents stale
