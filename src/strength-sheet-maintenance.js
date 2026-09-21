@@ -101,7 +101,7 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
 
   return {
     sheets: [ALLSETS_NAME, LOG_NAME],
-    AllSets: { existingRows: existingRows.length, rowsAdded: Math.max(0, additions.length), duplicatesRemoved: Math.max(0, -additions.length), totalRows: combined.length },
+    AllSets: { existingRows: existingRows.length, rowsAdded: Math.max(0, additions), duplicatesRemoved: Math.max(0, -additions), totalRows: combined.length },
     Log: { rowsWritten: Math.max(0, logValues.length - 1), columns: logHeaders.length }
   };
 }
