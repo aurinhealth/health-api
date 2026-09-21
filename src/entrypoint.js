@@ -52,7 +52,8 @@ async function handleStrengthAutomation(request, env, ctx) {
       protect_legs: "/strength/generate-plan",
       focus_upper: "/strength/generate-plan",
       focus_lower: "/strength/generate-plan",
-      substitute: "/strength/substitute"
+      substitute: "/strength/substitute",
+      import_history: "/strength/history/import"
     };
     const route = routes[action];
     if (!route) return Response.json({ status: "error", message: `Unknown strength action: ${action}` }, { status: 400 });
