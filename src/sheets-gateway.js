@@ -170,6 +170,24 @@ async function generateStrengthPlanRoute(env, request, url) {
       maxExercises: body?.maxExercises == null ? undefined : Number(body.maxExercises),
       excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
     };
+
+    // "regenerate" means create a genuinely different workout, not write the
+    // same deterministic plan again. Read today's current plan and exclude
+    // its exercises from the regenerated candidate pool.
+    if (String(body?.action || "").toLowerCase() === "regenerate") {
+      try {
+        const today = await fetchTodayValues(env);
+        const parsedToday = parseStrengthSheet(today.values);
+        const currentExercises = [...new Set((parsedToday.rows || [])
+          .filter(r => r.type === "WORK" && r.exercise)
+          .map(r => String(r.exercise)))];
+        options.excludeExercises = [...new Set([...options.excludeExercises, ...currentExercises])];
+      } catch (_) {
+        // Regeneration can still proceed from context if today's sheet cannot
+        // be read; the normal generation path will handle the result.
+      }
+    }
+
     const plan = generateStrengthPlan(context, options);
     if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
     const accessToken = await getGoogleAccessToken(env);
