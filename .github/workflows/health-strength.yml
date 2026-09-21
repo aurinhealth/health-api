@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "automation/strength-request.json"
+  schedule:
+    - cron: "5 1 * * *"
 
 permissions:
   id-token: write
@@ -23,20 +25,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          date_value="$(python - <<'PY'
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            date_value="$(TZ=Europe/Prague date +%F)"
+            preview_value="false"
+          else
+            date_value="$(python - <<'PY'
           import json
           with open("automation/strength-request.json", "r", encoding="utf-8") as f:
               data = json.load(f)
           print(data.get("date", ""))
           PY
           )"
-          preview_value="$(python - <<'PY'
+            preview_value="$(python - <<'PY'
           import json
           with open("automation/strength-request.json", "r", encoding="utf-8") as f:
               data = json.load(f)
           print("true" if data.get("preview") is True else "false")
           PY
           )"
+          fi
           echo "date=$date_value" >> "$GITHUB_OUTPUT"
           echo "preview=$preview_value" >> "$GITHUB_OUTPUT"
 
