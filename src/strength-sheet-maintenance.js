@@ -164,7 +164,7 @@ async function ensureGymExerciseCatalog(accessToken) {
     const videoLabel = "🎥 Video";
     rows.push([
       id, name, muscle, pattern, role, priority, sets, minReps, maxReps, targetRpe, step,
-      equipment, "AUTO", note, videoLabel, "🎥 " + name + " – technika", videoUrl
+      equipment, "AUTO", note, "=HYPERLINK(\"" + String(videoUrl).replace(/"/g, '""') + "\";\"🎥 Video\")", "🎥 " + name + " – technika", videoUrl
     ]);
   }
 
@@ -177,25 +177,8 @@ async function ensureGymExerciseCatalog(accessToken) {
     "?valueInputOption=USER_ENTERED"
   );
 
-  // Turn the video column into actual clickable links and keep the raw URL in Q.
-  const catalogSheetId = (meta.find(s => s.properties?.title === "Cviky")?.properties?.sheetId);
-  if (!catalogSheetId) throw new Error("Cviky sheetId not found");
-  const requests = [];
-  for (let i = 1; i < rows.length; i++) {
-    const url = rows[i][16];
-    requests.push({
-      updateCells: {
-        range: { sheetId: catalogSheetId },
-        rows: [{ values: [{ userEnteredValue: { formulaValue: "=HYPERLINK(\"" + String(url).replace(/"/g, '""') + "\";\"🎥 Video\")" } }] }],
-        fields: "userEnteredValue",
-        start: { rowIndex: i, columnIndex: 14 }
-      }
-    });
-  }
-  if (requests.length) await sheetsBatchUpdate(accessToken, { requests });
-
   return { rebuilt: true, added: GYM_CATALOG.length, totalCatalogEntries: GYM_CATALOG.length, videosReady: GYM_CATALOG.length };
-}
+
 
 
 async function refreshStrengthOverview(accessToken, db) {
