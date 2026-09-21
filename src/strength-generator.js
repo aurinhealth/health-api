@@ -106,21 +106,120 @@ function recentMuscleLoad(history, contextDate) {
   return load;
 }
 function choosePlan(context, options = {}) {
-  const history = context?.strength?.recentCompletedSets || [], legStress = cyclingLegStress(context), muscleLoad = recentMuscleLoad(history, context.date);
-  const dates = completedWorkoutDates(history), recentWorkoutCount = dates.filter(d => daysBetween(d, context.date) <= 10).length;
-  const recentTss = num(context?.cycling?.recentRideTss) || 0, next = context?.cycling?.nextRide, nextName = String(next?.name || "");
-  const nextHard = !!next?.intensity || /(threshold|tempo|sweet spot|vo2|interval)/i.test(nextName), nextLong = (num(next?.durationHours) || 0) >= 2.5;
+  const history = context?.strength?.recentCompletedSets || [];
+  const legStress = cyclingLegStress(context);
+  const muscleLoad = recentMuscleLoad(history, context.date);
+  const dates = completedWorkoutDates(history);
+  const recentWorkoutCount = dates.filter(d => daysBetween(d, context.date) <= 10).length;
+  const recentTss = num(context?.cycling?.recentRideTss) || 0;
+  const next = context?.cycling?.nextRide;
+  const nextName = String(next?.name || "");
+  const nextHard = !!next?.intensity || /(threshold|tempo|sweet spot|vo2|interval)/i.test(nextName);
+  const nextLong = (num(next?.durationHours) || 0) >= 2.5;
   const protectLegs = legStress >= 0.85 || nextHard || nextLong;
+
   const lastExerciseDate = new Map();
-  for (const row of history) { const d = dateKey(row.workout_date); if (d && (!lastExerciseDate.has(row.exercise) || d > lastExerciseDate.get(row.exercise))) lastExerciseDate.set(row.exercise, d); }
-  const notRecent = ex => { const d = lastExerciseDate.get(ex); return !d || daysBetween(d, context.date) >= 5; };
+  for (const row of history) {
+    const d = dateKey(row.workout_date);
+    if (d && (!lastExerciseDate.has(row.exercise) || d > lastExerciseDate.get(row.exercise))) {
+      lastExerciseDate.set(row.exercise, d);
+    }
+  }
+
+  const notRecent = ex => {
+    const d = lastExerciseDate.get(ex);
+    return !d || daysBetween(d, context.date) >= 5;
+  };
+
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
   const forceLower = options.focus === "lower";
-  if (forceUpper || (protectLegs && !forceLower)) return { name: "Upper Body", exercises: ["DB bench press", "Low row", "DB shoulder press", "DB curl", "Cable triceps extension"], rationale: forceUpper ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla." : (recentTss >= 700 || nextHard || nextLong ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a držíme silový stimul hlavně nahoře." : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku bez dalšího významného zatížení nohou."), protectedLegs: true, recentWorkoutCount, muscleLoad };
-  const legPress = notRecent("Pivot leg press") ? "Pivot leg press" : "Prone leg curl Prime";
-  const hamstring = legPress === "Pivot leg press" ? "Prone leg curl Prime" : null;
-  if (forceLower) return { name: "Lower Body", exercises: ["Pivot leg press", "Prone leg curl Prime"], rationale: "Požadavek uživatele soustředí trénink na dolní část těla.", protectedLegs: false, recentWorkoutCount, muscleLoad };
-  return { name: "Full Body", exercises: [legPress, "DB bench press", "Low row", ...(hamstring ? [hamstring] : []), "DB shoulder press", "Abs bench crunch"], rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; objem nohou zůstává přiměřený aktuální cyklistické zátěži.", protectedLegs: false, recentWorkoutCount, muscleLoad };
+
+  const candidatesByPattern = {
+    horizontalPush: ["DB bench press", "Chest flat press Prime", "Pec deck"],
+    horizontalPull: ["Low row", "Standing rowing machine"],
+    verticalPush: ["DB shoulder press", "Shoulder press Prime"],
+    verticalPull: ["Lat pulldown", "Cable pullover"],
+    biceps: ["DB curl", "Hammer curl", "Cable curl"],
+    triceps: ["Cable triceps extension"],
+    rearDelts: ["Rear delt pec deck", "Cable rear delt fly"],
+    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"]
+  };
+
+  function pick(pattern, used = new Set()) {
+    const candidates = candidatesByPattern[pattern] || [];
+    return candidates
+      .filter(ex => !used.has(ex) && notRecent(ex))
+      .sort((a, b) => {
+        const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
+        const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
+        return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
+      })[0] || candidates.find(ex => !used.has(ex));
+  }
+
+  function buildUpper() {
+    const used = new Set();
+    const exercises = [];
+    for (const pattern of ["horizontalPush", "horizontalPull", "verticalPush", "biceps", "triceps"]) {
+      const ex = pick(pattern, used);
+      if (ex) { exercises.push(ex); used.add(ex); }
+    }
+    return exercises;
+  }
+
+  if (forceUpper || (protectLegs && !forceLower)) {
+    const exercises = buildUpper();
+    return {
+      name: "Upper Body",
+      exercises,
+      rationale: forceUpper
+        ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
+        : (recentTss >= 700 || nextHard || nextLong
+          ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a cviky horní části těla vybíráme podle čerstvosti a nedávné svalové zátěže."
+          : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku; výběr cviků zohledňuje nedávnou svalovou zátěž a opakování cviků."),
+      protectedLegs: true,
+      recentWorkoutCount,
+      muscleLoad
+    };
+  }
+
+  if (forceLower) {
+    const used = new Set();
+    const quad = pick("horizontalPush", used); // placeholder replaced below
+    void quad;
+    const legCandidates = ["Pivot leg press", "Pendulum squat", "DB Bulgarian split squat", "Leg extension Prime", "Prone leg curl Prime", "DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"];
+    const exercises = legCandidates
+      .filter(ex => notRecent(ex))
+      .sort((a, b) => (muscleLoad.get(EXERCISES[a]?.muscle) || 0) - (muscleLoad.get(EXERCISES[b]?.muscle) || 0))
+      .slice(0, 3);
+    return {
+      name: "Lower Body",
+      exercises: exercises.length ? exercises : ["Pivot leg press", "Prone leg curl Prime"],
+      rationale: "Požadavek uživatele soustředí trénink na dolní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže.",
+      protectedLegs: false,
+      recentWorkoutCount,
+      muscleLoad
+    };
+  }
+
+  const used = new Set();
+  const legCandidates = ["Pivot leg press", "Pendulum squat", "DB Romanian deadlift", "Prone leg curl Prime", "Hip thrust", "Leg extension Prime", "DB Bulgarian split squat"];
+  const leg = legCandidates
+    .filter(ex => notRecent(ex))
+    .sort((a, b) => (muscleLoad.get(EXERCISES[a]?.muscle) || 0) - (muscleLoad.get(EXERCISES[b]?.muscle) || 0))[0];
+  if (leg) used.add(leg);
+  const upper = [];
+  for (const pattern of ["horizontalPush", "horizontalPull", "verticalPush", "core"]) {
+    const ex = pick(pattern, used);
+    if (ex) { upper.push(ex); used.add(ex); }
+  }
+  return {
+    name: "Full Body",
+    exercises: [leg, ...upper].filter(Boolean),
+    rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; výběr cviků zohledňuje nedávnou svalovou zátěž a čerstvost jednotlivých cviků.",
+    protectedLegs: false,
+    recentWorkoutCount,
+    muscleLoad
+  };
 }
 function warmupRows(exercise, workKg = null) {
   const def = EXERCISES[exercise]; if (!def?.warmup) return [];
