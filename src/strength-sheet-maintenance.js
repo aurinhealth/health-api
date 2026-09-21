@@ -418,5 +418,6 @@ export async function maintainStrengthSheets(accessToken, db) {
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   const workoutChrome = await refreshWorkoutChrome(accessToken);
   const formatting = await formatWorkbook(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, workoutChrome, formatting };
+  const workbookAudit = await auditWorkbook(accessToken);
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, workoutChrome, formatting, workbookAudit };
 }
