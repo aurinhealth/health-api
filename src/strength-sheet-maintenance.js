@@ -70,7 +70,7 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
     cell(r.workout_date), cell(r.type) === "WORK" ? "Silový" : cell(r.type),
     cell(r.exercise), cell(r.set_no), cell(r.actual_kg), cell(r.actual_reps), cell(r.rpe), cell(r.note)
   ])];
-  await valuesRequest(accessToken, "'Log'!A1:H10000", "POST", {}, ":clear");
+  await valuesRequest(accessToken, "'Log'!A1:Z10000", "POST", {}, ":clear");
   await valuesRequest(accessToken, "'Log'!A1:H" + Math.max(1,logValues.length), "PUT", { values: logValues }, "?valueInputOption=USER_ENTERED");
 
   return {
@@ -275,6 +275,28 @@ function columnWidth(sheetId, startCol, endCol, pixels) {
   };
 }
 
+async function refreshWorkoutChrome(accessToken) {
+  const current = await valuesRequest(accessToken, "'Dnešní trénink'!A1:K7");
+  const old = current.values || [];
+  const rawDate = String(old?.[2]?.[1] || old?.[5]?.[1] || "").trim();
+  const date = /^\\d{4}[-.]\\d{2}[-.]\\d{2}$/.test(rawDate)
+    ? rawDate.replace(/\\./g, "-")
+    : new Date().toISOString().slice(0, 10);
+  const displayDate = date.split("-").reverse().join(". ");
+  const rows = [
+    ["ADAPTIVNÍ SILOVÝ TRÉNINK"],
+    ["Dnešní trénink  •  " + displayDate],
+    ["Datum", date, "Režim", "AUTO", "Cviky", "METAGYM Kutná Hora"],
+    [],
+    [],
+    [],
+    ["Typ","Cvik","Série","Plán kg","Plán reps","Skutečně kg","Skutečně reps","RPE","Hotovo","Poznámka","Video"]
+  ];
+  await valuesRequest(accessToken, "'Dnešní trénink'!A1:K7", "POST", {}, ":clear");
+  await valuesRequest(accessToken, "'Dnešní trénink'!A1:K7", "PUT", { values: rows }, "?valueInputOption=USER_ENTERED");
+  return { workoutDate: date };
+}
+
 async function formatWorkbook(accessToken) {
   const sheets = await spreadsheetMetadata(accessToken);
   const byName = new Map(sheets.map(s => [s.properties?.title, s.properties?.sheetId]));
@@ -314,7 +336,10 @@ async function formatWorkbook(accessToken) {
       columnWidth(id,0,1,105), columnWidth(id,1,2,210), columnWidth(id,2,3,55),
       columnWidth(id,3,5,85), columnWidth(id,5,8,95), columnWidth(id,8,9,65),
       columnWidth(id,9,10,300), columnWidth(id,10,11,90),
-      repeatFormat(gridRange(id, 7, 1000, 0, 11), { wrapStrategy: "WRAP", verticalAlignment: "MIDDLE" })
+      repeatFormat(gridRange(id, 7, 1000, 0, 11), { wrapStrategy: "WRAP", verticalAlignment: "MIDDLE" }),
+      repeatFormat(gridRange(id, 7, 1000, 3, 4), { numberFormat:{ type:"NUMBER", pattern:"0.0" } }, "userEnteredFormat.numberFormat"),
+      repeatFormat(gridRange(id, 7, 1000, 5, 6), { numberFormat:{ type:"NUMBER", pattern:"0.0" } }, "userEnteredFormat.numberFormat"),
+      repeatFormat(gridRange(id, 7, 1000, 6, 8), { numberFormat:{ type:"NUMBER", pattern:"0" } }, "userEnteredFormat.numberFormat")
     );
   }
 
@@ -331,7 +356,11 @@ async function formatWorkbook(accessToken) {
       { updateSheetProperties: { properties: { sheetId:id, gridProperties:{ frozenRowCount:1 } }, fields:"gridProperties.frozenRowCount" } },
       columnWidth(id,0,1,100), columnWidth(id,1,2,250), columnWidth(id,2,3,110),
       columnWidth(id,3,4,85), columnWidth(id,4,5,115), columnWidth(id,5,6,95),
-      repeatFormat(gridRange(id,1,1000,0,6), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" })
+      repeatFormat(gridRange(id,1,1000,0,6), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" }),
+      repeatFormat(gridRange(id,1,1000,0,1), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" } }, "userEnteredFormat.numberFormat"),
+      repeatFormat(gridRange(id,1,1000,3,4), { numberFormat:{ type:"NUMBER", pattern:"0" } }, "userEnteredFormat.numberFormat"),
+      repeatFormat(gridRange(id,1,1000,4,5), { numberFormat:{ type:"NUMBER", pattern:"0.0" } }, "userEnteredFormat.numberFormat"),
+      repeatFormat(gridRange(id,1,1000,5,6), { numberFormat:{ type:"NUMBER", pattern:"#,##0" } }, "userEnteredFormat.numberFormat")
     );
   }
 
@@ -370,7 +399,11 @@ async function formatWorkbook(accessToken) {
       { updateSheetProperties:{properties:{sheetId:id,gridProperties:{frozenRowCount:1}},fields:"gridProperties.frozenRowCount"} }
     );
     width.forEach((w,i)=>requests.push(columnWidth(id,i,i+1,w)));
-    requests.push(repeatFormat(gridRange(id,1,10000,0,width.length), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" }));
+    requests.push(
+      repeatFormat(gridRange(id,1,10000,0,width.length), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" }),
+      repeatFormat(gridRange(id,1,10000,0,1), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" } }, "userEnteredFormat.numberFormat"),
+      repeatFormat(gridRange(id,1,10000,4,8), { numberFormat:{ type:"NUMBER", pattern:"0.0" } }, "userEnteredFormat.numberFormat")
+    );
   }
 
   // Exercise master — dense, filterable, with video columns easy to scan.
@@ -405,7 +438,8 @@ export async function maintainStrengthSheets(accessToken, db) {
   const overview = await refreshStrengthOverview(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   const videoDebug = await inspectExerciseVideoSource(accessToken);
+  const workoutChrome = await refreshWorkoutChrome(accessToken);
   const formatting = await formatWorkbook(accessToken);
   const workbookAudit = await auditWorkbook(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, videoDebug, formatting, workbookAudit };
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, videoDebug, workoutChrome, formatting, workbookAudit };
 }
