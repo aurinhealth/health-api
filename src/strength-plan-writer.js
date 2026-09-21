@@ -96,20 +96,33 @@ export async function repairStrengthSheetVideoLinks(accessToken) {
   const current = await sheetsRequest(accessToken, sheetRange("A1:K1000"));
   const values = current.values || [];
   const links = await fetchExerciseVideoLinks(accessToken);
-  let repaired = 0;
+  const output = [];
   const unmatchedExercises = new Set();
+
+  // One read + one bulk write instead of one Google API call per row.
   for (let i = 7; i < values.length; i++) {
     const row = values[i] || [];
     const exercise = String(row[1] || "").trim().toLocaleLowerCase("cs-CZ");
     const url = links.get(exercise) || (exercise ? fallbackVideoUrl(exercise) : "");
     if (!links.has(exercise) && exercise) unmatchedExercises.add(exercise);
-    if (url) {
-      const target = sheetRange("K" + (i + 1));
-      await sheetsRequest(accessToken, target, "PUT", { values: [[hyperlinkFormula(url)]] }, "?valueInputOption=USER_ENTERED");
-      repaired++;
-    }
+    output.push([url ? hyperlinkFormula(url) : ""]);
   }
-  return { repairedVideoLinks: repaired, videoLinkCandidates: links.size, unmatchedExercises: Array.from(unmatchedExercises).slice(0, 50) };
+
+  if (output.length) {
+    await sheetsRequest(
+      accessToken,
+      sheetRange("K8:K" + (7 + output.length)),
+      "PUT",
+      { values: output },
+      "?valueInputOption=USER_ENTERED"
+    );
+  }
+
+  return {
+    repairedVideoLinks: output.filter(r => r[0]).length,
+    videoLinkCandidates: links.size,
+    unmatchedExercises: Array.from(unmatchedExercises).slice(0, 50)
+  };
 }
 
 function fallbackVideoUrl(exercise) {
