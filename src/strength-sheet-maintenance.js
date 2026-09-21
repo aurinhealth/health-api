@@ -317,7 +317,6 @@ async function formatWorkbook(accessToken) {
   if (byName.has("Dnešní trénink")) {
     const id = byName.get("Dnešní trénink");
     requests.push(
-      { unmergeCells: { range: gridRange(id, 0, 7, 0, 11) } },
       { mergeCells: { range: gridRange(id, 0, 1, 0, 11), mergeType: "MERGE_ALL" } },
       repeatFormat(gridRange(id, 0, 1, 0, 11), {
         backgroundColor: UI.titleBg, textFormat: { fontFamily: "Arial", fontSize: 16, bold: true, foregroundColor: UI.white },
@@ -347,7 +346,6 @@ async function formatWorkbook(accessToken) {
   if (byName.has("Intervals")) {
     const id = byName.get("Intervals");
     requests.push(
-      { unmergeCells: { range: gridRange(id,0,3,0,26) } },
       repeatFormat(gridRange(id,0,1,0,6), {
         backgroundColor: UI.headerBg, textFormat: { fontFamily: "Arial", fontSize: 10, bold: true, foregroundColor: UI.text },
         horizontalAlignment: "CENTER", verticalAlignment: "MIDDLE",
@@ -368,8 +366,6 @@ async function formatWorkbook(accessToken) {
   if (byName.has("Přehled")) {
     const id = byName.get("Přehled");
     requests.push(
-      { unmergeCells: { range: gridRange(id,0,1,0,5) } },
-      { mergeCells: { range: gridRange(id,0,1,0,5), mergeType:"MERGE_ALL" } },
       repeatFormat(gridRange(id,0,1,0,5), {
         backgroundColor:UI.titleBg, textFormat:{fontFamily:"Arial",fontSize:15,bold:true,foregroundColor:UI.white},
         horizontalAlignment:"CENTER", verticalAlignment:"MIDDLE"
