@@ -57,13 +57,39 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
   const allValues = allCurrent.values || [];
   const hasAllHeader = allValues.length && String(allValues[0][0] || "").trim() === ALLSETS_HEADERS[0];
   const existingRows = hasAllHeader ? allValues.slice(1) : [];
-  const key = row => [row[0], row[1], String(row[2] || "").trim().toLowerCase(), row[3], row[6], row[7], row[8], row[11]].map(v => String(v ?? "")).join("|");
-  const known = new Set(existingRows.map(key));
-  const additions = values.filter(row => { const k=key(row); if(known.has(k)) return false; known.add(k); return true; });
-  if (!hasAllHeader) await valuesRequest(accessToken, "'AllSets'!A1:L1", "PUT", { values: [ALLSETS_HEADERS] }, "?valueInputOption=USER_ENTERED");
-  if (additions.length) {
-    await valuesRequest(accessToken, "'AllSets'!A" + (existingRows.length + 2) + ":L" + (existingRows.length + additions.length + 1), "PUT", { values: additions }, "?valueInputOption=USER_ENTERED");
+  const normalizeDate = value => {
+    const s = String(value ?? "").trim();
+    if (/^\\d{4}-\\d{2}-\\d{2}/.test(s)) return s.slice(0,10);
+    const m = s.match(/^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$/);
+    if (m) return `${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
+    const n = Number(s);
+    if (Number.isFinite(n) && n > 30000 && n < 70000) {
+      const d = new Date(Date.UTC(1899,11,30) + Math.round(n) * 86400000);
+      return d.toISOString().slice(0,10);
+    }
+    return s;
+  };
+  const key = row => [
+    normalizeDate(row[0]), row[1], String(row[2] || "").trim().toLowerCase(), row[3],
+    row[6], row[7], row[8], row[11]
+  ].map(v => String(v ?? "")).join("|");
+
+  // Reconcile existing history with D1 and remove duplicate copies caused by
+  // old date representations (YYYY-MM-DD vs DD.MM.YYYY vs Sheets serial dates).
+  // Existing unique rows are preserved; D1 rows win when the same set already exists.
+  const combined = [];
+  const seen = new Set();
+  for (const row of [...values, ...existingRows]) {
+    const k = key(row);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    combined.push(row);
   }
+  combined.sort((a,b) => normalizeDate(a[0]).localeCompare(normalizeDate(b[0])) || String(a[2]||"").localeCompare(String(b[2]||"")) || Number(a[3]||0)-Number(b[3]||0));
+
+  await valuesRequest(accessToken, "'AllSets'!A1:Z10000", "POST", {}, ":clear");
+  await valuesRequest(accessToken, "'AllSets'!A1:L" + Math.max(1, combined.length + 1), "PUT", { values: [ALLSETS_HEADERS, ...combined] }, "?valueInputOption=USER_ENTERED");
+  const additions = combined.length - existingRows.length;
 
   const logHeaders = ["Datum","Trénink","Cvik","Série","Váha kg","Opakování","RPE","Poznámka"];
   const logValues = [logHeaders, ...(rows.results || []).map(r => [
