@@ -77,9 +77,14 @@ jobs:
           print(json.dumps(data))
           PY
           )"
-          curl -fsS \
+          response="$(curl -sS -w '\n%{http_code}' \
             -X POST \
             -H "Authorization: Bearer $OIDC_TOKEN" \
             -H "Content-Type: application/json" \
             --data "$body" \
-            "https://health-api.chelseafc-czsk.workers.dev/automation/strength"
+            "https://health-api.chelseafc-czsk.workers.dev/automation/strength")"
+          echo "$response"
+          status_code="$(printf '%s\n' "$response" | tail -n1)"
+          if [ "$status_code" -lt 200 ] || [ "$status_code" -ge 300 ]; then
+            exit 1
+          fi
