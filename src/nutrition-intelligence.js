@@ -47,16 +47,20 @@ export function buildNutritionPlan(context, options = {}) {
   const fatMin = Math.round(weightKg * defaults.fatMinimumPerKg);
   const carbPerKg = dayType === "long" || dayType === "hard" ? defaults.carbPerKgHard : defaults.carbPerKgEasy;
   const carbs = Math.round(weightKg * carbPerKg);
-  const fatFromMacros = Math.round(Math.max(fatMin, (defaults.calorieTarget - protein * 4 - carbs * 4) / 9));
-  const caloriesFromMacros = protein * 4 + carbs * 4 + fatFromMacros * 9;
+  const fuelingCalories = plannedRideCarbs * 4;
+  const calorieTarget = defaults.calorieTarget + fuelingCalories;
+  const fatFromMacros = Math.round(fatMin);
+  const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
+  const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
+  const caloriesFromMacros = protein * 4 + dailyCarbs * 4 + fatFromMacros * 9;
   const preRideCarbs = plannedRideCarbs ? Math.round(Math.min(1.0 * weightKg, Math.max(60, durationHours * 0.5 * activityCarbsPerHour(next)))) : 0;
   const recentCalories = Math.round(recentActivityCalories(context));
   return {
     date: context.date,
     dayType,
-    calorieTarget: defaults.calorieTarget,
+    calorieTarget,
     maintenanceReference: defaults.maintenanceCalories,
-    macros: { proteinGrams: protein, carbsGrams: carbs, fatGrams: fatFromMacros, caloriesFromMacros },
+    macros: { proteinGrams: protein, carbsGrams: dailyCarbs, fatGrams: fatFromMacros, caloriesFromMacros },
     fueling: {
       plannedRide: next ? { name: next.name, durationHours, intensity: !!next.intensity, carbsDuringRideGrams: plannedRideCarbs, carbsPerHourGrams: plannedRideCarbs && durationHours ? Math.round(plannedRideCarbs / durationHours) : 0, preRideCarbsGrams: preRideCarbs, fluidMl: durationHours ? Math.round(durationHours * defaults.rideFluidMlPerHour) : 0 } : null
     },
