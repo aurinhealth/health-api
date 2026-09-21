@@ -1,0 +1,74 @@
+name: Health & Strength automation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "automation/strength-request.json"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  strength:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read automation request
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          date_value="$(python - <<'PY'
+          import json
+          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+          print(data.get("date", ""))
+          PY
+          )"
+          preview_value="$(python - <<'PY'
+          import json
+          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+          print("true" if data.get("preview") is True else "false")
+          PY
+          )"
+          echo "date=$date_value" >> "$GITHUB_OUTPUT"
+          echo "preview=$preview_value" >> "$GITHUB_OUTPUT"
+
+      - name: Request GitHub OIDC token
+        id: oidc
+        shell: bash
+        env:
+          OIDC_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          OIDC_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL \
+            -H "Authorization: bearer $OIDC_TOKEN" \
+            "$OIDC_URL&audience=health-strength")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Generate and write strength plan
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+          REQUEST_DATE: ${{ steps.request.outputs.date }}
+          REQUEST_PREVIEW: ${{ steps.request.outputs.preview }}
+        run: |
+          set -euo pipefail
+          body="$(python - <<'PY'
+          import json, os
+          date = os.environ.get("REQUEST_DATE", "")
+          preview = os.environ.get("REQUEST_PREVIEW", "false").lower() == "true"
+          print(json.dumps({"date": date or None, "preview": preview}))
+          PY
+          )"
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data "$body" \
+            "https://health-api.chelseafc-czsk.workers.dev/automation/strength"
