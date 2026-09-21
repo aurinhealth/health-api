@@ -30,10 +30,15 @@ jobs:
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           body="$(cat automation/nutrition-request.json)"
-          curl -fsS -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "$body"             "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition"             > automation/nutrition-result.json
+          http_code="$(curl -sS -o automation/nutrition-result.json -w "%{http_code}" -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "$body"             "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition")"
+          echo "HTTP $http_code"
           cat automation/nutrition-result.json
+          printf '%s' "$http_code" > automation/nutrition-http-status.txt
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            exit 1
+          fi
       - name: Persist nutrition result
         env:
           GH_TOKEN: ${{ github.token }}
