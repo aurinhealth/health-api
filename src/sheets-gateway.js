@@ -185,7 +185,9 @@ async function syncStrength(env) {
   try {
     const data = await fetchTodayValues(env);
     const result = await syncStrengthSheet(env.DB, data.values);
-    return Response.json({ ...result, sourceRange: data.range });
+    const accessToken = await getGoogleAccessToken(env);
+    const mirror = await mirrorStrengthHistoryToAllSets(accessToken, env.DB);
+    return Response.json({ ...result, historySheet: mirror, sourceRange: data.range });
   } catch (error) { return Response.json({ status: "error", step: "strength_sync", message: error.message }, { status: 500 }); }
 }
 
@@ -237,9 +239,11 @@ async function analyzeStrengthRoute(env, request) {
     const parsed = parseStrengthSheet(data.values);
     const sync = await syncStrengthSheet(env.DB, data.values);
     if (sync.status !== "ok") return Response.json(sync, { status: 500 });
+    const accessToken = await getGoogleAccessToken(env);
+    const mirror = await mirrorStrengthHistoryToAllSets(accessToken, env.DB);
     const history = await getStrengthHistory(env.DB, 300);
     const analysis = analyzeCompletedWorkout(parsed, history);
-    return Response.json({ status: "ok", command: body?.command || "analyze", sync, analysis });
+    return Response.json({ status: "ok", command: body?.command || "analyze", sync, historySheet: mirror, analysis });
   } catch (error) { return Response.json({ status: "error", step: "strength_analyze", message: error.message }, { status: 500 }); }
 }
 
