@@ -980,7 +980,10 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
   const token = await googleToken(env);
   const spreadsheetId = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
   const sheetName = "Intervals";
-  const headers = ["Datum", "Název", "Typ", "Start", "Konec", "Trvání h", "Vzdálenost km", "Kalorie", "ID"];
+
+  // User-facing view only. The Intervals activity ID remains in D1 and is not
+  // shown here because it has no practical value during normal training review.
+  const headers = ["Datum", "Aktivita", "Typ", "Čas min", "Vzdálenost km", "Kalorie"];
 
   const metaResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties(sheetId,title)`,
@@ -1003,9 +1006,14 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
     if (!addResponse.ok) throw new Error("Google Sheets Intervals addSheet HTTP " + addResponse.status + ": " + JSON.stringify(addData.error || addData));
   }
 
-  const rows = [headers, ...(activities || []).map(a => {
+  const sourceActivities = Array.isArray(activities) ? activities : [];
+  const rows = [headers];
+
+  for (const a of sourceActivities) {
     const start = activityStart(a);
     const end = activityEnd(a);
+    const name = a.name || a.title || "";
+    const type = a.type || a.activity_type || a.category || "";
 
     let duration = activityNumber(a, ["duration_hours", "durationHours"]);
     if (duration == null) duration = activityNumber(a, ["duration", "duration_seconds", "moving_time", "elapsed_time"]);
@@ -1017,25 +1025,25 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
     const rawDistance = activityNumber(a, ["distance"]);
     const distanceKm = directKm != null ? directKm : (rawDistance != null ? rawDistance / 1000 : null);
 
-    const calories =
-      activityNumber(a, ["calories", "calories_kcal", "icu_calories"]) ??
-      null;
-    return [
-      dateOnly(start),
-      a.name || a.title || "",
-      a.type || a.activity_type || a.category || "",
-      start || "",
-      end || "",
-      duration == null ? "" : Number(duration.toFixed(3)),
-      distanceKm == null ? "" : Number(distanceKm.toFixed(3)),
-      calories == null ? "" : calories,
-      a.id == null ? "" : String(a.id)
-    ];
-  })];
+    const calories = activityNumber(a, ["calories", "calories_kcal", "icu_calories"]);
 
-  // Intervals.icu is the source mirror. Clear the full visible area so stale
-  // legacy columns (HR/sleep helper columns) cannot survive from older layouts.
-  const range = "'" + sheetName + "'!A1:L1000";
+    // Ignore empty placeholder activities (for example an activity with only
+    // an internal ID and start timestamp). They remain available in D1.
+    if (!name && !type && duration == null && distanceKm == null && calories == null) continue;
+
+    rows.push([
+      dateOnly(start),
+      name,
+      type,
+      duration == null ? "" : Math.round(Number(duration) * 60),
+      distanceKm == null ? "" : Number(Number(distanceKm).toFixed(1)),
+      calories == null ? "" : Math.round(Number(calories))
+    ]);
+  }
+
+  // Intervals.icu is the source mirror. Clear old helper columns too, so the
+  // visible sheet can never retain the legacy J:P data.
+  const range = "'" + sheetName + "'!A1:Z1000";
   const clearResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:clear`,
     { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: "{}" }
@@ -1043,7 +1051,7 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
   const clearData = await clearResponse.json();
   if (!clearResponse.ok) throw new Error("Google Sheets Intervals clear HTTP " + clearResponse.status + ": " + JSON.stringify(clearData.error || clearData));
 
-  const writeRange = "'" + sheetName + "'!A1:I" + Math.max(1, rows.length);
+  const writeRange = "'" + sheetName + "'!A1:F" + Math.max(1, rows.length);
   const writeResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
     {
@@ -1055,7 +1063,7 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
   const writeData = await writeResponse.json();
   if (!writeResponse.ok) throw new Error("Google Sheets Intervals write HTTP " + writeResponse.status + ": " + JSON.stringify(writeData.error || writeData));
 
-  return { sheet: sheetName, rowsWritten: Math.max(0, rows.length - 1) };
+  return { sheet: sheetName, rowsWritten: Math.max(0, rows.length - 1), visibleColumns: headers.length };
 }
 
 
