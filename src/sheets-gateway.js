@@ -173,7 +173,14 @@ async function generateStrengthPlanRoute(env, request, url) {
     const plan = generateStrengthPlan(context, options);
     if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
     const accessToken = await getGoogleAccessToken(env);
-    const result = await writeStrengthPlan(accessToken, { date: plan.date, rows: plan.rows }, async () => {
+    const result = await writeStrengthPlan(accessToken, {
+      date: plan.date,
+      rows: plan.rows,
+      planName: plan.planName,
+      rationale: plan.rationale,
+      protectedLegs: plan.protectedLegs,
+      loadFactor: plan.loadFactor
+    }, async () => {
       const data = await fetchTodayValues(env);
       return syncStrengthSheet(env.DB, data.values);
     });
