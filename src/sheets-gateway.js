@@ -4,6 +4,7 @@ import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet, importStreng
 import { writeStrengthPlan } from "./strength-plan-writer.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
+import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./strength-sheet-maintenance.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -26,6 +27,7 @@ export default {
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
+    if (url.pathname === "/strength/sheets/maintenance" && request.method === "POST") return maintainStrengthSheetsRoute(env);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
@@ -191,9 +193,23 @@ async function importStrengthHistoryRoute(env, request) {
   try {
     const body = await request.json().catch(() => ({}));
     const result = await importStrengthHistory(env.DB, body);
+    if (result.status === "ok") {
+      const accessToken = await getGoogleAccessToken(env);
+      const mirror = await mirrorStrengthHistoryToAllSets(accessToken, env.DB);
+      return Response.json({ ...result, historySheet: mirror });
+    }
     return Response.json(result);
   } catch (error) {
     return Response.json({ status: "error", step: "strength_history_import", message: error.message }, { status: 500 });
+  }
+}
+
+async function maintainStrengthSheetsRoute(env) {
+  try {
+    const accessToken = await getGoogleAccessToken(env);
+    return Response.json(await maintainStrengthSheets(accessToken, env.DB));
+  } catch (error) {
+    return Response.json({ status: "error", step: "strength_sheet_maintenance", message: error.message }, { status: 500 });
   }
 }
 
