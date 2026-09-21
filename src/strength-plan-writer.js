@@ -78,6 +78,28 @@ export async function fetchExerciseVideoLinks(accessToken) {
   return map;
 }
 
+export async function inspectExerciseVideoSource(accessToken) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent("Cviky!A1:Z20")}&fields=sheets.properties.title,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.userEnteredValue,sheets.data.rowData.values.hyperlink,sheets.data.rowData.values.userEnteredFormat.textFormat.link`;
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Google Sheets Cviky debug HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
+  const sheet = (data.sheets || []).find(s => s.properties?.title === "Cviky");
+  const rows = (sheet?.data?.[0]?.rowData || []).slice(0, 20);
+  const textOf = cell => {
+    const v = cell?.effectiveValue || cell?.userEnteredValue;
+    if (!v) return "";
+    return v.stringValue ?? v.numberValue ?? v.boolValue ?? v.formulaValue ?? "";
+  };
+  return rows.map((row, index) => ({
+    row: index + 1,
+    cells: (row.values || []).map(cell => ({
+      text: textOf(cell),
+      hyperlink: cell?.hyperlink || null,
+      richLink: cell?.userEnteredFormat?.textFormat?.link?.uri || null
+    }))
+  }));
+}
+
 export async function repairStrengthSheetVideoLinks(accessToken) {
   const current = await sheetsRequest(accessToken, sheetRange("A1:K1000"));
   const values = current.values || [];
