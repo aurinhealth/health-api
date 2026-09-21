@@ -260,14 +260,36 @@ function warmupRows(exercise, workKg = null) {
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
 }
-function workRows(exercise, historyMap, factor, protectedLegs) {
+function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue) {
+  const def = EXERCISES[exercise];
+  const base = Number(def?.sets) || 3;
+  const recentLoad = Number(muscleLoad?.get(def?.muscle) || 0);
+  let sets = base;
+
+  // Start from the exercise's normal volume, then adapt it to recent
+  // muscle-specific load and whole-system recovery.
+  if (recentLoad >= 4) sets -= 1;
+  else if (recentLoad >= 2.5 && base >= 3) sets -= 1;
+
+  if (recoveryFactorValue < 0.90) sets -= 1;
+  else if (recoveryFactorValue >= 0.97 && recentLoad < 0.8) sets += 1;
+
+  // Keep the range deliberately conservative: accessories can move between
+  // 2–3 sets, while main movements can move between 2–4 sets.
+  const minSets = 2;
+  const maxSets = base >= 3 ? 4 : 3;
+  return clamp(Math.round(sets), minSets, maxSets);
+}
+
+function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad) {
   const def = EXERCISES[exercise], estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: def.reps, fallbackKg: def.baseKg, loadFactor: factor });
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : def.reps;
-  const note = estimate.source === "cross-exercise-estimate" ? `${def.note}; odhad z ${estimate.referenceExercise}, ověř RPE` : def.note;
+  const sets = adaptiveSetCount(exercise, muscleLoad, factor);
+  const note = estimate.source === "cross-exercise-estimate" ? def.note + "; odhad z " + estimate.referenceExercise + ", ověř RPE" : def.note;
   const rows = [];
-  for (let i = 0; i < def.sets; i++) rows.push(["WORK", exercise, String(i + 1), kg == null ? "" : String(kg).replace(".", ","), reps, "", "", "", "FALSE", note, i === 0 ? "🎥 Video" : "", "", execution]);
-  return { rows, kg, estimate };
+  for (let i = 0; i < sets; i++) rows.push(["WORK", exercise, String(i + 1), kg == null ? "" : String(kg).replace(".", ","), reps, "", "", "", "FALSE", note, i === 0 ? "🎥 Video" : "", "", execution]);
+  return { rows, kg, sets, estimate };
 }
 
 export function generateStrengthPlan(context, options = {}) {
@@ -294,10 +316,11 @@ export function generateStrengthPlan(context, options = {}) {
   exercises = exercises.sort((a, b) => Number(EXERCISES[b]?.warmup === true) - Number(EXERCISES[a]?.warmup === true));
 
   const rows = [], loadEstimates = [];
+  const muscleLoad = recentMuscleLoad(history, context.date);
   for (const exercise of exercises) {
-    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs);
+    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad);
     rows.push(...warmupRows(exercise, work.kg), ...work.rows);
-    loadEstimates.push({ exercise, ...work.estimate });
+    loadEstimates.push({ exercise, sets: work.sets, ...work.estimate });
   }
   return { date: context.date, planName: chosen.name, rationale: chosen.rationale, loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, loadEstimates, rows };
 }
