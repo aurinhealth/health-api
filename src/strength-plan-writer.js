@@ -50,29 +50,21 @@ export async function fetchExerciseVideoLinks(accessToken) {
     if (!v) return "";
     return v.stringValue ?? v.numberValue ?? v.boolValue ?? v.formulaValue ?? "";
   };
-  const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ").replace(/\\s+/g, " ");
+  const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ").replace(/\s+/g, " ");
   const map = new Map();
 
-  // Do not depend on the exact Cviky header/column layout. For every row, find a
-  // real hyperlink and associate it with all meaningful text cells in that row.
+  // Cviky layout: B = Cvik, O = Video hyperlink, Q = Video URL.
+  // Prefer the explicit Video URL column, then fall back to the hyperlink metadata.
   for (const row of rows) {
     const cells = row.values || [];
-    const linked = cells.find(cell =>
-      typeof cell?.hyperlink === "string" && /^https?:\/\//i.test(cell.hyperlink)
-    );
-    const linkedUrl =
-      linked?.hyperlink ||
-      cells.find(cell => typeof cell?.userEnteredFormat?.textFormat?.link?.uri === "string")
-        ?.userEnteredFormat?.textFormat?.link?.uri ||
-      cells.map(textOf).find(value => /^https?:\/\//i.test(String(value))) ||
-      cells.map(textOf).map(value => String(value).match(/^=HYPERLINK\(\s*"([^"]+)"/i)?.[1]).find(Boolean) ||
-      null;
-    if (!linkedUrl) continue;
-
-    for (const cell of cells) {
-      const value = norm(textOf(cell));
-      if (value && value.length >= 3) map.set(value, linkedUrl);
-    }
+    const exercise = norm(textOf(cells[1]));
+    if (!exercise) continue;
+    const explicitUrl = String(textOf(cells[16]) || "").trim();
+    const videoLink =
+      (typeof cells[14]?.hyperlink === "string" && cells[14].hyperlink) ||
+      cells[14]?.userEnteredFormat?.textFormat?.link?.uri ||
+      explicitUrl;
+    if (/^https?:\/\//i.test(videoLink)) map.set(exercise, videoLink);
   }
 
   return map;
