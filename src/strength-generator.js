@@ -142,7 +142,11 @@ function choosePlan(context, options = {}) {
     biceps: ["DB curl", "Hammer curl", "Cable curl"],
     triceps: ["Cable triceps extension"],
     rearDelts: ["Rear delt pec deck", "Cable rear delt fly"],
-    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"]
+    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"],
+    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime"],
+    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"],
+    unilateral: ["DB Bulgarian split squat"],
+    posterior: ["Prone leg curl Prime"]
   };
 
   function pick(pattern, used = new Set()) {
@@ -210,12 +214,6 @@ function choosePlan(context, options = {}) {
 
   if (forceLower) {
     const used = new Set();
-    const lowerPatterns = {
-      quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime"],
-      hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"],
-      posterior: ["Prone leg curl Prime"],
-      unilateral: ["DB Bulgarian split squat"]
-    };
     const exercises = [];
     // Lower Body gets movement-pattern diversity first: one knee-dominant
     // movement, one hip-hinge/posterior-chain movement, then an accessory.
