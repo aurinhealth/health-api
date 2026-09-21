@@ -1,4 +1,4 @@
-import { estimateStartingLoad } from "./strength-intelligence.js";
+import { estimateStartingLoad, resolveLoad } from "./strength-intelligence.js";
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -125,7 +125,8 @@ function choosePlan(context, options = {}) {
 function warmupRows(exercise, workKg = null) {
   const def = EXERCISES[exercise]; if (!def?.warmup) return [];
   const reference = workKg ?? def.baseKg; if (reference == null) return [];
-  const kg = Math.max(2, Math.round(reference * 0.4 * 2) / 2), kg2 = Math.max(2, Math.round(reference * 0.65 * 2) / 2), kg3 = Math.max(2, Math.round(reference * 0.8 * 2) / 2);
+  const rawKg = Math.max(2, reference * 0.4), rawKg2 = Math.max(2, reference * 0.65), rawKg3 = Math.max(2, reference * 0.8);
+  const kg = resolveLoad(exercise, rawKg), kg2 = resolveLoad(exercise, rawKg2), kg3 = resolveLoad(exercise, rawKg3);
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
 }
