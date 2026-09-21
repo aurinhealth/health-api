@@ -81,7 +81,7 @@ async function callHealthApi(request,env,toolName,args){
    else if(toolName==="analyzeStrengthWorkout") body=JSON.stringify({command:args.command||"analyze"});
    else if(toolName==="findStrengthAlternatives") body=JSON.stringify({exercise:args.exercise||"",muscle:args.muscle||""});
    else if(toolName==="substituteStrengthExercise") body=JSON.stringify({from:args.from||"",to:args.to||"",muscle:args.muscle||""});
-   else body="{}";
+   else if(toolName!=="getNutritionPlan") body="{}";
  }
  const response=await fetch(url,{method,headers,body}),text=await response.text();
  let data;try{data=JSON.parse(text)}catch{data={status:"error",message:text}}
