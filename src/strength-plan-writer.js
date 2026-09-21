@@ -36,7 +36,7 @@ async function sheetsBatchUpdate(accessToken, body) {
 }
 
 
-async function fetchExerciseVideoLinks(accessToken) {
+export async function fetchExerciseVideoLinks(accessToken) {
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent("Cviky!A1:Z1000")}&fields=sheets.properties.title,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.userEnteredValue,sheets.data.rowData.values.hyperlink,sheets.data.rowData.values.userEnteredFormat.textFormat.link`;
   const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await response.json();
@@ -74,6 +74,25 @@ async function fetchExerciseVideoLinks(accessToken) {
   }
 
   return map;
+}
+
+export async function repairStrengthSheetVideoLinks(accessToken) {
+  const current = await sheetsRequest(accessToken, sheetRange("A1:K1000"));
+  const values = current.values || [];
+  const links = await fetchExerciseVideoLinks(accessToken);
+  let repaired = 0;
+  for (let i = 7; i < values.length; i++) {
+    const row = values[i] || [];
+    const exercise = String(row[1] || "").trim().toLocaleLowerCase("cs-CZ");
+    const url = links.get(exercise);
+    if (!url) continue;
+    if (row[10] === "🎥 Video" || !row[10]) {
+      const target = sheetRange("K" + (i + 1));
+      await sheetsRequest(accessToken, target, "PUT", { values: [[hyperlinkFormula(url)]] }, "?valueInputOption=USER_ENTERED");
+      repaired++;
+    }
+  }
+  return { repairedVideoLinks: repaired };
 }
 
 function hyperlinkFormula(url, label = "🎥 Video") {
