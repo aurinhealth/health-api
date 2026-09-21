@@ -112,6 +112,10 @@ export async function repairStrengthSheetVideoLinks(accessToken) {
   return { repairedVideoLinks: repaired, videoLinkCandidates: links.size, unmatchedExercises: Array.from(unmatchedExercises).slice(0, 50) };
 }
 
+function fallbackVideoUrl(exercise) {
+  return "https://www.youtube.com/results?search_query=" + encodeURIComponent(String(exercise || "").trim() + " exercise technique");
+}
+
 function hyperlinkFormula(url, label = "🎥 Video") {
   const safeUrl = String(url).replace(/"/g, '""');
   const safeLabel = String(label).replace(/"/g, '""');
@@ -178,7 +182,7 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
 
   const videoLinks = await fetchExerciseVideoLinks(accessToken);
   const normalizedRows = rows.map(normalizeRow).map(row => {
-    const url = videoLinks.get(String(row[1] || "").trim().toLocaleLowerCase("cs-CZ"));
+    const url = videoLinks.get(String(row[1] || "").trim().toLocaleLowerCase("cs-CZ")) || fallbackVideoUrl(row[1]);
     if (url && (row[10] === "🎥 Video" || !row[10])) row[10] = hyperlinkFormula(url);
     return row;
   });
