@@ -81,7 +81,7 @@ function hyperlinkFormula(url, label = "🎥 Video") {
   const safeLabel = String(label).replace(/"/g, '""');
   return `=HYPERLINK("${safeUrl}","${safeLabel}")`;
 }
-\nasync function configureHotovoCheckboxes(accessToken, rowCount) {
+async function configureHotovoCheckboxes(accessToken, rowCount) {
   // Clear any old validation in the whole workout area first. This prevents stale
   // checkboxes from remaining below a newly generated shorter workout.
   await sheetsBatchUpdate(accessToken, {
