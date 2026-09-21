@@ -976,6 +976,79 @@ async function syncIntervalsEvents(env) {
 // ======================================================
 // INTERVALS SYNC
 // ======================================================
+async function mirrorIntervalsActivitiesToSheet(env, activities) {
+  const token = await googleToken(env);
+  const spreadsheetId = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
+  const sheetName = "Intervals";
+  const headers = ["Datum", "Název", "Typ", "Start", "Konec", "Trvání h", "Vzdálenost km", "Kalorie", "ID"];
+
+  const metaResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties(sheetId,title)`,
+    { headers: { Authorization: "Bearer " + token } }
+  );
+  const meta = await metaResponse.json();
+  if (!metaResponse.ok) throw new Error("Google Sheets Intervals metadata HTTP " + metaResponse.status + ": " + JSON.stringify(meta.error || meta));
+
+  const exists = (meta.sheets || []).find(s => s.properties?.title === sheetName);
+  if (!exists) {
+    const addResponse = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}:batchUpdate`,
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] })
+      }
+    );
+    const addData = await addResponse.json();
+    if (!addResponse.ok) throw new Error("Google Sheets Intervals addSheet HTTP " + addResponse.status + ": " + JSON.stringify(addData.error || addData));
+  }
+
+  const rows = [headers, ...(activities || []).map(a => {
+    const start = activityStart(a);
+    const end = activityEnd(a);
+    const duration = hoursBetween(start, end);
+    const distance =
+      activityNumber(a, ["distance", "distance_km", "distanceKm"]) ??
+      null;
+    const calories =
+      activityNumber(a, ["calories", "calories_kcal", "icu_calories"]) ??
+      null;
+    return [
+      dateOnly(start),
+      a.name || a.title || "",
+      a.type || a.activity_type || a.category || "",
+      start || "",
+      end || "",
+      duration == null ? "" : Number(duration.toFixed(3)),
+      distance == null ? "" : Number(distance.toFixed(3)),
+      calories == null ? "" : calories,
+      a.id == null ? "" : String(a.id)
+    ];
+  })];
+
+  const range = "'" + sheetName + "'!A1:I1000";
+  const clearResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:clear`,
+    { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: "{}" }
+  );
+  const clearData = await clearResponse.json();
+  if (!clearResponse.ok) throw new Error("Google Sheets Intervals clear HTTP " + clearResponse.status + ": " + JSON.stringify(clearData.error || clearData));
+
+  const writeRange = "'" + sheetName + "'!A1:I" + Math.max(1, rows.length);
+  const writeResponse = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(writeRange)}?valueInputOption=USER_ENTERED`,
+    {
+      method: "PUT",
+      headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ values: rows })
+    }
+  );
+  const writeData = await writeResponse.json();
+  if (!writeResponse.ok) throw new Error("Google Sheets Intervals write HTTP " + writeResponse.status + ": " + JSON.stringify(writeData.error || writeData));
+
+  return { sheet: sheetName, rowsWritten: Math.max(0, rows.length - 1) };
+}
+
 
 async function syncIntervals(env) {
   const activities =
@@ -988,11 +1061,18 @@ async function syncIntervals(env) {
       env
     );
 
+  const historySheet =
+    await mirrorIntervalsActivitiesToSheet(
+      env,
+      activities.activities
+    );
+
   return Response.json({
     status: "ok",
     source: "intervals.icu",
     activities,
-    planned
+    planned,
+    historySheet
   });
 }
 
