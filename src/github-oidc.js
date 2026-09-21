@@ -2,7 +2,10 @@ const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const JWKS_URL = `${OIDC_ISSUER}/.well-known/jwks`;
 const EXPECTED_AUDIENCE = "health-strength";
 const EXPECTED_REPOSITORY = "shaarkyn/health-api";
-const EXPECTED_WORKFLOW = "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main";
+const EXPECTED_WORKFLOWS = new Set([
+  "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main",
+  "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main"
+]);
 
 let cachedJwks = null;
 let cachedJwksAt = 0;
@@ -26,7 +29,7 @@ export async function verifyGitHubActionsToken(request) {
   if (claims.repository !== EXPECTED_REPOSITORY) throw new Error("Invalid GitHub Actions repository");
   if (claims.repository_visibility !== "private") throw new Error("Invalid GitHub Actions repository visibility");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
-  if (claims.workflow_ref !== EXPECTED_WORKFLOW) throw new Error("Invalid GitHub Actions workflow");
+  if (!EXPECTED_WORKFLOWS.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
   if (claims.event_name !== "push") throw new Error("Invalid GitHub Actions event");
   if (claims.actor !== "shaarkyn") throw new Error("Invalid GitHub Actions actor");
   if (!Number.isFinite(claims.exp) || claims.exp <= now) throw new Error("Expired GitHub Actions token");
