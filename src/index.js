@@ -1006,10 +1006,17 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
   const rows = [headers, ...(activities || []).map(a => {
     const start = activityStart(a);
     const end = activityEnd(a);
-    const duration = hoursBetween(start, end);
-    const distance =
-      activityNumber(a, ["distance", "distance_km", "distanceKm"]) ??
-      null;
+
+    let duration = activityNumber(a, ["duration_hours", "durationHours"]);
+    if (duration == null) duration = activityNumber(a, ["duration", "duration_seconds", "moving_time", "elapsed_time"]);
+    if (duration != null && duration > 1000) duration = duration / 3600;
+    if (duration != null && duration > 12) duration = duration / 3600;
+    if (duration == null && start && end) duration = hoursBetween(start, end);
+
+    const directKm = activityNumber(a, ["distance_km", "distanceKm"]);
+    const rawDistance = activityNumber(a, ["distance"]);
+    const distanceKm = directKm != null ? directKm : (rawDistance != null ? rawDistance / 1000 : null);
+
     const calories =
       activityNumber(a, ["calories", "calories_kcal", "icu_calories"]) ??
       null;
@@ -1020,13 +1027,15 @@ async function mirrorIntervalsActivitiesToSheet(env, activities) {
       start || "",
       end || "",
       duration == null ? "" : Number(duration.toFixed(3)),
-      distance == null ? "" : Number(distance.toFixed(3)),
+      distanceKm == null ? "" : Number(distanceKm.toFixed(3)),
       calories == null ? "" : calories,
       a.id == null ? "" : String(a.id)
     ];
   })];
 
-  const range = "'" + sheetName + "'!A1:I1000";
+  // Intervals.icu is the source mirror. Clear the full visible area so stale
+  // legacy columns (HR/sleep helper columns) cannot survive from older layouts.
+  const range = "'" + sheetName + "'!A1:L1000";
   const clearResponse = await fetch(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${encodeURIComponent(range)}:clear`,
     { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: "{}" }
