@@ -31,13 +31,13 @@ async function spreadsheetMetadata(accessToken) {
 function cell(v) { return v == null ? "" : v; }
 
 export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
-  const rows = await db.prepare(`
+  const rows = await db.prepare(\`
     SELECT workout_date, type, exercise, set_no, planned_kg, planned_reps,
            actual_kg, actual_reps, rpe, completed, note, source
     FROM strength_sets
     WHERE completed = 1
     ORDER BY workout_date ASC, sheet_row ASC, id ASC
-  `).all();
+  \`).all();
 
   const values = (rows.results || []).map(r => [
     cell(r.workout_date), cell(r.type), cell(r.exercise), cell(r.set_no),
@@ -46,50 +46,38 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
   ]);
 
   const existing = await spreadsheetMetadata(accessToken);
-  const targets = [ALLSETS_NAME, LOG_NAME];
-  const requests = [];
-  for (const name of targets) {
-    if (!existing.find(s => s.properties && s.properties.title === name)) {
-      requests.push({ addSheet: { properties: { title: name } } });
-    }
+  if (!existing.find(s => s.properties && s.properties.title === ALLSETS_NAME)) {
+    await sheetsBatchUpdate(accessToken, { requests: [{ addSheet: { properties: { title: ALLSETS_NAME } } }] });
   }
-  if (requests.length) await sheetsBatchUpdate(accessToken, { requests });
-
-  const result = {};
-  for (const name of targets) {
-    const range = "'" + name + "'!A1:L10000";
-    const current = await valuesRequest(accessToken, range);
-    const currentValues = current.values || [];
-    const hasHeader = currentValues.length && String(currentValues[0][0] || "").trim() === ALLSETS_HEADERS[0];
-    const existingRows = hasHeader ? currentValues.slice(1) : [];
-    const key = row => [
-      row[0], row[1], String(row[2] || "").trim().toLowerCase(), row[3],
-      row[6], row[7], row[8], row[11]
-    ].map(v => String(v ?? "")).join("|");
-    const known = new Set(existingRows.map(key));
-    const additions = values.filter(row => {
-      const k = key(row);
-      if (known.has(k)) return false;
-      known.add(k);
-      return true;
-    });
-
-    if (!hasHeader) {
-      await valuesRequest(accessToken, "'" + name + "'!A1:L1", "PUT", { values: [ALLSETS_HEADERS] }, "?valueInputOption=USER_ENTERED");
-    }
-    if (additions.length) {
-      await valuesRequest(
-        accessToken,
-        "'" + name + "'!A" + (existingRows.length + 2) + ":L" + (existingRows.length + additions.length + 1),
-        "PUT",
-        { values: additions },
-        "?valueInputOption=USER_ENTERED"
-      );
-    }
-    result[name] = { existingRows: existingRows.length, rowsAdded: additions.length, totalRows: existingRows.length + additions.length };
+  if (!existing.find(s => s.properties && s.properties.title === LOG_NAME)) {
+    await sheetsBatchUpdate(accessToken, { requests: [{ addSheet: { properties: { title: LOG_NAME } } }] });
   }
 
-  return { sheets: targets, ...result };
+  const allCurrent = await valuesRequest(accessToken, "'AllSets'!A1:L10000");
+  const allValues = allCurrent.values || [];
+  const hasAllHeader = allValues.length && String(allValues[0][0] || "").trim() === ALLSETS_HEADERS[0];
+  const existingRows = hasAllHeader ? allValues.slice(1) : [];
+  const key = row => [row[0], row[1], String(row[2] || "").trim().toLowerCase(), row[3], row[6], row[7], row[8], row[11]].map(v => String(v ?? "")).join("|");
+  const known = new Set(existingRows.map(key));
+  const additions = values.filter(row => { const k=key(row); if(known.has(k)) return false; known.add(k); return true; });
+  if (!hasAllHeader) await valuesRequest(accessToken, "'AllSets'!A1:L1", "PUT", { values: [ALLSETS_HEADERS] }, "?valueInputOption=USER_ENTERED");
+  if (additions.length) {
+    await valuesRequest(accessToken, "'AllSets'!A" + (existingRows.length + 2) + ":L" + (existingRows.length + additions.length + 1), "PUT", { values: additions }, "?valueInputOption=USER_ENTERED");
+  }
+
+  const logHeaders = ["Datum","Trénink","Cvik","Série","Váha kg","Opakování","RPE","Poznámka"];
+  const logValues = [logHeaders, ...(rows.results || []).map(r => [
+    cell(r.workout_date), cell(r.type) === "WORK" ? "Silový" : cell(r.type),
+    cell(r.exercise), cell(r.set_no), cell(r.actual_kg), cell(r.actual_reps), cell(r.rpe), cell(r.note)
+  ])];
+  await valuesRequest(accessToken, "'Log'!A1:H10000", "POST", {}, ":clear");
+  await valuesRequest(accessToken, "'Log'!A1:H" + Math.max(1,logValues.length), "PUT", { values: logValues }, "?valueInputOption=USER_ENTERED");
+
+  return {
+    sheets: [ALLSETS_NAME, LOG_NAME],
+    AllSets: { existingRows: existingRows.length, rowsAdded: additions.length, totalRows: existingRows.length + additions.length },
+    Log: { rowsWritten: Math.max(0, logValues.length - 1), columns: logHeaders.length }
+  };
 }
 
 async function auditWorkbook(accessToken) {
@@ -110,15 +98,86 @@ async function auditWorkbook(accessToken) {
   return audit;
 }
 
+
+const CVIKY_HEADERS = ["ID","Cvik","Svalová oblast","Pohybový vzor","Role","Priorita","Série","Min opak.","Max opak.","Cílové RPE","Krok váhy","Vybavení","Rotace","Poznámka","Video","Video název","Video URL"];
+
+const GYM_CATALOG = [
+  ["DB bench press","chest","horizontal_push","compound","A",3,6,10,8,1,"dumbbell","Hlavní tlak; 1 jednoručka"],
+  ["Low row","back","horizontal_pull","compound","A",3,6,10,8,5,"machine","Hlavní tah; stroj"],
+  ["DB shoulder press","shoulders","vertical_push","compound","A",3,6,10,8,1,"dumbbell","Volné váhy; 1 jednoručka"],
+  ["Pivot leg press","quads","knee_dominant","compound","A",3,6,10,8,5,"machine","Hlavní cvik; stroj"],
+  ["Prime prone leg curl","hamstrings","knee_flexion","isolation","A",3,8,15,8,2.5,"machine","Hamstringy; jednostranně pokud konstrukce dovolí"],
+  ["Cable curl","biceps","elbow_flexion","isolation","B",3,8,15,8,2.5,"cable","Kladka"],
+  ["DB curl","biceps","elbow_flexion","isolation","B",3,8,15,8,1,"dumbbell","Jednostranně"],
+  ["Hammer curl","biceps","elbow_flexion","isolation","B",3,8,15,8,1,"dumbbell","Jednostranně"],
+  ["Cable triceps extension","triceps","elbow_extension","isolation","B",3,8,15,8,2.5,"cable","Triceps; kladka"],
+  ["Abs bench crunch","core","trunk_flexion","core","B",3,10,20,8,5,"machine","Core; stroj"],
+  ["Prime flat chest press","chest","horizontal_push","compound","A",3,8,12,8,5,"machine","Prime stroj"],
+  ["Prime shoulder press","shoulders","vertical_push","compound","A",3,8,12,8,5,"machine","Prime stroj"],
+  ["Lat pulldown","back","vertical_pull","compound","A",3,8,12,8,2.5,"cable","Kladka shora"],
+  ["Standing rowing machine","back","horizontal_pull","compound","A",3,8,12,8,5,"machine","Stojící veslovací stroj"],
+  ["Pendulum squat","quads","knee_dominant","compound","A",3,6,10,8,2.5,"machine","Pendulum squat"],
+  ["Prime leg extension","quads","knee_extension","isolation","B",2,10,15,8,2.5,"machine","Preferovat jednostranně"],
+  ["Hip thrust","glutes","hip_extension","compound","A",3,6,12,8,5,"machine/barbell","Hýždě"],
+  ["DB Romanian deadlift","hamstrings","hinge","compound","A",3,8,12,8,1,"dumbbell","1 jednoručka; hamstringy/hýždě"],
+  ["Barbell Romanian deadlift","hamstrings","hinge","compound","A",3,6,10,8,2.5,"barbell","Osa; hamstringy/hýždě"],
+  ["DB Bulgarian split squat","quads","unilateral_knee_dominant","compound","A",3,8,12,8,1,"dumbbell","Jednostranná síla"],
+  ["Adduction machine","adductors","adduction","isolation","C",2,15,20,8,5,"machine","Stroj"],
+  ["Abduction machine","abductors","abduction","isolation","C",2,15,20,8,5,"machine","Stroj"],
+  ["Pec deck","chest","horizontal_push","isolation","B",3,10,15,8,5,"machine","Pec deck"],
+  ["Rear delt pec deck","rear_delts","rear_delt","isolation","B",3,10,15,8,2.5,"machine","Reverse pec deck"],
+  ["Cable lateral raise","side_delts","lateral_raise","isolation","B",3,10,15,8,2.5,"cable","Preferovat jednostranně"],
+  ["Cable pullover","back","vertical_pull","isolation","B",2,10,15,8,2.5,"cable","Laty"],
+  ["Cable rear delt fly","rear_delts","rear_delt","isolation","B",2,10,15,8,2.5,"cable","Preferovat jednostranně"],
+  ["Pallof press","core","anti_rotation","core","C",3,10,15,8,2.5,"cable","Jednostranně"],
+  ["Cable woodchop","core","rotation","core","C",2,8,12,8,2.5,"cable","Jednostranně"],
+  ["Roman chair","core","trunk_extension","core","C",3,10,15,8,2.5,"machine","Hyperextenze"],
+  ["Standing calf machine","calves","plantar_flexion","isolation","C",3,10,20,8,5,"machine","Lýtka"],
+  ["Cable crunch","core","trunk_flexion","core","C",3,10,20,8,2.5,"cable","Core"]
+];
+
+async function ensureGymExerciseCatalog(accessToken) {
+  const meta = await spreadsheetMetadata(accessToken);
+  if (!meta.find(s => s.properties?.title === "Cviky")) {
+    await sheetsBatchUpdate(accessToken, { requests: [{ addSheet: { properties: { title: "Cviky" } } }] });
+  }
+  const current = await valuesRequest(accessToken, "'Cviky'!A1:Q1000");
+  const values = current.values || [];
+  if (!values.length || String(values[0][1] || "").trim() !== "Cvik") {
+    await valuesRequest(accessToken, "'Cviky'!A1:Q1", "PUT", { values: [CVIKY_HEADERS] }, "?valueInputOption=USER_ENTERED");
+  }
+  const existingNames = new Set(values.slice(1).map(r => String(r[1] || "").trim().toLocaleLowerCase("cs-CZ")).filter(Boolean));
+  let maxId = 0;
+  for (const r of values.slice(1)) {
+    const m = String(r[0] || "").match(/E(\d+)/i);
+    if (m) maxId = Math.max(maxId, Number(m[1]));
+  }
+  const additions = [];
+  for (const item of GYM_CATALOG) {
+    const [name, muscle, pattern, role, priority, sets, minReps, maxReps, targetRpe, step, equipment, note] = item;
+    if (existingNames.has(name.toLocaleLowerCase("cs-CZ"))) continue;
+    maxId++;
+    additions.push(["E" + String(maxId).padStart(2,"0"),name,muscle,pattern,role,priority,sets,minReps,maxReps,targetRpe,step,equipment,"AUTO",note,"","",""]);
+    existingNames.add(name.toLocaleLowerCase("cs-CZ"));
+  }
+  if (additions.length) {
+    const start = values.length + 1;
+    const end = start + additions.length - 1;
+    await valuesRequest(accessToken, "'Cviky'!A" + start + ":Q" + end, "PUT", { values: additions }, "?valueInputOption=USER_ENTERED");
+  }
+  return { added: additions.length, totalCatalogEntries: existingNames.size };
+}
+
 export async function maintainStrengthSheets(accessToken, db) {
   const sheets = await spreadsheetMetadata(accessToken);
   const deleteTitles = new Set(["List1", "List 1", "Návod"]);
   const deletions = sheets.filter(s => deleteTitles.has(s.properties && s.properties.title)).map(s => s.properties.sheetId);
   if (sheets.length - deletions.length < 1) deletions.pop();
   if (deletions.length) await sheetsBatchUpdate(accessToken, { requests: deletions.map(sheetId => ({ deleteSheet: { sheetId } })) });
+  const catalog = await ensureGymExerciseCatalog(accessToken);
   const mirror = await mirrorStrengthHistoryToAllSets(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   const videoDebug = await inspectExerciseVideoSource(accessToken);
   const workbookAudit = await auditWorkbook(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), ...mirror, ...videoLinks, videoDebug, workbookAudit };
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, ...mirror, ...videoLinks, videoDebug, workbookAudit };
 }
