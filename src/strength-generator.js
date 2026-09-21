@@ -184,8 +184,6 @@ function choosePlan(context, options = {}) {
 
   if (forceLower) {
     const used = new Set();
-    const quad = pick("horizontalPush", used); // placeholder replaced below
-    void quad;
     const legCandidates = ["Pivot leg press", "Pendulum squat", "DB Bulgarian split squat", "Leg extension Prime", "Prone leg curl Prime", "DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"];
     const exercises = legCandidates
       .filter(ex => notRecent(ex))
