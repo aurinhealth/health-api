@@ -59,8 +59,8 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
   const existingRows = hasAllHeader ? allValues.slice(1) : [];
   const normalizeDate = value => {
     const s = String(value ?? "").trim();
-    if (/^\\d{4}-\\d{2}-\\d{2}/.test(s)) return s.slice(0,10);
-    const m = s.match(/^(\\d{1,2})\\.(\\d{1,2})\\.(\\d{4})$/);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+    const m = s.match(/^(\d{1,2})\\.(\d{1,2})\\.(\d{4})$/);
     if (m) return `${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
     const n = Number(s);
     if (Number.isFinite(n) && n > 30000 && n < 70000) {
@@ -288,7 +288,7 @@ async function refreshWorkoutChrome(accessToken) {
   const current = await valuesRequest(accessToken, "'Dnešní trénink'!A1:K7");
   const old = current.values || [];
   const rawDate = String(old?.[2]?.[1] || old?.[5]?.[1] || "").trim();
-  const date = /^\\d{4}[-.]\\d{2}[-.]\\d{2}$/.test(rawDate)
+  const date = /^\d{4}[-.]\d{2}[-.]\d{2}$/.test(rawDate)
     ? rawDate.replace(/\\./g, "-")
     : new Date().toISOString().slice(0, 10);
   const displayDate = date.split("-").reverse().join(". ");
