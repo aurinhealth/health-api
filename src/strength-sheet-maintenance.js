@@ -1,5 +1,6 @@
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const ALLSETS_NAME = "AllSets";
+const LOG_NAME = "Log";
 const ALLSETS_HEADERS = ["Datum","Typ","Cvik","Série","Plán kg","Plán reps","Skutečně kg","Skutečně reps","RPE","Hotovo","Poznámka","Zdroj"];
 
 async function sheetsBatchUpdate(accessToken, body) {
@@ -44,17 +45,38 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
   ])];
 
   const existing = await spreadsheetMetadata(accessToken);
-  const allSets = existing.find(s => s.properties && s.properties.title === ALLSETS_NAME);
-  if (!allSets) await sheetsBatchUpdate(accessToken, { requests: [{ addSheet: { properties: { title: ALLSETS_NAME } } }] });
+  const targets = [
+    { name: ALLSETS_NAME, clear: "'AllSets'!A1:L10000" },
+    { name: LOG_NAME, clear: "'Log'!A1:L10000" }
+  ];
+  const requests = [];
+  for (const target of targets) {
+    if (!existing.find(s => s.properties && s.properties.title === target.name)) {
+      requests.push({ addSheet: { properties: { title: target.name } } });
+    }
+  }
+  if (requests.length) await sheetsBatchUpdate(accessToken, { requests });
 
-  await valuesRequest(accessToken, "'AllSets'!A1:L10000", "POST", {}, ":clear");
-  await valuesRequest(accessToken, "'AllSets'!A1:L" + Math.max(1, values.length), "PUT", { values }, "?valueInputOption=USER_ENTERED");
-  return { sheet: ALLSETS_NAME, rowsWritten: Math.max(0, values.length - 1), totalRows: values.length };
+  for (const target of targets) {
+    await valuesRequest(accessToken, target.clear, "POST", {}, ":clear");
+    await valuesRequest(
+      accessToken,
+      "'" + target.name + "'!A1:L" + Math.max(1, values.length),
+      "PUT",
+      { values },
+      "?valueInputOption=USER_ENTERED"
+    );
+  }
+  return {
+    sheets: [ALLSETS_NAME, LOG_NAME],
+    rowsWritten: Math.max(0, values.length - 1),
+    totalRows: values.length
+  };
 }
 
 export async function maintainStrengthSheets(accessToken, db) {
   const sheets = await spreadsheetMetadata(accessToken);
-  const deleteTitles = new Set(["List1", "Návod"]);
+  const deleteTitles = new Set(["List1", "List 1", "Návod"]);
   const deletions = sheets.filter(s => deleteTitles.has(s.properties && s.properties.title)).map(s => s.properties.sheetId);
   if (sheets.length - deletions.length < 1) deletions.pop();
   if (deletions.length) await sheetsBatchUpdate(accessToken, { requests: deletions.map(sheetId => ({ deleteSheet: { sheetId } })) });
