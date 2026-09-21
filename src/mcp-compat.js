@@ -1,7 +1,7 @@
 import { handleMcp } from "./mcp.js";
 
 const MODERN = "2026-07-28";
-const SERVER_INFO = { name: "health-api-strength-coach", title: "Health API Strength Coach", version: "1.0.2" };
+const SERVER_INFO = { name: "health-api-strength-coach", title: "Health API Strength Coach", version: "1.1.0" };
 
 export async function handleMcpCompat(request, env) {
   const protocol = request.headers.get("MCP-Protocol-Version");
