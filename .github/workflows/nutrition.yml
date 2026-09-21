@@ -6,10 +6,13 @@ on:
       - main
     paths:
       - "automation/nutrition-request.json"
+  issues:
+    types: [opened]
 
 permissions:
   id-token: write
   contents: write
+  issues: write
 
 jobs:
   nutrition:
@@ -31,13 +34,34 @@ jobs:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -uo pipefail
-          body="$(cat automation/nutrition-request.json)"
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            body='{"request_id":"issue-nutrition-verification","date":"2026-09-21"}'
+          else
+            body="$(cat automation/nutrition-request.json)"
+          fi
           http_code="$(curl -sS -o automation/nutrition-result.json -w "%{http_code}" -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "$body"             "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition")"
           echo "HTTP $http_code"
           cat automation/nutrition-result.json
           printf '%s' "$http_code" > automation/nutrition-http-status.txt
           if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
             exit 1
+          fi
+      - name: Report nutrition result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -f automation/nutrition-result.json ]; then
+            result="$(cat automation/nutrition-result.json)"
+          else
+            result='{"status":"error","message":"No nutrition result file was produced"}'
+          fi
+          if [ "${{ github.event_name }}" = "issues" ]; then
+            gh issue comment "${{ github.event.issue.number }}" --body "Nutrition verification result:
+```json
+${result}
+```"
           fi
       - name: Persist nutrition result
         env:
