@@ -48,9 +48,9 @@ export async function fetchExerciseVideoLinks(accessToken) {
   const textOf = cell => {
     const v = cell?.effectiveValue || cell?.userEnteredValue;
     if (!v) return "";
-    return v.stringValue ?? v.numberValue ?? v.boolValue ?? "";
+    return v.stringValue ?? v.numberValue ?? v.boolValue ?? v.formulaValue ?? "";
   };
-  const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ");
+  const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ").replace(/\\s+/g, " ");
   const map = new Map();
 
   // Do not depend on the exact Cviky header/column layout. For every row, find a
@@ -64,6 +64,8 @@ export async function fetchExerciseVideoLinks(accessToken) {
       linked?.hyperlink ||
       cells.find(cell => typeof cell?.userEnteredFormat?.textFormat?.link?.uri === "string")
         ?.userEnteredFormat?.textFormat?.link?.uri ||
+      cells.map(textOf).find(value => /^https?:\\/\\//i.test(String(value))) ||
+      cells.map(textOf).map(value => String(value).match(/^=HYPERLINK\\(\\s*"([^"]+)"/i)?.[1]).find(Boolean) ||
       null;
     if (!linkedUrl) continue;
 
