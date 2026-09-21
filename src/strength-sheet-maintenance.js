@@ -36,43 +36,60 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
            actual_kg, actual_reps, rpe, completed, note, source
     FROM strength_sets
     WHERE completed = 1
-    ORDER BY workout_date DESC, sheet_row ASC, id ASC
+    ORDER BY workout_date ASC, sheet_row ASC, id ASC
   `).all();
 
-  const values = [ALLSETS_HEADERS, ...(rows.results || []).map(r => [
+  const values = (rows.results || []).map(r => [
     cell(r.workout_date), cell(r.type), cell(r.exercise), cell(r.set_no),
     cell(r.planned_kg), cell(r.planned_reps), cell(r.actual_kg), cell(r.actual_reps),
     cell(r.rpe), r.completed ? "TRUE" : "FALSE", cell(r.note), cell(r.source)
-  ])];
+  ]);
 
   const existing = await spreadsheetMetadata(accessToken);
-  const targets = [
-    { name: ALLSETS_NAME, clear: "'AllSets'!A1:L10000" },
-    { name: LOG_NAME, clear: "'Log'!A1:L10000" }
-  ];
+  const targets = [ALLSETS_NAME, LOG_NAME];
   const requests = [];
-  for (const target of targets) {
-    if (!existing.find(s => s.properties && s.properties.title === target.name)) {
-      requests.push({ addSheet: { properties: { title: target.name } } });
+  for (const name of targets) {
+    if (!existing.find(s => s.properties && s.properties.title === name)) {
+      requests.push({ addSheet: { properties: { title: name } } });
     }
   }
   if (requests.length) await sheetsBatchUpdate(accessToken, { requests });
 
-  for (const target of targets) {
-    await valuesRequest(accessToken, target.clear, "POST", {}, ":clear");
-    await valuesRequest(
-      accessToken,
-      "'" + target.name + "'!A1:L" + Math.max(1, values.length),
-      "PUT",
-      { values },
-      "?valueInputOption=USER_ENTERED"
-    );
+  const result = {};
+  for (const name of targets) {
+    const range = "'" + name + "'!A1:L10000";
+    const current = await valuesRequest(accessToken, range);
+    const currentValues = current.values || [];
+    const hasHeader = currentValues.length && String(currentValues[0][0] || "").trim() === ALLSETS_HEADERS[0];
+    const existingRows = hasHeader ? currentValues.slice(1) : [];
+    const key = row => [
+      row[0], row[1], String(row[2] || "").trim().toLowerCase(), row[3],
+      row[6], row[7], row[8], row[11]
+    ].map(v => String(v ?? "")).join("|");
+    const known = new Set(existingRows.map(key));
+    const additions = values.filter(row => {
+      const k = key(row);
+      if (known.has(k)) return false;
+      known.add(k);
+      return true;
+    });
+
+    if (!hasHeader) {
+      await valuesRequest(accessToken, "'" + name + "'!A1:L1", "PUT", { values: [ALLSETS_HEADERS] }, "?valueInputOption=USER_ENTERED");
+    }
+    if (additions.length) {
+      await valuesRequest(
+        accessToken,
+        "'" + name + "'!A" + (existingRows.length + 2) + ":L" + (existingRows.length + additions.length + 1),
+        "PUT",
+        { values: additions },
+        "?valueInputOption=USER_ENTERED"
+      );
+    }
+    result[name] = { existingRows: existingRows.length, rowsAdded: additions.length, totalRows: existingRows.length + additions.length };
   }
-  return {
-    sheets: [ALLSETS_NAME, LOG_NAME],
-    rowsWritten: Math.max(0, values.length - 1),
-    totalRows: values.length
-  };
+
+  return { sheets: targets, ...result };
 }
 
 export async function maintainStrengthSheets(accessToken, db) {
