@@ -7,18 +7,18 @@ const EXERCISES = {
   "Low row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "6–10", baseKg: 20, warmup: true, note: "Hlavní tah; kg = celková zátěž stroje", fatigue: 1.0 },
   "DB shoulder press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "6–10", baseKg: 10, warmup: true, note: "Volné váhy; kg = 1 jednoručka", fatigue: 0.9 },
   "Pivot leg press": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "6–10", baseKg: 145, warmup: true, note: "Hlavní cvik; kg = celková zátěž stroje", fatigue: 1.35 },
-  "Prime prone leg curl": { pattern: "hamstring", muscle: "hamstrings", unilateral: true, sets: 3, reps: "8–15", baseKg: 40, warmup: false, note: "Hamstringy; kg = zátěž na jednu stranu", fatigue: 0.85 },
+  "Prone leg curl Prime": { pattern: "hamstring", muscle: "hamstrings", unilateral: true, sets: 3, reps: "8–15", baseKg: 40, warmup: false, note: "Hamstringy; kg = zátěž na jednu stranu", fatigue: 0.85 },
   "Cable curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "8–15", baseKg: 15, warmup: false, note: "Biceps; kg = váha na kladce", fatigue: 0.45 },
   "DB curl": { pattern: "biceps", muscle: "biceps", unilateral: true, sets: 3, reps: "8–15", baseKg: 10, warmup: false, note: "Biceps; kg = 1 jednoručka", fatigue: 0.45 },
   "Hammer curl": { pattern: "biceps", muscle: "biceps", unilateral: true, sets: 3, reps: "8–15", baseKg: 10, warmup: false, note: "Biceps; kg = 1 jednoručka", fatigue: 0.45 },
   "Cable triceps extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "8–15", baseKg: 15, warmup: false, note: "Triceps; kg = váha na kladce", fatigue: 0.45 },
   "Abs bench crunch": { pattern: "core", muscle: "core", unilateral: false, sets: 3, reps: "10–20", baseKg: 52.5, warmup: false, note: "Core; kg = celková zátěž stroje", fatigue: 0.35 },
-  "Prime flat chest press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 42.5, warmup: true, note: "Hrudník; Prime stroj", fatigue: 0.95 },
-  "Prime shoulder press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "8–12", baseKg: 10, warmup: true, note: "Ramena; Prime stroj", fatigue: 0.9 },
+  "Chest flat press Prime": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 42.5, warmup: true, note: "Hrudník; Prime stroj", fatigue: 0.95 },
+  "Shoulder press Prime": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "8–12", baseKg: 10, warmup: true, note: "Ramena; Prime stroj", fatigue: 0.9 },
   "Lat pulldown": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 45, warmup: true, note: "Laty; kladka shora", fatigue: 0.9 },
   "Standing rowing machine": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Záda; standing rowing machine", fatigue: 0.95 },
   "Pendulum squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "6–10", baseKg: 35, warmup: true, note: "Kvadricepsy; pendulum squat", fatigue: 1.3 },
-  "Prime leg extension": { pattern: "quad", muscle: "quads", unilateral: true, sets: 2, reps: "10–15", baseKg: 45, warmup: false, note: "Kvadricepsy; ideálně jednostranně", fatigue: 0.65 },
+  "Leg extension Prime": { pattern: "quad", muscle: "quads", unilateral: true, sets: 2, reps: "10–15", baseKg: 45, warmup: false, note: "Kvadricepsy; ideálně jednostranně", fatigue: 0.65 },
   "Hip thrust": { pattern: "hip_extension", muscle: "glutes", unilateral: false, sets: 3, reps: "6–12", baseKg: 40, warmup: true, note: "Hýždě; hip thrust", fatigue: 1.0 },
   "DB Romanian deadlift": { pattern: "hinge", muscle: "hamstrings", unilateral: false, sets: 3, reps: "8–12", baseKg: 27.5, warmup: true, note: "Hamstringy/hýždě; kg = 1 jednoručka", fatigue: 1.0 },
   "Barbell Romanian deadlift": { pattern: "hinge", muscle: "hamstrings", unilateral: false, sets: 3, reps: "6–10", baseKg: 70, warmup: true, note: "Hamstringy/hýždě; osa", fatigue: 1.1 },
@@ -33,7 +33,7 @@ const EXERCISES = {
   "Pallof press": { pattern: "anti_rotation", muscle: "core", unilateral: true, sets: 3, reps: "10–15", baseKg: 30, warmup: false, note: "Anti-rotace; jednostranně", fatigue: 0.3 },
   "Cable woodchop": { pattern: "rotation", muscle: "core", unilateral: true, sets: 2, reps: "8–12", baseKg: 25, warmup: false, note: "Rotace; jednostranně", fatigue: 0.3 },
   "Roman chair": { pattern: "trunk_extension", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Core/hyperextenze; stroj", fatigue: 0.4 },
-  "Standing calf machine": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "10–20", baseKg: 50, warmup: false, note: "Lýtka; stroj", fatigue: 0.45 },
+  "Standing calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "10–20", baseKg: 50, warmup: false, note: "Lýtka; stroj", fatigue: 0.45 },
   "Cable crunch": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–20", baseKg: 30, warmup: false, note: "Core; kladka", fatigue: 0.35 }
 };
 
@@ -117,9 +117,9 @@ function choosePlan(context, options = {}) {
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
   const forceLower = options.focus === "lower";
   if (forceUpper || (protectLegs && !forceLower)) return { name: "Upper Body", exercises: ["DB bench press", "Low row", "DB shoulder press", "DB curl", "Cable triceps extension"], rationale: forceUpper ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla." : (recentTss >= 700 || nextHard || nextLong ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a držíme silový stimul hlavně nahoře." : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku bez dalšího významného zatížení nohou."), protectedLegs: true, recentWorkoutCount, muscleLoad };
-  const legPress = notRecent("Pivot leg press") ? "Pivot leg press" : "Prime prone leg curl";
-  const hamstring = legPress === "Pivot leg press" ? "Prime prone leg curl" : null;
-  if (forceLower) return { name: "Lower Body", exercises: ["Pivot leg press", "Prime prone leg curl"], rationale: "Požadavek uživatele soustředí trénink na dolní část těla.", protectedLegs: false, recentWorkoutCount, muscleLoad };
+  const legPress = notRecent("Pivot leg press") ? "Pivot leg press" : "Prone leg curl Prime";
+  const hamstring = legPress === "Pivot leg press" ? "Prone leg curl Prime" : null;
+  if (forceLower) return { name: "Lower Body", exercises: ["Pivot leg press", "Prone leg curl Prime"], rationale: "Požadavek uživatele soustředí trénink na dolní část těla.", protectedLegs: false, recentWorkoutCount, muscleLoad };
   return { name: "Full Body", exercises: [legPress, "DB bench press", "Low row", ...(hamstring ? [hamstring] : []), "DB shoulder press", "Abs bench crunch"], rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; objem nohou zůstává přiměřený aktuální cyklistické zátěži.", protectedLegs: false, recentWorkoutCount, muscleLoad };
 }
 function warmupRows(exercise, workKg = null) {
@@ -144,7 +144,7 @@ export function generateStrengthPlan(context, options = {}) {
   let exercises = [...chosen.exercises];
   const excluded = new Set((options.excludeExercises || []).map(String));
   exercises = exercises.filter(ex => !excluded.has(ex));
-  const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "Prime flat chest press", "Prime shoulder press", "DB bench press", "Low row", "Standing rowing machine", "Lat pulldown", "DB shoulder press", "Pec deck", "Rear delt pec deck", "Cable lateral raise", "Prime prone leg curl", "Prime leg extension", "DB Romanian deadlift", "DB Bulgarian split squat", "Hip thrust", "Pivot leg press", "Pendulum squat", "Abs bench crunch", "Cable crunch", "Pallof press"];
+  const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "Chest flat press Prime", "Shoulder press Prime", "DB bench press", "Low row", "Standing rowing machine", "Lat pulldown", "DB shoulder press", "Pec deck", "Rear delt pec deck", "Cable lateral raise", "Prone leg curl Prime", "Leg extension Prime", "DB Romanian deadlift", "DB Bulgarian split squat", "Hip thrust", "Pivot leg press", "Pendulum squat", "Abs bench crunch", "Cable crunch", "Pallof press"];
   for (const candidate of candidates) {
     if (exercises.length >= (Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5))) break;
     if (!exercises.includes(candidate) && !excluded.has(candidate)) exercises.push(candidate);
