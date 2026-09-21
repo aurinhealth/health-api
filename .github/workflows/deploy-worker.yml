@@ -40,7 +40,7 @@ jobs:
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")"
           echo "::add-mask::$token"
           curl --fail-with-body -sS \
-  -X POST \
+            -X POST \
             -H "Authorization: Bearer $token" \
             -H "Content-Type: application/json" \
             --data '{"action":"sheet_maintenance","date":null,"preview":false}' \
