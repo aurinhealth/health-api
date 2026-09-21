@@ -370,13 +370,13 @@ async function formatWorkbook(accessToken) {
       columnWidth(id,9,10,300), columnWidth(id,10,11,90),
       repeatFormat(gridRange(id, 7, 1000, 0, 11), { wrapStrategy: "WRAP", verticalAlignment: "MIDDLE" }),
       repeatFormat(gridRange(id, 2, 3, 0, 11), { horizontalAlignment:"LEFT" }),
-      repeatFormat(gridRange(id, 2, 3, 1, 2), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
+      repeatFormat(gridRange(id, 2, 3, 1, 2), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 0, 1), { horizontalAlignment:"CENTER" }, "userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 1, 2), { horizontalAlignment:"LEFT" }, "userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 2, 5), { horizontalAlignment:"CENTER" }, "userEnteredFormat.horizontalAlignment"),
-      repeatFormat(gridRange(id, 7, 1000, 3, 4), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
+      repeatFormat(gridRange(id, 7, 1000, 3, 4), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 4, 5), { horizontalAlignment:"CENTER" }, "userEnteredFormat.horizontalAlignment"),
-      repeatFormat(gridRange(id, 7, 1000, 5, 6), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
+      repeatFormat(gridRange(id, 7, 1000, 5, 6), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 6, 9), { horizontalAlignment:"CENTER" }, "userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 9, 10), { horizontalAlignment:"LEFT" }, "userEnteredFormat.horizontalAlignment"),
       repeatFormat(gridRange(id, 7, 1000, 10, 11), { horizontalAlignment:"CENTER" }, "userEnteredFormat.horizontalAlignment")
@@ -417,12 +417,12 @@ async function formatWorkbook(accessToken) {
       repeatFormat(gridRange(id,10,11,0,5), {
         backgroundColor:UI.headerBg, textFormat:{fontFamily:"Arial",fontSize:10,bold:true,foregroundColor:UI.text}
       }),
-      repeatFormat(gridRange(id,3,4,1,2), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,6,1000,0,1), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,11,1000,1,2), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,11,1000,2,3), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,11,1000,3,4), { numberFormat:{ type:"NUMBER", pattern:"0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,11,1000,4,5), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
+      repeatFormat(gridRange(id,3,4,1,2), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,6,1000,0,1), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,11,1000,1,2), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,11,1000,2,3), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,11,1000,3,4), { numberFormat:{ type:"NUMBER", pattern:"0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,11,1000,4,5), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
       { updateSheetProperties:{properties:{sheetId:id,gridProperties:{frozenRowCount:1}},fields:"gridProperties.frozenRowCount"} },
       columnWidth(id,0,1,210), columnWidth(id,1,2,115), columnWidth(id,2,4,95), columnWidth(id,4,5,70)
     );
@@ -444,12 +444,12 @@ async function formatWorkbook(accessToken) {
     width.forEach((w,i)=>requests.push(columnWidth(id,i,i+1,w)));
     requests.push(
       repeatFormat(gridRange(id,1,10000,0,width.length), { wrapStrategy:"CLIP", verticalAlignment:"MIDDLE" }),
-      repeatFormat(gridRange(id,1,10000,0,1), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,1,10000,3,4), { numberFormat:{ type:"NUMBER", pattern:"0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,1,10000,4,5), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,1,10000,5,6), { numberFormat:{ type:"NUMBER", pattern:"0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,1,10000,6,7), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment"),
-      repeatFormat(gridRange(id,1,10000,7,8), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,horizontalAlignment")
+      repeatFormat(gridRange(id,1,10000,0,1), { numberFormat:{ type:"DATE", pattern:"dd.mm.yyyy" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,1,10000,3,4), { numberFormat:{ type:"NUMBER", pattern:"0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,1,10000,4,5), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"RIGHT" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,1,10000,5,6), { numberFormat:{ type:"NUMBER", pattern:"0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,1,10000,6,7), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment"),
+      repeatFormat(gridRange(id,1,10000,7,8), { numberFormat:{ type:"NUMBER", pattern:"0.0" }, horizontalAlignment:"CENTER" }, "userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment")
     );
   }
 
