@@ -54,6 +54,7 @@ jobs:
           set -euo pipefail
           if [ -f automation/nutrition-result.json ]; then cat automation/nutrition-result.json; else echo "No nutrition result file was produced"; fi
       - name: Persist nutrition result
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
