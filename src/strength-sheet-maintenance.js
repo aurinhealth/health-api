@@ -31,13 +31,13 @@ async function spreadsheetMetadata(accessToken) {
 function cell(v) { return v == null ? "" : v; }
 
 export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
-  const rows = await db.prepare(\`
+  const rows = await db.prepare(`
     SELECT workout_date, type, exercise, set_no, planned_kg, planned_reps,
            actual_kg, actual_reps, rpe, completed, note, source
     FROM strength_sets
     WHERE completed = 1
     ORDER BY workout_date ASC, sheet_row ASC, id ASC
-  \`).all();
+  `).all();
 
   const values = (rows.results || []).map(r => [
     cell(r.workout_date), cell(r.type), cell(r.exercise), cell(r.set_no),
@@ -170,30 +170,30 @@ async function ensureGymExerciseCatalog(accessToken) {
 
 
 async function refreshStrengthOverview(accessToken, db) {
-  const last = await db.prepare(\`
+  const last = await db.prepare(`
     SELECT workout_date, COUNT(*) AS sets
     FROM strength_sets
     WHERE completed = 1
     GROUP BY workout_date
     ORDER BY workout_date DESC
     LIMIT 1
-  \`).first();
+  `).first();
 
-  const recent = await db.prepare(\`
+  const recent = await db.prepare(`
     SELECT workout_date, COUNT(*) AS sets
     FROM strength_sets
     WHERE completed = 1
     GROUP BY workout_date
     ORDER BY workout_date DESC
     LIMIT 10
-  \`).all();
+  `).all();
 
-  const progression = await db.prepare(\`
+  const progression = await db.prepare(`
     SELECT workout_date, exercise, actual_kg, actual_reps, rpe
     FROM strength_sets
     WHERE completed = 1 AND type = 'WORK'
     ORDER BY workout_date DESC, exercise ASC, set_no ASC
-  \`).all();
+  `).all();
 
   const latestByExercise = new Map();
   for (const r of progression.results || []) {
