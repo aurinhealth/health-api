@@ -206,7 +206,7 @@ export async function syncStrengthSheet(db, values) {
 export async function importStrengthHistory(db, workout) {
   await ensureStrengthTable(db);
   const date = text(workout?.date);
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) throw new Error("Invalid workout date; expected YYYY-MM-DD");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid workout date; expected YYYY-MM-DD");
   const sets = Array.isArray(workout?.sets) ? workout.sets : [];
   if (!sets.length) throw new Error("Workout sets must be a non-empty array");
 
