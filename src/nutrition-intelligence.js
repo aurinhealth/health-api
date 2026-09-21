@@ -48,8 +48,9 @@ export function buildNutritionPlan(context, options = {}) {
   const carbPerKg = dayType === "long" || dayType === "hard" ? defaults.carbPerKgHard : defaults.carbPerKgEasy;
   const carbs = Math.round(weightKg * carbPerKg);
   const fuelingCalories = plannedRideCarbs * 4;
-  const calorieTarget = defaults.calorieTarget + fuelingCalories;
   const fatFromMacros = Math.round(fatMin);
+  const minimumMacroCalories = protein * 4 + carbs * 4 + fatFromMacros * 9;
+  const calorieTarget = Math.max(defaults.calorieTarget + fuelingCalories, minimumMacroCalories);
   const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
   const caloriesFromMacros = protein * 4 + dailyCarbs * 4 + fatFromMacros * 9;
