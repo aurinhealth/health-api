@@ -83,7 +83,7 @@ function recentMuscleLoad(history, contextDate) {
   }
   return load;
 }
-function choosePlan(context) {
+function choosePlan(context, options = {}) {
   const history = context?.strength?.recentCompletedSets || [], legStress = cyclingLegStress(context), muscleLoad = recentMuscleLoad(history, context.date);
   const dates = completedWorkoutDates(history), recentWorkoutCount = dates.filter(d => daysBetween(d, context.date) <= 10).length;
   const recentTss = num(context?.cycling?.recentRideTss) || 0, next = context?.cycling?.nextRide, nextName = String(next?.name || "");
@@ -92,9 +92,12 @@ function choosePlan(context) {
   const lastExerciseDate = new Map();
   for (const row of history) { const d = dateKey(row.workout_date); if (d && (!lastExerciseDate.has(row.exercise) || d > lastExerciseDate.get(row.exercise))) lastExerciseDate.set(row.exercise, d); }
   const notRecent = ex => { const d = lastExerciseDate.get(ex); return !d || daysBetween(d, context.date) >= 5; };
-  if (protectLegs) return { name: "Upper Body + Core", exercises: ["DB bench press", "Low row", "DB shoulder press", "DB curl", "Cable triceps extension"], rationale: recentTss >= 700 || nextHard || nextLong ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a držíme silový stimul hlavně nahoře." : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku bez dalšího významného zatížení nohou.", protectedLegs: true, recentWorkoutCount, muscleLoad };
+  const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
+  const forceLower = options.focus === "lower";
+  if (forceUpper || (protectLegs && !forceLower)) return { name: "Upper Body", exercises: ["DB bench press", "Low row", "DB shoulder press", "DB curl", "Cable triceps extension"], rationale: forceUpper ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla." : (recentTss >= 700 || nextHard || nextLong ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a držíme silový stimul hlavně nahoře." : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku bez dalšího významného zatížení nohou."), protectedLegs: true, recentWorkoutCount, muscleLoad };
   const legPress = notRecent("Pivot leg press") ? "Pivot leg press" : "Prime prone leg curl";
   const hamstring = legPress === "Pivot leg press" ? "Prime prone leg curl" : null;
+  if (forceLower) return { name: "Lower Body", exercises: ["Pivot leg press", "Prime prone leg curl"], rationale: "Požadavek uživatele soustředí trénink na dolní část těla.", protectedLegs: false, recentWorkoutCount, muscleLoad };
   return { name: "Full Body", exercises: [legPress, "DB bench press", "Low row", ...(hamstring ? [hamstring] : []), "DB shoulder press", "Abs bench crunch"], rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; objem nohou zůstává přiměřený aktuální cyklistické zátěži.", protectedLegs: false, recentWorkoutCount, muscleLoad };
 }
 function warmupRows(exercise, workKg = null) {
@@ -114,10 +117,20 @@ function workRows(exercise, historyMap, factor, protectedLegs) {
   return { rows, kg, estimate };
 }
 
-export function generateStrengthPlan(context) {
-  const chosen = choosePlan(context), factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
+export function generateStrengthPlan(context, options = {}) {
+  const chosen = choosePlan(context, options), factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
+  let exercises = [...chosen.exercises];
+  const excluded = new Set((options.excludeExercises || []).map(String));
+  exercises = exercises.filter(ex => !excluded.has(ex));
+  const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "DB bench press", "Low row", "DB shoulder press", "Prime prone leg curl", "Pivot leg press"];
+  for (const candidate of candidates) {
+    if (exercises.length >= (Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5))) break;
+    if (!exercises.includes(candidate) && !excluded.has(candidate)) exercises.push(candidate);
+  }
+  const maxExercises = Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5);
+  exercises = exercises.slice(0, maxExercises);
   const rows = [], loadEstimates = [];
-  for (const exercise of chosen.exercises) {
+  for (const exercise of exercises) {
     const work = workRows(exercise, historyMap, factor, chosen.protectedLegs);
     rows.push(...warmupRows(exercise, work.kg), ...work.rows);
     loadEstimates.push({ exercise, ...work.estimate });
