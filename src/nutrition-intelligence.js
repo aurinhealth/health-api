@@ -63,3 +63,5 @@ export function buildNutritionPlan(context, options = {}) {
     context: { recentCyclingCaloriesLast3: recentCalories, recentRideHours: context?.cycling?.recentRideHours || 0, recentRideTss: context?.cycling?.recentRideTss || 0 }
   };
 }
+
+// Deployment marker: nutrition endpoint requires the current Worker revision.
