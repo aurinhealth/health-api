@@ -68,13 +68,13 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getStrengthHistory","getTodayStrengthSheet","getNutritionPlan"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getStrengthHistory","getTodayStrengthSheet"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
  headers.set("Authorization",`Bearer ${internalKey}`);
  let url=`${base}${route()}`,body;
- if(toolName==="getNutritionPlan" && args.date) url += `?date=${encodeURIComponent(String(args.date))}`;
+ if(toolName==="getNutritionPlan") body=JSON.stringify({date:args.date||null});
  if(method==="POST"){
    headers.set("Content-Type","application/json");
    if(toolName==="generateStrengthPlan") body=JSON.stringify({date:args.date||null,preview:Boolean(args.preview),focus:args.focus||undefined,forceProtectLegs:Boolean(args.forceProtectLegs),durationMinutes:args.durationMinutes||undefined,maxExercises:args.maxExercises||undefined,excludeExercises:Array.isArray(args.excludeExercises)?args.excludeExercises:[]});
