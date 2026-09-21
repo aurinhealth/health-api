@@ -1,5 +1,5 @@
 const MCP_PROTOCOL_VERSION = "2025-11-25";
-const SERVER_VERSION = "1.0.3";
+const SERVER_VERSION = "1.1.0";
 const DEMO_API_KEY = "health-strength-demo-2026";
 
 const TOOLS = [
