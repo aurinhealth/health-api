@@ -1,4 +1,4 @@
-import { handleMcp } from "./mcp.js";
+import { handleMcp, TOOLS } from "./mcp.js";
 
 const MODERN = "2026-07-28";
 const SERVER_INFO = { name: "health-api-strength-coach", title: "Health API Strength Coach", version: "1.1.0" };
@@ -16,6 +16,7 @@ export async function handleMcpCompat(request, env) {
         result: {
           supportedVersions: [MODERN, "2025-11-25", "2025-06-18"],
           capabilities: { tools: {} },
+          tools: TOOLS,
           instructions: "Use the shared daily context for training and nutrition. generateStrengthPlan writes the adaptive workout unless preview=true; getNutritionPlan returns the daily nutrition plan.",
           _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO }
         }
