@@ -39,10 +39,10 @@ jobs:
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=health-strength")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")"
           echo "::add-mask::$token"
-          curl -fsS \
-            -X POST \
+          curl --fail-with-body -sS \
+  -X POST \
             -H "Authorization: Bearer $token" \
             -H "Content-Type: application/json" \
             --data '{"action":"sheet_maintenance","date":null,"preview":false}' \
             "https://health-api.chelseafc-czsk.workers.dev/automation/strength"
-          curl -fsS "https://health-api.chelseafc-czsk.workers.dev/sync/intervals"
+          curl --fail-with-body -sS "https://health-api.chelseafc-czsk.workers.dev/sync/intervals"
