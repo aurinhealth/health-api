@@ -5,6 +5,7 @@ import { writeStrengthPlan } from "./strength-plan-writer.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./strength-sheet-maintenance.js";
+import { buildNutritionPlan } from "./nutrition-intelligence.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -33,6 +34,7 @@ export default {
     if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
     if (url.pathname === "/strength/alternatives" && request.method === "POST") return alternativesRoute(env, request);
     if (url.pathname === "/strength/substitute" && request.method === "POST") return substituteRoute(env, request);
+    if (url.pathname === "/nutrition/plan" && request.method === "POST") return nutritionPlanRoute(env, request);
     return app.fetch(request, env, ctx);
   }
 };
@@ -282,6 +284,20 @@ async function alternativesRoute(env, request) {
     const alternatives = findExerciseAlternatives(exercise, history, muscle);
     return Response.json({ status: "ok", exercise: exercise || null, muscle: muscle || EXERCISE_INTELLIGENCE[exercise]?.muscle || null, alternatives });
   } catch (error) { return Response.json({ status: "error", step: "strength_alternatives", message: error.message }, { status: 500 }); }
+}
+
+
+async function nutritionPlanRoute(env, request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const date = String(body?.date || "").trim() || null;
+    const context = await buildStrengthContext(env, date);
+    if (context.status !== "ok") throw new Error("Shared daily context is not ready");
+    const plan = buildNutritionPlan(context, body);
+    return Response.json({ status: "ok", plan });
+  } catch (error) {
+    return Response.json({ status: "error", step: "nutrition_plan", message: error.message }, { status: 500 });
+  }
 }
 
 async function substituteRoute(env, request) {
