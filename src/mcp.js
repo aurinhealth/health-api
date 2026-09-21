@@ -6,6 +6,7 @@ const TOOLS = [
   { name:"getStrengthContext", title:"Get strength training context", description:"Read integrated training context for a date, including cycling load, recovery data, and strength history.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getTodayStrengthSheet", title:"Read today's strength sheet", description:"Read the current Dnešní trénink Google Sheet contents.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getNutritionPlan", title:"Get daily nutrition plan", description:"Build the daily nutrition plan from the shared cycling, recovery, and strength context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"generateStrengthPlan", title:"Generate today's strength workout", description:"Generate an adaptive strength workout and write it to the Google Sheet unless preview=true.", inputSchema:{type:"object",properties:{date:{type:"string"},preview:{type:"boolean",default:false},focus:{type:"string",enum:["upper","lower","full"]},forceProtectLegs:{type:"boolean"},durationMinutes:{type:"integer",minimum:20,maximum:120},maxExercises:{type:"integer",minimum:2,maximum:8},excludeExercises:{type:"array",items:{type:"string"}}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
   { name:"syncStrengthSheet", title:"Sync completed strength sets", description:"Sync completed strength sets from the Google Sheet into D1.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
   { name:"analyzeStrengthWorkout", title:"Analyze completed strength workout", description:"Sync and analyze the completed strength workout.", inputSchema:{type:"object",properties:{command:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
@@ -59,6 +60,7 @@ async function callHealthApi(request,env,toolName,args){
   getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
   getTodayStrengthSheet:()=>"/strength/sheet/today",
+  getNutritionPlan:()=>"/nutrition/plan",
   generateStrengthPlan:()=>"/strength/generate-plan",
   syncStrengthSheet:()=>"/strength/sync",
   analyzeStrengthWorkout:()=>"/strength/analyze",
@@ -66,12 +68,13 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getStrengthHistory","getTodayStrengthSheet"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getStrengthHistory","getTodayStrengthSheet","getNutritionPlan"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
  headers.set("Authorization",`Bearer ${internalKey}`);
  let url=`${base}${route()}`,body;
+ if(toolName==="getNutritionPlan" && args.date) url += `?date=${encodeURIComponent(String(args.date))}`;
  if(method==="POST"){
    headers.set("Content-Type","application/json");
    if(toolName==="generateStrengthPlan") body=JSON.stringify({date:args.date||null,preview:Boolean(args.preview),focus:args.focus||undefined,forceProtectLegs:Boolean(args.forceProtectLegs),durationMinutes:args.durationMinutes||undefined,maxExercises:args.maxExercises||undefined,excludeExercises:Array.isArray(args.excludeExercises)?args.excludeExercises:[]});
