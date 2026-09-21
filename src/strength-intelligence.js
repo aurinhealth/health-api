@@ -129,7 +129,7 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
   kg *= progressionMultiplier(n(ref.actual_reps), n(ref.rpe), targetReps);
   kg *= recoveryMultiplier(loadFactor);
   const step = practicalStep(EXERCISE_INTELLIGENCE[exercise]);
-  const rounded = roundToStep(kg, step);
+  const rounded = resolveLoad(exercise, kg);
   return {
     kg: rounded, source: "own-history", confidence: 1, referenceExercise: exercise,
     referenceKg: n(ref.actual_kg), referenceReps: n(ref.actual_reps), referenceRpe: n(ref.rpe),
@@ -162,10 +162,10 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     let kg = ref.kg * ref.factor;
     kg *= progressionMultiplier(ref.reps, ref.rpe, targetReps);
     kg *= recoveryMultiplier(loadFactor);
-    const rounded = roundToStep(kg, practicalStep(def));
-    return { kg: Math.max(practicalStep(def), rounded), source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, referenceDate: ref.date, similarity: ref.similarity, transferFactor: ref.factor };
+    const rounded = resolveLoad(exercise, kg);
+    return { kg: rounded, source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, referenceDate: ref.date, similarity: ref.similarity, transferFactor: ref.factor };
   }
-  if (fallbackKg != null) return { kg: roundToStep(Number(fallbackKg), practicalStep(def)), source: "catalogue-default", confidence: 0.25 };
+  if (fallbackKg != null) return { kg: resolveLoad(exercise, Number(fallbackKg)), source: "catalogue-default", confidence: 0.25 };
   return { kg: null, source: "no-reference", confidence: 0 };
 }
 
