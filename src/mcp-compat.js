@@ -16,7 +16,7 @@ export async function handleMcpCompat(request, env) {
         result: {
           supportedVersions: [MODERN, "2025-11-25", "2025-06-18"],
           capabilities: { tools: {} },
-          instructions: "Use strength context and completed strength history before generating a workout. generateStrengthPlan writes the adaptive workout unless preview=true.",
+          instructions: "Use the shared daily context for training and nutrition. generateStrengthPlan writes the adaptive workout unless preview=true; getNutritionPlan returns the daily nutrition plan.",
           _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO }
         }
       });
