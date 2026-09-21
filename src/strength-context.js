@@ -65,7 +65,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   let strengthHistory;
   try { const { getStrengthHistory } = await import("./strength-history.js"); strengthHistory = await getStrengthHistory(env.DB, 150); } catch (e) { throw new Error(`strength_context.strength_d1: ${e.message}`); }
   const activities = (Array.isArray(activitiesRaw) ? activitiesRaw : []).map(activityInfo), events = (Array.isArray(eventsRaw) ? eventsRaw : []).map(eventInfo);
-  const rides = activities.filter(x => x.cycling), plannedRides = events.filter(x => x.cycling);
+  const rides = activities.filter(x => x.cycling), plannedRides = events.filter(x => x.cycling && n(x.durationHours) > 0 && n(x.durationHours) <= 8);
   const recent = rides.filter(x => x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), planned = plannedRides.filter(x => x.date >= date).sort((a,b) => String(a.start).localeCompare(String(b.start)));
   return { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "google-sheet/d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, sheetSync } };
 }
