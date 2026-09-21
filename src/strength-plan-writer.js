@@ -103,7 +103,7 @@ export async function repairStrengthSheetVideoLinks(accessToken) {
     const exercise = String(row[1] || "").trim().toLocaleLowerCase("cs-CZ");
     const url = links.get(exercise) || (exercise ? fallbackVideoUrl(exercise) : "");
     if (!links.has(exercise) && exercise) unmatchedExercises.add(exercise);
-    if (url && (row[10] === "🎥 Video" || !row[10])) {
+    if (url) {
       const target = sheetRange("K" + (i + 1));
       await sheetsRequest(accessToken, target, "PUT", { values: [[hyperlinkFormula(url)]] }, "?valueInputOption=USER_ENTERED");
       repaired++;
