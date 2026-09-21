@@ -178,7 +178,7 @@ async function ensureGymExerciseCatalog(accessToken) {
   );
 
   return { rebuilt: true, added: GYM_CATALOG.length, totalCatalogEntries: GYM_CATALOG.length, videosReady: GYM_CATALOG.length };
-
+}
 
 
 async function refreshStrengthOverview(accessToken, db) {
