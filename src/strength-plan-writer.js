@@ -35,7 +35,45 @@ async function sheetsBatchUpdate(accessToken, body) {
   return data;
 }
 
-async function configureHotovoCheckboxes(accessToken, rowCount) {
+
+async function fetchExerciseVideoLinks(accessToken) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent("Cviky!A1:Z1000")}&fields=sheets.properties.title,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.userEnteredValue,sheets.data.rowData.values.hyperlink`;
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const data = await response.json();
+  if (!response.ok) throw new Error(`Google Sheets Cviky read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
+  const sheet = (data.sheets || []).find(s => s.properties?.title === "Cviky");
+  if (!sheet) return new Map();
+
+  const rows = sheet.data?.[0]?.rowData || [];
+  const textOf = cell => {
+    const v = cell?.effectiveValue || cell?.userEnteredValue;
+    if (!v) return "";
+    return v.stringValue ?? v.numberValue ?? v.boolValue ?? "";
+  };
+  const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ");
+  const matrix = rows.map(r => (r.values || []).map(textOf));
+  const headerIndex = matrix.findIndex(row => row.some(v => /^(cvik|cviky|exercise|název cviku|name)$/i.test(String(v).trim())));
+  const start = headerIndex >= 0 ? headerIndex + 1 : 0;
+  let exerciseCol = headerIndex >= 0 ? matrix[headerIndex].findIndex(v => /^(cvik|cviky|exercise|název cviku|name)$/i.test(String(v).trim())) : 0;
+  if (exerciseCol < 0) exerciseCol = 0;
+
+  const map = new Map();
+  for (let r = start; r < rows.length; r++) {
+    const rowCells = rows[r]?.values || [];
+    const exercise = norm(matrix[r]?.[exerciseCol]);
+    if (!exercise) continue;
+    const linked = rowCells.find(cell => typeof cell?.hyperlink === "string" && /^https?:\\/\\//i.test(cell.hyperlink));
+    if (linked?.hyperlink) map.set(exercise, linked.hyperlink);
+  }
+  return map;
+}
+
+function hyperlinkFormula(url, label = "🎥 Video") {
+  const safeUrl = String(url).replace(/"/g, '""');
+  const safeLabel = String(label).replace(/"/g, '""');
+  return `=HYPERLINK("${safeUrl}","${safeLabel}")`;
+}
+\nasync function configureHotovoCheckboxes(accessToken, rowCount) {
   // Clear any old validation in the whole workout area first. This prevents stale
   // checkboxes from remaining below a newly generated shorter workout.
   await sheetsBatchUpdate(accessToken, {
@@ -94,7 +132,12 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
   const current = await syncCurrent();
   if (current?.status === "error") throw new Error(`Could not sync current workout before replacement: ${current.message}`);
 
-  const normalizedRows = rows.map(normalizeRow);
+  const videoLinks = await fetchExerciseVideoLinks(accessToken);
+  const normalizedRows = rows.map(normalizeRow).map(row => {
+    const url = videoLinks.get(String(row[1] || "").trim().toLocaleLowerCase("cs-CZ"));
+    if (url && (row[10] === "🎥 Video" || !row[10])) row[10] = hyperlinkFormula(url);
+    return row;
+  });
   const clearRange = sheetRange("A8:M1000");
   await sheetsRequest(accessToken, clearRange, "POST", {}, ":clear");
 
