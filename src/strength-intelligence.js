@@ -47,19 +47,40 @@ function transferFactor(from, to) {
   return null;
 }
 
-function practicalStep(meta) {
-  if (!meta) return 2.5;
-  if (meta.loadUnit === LOAD_UNITS.PER_HAND_KG) return 1;
-  if (meta.loadUnit === LOAD_UNITS.MACHINE_PER_SIDE_KG) return 2.5;
-  if (meta.loadUnit === LOAD_UNITS.MACHINE_TOTAL_KG) return 5;
-  if (meta.loadUnit === LOAD_UNITS.BARBELL_KG) return 2.5;
-  if (meta.loadUnit === LOAD_UNITS.CABLE_STACK_KG) return 2.5;
-  return 2.5;
+export const LOAD_RULES = {
+  // METAGYM dumbbells: use a practical standard until the exact rack inventory is verified.
+  DUMBBELL: { min: 10, max: 50, step: 2.5, strict: true },
+  // Cable stacks are machine-specific; 2.5 kg is the temporary conservative default.
+  CABLE_STACK: { min: 2.5, max: null, step: 2.5, strict: true },
+  // Plate-loaded machines and barbells can be built from 1.25 kg plates per side.
+  PLATE_LOADED: { min: 2.5, max: null, step: 2.5, strict: false },
+  BARBELL: { min: 10, max: null, step: 2.5, strict: true }
+};
+
+function loadRule(meta) {
+  if (!meta) return LOAD_RULES.PLATE_LOADED;
+  if (meta.loadUnit === LOAD_UNITS.PER_HAND_KG) return LOAD_RULES.DUMBBELL;
+  if (meta.loadUnit === LOAD_UNITS.CABLE_STACK_KG) return LOAD_RULES.CABLE_STACK;
+  if (meta.loadUnit === LOAD_UNITS.BARBELL_KG) return LOAD_RULES.BARBELL;
+  if (meta.loadUnit === LOAD_UNITS.MACHINE_TOTAL_KG || meta.loadUnit === LOAD_UNITS.MACHINE_PER_SIDE_KG) return LOAD_RULES.PLATE_LOADED;
+  return LOAD_RULES.PLATE_LOADED;
 }
 
-function roundToStep(value, step) {
+function practicalStep(meta) {
+  return loadRule(meta).step;
+}
+
+function roundToStep(value, step, min = 0, max = null) {
   if (value == null || !Number.isFinite(value)) return null;
-  return Math.max(step, Math.round(value / step) * step);
+  let rounded = Math.max(min, Math.round(value / step) * step);
+  if (max != null) rounded = Math.min(max, rounded);
+  return Math.round(rounded * 100) / 100;
+}
+
+export function resolveLoad(exercise, value) {
+  const meta = EXERCISE_INTELLIGENCE[exercise];
+  const rule = loadRule(meta);
+  return roundToStep(value, rule.step, rule.min, rule.max);
 }
 
 function progressionMultiplier(reps, rpe, targetReps) {
