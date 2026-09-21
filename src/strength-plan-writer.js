@@ -97,18 +97,19 @@ export async function repairStrengthSheetVideoLinks(accessToken) {
   const values = current.values || [];
   const links = await fetchExerciseVideoLinks(accessToken);
   let repaired = 0;
+  const unmatchedExercises = new Set();
   for (let i = 7; i < values.length; i++) {
     const row = values[i] || [];
     const exercise = String(row[1] || "").trim().toLocaleLowerCase("cs-CZ");
     const url = links.get(exercise);
-    if (!url) continue;
+    if (!url) { if (exercise) unmatchedExercises.add(exercise); continue; }
     if (row[10] === "🎥 Video" || !row[10]) {
       const target = sheetRange("K" + (i + 1));
       await sheetsRequest(accessToken, target, "PUT", { values: [[hyperlinkFormula(url)]] }, "?valueInputOption=USER_ENTERED");
       repaired++;
     }
   }
-  return { repairedVideoLinks: repaired, videoLinkCandidates: links.size };
+  return { repairedVideoLinks: repaired, videoLinkCandidates: links.size, unmatchedExercises: Array.from(unmatchedExercises).slice(0, 50) };
 }
 
 function hyperlinkFormula(url, label = "🎥 Video") {
