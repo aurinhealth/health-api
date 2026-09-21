@@ -9,7 +9,7 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   nutrition:
@@ -32,4 +32,16 @@ jobs:
         run: |
           set -euo pipefail
           body="$(cat automation/nutrition-request.json)"
-          curl -fsS -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "$body"             "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition"
+          curl -fsS -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "$body"             "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition"             > automation/nutrition-result.json
+          cat automation/nutrition-result.json
+      - name: Persist nutrition result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add automation/nutrition-result.json
+          git diff --cached --quiet && exit 0
+          git commit -m "Store nutrition plan result"
+          git push
