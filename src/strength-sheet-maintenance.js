@@ -303,13 +303,29 @@ async function refreshWorkoutChrome(accessToken) {
   ];
   await valuesRequest(accessToken, "'Dnešní trénink'!A1:K7", "POST", {}, ":clear");
   await valuesRequest(accessToken, "'Dnešní trénink'!A1:K7", "PUT", { values: rows }, "?valueInputOption=USER_ENTERED");
+
+  // Keep only the Hotovo checkbox; remove all legacy dropdown/chip validation.
+  const fullWorkout = await valuesRequest(accessToken, "'Dnešní trénink'!A8:K1000");
+  const rowCount = (fullWorkout.values || []).filter(row => row.some(v => String(v ?? "").trim() !== "")).length;
   await sheetsBatchUpdate(accessToken, {
-    requests: [{
-      setDataValidation: {
-        range: { sheetId: 585189491, startRowIndex: 0, endRowIndex: 1000, startColumnIndex: 0, endColumnIndex: 11 },
-        rule: null
+    requests: [
+      {
+        setDataValidation: {
+          range: { sheetId: 585189491, startRowIndex: 0, endRowIndex: 1000, startColumnIndex: 0, endColumnIndex: 11 },
+          rule: null
+        }
+      },
+      {
+        setDataValidation: {
+          range: { sheetId: 585189491, startRowIndex: 7, endRowIndex: 7 + rowCount, startColumnIndex: 8, endColumnIndex: 9 },
+          rule: {
+            condition: { type: "BOOLEAN" },
+            showCustomUi: true,
+            strict: true
+          }
+        }
       }
-    }]
+    ]
   });
   return { workoutDate: date };
 }
