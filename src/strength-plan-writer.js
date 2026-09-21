@@ -160,6 +160,30 @@ async function configureHotovoCheckboxes(accessToken, rowCount) {
   });
 }
 
+async function writeWorkoutHeader(accessToken, body, date) {
+  const planName = String(body?.planName || "Dnešní trénink").trim();
+  const protectedLegs = body?.protectedLegs === true;
+  const loadFactor = Number(body?.loadFactor);
+  const loadText = Number.isFinite(loadFactor) ? loadFactor.toFixed(2).replace(".", ",") : "—";
+  const rationale = String(body?.rationale || "").trim();
+
+  await sheetsRequest(accessToken, sheetRange("A1:K7"), "POST", {}, ":clear");
+
+  const title = "ADAPTIVNÍ SILOVÝ TRÉNINK";
+  const subtitle = planName + "  •  " + date.split("-").reverse().join(". ");
+  const rows = [
+    [title],
+    [subtitle],
+    ["Datum", date, "Plán", planName, "Nohy", protectedLegs ? "CHRÁNĚNO" : "NORMÁLNĚ", "Load", loadText],
+    ["Poznámka", rationale],
+    [],
+    [],
+    ["Typ","Cvik","Série","Plán kg","Plán reps","Skutečně kg","Skutečně reps","RPE","Hotovo","Poznámka","Video"]
+  ];
+
+  await sheetsRequest(accessToken, sheetRange("A1:K7"), "PUT", { values: rows }, "?valueInputOption=USER_ENTERED");
+}
+
 function normalizeRow(row) {
   if (!Array.isArray(row)) throw new Error("Each workout row must be an array");
   // Generator may still provide legacy 13-column rows. Keep only the user-facing fields,
@@ -196,9 +220,7 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
   // for the newly generated rows and does not touch the column during normal syncing.
   await configureHotovoCheckboxes(accessToken, normalizedRows.length);
 
-  // Keep the existing metadata area and update only the explicit workout date.
-  const dateRange = sheetRange("B3");
-  await sheetsRequest(accessToken, dateRange, "PUT", { values: [[date]] }, "?valueInputOption=USER_ENTERED");
+  await writeWorkoutHeader(accessToken, body, date);
 
   return {
     status: "ok",
