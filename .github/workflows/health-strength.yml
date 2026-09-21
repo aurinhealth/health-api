@@ -15,6 +15,9 @@ jobs:
   strength:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Read automation request
         id: request
         shell: bash
