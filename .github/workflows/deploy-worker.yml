@@ -45,3 +45,4 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"sheet_maintenance","date":null,"preview":false}' \
             "https://health-api.chelseafc-czsk.workers.dev/automation/strength"
+          curl -fsS "https://health-api.chelseafc-czsk.workers.dev/sync/intervals"
