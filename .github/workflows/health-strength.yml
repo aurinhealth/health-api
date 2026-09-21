@@ -70,9 +70,11 @@ jobs:
           set -euo pipefail
           body="$(python - <<'PY'
           import json, os
-          date = os.environ.get("REQUEST_DATE", "")
-          preview = os.environ.get("REQUEST_PREVIEW", "false").lower() == "true"
-          print(json.dumps({"date": date or None, "preview": preview}))
+          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+          data["date"] = os.environ.get("REQUEST_DATE", "") or None
+          data["preview"] = os.environ.get("REQUEST_PREVIEW", "false").lower() == "true"
+          print(json.dumps(data))
           PY
           )"
           curl -fsS \
