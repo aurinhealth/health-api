@@ -37,7 +37,7 @@ async function sheetsBatchUpdate(accessToken, body) {
 
 
 async function fetchExerciseVideoLinks(accessToken) {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent("Cviky!A1:Z1000")}&fields=sheets.properties.title,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.userEnteredValue,sheets.data.rowData.values.hyperlink`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent("Cviky!A1:Z1000")}&fields=sheets.properties.title,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.userEnteredValue,sheets.data.rowData.values.hyperlink,sheets.data.rowData.values.userEnteredFormat.textFormat.link`;
   const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await response.json();
   if (!response.ok) throw new Error(`Google Sheets Cviky read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
@@ -51,20 +51,28 @@ async function fetchExerciseVideoLinks(accessToken) {
     return v.stringValue ?? v.numberValue ?? v.boolValue ?? "";
   };
   const norm = value => String(value || "").trim().toLocaleLowerCase("cs-CZ");
-  const matrix = rows.map(r => (r.values || []).map(textOf));
-  const headerIndex = matrix.findIndex(row => row.some(v => /^(cvik|cviky|exercise|název cviku|name)$/i.test(String(v).trim())));
-  const start = headerIndex >= 0 ? headerIndex + 1 : 0;
-  let exerciseCol = headerIndex >= 0 ? matrix[headerIndex].findIndex(v => /^(cvik|cviky|exercise|název cviku|name)$/i.test(String(v).trim())) : 0;
-  if (exerciseCol < 0) exerciseCol = 0;
-
   const map = new Map();
-  for (let r = start; r < rows.length; r++) {
-    const rowCells = rows[r]?.values || [];
-    const exercise = norm(matrix[r]?.[exerciseCol]);
-    if (!exercise) continue;
-    const linked = rowCells.find(cell => typeof cell?.hyperlink === "string" && /^https?:\\/\\//i.test(cell.hyperlink));
-    if (linked?.hyperlink) map.set(exercise, linked.hyperlink);
+
+  // Do not depend on the exact Cviky header/column layout. For every row, find a
+  // real hyperlink and associate it with all meaningful text cells in that row.
+  for (const row of rows) {
+    const cells = row.values || [];
+    const linked = cells.find(cell =>
+      typeof cell?.hyperlink === "string" && /^https?:\/\//i.test(cell.hyperlink)
+    );
+    const linkedUrl =
+      linked?.hyperlink ||
+      cells.find(cell => typeof cell?.userEnteredFormat?.textFormat?.link?.uri === "string")
+        ?.userEnteredFormat?.textFormat?.link?.uri ||
+      null;
+    if (!linkedUrl) continue;
+
+    for (const cell of cells) {
+      const value = norm(textOf(cell));
+      if (value && value.length >= 3) map.set(value, linkedUrl);
+    }
   }
+
   return map;
 }
 
