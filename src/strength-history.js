@@ -203,6 +203,58 @@ export async function syncStrengthSheet(db, values) {
   };
 }
 
+export async function importStrengthHistory(db, workout) {
+  await ensureStrengthTable(db);
+  const date = text(workout?.date);
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) throw new Error("Invalid workout date; expected YYYY-MM-DD");
+  const sets = Array.isArray(workout?.sets) ? workout.sets : [];
+  if (!sets.length) throw new Error("Workout sets must be a non-empty array");
+
+  let imported = 0;
+  for (let i = 0; i < sets.length; i++) {
+    const s = sets[i] || {};
+    const type = text(s.type || "WORK").toUpperCase();
+    const exercise = text(s.exercise);
+    if (!exercise || !/^(WARMUP|WORK)$/.test(type)) continue;
+    const actualKg = numberOrNull(s.actualKg);
+    const actualReps = numberOrNull(s.actualReps);
+    const plannedKg = numberOrNull(s.plannedKg ?? s.actualKg);
+    const plannedReps = text(s.plannedReps ?? s.actualReps);
+    const setNo = numberOrNull(s.setNo);
+    const rpe = numberOrNull(s.rpe);
+    const note = text(s.note);
+    const sourceKey = `manual:${date}:${i + 1}`;
+
+    await db.prepare(`
+      INSERT INTO strength_sets (
+        workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
+        actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
+        source, source_key, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, '', '', '', 'manual', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(source_key) DO UPDATE SET
+        workout_date=excluded.workout_date,
+        sheet_row=excluded.sheet_row,
+        type=excluded.type,
+        exercise=excluded.exercise,
+        set_no=excluded.set_no,
+        planned_kg=excluded.planned_kg,
+        planned_reps=excluded.planned_reps,
+        actual_kg=excluded.actual_kg,
+        actual_reps=excluded.actual_reps,
+        rpe=excluded.rpe,
+        completed=1,
+        note=excluded.note,
+        updated_at=CURRENT_TIMESTAMP
+    `).bind(
+      date, 1000000 + i + 1, type, exercise, setNo, plannedKg, plannedReps,
+      actualKg, actualReps, rpe, note, sourceKey
+    ).run();
+    imported++;
+  }
+
+  return { status: "ok", workoutDate: date, setsImported: imported, source: "manual" };
+}
+
 export async function getStrengthHistory(db, limit = 100) {
   await ensureStrengthTable(db);
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
