@@ -13,6 +13,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.0.4", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
+    if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
     const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcpCompat(request, env);
@@ -76,6 +77,29 @@ async function handleStrengthAutomation(request, env, ctx) {
     const response = await app.fetch(internalRequest, env, ctx);
     const result = await response.clone().json().catch(() => null);
     if (result && typeof result === "object") return Response.json({ ...result, action }, { status: response.status });
+    return response;
+  } catch (error) {
+    return Response.json({ status: "error", step: "github_actions_auth", message: error.message }, { status: 401 });
+  }
+}
+
+
+async function handleNutritionAutomation(request, env, ctx) {
+  if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
+  try {
+    await verifyGitHubActionsToken(request);
+    const body = await request.json().catch(() => ({}));
+    const date = body?.date == null || body.date === "" ? null : String(body.date).trim();
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
+    const internalUrl = new URL("/nutrition/plan", request.url);
+    const internalRequest = new Request(internalUrl, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${env.STRENGTH_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, date })
+    });
+    const response = await app.fetch(internalRequest, env, ctx);
+    const result = await response.clone().json().catch(() => null);
+    if (result && typeof result === "object") return Response.json(result, { status: response.status });
     return response;
   } catch (error) {
     return Response.json({ status: "error", step: "github_actions_auth", message: error.message }, { status: 401 });
