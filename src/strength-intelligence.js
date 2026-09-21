@@ -3,6 +3,7 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export const LOAD_UNITS = {
   PER_HAND_KG: "per_hand_kg",
   MACHINE_TOTAL_KG: "machine_total_kg",
+  BARBELL_KG: "barbell_kg",
   MACHINE_PER_SIDE_KG: "machine_per_side_kg",
   CABLE_STACK_KG: "cable_stack_kg",
   BODYWEIGHT: "bodyweight"
@@ -51,6 +52,7 @@ function practicalStep(meta) {
   if (meta.loadUnit === LOAD_UNITS.PER_HAND_KG) return 1;
   if (meta.loadUnit === LOAD_UNITS.MACHINE_PER_SIDE_KG) return 2.5;
   if (meta.loadUnit === LOAD_UNITS.MACHINE_TOTAL_KG) return 5;
+  if (meta.loadUnit === LOAD_UNITS.BARBELL_KG) return 2.5;
   if (meta.loadUnit === LOAD_UNITS.CABLE_STACK_KG) return 2.5;
   return 2.5;
 }
