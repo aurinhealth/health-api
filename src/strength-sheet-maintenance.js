@@ -168,6 +168,56 @@ async function ensureGymExerciseCatalog(accessToken) {
   return { added: additions.length, totalCatalogEntries: existingNames.size };
 }
 
+
+async function refreshStrengthOverview(accessToken, db) {
+  const last = await db.prepare(\`
+    SELECT workout_date, COUNT(*) AS sets
+    FROM strength_sets
+    WHERE completed = 1
+    GROUP BY workout_date
+    ORDER BY workout_date DESC
+    LIMIT 1
+  \`).first();
+
+  const recent = await db.prepare(\`
+    SELECT workout_date, COUNT(*) AS sets
+    FROM strength_sets
+    WHERE completed = 1
+    GROUP BY workout_date
+    ORDER BY workout_date DESC
+    LIMIT 10
+  \`).all();
+
+  const progression = await db.prepare(\`
+    SELECT workout_date, exercise, actual_kg, actual_reps, rpe
+    FROM strength_sets
+    WHERE completed = 1 AND type = 'WORK'
+    ORDER BY workout_date DESC, exercise ASC, set_no ASC
+  \`).all();
+
+  const latestByExercise = new Map();
+  for (const r of progression.results || []) {
+    if (!latestByExercise.has(r.exercise)) latestByExercise.set(r.exercise, r);
+  }
+
+  const rows = [
+    ["ADAPTIVNÍ SILOVÝ TRÉNINK – PŘEHLED"],
+    ["Aktualizováno", new Date().toISOString()],
+    [],
+    ["Poslední trénink", last?.workout_date || "—", "Dokončené série", last?.sets || 0],
+    [],
+    ["Nedávné tréninky", "Dokončené série"],
+    ...(recent.results || []).map(r => [r.workout_date, r.sets]),
+    [],
+    ["Cvik", "Poslední datum", "Váha kg", "Opakování", "RPE"],
+    ...Array.from(latestByExercise.entries()).map(([exercise, r]) => [exercise, r.workout_date, r.actual_kg ?? "", r.actual_reps ?? "", r.rpe ?? ""])
+  ];
+
+  await valuesRequest(accessToken, "'Přehled'!A1:K1000", "POST", {}, ":clear");
+  await valuesRequest(accessToken, "'Přehled'!A1:E" + Math.max(1, rows.length), "PUT", { values: rows }, "?valueInputOption=USER_ENTERED");
+  return { rowsWritten: rows.length, lastWorkout: last?.workout_date || null };
+}
+
 export async function maintainStrengthSheets(accessToken, db) {
   const sheets = await spreadsheetMetadata(accessToken);
   const deleteTitles = new Set(["List1", "List 1", "Návod"]);
@@ -176,8 +226,9 @@ export async function maintainStrengthSheets(accessToken, db) {
   if (deletions.length) await sheetsBatchUpdate(accessToken, { requests: deletions.map(sheetId => ({ deleteSheet: { sheetId } })) });
   const catalog = await ensureGymExerciseCatalog(accessToken);
   const mirror = await mirrorStrengthHistoryToAllSets(accessToken, db);
+  const overview = await refreshStrengthOverview(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   const videoDebug = await inspectExerciseVideoSource(accessToken);
   const workbookAudit = await auditWorkbook(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, ...mirror, ...videoLinks, videoDebug, workbookAudit };
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, videoDebug, workbookAudit };
 }
