@@ -10,7 +10,10 @@ export const LOAD_UNITS = {
 };
 
 export const EXERCISE_INTELLIGENCE = {
-  "DB bench press": { muscle: "chest", pattern: "horizontal_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["Chest flat press Prime", "Barbell bench press", "Incline DB press"] },
+  "DB bench press": { muscle: "chest", pattern: "horizontal_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["Chest flat press Prime", "Barbell bench press", "DB incline press"] },
+  "Barbell bench press": { muscle: "chest", pattern: "horizontal_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.05, variants: ["DB bench press", "DB incline press"] },
+  "DB incline press": { muscle: "chest", pattern: "incline_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["DB bench press", "Barbell bench press"] },
+  "Standing multi flight": { muscle: "shoulders", pattern: "vertical_push", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.85, variants: ["DB shoulder press", "Shoulder press Prime"] },
   "Low row": { muscle: "back", pattern: "horizontal_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.0, variants: ["Standing rowing machine", "Lat pulldown"] },
   "DB shoulder press": { muscle: "shoulders", pattern: "vertical_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.9, variants: ["Shoulder press Prime"] },
   "Pivot leg press": { muscle: "quads", pattern: "knee_dominant", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.35, variants: ["Pendulum squat", "Leg extension Prime", "DB Bulgarian split squat"] },
