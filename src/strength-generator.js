@@ -11,6 +11,7 @@ const EXERCISES = {
   "Cable curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "8–15", baseKg: 15, warmup: false, note: "Biceps; kg = váha na kladce", fatigue: 0.45 },
   "DB curl": { pattern: "biceps", muscle: "biceps", unilateral: true, sets: 3, reps: "8–15", baseKg: 10, warmup: false, note: "Biceps; kg = 1 jednoručka", fatigue: 0.45 },
   "Hammer curl": { pattern: "biceps", muscle: "biceps", unilateral: true, sets: 3, reps: "8–15", baseKg: 10, warmup: false, note: "Biceps; kg = 1 jednoručka", fatigue: 0.45 },
+  "Cable triceps extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "8–15", baseKg: 15, warmup: false, note: "Triceps; kg = váha na kladce", fatigue: 0.45 },
   "Abs bench crunch": { pattern: "core", muscle: "core", unilateral: false, sets: 3, reps: "10–20", baseKg: 52.5, warmup: false, note: "Core; kg = celková zátěž stroje", fatigue: 0.35 }
 };
 
@@ -91,7 +92,7 @@ function choosePlan(context) {
   const lastExerciseDate = new Map();
   for (const row of history) { const d = dateKey(row.workout_date); if (d && (!lastExerciseDate.has(row.exercise) || d > lastExerciseDate.get(row.exercise))) lastExerciseDate.set(row.exercise, d); }
   const notRecent = ex => { const d = lastExerciseDate.get(ex); return !d || daysBetween(d, context.date) >= 5; };
-  if (protectLegs) return { name: "Upper Body + Core", exercises: ["DB bench press", "Low row", "DB shoulder press", "DB curl", "Abs bench crunch"], rationale: recentTss >= 700 || nextHard || nextLong ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a držíme silový stimul hlavně nahoře." : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku bez dalšího významného zatížení nohou.", protectedLegs: true, recentWorkoutCount, muscleLoad };
+  if (protectLegs) return { name: "Upper Body + Core", exercises: ["DB bench press", "Low row", "DB shoulder press", "DB curl", "Cable triceps extension"], rationale: recentTss >= 700 || nextHard || nextLong ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a držíme silový stimul hlavně nahoře." : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku bez dalšího významného zatížení nohou.", protectedLegs: true, recentWorkoutCount, muscleLoad };
   const legPress = notRecent("Pivot leg press") ? "Pivot leg press" : "Prime prone leg curl";
   const hamstring = legPress === "Pivot leg press" ? "Prime prone leg curl" : null;
   return { name: "Full Body", exercises: [legPress, "DB bench press", "Low row", ...(hamstring ? [hamstring] : []), "DB shoulder press", "Abs bench crunch"], rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; objem nohou zůstává přiměřený aktuální cyklistické zátěži.", protectedLegs: false, recentWorkoutCount, muscleLoad };
