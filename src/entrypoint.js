@@ -40,15 +40,41 @@ async function handleStrengthAutomation(request, env, ctx) {
     await verifyGitHubActionsToken(request);
     const body = await request.json().catch(() => ({}));
     const date = body?.date == null || body.date === "" ? null : String(body.date).trim();
+    const action = String(body?.action || "generate").toLowerCase();
     const preview = body?.preview === true;
     if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
-    const internalUrl = new URL("/strength/generate-plan", request.url);
+
+    const routes = {
+      generate: "/strength/generate-plan",
+      regenerate: "/strength/generate-plan",
+      adjust: "/strength/generate-plan",
+      shorten: "/strength/generate-plan",
+      protect_legs: "/strength/generate-plan",
+      focus_upper: "/strength/generate-plan",
+      focus_lower: "/strength/generate-plan",
+      substitute: "/strength/substitute"
+    };
+    const route = routes[action];
+    if (!route) return Response.json({ status: "error", message: `Unknown strength action: ${action}` }, { status: 400 });
+
+    const internalUrl = new URL(route, request.url);
+    const payload = { ...body, date, preview, action };
+    if (action === "protect_legs" || action === "focus_upper") payload.forceProtectLegs = true;
+    if (action === "shorten" && payload.durationMinutes == null) payload.durationMinutes = 60;
+    if (action === "substitute") {
+      if (!payload.from) return Response.json({ status: "error", message: "substitute requires 'from'" }, { status: 400 });
+      if (!payload.to && !payload.muscle) return Response.json({ status: "error", message: "substitute requires 'to' or 'muscle'" }, { status: 400 });
+    }
+
     const internalRequest = new Request(internalUrl, {
       method: "POST",
       headers: { "Authorization": `Bearer ${env.STRENGTH_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ date, preview })
+      body: JSON.stringify(payload)
     });
-    return app.fetch(internalRequest, env, ctx);
+    const response = await app.fetch(internalRequest, env, ctx);
+    const result = await response.clone().json().catch(() => null);
+    if (result && typeof result === "object") return Response.json({ ...result, action }, { status: response.status });
+    return response;
   } catch (error) {
     return Response.json({ status: "error", step: "github_actions_auth", message: error.message }, { status: 401 });
   }
