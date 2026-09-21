@@ -160,7 +160,14 @@ async function generateStrengthPlanRoute(env, request, url) {
     const date = String(body?.date || url.searchParams.get("date") || "").trim() || null;
     const context = await buildStrengthContext(env, date);
     if (context.status !== "ok") throw new Error("Strength context is not ready");
-    const plan = generateStrengthPlan(context);
+    const options = {
+      focus: body?.focus ? String(body.focus) : undefined,
+      forceProtectLegs: body?.forceProtectLegs === true,
+      durationMinutes: body?.durationMinutes == null ? undefined : Number(body.durationMinutes),
+      maxExercises: body?.maxExercises == null ? undefined : Number(body.maxExercises),
+      excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
+    };
+    const plan = generateStrengthPlan(context, options);
     if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
     const accessToken = await getGoogleAccessToken(env);
     const result = await writeStrengthPlan(accessToken, { date: plan.date, rows: plan.rows }, async () => {
