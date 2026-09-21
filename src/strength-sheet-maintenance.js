@@ -1,3 +1,4 @@
+import { repairStrengthSheetVideoLinks } from "./strength-plan-writer.js";
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const ALLSETS_NAME = "AllSets";
 const LOG_NAME = "Log";
@@ -81,5 +82,6 @@ export async function maintainStrengthSheets(accessToken, db) {
   if (sheets.length - deletions.length < 1) deletions.pop();
   if (deletions.length) await sheetsBatchUpdate(accessToken, { requests: deletions.map(sheetId => ({ deleteSheet: { sheetId } })) });
   const mirror = await mirrorStrengthHistoryToAllSets(accessToken, db);
+  const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), ...mirror };
 }
