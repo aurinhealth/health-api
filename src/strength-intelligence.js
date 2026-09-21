@@ -19,7 +19,29 @@ export const EXERCISE_INTELLIGENCE = {
   "DB curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.45, variants: ["Cable curl", "Hammer curl"] },
   "Hammer curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.45, variants: ["DB curl", "Cable curl"] },
   "Cable triceps extension": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable triceps pushdown", "Overhead cable triceps extension"] },
-  "Abs bench crunch": { muscle: "core", pattern: "trunk_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: ["Cable crunch", "Roman chair"] }
+  "Abs bench crunch": { muscle: "core", pattern: "trunk_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: ["Cable crunch", "Roman chair"] },
+  "Chest flat press Prime": { muscle: "chest", pattern: "horizontal_push", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.95, variants: ["DB bench press"] },
+  "Shoulder press Prime": { muscle: "shoulders", pattern: "vertical_push", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.9, variants: ["DB shoulder press"] },
+  "Lat pulldown": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.9, variants: ["Low row", "Cable pullover"] },
+  "Standing rowing machine": { muscle: "back", pattern: "horizontal_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.95, variants: ["Low row"] },
+  "Pendulum squat": { muscle: "quads", pattern: "knee_dominant", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.3, variants: ["Pivot leg press"] },
+  "Leg extension Prime": { muscle: "quads", pattern: "knee_extension", equipment: "machine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_PER_SIDE_KG, fatigue: 0.65, variants: ["Pivot leg press", "DB Bulgarian split squat"] },
+  "Hip thrust": { muscle: "glutes", pattern: "hip_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.0, variants: ["DB Romanian deadlift"] },
+  "DB Romanian deadlift": { muscle: "hamstrings", pattern: "hip_hinge", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["Barbell Romanian deadlift", "Prone leg curl Prime"] },
+  "Barbell Romanian deadlift": { muscle: "hamstrings", pattern: "hip_hinge", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.1, variants: ["DB Romanian deadlift"] },
+  "DB Bulgarian split squat": { muscle: "quads", pattern: "unilateral_knee_dominant", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["Pivot leg press", "Leg extension Prime"] },
+  "Adduction machine": { muscle: "adductors", pattern: "adduction", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: [] },
+  "Abduction machine": { muscle: "abductors", pattern: "abduction", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: [] },
+  "Pec deck": { muscle: "chest", pattern: "horizontal_adduction", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.55, variants: ["DB bench press"] },
+  "Rear delt pec deck": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.45, variants: ["Cable rear delt fly"] },
+  "Cable lateral raise": { muscle: "side_delts", pattern: "lateral_raise", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: [] },
+  "Cable pullover": { muscle: "back", pattern: "vertical_pull", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Lat pulldown"] },
+  "Cable rear delt fly": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Rear delt pec deck"] },
+  "Pallof press": { muscle: "core", pattern: "anti_rotation", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Cable woodchop"] },
+  "Cable woodchop": { muscle: "core", pattern: "rotation", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Pallof press"] },
+  "Roman chair": { muscle: "core", pattern: "trunk_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Abs bench crunch"] },
+  "Standing calf raise": { muscle: "calves", pattern: "plantar_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.45, variants: [] },
+  "Cable crunch": { muscle: "core", pattern: "trunk_flexion", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Abs bench crunch"] }
 };
 
 function n(v) { const x = Number(v); return Number.isFinite(x) ? x : null; }
@@ -83,7 +105,15 @@ export function resolveLoad(exercise, value) {
   return roundToStep(value, rule.step, rule.min, rule.max);
 }
 
-function progressionMultiplier(reps, rpe, targetReps) {
+function normalizeRpe(value) {
+  const x = n(value);
+  // 0 is used by the sheet/import pipeline for an unknown RPE, not for an
+  // actual maximal-effort score.
+  return x != null && x > 0 && x <= 10 ? x : null;
+}
+
+function progressionMultiplier(reps, rpeValue, targetReps) {
+  const rpe = normalizeRpe(rpeValue);
   const range = parseRepRange(targetReps);
   if (rpe == null) return 1;
   if (rpe >= 9.5) return 0.92;
@@ -109,7 +139,7 @@ function selectReference(rows, targetReps) {
   const range = parseRepRange(targetReps);
 
   const scored = candidates.map(r => {
-    const reps = n(r.actual_reps), rpe = n(r.rpe);
+    const reps = n(r.actual_reps), rpe = normalizeRpe(r.rpe);
     let score = 0;
     if (range && reps >= range.min && reps <= range.max) score += 3;
     if (range && reps >= range.max) score += 1;
@@ -126,7 +156,7 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
   const ref = selectReference(own, targetReps);
   if (!ref) return null;
   let kg = n(ref.actual_kg);
-  kg *= progressionMultiplier(n(ref.actual_reps), n(ref.rpe), targetReps);
+  kg *= progressionMultiplier(n(ref.actual_reps), normalizeRpe(ref.rpe), targetReps);
   kg *= recoveryMultiplier(loadFactor);
   const step = practicalStep(EXERCISE_INTELLIGENCE[exercise]);
   const rounded = resolveLoad(exercise, kg);
@@ -154,13 +184,13 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     const similarity = scoreSimilarity(name, exercise);
     const factor = transferFactor(name, exercise);
     if (similarity < 0.85 || factor == null) continue;
-    candidates.push({ name, kg, rpe: n(ref.rpe), reps: n(ref.actual_reps), similarity, factor, date: ref.workout_date });
+    candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor, date: ref.workout_date });
   }
   candidates.sort((a, b) => b.similarity - a.similarity || String(b.date).localeCompare(String(a.date)));
   const ref = candidates[0];
   if (ref) {
     let kg = ref.kg * ref.factor;
-    kg *= progressionMultiplier(ref.reps, ref.rpe, targetReps);
+    kg *= progressionMultiplier(ref.reps, normalizeRpe(ref.rpe), targetReps);
     kg *= recoveryMultiplier(loadFactor);
     const rounded = resolveLoad(exercise, kg);
     return { kg: rounded, source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, referenceDate: ref.date, similarity: ref.similarity, transferFactor: ref.factor };
@@ -177,7 +207,7 @@ export function analyzeCompletedWorkout(parsed, history = []) {
   const exercises = [], recommendations = [];
   for (const [exercise, rows] of byExercise) {
     const usable = rows.filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null);
-    const avgRpeValues = rows.map(r => n(r.rpe)).filter(x => x != null);
+    const avgRpeValues = rows.map(r => normalizeRpe(r.rpe)).filter(x => x != null);
     const avgRpe = avgRpeValues.length ? avgRpeValues.reduce((a, b) => a + b, 0) / avgRpeValues.length : null;
     const topReps = usable.length ? Math.max(...usable.map(r => n(r.actual_reps))) : null;
     const planned = rows[0]?.planned_kg != null ? n(rows[0].planned_kg) : null;
