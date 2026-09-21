@@ -1,12 +1,16 @@
 const MCP_PROTOCOL_VERSION = "2025-11-25";
-const SERVER_VERSION = "1.0.2";
+const SERVER_VERSION = "1.0.3";
 const DEMO_API_KEY = "health-strength-demo-2026";
 
 const TOOLS = [
-  { name:"getStrengthContext", title:"Get strength training context", description:"Read integrated training context for a date, including cycling load, recovery data, and strength history.", inputSchema:{type:"object",properties:{date:{type:"string",description:"Optional workout date in YYYY-MM-DD format."}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getStrengthContext", title:"Get strength training context", description:"Read integrated training context for a date, including cycling load, recovery data, and strength history.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getTodayStrengthSheet", title:"Read today's strength sheet", description:"Read the current Dnešní trénink Google Sheet contents.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
-  { name:"findStrengthAlternatives", title:"Find exercise alternatives", description:"Find suitable strength-exercise alternatives from the active catalogue and training history.", inputSchema:{type:"object",properties:{exercise:{type:"string"},muscle:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}}
+  { name:"generateStrengthPlan", title:"Generate today's strength workout", description:"Generate an adaptive strength workout and write it to the Google Sheet unless preview=true.", inputSchema:{type:"object",properties:{date:{type:"string"},preview:{type:"boolean",default:false}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
+  { name:"syncStrengthSheet", title:"Sync completed strength sets", description:"Sync completed strength sets from the Google Sheet into D1.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
+  { name:"analyzeStrengthWorkout", title:"Analyze completed strength workout", description:"Sync and analyze the completed strength workout.", inputSchema:{type:"object",properties:{command:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
+  { name:"findStrengthAlternatives", title:"Find exercise alternatives", description:"Find suitable strength-exercise alternatives.", inputSchema:{type:"object",properties:{exercise:{type:"string"},muscle:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"substituteStrengthExercise", title:"Substitute today's exercise", description:"Replace an exercise in today's Google Sheet workout.", inputSchema:{type:"object",required:["from"],properties:{from:{type:"string"},to:{type:"string"},muscle:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}}
 ];
 
 export async function handleMcp(request,env){
@@ -25,7 +29,7 @@ export async function handleMcp(request,env){
  if(message.method!=="initialize"&&protocolHeader&&!isSupportedProtocol(protocolHeader))return json({jsonrpc:"2.0",id:message.id??null,error:{code:-32602,message:"Unsupported MCP protocol version"}},400,cors);
  if(message.method==="initialize"){
    const requested=message.params?.protocolVersion,protocolVersion=isSupportedProtocol(requested)?requested:MCP_PROTOCOL_VERSION,sessionId=crypto.randomUUID();
-   return json({jsonrpc:"2.0",id:message.id,result:{protocolVersion,capabilities:{tools:{}},serverInfo:{name:"health-api-strength-coach",title:"Health API Strength Coach",version:SERVER_VERSION},instructions:"This MCP is read-only. Workout generation, synchronization, analysis writes, and Google Sheet modifications are handled automatically by the backend. Read the resulting context, history, and today's sheet."}},200,{...cors,"Mcp-Session-Id":sessionId,"MCP-Protocol-Version":protocolVersion});
+   return json({jsonrpc:"2.0",id:message.id,result:{protocolVersion,capabilities:{tools:{}},serverInfo:{name:"health-api-strength-coach",title:"Health API Strength Coach",version:SERVER_VERSION},instructions:"Use strength context and completed strength history before generating a workout. generateStrengthPlan writes the adaptive workout to the Google Sheet unless preview=true."}},200,{...cors,"Mcp-Session-Id":sessionId,"MCP-Protocol-Version":protocolVersion});
  }
  if(message.method==="notifications/initialized"||message.method==="notifications/cancelled"||message.method==="ping"){if(message.id===undefined)return new Response(null,{status:202,headers:cors});return json({jsonrpc:"2.0",id:message.id,result:{}},200,cors)}
  if(message.method==="tools/list")return json({jsonrpc:"2.0",id:message.id,result:{tools:TOOLS}},200,cors);
@@ -55,17 +59,26 @@ async function callHealthApi(request,env,toolName,args){
   getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
   getTodayStrengthSheet:()=>"/strength/sheet/today",
-  findStrengthAlternatives:()=>"/strength/alternatives"
+  generateStrengthPlan:()=>"/strength/generate-plan",
+  syncStrengthSheet:()=>"/strength/sync",
+  analyzeStrengthWorkout:()=>"/strength/analyze",
+  findStrengthAlternatives:()=>"/strength/alternatives",
+  substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
+ const method=["getStrengthContext","getStrengthHistory","getTodayStrengthSheet"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
  headers.set("Authorization",`Bearer ${internalKey}`);
- let url=`${base}${route()}`,method="GET",body;
- if(toolName==="findStrengthAlternatives"){
-   method="POST";headers.set("Content-Type","application/json");
-   body=JSON.stringify({exercise:args.exercise||"",muscle:args.muscle||""});
+ let url=`${base}${route()}`,body;
+ if(method==="POST"){
+   headers.set("Content-Type","application/json");
+   if(toolName==="generateStrengthPlan") body=JSON.stringify({date:args.date||null,preview:Boolean(args.preview)});
+   else if(toolName==="analyzeStrengthWorkout") body=JSON.stringify({command:args.command||"analyze"});
+   else if(toolName==="findStrengthAlternatives") body=JSON.stringify({exercise:args.exercise||"",muscle:args.muscle||""});
+   else if(toolName==="substituteStrengthExercise") body=JSON.stringify({from:args.from||"",to:args.to||"",muscle:args.muscle||""});
+   else body="{}";
  }
  const response=await fetch(url,{method,headers,body}),text=await response.text();
  let data;try{data=JSON.parse(text)}catch{data={status:"error",message:text}}
