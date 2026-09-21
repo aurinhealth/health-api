@@ -92,6 +92,24 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
   return { sheets: targets, ...result };
 }
 
+async function auditWorkbook(accessToken) {
+  const sheets = await spreadsheetMetadata(accessToken);
+  const audit = [];
+  for (const s of sheets) {
+    const title = s.properties?.title;
+    if (!title) continue;
+    const range = "'" + title.replace(/'/g, "''") + "'!A1:L15";
+    const data = await valuesRequest(accessToken, range);
+    audit.push({
+      title,
+      rowCount: s.properties?.gridProperties?.rowCount ?? null,
+      columnCount: s.properties?.gridProperties?.columnCount ?? null,
+      sample: (data.values || []).slice(0, 15)
+    });
+  }
+  return audit;
+}
+
 export async function maintainStrengthSheets(accessToken, db) {
   const sheets = await spreadsheetMetadata(accessToken);
   const deleteTitles = new Set(["List1", "List 1", "Návod"]);
@@ -101,5 +119,6 @@ export async function maintainStrengthSheets(accessToken, db) {
   const mirror = await mirrorStrengthHistoryToAllSets(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
   const videoDebug = await inspectExerciseVideoSource(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), ...mirror, ...videoLinks, videoDebug };
+  const workbookAudit = await auditWorkbook(accessToken);
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), ...mirror, ...videoLinks, videoDebug, workbookAudit };
 }
