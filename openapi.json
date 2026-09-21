@@ -63,6 +63,28 @@
         }
       }
     },
+    "/nutrition/plan": {
+      "post": {
+        "operationId": "getNutritionPlan",
+        "summary": "Get the daily nutrition plan from shared training context",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "date": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    },
     "/strength/generate-plan": {
       "post": {
         "operationId": "generateStrengthPlan",
