@@ -416,9 +416,7 @@ export async function maintainStrengthSheets(accessToken, db) {
   const mirror = await mirrorStrengthHistoryToAllSets(accessToken, db);
   const overview = await refreshStrengthOverview(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
-  const videoDebug = await inspectExerciseVideoSource(accessToken);
   const workoutChrome = await refreshWorkoutChrome(accessToken);
   const formatting = await formatWorkbook(accessToken);
-  const workbookAudit = await auditWorkbook(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, videoDebug, workoutChrome, formatting, workbookAudit };
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), catalog, overview, ...mirror, ...videoLinks, workoutChrome, formatting };
 }
