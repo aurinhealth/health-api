@@ -83,5 +83,5 @@ export async function maintainStrengthSheets(accessToken, db) {
   if (deletions.length) await sheetsBatchUpdate(accessToken, { requests: deletions.map(sheetId => ({ deleteSheet: { sheetId } })) });
   const mirror = await mirrorStrengthHistoryToAllSets(accessToken, db);
   const videoLinks = await repairStrengthSheetVideoLinks(accessToken);
-  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), ...mirror };
+  return { status: "ok", deletedSheets: sheets.filter(s => deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), preservedSheets: sheets.filter(s => !deletions.includes(s.properties && s.properties.sheetId)).map(s => s.properties.title), ...mirror, ...videoLinks };
 }
