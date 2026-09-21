@@ -6,10 +6,6 @@ on:
       - main
     paths:
       - "automation/nutrition-request.json"
-  issues:
-    types: [opened]
-  pull_request:
-    types: [opened, synchronize]
 
 permissions:
   id-token: write
