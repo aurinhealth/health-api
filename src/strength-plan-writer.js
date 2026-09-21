@@ -64,8 +64,8 @@ export async function fetchExerciseVideoLinks(accessToken) {
       linked?.hyperlink ||
       cells.find(cell => typeof cell?.userEnteredFormat?.textFormat?.link?.uri === "string")
         ?.userEnteredFormat?.textFormat?.link?.uri ||
-      cells.map(textOf).find(value => /^https?:\\/\\//i.test(String(value))) ||
-      cells.map(textOf).map(value => String(value).match(/^=HYPERLINK\\(\\s*"([^"]+)"/i)?.[1]).find(Boolean) ||
+      cells.map(textOf).find(value => /^https?:\/\//i.test(String(value))) ||
+      cells.map(textOf).map(value => String(value).match(/^=HYPERLINK\(\s*"([^"]+)"/i)?.[1]).find(Boolean) ||
       null;
     if (!linkedUrl) continue;
 
