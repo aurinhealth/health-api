@@ -1,6 +1,6 @@
 import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet } from "./strength-history.js";
+import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
 import { writeStrengthPlan } from "./strength-plan-writer.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
@@ -25,6 +25,7 @@ export default {
     if (url.pathname === "/strength/sheet/simplify" && request.method === "POST") return simplifyStrengthSheet(env);
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
+    if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
@@ -184,6 +185,16 @@ async function syncStrength(env) {
     const result = await syncStrengthSheet(env.DB, data.values);
     return Response.json({ ...result, sourceRange: data.range });
   } catch (error) { return Response.json({ status: "error", step: "strength_sync", message: error.message }, { status: 500 }); }
+}
+
+async function importStrengthHistoryRoute(env, request) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const result = await importStrengthHistory(env.DB, body);
+    return Response.json(result);
+  } catch (error) {
+    return Response.json({ status: "error", step: "strength_history_import", message: error.message }, { status: 500 });
+  }
 }
 
 async function strengthHistory(env, url) {
