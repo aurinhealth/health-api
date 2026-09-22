@@ -22,9 +22,23 @@ function durationHours(a) {
   if (start && end) { const h = (new Date(end) - new Date(start)) / 3600000; if (Number.isFinite(h) && h >= 0) return h; }
   return null;
 }
-function textOf(a) { return `${a?.type || ""} ${a?.activity_type || ""} ${a?.category || ""} ${a?.name || a?.title || ""} ${a?.description || ""}`.toLowerCase(); }
-function isRide(a) { return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textOf(a)); }
-function isIntensity(a) { return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(textOf(a)); }
+function textOf(a) { return `${a?.type || ""} ${a?.activity_type || ""} ${a?.category || ""} ${a?.name || a?.title || ""}`.toLowerCase(); }
+export function isRide(a) { return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textOf(a)); }
+function semanticIntensityText(a) {
+  const fields = [
+    a?.name, a?.title, a?.workout_type, a?.workoutType,
+    a?.icu_intensity, a?.intensity_label, a?.intensityLabel,
+    a?.category
+  ];
+  const tags = Array.isArray(a?.tags) ? a.tags : [];
+  return [...fields, ...tags].filter(x => typeof x === "string").join(" ").toLowerCase();
+}
+export function isIntensity(a) {
+  if (typeof a?.intensity === "boolean") return a.intensity;
+  if (typeof a?.is_intensity === "boolean") return a.is_intensity;
+  const semantic = semanticIntensityText(a);
+  return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic);
+}
 function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), intensity: isIntensity(a) }; }
 function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), intensity: isIntensity(e), payload: e }; }
 function intervalsAuth(env) { if (!env.INTERVALS_API_KEY) throw new Error("INTERVALS_API_KEY is not configured"); return "Basic " + btoa("API_KEY:" + env.INTERVALS_API_KEY); }
