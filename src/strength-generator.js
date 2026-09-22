@@ -1,4 +1,5 @@
 import { estimateStartingLoad, resolveLoad } from "./strength-intelligence.js";
+import { normalizeExerciseName } from "./strength-normalization.js";
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -49,7 +50,7 @@ function daysBetween(a, b) {
 function recentExerciseMap(history) {
   const map = new Map();
   for (const row of history || []) {
-    const ex = String(row.exercise || ""); if (!ex) continue;
+    const ex = normalizeExerciseName(row.exercise); if (!ex) continue;
     const arr = map.get(ex) || []; arr.push(row); map.set(ex, arr);
   }
   return map;
@@ -98,7 +99,7 @@ function cyclingLegStress(context) {
 function recentMuscleLoad(history, contextDate) {
   const load = new Map();
   for (const row of history || []) {
-    const def = EXERCISES[row.exercise]; if (!def) continue;
+    const def = EXERCISES[normalizeExerciseName(row.exercise)]; if (!def) continue;
     const age = daysBetween(row.workout_date, contextDate); if (age > 14) continue;
     const rpe = num(row.rpe), effort = rpe == null ? 0.8 : clamp(rpe / 10, 0.5, 1.1), recency = age <= 3 ? 1 : age <= 7 ? 0.65 : 0.35;
     load.set(def.muscle, (load.get(def.muscle) || 0) + def.fatigue * effort * recency);
@@ -121,8 +122,9 @@ function choosePlan(context, options = {}) {
   const lastExerciseDate = new Map();
   for (const row of history) {
     const d = dateKey(row.workout_date);
-    if (d && (!lastExerciseDate.has(row.exercise) || d > lastExerciseDate.get(row.exercise))) {
-      lastExerciseDate.set(row.exercise, d);
+    const exercise = normalizeExerciseName(row.exercise);
+    if (d && exercise && (!lastExerciseDate.has(exercise) || d > lastExerciseDate.get(exercise))) {
+      lastExerciseDate.set(exercise, d);
     }
   }
 
@@ -295,7 +297,7 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad) {
 export function generateStrengthPlan(context, options = {}) {
   const chosen = choosePlan(context, options), factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   let exercises = [...chosen.exercises];
-  const excluded = new Set((options.excludeExercises || []).map(String));
+  const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
   exercises = exercises.filter(ex => !excluded.has(ex));
   const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "Chest flat press Prime", "Shoulder press Prime", "DB bench press", "Low row", "Standing rowing machine", "Lat pulldown", "DB shoulder press", "Pec deck", "Rear delt pec deck", "Cable lateral raise", "Prone leg curl Prime", "Leg extension Prime", "DB Romanian deadlift", "DB Bulgarian split squat", "Hip thrust", "Pivot leg press", "Pendulum squat", "Abs bench crunch", "Cable crunch", "Pallof press"];
   const selectedPatterns = new Set(exercises.map(ex => EXERCISES[ex]?.pattern).filter(Boolean));
