@@ -1,3 +1,5 @@
+import { normalizeExerciseName } from "./strength-normalization.js";
+
 const TZ = "Europe/Prague";
 const SHEET_NAME = "Dnešní trénink";
 const VISIBLE_HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
@@ -57,7 +59,7 @@ export function parseStrengthSheet(values) {
   for (let i = header.index + 1; i < values.length; i++) {
     const r = values[i] || [];
     const type = text(r[0]);
-    const exercise = text(r[1]);
+    const exercise = normalizeExerciseName(text(r[1]));
     if (!type && !exercise) continue;
     if (!exercise) continue;
     if (!/^(WARMUP|WORK)$/i.test(type)) continue;
@@ -214,7 +216,7 @@ export async function importStrengthHistory(db, workout) {
   for (let i = 0; i < sets.length; i++) {
     const s = sets[i] || {};
     const type = text(s.type || "WORK").toUpperCase();
-    const exercise = text(s.exercise);
+    const exercise = normalizeExerciseName(text(s.exercise));
     if (!exercise || !/^(WARMUP|WORK)$/.test(type)) continue;
     const actualKg = numberOrNull(s.actualKg);
     const actualReps = numberOrNull(s.actualReps);
@@ -267,7 +269,7 @@ export async function getStrengthHistory(db, limit = 100) {
     ORDER BY workout_date DESC, sheet_row ASC
     LIMIT ?
   `).bind(safeLimit).all();
-  return result.results || [];
+  return (result.results || []).map(row => ({ ...row, exercise: normalizeExerciseName(row.exercise) }));
 }
 
 export async function getExerciseHistory(db, exercise, limit = 30) {
@@ -281,5 +283,5 @@ export async function getExerciseHistory(db, exercise, limit = 30) {
     ORDER BY workout_date DESC, set_no ASC
     LIMIT ?
   `).bind(text(exercise), safeLimit).all();
-  return result.results || [];
+  return (result.results || []).map(row => ({ ...row, exercise: normalizeExerciseName(row.exercise) }));
 }
