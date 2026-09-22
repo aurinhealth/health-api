@@ -7,6 +7,7 @@ import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad
 import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./strength-sheet-maintenance.js";
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
 import { getCyclingContext } from "./cycling-context.js";
+import { completedRowsAreSynced } from "./strength-sync-guard.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -193,25 +194,7 @@ async function ensureCurrentWorkoutSafeToReplace(env) {
      WHERE workout_date = ? AND source = 'google-sheet' AND completed = 1`
   ).bind(parsed.date).all();
 
-  const byRow = new Map((dbRows.results || []).map(row => [Number(row.sheet_row), row]));
-  const normalize = value => value == null ? null : String(value).trim();
-  const sameNumber = (a, b) => (a == null && b == null) || (a != null && b != null && Number(a) === Number(b));
-  const same = (sheetRow, dbRow) => {
-    if (!dbRow) return false;
-    return (
-      normalize(sheetRow.type) === normalize(dbRow.type) &&
-      normalize(sheetRow.exercise) === normalize(dbRow.exercise) &&
-      sameNumber(sheetRow.setNo, dbRow.set_no) &&
-      sameNumber(sheetRow.plannedKg, dbRow.planned_kg) &&
-      normalize(sheetRow.plannedReps) === normalize(dbRow.planned_reps) &&
-      sameNumber(sheetRow.actualKg, dbRow.actual_kg) &&
-      sameNumber(sheetRow.actualReps, dbRow.actual_reps) &&
-      sameNumber(sheetRow.rpe, dbRow.rpe) &&
-      Number(dbRow.completed) === 1
-    );
-  };
-
-  const unsynced = completed.filter(row => !same(row, byRow.get(Number(row.sheetRow))));
+  const unsynced = completed.filter(row => !completedRowsAreSynced([row], dbRows.results || []));
   if (unsynced.length) {
     return {
       status: "error",
