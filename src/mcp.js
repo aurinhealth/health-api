@@ -1,3 +1,5 @@
+import healthApp from "./sheets-gateway.js";
+
 const MCP_PROTOCOL_VERSION = "2026-07-28";
 const SERVER_VERSION = "1.1.0";
 const DEMO_API_KEY = "health-strength-demo-2026";
@@ -86,7 +88,8 @@ async function callHealthApi(request,env,toolName,args){
    else if(toolName==="substituteStrengthExercise") body=JSON.stringify({from:args.from||"",to:args.to||"",muscle:args.muscle||""});
    else if(toolName!=="getNutritionPlan") body="{}";
  }
- const response=await fetch(url,{method,headers,body}),text=await response.text();
+ const internalRequest=new Request(url,{method,headers,body});
+ const response=await healthApp.fetch(internalRequest,env,undefined),text=await response.text();
  let data;try{data=JSON.parse(text)}catch{data={status:"error",message:text}}
  if(!response.ok)throw new Error(data?.message||data?.error?.message||`health-api HTTP ${response.status}`);
  if(data?.status==="error")throw new Error(`${data.step||toolName}: ${data.message||"unknown backend error"}`);
