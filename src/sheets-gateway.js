@@ -6,6 +6,7 @@ import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./strength-sheet-maintenance.js";
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
+import { getCyclingContext } from "./cycling-context.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -35,11 +36,12 @@ export default {
     if (url.pathname === "/strength/alternatives" && request.method === "POST") return alternativesRoute(env, request);
     if (url.pathname === "/strength/substitute" && request.method === "POST") return substituteRoute(env, request);
     if (url.pathname === "/nutrition/plan" && request.method === "POST") return nutritionPlanRoute(env, request);
+    if (url.pathname === "/cycling/context" && request.method === "GET") return cyclingContextRoute(env, url);
     return app.fetch(request, env, ctx);
   }
 };
 
-function authorizeStrength(request, env) {
+async function cyclingContextRoute(env, url) {\n  try {\n    const context = await getCyclingContext(env, {\n      date: url.searchParams.get("date") || undefined,\n      lat: url.searchParams.get("lat") || undefined,\n      lon: url.searchParams.get("lon") || undefined,\n      rideType: url.searchParams.get("ride_type") || undefined,\n      durationMinutes: url.searchParams.get("duration_minutes") || undefined,\n      startTime: url.searchParams.get("start_time") || undefined\n    });\n    return Response.json(context);\n  } catch (error) {\n    return Response.json({ status: "error", step: "cycling_context", message: error.message }, { status: 502 });\n  }\n}\n\nfunction authorizeStrength(request, env) {
   if (!env.STRENGTH_API_KEY) return Response.json({ status: "error", step: "strength_auth", message: "STRENGTH_API_KEY is not configured" }, { status: 503 });
   const authorization = request.headers.get("Authorization") || "";
   if (authorization !== `Bearer ${env.STRENGTH_API_KEY}`) return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
