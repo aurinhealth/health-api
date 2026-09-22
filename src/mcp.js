@@ -3,6 +3,8 @@ const SERVER_VERSION = "1.1.0";
 const DEMO_API_KEY = "health-strength-demo-2026";
 
 export const TOOLS = [
+  { name:"getCyclingContext", title:"Get adaptive cycling context", description:"Read season, weather, wind, daylight, and time-window context used to adapt cycling plans.", inputSchema:{type:"object",properties:{date:{type:"string"},lat:{type:"number"},lon:{type:"number"},rideType:{type:"string"},durationMinutes:{type:"integer",minimum:20,maximum:360},startTime:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true}},
+
   { name:"getStrengthContext", title:"Get strength training context", description:"Read integrated training context for a date, including cycling load, recovery data, and strength history.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getTodayStrengthSheet", title:"Read today's strength sheet", description:"Read the current Dnešní trénink Google Sheet contents.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
@@ -57,7 +59,7 @@ function demoTool(name,args){
 async function callHealthApi(request,env,toolName,args){
  const base=new URL(request.url).origin;
  const routes={
-  getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
+  getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,\n  getCyclingContext:()=>`/cycling/context?${new URLSearchParams(Object.entries({date:args.date,lat:args.lat,lon:args.lon,ride_type:args.rideType,duration_minutes:args.durationMinutes,start_time:args.startTime}).filter(([,v])=>v!=null&&v!=="" )).toString()}`,
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
   getTodayStrengthSheet:()=>"/strength/sheet/today",
   getNutritionPlan:()=>"/nutrition/plan",
@@ -68,7 +70,7 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getStrengthHistory","getTodayStrengthSheet"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
