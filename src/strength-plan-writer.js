@@ -206,17 +206,15 @@ function normalizeRow(row) {
   return source;
 }
 
-export async function writeStrengthPlan(accessToken, body, syncCurrent) {
+export async function writeStrengthPlan(accessToken, body) {
   const date = String(body?.date || "").trim();
   const rows = body?.rows;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid date; expected YYYY-MM-DD");
   if (!Array.isArray(rows) || rows.length < 1) throw new Error("rows must be a non-empty 2D array");
   if (rows.length > MAX_ROWS) throw new Error(`Too many workout rows; maximum is ${MAX_ROWS}`);
 
-  // Sync the current visible sheet before replacing it so completed sets are preserved in D1.
-  const current = await syncCurrent();
-  if (current?.status === "error") throw new Error(`Could not sync current workout before replacement: ${current.message}`);
-
+  // Generation is intentionally NOT a save/sync operation.
+  // The caller must explicitly sync a completed workout before it is archived.
   const videoLinks = await fetchExerciseVideoLinks(accessToken);
   const normalizedRows = rows.map(normalizeRow).map(row => {
     const url = videoLinks.get(String(row[1] || "").trim().toLocaleLowerCase("cs-CZ")) || fallbackVideoUrl(row[1]);
@@ -243,6 +241,6 @@ export async function writeStrengthPlan(accessToken, body, syncCurrent) {
     visibleColumns: COLS,
     updatedRange: result.updatedRange || writeRange,
     checkboxesConfigured: true,
-    previousWorkoutSynced: true
+    previousWorkoutSynced: false
   };
 }
