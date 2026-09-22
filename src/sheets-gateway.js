@@ -195,17 +195,18 @@ async function ensureCurrentWorkoutSafeToReplace(env) {
 
   const byRow = new Map((dbRows.results || []).map(row => [Number(row.sheet_row), row]));
   const normalize = value => value == null ? null : String(value).trim();
+  const sameNumber = (a, b) => (a == null && b == null) || (a != null && b != null && Number(a) === Number(b));
   const same = (sheetRow, dbRow) => {
     if (!dbRow) return false;
     return (
       normalize(sheetRow.type) === normalize(dbRow.type) &&
       normalize(sheetRow.exercise) === normalize(dbRow.exercise) &&
-      Number(sheetRow.setNo ?? NaN) === Number(dbRow.set_no ?? NaN) &&
-      Number(sheetRow.plannedKg ?? NaN) === Number(dbRow.planned_kg ?? NaN) &&
+      sameNumber(sheetRow.setNo, dbRow.set_no) &&
+      sameNumber(sheetRow.plannedKg, dbRow.planned_kg) &&
       normalize(sheetRow.plannedReps) === normalize(dbRow.planned_reps) &&
-      Number(sheetRow.actualKg ?? NaN) === Number(dbRow.actual_kg ?? NaN) &&
-      Number(sheetRow.actualReps ?? NaN) === Number(dbRow.actual_reps ?? NaN) &&
-      Number(sheetRow.rpe ?? NaN) === Number(dbRow.rpe ?? NaN) &&
+      sameNumber(sheetRow.actualKg, dbRow.actual_kg) &&
+      sameNumber(sheetRow.actualReps, dbRow.actual_reps) &&
+      sameNumber(sheetRow.rpe, dbRow.rpe) &&
       Number(dbRow.completed) === 1
     );
   };
