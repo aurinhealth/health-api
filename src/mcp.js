@@ -1,4 +1,4 @@
-const MCP_PROTOCOL_VERSION = "2025-11-25";
+const MCP_PROTOCOL_VERSION = "2026-07-28";
 const SERVER_VERSION = "1.1.0";
 const DEMO_API_KEY = "health-strength-demo-2026";
 
@@ -45,7 +45,7 @@ export async function handleMcp(request,env){
  return json({jsonrpc:"2.0",id:message.id??null,error:{code:-32601,message:`Method not found: ${message.method}`}},404,cors);
 }
 
-function isSupportedProtocol(v){return v==="2025-11-25"||v==="2025-06-18"}
+function isSupportedProtocol(v){return v==="2026-07-28"||v==="2025-11-25"||v==="2025-06-18"}
 function isAllowedOrigin(o){try{const u=new URL(o);return u.protocol==="https:"&&["chatgpt.com","chat.openai.com","platform.openai.com"].includes(u.hostname)}catch{return false}}
 function corsHeaders(o){return o?{"Access-Control-Allow-Origin":o,Vary:"Origin"}:{}}
 function demoTool(name,args){
