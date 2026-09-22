@@ -135,45 +135,70 @@ function progressionMultiplier(reps, rpeValue, targetReps) {
 
 function recoveryMultiplier(loadFactor) { return clamp(0.92 + 0.08 * loadFactor, 0.92, 1); }
 
+function scoreHistoryRow(r, targetReps) {
+  const range = parseRepRange(targetReps);
+  const reps = n(r.actual_reps), rpe = normalizeRpe(r.rpe);
+  let score = 0;
+  if (range && reps >= range.min && reps <= range.max) score += 3;
+  if (range && reps >= range.max) score += 1;
+  if (rpe != null && rpe <= 8) score += 2;
+  if (rpe != null && rpe >= 9.5) score -= 2;
+  return score;
+}
+
 function selectReference(rows, targetReps) {
   const usable = latestByDate(rows).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null);
   if (!usable.length) return null;
-
-  // The latest completed workout for this exercise is the primary reference.
-  // Older sessions remain useful as history, but must not override the latest
-  // real performance just because they happened to have a better RPE/reps score.
   const latestDate = String(usable[0].workout_date || "").slice(0, 10);
   const latestWorkout = usable.filter(r => String(r.workout_date || "").slice(0, 10) === latestDate);
   const candidates = latestWorkout.length ? latestWorkout : usable.slice(0, 12);
-  const range = parseRepRange(targetReps);
+  return [...candidates].sort((a, b) =>
+    scoreHistoryRow(b, targetReps) - scoreHistoryRow(a, targetReps) ||
+    Number(b.actual_reps || 0) - Number(a.actual_reps || 0) ||
+    Number(b.set_no || 0) - Number(a.set_no || 0)
+  )[0];
+}
 
-  const scored = candidates.map(r => {
-    const reps = n(r.actual_reps), rpe = normalizeRpe(r.rpe);
-    let score = 0;
-    if (range && reps >= range.min && reps <= range.max) score += 3;
-    if (range && reps >= range.max) score += 1;
-    if (rpe != null && rpe <= 8) score += 2;
-    if (rpe != null && rpe >= 9.5) score -= 2;
-    return { r, score };
-  });
-  scored.sort((a, b) => b.score - a.score || Number(b.r.actual_reps || 0) - Number(a.r.actual_reps || 0) || Number(b.r.set_no || 0) - Number(a.r.set_no || 0));
-  return scored[0].r;
+function recentPerformanceReferences(rows, targetReps, maxSessions = 5) {
+  const usable = (rows || []).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null);
+  const dates = [...new Set(usable.map(r => String(r.workout_date || "").slice(0, 10)).filter(Boolean))]
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, maxSessions);
+  return dates.map((date, index) => {
+    const sessionRows = usable.filter(r => String(r.workout_date || "").slice(0, 10) === date);
+    const ref = [...sessionRows].sort((a, b) =>
+      scoreHistoryRow(b, targetReps) - scoreHistoryRow(a, targetReps) ||
+      Number(b.actual_reps || 0) - Number(a.actual_reps || 0) ||
+      Number(b.set_no || 0) - Number(a.set_no || 0)
+    )[0];
+    return ref ? { ref, weight: Math.max(0.4, 1 - index * 0.15) } : null;
+  }).filter(Boolean);
 }
 
 function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
   if (!own.length) return null;
-  const ref = selectReference(own, targetReps);
-  if (!ref) return null;
-  let kg = n(ref.actual_kg);
-  kg *= progressionMultiplier(n(ref.actual_reps), normalizeRpe(ref.rpe), targetReps);
+  const performances = recentPerformanceReferences(own, targetReps, 5);
+  if (!performances.length) return null;
+
+  let weightedKg = 0, totalWeight = 0;
+  for (const { ref, weight } of performances) {
+    const adjusted = n(ref.actual_kg) * progressionMultiplier(n(ref.actual_reps), normalizeRpe(ref.rpe), targetReps);
+    weightedKg += adjusted * weight;
+    totalWeight += weight;
+  }
+  let kg = totalWeight ? weightedKg / totalWeight : n(performances[0].ref.actual_kg);
   kg *= recoveryMultiplier(loadFactor);
-  const step = practicalStep(EXERCISE_INTELLIGENCE[exercise]);
+
+  const latest = performances[0].ref;
   const rounded = resolveLoad(exercise, kg);
+  const latestKg = n(latest.actual_kg);
+  const confidence = clamp(0.72 + Math.min(performances.length, 5) * 0.055, 0.72, 1);
   return {
-    kg: rounded, source: "own-history", confidence: 1, referenceExercise: exercise,
-    referenceKg: n(ref.actual_kg), referenceReps: n(ref.actual_reps), referenceRpe: n(ref.rpe),
-    referenceDate: ref.workout_date,
-    deltaPct: n(ref.actual_kg) ? Math.round((rounded / n(ref.actual_kg) - 1) * 1000) / 10 : 0
+    kg: rounded, source: "own-history", confidence,
+    referenceExercise: exercise, referenceKg: latestKg,
+    referenceReps: n(latest.actual_reps), referenceRpe: normalizeRpe(latest.rpe),
+    referenceDate: latest.workout_date, performanceCount: performances.length,
+    deltaPct: latestKg ? Math.round((rounded / latestKg - 1) * 1000) / 10 : 0
   };
 }
 
