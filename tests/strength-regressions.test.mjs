@@ -90,7 +90,7 @@ test("generator treats aliased recent leg curl as the same exercise", () => {
       }]
     }
   }, { focus: "lower", maxExercises: 4 });
-  assert.ok(!plan.exercises.includes("Prone leg curl Prime"));
+  assert.ok(!plan.rows.some(row => row[0] === "WORK" && row[1] === "Prone leg curl Prime"));
 });
 
 test("sync guard accepts matching null values", () => {
