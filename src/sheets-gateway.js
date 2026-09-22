@@ -1,6 +1,6 @@
 import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
+import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet, importStrengthHistory, ensureStrengthTable } from "./strength-history.js";
 import { writeStrengthPlan } from "./strength-plan-writer.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
@@ -169,17 +169,62 @@ async function ensureCurrentWorkoutSafeToReplace(env) {
   const data = await fetchTodayValues(env);
   const parsed = parseStrengthSheet(data.values);
   const completed = parsed.completedRows || [];
-  if (completed.length > 0) {
+
+  if (!completed.length) {
+    return { status: "ok", workoutDate: parsed.date, completedRows: 0, synced: true };
+  }
+
+  if (!parsed.date) {
+    return {
+      status: "error",
+      step: "strength_generate_plan",
+      code: "CURRENT_WORKOUT_NOT_SYNCED",
+      message: "Current workout contains completed sets. Save/sync the current workout explicitly before generating a new workout.",
+      workoutDate: null,
+      completedRows: completed.length
+    };
+  }
+
+  await ensureStrengthTable(env.DB);
+  const dbRows = await env.DB.prepare(
+    `SELECT sheet_row, type, exercise, set_no, planned_kg, planned_reps,
+            actual_kg, actual_reps, rpe, completed
+     FROM strength_sets
+     WHERE workout_date = ? AND source = 'google-sheet' AND completed = 1`
+  ).bind(parsed.date).all();
+
+  const byRow = new Map((dbRows.results || []).map(row => [Number(row.sheet_row), row]));
+  const normalize = value => value == null ? null : String(value).trim();
+  const same = (sheetRow, dbRow) => {
+    if (!dbRow) return false;
+    return (
+      normalize(sheetRow.type) === normalize(dbRow.type) &&
+      normalize(sheetRow.exercise) === normalize(dbRow.exercise) &&
+      Number(sheetRow.setNo ?? NaN) === Number(dbRow.set_no ?? NaN) &&
+      Number(sheetRow.plannedKg ?? NaN) === Number(dbRow.planned_kg ?? NaN) &&
+      normalize(sheetRow.plannedReps) === normalize(dbRow.planned_reps) &&
+      Number(sheetRow.actualKg ?? NaN) === Number(dbRow.actual_kg ?? NaN) &&
+      Number(sheetRow.actualReps ?? NaN) === Number(dbRow.actual_reps ?? NaN) &&
+      Number(sheetRow.rpe ?? NaN) === Number(dbRow.rpe ?? NaN) &&
+      Number(dbRow.completed) === 1
+    );
+  };
+
+  const unsynced = completed.filter(row => !same(row, byRow.get(Number(row.sheetRow))));
+  if (unsynced.length) {
     return {
       status: "error",
       step: "strength_generate_plan",
       code: "CURRENT_WORKOUT_NOT_SYNCED",
       message: "Current workout contains completed sets. Save/sync the current workout explicitly before generating a new workout.",
       workoutDate: parsed.date,
-      completedRows: completed.length
+      completedRows: completed.length,
+      unsyncedRows: unsynced.length,
+      unsyncedSheetRows: unsynced.map(row => row.sheetRow)
     };
   }
-  return { status: "ok", workoutDate: parsed.date, completedRows: 0 };
+
+  return { status: "ok", workoutDate: parsed.date, completedRows: completed.length, synced: true };
 }
 
 async function writeStrengthPlanRoute(env, request) {
