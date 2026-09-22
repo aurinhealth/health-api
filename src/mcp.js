@@ -59,7 +59,8 @@ function demoTool(name,args){
 async function callHealthApi(request,env,toolName,args){
  const base=new URL(request.url).origin;
  const routes={
-  getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,\n  getCyclingContext:()=>`/cycling/context?${new URLSearchParams(Object.entries({date:args.date,lat:args.lat,lon:args.lon,ride_type:args.rideType,duration_minutes:args.durationMinutes,start_time:args.startTime}).filter(([,v])=>v!=null&&v!=="" )).toString()}`,
+  getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
+  getCyclingContext:()=>`/cycling/context?${new URLSearchParams(Object.entries({date:args.date,lat:args.lat,lon:args.lon,ride_type:args.rideType,duration_minutes:args.durationMinutes,start_time:args.startTime}).filter(([,v])=>v!=null&&v!=="" )).toString()}`,
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
   getTodayStrengthSheet:()=>"/strength/sheet/today",
   getNutritionPlan:()=>"/nutrition/plan",
