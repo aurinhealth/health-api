@@ -29,6 +29,17 @@ jobs:
             date_value="$(TZ=Europe/Prague date +%F)"
             preview_value="false"
           else
+            action_value="$(python - <<'PY'
+          import json
+          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+          print(data.get("action", "generate"))
+          PY
+          )"
+            if [ "$action_value" = "none" ]; then
+              echo "Neutral strength automation request; nothing to run."
+              exit 0
+            fi
             date_value="$(python - <<'PY'
           import json
           with open("automation/strength-request.json", "r", encoding="utf-8") as f:
