@@ -40,19 +40,3 @@ jobs:
           python -c 'import json,sys; d=json.load(sys.stdin); r=d["result"]; assert r["resultType"]=="complete"; assert "2026-07-28" in r["supportedVersions"]; assert r["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]=="health-api-strength-coach"' <<< "$discover"
           tools="$(curl -fsS -X POST -H "Authorization: Bearer health-strength-demo-2026" -H "Content-Type: application/json" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' "https://health-api.chelseafc-czsk.workers.dev/mcp")"
           python -c 'import json,sys; d=json.load(sys.stdin); names={x["name"] for x in d["result"]["tools"]}; assert "generateStrengthPlan" in names and "syncStrengthSheet" in names' <<< "$tools"
-      - name: Refresh strength sheets
-        shell: bash
-        run: |
-          set -euo pipefail
-          response="$(curl -fsSL \
-            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=health-strength")"
-          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")"
-          echo "::add-mask::$token"
-          curl --fail-with-body -sS \
-            -X POST \
-            -H "Authorization: Bearer $token" \
-            -H "Content-Type: application/json" \
-            --data '{"action":"sheet_maintenance","date":null,"preview":false}' \
-            "https://health-api.chelseafc-czsk.workers.dev/automation/strength"
-          curl --fail-with-body -sS "https://health-api.chelseafc-czsk.workers.dev/sync/intervals"
