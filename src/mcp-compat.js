@@ -31,14 +31,14 @@ export async function handleMcpCompat(request, env) {
     headers.delete("MCP-Protocol-Version");
     const legacyRequest = new Request(request, { headers });
     const response = await handleMcp(legacyRequest, env);
-    return normalizeToolResult(response, origin);
+    return normalizeToolResult(response, origin, true);
   }
 
   const response = await handleMcp(request, env);
   return normalizeToolResult(response, origin);
 }
 
-async function normalizeToolResult(response, origin) {
+async function normalizeToolResult(response, origin, modern = false) {
   if (response.status === 401) {
     const headers = new Headers(response.headers);
     headers.set("WWW-Authenticate", `Bearer realm="health-api-mcp", resource_metadata="${origin}/.well-known/oauth-protected-resource", scope="strength:read strength:write"`);
@@ -49,12 +49,22 @@ async function normalizeToolResult(response, origin) {
   if (!contentType.includes("application/json")) return response;
 
   const body = await response.clone().json().catch(() => null);
-  if (!body?.result?.content || !Array.isArray(body.result.content)) return response;
-  if (body.result.structuredContent !== undefined) return response;
+  if (!body?.result) return response;
 
-  const text = body.result.content.find((item) => item?.type === "text")?.text;
-  if (!text) return response;
-  try { body.result.structuredContent = JSON.parse(text); } catch { return response; }
+  if (modern) {
+    body.result.resultType = body.result.resultType || "complete";
+    body.result._meta = {
+      ...(body.result._meta || {}),
+      "io.modelcontextprotocol/serverInfo": SERVER_INFO
+    };
+  }
+
+  if (body.result.content && Array.isArray(body.result.content) && body.result.structuredContent === undefined) {
+    const text = body.result.content.find((item) => item?.type === "text")?.text;
+    if (text) {
+      try { body.result.structuredContent = JSON.parse(text); } catch {}
+    }
+  }
 
   const headers = new Headers(response.headers);
   headers.set("content-type", "application/json; charset=utf-8");
