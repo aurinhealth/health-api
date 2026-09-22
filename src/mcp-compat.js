@@ -14,11 +14,13 @@ export async function handleMcpCompat(request, env) {
         jsonrpc: "2.0",
         id: message.id,
         result: {
+          resultType: "complete",
           supportedVersions: [MODERN, "2025-11-25", "2025-06-18"],
           capabilities: { tools: {} },
-          tools: TOOLS,
+          _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO },
           instructions: "Use the shared daily context for training and nutrition. generateStrengthPlan writes the adaptive workout unless preview=true; getNutritionPlan returns the daily nutrition plan.",
-          _meta: { "io.modelcontextprotocol/serverInfo": SERVER_INFO }
+          ttlMs: 300000,
+          cacheScope: "private"
         }
       });
     }
