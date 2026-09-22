@@ -165,14 +165,30 @@ async function sheetsRequest(accessToken, range, method = "GET", body = null, qu
   return data;
 }
 
+async function ensureCurrentWorkoutSafeToReplace(env) {
+  const data = await fetchTodayValues(env);
+  const parsed = parseStrengthSheet(data.values);
+  const completed = parsed.completedRows || [];
+  if (completed.length > 0) {
+    return {
+      status: "error",
+      step: "strength_generate_plan",
+      code: "CURRENT_WORKOUT_NOT_SYNCED",
+      message: "Current workout contains completed sets. Save/sync the current workout explicitly before generating a new workout.",
+      workoutDate: parsed.date,
+      completedRows: completed.length
+    };
+  }
+  return { status: "ok", workoutDate: parsed.date, completedRows: 0 };
+}
+
 async function writeStrengthPlanRoute(env, request) {
   try {
     const body = await request.json();
+    const guard = await ensureCurrentWorkoutSafeToReplace(env);
+    if (guard.status !== "ok") return Response.json(guard, { status: 409 });
     const accessToken = await getGoogleAccessToken(env);
-    const result = await writeStrengthPlan(accessToken, body, async () => {
-      const data = await fetchTodayValues(env);
-      return syncStrengthSheet(env.DB, data.values);
-    });
+    const result = await writeStrengthPlan(accessToken, body);
     return Response.json(result);
   } catch (error) { return Response.json({ status: "error", step: "strength_write_plan", message: error.message }, { status: 500 }); }
 }
@@ -210,6 +226,8 @@ async function generateStrengthPlanRoute(env, request, url) {
 
     const plan = generateStrengthPlan(context, options);
     if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
+    const guard = await ensureCurrentWorkoutSafeToReplace(env);
+    if (guard.status !== "ok") return Response.json(guard, { status: 409 });
     const accessToken = await getGoogleAccessToken(env);
     const result = await writeStrengthPlan(accessToken, {
       date: plan.date,
@@ -218,9 +236,6 @@ async function generateStrengthPlanRoute(env, request, url) {
       rationale: plan.rationale,
       protectedLegs: plan.protectedLegs,
       loadFactor: plan.loadFactor
-    }, async () => {
-      const data = await fetchTodayValues(env);
-      return syncStrengthSheet(env.DB, data.values);
     });
     return Response.json({ ...result, planName: plan.planName, rationale: plan.rationale, loadFactor: plan.loadFactor, loadEstimates: plan.loadEstimates });
   } catch (error) { return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 }); }
