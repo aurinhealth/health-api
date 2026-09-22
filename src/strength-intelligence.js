@@ -1,3 +1,5 @@
+import { normalizeExerciseName } from "./strength-normalization.js";
+
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 export const LOAD_UNITS = {
@@ -51,7 +53,10 @@ function n(v) { const x = Number(v); return Number.isFinite(x) ? x : null; }
 function dateKey(v) { return String(v || "").slice(0, 10); }
 function latestByDate(rows) { return [...(rows || [])].sort((a, b) => String(b.workout_date).localeCompare(String(a.workout_date)) || Number(b.set_no || 0) - Number(a.set_no || 0)); }
 export function parseRepRange(value) { const m = String(value || "").match(/(\d+)\s*[–-]\s*(\d+)/); return m ? { min: Number(m[1]), max: Number(m[2]) } : null; }
-function completedRowsForExercise(history, exercise) { return (history || []).filter(r => String(r.exercise).toLowerCase() === String(exercise).toLowerCase() && String(r.type || "WORK").toUpperCase() === "WORK" && Number(r.completed) === 1); }
+function completedRowsForExercise(history, exercise) {
+  const canonical = normalizeExerciseName(exercise).toLowerCase();
+  return (history || []).filter(r => normalizeExerciseName(r.exercise).toLowerCase() === canonical && String(r.type || "WORK").toUpperCase() === "WORK" && Number(r.completed) === 1);
+}
 
 function scoreSimilarity(from, to) {
   const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
@@ -103,6 +108,7 @@ function roundToStep(value, step, min = 0, max = null) {
 }
 
 export function resolveLoad(exercise, value) {
+  exercise = normalizeExerciseName(exercise);
   const meta = EXERCISE_INTELLIGENCE[exercise];
   const rule = loadRule(meta);
   return roundToStep(value, rule.step, rule.min, rule.max);
@@ -172,6 +178,7 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
 }
 
 export function estimateStartingLoad({ exercise, history = [], targetReps = "8–15", fallbackKg = null, loadFactor = 1 }) {
+  exercise = normalizeExerciseName(exercise);
   const def = EXERCISE_INTELLIGENCE[exercise];
   if (!def) return { kg: fallbackKg, source: fallbackKg == null ? "unknown" : "fallback", confidence: fallbackKg == null ? 0 : 0.2 };
   const ownEstimate = estimateFromOwnHistory(completedRowsForExercise(history, exercise), exercise, targetReps, loadFactor);
@@ -203,7 +210,7 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
 }
 
 export function analyzeCompletedWorkout(parsed, history = []) {
-  const work = (parsed?.completedRows || []).filter(r => r.type === "WORK");
+  const work = (parsed?.completedRows || []).filter(r => r.type === "WORK").map(r => ({ ...r, exercise: normalizeExerciseName(r.exercise) }));
   if (!work.length) return { status: "ok", completedSets: 0, summary: "Zatím nejsou dokončené pracovní série k analýze.", exercises: [], recommendations: [] };
   const byExercise = new Map();
   for (const row of work) { const arr = byExercise.get(row.exercise) || []; arr.push(row); byExercise.set(row.exercise, arr); }
@@ -226,6 +233,7 @@ export function analyzeCompletedWorkout(parsed, history = []) {
 }
 
 export function findExerciseAlternatives(exercise, history = [], requestedMuscle = null) {
+  exercise = normalizeExerciseName(exercise);
   const base = EXERCISE_INTELLIGENCE[exercise];
   const targetMuscle = requestedMuscle || base?.muscle;
   return Object.entries(EXERCISE_INTELLIGENCE)
