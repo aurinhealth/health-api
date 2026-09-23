@@ -12,6 +12,7 @@ export const TOOLS = [
   { name:"getTodayStrengthSheet", title:"Read today's strength sheet", description:"Read the current Dnešní trénink Google Sheet contents.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getNutritionPlan", title:"Get daily nutrition plan", description:"Build the daily nutrition plan from the shared cycling, recovery, and strength context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getDailyDecision", title:"Get adaptive daily decision", description:"Combine recovery, cycling load, strength readiness, nutrition, and upcoming rides into one daily decision context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getDailyPlan", title:"Get unified daily plan", description:"Return one actionable plan combining cycling, strength, nutrition, food, recovery, and meal timing for the day.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getWeeklyReview", title:"Get weekly training review", description:"Summarize the last 7 days of cycling, strength, nutrition, and weight trend.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"searchCookbook", title:"Search cookbook recipes", description:"Find recipes by cookbook page and/or name.", inputSchema:{type:"object",properties:{page:{type:"integer"},name:{type:"string"},limit:{type:"integer",minimum:1,maximum:50}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getCookbookRecipe", title:"Get cookbook recipe", description:"Get a cookbook recipe including available nutrition values.", inputSchema:{type:"object",properties:{page:{type:"integer"},name:{type:"string"},recipeId:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
@@ -93,6 +94,7 @@ async function callHealthApi(request,env,toolName,args){
   getTodayStrengthSheet:()=>"/strength/sheet/today",
   getNutritionPlan:()=>"/nutrition/plan",
   getDailyDecision:()=>"/decision/daily",
+  getDailyPlan:()=>`/daily/plan${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
   getWeeklyReview:()=>`/training/weekly-review${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
   searchCookbook:()=>`/cookbook/search?${new URLSearchParams(Object.entries({page:args.page,name:args.name,limit:args.limit}).filter(([,v])=>v!=null&&v!=="")).toString()}`,
   getCookbookRecipe:()=>`/cookbook/recipe?${new URLSearchParams(Object.entries({page:args.page,name:args.name,recipe_id:args.recipeId}).filter(([,v])=>v!=null&&v!=="")).toString()}`,
@@ -113,7 +115,7 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getWeeklyReview","getFoodFavorites","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getWeeklyReview","getDailyPlan","getFoodFavorites","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
