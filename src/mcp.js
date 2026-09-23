@@ -61,6 +61,11 @@ function demoTool(name,args){
  if(name==="getStrengthHistory")return{status:"ok",demo:true,count:0,rows:[]};
  if(name==="getTodayStrengthSheet")return{status:"ok",demo:true,sheet:"Dnešní trénink",workoutDate:date};
  if(name==="findStrengthAlternatives")return{status:"ok",demo:true,exercise:args.exercise||null,alternatives:[]};
+ if(name==="searchCookbook")return{status:"ok",demo:true,count:0,recipes:[]};
+ if(name==="getCookbookRecipe")return{status:"ok",demo:true,recipe:null};
+ if(name==="logMeal")return{status:"ok",demo:true,id:1,entryStatus:args.status||"eaten"};
+ if(name==="getFoodDay")return{status:"ok",demo:true,date,entries:[],totals:{eaten:{calories:0,protein_g:0,carbs_g:0,fat_g:0},planned:{calories:0,protein_g:0,carbs_g:0,fat_g:0}}};
+ if(name==="recommendNutrition")return{status:"ok",demo:true,remaining:{},suggestions:[]};
  throw new Error(`Unsupported demo tool: ${name}`);
 }
 async function callHealthApi(request,env,toolName,args){
