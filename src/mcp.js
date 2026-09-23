@@ -110,7 +110,7 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getDailyDecision","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
