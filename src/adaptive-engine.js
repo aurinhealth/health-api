@@ -30,7 +30,7 @@ function recoveryMetrics(context){
   if(hard>=3) score-=7; else if(hard>=2) score-=4;
   return {score:Math.round(clamp(score,0,100)),sleepMinutes:sleep?.value??null,hrv:hrv?.value??null,restingHr:rhr?.value??null};
 }
-function legReadiness(context,recovery){
+function calculateLegReadiness(context,recovery){
   let score=recovery.score;
   const tss=n(context?.cycling?.recentRideTss);
   const last48=(context?.cycling?.recentActivities||[]).slice(0,3).reduce((s,x)=>s+n(x.tss),0);
@@ -43,7 +43,7 @@ function legReadiness(context,recovery){
 }
 export function buildAdaptiveDecision(context,food=null){
   const recovery=recoveryMetrics(context);
-  const legReadiness=legReadiness(context,recovery);
+  const legReadiness=calculateLegReadiness(context,recovery);
   const next=context?.cycling?.nextRide||null;
   const upcoming=(context?.cycling?.plannedWorkouts||[]).slice(0,3);
   const nextHard=!!next?.intensity;
@@ -79,4 +79,4 @@ export function buildAdaptiveDecision(context,food=null){
     recommendations
   };
 }
-export { recoveryMetrics, legReadiness };
+export { recoveryMetrics, calculateLegReadiness };
