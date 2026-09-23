@@ -13,6 +13,33 @@ function localDate(offsetDays = 0) {
   return new Date(Date.UTC(y, m - 1, d + offsetDays)).toISOString().slice(0, 10);
 }
 function n(v, fallback = 0) { const x = Number(v); return Number.isFinite(x) ? x : fallback; }
+async function d1WeightTrend(env, endDate) {
+  try {
+    const end = String(endDate || localDate()).slice(0,10);
+    const start = localDate(-35);
+    const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE lower(data_type) LIKE '%weight%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time <= ? OR start_time <= ?) ORDER BY COALESCE(sample_time,start_time)`)
+      .bind(`${start}T00:00:00`,`${start}T00:00:00`,`${end}T23:59:59`,`${end}T23:59:59`).all();
+    const points=[];
+    for(const row of rows.results||[]){
+      let value=n(row.value_numeric,NaN);
+      const unit=String(row.value_unit||"").toLowerCase();
+      if(!Number.isFinite(value)) continue;
+      if(unit.includes("lb")||unit.includes("pound")) value=value*0.45359237;
+      if(value<35||value>250) continue;
+      points.push({date:String(row.sample_time||row.start_time||"").slice(0,10),kg:value});
+    }
+    const byDate=new Map();
+    for(const p of points) if(p.date) byDate.set(p.date,p.kg);
+    const daily=[...byDate.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([date,kg])=>({date,kg}));
+    if(!daily.length) return {samples:0,latestKg:null,weeklyRateKg:null,average7Kg:null,average28Kg:null};
+    const last=daily.slice(-7), last28=daily.slice(-28);
+    const mean=a=>a.length?a.reduce((s,x)=>s+x.kg,0)/a.length:null;
+    const first=daily[0], latest=daily[daily.length-1];
+    const days=Math.max(1,(new Date(latest.date)-new Date(first.date))/86400000);
+    const weeklyRateKg=Math.round(((latest.kg-first.kg)/days)*7*100)/100;
+    return {samples:daily.length,latestKg:Math.round(latest.kg*10)/10,average7Kg:mean(last)==null?null:Math.round(mean(last)*10)/10,average28Kg:mean(last28)==null?null:Math.round(mean(last28)*10)/10,weeklyRateKg,points:daily.slice(-14)};
+  } catch (_) { return {samples:0,latestKg:null,weeklyRateKg:null,average7Kg:null,average28Kg:null}; }
+}
 function durationHours(a) {
   for (const key of ["duration", "duration_seconds", "moving_time", "elapsed_time"]) {
     const x = n(a?.[key], NaN);
@@ -90,7 +117,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   const plannedStrengthWorkout = plannedStrengthRows.length
     ? { date, rows: plannedStrengthRows.map(row => [row.type, row.exercise, row.setNo, row.plannedKg, row.plannedReps]) }
     : null;
-  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "google-sheet/d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } };
-  context.nutrition = buildNutritionPlan(context);
+  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "google-sheet/d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } , weightTrend: await d1WeightTrend(env,date) };
+  context.nutrition = buildNutritionPlan(context, { weightTrend: context.weightTrend });\n  const { buildAdaptiveDecision } = await import("./adaptive-engine.js");\n  context.adaptive = buildAdaptiveDecision(context, null);
   return context;
 }
