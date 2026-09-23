@@ -110,7 +110,10 @@ export async function logResolvedFood(db, input = {}) {
     protein_g: values.protein_g,
     carbs_g: values.carbs_g,
     fat_g: values.fat_g,
+    fiber_g: amount?.fiber_g ?? n(input.fiber_g, product.fiber_100g),
+    salt_g: amount?.salt_g ?? n(input.salt_g, product.salt_100g),
     servings: amount ? 1 : input.servings,
+    amount_g: grams,
     source: input.source || product.source,
     name: input.name || product.name,
     note: [input.note, grams != null ? `amount_g=${grams}` : null].filter(Boolean).join("; ")
