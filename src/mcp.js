@@ -11,6 +11,11 @@ export const TOOLS = [
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getTodayStrengthSheet", title:"Read today's strength sheet", description:"Read the current Dnešní trénink Google Sheet contents.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getNutritionPlan", title:"Get daily nutrition plan", description:"Build the daily nutrition plan from the shared cycling, recovery, and strength context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"searchCookbook", title:"Search cookbook recipes", description:"Find recipes by cookbook page and/or name.", inputSchema:{type:"object",properties:{page:{type:"integer"},name:{type:"string"},limit:{type:"integer",minimum:1,maximum:50}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getCookbookRecipe", title:"Get cookbook recipe", description:"Get a cookbook recipe including available nutrition values.", inputSchema:{type:"object",properties:{page:{type:"integer"},name:{type:"string"},recipeId:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"logMeal", title:"Log food", description:"Log a cookbook meal or manually supplied nutrition into the daily food log. Status can be eaten or planned.", inputSchema:{type:"object",properties:{date:{type:"string"},page:{type:"integer"},name:{type:"string"},recipeId:{type:"string"},servings:{type:"number"},mealTime:{type:"string"},mealType:{type:"string"},calories:{type:"number"},protein_g:{type:"number"},carbs_g:{type:"number"},fat_g:{type:"number"},status:{type:"string",enum:["eaten","planned","cancelled"]},source:{type:"string"},note:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
+  { name:"getFoodDay", title:"Get daily food log", description:"Read eaten and planned food plus totals and the nutrition target for a day.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"recommendNutrition", title:"Recommend what to eat", description:"Compare the daily food log with the adaptive nutrition target and suggest what remains to be covered.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"generateStrengthPlan", title:"Generate today's strength workout", description:"Generate an adaptive strength workout and write it to the Google Sheet unless preview=true.", inputSchema:{type:"object",properties:{date:{type:"string"},preview:{type:"boolean",default:false},focus:{type:"string",enum:["upper","lower","full"]},forceProtectLegs:{type:"boolean"},durationMinutes:{type:"integer",minimum:20,maximum:120},maxExercises:{type:"integer",minimum:2,maximum:8},excludeExercises:{type:"array",items:{type:"string"}}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
   { name:"syncStrengthSheet", title:"Sync completed strength sets", description:"Sync completed strength sets from the Google Sheet into D1.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
   { name:"analyzeStrengthWorkout", title:"Analyze completed strength workout", description:"Sync and analyze the completed strength workout.", inputSchema:{type:"object",properties:{command:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
@@ -66,6 +71,11 @@ async function callHealthApi(request,env,toolName,args){
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
   getTodayStrengthSheet:()=>"/strength/sheet/today",
   getNutritionPlan:()=>"/nutrition/plan",
+  searchCookbook:()=>`/cookbook/search?${new URLSearchParams(Object.entries({page:args.page,name:args.name,limit:args.limit}).filter(([,v])=>v!=null&&v!=="")).toString()}`,
+  getCookbookRecipe:()=>`/cookbook/recipe?${new URLSearchParams(Object.entries({page:args.page,name:args.name,recipe_id:args.recipeId}).filter(([,v])=>v!=null&&v!=="")).toString()}`,
+  logMeal:()=>"/nutrition/log-meal",
+  getFoodDay:()=>`/nutrition/day?date=${encodeURIComponent(String(args.date||""))}`,
+  recommendNutrition:()=>"/nutrition/recommend",
   generateStrengthPlan:()=>"/strength/generate-plan",
   syncStrengthSheet:()=>"/strength/sync",
   analyzeStrengthWorkout:()=>"/strength/analyze",
@@ -73,7 +83,7 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","searchCookbook","getCookbookRecipe","getFoodDay"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
@@ -82,7 +92,9 @@ async function callHealthApi(request,env,toolName,args){
  if(toolName==="getNutritionPlan") body=JSON.stringify({date:args.date||null});
  if(method==="POST"){
    headers.set("Content-Type","application/json");
-   if(toolName==="generateStrengthPlan") body=JSON.stringify({date:args.date||null,preview:Boolean(args.preview),focus:args.focus||undefined,forceProtectLegs:Boolean(args.forceProtectLegs),durationMinutes:args.durationMinutes||undefined,maxExercises:args.maxExercises||undefined,excludeExercises:Array.isArray(args.excludeExercises)?args.excludeExercises:[]});
+   if(toolName==="logMeal") body=JSON.stringify(args);
+   else if(toolName==="recommendNutrition") body=JSON.stringify({date:args.date||null});
+   else if(toolName==="generateStrengthPlan") body=JSON.stringify({date:args.date||null,preview:Boolean(args.preview),focus:args.focus||undefined,forceProtectLegs:Boolean(args.forceProtectLegs),durationMinutes:args.durationMinutes||undefined,maxExercises:args.maxExercises||undefined,excludeExercises:Array.isArray(args.excludeExercises)?args.excludeExercises:[]});
    else if(toolName==="analyzeStrengthWorkout") body=JSON.stringify({command:args.command||"analyze"});
    else if(toolName==="findStrengthAlternatives") body=JSON.stringify({exercise:args.exercise||"",muscle:args.muscle||""});
    else if(toolName==="substituteStrengthExercise") body=JSON.stringify({from:args.from||"",to:args.to||"",muscle:args.muscle||""});
