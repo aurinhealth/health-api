@@ -30,8 +30,12 @@ export async function syncDailyNutritionNotes(env, options={}){
     events.push({external_id:`health-nutrition-${date}`,category:"NOTE",start_date_local:`${date}T00:00:00`,name:`Nutrition — ${date}`,description:note(date,nutrition)});
     date=addDays(date,1);
   }
-  const r=await fetch(`${BASE_URL}/athlete/0/events/bulk?upsert=true`,{method:"POST",headers:{Authorization:auth(env),"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(events)});
-  const t=await r.text(); let data; try{data=JSON.parse(t)}catch{data=t}
-  if(!r.ok) throw new Error(`Intervals.icu HTTP ${r.status}: ${JSON.stringify(data)}`);
-  return {status:"ok",oldest,newest,weightKg,updatedCount:Array.isArray(data)?data.length:events.length,events:Array.isArray(data)?data.map(e=>({id:e.id,date:e.start_date_local,name:e.name})):[]};
+  const results=[];
+  for (const event of events) {
+    const r=await fetch(`${BASE_URL}/athlete/0/events`,{method:"POST",headers:{Authorization:auth(env),"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(event)});
+    const t=await r.text(); let data; try{data=JSON.parse(t)}catch{data=t}
+    if(!r.ok) throw new Error(`Intervals.icu HTTP ${r.status}: ${JSON.stringify(data)}`);
+    results.push({id:data?.id ?? null,date:data?.start_date_local ?? event.start_date_local,name:data?.name ?? event.name});
+  }
+  return {status:"ok",oldest,newest,weightKg,updatedCount:results.length,events:results};
 }
