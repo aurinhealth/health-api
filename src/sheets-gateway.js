@@ -9,6 +9,7 @@ import { buildNutritionPlan } from "./nutrition-intelligence.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { completedRowsAreSynced } from "./strength-sync-guard.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
+import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood } from "./food-log.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -38,6 +39,11 @@ export default {
     if (url.pathname === "/strength/alternatives" && request.method === "POST") return alternativesRoute(env, request);
     if (url.pathname === "/strength/substitute" && request.method === "POST") return substituteRoute(env, request);
     if (url.pathname === "/nutrition/plan" && request.method === "POST") return nutritionPlanRoute(env, request);
+    if (url.pathname === "/cookbook/search" && request.method === "GET") return cookbookSearchRoute(env, url);
+    if (url.pathname === "/cookbook/recipe" && request.method === "GET") return cookbookRecipeRoute(env, url);
+    if (url.pathname === "/nutrition/log-meal" && request.method === "POST") return logMealRoute(env, request);
+    if (url.pathname === "/nutrition/day" && request.method === "GET") return nutritionDayRoute(env, url);
+    if (url.pathname === "/nutrition/recommend" && request.method === "POST") return nutritionRecommendRoute(env, request);
     if (url.pathname === "/cycling/context" && request.method === "GET") return cyclingContextRoute(env, url);
     return app.fetch(request, env, ctx);
   }
@@ -402,6 +408,41 @@ async function nutritionPlanRoute(env, request) {
   } catch (error) {
     return Response.json({ status: "error", step: "nutrition_plan", message: error.message }, { status: 500 });
   }
+}
+
+async function cookbookSearchRoute(env, url) {
+  try {
+    return Response.json(await searchCookbookRecipes({ page:url.searchParams.get("page"), name:url.searchParams.get("name"), limit:url.searchParams.get("limit") || 10 }));
+  } catch (error) { return Response.json({ status:"error", step:"cookbook_search", message:error.message }, { status:500 }); }
+}
+async function cookbookRecipeRoute(env, url) {
+  try {
+    const recipe=await getCookbookRecipe({ page:url.searchParams.get("page"), name:url.searchParams.get("name"), recipeId:url.searchParams.get("recipe_id") });
+    if (!recipe) return Response.json({ status:"error", message:"Recipe not found" }, { status:404 });
+    return Response.json({ status:"ok", recipe });
+  } catch (error) { return Response.json({ status:"error", step:"cookbook_recipe", message:error.message }, { status:500 }); }
+}
+async function logMealRoute(env, request) {
+  try { return Response.json(await logFood(env.DB, await request.json().catch(()=>({})))); }
+  catch (error) { return Response.json({ status:"error", step:"nutrition_log_meal", message:error.message }, { status:400 }); }
+}
+async function nutritionDayRoute(env, url) {
+  try {
+    const date=url.searchParams.get("date") || new Date().toISOString().slice(0,10);
+    const context=await buildStrengthContext(env,date);
+    const plan=buildNutritionPlan(context,{});
+    const food=await getFoodDay(env.DB,date);
+    const recommendations=recommendFood({day:date,nutritionPlan:plan,entries:food});
+    return Response.json({ status:"ok", date, plan, food, recommendations });
+  } catch (error) { return Response.json({ status:"error", step:"nutrition_day", message:error.message }, { status:500 }); }
+}
+async function nutritionRecommendRoute(env, request) {
+  try {
+    const body=await request.json().catch(()=>({})), date=String(body.date || new Date().toISOString().slice(0,10));
+    const context=await buildStrengthContext(env,date), plan=buildNutritionPlan(context,body);
+    const food=await getFoodDay(env.DB,date);
+    return Response.json(recommendFood({day:date,nutritionPlan:plan,entries:food}));
+  } catch (error) { return Response.json({ status:"error", step:"nutrition_recommend", message:error.message }, { status:500 }); }
 }
 
 async function substituteRoute(env, request) {
