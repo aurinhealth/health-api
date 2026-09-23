@@ -27,7 +27,7 @@ export async function syncDailyNutritionNotes(env, options={}){
     const context=await buildStrengthContext(env,date);
     if(context.status!=="ok") throw new Error(`Strength context not ready for ${date}`);
     const nutrition=buildNutritionPlan(context,{weightKg});
-    events.push({external_id:`health-nutrition-${date}`,category:"NOTE",start_date_local:date,name:`Nutrition — ${date}`,description:note(date,nutrition)});
+    events.push({external_id:`health-nutrition-${date}`,category:"NOTE",start_date_local:`${date}T00:00:00`,name:`Nutrition — ${date}`,description:note(date,nutrition)});
     date=addDays(date,1);
   }
   const r=await fetch(`${BASE_URL}/athlete/0/events/bulk?upsert=true`,{method:"POST",headers:{Authorization:auth(env),"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(events)});
