@@ -125,7 +125,7 @@ export function buildNutritionPlan(context, options = {}) {
   const trainingAdjustment = Math.min(defaults.maxTrainingAdjustment, rawTrainingAdjustment);
   const adjustedCalorieTarget = Math.max(
     calorieTarget,
-    defaults.restCalorieTarget + trainingAdjustment
+    adaptiveBase.target + trainingAdjustment
   );
   const adjustedCarbsFromCalories = Math.max(
     dailyCarbs,
@@ -137,7 +137,8 @@ export function buildNutritionPlan(context, options = {}) {
     date: context.date,
     dayType,
     calorieTarget: adjustedCalorieTarget,
-    maintenanceReference: defaults.maintenanceCalories,\n    weightTrend,\n    adaptiveCalorieAdjustment: adaptiveBase.adjustment,\n    adaptiveCalorieReason: adaptiveBase.reason,
+    maintenanceReference: defaults.maintenanceCalories,
+    weightTrend,\n    adaptiveCalorieAdjustment: adaptiveBase.adjustment,\n    adaptiveCalorieReason: adaptiveBase.reason,
     reductionTarget: {
       minLossKgPerWeek: defaults.targetLossKgPerWeekMin,
       maxLossKgPerWeek: defaults.targetLossKgPerWeekMax,
