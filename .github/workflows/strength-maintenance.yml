@@ -42,6 +42,7 @@ jobs:
             body="${response%$'\n'*}"
             if [ "$code" -lt 500 ] && [ "$code" != "429" ]; then
               printf '%s\n' "$body"
+              python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d' <<< "$body"
               break
             fi
             if [ "$attempt" -eq 3 ]; then
@@ -55,4 +56,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail-with-body -sS "https://health-api.chelseafc-czsk.workers.dev/sync/intervals"
+          for attempt in 1 2 3; do
+            response="$(curl -sS -w '\n%{http_code}' "https://health-api.chelseafc-czsk.workers.dev/sync/intervals" || true)"
+            code="${response##*
+\n'}"
+            body="${response%
+\n'*}"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              printf '%s\n' "$body"
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              printf '%s\n' "$body"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Verify Worker health
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
