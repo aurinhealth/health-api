@@ -7,6 +7,8 @@ import { parseStrengthSheet } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
 import { generateStrengthPlan } from "../src/strength-generator.js";
 import { completedRowsAreSynced } from "../src/strength-sync-guard.js";
+import { strengthPlanToIntervalsEvent } from "../src/intervals-strength.js";
+import { buildNutritionPlan } from "../src/nutrition-intelligence.js";
 
 test("endurance ride is not marked intense because description contains interval", () => {
   assert.equal(
@@ -289,4 +291,52 @@ test("generator uses semantic cycling intensity, not workout description keyword
     strength: { recentCompletedSets: [] }
   }, { maxExercises: 5 });
   assert.equal(plan.protectedLegs, false);
+});
+
+
+test("strength plan is converted to an Intervals WeightTraining event with set details", () => {
+  const event = strengthPlanToIntervalsEvent({
+    date: "2026-09-24",
+    planName: "Upper Body",
+    rationale: "Protect legs for cycling",
+    rows: [
+      ["WARMUP", "Chest flat press Prime", "1", "17.5", "8", "", "", "", "FALSE", "[WARMUP]", ""],
+      ["WORK", "Chest flat press Prime", "1", "42.5", "8–12", "", "", "", "FALSE", "", ""],
+      ["WORK", "Chest flat press Prime", "2", "42.5", "8–12", "", "", "", "FALSE", "", ""],
+      ["WORK", "Hammer curl", "1", "10", "8–15", "", "", "", "FALSE", "", ""]
+    ]
+  });
+  assert.equal(event.type, "WeightTraining");
+  assert.equal(event.category, "WORKOUT");
+  assert.equal(event.start_date_local, "2026-09-24T00:00:00");
+  assert.match(event.description, /Chest flat press Prime — 1×8–12 @ 42.5 kg/);
+  assert.match(event.description, /Chest flat press Prime — 2×8–12 @ 42.5 kg/);
+  assert.match(event.description, /Hammer curl — 1×8–15 @ 10 kg/);
+});
+
+test("nutrition plan increases daily target when a strength plan is present", () => {
+  const context = {
+    date: "2026-09-24",
+    cycling: {
+      plannedWorkouts: [],
+      recentActivities: [],
+      recentRideHours: 0,
+      recentRideTss: 0
+    }
+  };
+  const base = buildNutritionPlan(context);
+  const withGym = buildNutritionPlan(context, {
+    strengthPlan: {
+      rows: [
+        ["WORK", "Chest flat press Prime", "1", "42.5", "8–12"],
+        ["WORK", "Chest flat press Prime", "2", "42.5", "8–12"],
+        ["WORK", "Standing rowing machine", "1", "40", "8–12"],
+        ["WORK", "Standing rowing machine", "2", "40", "8–12"]
+      ]
+    }
+  });
+  assert.ok(withGym.training.strengthMinutes > 0);
+  assert.ok(withGym.training.strengthCalories > 0);
+  assert.ok(withGym.calorieTarget > base.calorieTarget);
+  assert.equal(withGym.macros.proteinGrams, 176);
 });
