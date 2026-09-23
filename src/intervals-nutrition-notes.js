@@ -12,6 +12,7 @@ function note(date,n){
     `Carbohydrates: ${n.macros.carbsGrams} g`,
     `Fat: ${n.macros.fatGrams} g`,"",
     `Estimated training calories: ${n.training.estimatedTrainingCalories} kcal`,
+    `Target strategy: ${n.reductionTarget?.strategy || "gradual weight loss"}`,
     n.training.strengthMinutes ? `Strength: ~${n.training.strengthMinutes} min / ~${n.training.strengthCalories} kcal` : "",
     n.training.cyclingTrainingCalories ? `Cycling: ~${n.training.cyclingTrainingCalories} kcal` : "",
     f ? `Ride fueling: ${f.carbsDuringRideGrams} g during (${f.carbsPerHourGrams} g/h), ~${f.fluidMl} ml fluid` : "",
