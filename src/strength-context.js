@@ -62,8 +62,10 @@ async function syncCurrentStrengthSheet(env) {
     const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}`, { headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: "application/json" } });
     const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = {}; }
     if (!response.ok) throw new Error(`Google Sheets read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
-    const { syncStrengthSheet } = await import("./strength-history.js");
-    return await syncStrengthSheet(env.DB, data.values || []);
+    const { syncStrengthSheet, parseStrengthSheet } = await import("./strength-history.js");
+    const parsed = parseStrengthSheet(data.values || []);
+    const sync = await syncStrengthSheet(env.DB, data.values || []);
+    return { ...sync, parsed };
   } catch (error) { throw new Error(`strength sheet sync failed: ${error instanceof Error ? error.message : String(error)}`); }
 }
 export async function buildStrengthContext(env, requestedDate = null) {
@@ -82,7 +84,13 @@ export async function buildStrengthContext(env, requestedDate = null) {
   const rides = activities.filter(x => x.cycling), plannedRides = events.filter(x => x.cycling && n(x.durationHours) > 0 && n(x.durationHours) <= 8);
   const recent = rides.filter(x => x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), planned = plannedRides.filter(x => x.date >= date).sort((a,b) => String(a.start).localeCompare(String(b.start)));
   const { buildNutritionPlan } = await import("./nutrition-intelligence.js");
-  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "google-sheet/d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, sheetSync } };
+  const plannedStrengthRows = sheetSync?.parsed?.date === date
+    ? (sheetSync.parsed.rows || []).filter(row => String(row.type || "").toUpperCase() === "WORK")
+    : [];
+  const plannedStrengthWorkout = plannedStrengthRows.length
+    ? { date, rows: plannedStrengthRows.map(row => [row.type, row.exercise, row.setNo, row.plannedKg, row.plannedReps]) }
+    : null;
+  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "google-sheet/d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } };
   context.nutrition = buildNutritionPlan(context);
   return context;
 }
