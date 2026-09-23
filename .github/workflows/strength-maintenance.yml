@@ -2,6 +2,9 @@ name: Strength sheet maintenance
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/strength-maintenance.yml"
   schedule:
     - cron: "*/15 * * * *"
 
