@@ -77,6 +77,7 @@ function demoTool(name,args){
  if(name==="recommendNutrition")return{status:"ok",demo:true,remaining:{},suggestions:[]};
  if(name==="resolveFood")return{status:"ok",demo:true,match:"package_label",product:{name:args.name||"Demo food",calories_100g:args.calories_100g||100,protein_100g:args.protein_100g||10,carbs_100g:args.carbs_100g||10,fat_100g:args.fat_100g||2}};
  if(name==="getFoodProduct")return{status:"ok",demo:true,product:null};
+ if(name==="getFoodFavorites")return{status:"ok",demo:true,foods:[]};
  if(name==="logFoodProduct")return{status:"ok",demo:true,id:1,grams:args.grams||null};
  if(name==="consumePlannedFood")return{status:"ok",demo:true,mode:"promoted",id:args.id||1};
  if(name==="updateFoodEntry")return{status:"ok",demo:true,id:args.id||1};
