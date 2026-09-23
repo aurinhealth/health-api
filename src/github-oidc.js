@@ -32,7 +32,11 @@ export async function verifyGitHubActionsToken(request) {
   if (claims.repository_visibility !== "private") throw new Error("Invalid GitHub Actions repository visibility");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
   if (!EXPECTED_WORKFLOWS.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
-  if (claims.event_name !== "push") throw new Error("Invalid GitHub Actions event");
+  const scheduledWorkflow = claims.workflow_ref === "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main"
+    || claims.workflow_ref === "shaarkyn/health-api/.github/workflows/strength-maintenance.yml@refs/heads/main";
+  if (claims.event_name !== "push" && !(scheduledWorkflow && claims.event_name === "schedule")) {
+    throw new Error("Invalid GitHub Actions event");
+  }
   if (claims.actor !== "shaarkyn") throw new Error("Invalid GitHub Actions actor");
   if (!Number.isFinite(claims.exp) || claims.exp <= now) throw new Error("Expired GitHub Actions token");
   if (Number.isFinite(claims.nbf) && claims.nbf > now + 60) throw new Error("GitHub Actions token is not active yet");
