@@ -66,6 +66,13 @@ jobs:
           product="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/food/product?barcode=4056489918325")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert d.get("product") or d.get("products"),d' <<< "$product"
 
+      - name: Smoke test daily plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/daily/plan")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert "training" in d and "nutrition" in d and "food" in d and "meals" in d' <<< "$plan"
+
       - name: Smoke test MCP endpoint
         shell: bash
         run: |
