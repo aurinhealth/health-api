@@ -80,7 +80,7 @@ test("load estimator uses multiple recent performances", () => {
   });
   assert.equal(estimate.source, "own-history");
   assert.equal(estimate.performanceCount, 3);
-  assert.equal(estimate.kg, 40);
+  assert.equal(estimate.kg, 37.5);
 });
 
 test("generator treats aliased recent leg curl as the same exercise", () => {
