@@ -340,3 +340,23 @@ test("nutrition plan increases daily target when a strength plan is present", ()
   assert.ok(withGym.calorieTarget > base.calorieTarget);
   assert.equal(withGym.macros.proteinGrams, 176);
 });
+
+
+import { estimateEventCalories } from "../src/intervals-calories.js";
+
+test("planned cycling workout gets a calorie estimate", () => {
+  const kcal = estimateEventCalories({
+    type: "Ride",
+    moving_time: 3600,
+    icu_intensity: 0.75
+  }, { weightKg: 88, ftp: 260 });
+  assert.ok(kcal > 0);
+});
+
+test("planned strength workout gets a calorie estimate", () => {
+  const kcal = estimateEventCalories({
+    type: "WeightTraining",
+    moving_time: 3600
+  }, { weightKg: 88 });
+  assert.ok(kcal > 0);
+});
