@@ -1,5 +1,6 @@
 import { estimateStartingLoad, resolveLoad } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { isIntensity } from "./strength-context.js";
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -76,11 +77,16 @@ function recoveryFactor(context) {
   let factor = 1;
   if (recentTss >= 900) factor *= 0.90; else if (recentTss >= 750) factor *= 0.94; else if (recentTss >= 600) factor *= 0.97;
   if (recentHours >= 12) factor *= 0.96; else if (recentHours >= 9) factor *= 0.98;
-  const intensityCount = recent.slice(0, 4).filter(x => x.intensity || /(threshold|tempo|sweet spot|vo2|interval)/i.test(String(x.name || ""))).length;
+  const intensityCount = recent.slice(0, 4).filter(isIntensity).length;
   if (intensityCount >= 3) factor *= 0.94; else if (intensityCount >= 2) factor *= 0.97;
-  const next = context?.cycling?.nextRide, nextName = String(next?.name || "");
-  const nextHard = !!next?.intensity || /(threshold|tempo|sweet spot|vo2|interval)/i.test(nextName), nextLong = (num(next?.durationHours) || 0) >= 2.5;
+  const next = context?.cycling?.nextRide;
+  const nextHard = isIntensity(next), nextLong = (num(next?.durationHours) || 0) >= 2.5;
+  const upcoming = Array.isArray(context?.cycling?.plannedWorkouts) ? context.cycling.plannedWorkouts.slice(0, 3) : [];
+  const upcomingHard = upcoming.filter(isIntensity).length;
+  const upcomingLong = upcoming.filter(x => (num(x?.durationHours) || 0) >= 2.5).length;
   if (nextHard) factor *= 0.96; if (nextLong) factor *= 0.97;
+  if (upcomingHard >= 2) factor *= 0.96;
+  if (upcomingLong >= 2) factor *= 0.97;
   if (signals.sleepMin != null) { if (signals.sleepMin < 330) factor *= 0.94; else if (signals.sleepMin < 390) factor *= 0.98; }
   if (signals.hrv != null && signals.hrv < 90) factor *= 0.97;
   if (signals.restingHr != null && signals.restingHr >= 55) factor *= 0.97;
@@ -88,13 +94,27 @@ function recoveryFactor(context) {
 }
 function cyclingLegStress(context) {
   const recentTss = num(context?.cycling?.recentRideTss) || 0, recent = context?.cycling?.recentActivities || [], next = context?.cycling?.nextRide;
-  const nextName = String(next?.name || "");
   let stress = clamp(recentTss / 800, 0, 1.2);
   const last48h = recent.slice(0, 3).reduce((sum, x) => sum + (num(x.tss) || 0), 0);
   stress += clamp(last48h / 450, 0, 0.8) * 0.35;
-  if (next?.intensity || /(threshold|tempo|sweet spot|vo2|interval)/i.test(nextName)) stress += 0.25;
+  if (isIntensity(next)) stress += 0.25;
   if ((num(next?.durationHours) || 0) >= 2.5) stress += 0.2;
+  const upcoming = Array.isArray(context?.cycling?.plannedWorkouts) ? context.cycling.plannedWorkouts.slice(0, 3) : [];
+  stress += Math.min(0.3, upcoming.filter(isIntensity).length * 0.1);
+  stress += Math.min(0.2, upcoming.filter(x => (num(x?.durationHours) || 0) >= 2.5).length * 0.1);
   return clamp(stress, 0, 1.5);
+}
+function recentMuscleExposure(history, contextDate) {
+  const exposure = new Map();
+  for (const row of history || []) {
+    const def = EXERCISES[normalizeExerciseName(row.exercise)];
+    if (!def || String(row.type || "WORK").toUpperCase() !== "WORK") continue;
+    const age = daysBetween(row.workout_date, contextDate);
+    if (age > 7) continue;
+    const sets = Math.max(1, num(row.set_no) || 1);
+    exposure.set(def.muscle, (exposure.get(def.muscle) || 0) + 1);
+  }
+  return exposure;
 }
 function recentMuscleLoad(history, contextDate) {
   const load = new Map();
@@ -110,14 +130,17 @@ function choosePlan(context, options = {}) {
   const history = context?.strength?.recentCompletedSets || [];
   const legStress = cyclingLegStress(context);
   const muscleLoad = recentMuscleLoad(history, context.date);
+  const muscleExposure = recentMuscleExposure(history, context.date);
   const dates = completedWorkoutDates(history);
   const recentWorkoutCount = dates.filter(d => daysBetween(d, context.date) <= 10).length;
   const recentTss = num(context?.cycling?.recentRideTss) || 0;
   const next = context?.cycling?.nextRide;
-  const nextName = String(next?.name || "");
-  const nextHard = !!next?.intensity || /(threshold|tempo|sweet spot|vo2|interval)/i.test(nextName);
+  const nextHard = isIntensity(next);
   const nextLong = (num(next?.durationHours) || 0) >= 2.5;
-  const protectLegs = legStress >= 0.85 || nextHard || nextLong;
+  const planned = Array.isArray(context?.cycling?.plannedWorkouts) ? context.cycling.plannedWorkouts.slice(0, 3) : [];
+  const upcomingHard = planned.filter(isIntensity).length;
+  const upcomingLong = planned.filter(x => (num(x?.durationHours) || 0) >= 2.5).length;
+  const protectLegs = legStress >= 0.85 || nextHard || nextLong || upcomingHard >= 2 || upcomingLong >= 2;
 
   const lastExerciseDate = new Map();
   for (const row of history) {
@@ -131,6 +154,10 @@ function choosePlan(context, options = {}) {
   const notRecent = ex => {
     const d = lastExerciseDate.get(ex);
     return !d || daysBetween(d, context.date) >= 5;
+  };
+  const muscleNotRecentlyExposed = ex => {
+    const muscle = EXERCISES[ex]?.muscle;
+    return !muscle || !(muscleExposure.get(muscle) > 0);
   };
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
@@ -156,9 +183,11 @@ function choosePlan(context, options = {}) {
     return candidates
       .filter(ex => !used.has(ex) && notRecent(ex))
       .sort((a, b) => {
+        const freshA = muscleNotRecentlyExposed(a) ? 0 : 1;
+        const freshB = muscleNotRecentlyExposed(b) ? 0 : 1;
         const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
         const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
-        return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
+        return freshA - freshB || loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
       })[0] || candidates.find(ex => !used.has(ex));
   }
 
@@ -203,6 +232,7 @@ function choosePlan(context, options = {}) {
     return {
       name: "Upper Body",
       exercises,
+      muscleExposure: Object.fromEntries(muscleExposure),
       rationale: forceUpper
         ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
         : (recentTss >= 700 || nextHard || nextLong
@@ -230,6 +260,7 @@ function choosePlan(context, options = {}) {
     return {
       name: "Lower Body",
       exercises: exercises.length ? exercises : ["Pivot leg press", "Prone leg curl Prime"],
+      muscleExposure: Object.fromEntries(muscleExposure),
       rationale: "Požadavek uživatele soustředí trénink na dolní část těla; skladba nejprve zajišťuje různé pohybové vzory a teprve potom vybírá podle čerstvosti a nedávné svalové zátěže.",
       protectedLegs: false,
       recentWorkoutCount,
@@ -248,6 +279,7 @@ function choosePlan(context, options = {}) {
   return {
     name: "Full Body",
     exercises: [leg, ...upper].filter(Boolean),
+    muscleExposure: Object.fromEntries(muscleExposure),
     rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; výběr cviků zohledňuje nedávnou svalovou zátěž a čerstvost jednotlivých cviků.",
     protectedLegs: false,
     recentWorkoutCount,
