@@ -189,7 +189,7 @@ test("generator protects legs when multiple hard rides are upcoming", () => {
   assert.equal(plan.protectedLegs, true);
   assert.equal(plan.planName, "Upper Body");
   assert.ok(plan.rows.length > 0);
-  assert.ok(!plan.loadEstimates.some(x => ["quads", "hamstrings", "glutes"].includes(x.muscle)));
+  assert.ok(!plan.loadEstimates.some(x => ["Pivot leg press", "Pendulum squat", "Prone leg curl Prime", "Hip thrust", "DB Romanian deadlift", "DB Bulgarian split squat", "Leg extension Prime"].includes(x.exercise)));
 });
 
 test("lower-body plan includes a unilateral movement when fresh", () => {
