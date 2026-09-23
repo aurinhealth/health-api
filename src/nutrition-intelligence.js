@@ -2,14 +2,18 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 
 export const NUTRITION_DEFAULTS = {
-  maintenanceCalories: 1993,
-  calorieTarget: 2000,
+  maintenanceCalories: 2500,
+  calorieTarget: 2250,
+  restCalorieTarget: 2250,
+  targetLossKgPerWeekMin: 0.25,
+  targetLossKgPerWeekMax: 0.50,
   proteinGrams: 176,
   proteinPerKg: 2.0,
   carbPerKgEasy: 2.0,
   carbPerKgHard: 3.0,
   carbPerKgLong: 3.5,
   trainingCalorieCoverage: 0.7,
+  maxTrainingAdjustment: 1400,
   fatMinimumPerKg: 0.7,
   rideFuelingThresholdHours: 1.5,
   rideCarbsPerHourEasy: 60,
@@ -105,10 +109,11 @@ export function buildNutritionPlan(context, options = {}) {
   // return only part of the estimated training expenditure, keeping a deficit
   // while providing enough energy to support the session. Ride fueling is part
   // of this same daily target, never an extra allowance on top of it.
-  const trainingAdjustment = Math.round(planningTrainingCalories * defaults.trainingCalorieCoverage);
+  const rawTrainingAdjustment = Math.round(planningTrainingCalories * defaults.trainingCalorieCoverage);
+  const trainingAdjustment = Math.min(defaults.maxTrainingAdjustment, rawTrainingAdjustment);
   const adjustedCalorieTarget = Math.max(
     calorieTarget,
-    defaults.calorieTarget + trainingAdjustment
+    defaults.restCalorieTarget + trainingAdjustment
   );
   const adjustedCarbsFromCalories = Math.max(
     dailyCarbs,
@@ -121,6 +126,11 @@ export function buildNutritionPlan(context, options = {}) {
     dayType,
     calorieTarget: adjustedCalorieTarget,
     maintenanceReference: defaults.maintenanceCalories,
+    reductionTarget: {
+      minLossKgPerWeek: defaults.targetLossKgPerWeekMin,
+      maxLossKgPerWeek: defaults.targetLossKgPerWeekMax,
+      strategy: "Target a 0.25–0.50 kg/week trend and adjust from rolling weight trend over time"
+    },
     training: {
       strengthMinutes,
       strengthCalories,
