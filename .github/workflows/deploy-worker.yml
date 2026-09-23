@@ -56,6 +56,16 @@ jobs:
           body="$(curl -fsS -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "{\"action\":\"generate\",\"date\":\"$date_value\",\"preview\":true}"             "https://health-api.chelseafc-czsk.workers.dev/automation/strength")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert d.get("preview") is True, d; p=d.get("plan") or {}; assert p.get("rows"), p; assert p.get("loadEstimates") is not None, p' <<< "$body"
 
+      - name: Smoke test food resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          body='{"name":"Milbona High Protein Pudding","brand":"Milbona","calories_100g":81,"protein_100g":10,"carbs_100g":6.4,"fat_100g":1.6,"fiber_100g":0.7,"salt_100g":0.28}'
+          resolved="$(curl -fsS -X POST -H "Content-Type: application/json" --data "$body" "https://health-api.chelseafc-czsk.workers.dev/food/resolve")"
+          python -c 'import json,sys; d=json.load(sys.stdin); p=d.get("product") or {}; assert d.get("status")=="ok",d; assert d.get("match")=="package_label",d; assert p.get("calories_100g")==81,p; assert p.get("protein_100g")==10,p; assert p.get("fiber_100g")==0.7,p; assert p.get("salt_100g")==0.28,p' <<< "$resolved"
+          product="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/food/product?barcode=4056489918325")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert d.get("product") or d.get("products"),d' <<< "$product"
+
       - name: Smoke test MCP endpoint
         shell: bash
         run: |
@@ -65,4 +75,4 @@ jobs:
           discover="$(curl -fsS -X POST -H "Authorization: Bearer health-strength-demo-2026" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2026-07-28" -H "Mcp-Method: server/discover" --data '{"jsonrpc":"2.0","id":3,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"ci-smoke-test","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}' "https://health-api.chelseafc-czsk.workers.dev/mcp")"
           python -c 'import json,sys; d=json.load(sys.stdin); r=d["result"]; assert r["resultType"]=="complete"; assert "2026-07-28" in r["supportedVersions"]; assert r["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]=="health-api-strength-coach"' <<< "$discover"
           tools="$(curl -fsS -X POST -H "Authorization: Bearer health-strength-demo-2026" -H "Content-Type: application/json" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' "https://health-api.chelseafc-czsk.workers.dev/mcp")"
-          python -c 'import json,sys; d=json.load(sys.stdin); names={x["name"] for x in d["result"]["tools"]}; assert "generateStrengthPlan" in names and "syncStrengthSheet" in names' <<< "$tools"
+          python -c 'import json,sys; d=json.load(sys.stdin); names={x["name"] for x in d["result"]["tools"]}; assert "generateStrengthPlan" in names and "syncStrengthSheet" in names and "resolveFood" in names and "consumePlannedFood" in names and "updateFoodEntry" in names and "cancelFoodEntry" in names' <<< "$tools"
