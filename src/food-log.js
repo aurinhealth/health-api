@@ -163,11 +163,11 @@ export async function consumePlannedFood(db, input = {}) {
   const result=await db.prepare("UPDATE food_log SET servings=?, calories=?, protein_g=?, carbs_g=?, fat_g=?, fiber_g=?, salt_g=? WHERE id=?").bind(
     remaining,
     n(row.calories,0)* (1-factor), n(row.protein_g,0)*(1-factor), n(row.carbs_g,0)*(1-factor), n(row.fat_g,0)*(1-factor),
-    row.fiber_g==null?null:n(row.fiber_g,0)*(1-factor), row.salt_g==null?null:n(row.salt_g,0)*(1-factor), id
+    row.fiber_g==null?null:n(row.fiber_g,0)*(1-factor), row.salt_g==null?null:n(row.salt_g,0)*(1-factor), row.amount_g==null?null:n(row.amount_g,0)*(1-factor), id
   ).run();
   const per={calories:n(row.calories,0)*factor,protein_g:n(row.protein_g,0)*factor,carbs_g:n(row.carbs_g,0)*factor,fat_g:n(row.fat_g,0)*factor,fiber_g:row.fiber_g==null?null:n(row.fiber_g,0)*factor,salt_g:row.salt_g==null?null:n(row.salt_g,0)*factor};
   const ins=await db.prepare("INSERT INTO food_log (date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,fiber_g,salt_g,amount_g,brand,barcode,status,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(
-    row.date,row.meal_time,row.meal_type,row.recipe_page,row.recipe_name,row.cookbook_page,requested,per.calories,per.protein_g,per.carbs_g,per.fat_g,per.fiber_g,per.salt_g,row.amount_g,row.brand,row.barcode,"eaten",row.source,row.note
+    row.date,row.meal_time,row.meal_type,row.recipe_page,row.recipe_name,row.cookbook_page,requested,per.calories,per.protein_g,per.carbs_g,per.fat_g,per.fiber_g,per.salt_g,row.amount_g==null?null:n(row.amount_g,0)*factor,row.brand,row.barcode,"eaten",row.source,row.note
   ).run();
   return {status:"ok",mode:"split",plannedId:id,consumedId:ins.meta?.last_row_id??null,remainingPlannedServings:remaining};
 }
