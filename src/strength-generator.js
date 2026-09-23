@@ -182,7 +182,7 @@ function choosePlan(context, options = {}) {
     const candidates = candidatesByPattern[pattern] || [];
     const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
     const fresh = eligible.filter(muscleNotRecentlyExposed);
-    const pool = fresh.length ? fresh : (eligible.length ? eligible : []);
+    const pool = fresh;
     return pool.sort((a, b) => {
       const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
       const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
