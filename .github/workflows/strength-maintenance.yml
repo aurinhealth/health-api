@@ -1,5 +1,5 @@
 name: Strength sheet maintenance
-# Maintenance verification after OIDC authorization
+# Maintenance verification after scheduled OIDC authorization
 
 on:
   workflow_dispatch:
