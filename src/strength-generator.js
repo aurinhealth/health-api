@@ -355,6 +355,7 @@ export function generateStrengthPlan(context, options = {}) {
 
   const rows = [], loadEstimates = [];
   const muscleLoad = recentMuscleLoad(history, context.date);
+  const volumeModifier = Number(context?.adaptive?.strengthVolumeModifier) || 1;
   for (const exercise of exercises) {
     const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier);
     rows.push(...warmupRows(exercise, work.kg), ...work.rows);
