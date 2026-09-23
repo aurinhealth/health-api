@@ -37,8 +37,8 @@ export function estimateEventCalories(event, options = {}) {
 
 function withCalories(description, calories) {
   const marker = "Estimated calories:";
-  const base = String(description || "").replace(/^Estimated calories:\s*\d+\s*kcal\s*\n?/i, "").trim();
-  return `${marker} ${calories} kcal\n\n${base}`.trim();
+  const base = String(description || "").replace(/\n?Estimated calories:\s*\d+\s*kcal\s*$/i, "").trim();
+  return [base, `${marker} ${calories} kcal`].filter(Boolean).join("\n\n");
 }
 
 export async function syncPlannedEventCalories(env, options = {}) {
