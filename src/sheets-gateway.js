@@ -9,7 +9,7 @@ import { buildNutritionPlan } from "./nutrition-intelligence.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { completedRowsAreSynced } from "./strength-sync-guard.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
-import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveAndCacheFood, lookupCachedFood, logResolvedFood } from "./food-log.js";
+import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveAndCacheFood, lookupCachedFood, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry } from "./food-log.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -47,6 +47,9 @@ export default {
     if (url.pathname === "/food/resolve" && request.method === "POST") return foodResolveRoute(env, request);
     if (url.pathname === "/food/product" && request.method === "GET") return foodProductRoute(env, url);
     if (url.pathname === "/nutrition/log-product" && request.method === "POST") return logProductRoute(env, request);
+    if (url.pathname === "/nutrition/consume" && request.method === "POST") return consumeFoodRoute(env, request);
+    if (url.pathname === "/nutrition/food/update" && request.method === "POST") return updateFoodRoute(env, request);
+    if (url.pathname === "/nutrition/food/cancel" && request.method === "POST") return cancelFoodRoute(env, request);
     if (url.pathname === "/cycling/context" && request.method === "GET") return cyclingContextRoute(env, url);
     return app.fetch(request, env, ctx);
   }
@@ -470,6 +473,21 @@ async function foodProductRoute(env, url) {
 async function logProductRoute(env, request) {
   try { return Response.json(await logResolvedFood(env.DB, await request.json().catch(()=>({})))); }
   catch (error) { return Response.json({ status:"error", step:"nutrition_log_product", message:error.message }, { status:400 }); }
+}
+
+async function consumeFoodRoute(env, request) {
+  try { return Response.json(await consumePlannedFood(env.DB, await request.json().catch(()=>({})))); }
+  catch (error) { return Response.json({ status:"error", step:"nutrition_consume", message:error.message }, { status:400 }); }
+}
+async function updateFoodRoute(env, request) {
+  try { return Response.json(await updateFoodEntry(env.DB, await request.json().catch(()=>({})))); }
+  catch (error) { return Response.json({ status:"error", step:"nutrition_food_update", message:error.message }, { status:400 }); }
+}
+async function cancelFoodRoute(env, request) {
+  try {
+    const body=await request.json().catch(()=>({}));
+    return Response.json(await cancelFoodEntry(env.DB, body.id));
+  } catch (error) { return Response.json({ status:"error", step:"nutrition_food_cancel", message:error.message }, { status:400 }); }
 }
 
 async function substituteRoute(env, request) {
