@@ -9,7 +9,7 @@ export const NUTRITION_DEFAULTS = {
   carbPerKgEasy: 2.0,
   carbPerKgHard: 3.0,
   carbPerKgLong: 3.5,
-  strengthCalorieCoverage: 0.5,
+  trainingCalorieCoverage: 0.7,
   fatMinimumPerKg: 0.7,
   rideFuelingThresholdHours: 1.5,
   rideCarbsPerHourEasy: 60,
@@ -34,6 +34,18 @@ function classifyDay(context) {
 
 function recentActivityCalories(context) {
   return (context?.cycling?.recentActivities || []).slice(0, 3).reduce((sum, a) => sum + n(a.calories), 0);
+}
+
+function estimatePlannedRideCalories(ride) {
+  if (!ride) return 0;
+  const hours = n(ride.durationHours);
+  if (!hours) return 0;
+  const watts = n(ride.normalizedPower || ride.averagePower);
+  const ftp = 260;
+  if (watts > 0) return Math.round((watts * hours * 3600 / 4184) / 0.23);
+  // Practical planning estimate for an 88 kg rider when future power is absent.
+  const kcalPerHour = ride.intensity ? 600 : 500;
+  return Math.round(hours * kcalPerHour);
 }
 
 function estimateStrengthMinutes(plan) {
@@ -83,14 +95,20 @@ export function buildNutritionPlan(context, options = {}) {
   const cyclingTrainingCalories = Math.round((context?.cycling?.recentActivities || [])
     .filter(a => String(a.date || "") === String(context.date || ""))
     .reduce((sum, a) => sum + n(a.calories), 0));
-  const trainingCalories = strengthCalories + cyclingTrainingCalories;
-  // Do not "eat back" the full training expenditure. The goal is a controlled
-  // weekly deficit while still supporting performance and recovery.
-  // Planned ride fueling is treated separately because those carbs are performance fuel.
-  const trainingAdjustment = Math.round(strengthCalories * defaults.strengthCalorieCoverage);
+  const completedCyclingCalories = cyclingTrainingCalories;
+  const plannedCyclingCalories = next && !context?.cycling?.recentActivities?.some(a => String(a.date || "") === String(context.date || ""))
+    ? estimatePlannedRideCalories(next)
+    : 0;
+  const trainingCalories = strengthCalories + completedCyclingCalories;
+  const planningTrainingCalories = strengthCalories + completedCyclingCalories + plannedCyclingCalories;
+  // Base intake is the user's chosen reduction baseline. On training days we
+  // return only part of the estimated training expenditure, keeping a deficit
+  // while providing enough energy to support the session. Ride fueling is part
+  // of this same daily target, never an extra allowance on top of it.
+  const trainingAdjustment = Math.round(planningTrainingCalories * defaults.trainingCalorieCoverage);
   const adjustedCalorieTarget = Math.max(
     calorieTarget,
-    defaults.calorieTarget + trainingAdjustment + fuelingCalories
+    defaults.calorieTarget + trainingAdjustment
   );
   const adjustedCarbsFromCalories = Math.max(
     dailyCarbs,
@@ -106,9 +124,11 @@ export function buildNutritionPlan(context, options = {}) {
     training: {
       strengthMinutes,
       strengthCalories,
-      cyclingTrainingCalories,
+      cyclingTrainingCalories: completedCyclingCalories,
+      plannedCyclingCalories,
       estimatedTrainingCalories: trainingCalories,
-      estimateMethod: "strength: 5 MET resistance-training estimate; cycling: observed calories when available"
+      plannedTrainingCalories: planningTrainingCalories,
+      estimateMethod: "strength: 5 MET resistance-training estimate; cycling: observed calories when available or planned-power/500–600 kcal/h estimate"
     },
     macros: { proteinGrams: protein, carbsGrams: adjustedCarbsFromCalories, fatGrams: fatFromMacros, caloriesFromMacros: finalCaloriesFromMacros },
     fueling: {
