@@ -8,6 +8,7 @@ import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./streng
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
 import { buildAdaptiveDecision } from "./adaptive-engine.js";
 import { buildWeeklyReview } from "./weekly-review.js";
+import { buildDailyPlan } from "./daily-plan.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { completedRowsAreSynced } from "./strength-sync-guard.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
@@ -47,6 +48,7 @@ export default {
     if (url.pathname === "/nutrition/day" && request.method === "GET") return nutritionDayRoute(env, url);
     if (url.pathname === "/nutrition/recommend" && request.method === "POST") return nutritionRecommendRoute(env, request);
     if (url.pathname === "/decision/daily" && request.method === "POST") return dailyDecisionRoute(env, request);
+    if (url.pathname === "/daily/plan" && request.method === "GET") return dailyPlanRoute(env, url);
     if (url.pathname === "/training/weekly-review" && request.method === "GET") return weeklyReviewRoute(env, url);
     if (url.pathname === "/food/resolve" && request.method === "POST") return foodResolveRoute(env, request);
     if (url.pathname === "/food/product" && request.method === "GET") return foodProductRoute(env, url);
@@ -466,6 +468,16 @@ async function dailyDecisionRoute(env, request) {
     const food=await getFoodDay(env.DB,context.date);
     return Response.json({...buildAdaptiveDecision(context,{...food,nutritionTarget:plan}),nutrition:plan,food});
   } catch(error) { return Response.json({status:"error",step:"daily_decision",message:error.message},{status:500}); }
+}
+async function dailyPlanRoute(env,url) {
+  try {
+    const date=String(url.searchParams.get("date")||"").trim()||null;
+    const context=await buildStrengthContext(env,date);
+    const nutrition=buildNutritionPlan(context,{weightTrend:context.weightTrend});
+    const food=await getFoodDay(env.DB,context.date);
+    const recommendations=recommendFood({day:context.date,nutritionPlan:nutrition,entries:food});
+    return Response.json(buildDailyPlan({context,nutrition,food,recommendations}));
+  } catch(error) { return Response.json({status:"error",step:"daily_plan",message:error.message},{status:500}); }
 }
 async function weeklyReviewRoute(env,url) {
   try {
