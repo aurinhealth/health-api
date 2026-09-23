@@ -5,7 +5,8 @@ const EXPECTED_REPOSITORY = "shaarkyn/health-api";
 const EXPECTED_WORKFLOWS = new Set([
   "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main",
   "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main",
-  "shaarkyn/health-api/.github/workflows/nutrition.yml@refs/heads/main"
+  "shaarkyn/health-api/.github/workflows/nutrition.yml@refs/heads/main",
+  "shaarkyn/health-api/.github/workflows/strength-maintenance.yml@refs/heads/main"
 ]);
 
 let cachedJwks = null;
