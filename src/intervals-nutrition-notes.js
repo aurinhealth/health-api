@@ -1,9 +1,10 @@
 import { buildStrengthContext } from "./strength-context.js";
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
+import { getFoodDay, recommendFood } from "./food-log.js";
 const BASE_URL = "https://intervals.icu/api/v1";
 const auth = env => "Basic " + btoa("API_KEY:" + env.INTERVALS_API_KEY);
 const addDays = (date, days) => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate()+days); return d.toISOString().slice(0,10); };
-function note(date,n){
+function note(date,n,food){
   const f=n.fueling?.plannedRide;
   return [
     "Daily nutrition target — Health & Strength","",
@@ -17,7 +18,7 @@ function note(date,n){
     n.training.cyclingTrainingCalories ? `Cycling: ~${n.training.cyclingTrainingCalories} kcal` : "",
     f ? `Ride fueling: ${f.carbsDuringRideGrams} g during (${f.carbsPerHourGrams} g/h), ~${f.fluidMl} ml fluid` : "",
     f?.preRideCarbsGrams ? `Pre-ride carbs: ~${f.preRideCarbsGrams} g` : "",
-    "",`Day type: ${n.dayType}`
+    "",`Day type: ${n.dayType}`, `Food eaten: ${food?.totals?.eaten?.calories ?? 0} kcal / ${food?.totals?.eaten?.protein_g ?? 0} g protein`, `Food remaining: ${food?.recommendations?.remaining?.calories ?? 0} kcal / ${food?.recommendations?.remaining?.protein_g ?? 0} g protein`, food?.recommendations?.suggestions?.[0]?.suggestion ? `Food recommendation: ${food.recommendations.suggestions[0].suggestion}` : ""
   ].filter(Boolean).join("\n");
 }
 export async function syncDailyNutritionNotes(env, options={}){
@@ -28,7 +29,9 @@ export async function syncDailyNutritionNotes(env, options={}){
     const context=await buildStrengthContext(env,date);
     if(context.status!=="ok") throw new Error(`Strength context not ready for ${date}`);
     const nutrition=buildNutritionPlan(context,{weightKg});
-    events.push({external_id:`health-nutrition-${date}`,category:"NOTE",start_date_local:`${date}T00:00:00`,name:`Nutrition — ${date}`,description:note(date,nutrition)});
+    const foodDay=await getFoodDay(env.DB,date);
+    const food={...foodDay,recommendations:recommendFood({day:date,nutritionPlan:nutrition,entries:foodDay})};
+    events.push({external_id:`health-nutrition-${date}`,category:"NOTE",start_date_local:`${date}T00:00:00`,name:`Nutrition — ${date}`,description:note(date,nutrition,food)});
     date=addDays(date,1);
   }
   const results=[];
