@@ -203,11 +203,47 @@ export async function getFoodDay(db,date) {
   return {status:"ok",date:day,entries:all,totals:{eaten:sum(eaten),planned:sum(planned),all:sum(all.filter(r=>r.status!=="cancelled"))}};
 }
 export function recommendFood({day,nutritionPlan,entries}) {
-  const target=nutritionPlan||{},eaten=entries?.totals?.eaten||{};
-  const remaining={calories:Math.max(0,n(target.calorieTarget,0)-n(eaten.calories,0)),protein_g:Math.max(0,n(target.macros?.proteinGrams,0)-n(eaten.protein_g,0)),carbs_g:Math.max(0,n(target.macros?.carbsGrams,0)-n(eaten.carbs_g,0)),fat_g:Math.max(0,n(target.macros?.fatGrams,0)-n(eaten.fat_g,0))};
+  const target=nutritionPlan||{};
+  const eaten=entries?.totals?.eaten||{};
+  const remaining=remainingNutrition(target,eaten);
+  const planned=(entries?.entries||[]).filter(r=>r.status==="planned");
+  const plannedFoodOptions=planned.map(r=>{
+    const ratio=Math.max(0.01,n(r.servings,1));
+    const kcal=n(r.calories,0), protein=n(r.protein_g,0), carbs=n(r.carbs_g,0), fat=n(r.fat_g,0);
+    const proteinFit=Math.min(protein/Math.max(remaining.protein_g,1),1);
+    const calorieFit=Math.min(kcal/Math.max(remaining.calories,1),1);
+    const overshoot=Math.max(0,kcal-remaining.calories);
+    const score=(proteinFit*0.55)+(calorieFit*0.25)+(remaining.calories>0?Math.max(0,1-overshoot/Math.max(remaining.calories,1))*0.20:0);
+    return {id:r.id,name:r.recipe_name,servings:r.servings,calories:kcal,protein_g:protein,carbs_g:carbs,fat_g:fat,score:Number(score.toFixed(3)),mealType:r.meal_type,mealTime:r.meal_time};
+  }).sort((a,b)=>b.score-a.score);
   const suggestions=[];
-  if(remaining.protein_g>=30)suggestions.push({reason:"protein_remaining",suggestion:"Doplň hlavně bílkoviny; vhodná je porce libového masa, skyr/tvaroh nebo proteinový nápoj podle toho, co máš k dispozici."});
-  if(remaining.carbs_g>=60 && n(target?.training?.plannedCyclingCalories,0)>0)suggestions.push({reason:"cycling_carbs_remaining",suggestion:"Po plánovaném kole je vhodné doplnit sacharidy; přednostně jídlem z kuchařky nebo snadno dostupnou rýží, pečivem či ovocem."});
-  if(!suggestions.length)suggestions.push({reason:"balanced_remaining",suggestion:"Zbývá prostor pro jídlo podle zbývajících kalorií a makroživin."});
-  return {status:"ok",day,remaining,suggestions};
+  const completedRide=n(target.training?.cyclingTrainingCalories,0)>0;
+  const longRide=!!target.fueling?.plannedRide && n(target.fueling.plannedRide.durationHours,0)>=1.5;
+
+  if(plannedFoodOptions.length) {
+    const pick=plannedFoodOptions[0];
+    suggestions.push({
+      reason:"use_planned_food",
+      suggestion:`Máš naplánované jídlo „${pick.name}“ — ${pick.servings} porcí. Z hlediska dnešního zbývajícího příjmu dává smysl začít jím.`,
+      food:pick
+    });
+  }
+  if(completedRide && remaining.protein_g>=25) {
+    suggestions.push({
+      reason:"post_ride_recovery",
+      suggestion:"Po dokončeném kole máš stále prostor hlavně na bílkoviny; dej přednost normálnímu jídlu s kvalitním zdrojem bílkovin a podle délky/intenzity kola i sacharidům."
+    });
+  } else if(longRide && remaining.carbs_g>=60) {
+    suggestions.push({
+      reason:"ride_carbs",
+      suggestion:"Na delší plánované kolo je vhodné mít dostatek sacharidů; přednostně je pokryj jídlem, které už máš naplánované, případně rýží, pečivem, bramborami nebo ovocem."
+    });
+  }
+  if(remaining.protein_g>=30 && !plannedFoodOptions.length)
+    suggestions.push({reason:"protein_remaining",suggestion:"Chybí ti významná část bílkovin; vhodný je skyr/tvaroh, libové maso, vejce nebo proteinový nápoj podle dostupnosti."});
+  if(remaining.calories<=150)
+    suggestions.push({reason:"target_nearby",suggestion:"Jsi blízko dnešního kalorického cíle; další jídlo drž spíše malé a podle zbývajících makroživin."});
+  if(!suggestions.length)
+    suggestions.push({reason:"balanced_remaining",suggestion:"Zbývá prostor pro jídlo podle zbývajících kalorií a makroživin."});
+  return {status:"ok",day,remaining,plannedFoodOptions,suggestions};
 }
