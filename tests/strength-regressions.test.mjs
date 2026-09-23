@@ -237,3 +237,56 @@ test("generated plan survives sheet serialization round-trip", () => {
     workRows.map(row => row[1])
   );
 });
+
+
+test("generator prefers muscles without completed work in the last 7 days", () => {
+  const plan = generateStrengthPlan({
+    status: "ok",
+    date: "2026-09-23",
+    cycling: {
+      recentRideHours: 2,
+      recentRideTss: 100,
+      recentActivities: [],
+      plannedWorkouts: [],
+      nextRide: null
+    },
+    recovery: {},
+    strength: {
+      recentCompletedSets: [
+        { workout_date: "2026-09-21", exercise: "Chest flat press Prime", type: "WORK", completed: 1, actual_kg: 40, actual_reps: 10, rpe: 7, set_no: 1 },
+        { workout_date: "2026-09-21", exercise: "Standing rowing machine", type: "WORK", completed: 1, actual_kg: 40, actual_reps: 10, rpe: 7, set_no: 1 },
+        { workout_date: "2026-09-21", exercise: "DB shoulder press", type: "WORK", completed: 1, actual_kg: 10, actual_reps: 8, rpe: 7, set_no: 1 },
+        { workout_date: "2026-09-21", exercise: "DB curl", type: "WORK", completed: 1, actual_kg: 10, actual_reps: 10, rpe: 7, set_no: 1 },
+        { workout_date: "2026-09-21", exercise: "Cable triceps extension", type: "WORK", completed: 1, actual_kg: 30, actual_reps: 10, rpe: 7, set_no: 1 }
+      ]
+    }
+  }, { focus: "upper", maxExercises: 5 });
+  const work = plan.rows.filter(row => row[0] === "WORK").map(row => row[1]);
+  assert.ok(!work.includes("Chest flat press Prime"));
+  assert.ok(!work.includes("Standing rowing machine"));
+  assert.ok(!work.includes("DB shoulder press"));
+  assert.ok(!work.includes("DB curl"));
+  assert.ok(!work.includes("Cable triceps extension"));
+});
+
+test("generator uses semantic cycling intensity, not workout description keywords", () => {
+  const plan = generateStrengthPlan({
+    status: "ok",
+    date: "2026-09-23",
+    cycling: {
+      recentRideHours: 2,
+      recentRideTss: 100,
+      recentActivities: [],
+      plannedWorkouts: [],
+      nextRide: {
+        name: "Endurance",
+        type: "Ride",
+        intensity: false,
+        description: "structured workout; intensity=interval; cadence drills"
+      }
+    },
+    recovery: {},
+    strength: { recentCompletedSets: [] }
+  }, { maxExercises: 5 });
+  assert.equal(plan.protectedLegs, false);
+});
