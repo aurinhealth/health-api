@@ -111,7 +111,9 @@ export async function logResolvedFood(db, input = {}) {
 export async function logFood(db, input = {}) {
   await ensureFoodLogTable(db);
   const date=text(input.date) || new Date().toISOString().slice(0,10), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
-  const recipe=(input.page != null || input.name) ? await getCookbookRecipe({page:input.page,name:input.name,recipeId:input.recipeId}) : null;
+  const sourceText = text(input.source).toLowerCase();
+  const useCookbook = sourceText === "" || sourceText === "cookbook" || input.page != null || input.recipeId;
+  const recipe = useCookbook && (input.page != null || input.name || input.recipeId) ? await getCookbookRecipe({page:input.page,name:useCookbook ? input.name : null,recipeId:input.recipeId}) : null;
   if (!recipe && input.calories == null && input.protein_g == null && input.carbs_g == null && input.fat_g == null) throw new Error("Recipe not found and no nutrition values were supplied");
   const calories=n(input.calories,recipe?.calories), protein=n(input.protein_g,recipe?.protein_g), carbs=n(input.carbs_g,recipe?.carbs_g), fat=n(input.fat_g,recipe?.fat_g);
   const result=await db.prepare("INSERT INTO food_log (date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,status,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(
