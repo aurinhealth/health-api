@@ -62,3 +62,16 @@ test("recommendation prefers planned food before generic food", () => {
   assert.equal(result.suggestions[0].reason, "use_planned_food");
   assert.equal(result.suggestions.some(x=>x.reason==="post_ride_recovery"), true);
 });
+
+
+test("meal schedule includes training timing and planned food", () => {
+  const result = recommendFood({
+    day:"2026-09-23",
+    nutritionPlan:{calorieTarget:3000,macros:{proteinGrams:176,carbsGrams:350,fatGrams:60},training:{cyclingTrainingCalories:700},fueling:{plannedRide:{durationHours:2,intensity:false}}},
+    entries:{totals:{eaten:{calories:1200,protein_g:90,carbs_g:120,fat_g:20}},entries:[
+      {id:8,status:"planned",recipe_name:"Rice + chicken",servings:1,meal_type:"lunch",meal_time:"12:00",calories:700,protein_g:50,carbs_g:80,fat_g:10}
+    ]}
+  });
+  assert.ok(result.mealSchedule.some(x=>x.phase==="pre_ride"));
+  assert.ok(result.mealSchedule.some(x=>x.food==="Rice + chicken"));
+});
