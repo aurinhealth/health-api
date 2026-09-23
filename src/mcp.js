@@ -20,6 +20,7 @@ export const TOOLS = [
   { name:"recommendNutrition", title:"Recommend what to eat", description:"Compare the daily food log with the adaptive nutrition target and suggest what remains to be covered.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"resolveFood", title:"Resolve food product", description:"Resolve a food from package-label nutrition, barcode, or product name using layered food sources.", inputSchema:{type:"object",properties:{barcode:{type:"string"},name:{type:"string"},brand:{type:"string"},calories_100g:{type:"number"},protein_100g:{type:"number"},carbs_100g:{type:"number"},fat_100g:{type:"number"},serving_size:{type:"string"},limit:{type:"integer",minimum:1,maximum:20}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:true}},
   { name:"getFoodProduct", title:"Get food product", description:"Get a cached/resolved food product by barcode or name.", inputSchema:{type:"object",properties:{barcode:{type:"string"},name:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true}},
+  { name:"getFoodFavorites", title:"Get frequent foods", description:"List frequently eaten foods from the last 60 days for quick reuse and meal planning.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:50}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"logFoodProduct", title:"Log food product", description:"Resolve a food product and log the consumed amount in grams against the daily nutrition log.", inputSchema:{type:"object",properties:{date:{type:"string"},barcode:{type:"string"},name:{type:"string"},brand:{type:"string"},grams:{type:"number"},calories_100g:{type:"number"},protein_100g:{type:"number"},carbs_100g:{type:"number"},fat_100g:{type:"number"},mealTime:{type:"string"},mealType:{type:"string"},note:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true}},
   { name:"consumePlannedFood", title:"Consume planned food", description:"Move all or part of a planned food entry into eaten intake while preserving the remaining planned portion.", inputSchema:{type:"object",required:["id"],properties:{id:{type:"integer"},servings:{type:"number"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
   { name:"updateFoodEntry", title:"Update food entry", description:"Correct a food log entry's time, portions, nutrition values, status, or note.", inputSchema:{type:"object",required:["id"],properties:{id:{type:"integer"},mealTime:{type:"string"},mealType:{type:"string"},servings:{type:"number"},calories:{type:"number"},protein_g:{type:"number"},carbs_g:{type:"number"},fat_g:{type:"number"},fiber_g:{type:"number"},salt_g:{type:"number"},status:{type:"string",enum:["eaten","planned","cancelled"]},note:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
@@ -99,6 +100,7 @@ async function callHealthApi(request,env,toolName,args){
   recommendNutrition:()=>"/nutrition/recommend",
   resolveFood:()=>"/food/resolve",
   getFoodProduct:()=>`/food/product?${new URLSearchParams(Object.entries({barcode:args.barcode,name:args.name}).filter(([,v])=>v!=null&&v!=="" )).toString()}`,
+  getFoodFavorites:()=>`/food/favorites?limit=${encodeURIComponent(String(args.limit??20))}`,
   logFoodProduct:()=>"/nutrition/log-product",
   consumePlannedFood:()=>"/nutrition/consume",
   updateFoodEntry:()=>"/nutrition/food/update",
@@ -110,7 +112,7 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getWeeklyReview","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getWeeklyReview","getFoodFavorites","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
