@@ -180,15 +180,14 @@ function choosePlan(context, options = {}) {
 
   function pick(pattern, used = new Set()) {
     const candidates = candidatesByPattern[pattern] || [];
-    return candidates
-      .filter(ex => !used.has(ex) && notRecent(ex))
-      .sort((a, b) => {
-        const freshA = muscleNotRecentlyExposed(a) ? 0 : 1;
-        const freshB = muscleNotRecentlyExposed(b) ? 0 : 1;
-        const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
-        const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
-        return freshA - freshB || loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
-      })[0] || candidates.find(ex => !used.has(ex));
+    const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
+    const fresh = eligible.filter(muscleNotRecentlyExposed);
+    const pool = fresh.length ? fresh : (eligible.length ? eligible : []);
+    return pool.sort((a, b) => {
+      const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
+      const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
+      return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
+    })[0];
   }
 
   // Prevent redundant movement patterns in the same session. For example,
@@ -200,15 +199,14 @@ function choosePlan(context, options = {}) {
 
   function pickDiverse(pattern, used = new Set()) {
     const candidates = candidatesByPattern[pattern] || [];
-    return candidates
-      .filter(ex => !used.has(ex) && notRecent(ex))
-      .sort((a, b) => {
-        const freshA = muscleNotRecentlyExposed(a) ? 0 : 1;
-        const freshB = muscleNotRecentlyExposed(b) ? 0 : 1;
-        const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
-        const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
-        return freshA - freshB || loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
-      })[0] || candidates.find(ex => !used.has(ex));
+    const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
+    const fresh = eligible.filter(muscleNotRecentlyExposed);
+    const pool = fresh.length ? fresh : [];
+    return pool.sort((a, b) => {
+      const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
+      const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
+      return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
+    })[0];
   }
 
   function addDiverse(exercises, used, preferredPatterns) {
@@ -333,12 +331,15 @@ export function generateStrengthPlan(context, options = {}) {
   let exercises = [...chosen.exercises];
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
   exercises = exercises.filter(ex => !excluded.has(ex));
+  const weeklyExposure = recentMuscleExposure(history, context.date);
   const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "Chest flat press Prime", "Shoulder press Prime", "DB bench press", "Low row", "Standing rowing machine", "Lat pulldown", "DB shoulder press", "Pec deck", "Rear delt pec deck", "Cable lateral raise", "Prone leg curl Prime", "Leg extension Prime", "DB Romanian deadlift", "DB Bulgarian split squat", "Hip thrust", "Pivot leg press", "Pendulum squat", "Abs bench crunch", "Cable crunch", "Pallof press"];
   const selectedPatterns = new Set(exercises.map(ex => EXERCISES[ex]?.pattern).filter(Boolean));
   for (const candidate of candidates) {
     if (exercises.length >= (Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5))) break;
     const candidatePattern = EXERCISES[candidate]?.pattern;
-    if (!exercises.includes(candidate) && !excluded.has(candidate) && (!candidatePattern || !selectedPatterns.has(candidatePattern))) {
+    const candidateMuscle = EXERCISES[candidate]?.muscle;
+    const muscleFresh = !candidateMuscle || !(weeklyExposure.get(candidateMuscle) > 0);
+    if (!exercises.includes(candidate) && !excluded.has(candidate) && muscleFresh && (!candidatePattern || !selectedPatterns.has(candidatePattern))) {
       exercises.push(candidate);
       if (candidatePattern) selectedPatterns.add(candidatePattern);
     }
