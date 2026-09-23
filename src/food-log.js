@@ -248,7 +248,15 @@ export function recommendFood({day,nutritionPlan,entries}) {
     suggestions.push({reason:"target_nearby",suggestion:"Jsi blízko dnešního kalorického cíle; další jídlo drž spíše malé a podle zbývajících makroživin."});
   if(!suggestions.length)
     suggestions.push({reason:"balanced_remaining",suggestion:"Zbývá prostor pro jídlo podle zbývajících kalorií a makroživin."});
-  return {status:"ok",day,remaining,plannedFoodOptions,suggestions};
+  const mealSchedule=[];
+  const plannedByTime=[...planned].sort((a,b)=>String(a.meal_time||"").localeCompare(String(b.meal_time||"")));
+  if(longRide && remaining.carbs_g>=60)
+    mealSchedule.push({phase:"pre_ride",timing:"1–3 h před kolem",goal:"sacharidy + lehce stravitelné jídlo",suggestion:"Pokryj část sacharidů z připraveného jídla; před delší jízdou nechoď s velkým kalorickým deficitem."});
+  if(completedRide && remaining.protein_g>=25)
+    mealSchedule.push({phase:"post_ride",timing:"do 2 h po kole",goal:"regenerace",suggestion:"Normální jídlo s kvalitním proteinem a sacharidy podle délky/intenzity jízdy."});
+  for(const item of plannedByTime.slice(0,4))
+    mealSchedule.push({phase:item.meal_type||"planned",timing:item.meal_time||"podle hladu a tréninku",goal:"využít připravené jídlo",food:item.recipe_name||item.name||"plánované jídlo",servings:item.servings});
+  return {status:"ok",day,remaining,plannedFoodOptions,suggestions,mealSchedule};
 }
 
 
