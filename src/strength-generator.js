@@ -203,9 +203,11 @@ function choosePlan(context, options = {}) {
     return candidates
       .filter(ex => !used.has(ex) && notRecent(ex))
       .sort((a, b) => {
+        const freshA = muscleNotRecentlyExposed(a) ? 0 : 1;
+        const freshB = muscleNotRecentlyExposed(b) ? 0 : 1;
         const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
         const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
-        return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
+        return freshA - freshB || loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
       })[0] || candidates.find(ex => !used.has(ex));
   }
 
