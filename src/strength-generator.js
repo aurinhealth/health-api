@@ -294,7 +294,7 @@ function warmupRows(exercise, workKg = null) {
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
 }
-function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue) {
+function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModifier = 1) {
   const def = EXERCISES[exercise];
   const base = Number(def?.sets) || 3;
   const recentLoad = Number(muscleLoad?.get(def?.muscle) || 0);
@@ -315,11 +315,11 @@ function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue) {
   return clamp(Math.round(sets), minSets, maxSets);
 }
 
-function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad) {
+function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1) {
   const def = EXERCISES[exercise], estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: def.reps, fallbackKg: def.baseKg, loadFactor: factor });
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : def.reps;
-  const sets = adaptiveSetCount(exercise, muscleLoad, factor);
+  const sets = adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier);
   const note = estimate.source === "cross-exercise-estimate" ? def.note + "; odhad z " + estimate.referenceExercise + ", ověř RPE" : def.note;
   const rows = [];
   for (let i = 0; i < sets; i++) rows.push(["WORK", exercise, String(i + 1), kg == null ? "" : String(kg).replace(".", ","), reps, "", "", "", "FALSE", note, i === 0 ? "🎥 Video" : "", "", execution]);
@@ -355,11 +355,11 @@ export function generateStrengthPlan(context, options = {}) {
   const rows = [], loadEstimates = [];
   const muscleLoad = recentMuscleLoad(history, context.date);
   for (const exercise of exercises) {
-    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad);
+    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier);
     rows.push(...warmupRows(exercise, work.kg), ...work.rows);
     loadEstimates.push({ exercise, sets: work.sets, ...work.estimate });
   }
-  return { date: context.date, planName: chosen.name, rationale: chosen.rationale, loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, loadEstimates, rows };
+  return { date: context.date, planName: chosen.name, rationale: chosen.rationale, loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };
