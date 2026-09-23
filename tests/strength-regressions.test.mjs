@@ -163,3 +163,77 @@ test("sync guard rejects mismatched completed row", () => {
   }];
   assert.equal(completedRowsAreSynced(completed, dbRows), false);
 });
+
+
+test("generator protects legs when multiple hard rides are upcoming", () => {
+  const plan = generateStrengthPlan({
+    status: "ok",
+    date: "2026-09-23",
+    cycling: {
+      recentRideHours: 8,
+      recentRideTss: 700,
+      recentActivities: [
+        { name: "Threshold", type: "Ride", tss: 100 },
+        { name: "Endurance", type: "Ride", tss: 80 }
+      ],
+      plannedWorkouts: [
+        { name: "Endurance", type: "Ride", durationHours: 1.5 },
+        { name: "Threshold 3x15", type: "Ride", durationHours: 1.5 },
+        { name: "VO2 intervals", type: "Ride", durationHours: 1.25 }
+      ],
+      nextRide: { name: "Endurance", type: "Ride", durationHours: 1.5 }
+    },
+    recovery: {},
+    strength: { recentCompletedSets: [] }
+  }, { maxExercises: 5 });
+  assert.equal(plan.protectedLegs, true);
+  assert.equal(plan.planName, "Upper Body");
+  assert.ok(plan.rows.length > 0);
+  assert.ok(!plan.loadEstimates.some(x => ["quads", "hamstrings", "glutes"].includes(x.muscle)));
+});
+
+test("lower-body plan includes a unilateral movement when fresh", () => {
+  const plan = generateStrengthPlan({
+    status: "ok",
+    date: "2026-09-23",
+    cycling: {
+      recentRideHours: 2,
+      recentRideTss: 100,
+      recentActivities: [],
+      plannedWorkouts: [],
+      nextRide: null
+    },
+    recovery: {},
+    strength: { recentCompletedSets: [] }
+  }, { focus: "lower", maxExercises: 4 });
+  assert.ok(plan.rows.some(row => row[0] === "WORK" && row[1] === "DB Bulgarian split squat"));
+});
+
+test("generated plan survives sheet serialization round-trip", () => {
+  const plan = generateStrengthPlan({
+    status: "ok",
+    date: "2026-09-23",
+    cycling: {
+      recentRideHours: 2,
+      recentRideTss: 100,
+      recentActivities: [],
+      plannedWorkouts: [],
+      nextRide: null
+    },
+    recovery: {},
+    strength: { recentCompletedSets: [] }
+  }, { focus: "upper", maxExercises: 5 });
+  const values = [
+    ["Datum", plan.date],
+    ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"],
+    ...plan.rows.map(row => row.slice(0, 11))
+  ];
+  const parsed = parseStrengthSheet(values);
+  const workRows = plan.rows.filter(row => row[0] === "WORK");
+  assert.equal(parsed.date, plan.date);
+  assert.equal(parsed.rows.filter(row => row.type === "WORK").length, workRows.length);
+  assert.deepEqual(
+    parsed.rows.filter(row => row.type === "WORK").map(row => row.exercise),
+    workRows.map(row => row[1])
+  );
+});
