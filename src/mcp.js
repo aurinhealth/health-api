@@ -11,6 +11,8 @@ export const TOOLS = [
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getTodayStrengthSheet", title:"Read today's strength sheet", description:"Read the current Dnešní trénink Google Sheet contents.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getNutritionPlan", title:"Get daily nutrition plan", description:"Build the daily nutrition plan from the shared cycling, recovery, and strength context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getDailyDecision", title:"Get adaptive daily decision", description:"Combine recovery, cycling load, strength readiness, nutrition, and upcoming rides into one daily decision context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getWeeklyReview", title:"Get weekly training review", description:"Summarize the last 7 days of cycling, strength, nutrition, and weight trend.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"searchCookbook", title:"Search cookbook recipes", description:"Find recipes by cookbook page and/or name.", inputSchema:{type:"object",properties:{page:{type:"integer"},name:{type:"string"},limit:{type:"integer",minimum:1,maximum:50}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getCookbookRecipe", title:"Get cookbook recipe", description:"Get a cookbook recipe including available nutrition values.", inputSchema:{type:"object",properties:{page:{type:"integer"},name:{type:"string"},recipeId:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"logMeal", title:"Log food", description:"Log a cookbook meal or manually supplied nutrition into the daily food log. Status can be eaten or planned.", inputSchema:{type:"object",properties:{date:{type:"string"},page:{type:"integer"},name:{type:"string"},recipeId:{type:"string"},servings:{type:"number"},mealTime:{type:"string"},mealType:{type:"string"},calories:{type:"number"},protein_g:{type:"number"},carbs_g:{type:"number"},fat_g:{type:"number"},status:{type:"string",enum:["eaten","planned","cancelled"]},source:{type:"string"},note:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
@@ -88,6 +90,8 @@ async function callHealthApi(request,env,toolName,args){
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
   getTodayStrengthSheet:()=>"/strength/sheet/today",
   getNutritionPlan:()=>"/nutrition/plan",
+  getDailyDecision:()=>"/decision/daily",
+  getWeeklyReview:()=>`/training/weekly-review${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
   searchCookbook:()=>`/cookbook/search?${new URLSearchParams(Object.entries({page:args.page,name:args.name,limit:args.limit}).filter(([,v])=>v!=null&&v!=="")).toString()}`,
   getCookbookRecipe:()=>`/cookbook/recipe?${new URLSearchParams(Object.entries({page:args.page,name:args.name,recipe_id:args.recipeId}).filter(([,v])=>v!=null&&v!=="")).toString()}`,
   logMeal:()=>"/nutrition/log-meal",
@@ -106,17 +110,19 @@ async function callHealthApi(request,env,toolName,args){
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getNutritionPlan","getDailyDecision","getWeeklyReview","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");
  headers.set("Authorization",`Bearer ${internalKey}`);
  let url=`${base}${route()}`,body;
  if(toolName==="getNutritionPlan") body=JSON.stringify({date:args.date||null});
+ if(toolName==="getDailyDecision") body=JSON.stringify({date:args.date||null});
  if(method==="POST"){
    headers.set("Content-Type","application/json");
    if(toolName==="logMeal") body=JSON.stringify(args);
    else if(toolName==="recommendNutrition") body=JSON.stringify({date:args.date||null});
+   else if(toolName==="getDailyDecision") body=JSON.stringify({date:args.date||null});
    else if(toolName==="resolveFood") body=JSON.stringify(args);
    else if(toolName==="logFoodProduct") body=JSON.stringify(args);
    else if(toolName==="consumePlannedFood") body=JSON.stringify(args);
