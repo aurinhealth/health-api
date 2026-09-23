@@ -71,8 +71,8 @@ test("load estimator uses multiple recent performances", () => {
     exercise: "Prime flat chest press",
     history: [
       { workout_date: "2026-09-22", type: "WORK", exercise: "Prime flat chest press", actual_kg: 42.5, actual_reps: 10, rpe: 8, completed: 1, set_no: 1 },
-      { workout_date: "2026-09-15", type: "WORK", exercise: "Prime flat chest press", actual_kg: 40, actual_reps: 11, rpe: 7.5, completed: 1, set_no: 1 },
-      { workout_date: "2026-09-08", type: "WORK", exercise: "Prime flat chest press", actual_kg: 40, actual_reps: 9, rpe: 8, completed: 1, set_no: 1 }
+      { workout_date: "2026-09-15", type: "WORK", exercise: "Prime flat chest press", actual_kg: 35, actual_reps: 11, rpe: 7.5, completed: 1, set_no: 1 },
+      { workout_date: "2026-09-08", type: "WORK", exercise: "Prime flat chest press", actual_kg: 35, actual_reps: 9, rpe: 8, completed: 1, set_no: 1 }
     ],
     targetReps: "8–12",
     fallbackKg: 35,
@@ -80,7 +80,7 @@ test("load estimator uses multiple recent performances", () => {
   });
   assert.equal(estimate.source, "own-history");
   assert.equal(estimate.performanceCount, 3);
-  assert.notEqual(estimate.kg, 42.5);
+  assert.equal(estimate.kg, 40);
 });
 
 test("generator treats aliased recent leg curl as the same exercise", () => {
