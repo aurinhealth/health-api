@@ -250,3 +250,21 @@ export function recommendFood({day,nutritionPlan,entries}) {
     suggestions.push({reason:"balanced_remaining",suggestion:"Zbývá prostor pro jídlo podle zbývajících kalorií a makroživin."});
   return {status:"ok",day,remaining,plannedFoodOptions,suggestions};
 }
+
+
+export async function getFoodFavorites(db, limit=20) {
+  await ensureFoodLogTable(db);
+  const safe=Math.max(1,Math.min(50,Number(limit)||20));
+  const rows=await db.prepare(`SELECT COALESCE(barcode,'') barcode, COALESCE(recipe_name,'') name, COALESCE(brand,'') brand,
+      COUNT(*) count, MAX(created_at) lastUsed,
+      ROUND(AVG(NULLIF(calories,0)),0) calories,
+      ROUND(AVG(NULLIF(protein_g,0)),1) protein_g,
+      ROUND(AVG(NULLIF(carbs_g,0)),1) carbs_g,
+      ROUND(AVG(NULLIF(fat_g,0)),1) fat_g
+    FROM food_log
+    WHERE status='eaten' AND date>=date('now','-60 day') AND (recipe_name IS NOT NULL OR barcode IS NOT NULL)
+    GROUP BY barcode, recipe_name, brand
+    ORDER BY count DESC, lastUsed DESC
+    LIMIT ?`).bind(safe).all();
+  return {status:"ok",limit:safe,days:60,foods:rows.results||[]};
+}
