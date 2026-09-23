@@ -138,7 +138,9 @@ export function buildNutritionPlan(context, options = {}) {
     dayType,
     calorieTarget: adjustedCalorieTarget,
     maintenanceReference: defaults.maintenanceCalories,
-    weightTrend,\n    adaptiveCalorieAdjustment: adaptiveBase.adjustment,\n    adaptiveCalorieReason: adaptiveBase.reason,
+    weightTrend,
+    adaptiveCalorieAdjustment: adaptiveBase.adjustment,
+    adaptiveCalorieReason: adaptiveBase.reason,
     reductionTarget: {
       minLossKgPerWeek: defaults.targetLossKgPerWeekMin,
       maxLossKgPerWeek: defaults.targetLossKgPerWeekMax,
