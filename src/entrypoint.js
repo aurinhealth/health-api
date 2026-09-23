@@ -2,6 +2,7 @@ import app from "./sheets-gateway.js";
 import { handleMcpCompat } from "./mcp-compat.js";
 import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
+import { syncDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
@@ -16,6 +17,7 @@ export default {
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
     if (url.pathname === "/automation/planned-calories") return handlePlannedCaloriesAutomation(request, env);
+    if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, env);
     const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcpCompat(request, env);
@@ -150,4 +152,21 @@ async function handlePlannedCaloriesAutomation(request, env) {
   } catch (error) {
     return Response.json({ status: "error", step: "planned_calories", message: error.message }, { status: 500 });
   }
+}
+
+
+async function handleNutritionNotesAutomation(request, env) {
+  if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
+  try {
+    await verifyGitHubActionsToken(request);
+    const body=await request.json().catch(()=>({}));
+    const today=new Date(), oldest=String(body?.oldest||today.toISOString().slice(0,10)), newest=String(body?.newest||new Date(today.getTime()+14*86400000).toISOString().slice(0,10));
+    let weightKg=Number(body?.weightKg);
+    if(!Number.isFinite(weightKg)){
+      const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).first();
+      weightKg=Number(row?.value_numeric);
+    }
+    if(!Number.isFinite(weightKg)||weightKg<=0) weightKg=88;
+    return Response.json(await syncDailyNutritionNotes(env,{oldest,newest,weightKg}));
+  } catch(error){ return Response.json({status:"error",step:"nutrition_notes",message:error.message},{status:500}); }
 }
