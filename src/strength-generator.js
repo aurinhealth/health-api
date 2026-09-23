@@ -312,7 +312,8 @@ function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModif
   // 2–3 sets, while main movements can move between 2–4 sets.
   const minSets = 2;
   const maxSets = base >= 3 ? 4 : 3;
-  return clamp(Math.round(sets), minSets, maxSets);
+  sets = Math.round(sets * clamp(volumeModifier, 0.75, 1.05));
+  return clamp(sets, minSets, maxSets);
 }
 
 function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1) {
