@@ -8,6 +8,7 @@ import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./streng
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { completedRowsAreSynced } from "./strength-sync-guard.js";
+import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 
 const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
 const SHEET_GID = "585189491";
@@ -266,7 +267,27 @@ async function generateStrengthPlanRoute(env, request, url) {
       protectedLegs: plan.protectedLegs,
       loadFactor: plan.loadFactor
     });
-    return Response.json({ ...result, planName: plan.planName, rationale: plan.rationale, loadFactor: plan.loadFactor, loadEstimates: plan.loadEstimates });
+
+    let intervals = { status: "skipped", reason: "INTERVALS_API_KEY is not configured" };
+    try {
+      intervals = await writeStrengthPlanToIntervals(env, plan, {
+        startTime: body?.startTime || "00:00",
+        durationMinutes: body?.durationMinutes || 60
+      });
+    } catch (error) {
+      intervals = { status: "error", message: error.message };
+    }
+
+    const nutrition = buildNutritionPlan(context, { ...body, strengthPlan: plan });
+    return Response.json({
+      ...result,
+      planName: plan.planName,
+      rationale: plan.rationale,
+      loadFactor: plan.loadFactor,
+      loadEstimates: plan.loadEstimates,
+      intervals,
+      nutrition
+    });
   } catch (error) { return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 }); }
 }
 
