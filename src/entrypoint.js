@@ -127,10 +127,23 @@ async function handlePlannedCaloriesAutomation(request, env) {
     const today = new Date();
     const oldest = String(body?.oldest || today.toISOString().slice(0, 10));
     const newest = String(body?.newest || new Date(today.getTime() + 14 * 86400000).toISOString().slice(0, 10));
+    let weightKg = Number(body?.weightKg);
+    if (!Number.isFinite(weightKg)) {
+      const weightRow = await env.DB.prepare(
+        `SELECT value_numeric FROM health_datapoints
+         WHERE LOWER(data_type) LIKE '%weight%'
+           AND value_numeric IS NOT NULL
+         ORDER BY COALESCE(sample_time, start_time) DESC
+         LIMIT 1`
+      ).first();
+      weightKg = Number(weightRow?.value_numeric);
+    }
+    if (!Number.isFinite(weightKg) || weightKg <= 0) weightKg = 88;
+
     const result = await syncPlannedEventCalories(env, {
       oldest,
       newest,
-      weightKg: body?.weightKg,
+      weightKg,
       ftp: body?.ftp
     });
     return Response.json(result);
