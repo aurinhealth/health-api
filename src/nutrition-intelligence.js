@@ -3,11 +3,13 @@ const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback
 
 export const NUTRITION_DEFAULTS = {
   maintenanceCalories: 1993,
-  calorieTarget: 1800,
+  calorieTarget: 2000,
   proteinGrams: 176,
   proteinPerKg: 2.0,
-  carbPerKgEasy: 3.0,
-  carbPerKgHard: 5.0,
+  carbPerKgEasy: 2.0,
+  carbPerKgHard: 3.0,
+  carbPerKgLong: 3.5,
+  strengthCalorieCoverage: 0.5,
   fatMinimumPerKg: 0.7,
   rideFuelingThresholdHours: 1.5,
   rideCarbsPerHourEasy: 60,
@@ -61,12 +63,16 @@ export function buildNutritionPlan(context, options = {}) {
     : 0;
   const protein = Math.round(Math.max(defaults.proteinGrams, weightKg * defaults.proteinPerKg));
   const fatMin = Math.round(weightKg * defaults.fatMinimumPerKg);
-  const carbPerKg = dayType === "long" || dayType === "hard" ? defaults.carbPerKgHard : defaults.carbPerKgEasy;
+  const carbPerKg = dayType === "long"
+    ? defaults.carbPerKgLong
+    : dayType === "hard"
+      ? defaults.carbPerKgHard
+      : defaults.carbPerKgEasy;
   const carbs = Math.round(weightKg * carbPerKg);
   const fuelingCalories = plannedRideCarbs * 4;
   const fatFromMacros = Math.round(fatMin);
   const minimumMacroCalories = protein * 4 + carbs * 4 + fatFromMacros * 9;
-  const calorieTarget = Math.max(defaults.calorieTarget + fuelingCalories, minimumMacroCalories);
+  const calorieTarget = Math.max(defaults.calorieTarget, minimumMacroCalories);
   const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
   const caloriesFromMacros = protein * 4 + dailyCarbs * 4 + fatFromMacros * 9;
@@ -78,9 +84,13 @@ export function buildNutritionPlan(context, options = {}) {
     .filter(a => String(a.date || "") === String(context.date || ""))
     .reduce((sum, a) => sum + n(a.calories), 0));
   const trainingCalories = strengthCalories + cyclingTrainingCalories;
+  // Do not "eat back" the full training expenditure. The goal is a controlled
+  // weekly deficit while still supporting performance and recovery.
+  // Planned ride fueling is treated separately because those carbs are performance fuel.
+  const trainingAdjustment = Math.round(strengthCalories * defaults.strengthCalorieCoverage);
   const adjustedCalorieTarget = Math.max(
     calorieTarget,
-    defaults.calorieTarget + Math.round(trainingCalories * 0.75)
+    defaults.calorieTarget + trainingAdjustment + fuelingCalories
   );
   const adjustedCarbsFromCalories = Math.max(
     dailyCarbs,
