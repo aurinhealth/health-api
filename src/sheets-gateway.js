@@ -6,6 +6,8 @@ import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./strength-sheet-maintenance.js";
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
+import { buildAdaptiveDecision } from "./adaptive-engine.js";
+import { buildWeeklyReview } from "./weekly-review.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { completedRowsAreSynced } from "./strength-sync-guard.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
@@ -44,6 +46,8 @@ export default {
     if (url.pathname === "/nutrition/log-meal" && request.method === "POST") return logMealRoute(env, request);
     if (url.pathname === "/nutrition/day" && request.method === "GET") return nutritionDayRoute(env, url);
     if (url.pathname === "/nutrition/recommend" && request.method === "POST") return nutritionRecommendRoute(env, request);
+    if (url.pathname === "/decision/daily" && request.method === "POST") return dailyDecisionRoute(env, request);
+    if (url.pathname === "/training/weekly-review" && request.method === "GET") return weeklyReviewRoute(env, url);
     if (url.pathname === "/food/resolve" && request.method === "POST") return foodResolveRoute(env, request);
     if (url.pathname === "/food/product" && request.method === "GET") return foodProductRoute(env, url);
     if (url.pathname === "/nutrition/log-product" && request.method === "POST") return logProductRoute(env, request);
@@ -409,7 +413,7 @@ async function nutritionPlanRoute(env, request) {
       }
     }
 
-    const plan = buildNutritionPlan(context, { ...body, strengthPlan });
+    const plan = buildNutritionPlan(context, { ...body, strengthPlan, weightTrend: context.weightTrend });
     return Response.json({ status: "ok", plan });
   } catch (error) {
     return Response.json({ status: "error", step: "nutrition_plan", message: error.message }, { status: 500 });
@@ -439,16 +443,35 @@ async function nutritionDayRoute(env, url) {
     const plan=buildNutritionPlan(context,{});
     const food=await getFoodDay(env.DB,date);
     const recommendations=recommendFood({day:date,nutritionPlan:plan,entries:food});
-    return Response.json({ status:"ok", date, plan, food, recommendations });
+    const adaptive=buildAdaptiveDecision(context,{...food,nutritionTarget:plan});
+    return Response.json({ status:"ok", date, plan, food, recommendations, adaptive });
   } catch (error) { return Response.json({ status:"error", step:"nutrition_day", message:error.message }, { status:500 }); }
 }
 async function nutritionRecommendRoute(env, request) {
   try {
     const body=await request.json().catch(()=>({})), date=String(body.date || new Date().toISOString().slice(0,10));
-    const context=await buildStrengthContext(env,date), plan=buildNutritionPlan(context,body);
+    const context=await buildStrengthContext(env,date), plan=buildNutritionPlan(context,{...body,weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,date);
-    return Response.json(recommendFood({day:date,nutritionPlan:plan,entries:food}));
+    return Response.json({...recommendFood({day:date,nutritionPlan:plan,entries:food}),adaptive:buildAdaptiveDecision(context,{...food,nutritionTarget:plan})});
   } catch (error) { return Response.json({ status:"error", step:"nutrition_recommend", message:error.message }, { status:500 }); }
+}
+
+async function dailyDecisionRoute(env, request) {
+  try {
+    const body=await request.json().catch(()=>({}));
+    const date=String(body.date||"").trim()||null;
+    const context=await buildStrengthContext(env,date);
+    const plan=buildNutritionPlan(context,{...body,weightTrend:context.weightTrend});
+    const food=await getFoodDay(env.DB,context.date);
+    return Response.json({...buildAdaptiveDecision(context,{...food,nutritionTarget:plan}),nutrition:plan,food});
+  } catch(error) { return Response.json({status:"error",step:"daily_decision",message:error.message},{status:500}); }
+}
+async function weeklyReviewRoute(env,url) {
+  try {
+    const date=String(url.searchParams.get("date")||"").trim()||null;
+    const context=await buildStrengthContext(env,date);
+    return Response.json(await buildWeeklyReview(env,context,context.date));
+  } catch(error) { return Response.json({status:"error",step:"weekly_review",message:error.message},{status:500}); }
 }
 
 async function foodResolveRoute(env, request) {
