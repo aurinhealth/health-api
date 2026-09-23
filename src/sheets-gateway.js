@@ -376,7 +376,28 @@ async function nutritionPlanRoute(env, request) {
     const date = String(body?.date || "").trim() || null;
     const context = await buildStrengthContext(env, date);
     if (context.status !== "ok") throw new Error("Shared daily context is not ready");
-    const plan = buildNutritionPlan(context, body);
+
+    let strengthPlan = body?.strengthPlan || null;
+    if (!strengthPlan) {
+      try {
+        const sheet = await fetchTodayValues(env);
+        const parsed = parseStrengthSheet(sheet.values);
+        if (!date || parsed.date === date) {
+          const rows = (parsed.rows || []).map(r => [
+            r.type, r.exercise, r.setNo == null ? "" : String(r.setNo),
+            r.plannedKg == null ? "" : String(r.plannedKg),
+            r.plannedReps || "", "", "", "", "FALSE", r.note || "", r.video || ""
+          ]);
+          if (rows.some(r => r[0] === "WORK")) {
+            strengthPlan = { date: parsed.date, rows };
+          }
+        }
+      } catch (_) {
+        // Nutrition remains available even if the optional sheet read fails.
+      }
+    }
+
+    const plan = buildNutritionPlan(context, { ...body, strengthPlan });
     return Response.json({ status: "ok", plan });
   } catch (error) {
     return Response.json({ status: "error", step: "nutrition_plan", message: error.message }, { status: 500 });
