@@ -110,7 +110,31 @@ jobs:
             sleep $((attempt * 20))
           done
 
-      - name: Verify Worker health
+
+      - name: Sync daily nutrition notes
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition-notes" || true)"
+          code="${response##*
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
+\n'}"; body="${response%
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
+\n'*}"
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { printf '%s\n' "$body"; exit 1; }
+          printf '%s\n' "$body"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d' <<< "$body"
+\n      - name: Verify Worker health
         shell: bash
         run: |
           set -euo pipefail
