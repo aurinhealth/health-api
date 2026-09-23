@@ -59,8 +59,42 @@ jobs:
           for attempt in 1 2 3; do
             response="$(curl -sS -w '\n%{http_code}' "https://health-api.chelseafc-czsk.workers.dev/sync/intervals" || true)"
             code="${response##*
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              printf '%s\n' "$body"
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              printf '%s\n' "$body"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Verify Worker health
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
 \n'}"
             body="${response%
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              printf '%s\n' "$body"
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              printf '%s\n' "$body"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Verify Worker health
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
 \n'*}"
             if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
               printf '%s\n' "$body"
