@@ -9,7 +9,7 @@ export async function ensureFoodLogTable(db) {
 }
 
 function recipeId(recipe) {
-  return text(recipe?.id || recipe?.recipe_id || recipe?.slug || \`\${recipe?.page || "recipe"}-\${text(recipe?.name || recipe?.title)}\`);
+  return text(recipe?.id || recipe?.recipe_id || recipe?.slug || String(recipe?.page || "recipe") + "-" + text(recipe?.name || recipe?.title));
 }
 function searchableRecipeText(recipe) {
   const fields = ["name","title","recipe_name","description","category","meal","keywords","tags","ingredients"];
