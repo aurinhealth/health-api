@@ -77,6 +77,8 @@ export function productFromLabel(input = {}) {
     protein_100g: protein,
     carbs_100g: carbs,
     fat_100g: fat,
+    fiber_100g: num(input.fiber_100g ?? input.fiber_g),
+    salt_100g: num(input.salt_100g ?? input.salt_g),
     source: "package_label",
     source_url: null,
     confidence: "highest",
