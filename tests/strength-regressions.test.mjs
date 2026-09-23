@@ -360,3 +360,19 @@ test("planned strength workout gets a calorie estimate", () => {
   }, { weightKg: 88 });
   assert.ok(kcal > 0);
 });
+
+
+test("adaptive strength volume reduces sets under low readiness", async () => {
+  const { generateStrengthPlan } = await import("../src/strength-generator.js");
+  const context={
+    date:"2026-09-23",
+    cycling:{recentRideTss:800,recentRideHours:10,recentActivities:[{intensity:true,tss:180}],nextRide:{intensity:true,durationHours:2}},
+    recovery:{sleep_duration:[{sampleTime:"2026-09-23T06:00:00",value:330}]},
+    strength:{recentCompletedSets:[]},
+    adaptive:{strengthVolumeModifier:0.75,recovery:{score:60},legReadiness:55}
+  };
+  const plan=generateStrengthPlan(context,{focus:"upper",maxExercises:3});
+  const work=plan.rows.filter(r=>r[0]==="WORK");
+  assert.ok(work.length<=9);
+  assert.equal(plan.adaptive.volumeModifier,0.75);
+});
