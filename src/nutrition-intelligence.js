@@ -60,6 +60,16 @@ function estimateStrengthMinutes(plan) {
   return Math.round(clamp(workSets * 2.5 + warmupSets * 1.5 + exercises * 4, 35, 100));
 }
 
+function adaptiveBaseCalories(defaults, weightTrend) {
+  const base=Number(defaults.restCalorieTarget);
+  const rate=Number(weightTrend?.weeklyRateKg);
+  const samples=Number(weightTrend?.samples||0);
+  if(!Number.isFinite(rate)||samples<4) return {target:base,adjustment:0,reason:"insufficient_weight_history"};
+  if(rate > -0.10) return {target:base-100,adjustment:-100,reason:"loss_below_target"};
+  if(rate < -0.60) return {target:base+100,adjustment:100,reason:"loss_above_target"};
+  return {target:base,adjustment:0,reason:"within_target_range"};
+}
+
 function estimateStrengthCalories(weightKg, minutes) {
   if (!minutes) return 0;
   // Moderate-to-vigorous resistance training estimate; deliberately reported
@@ -72,6 +82,8 @@ export function buildNutritionPlan(context, options = {}) {
   const weightKg = n(options.weightKg, n(context?.weightKg, 88));
   const defaults = { ...NUTRITION_DEFAULTS, ...(options.defaults || {}) };
   const dayType = classifyDay(context);
+  const weightTrend = options.weightTrend || context?.weightTrend || null;
+  const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend);
   const next = context?.cycling?.nextRide || null;
   const durationHours = n(next?.durationHours);
   const plannedRideCarbs = durationHours >= defaults.rideFuelingThresholdHours
@@ -88,7 +100,7 @@ export function buildNutritionPlan(context, options = {}) {
   const fuelingCalories = plannedRideCarbs * 4;
   const fatFromMacros = Math.round(fatMin);
   const minimumMacroCalories = protein * 4 + carbs * 4 + fatFromMacros * 9;
-  const calorieTarget = Math.max(defaults.calorieTarget, minimumMacroCalories);
+  const calorieTarget = Math.max(adaptiveBase.target, defaults.calorieTarget, minimumMacroCalories);
   const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
   const caloriesFromMacros = protein * 4 + dailyCarbs * 4 + fatFromMacros * 9;
@@ -125,7 +137,7 @@ export function buildNutritionPlan(context, options = {}) {
     date: context.date,
     dayType,
     calorieTarget: adjustedCalorieTarget,
-    maintenanceReference: defaults.maintenanceCalories,
+    maintenanceReference: defaults.maintenanceCalories,\n    weightTrend,\n    adaptiveCalorieAdjustment: adaptiveBase.adjustment,\n    adaptiveCalorieReason: adaptiveBase.reason,
     reductionTarget: {
       minLossKgPerWeek: defaults.targetLossKgPerWeekMin,
       maxLossKgPerWeek: defaults.targetLossKgPerWeekMax,
