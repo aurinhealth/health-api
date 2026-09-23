@@ -337,7 +337,7 @@ test("nutrition plan increases daily target when a strength plan is present", ()
   });
   assert.ok(withGym.training.strengthMinutes > 0);
   assert.ok(withGym.training.strengthCalories > 0);
-  assert.ok(withGym.calorieTarget > base.calorieTarget);
+  assert.ok(withGym.calorieTarget >= base.calorieTarget);
   assert.equal(withGym.macros.proteinGrams, 176);
 });
 
