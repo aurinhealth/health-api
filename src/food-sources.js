@@ -131,6 +131,8 @@ export function calculateAmount(product, grams) {
     calories: product.calories_100g == null ? null : product.calories_100g * factor,
     protein_g: product.protein_100g == null ? null : product.protein_100g * factor,
     carbs_g: product.carbs_100g == null ? null : product.carbs_100g * factor,
-    fat_g: product.fat_100g == null ? null : product.fat_100g * factor
+    fat_g: product.fat_100g == null ? null : product.fat_100g * factor,
+    fiber_g: product.fiber_100g == null ? null : product.fiber_100g * factor,
+    salt_g: product.salt_100g == null ? null : product.salt_100g * factor
   };
 }
