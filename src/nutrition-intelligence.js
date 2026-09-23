@@ -34,6 +34,22 @@ function recentActivityCalories(context) {
   return (context?.cycling?.recentActivities || []).slice(0, 3).reduce((sum, a) => sum + n(a.calories), 0);
 }
 
+function estimateStrengthMinutes(plan) {
+  if (!plan?.rows?.length) return 0;
+  const workSets = plan.rows.filter(r => r?.[0] === "WORK").length;
+  const warmupSets = plan.rows.filter(r => r?.[0] === "WARMUP").length;
+  const exercises = new Set(plan.rows.filter(r => r?.[0] === "WORK" && r?.[1]).map(r => r[1])).size;
+  return Math.round(clamp(workSets * 2.5 + warmupSets * 1.5 + exercises * 4, 35, 100));
+}
+
+function estimateStrengthCalories(weightKg, minutes) {
+  if (!minutes) return 0;
+  // Moderate-to-vigorous resistance training estimate; deliberately reported
+  // as an estimate rather than pretending the value is a measured expenditure.
+  const met = 5.0;
+  return Math.round((met * 3.5 * weightKg / 200) * minutes);
+}
+
 export function buildNutritionPlan(context, options = {}) {
   const weightKg = n(options.weightKg, n(context?.weightKg, 88));
   const defaults = { ...NUTRITION_DEFAULTS, ...(options.defaults || {}) };
@@ -55,13 +71,36 @@ export function buildNutritionPlan(context, options = {}) {
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
   const caloriesFromMacros = protein * 4 + dailyCarbs * 4 + fatFromMacros * 9;
   const preRideCarbs = plannedRideCarbs ? Math.round(Math.min(1.0 * weightKg, Math.max(60, durationHours * 0.5 * activityCarbsPerHour(next)))) : 0;
+  const strengthPlan = options?.strengthPlan || context?.strength?.plannedWorkout || null;
+  const strengthMinutes = Number(options?.strengthMinutes || estimateStrengthMinutes(strengthPlan));
+  const strengthCalories = estimateStrengthCalories(weightKg, strengthMinutes);
+  const cyclingTrainingCalories = Math.round((context?.cycling?.recentActivities || [])
+    .filter(a => String(a.date || "") === String(context.date || ""))
+    .reduce((sum, a) => sum + n(a.calories), 0));
+  const trainingCalories = strengthCalories + cyclingTrainingCalories;
+  const adjustedCalorieTarget = Math.max(
+    calorieTarget,
+    defaults.calorieTarget + Math.round(trainingCalories * 0.75)
+  );
+  const adjustedCarbsFromCalories = Math.max(
+    dailyCarbs,
+    Math.round((adjustedCalorieTarget - protein * 4 - fatFromMacros * 9) / 4)
+  );
+  const finalCaloriesFromMacros = protein * 4 + adjustedCarbsFromCalories * 4 + fatFromMacros * 9;
   const recentCalories = Math.round(recentActivityCalories(context));
   return {
     date: context.date,
     dayType,
-    calorieTarget,
+    calorieTarget: adjustedCalorieTarget,
     maintenanceReference: defaults.maintenanceCalories,
-    macros: { proteinGrams: protein, carbsGrams: dailyCarbs, fatGrams: fatFromMacros, caloriesFromMacros },
+    training: {
+      strengthMinutes,
+      strengthCalories,
+      cyclingTrainingCalories,
+      estimatedTrainingCalories: trainingCalories,
+      estimateMethod: "strength: 5 MET resistance-training estimate; cycling: observed calories when available"
+    },
+    macros: { proteinGrams: protein, carbsGrams: adjustedCarbsFromCalories, fatGrams: fatFromMacros, caloriesFromMacros: finalCaloriesFromMacros },
     fueling: {
       plannedRide: next ? { name: next.name, durationHours, intensity: !!next.intensity, carbsDuringRideGrams: plannedRideCarbs, carbsPerHourGrams: plannedRideCarbs && durationHours ? Math.round(plannedRideCarbs / durationHours) : 0, preRideCarbsGrams: preRideCarbs, fluidMl: durationHours ? Math.round(durationHours * defaults.rideFluidMlPerHour) : 0 } : null
     },
