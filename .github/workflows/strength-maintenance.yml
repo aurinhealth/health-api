@@ -75,6 +75,41 @@ jobs:
             sleep $((attempt * 20))
           done
 
+
+      - name: Sync planned workout calorie estimates
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://health-api.chelseafc-czsk.workers.dev/automation/planned-calories" || true)"
+            code="${response##*
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
+\n'}"
+            body="${response%
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
+\n'*}"
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
+              printf '%s\n' "$body"
+              python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d' <<< "$body"
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              printf '%s\n' "$body"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+
       - name: Verify Worker health
         shell: bash
         run: |
