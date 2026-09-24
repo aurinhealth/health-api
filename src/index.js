@@ -9,7 +9,7 @@ export default {
     );
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     try {
@@ -30,6 +30,21 @@ export default {
       }
 
       if (url.pathname === "/sync/google") {
+        // Google Health sync touches many datasets and can legitimately take
+        // longer than a browser request should remain open. Start it in the
+        // Worker background and return immediately; scheduled syncs still
+        // execute syncGoogle() directly as before.
+        if (ctx?.waitUntil) {
+          ctx.waitUntil(
+            syncGoogle(env).catch(error => {
+              console.error("Google sync failed:", error);
+            })
+          );
+          return Response.json(
+            { status: "started", source: "google", message: "Google Health sync started in the background." },
+            { status: 202, headers: { "Cache-Control": "no-store" } }
+          );
+        }
         return await syncGoogle(env);
       }
 
