@@ -1225,7 +1225,7 @@ async function startGoogleSync(env) {
 async function processGoogleSyncBatch(env) {
   let processed = 0;
 
-  while (processed < 2) {
+  while (processed < 5) {
     const state = await readGoogleSyncState(env);
     if (!state || state.status !== "running") return { status: processed ? "running" : "idle" };
 
@@ -1313,7 +1313,7 @@ async function processGoogleSyncBatch(env) {
 
       await setGoogleSyncStatus(env, "running", details);
       processed += 1;
-      if (processed >= 2) return { status: "running", details };
+      if (processed >= 5) return { status: "running", details };
     } catch (error) {
       const message = error?.message || String(error);
       results.push({
