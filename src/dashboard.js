@@ -32,7 +32,7 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 7px;
 
   <section class="auth">
     <div><strong>Dashboard</strong> <span class="pill">session protected</span></div>
-    <div class="small">Session je uložená pouze jako podepsaná HttpOnly cookie; API key se v prohlížeči neukládá.</div>
+    <div class="small">Access key slouží jen k prvnímu přihlášení. Potom používá dashboard podepsanou HttpOnly session cookie, která se při používání automaticky prodlužuje; klíč se v prohlížeči neukládá.</div>
     <div class="authrow" style="margin-top:9px"><input id="key" type="password" autocomplete="current-password" placeholder="Dashboard access key"><button id="connect">Sign in</button><button id="logout" hidden>Sign out</button></div>
     <div id="status" class="status">Kontroluji session…</div>
   </section>
@@ -113,7 +113,7 @@ function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&l
 function num(v,d=0){const n=Number(v);return Number.isFinite(n)?n:d}
 function fmt(v,d=0){return Math.round(num(v)*10**d)/10**d}
 function dateShift(date,days){const p=date.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]+days)).toISOString().slice(0,10)}
-function pragueToday(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
+function pragueToday(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const y=p.find(x=>x.type==="year")?.value,m=p.find(x=>x.type==="month")?.value,d=p.find(x=>x.type==="day")?.value;return `${y}-${m}-${d}`}
 function pragueMonday(){const d=pragueToday();const p=d.split("-").map(Number);const x=new Date(Date.UTC(p[0],p[1]-1,p[2]));const wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
 function dateLabel(d){return new Intl.DateTimeFormat("cs-CZ",{day:"2-digit",month:"2-digit"}).format(new Date(d+"T12:00:00Z"))}
 function longDate(d){return new Intl.DateTimeFormat("cs-CZ",{weekday:"long",day:"numeric",month:"numeric"}).format(new Date(d+"T12:00:00Z"))}
