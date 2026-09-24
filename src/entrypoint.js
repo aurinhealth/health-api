@@ -2,6 +2,7 @@ import app from "./sheets-gateway.js";
 import { handleMcpCompat } from "./mcp-compat.js";
 import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
+import { removeEstimatedEventCalories } from "./intervals-calories.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
@@ -18,6 +19,7 @@ export default {
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, env);
+    if (url.pathname === "/automation/planned-calories-cleanup") return handlePlannedCaloriesCleanup(request, env);
     const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcpCompat(request, env);
@@ -279,6 +281,17 @@ function logoResponse() {
   return new Response(svg, { status: 200, headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" } });
 }
 
+
+async function handlePlannedCaloriesCleanup(request, env) {
+  if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
+  try {
+    await verifyGitHubActionsToken(request);
+    const body=await request.json().catch(()=>({}));
+    return Response.json(await removeEstimatedEventCalories(env,{oldest:body?.oldest,newest:body?.newest}));
+  } catch(error) {
+    return Response.json({status:"error",step:"planned_calories_cleanup",message:error.message},{status:500});
+  }
+}
 
 async function handleNutritionNotesAutomation(request, env) {
   if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
