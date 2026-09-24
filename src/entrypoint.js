@@ -4,6 +4,7 @@ import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { syncDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
+import { dashboardPage } from "./dashboard.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -25,6 +26,8 @@ export default {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
       return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     }
+    if (url.pathname === "/app" && request.method === "GET") return dashboardPage();
+    if (url.pathname.startsWith("/app/api/")) return handleDashboardApi(request, env, ctx, url);
     if (url.pathname === "/" && request.method === "GET") return homepagePage();
     if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
     if (url.pathname === "/terms" && request.method === "GET") return policyPage("Terms of Use", `Health & Strength is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.`);
@@ -39,6 +42,31 @@ export default {
     return app.fetch(request, env, ctx);
   }
 };
+
+async function handleDashboardApi(request, env, ctx, url) {
+  if (request.method !== "GET") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
+  const expected = String(env.STRENGTH_API_KEY || "");
+  const auth = request.headers.get("Authorization") || "";
+  if (!expected || auth !== "Bearer " + expected) {
+    return Response.json({ status: "error", message: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
+  }
+
+  const routes = {
+    "/app/api/daily": "/analysis/daily",
+    "/app/api/weight": "/health/weight",
+    "/app/api/activities": "/health/activities",
+    "/app/api/nutrition": "/health/nutrition"
+  };
+  const target = routes[url.pathname];
+  if (!target) return Response.json({ status: "error", message: "Not found" }, { status: 404 });
+
+  const internal = new URL(target, request.url);
+  for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
+  const response = await app.fetch(new Request(internal, { method: "GET" }), env, ctx);
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store");
+  return new Response(response.body, { status: response.status, headers });
+}
 
 async function handleStrengthAutomation(request, env, ctx) {
   if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
