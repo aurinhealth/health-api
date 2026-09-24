@@ -57,7 +57,6 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 <section id="training" class="view">
   <div class="weekbar"><div><div class="eyebrow">Training management</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Dnes</button><button class="btn" id="nextWeek">→</button></div></div>
   <div class="daygrid" id="trainingDays"></div>
-  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Plánované aktivity</h3><div id="plannedList"></div></div><div class="card"><h3>Dokončené aktivity</h3><div id="completedList"></div></div></div>
   <div class="grid" style="margin-top:12px">
     <div class="card"><div class="label">Fitness</div><div id="tFitness" class="value">—</div><div class="small">CTL · 42denní trend</div></div>
     <div class="card"><div class="label">Fatigue</div><div id="tFatigue" class="value">—</div><div class="small">ATL · 7denní trend</div></div>
@@ -72,6 +71,8 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><h3>Tréninkový load · posledních 42 dní</h3><svg id="loadChart" class="chart" viewBox="0 0 1000 250"></svg></div>
     <div class="card"><h3>Aktivity · historie</h3><div id="trainingSummary" class="small"></div><div id="trainingActivityTable"></div></div>
   </div>
+
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Plánované aktivity</h3><div id="plannedList"></div></div><div class="card"><h3>Dokončené aktivity</h3><div id="completedList"></div></div></div>
 </section>
 
 <section id="gym" class="view">
