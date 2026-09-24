@@ -104,18 +104,47 @@ function fromBase64url(s) {
 }
 
 async function handleDashboardApi(request, env, ctx, url) {
+  const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+
+  if (url.pathname === "/app/api/gym") {
+    if (request.method === "GET") {
+      const internal = new URL("/strength/sheet/today", request.url);
+      const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
+      const data = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
+      return Response.json(data, { status: response.status, headers: {"Cache-Control":"no-store"} });
+    }
+    if (request.method === "POST") {
+      const body = await request.json().catch(() => ({}));
+      const values = Array.isArray(body?.values) ? body.values : null;
+      if (!values) return Response.json({status:"error",message:"values must be a 2D array"}, {status:400});
+      const internal = new URL("/strength/sheet/write", request.url);
+      const response = await app.fetch(new Request(internal, {
+        method:"POST",
+        headers:{...internalAuth,"Content-Type":"application/json"},
+        body:JSON.stringify({range:"'Dnešní trénink'!A8:K"+(7+values.length),values})
+      }), env, ctx);
+      const result = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
+      if (!response.ok) return Response.json(result,{status:response.status});
+      const sync = await app.fetch(new Request(new URL("/strength/sync",request.url),{method:"POST",headers:internalAuth}),env,ctx);
+      const syncResult = await sync.json().catch(()=>null);
+      return Response.json({status:"ok",write:result,sync:syncResult},{headers:{"Cache-Control":"no-store"}});
+    }
+    return Response.json({status:"error",message:"Method not allowed"},{status:405});
+  }
+
+  if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
+    const body = await request.json().catch(() => ({}));
+    const internal = new URL("/strength/generate-plan", request.url);
+    const response = await app.fetch(new Request(internal,{
+      method:"POST",
+      headers:{...internalAuth,"Content-Type":"application/json"},
+      body:JSON.stringify({...body,date:body?.date||null})
+    }),env,ctx);
+    const data=await response.json().catch(()=>({status:"error",message:"Invalid response"}));
+    return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store"}});
+  }
+
   if (request.method !== "GET") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
-  const expected = String(env.STRENGTH_API_KEY || "");
-  const auth = request.headers.get("Authorization") || "";
-  let authorized = Boolean(expected && auth === "Bearer " + expected);
-  let refreshSession = false;
-  if (!authorized) {
-    authorized = await verifyDashboardSession(request, expected);
-    refreshSession = authorized;
-  }
-  if (!authorized) {
-    return Response.json({ status: "error", message: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
-  }
 
   if (url.pathname === "/app/api/week") {
     const requestedStart = url.searchParams.get("start");
@@ -142,26 +171,24 @@ async function handleDashboardApi(request, env, ctx, url) {
         recommendations: await recommendResponse.json()
       };
     }));
-    const headers = {"Cache-Control":"no-store"};
-    if (refreshSession) headers["Set-Cookie"] = await newDashboardSessionCookie(expected);
-    return Response.json({status:"ok",start,end:dates[6],days},{headers});
+    return Response.json({status:"ok",start,end:dates[6],days},{headers:{"Cache-Control":"no-store"}});
   }
 
   const routes = {
     "/app/api/daily": "/analysis/daily",
     "/app/api/weight": "/health/weight",
     "/app/api/activities": "/health/activities",
-    "/app/api/nutrition": "/health/nutrition"
+    "/app/api/nutrition": "/health/nutrition",
+    "/app/api/sleep": "/health/sleep"
   };
   const target = routes[url.pathname];
   if (!target) return Response.json({ status: "error", message: "Not found" }, { status: 404 });
 
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
-  const response = await app.fetch(new Request(internal, { method: "GET" }), env, ctx);
+  const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
-  if (refreshSession) headers.set("Set-Cookie", await newDashboardSessionCookie(expected));
   return new Response(response.body, { status: response.status, headers });
 }
 
