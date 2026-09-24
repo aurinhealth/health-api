@@ -217,7 +217,7 @@ function renderOverview(){
   const renderPlanDay=x=>{
     const p=(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z));
     const a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));
-    const items=p.map(z=>{const match=a.find(y=>Math.abs(num(y.tss)-num(z.tss))<=5&&String(y.name||"").toLowerCase().includes(String(z.name||"").toLowerCase().slice(0,12)));return {z,done:Boolean(match),actual:match};});
+    const items=p.map(z=>{const match=a.find(y=>String(y.pairedEventId||y.paired_event_id||"")===String(z.id||""))||a.find(y=>Math.abs(num(y.tss)-num(z.tss))<=5&&String(y.name||"").toLowerCase().includes(String(z.name||"").toLowerCase().slice(0,12)));return {z,done:Boolean(match),actual:match};});
     a.filter(y=>!p.some(z=>String(z.name||"").toLowerCase()===String(y.name||"").toLowerCase())).forEach(y=>items.push({z:y,done:true}));
     return '<div class="plan-day '+(x.date===today?"today":"")+'"><div class="dow">'+esc(longDate(x.date))+'</div>'+ (items.length?items.map(({z,done,actual})=>'<div class="plan-item '+(done?"done":"")+'"><div class="name">'+esc(z.name||z.type||"Aktivita")+'</div><div class="meta">'+(done?"✓ Dokončeno":"Plán")+(z.durationHours?" · "+fmt(z.durationHours,1)+" h":"")+(z.tss?" · TSS "+fmt(z.tss):"")+(done&&actual?" · skutečně "+fmt(actual.tss):"")+'</div></div>').join(""):'<div class="muted">Volno</div>')+'</div>';
   };
