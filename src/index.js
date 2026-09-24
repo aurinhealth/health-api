@@ -2411,7 +2411,7 @@ async function foodLog(env, request, url) {
     date,
     consumedAt,
     recipe ? recipe.page : null,
-    recipe ? recipe.title : null,
+    recipe ? recipe.title : name,
     servings,
     scaled.kcal,
     scaled.protein_g,
