@@ -118,14 +118,18 @@ async function handleDashboardApi(request, env, ctx, url) {
       dailyUrl.searchParams.set("date", date);
       const foodUrl = new URL("/food/log", request.url);
       foodUrl.searchParams.set("date", date);
-      const [dailyResponse, foodResponse] = await Promise.all([
+      const recommendUrl = new URL("/food/recommend", request.url);
+      recommendUrl.searchParams.set("date", date);
+      const [dailyResponse, foodResponse, recommendResponse] = await Promise.all([
         app.fetch(new Request(dailyUrl, {method:"GET"}), env, ctx),
-        app.fetch(new Request(foodUrl, {method:"GET"}), env, ctx)
+        app.fetch(new Request(foodUrl, {method:"GET"}), env, ctx),
+        app.fetch(new Request(recommendUrl, {method:"GET"}), env, ctx)
       ]);
       return {
         date,
         daily: await dailyResponse.json(),
-        food: await foodResponse.json()
+        food: await foodResponse.json(),
+        recommendations: await recommendResponse.json()
       };
     }));
     return Response.json({status:"ok",start,end:dates[6],days},{headers:{"Cache-Control":"no-store"}});
