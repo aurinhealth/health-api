@@ -33,4 +33,5 @@ jobs:
         run: |
           set -euo pipefail
           body="$(cat automation/nutrition-cleanup-request.json)"
-          curl -fsS -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "$body"             "https://petrfitnessdata.eu/automation/nutrition-notes"
+          response="$(curl -sS -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/automation/nutrition-notes")"
+          printf "%s\n" "$response"
