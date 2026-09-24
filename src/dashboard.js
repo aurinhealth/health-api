@@ -103,7 +103,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js" defer></script>
+<script src="/app/dashboard-client.js?v=20260924-1" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
