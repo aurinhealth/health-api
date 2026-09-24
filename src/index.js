@@ -607,7 +607,7 @@ async function googleReconcile(
   } else if (filterType === "exercise") {
     filter = `${filterName}.interval.civil_start_time >= "${startDate}T00:00:00" AND ${filterName}.interval.civil_start_time < "${end}T00:00:00"`;
   } else if (filterType === "sleep") {
-    filter = `sleep.interval.end_time >= "${startDate}T00:00:00Z" AND sleep.interval.end_time < "${end}T00:00:00Z"`;
+    filter = `sleep.interval.civil_end_time >= "${startDate}" AND sleep.interval.civil_end_time < "${end}"`;
   } else {
     throw new Error(`Unsupported Google filter type: ${filterType}`);
   }
@@ -1019,7 +1019,7 @@ async function syncGoogle(env) {
       let saved = 0;
       for (const point of points) {
         const i = googleInfo(type, point);
-        const fallbackId = `${type}:${i.sample || i.start || crypto.randomUUID()}`;
+        const fallbackId = point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`;
         await savePoint(env, family, type, point, i.value, i.unit, i.sample, i.start, i.end, fallbackId);
         saved++;
       }
