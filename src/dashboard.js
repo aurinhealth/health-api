@@ -30,8 +30,8 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 6px;
 
   <section class="auth">
     <div><strong>Dashboard access</strong></div>
-    <div class="small">Enter the private dashboard key configured for the Worker. The key stays in this browser session and is never displayed by the page.</div>
-    <div class="authrow" style="margin-top:10px"><input id="key" type="password" placeholder="Dashboard access key"><button id="connect">Load data</button></div>
+    <div class="small">Your dashboard session is authenticated server-side. The API key is never stored in the browser.</div>
+    <div class="authrow" style="margin-top:10px"><input id="key" type="password" autocomplete="current-password" placeholder="Dashboard access key"><button id="connect">Sign in</button><button id="logout" hidden>Sign out</button></div>
     <div id="status" class="status">Not connected.</div>
   </section>
 
@@ -66,17 +66,34 @@ table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 6px;
 </main>
 <script>
 const $=id=>document.getElementById(id);
-const saved=sessionStorage.getItem("pfd_dashboard_key"); if(saved) $("key").value=saved;
 function n(v,unit=""){return v==null||Number.isNaN(Number(v))?"—":Math.round(Number(v)*10)/10+(unit?" "+unit:"")}
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
-async function api(path,key){const r=await fetch(path,{headers:{Authorization:"Bearer "+key}});const d=await r.json().catch(()=>({message:"Invalid response"}));if(!r.ok)throw new Error(d.message||"HTTP "+r.status);return d}
-async function load(){
-  const key=$("key").value.trim(); if(!key){$("status").textContent="Enter the dashboard access key.";return}
-  sessionStorage.setItem("pfd_dashboard_key",key); $("status").textContent="Loading…"; $("status").className="status";
+async function jsonFetch(path,options={}){
+  const r=await fetch(path,{credentials:"same-origin",...options});
+  const d=await r.json().catch(()=>({message:"Invalid response"}));
+  if(!r.ok){const e=new Error(d.message||"HTTP "+r.status);e.status=r.status;throw e}
+  return d
+}
+async function login(){
+  const key=$("key").value.trim();
+  if(!key){$("status").textContent="Enter the dashboard access key.";return}
+  $("status").textContent="Signing in…";$("status").className="status";
   try{
-    const [daily,nutrition]=await Promise.all([
-      api("/app/api/daily",key),api("/app/api/nutrition",key)
-    ]);
+    await jsonFetch("/app/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});
+    $("key").value="";$("key").placeholder="Session active";$("key").disabled=true;
+    $("connect").hidden=true;$("logout").hidden=false;
+    await loadData();
+  }catch(e){$("status").textContent="Sign-in failed: "+e.message;$("status").className="status err"}
+}
+async function logout(){
+  await fetch("/app/logout",{method:"POST",credentials:"same-origin"});
+  $("content").hidden=true;$("key").disabled=false;$("key").placeholder="Dashboard access key";
+  $("connect").hidden=false;$("logout").hidden=true;$("status").textContent="Signed out."; $("status").className="status";
+}
+async function loadData(){
+  $("status").textContent="Loading…";$("status").className="status";
+  try{
+    const [daily,nutrition]=await Promise.all([jsonFetch("/app/api/daily"),jsonFetch("/app/api/nutrition")]);
     $("content").hidden=false;
     $("calTarget").textContent=n(daily.calories?.target);$("tdee").textContent=n(daily.calories?.estimatedTDEE);
     $("weight").textContent=n(daily.weight?.current);$("protein").textContent=n(daily.nutrition?.protein);
@@ -88,9 +105,13 @@ async function load(){
     const nr=nutrition.records||[];$("nutritionInfo").textContent=(nr.length||0)+" Google Health nutrition records returned.";
     $("nutritionRows").innerHTML=nr.slice(-30).reverse().map(x=>'<tr><td>'+esc(x.startTime||x.start_time||x.sampleTime||"")+'</td><td>'+esc(x.foodDisplayName||x.food_display_name||x.name||"Nutrition entry")+'</td><td>'+esc(x.mealType||x.meal_type||"")+'</td></tr>').join("")||'<tr><td colspan="3">No Google Health nutrition records found.</td></tr>';
     $("status").textContent="Connected • last refresh "+new Date().toLocaleTimeString();$("status").className="status ok";
-  }catch(e){$("status").textContent="Error: "+e.message;$("status").className="status err"}
+  }catch(e){
+    if(e.status===401){$("content").hidden=true;$("key").disabled=false;$("key").placeholder="Dashboard access key";$("connect").hidden=false;$("logout").hidden=true;$("status").textContent="Session expired. Sign in again."}
+    else $("status").textContent="Error: "+e.message;
+    $("status").className="status err";
+  }
 }
-$("connect").onclick=load;$("refresh").onclick=load;
+$("connect").onclick=login;$("logout").onclick=logout;$("refresh").onclick=loadData;
 </script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
