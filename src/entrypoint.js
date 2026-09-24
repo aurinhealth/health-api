@@ -79,6 +79,12 @@ async function verifyDashboardSession(request, secret) {
     return Number(data?.exp) > Math.floor(Date.now()/1000);
   } catch { return false; }
 }
+async function newDashboardSessionCookie(secret) {
+  const exp = Math.floor(Date.now()/1000) + 30*24*60*60;
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({exp})));
+  const signature = await dashboardHmac(payload, secret);
+  return "pfd_session="+payload+"."+signature+"; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax";
+}
 async function dashboardHmac(value, secret) {
   const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
   const sig = await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value));
@@ -102,7 +108,11 @@ async function handleDashboardApi(request, env, ctx, url) {
   const expected = String(env.STRENGTH_API_KEY || "");
   const auth = request.headers.get("Authorization") || "";
   let authorized = Boolean(expected && auth === "Bearer " + expected);
-  if (!authorized) authorized = await verifyDashboardSession(request, expected);
+  let refreshSession = false;
+  if (!authorized) {
+    authorized = await verifyDashboardSession(request, expected);
+    refreshSession = authorized;
+  }
   if (!authorized) {
     return Response.json({ status: "error", message: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
   }
@@ -149,6 +159,7 @@ async function handleDashboardApi(request, env, ctx, url) {
   const response = await app.fetch(new Request(internal, { method: "GET" }), env, ctx);
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
+  if (refreshSession) headers.set("Set-Cookie", await newDashboardSessionCookie(expected));
   return new Response(response.body, { status: response.status, headers });
 }
 
