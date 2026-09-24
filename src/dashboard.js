@@ -46,7 +46,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
     <div class="card"><div class="label">Recovery</div><div class="grid2" style="margin-top:4px"><div><div class="small">Spánek</div><div id="oRecoverySleep" class="value" style="font-size:22px">—</div></div><div><div class="small">Trénink</div><div id="oRecoveryTraining" class="value" style="font-size:22px">—</div></div></div><div id="oRecoveryNote" class="small">samostatně · celkové recovery</div></div>
   </div>
-  <div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
+  <div class="section">Spánek · posledních 7 nocí</div><div class="card"><div id="overviewSleepHistory"></div></div><div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
   <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="chart" viewBox="0 0 1000 260"></svg></div>
 </section>
@@ -93,7 +93,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
   <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div><div id="nutritionTargetSummary" class="notice" style="margin-top:8px"></div></div><div class="select-row"><select id="nutritionWeekSelect"></select><select id="nutritionDaySelect"></select></div></div>
   <div class="daygrid" id="nutritionDays"></div>
   <div class="grid2" style="margin-top:12px"><div class="card"><h3>Makra · příjem vs. cíl</h3><svg id="nutritionChart" class="stack-chart" viewBox="0 0 900 300"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
-  <div class="section">Google Health · historie jídel</div><div class="card"><details open><summary>Historie jídel</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div class="scroll"><table><thead><tr><th>Datum</th><th>Jídlo</th><th>Typ</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Tuk</th></tr></thead><tbody id="nutritionRows"></tbody></table></div></details></div>
+  <div class="section">Google Health · historie jídel</div><div class="card"><details><summary>Historie jídel ▾</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div class="scroll"><table><thead><tr><th>Datum</th><th>Jídlo</th><th>Typ</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Tuk</th></tr></thead><tbody id="nutritionRows"></tbody></table></div></details></div>
 </section>
 
 <section id="health" class="view">
