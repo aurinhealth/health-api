@@ -99,7 +99,11 @@ jobs:
           sleep="$(curl -fsS "https://petrfitnessdata.eu/app/api/sleep")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "sessions" in d' <<< "$sleep"
           gym="$(curl -fsS "https://petrfitnessdata.eu/app/api/gym")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "values" in d' <<< "$gym"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "values" in d; assert "videoLinks" in d' <<< "$gym"
+          activities="$(curl -fsS "https://petrfitnessdata.eu/app/api/activities")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "activities" in d' <<< "$activities"
+          week="$(curl -fsS "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,d' <<< "$week"
 
       - name: Smoke test MCP endpoint
         shell: bash
