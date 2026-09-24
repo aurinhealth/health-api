@@ -4,196 +4,122 @@ export function dashboardPage() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Petr Fitness Data</title>
+<meta name="robots" content="noindex,nofollow">
+<title>Petr Fitness Data — Command Center</title>
 <style>
-:root{color-scheme:dark;--bg:#090b0f;--panel:#12161e;--panel2:#171c26;--line:#293140;--text:#f4f5f7;--muted:#98a2b3;--accent:#8b5cf6;--accent2:#a78bfa;--ok:#34d399;--warn:#f59e0b;--bad:#f87171}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-main{max-width:1380px;margin:0 auto;padding:28px 22px 70px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:18px}h1{font-size:30px;line-height:1.15;margin:0 0 5px}.sub{color:var(--muted)}
-button,.tab{border:0;border-radius:10px;padding:10px 14px;background:var(--accent);color:white;font-weight:700;cursor:pointer}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 22px}.tab{background:transparent;border:1px solid var(--line);color:var(--muted)}.tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.auth{background:var(--panel);border:1px solid var(--line);padding:14px 16px;border-radius:14px;margin-bottom:20px}.authrow{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.auth input{width:320px;max-width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#0d1117;color:var(--text)}.status{color:var(--muted);margin-top:7px}.status.ok{color:var(--ok)}.status.err{color:var(--bad)}
-.view{display:none}.view.active{display:block}.section{font-size:19px;font-weight:750;margin:22px 0 11px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:17px;min-width:0}.card h3{margin:0 0 12px;font-size:15px}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.07em}.value{font-size:25px;font-weight:800;margin-top:3px}.small{font-size:12px;color:var(--muted)}.metric-note{margin-top:5px;font-size:12px;color:var(--muted)}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#202733;color:#d8dee8;font-size:11px}.good{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-.weekbar{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.weeknav{display:flex;gap:7px;align-items:center}.weeknav button{background:var(--panel2);border:1px solid var(--line);padding:8px 11px}.weektitle{font-weight:750;min-width:220px;text-align:center}
-table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 7px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}.scroll{overflow:auto}
-.daygrid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px}.day{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px;min-height:170px}.day.today{border-color:var(--accent)}.dayhead{font-weight:750;margin-bottom:8px}.daynum{color:var(--muted);font-size:11px}.bar{height:7px;border-radius:99px;background:#252c37;overflow:hidden;margin:7px 0}.bar>i{display:block;height:100%;background:var(--accent)}.bar.good>i{background:var(--ok)}
-.chart{height:240px;width:100%;display:block}.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}.legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent);margin-right:5px}.legend .green:before{background:var(--ok)}.legend .orange:before{background:var(--warn)}
-.activity{padding:11px 0;border-bottom:1px solid var(--line)}.activity:last-child{border-bottom:0}.activity strong{display:block}.muted{color:var(--muted)}
-.foodrow{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}.foodrow:last-child{border-bottom:0}.foodname{font-weight:650}.right{text-align:right;white-space:nowrap}
-@media(max-width:1050px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:1fr 1fr}.daygrid{overflow:auto;grid-template-columns:repeat(7,170px)}}
-@media(max-width:700px){main{padding:20px 14px 50px}.top{flex-direction:column}.grid,.grid2,.grid3{grid-template-columns:1fr}.weektitle{min-width:0}.daygrid{grid-template-columns:repeat(7,160px)}}
+:root{color-scheme:dark;--bg:#080b10;--sidebar:#0c1118;--panel:#111720;--panel2:#151c26;--line:#26303d;--text:#f5f7fa;--muted:#8d99aa;--accent:#7c5cff;--accent2:#9a84ff;--ok:#34d399;--warn:#f5b74b;--bad:#f87171;--cyan:#4cc9f0}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-template-columns:238px minmax(0,1fr);min-height:100vh}.sidebar{background:var(--sidebar);border-right:1px solid var(--line);padding:22px 14px;position:sticky;top:0;height:100vh}.brand{padding:3px 10px 24px}.brand strong{display:block;font-size:18px;letter-spacing:-.02em}.brand span{color:var(--muted);font-size:12px}.nav{display:grid;gap:5px}.nav button{border:1px solid transparent;background:transparent;color:var(--muted);padding:11px 12px;border-radius:10px;text-align:left;font-weight:650}.nav button:hover{background:var(--panel2);color:var(--text)}.nav button.active{background:rgba(124,92,255,.16);border-color:rgba(124,92,255,.35);color:#fff}.sidebar-foot{position:absolute;bottom:18px;left:24px;right:18px;color:var(--muted);font-size:11px}.main{min-width:0}.topbar{height:72px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 30px;position:sticky;top:0;background:rgba(8,11,16,.92);backdrop-filter:blur(12px);z-index:5}.top-title{font-size:17px;font-weight:750}.top-sub{color:var(--muted);font-size:12px}.actions{display:flex;gap:8px;align-items:center}.status-dot{width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block}.btn{border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:9px 12px;border-radius:9px;font-weight:650}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn:hover{filter:brightness(1.08)}.content{max-width:1500px;padding:26px 30px 70px;margin:0 auto}.view{display:none}.view.active{display:block}.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-end;margin-bottom:22px}.eyebrow{color:var(--accent2);font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:750}.hero h1{margin:3px 0 4px;font-size:30px;letter-spacing:-.035em}.hero p{margin:0;color:var(--muted)}.section{font-size:17px;font-weight:750;margin:24px 0 12px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{background:linear-gradient(180deg,var(--panel),#0f151d);border:1px solid var(--line);border-radius:13px;padding:16px;min-width:0;box-shadow:0 8px 28px rgba(0,0,0,.12)}.card h3{font-size:14px;margin:0 0 13px}.label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;font-weight:700}.value{font-size:26px;font-weight:800;letter-spacing:-.03em;margin-top:3px}.small{font-size:12px;color:var(--muted)}.muted{color:var(--muted)}.pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#202936;color:#cbd4df;font-size:11px;font-weight:650}.good{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.accent{color:var(--accent2)}.weekbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.weeknav{display:flex;gap:6px}.weeknav .btn{padding:7px 10px}.weektitle{font-weight:750}.daygrid{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px}.day{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px;min-height:155px}.day.today{border-color:var(--accent);box-shadow:inset 0 0 0 1px rgba(124,92,255,.18)}.dayhead{font-weight:700}.bar{height:6px;background:#242c37;border-radius:99px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--accent);border-radius:99px}.bar.ok i{background:var(--ok)}.activity{padding:10px 0;border-bottom:1px solid var(--line)}.activity:last-child{border-bottom:0}.activity strong{display:block}.right{text-align:right;white-space:nowrap}.foodrow{display:flex;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid var(--line)}.foodrow:last-child{border-bottom:0}.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}th{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}.chart{width:100%;height:250px;display:block}.legend{display:flex;gap:16px;color:var(--muted);font-size:11px}.metric-line{display:flex;justify-content:space-between;gap:10px;margin:7px 0}.gym-toolbar{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:12px}.gym-table input{width:82px;background:#0c1118;border:1px solid var(--line);color:var(--text);border-radius:7px;padding:7px}.gym-table input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}.gym-table a{color:#b9aaff;text-decoration:none;font-weight:650}.gym-table a:hover{text-decoration:underline}.gym-type{font-size:10px;color:var(--muted);font-weight:750;letter-spacing:.05em}.sleep-stage{display:flex;height:16px;border-radius:7px;overflow:hidden;background:#202733}.sleep-stage i{display:block}.stage-deep{background:#5b4ae8}.stage-rem{background:#a06cf7}.stage-light{background:#4cc9f0}.stage-awake{background:#f5b74b}.notice{padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:rgba(124,92,255,.07);color:#cbd4df}.toast{position:fixed;right:22px;bottom:22px;background:#151c26;border:1px solid var(--line);padding:12px 15px;border-radius:10px;box-shadow:0 14px 40px #0008;display:none;z-index:20}.toast.show{display:block}
+@media(max-width:1050px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:sticky;z-index:10;padding:10px 14px;border-right:0;border-bottom:1px solid var(--line)}.brand{display:none}.nav{display:flex;overflow:auto}.nav button{white-space:nowrap}.sidebar-foot{display:none}.topbar{top:51px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.daygrid{overflow:auto;grid-template-columns:repeat(7,170px)}}@media(max-width:700px){.content{padding:20px 14px 50px}.topbar{padding:0 14px}.top-sub{display:none}.hero{align-items:flex-start;flex-direction:column}.grid,.grid2,.grid3{grid-template-columns:1fr}.actions .status-label{display:none}}
 </style>
 </head>
 <body>
-<main>
-  <div class="top">
-    <div><h1>Petr Fitness Data</h1><div class="sub">Training • Health • Nutrition</div></div>
-    <button id="refresh">Refresh</button>
-  </div>
-
-  <section class="auth">
-    <div><strong>Dashboard</strong> <span class="pill">session protected</span></div>
-    <div class="small">Access key slouží jen k prvnímu přihlášení. Potom používá dashboard podepsanou HttpOnly session cookie, která se při používání automaticky prodlužuje; klíč se v prohlížeči neukládá.</div>
-    <div class="authrow" style="margin-top:9px"><input id="key" type="password" autocomplete="current-password" placeholder="Dashboard access key"><button id="connect">Sign in</button><button id="logout" hidden>Sign out</button></div>
-    <div id="status" class="status">Kontroluji session…</div>
-  </section>
-
-  <nav class="tabs">
-    <button class="tab active" data-view="overview">Přehled</button>
-    <button class="tab" data-view="training">Trénink</button>
-    <button class="tab" data-view="nutrition">Výživa</button>
-    <button class="tab" data-view="health">Osobní data</button>
+<div class="shell">
+<aside class="sidebar">
+  <div class="brand"><strong>Petr Fitness Data</strong><span>Performance Command Center</span></div>
+  <nav class="nav">
+    <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
+    <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
+    <button class="navbtn" data-view="gym">▣ <span>Gym</span></button>
+    <button class="navbtn" data-view="recovery">◒ <span>Recovery & spánek</span></button>
+    <button class="navbtn" data-view="nutrition">◉ <span>Výživa</span></button>
+    <button class="navbtn" data-view="health">⌁ <span>Health data</span></button>
   </nav>
-
-  <div id="content" hidden>
-    <section id="overview" class="view active">
-      <div class="section">Dnes</div>
-      <div class="grid">
-        <div class="card"><div class="label">Kalorický cíl</div><div id="oCal" class="value">—</div><div class="small">kcal</div></div>
-        <div class="card"><div class="label">Odhad TDEE</div><div id="oTdee" class="value">—</div><div class="small">kcal</div></div>
-        <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div class="small">kg</div></div>
-        <div class="card"><div class="label">Protein</div><div id="oProtein" class="value">—</div><div class="small">g / den</div></div>
-      </div>
-      <div class="grid3" style="margin-top:14px">
-        <div class="card"><div class="label">Snědeno</div><div id="oFood" class="value">—</div><div class="metric-note" id="oFoodNote"></div></div>
-        <div class="card"><div class="label">Dnešní trénink</div><div id="oTraining" class="value">—</div><div class="metric-note" id="oTrainingNote"></div></div>
-        <div class="card"><div class="label">Týdenní zátěž</div><div id="oWeek" class="value">—</div><div class="metric-note">dny s plánem / aktivitou</div></div>
-      </div>
-      <div class="section">Týdenní přehled</div>
-      <div class="card"><div id="weekSummary"></div></div>
-      <div class="grid2" style="margin-top:14px">
-        <div class="card"><h3>Kalorie: cíl vs. snědeno</h3><svg id="calChart" class="chart" viewBox="0 0 700 240"></svg><div class="legend"><span>Cíl</span><span class="green">Snědeno</span></div></div>
-        <div class="card"><h3>Hmotnost</h3><svg id="weightChart" class="chart" viewBox="0 0 700 240"></svg><div class="legend"><span>Hmotnost</span></div></div>
-      </div>
-    </section>
-
-    <section id="training" class="view">
-      <div class="weekbar"><div><div class="section" style="margin:0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="weeknav"><button id="prevWeek">←</button><button id="thisWeek">Tento týden</button><button id="nextWeek">→</button></div></div>
-      <div class="daygrid" id="trainingDays"></div>
-      <div class="grid2" style="margin-top:14px">
-        <div class="card"><h3>Plánované aktivity</h3><div id="plannedList"></div></div>
-        <div class="card"><h3>Dokončené aktivity</h3><div id="completedList"></div></div>
-      </div>
-      <div class="card" style="margin-top:14px"><h3>Délka tréninku v týdnu</h3><svg id="activityChart" class="chart" viewBox="0 0 1000 250"></svg></div>
-    </section>
-
-    <section id="nutrition" class="view">
-      <div class="weekbar"><div><div class="section" style="margin:0">Výživa</div><div id="nutritionRange" class="small"></div></div></div>
-      <div class="daygrid" id="nutritionDays"></div>
-      <div class="grid2" style="margin-top:14px">
-        <div class="card"><h3>Kalorie za týden</h3><svg id="nutritionChart" class="chart" viewBox="0 0 700 240"></svg></div>
-        <div class="card"><h3>Plán jídla / doporučení</h3><div id="foodPlan"></div></div>
-      </div>
-      <div class="section">Historie jídla z Google Health</div>
-      <div class="card"><div id="nutritionInfo" class="small"></div><div class="scroll" style="margin-top:8px"><table><thead><tr><th>Datum</th><th>Jídlo</th><th>Jídlo typ</th><th>kcal</th><th>Protein</th><th>Sacharidy</th><th>Tuk</th></tr></thead><tbody id="nutritionRows"></tbody></table></div></div>
-    </section>
-
-    <section id="health" class="view">
-      <div class="section">Osobní data</div>
-      <div class="grid">
-        <div class="card"><div class="label">Aktuální hmotnost</div><div id="hWeight" class="value">—</div><div class="small">kg</div></div>
-        <div class="card"><div class="label">7denní průměr</div><div id="hAvg7" class="value">—</div><div class="small">kg</div></div>
-        <div class="card"><div class="label">30denní průměr</div><div id="hAvg30" class="value">—</div><div class="small">kg</div></div>
-        <div class="card"><div class="label">Aktivity</div><div id="hActivities" class="value">—</div><div class="small">záznamů</div></div>
-      </div>
-      <div class="grid2" style="margin-top:14px">
-        <div class="card"><h3>Vývoj hmotnosti</h3><svg id="healthWeightChart" class="chart" viewBox="0 0 700 280"></svg></div>
-        <div class="card"><h3>Kalorický příjem vs. cíl</h3><svg id="healthCalChart" class="chart" viewBox="0 0 700 280"></svg></div>
-      </div>
-      <div class="section">Aktivita za poslední období</div>
-      <div class="card"><div id="healthActivityTable"></div></div>
-    </section>
+  <div class="sidebar-foot">Private training workspace<br>Data is loaded server-side</div>
+</aside>
+<main class="main">
+<header class="topbar">
+  <div><div class="top-title">Petr Fitness Data</div><div class="top-sub">Training intelligence · Health · Nutrition</div></div>
+  <div class="actions"><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
+</header>
+<div class="content">
+<section id="overview" class="view active">
+  <div class="hero"><div><div class="eyebrow">Performance overview</div><h1>Dobrý den, Petře</h1><p id="overviewDate">—</p></div></div>
+  <div class="grid">
+    <div class="card"><div class="label">Kalorický cíl</div><div id="oCal" class="value">—</div><div class="small">kcal / den</div></div>
+    <div class="card"><div class="label">TDEE</div><div id="oTdee" class="value">—</div><div class="small">odhad výdeje</div></div>
+    <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div class="small">kg</div></div>
+    <div class="card"><div class="label">Spánek</div><div id="oSleep" class="value">—</div><div class="small">poslední noc</div></div>
   </div>
-</main>
+  <div class="grid3" style="margin-top:12px">
+    <div class="card"><div class="label">Dnešní trénink</div><div id="oTraining" class="value">—</div><div id="oTrainingNote" class="small"></div></div>
+    <div class="card"><div class="label">Kalorie snědeno</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div></div>
+    <div class="card"><div class="label">Protein</div><div id="oProtein" class="value">—</div><div class="small">denní cíl</div></div>
+  </div>
+  <div class="section">Týdenní přehled</div><div class="card" id="weekSummary"></div>
+  <div class="grid2" style="margin-top:12px">
+    <div class="card"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="chart" viewBox="0 0 700 250"></svg></div>
+    <div class="card"><h3>Hmotnost</h3><svg id="weightChart" class="chart" viewBox="0 0 700 250"></svg></div>
+  </div>
+</section>
+
+<section id="training" class="view">
+  <div class="weekbar"><div><div class="eyebrow">Training management</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Dnes</button><button class="btn" id="nextWeek">→</button></div></div>
+  <div class="daygrid" id="trainingDays"></div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Plánované aktivity</h3><div id="plannedList"></div></div><div class="card"><h3>Dokončené aktivity</h3><div id="completedList"></div></div></div>
+  <div class="card" style="margin-top:12px"><h3>Délka tréninku</h3><svg id="activityChart" class="chart" viewBox="0 0 1000 250"></svg></div>
+</section>
+
+<section id="gym" class="view">
+  <div class="hero"><div><div class="eyebrow">Strength management</div><h1>Gym</h1><p id="gymMeta">Dnešní silový trénink</p></div><div class="actions"><button class="btn" id="generateGym">Generate today's plan</button><button class="btn primary" id="saveGym">Save workout</button></div></div>
+  <div class="notice" id="gymNotice">Načítám dnešní trénink…</div>
+  <div class="card" style="margin-top:12px"><div class="scroll"><table class="gym-table"><thead><tr><th>Typ</th><th>Cvik</th><th>Série</th><th>Plán kg</th><th>Plán reps</th><th>Skutečně kg</th><th>Skutečně reps</th><th>RPE</th><th>Hotovo</th><th>Video</th></tr></thead><tbody id="gymRows"></tbody></table></div></div>
+</section>
+
+<section id="recovery" class="view">
+  <div class="hero"><div><div class="eyebrow">Recovery intelligence</div><h1>Recovery & spánek</h1><p>Spánek, délka a rozložení jednotlivých fází</p></div></div>
+  <div class="grid">
+    <div class="card"><div class="label">Poslední noc</div><div id="rLast" class="value">—</div><div class="small" id="rLastMeta"></div></div>
+    <div class="card"><div class="label">Průměr</div><div id="rAvg" class="value">—</div><div class="small">posledních 30 dní</div></div>
+    <div class="card"><div class="label">Deep</div><div id="rDeep" class="value">—</div><div class="small">poslední noc</div></div>
+    <div class="card"><div class="label">REM</div><div id="rRem" class="value">—</div><div class="small">poslední noc</div></div>
+  </div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Spánek · posledních 30 dní</h3><svg id="sleepChart" class="chart" viewBox="0 0 700 250"></svg></div><div class="card"><h3>Poslední noc · fáze</h3><div id="sleepStages"></div></div></div>
+  <div class="card" style="margin-top:12px"><h3>Historie spánku</h3><div class="scroll"><table><thead><tr><th>Datum</th><th>Usnutí</th><th>Probuzení</th><th>Délka</th><th>Deep</th><th>REM</th><th>Light</th><th>Awake</th></tr></thead><tbody id="sleepRows"></tbody></table></div></div>
+</section>
+
+<section id="nutrition" class="view">
+  <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div></div></div>
+  <div class="daygrid" id="nutritionDays"></div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Kalorie za týden</h3><svg id="nutritionChart" class="chart" viewBox="0 0 700 250"></svg></div><div class="card"><h3>Doporučení</h3><div id="foodPlan"></div></div></div>
+  <div class="section">Google Health · historie jídel</div><div class="card"><div id="nutritionInfo" class="small"></div><div class="scroll"><table><thead><tr><th>Datum</th><th>Jídlo</th><th>Typ</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Tuk</th></tr></thead><tbody id="nutritionRows"></tbody></table></div></div>
+</section>
+
+<section id="health" class="view">
+  <div class="hero"><div><div class="eyebrow">Health data</div><h1>Health data</h1><p>Historie pohybu, hmotnosti a zdrojových dat</p></div></div>
+  <div class="grid"><div class="card"><div class="label">Hmotnost</div><div id="hWeight" class="value">—</div><div class="small">kg</div></div><div class="card"><div class="label">7denní průměr</div><div id="hAvg7" class="value">—</div><div class="small">kg</div></div><div class="card"><div class="label">30denní průměr</div><div id="hAvg30" class="value">—</div><div class="small">kg</div></div><div class="card"><div class="label">Aktivity</div><div id="hActivities" class="value">—</div><div class="small">záznamů</div></div></div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Vývoj hmotnosti</h3><svg id="healthWeightChart" class="chart" viewBox="0 0 700 250"></svg></div><div class="card"><h3>Aktivita · historie</h3><div id="healthActivityTable"></div></div></div>
+</section>
+</div></main></div>
+<div id="toast" class="toast"></div>
 <script>
 const $=id=>document.getElementById(id);
-let weekStart=pragueMonday();
-let state={week:null,weight:null,activities:null,nutrition:null,daily:null};
-
+let weekStart=pragueMonday(),state={};
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function num(v,d=0){const n=Number(v);return Number.isFinite(n)?n:d}
 function fmt(v,d=0){return Math.round(num(v)*10**d)/10**d}
 function dateShift(date,days){const p=date.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]+days)).toISOString().slice(0,10)}
-function pragueToday(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());const y=p.find(x=>x.type==="year")?.value,m=p.find(x=>x.type==="month")?.value,d=p.find(x=>x.type==="day")?.value;return y+"-"+m+"-"+d}
-function pragueMonday(){const d=pragueToday();const p=d.split("-").map(Number);const x=new Date(Date.UTC(p[0],p[1]-1,p[2]));const wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
+function pragueToday(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value+"-"+p.find(x=>x.type==="day").value}
+function pragueMonday(){const d=pragueToday().split("-").map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
 function dateLabel(d){return new Intl.DateTimeFormat("cs-CZ",{day:"2-digit",month:"2-digit"}).format(new Date(d+"T12:00:00Z"))}
 function longDate(d){return new Intl.DateTimeFormat("cs-CZ",{weekday:"long",day:"numeric",month:"numeric"}).format(new Date(d+"T12:00:00Z"))}
-async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options});const d=await r.json().catch(()=>({message:"Invalid response"}));if(!r.ok){const e=new Error(d.message||"HTTP "+r.status);e.status=r.status;throw e}return d}
-function setConnected(ok,msg){$("status").textContent=msg;$("status").className="status "+(ok?"ok":"err")}
-function activate(view){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.view===view));document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===view))}
-function weekLabel(){return dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6))}
-function chartSvg(id,values,targets,labels,opts={}){
-  const svg=$(id);const W=opts.W||700,H=opts.H||240,pad=34;
-  const nums=values.map(num).filter(Number.isFinite);const tnums=(targets||[]).map(num).filter(Number.isFinite);const all=nums.concat(tnums);
-  if(!all.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#98a2b3">Bez dat</text>';return}
-  let min=Math.min(...all),max=Math.max(...all);if(min===max){min-=1;max+=1}const x=i=>pad+(W-pad*2)*(values.length<=1?.5:i/(values.length-1));const y=v=>H-pad-(H-pad*2)*(v-min)/(max-min);
-  let out='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#293140"/>';
-  values.forEach((v,i)=>{if(Number.isFinite(num(v)))out+='<circle cx="'+x(i)+'" cy="'+y(num(v))+'" r="3.5" fill="#8b5cf6"/>';if(labels[i])out+='<text x="'+x(i)+'" y="'+(H-9)+'" text-anchor="middle" fill="#98a2b3" font-size="11">'+esc(labels[i])+'</text>'});
-  if(values.some(v=>Number.isFinite(num(v)))){const pts=values.map((v,i)=>Number.isFinite(num(v))?x(i)+","+y(num(v)):null).filter(Boolean).join(" ");out+='<polyline points="'+pts+'" fill="none" stroke="#8b5cf6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'}
-  if(targets&&targets.length){const pts=targets.map((v,i)=>Number.isFinite(num(v))?x(i)+","+y(num(v)):null).filter(Boolean).join(" ");out+='<polyline points="'+pts+'" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="6 5"/>'}
-  svg.innerHTML=out
-}
-function barChart(id,values,targets,labels){
-  const svg=$(id),W=700,H=240,pad=28;const all=values.concat(targets).map(num);const max=Math.max(1,...all)*1.12;const bw=(W-pad*2)/values.length*.58;let out="";
-  values.forEach((v,i)=>{const x=pad+i*(W-pad*2)/values.length+(W-pad*2)/values.length*.21;const h=num(v)/max*(H-55);const ht=num(targets[i])/max*(H-55);out+='<rect x="'+x+'" y="'+(H-30-ht)+'" width="'+bw+'" height="'+ht+'" rx="4" fill="#34d399" opacity=".28"/><rect x="'+x+'" y="'+(H-30-h)+'" width="'+bw+'" height="'+h+'" rx="4" fill="#8b5cf6"/><text x="'+(x+bw/2)+'" y="'+(H-9)+'" text-anchor="middle" fill="#98a2b3" font-size="10">'+esc(labels[i])+'</text>'});svg.innerHTML=out
-}
-function renderOverview(){
- const d=state.daily||{};const food=d.nutrition?.foodLog?.totals||{};$("oCal").textContent=fmt(d.calories?.target);$("oTdee").textContent=fmt(d.calories?.estimatedTDEE);$("oWeight").textContent=fmt(d.weight?.current,1);$("oProtein").textContent=fmt(d.nutrition?.protein);
- $("oFood").textContent=fmt(food.kcal)+" kcal";$("oFoodNote").textContent=fmt(food.kcal/Math.max(1,num(d.calories?.target))*100,0)+" % cíle";
- const acts=d.training?.completed||[],planned=d.training?.planned||[];$("oTraining").textContent=acts.length?acts.length+" hotovo":"Volno";$("oTrainingNote").textContent=planned.length?planned.length+" plánováno":"Nic plánováno";
- const days=(state.week?.days||[]).filter(x=>(x.daily?.training?.completed||[]).length||(x.daily?.training?.planned||[]).length).length;$("oWeek").textContent=days+"/7";
- const daysW=state.week?.days||[];$("weekSummary").innerHTML=daysW.map(x=>{const dd=x.daily||{},a=dd.training?.completed||[],p=dd.training?.planned||[],target=num(dd.calories?.target),e=num(x.food?.totals?.kcal);return '<div class="foodrow"><div><strong>'+esc(longDate(x.date))+'</strong><div class="small">'+(a.length?a.length+" aktivita":"bez dokončené aktivity")+' • '+(p.length?p.length+" plán":"bez plánu")+'</div></div><div class="right">'+fmt(e)+' / '+fmt(target)+' kcal</div></div>'}).join("");
- const labels=daysW.map(x=>dateLabel(x.date));const vals=daysW.map(x=>num(x.food?.totals?.kcal));const targets=daysW.map(x=>num(x.daily?.calories?.target));barChart("calChart",vals,targets,labels);
- const wr=(state.weight?.records||[]).slice(-30);chartSvg("weightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))));
-}
-function renderTraining(){
- const days=state.week?.days||[];$("trainingRange").textContent=weekLabel();$("trainingDays").innerHTML=days.map(x=>{const a=x.daily?.training?.completed||[],p=x.daily?.training?.planned||[];const dur=a.reduce((s,z)=>s+num(z.durationHours),0);return '<div class="day '+(x.date===pragueToday()?"today":"")+'"><div class="dayhead">'+esc(longDate(x.date))+'</div><div class="small">'+fmt(dur,1)+' h dokončeno</div><div class="bar"><i style="width:'+Math.min(100,dur/2*100)+'%"></i></div>'+(p.length?p.map(z=>'<div style="margin:6px 0"><span class="pill">'+esc(z.type||"plan")+'</span><div>'+esc(z.name||"")+'</div></div>').join(""):'<div class="muted">Bez plánu</div>')+'</div>'}).join("");
- const planned=days.flatMap(x=>(x.daily?.training?.planned||[]).map(z=>({...z,date:x.date})));const completed=days.flatMap(x=>(x.daily?.training?.completed||[]).map(z=>({...z,date:x.date})));
- $("plannedList").innerHTML=planned.length?planned.map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' — '+esc(x.name||"Workout")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" • "+fmt(x.durationHours,1)+" h":"")+(x.tss?" • TSS "+fmt(x.tss):"")+'</span></div>').join(""):'<div class="muted">Nic plánováno.</div>';
- $("completedList").innerHTML=completed.length?completed.slice().reverse().map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' — '+esc(x.name||"Activity")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" • "+fmt(x.durationHours,1)+" h":"")+(x.calories?" • "+fmt(x.calories)+" kcal":"")+'</span></div>').join(""):'<div class="muted">Zatím nic dokončeno.</div>';
- chartSvg("activityChart",days.map(x=>(x.daily?.training?.completed||[]).reduce((s,z)=>s+num(z.durationHours),0)),[],days.map(x=>dateLabel(x.date)),{W:1000,H:250});
-}
-function renderNutrition(){
- const days=state.week?.days||[];$("nutritionRange").textContent=weekLabel();
- $("nutritionDays").innerHTML=days.map(x=>{const t=num(x.daily?.calories?.target),e=num(x.food?.totals?.kcal),pct=t?Math.min(100,e/t*100):0;const diff=t-e;return '<div class="day '+(x.date===pragueToday()?"today":"")+'"><div class="dayhead">'+esc(longDate(x.date))+'</div><div class="value" style="font-size:20px">'+fmt(e)+' <span class="small">/ '+fmt(t)+' kcal</span></div><div class="bar '+(Math.abs(diff)<150?"good":"")+'"><i style="width:'+pct+'%"></i></div><div class="small">P '+fmt(x.food?.totals?.protein_g,0)+' g • C '+fmt(x.food?.totals?.carbs_g,0)+' g • F '+fmt(x.food?.totals?.fat_g,0)+' g</div><div class="small" style="margin-top:8px">'+(x.daily?.nutrition?.protein?fmt(x.daily.nutrition.protein)+" g protein cíl":"")+'</div></div>'}).join("");
- const vals=days.map(x=>num(x.food?.totals?.kcal)),targets=days.map(x=>num(x.daily?.calories?.target));barChart("nutritionChart",vals,targets,days.map(x=>dateLabel(x.date)));
- const selected=days.find(x=>x.date===pragueToday())||days[0];const rec=selected?.recommendations?.recommendations||[];$("foodPlan").innerHTML=selected?'<div class="small" style="margin-bottom:10px">'+esc(selected.recommendations?.coaching||"")+'</div>'+(rec.length?rec.slice(0,5).map(r=>'<div class="foodrow"><div><div class="foodname">'+esc(r.title||r.name||"Jídlo")+'</div><div class="small">'+esc(r.recommendation_reason||"")+'</div></div><div class="right">'+fmt(r.kcal)+' kcal<br><span class="small">'+fmt(r.protein_g,0)+' g P</span></div></div>').join(""):'<div class="muted">Žádné doporučení.</div>'):'—';
- const nr=state.nutrition?.records||[];$("nutritionInfo").textContent=nr.length+" záznamů z Google Health";$("nutritionRows").innerHTML=nr.slice().sort((a,b)=>String(b.startTime).localeCompare(String(a.startTime))).map(x=>'<tr><td>'+esc(x.startTime?new Date(x.startTime).toLocaleString("cs-CZ"):"—")+'</td><td>'+esc(x.foodDisplayName||"—")+'</td><td>'+esc(x.mealType||"—")+'</td><td>'+fmt(x.kcal)+'</td><td>'+fmt(x.protein_g,1)+' g</td><td>'+fmt(x.carbs_g,1)+' g</td><td>'+fmt(x.fat_g,1)+' g</td></tr>').join("")||'<tr><td colspan="7">Bez záznamů.</td></tr>';
-}
-function renderHealth(){
- const w=state.weight||{};$("hWeight").textContent=fmt(w.latest?.value_numeric,1);$("hAvg7").textContent=fmt(w.average7d,1);$("hAvg30").textContent=fmt(w.average30d,1);$("hActivities").textContent=(state.activities?.count||0);
- const wr=(w.records||[]).slice(-30);chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))),{W:700,H:280});
- const days=state.week?.days||[];barChart("healthCalChart",days.map(x=>num(x.food?.totals?.kcal)),days.map(x=>num(x.daily?.calories?.target)),days.map(x=>dateLabel(x.date)));
- const acts=(state.activities?.activities||[]).filter(x=>x.data_type==="activity").slice(0,20);$("healthActivityTable").innerHTML=acts.length?'<div class="scroll"><table><thead><tr><th>Datum</th><th>Aktivita</th><th>Typ</th></tr></thead><tbody>'+acts.map(x=>{let p={};try{p=JSON.parse(x.payload_json||"{}")}catch{}return '<tr><td>'+esc(String(x.start_time||"").slice(0,16).replace("T"," "))+'</td><td>'+esc(p.name||p.title||"Activity")+'</td><td>'+esc(p.type||p.category||"")+'</td></tr>'}).join("")+'</tbody></table></div>':'<div class="muted">Žádné aktivity.</div>';
-}
-async function load(){
- $("status").textContent="Načítám data…";$("status").className="status";
- try{
-  const end=dateShift(weekStart,6);
-  const [daily,week,weight,activities,nutrition]=await Promise.all([
-    jsonFetch("/app/api/daily"),
-    jsonFetch("/app/api/week?start="+weekStart),
-    jsonFetch("/app/api/weight"),
-    jsonFetch("/app/api/activities"),
-    jsonFetch("/app/api/nutrition?start="+weekStart+"&end="+dateShift(end,1))
-  ]);
-  state={daily,week,weight,activities,nutrition};$("content").hidden=false;
-  renderOverview();renderTraining();renderNutrition();renderHealth();
-  $("key").value="";$("key").disabled=true;$("connect").hidden=true;$("logout").hidden=false;
-  setConnected(true,"Connected • poslední refresh "+new Date().toLocaleTimeString("cs-CZ"));
- }catch(e){
-  if(e.status===401){$("content").hidden=true;$("key").disabled=false;$("key").placeholder="Dashboard access key";$("connect").hidden=false;$("logout").hidden=true;$("status").textContent="Session expired. Přihlas se znovu."}
-  else setConnected(false,"Chyba: "+e.message);
- }
-}
-async function login(){
- const key=$("key").value.trim();if(!key){$("status").textContent="Zadej dashboard access key.";return}
- try{await jsonFetch("/app/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({key})});await load()}catch(e){setConnected(false,"Přihlášení selhalo: "+e.message)}
-}
-async function logout(){await fetch("/app/logout",{method:"POST",credentials:"same-origin"});$("content").hidden=true;$("key").disabled=false;$("key").placeholder="Dashboard access key";$("connect").hidden=false;$("logout").hidden=true;$("status").textContent="Odhlášeno.";$("status").className="status"}
-$("connect").onclick=login;$("logout").onclick=logout;$("refresh").onclick=load;
-$("prevWeek").onclick=()=>{weekStart=dateShift(weekStart,-7);load()};$("nextWeek").onclick=()=>{weekStart=dateShift(weekStart,7);load()};$("thisWeek").onclick=()=>{weekStart=pragueMonday();load()};
-document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>activate(b.dataset.view));
-load();
+function hm(min){if(!Number.isFinite(Number(min)))return "—";return Math.floor(Number(min)/60)+"h "+Math.round(Number(min)%60)+"m"}
+function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
+async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options});const d=await r.json().catch(()=>({message:"Invalid response"}));if(!r.ok)throw new Error(d.message||"HTTP "+r.status);return d}
+function activate(view){document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===view))}
+function chartSvg(id,values,targets,labels,opts={}){const svg=$(id),W=opts.W||700,H=opts.H||250,pad=34,vals=values.map(v=>Number(v)).filter(Number.isFinite),tar=(targets||[]).map(v=>Number(v)).filter(Number.isFinite),all=vals.concat(tar);if(!all.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#8d99aa">Bez dat</text>';return}let min=Math.min(...all),max=Math.max(...all);if(min===max){min-=1;max+=1}const x=i=>pad+(W-pad*2)*(values.length<=1?.5:i/(values.length-1)),y=v=>H-pad-(H-pad*2)*(v-min)/(max-min);let out='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#26303d"/>';const pts=[];values.forEach((v,i)=>{if(Number.isFinite(Number(v))){pts.push(x(i)+","+y(Number(v)));out+='<circle cx="'+x(i)+'" cy="'+y(Number(v))+'" r="3" fill="#7c5cff"/>'}if(labels[i])out+='<text x="'+x(i)+'" y="'+(H-8)+'" text-anchor="middle" fill="#8d99aa" font-size="10">'+esc(labels[i])+'</text>'});if(pts.length>1)out+='<polyline points="'+pts.join(" ")+'" fill="none" stroke="#7c5cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';if(targets?.length){const p=targets.map((v,i)=>Number.isFinite(Number(v))?x(i)+","+y(Number(v)):null).filter(Boolean);if(p.length>1)out+='<polyline points="'+p.join(" ")+'" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="6 5"/>'}svg.innerHTML=out}
+function barChart(id,values,targets,labels){const svg=$(id),W=700,H=250,pad=28,all=values.concat(targets||[]).map(num),max=Math.max(1,...all)*1.12,bw=(W-pad*2)/Math.max(1,values.length)*.58;let out="";values.forEach((v,i)=>{const x=pad+i*(W-pad*2)/Math.max(1,values.length)+(W-pad*2)/Math.max(1,values.length)*.21,h=num(v)/max*(H-55),ht=num(targets?.[i])/max*(H-55);out+='<rect x="'+x+'" y="'+(H-30-ht)+'" width="'+bw+'" height="'+ht+'" rx="4" fill="#34d399" opacity=".25"/><rect x="'+x+'" y="'+(H-30-h)+'" width="'+bw+'" height="'+h+'" rx="4" fill="#7c5cff"/><text x="'+(x+bw/2)+'" y="'+(H-9)+'" text-anchor="middle" fill="#8d99aa" font-size="10">'+esc(labels[i])+'</text>'});svg.innerHTML=out}
+function renderOverview(){const d=state.daily||{},f=d.nutrition?.foodLog?.totals||{};$("overviewDate").textContent=longDate(pragueToday());$("oCal").textContent=fmt(d.calories?.target);$("oTdee").textContent=fmt(d.calories?.estimatedTDEE);$("oWeight").textContent=fmt(d.weight?.current,1);const last=state.sleep?.sessions?.[0];$("oSleep").textContent=last?hm(last.durationMin):"—";$("oTraining").textContent=(d.training?.completed||[]).length?((d.training.completed||[]).length+" aktiv."):((d.training?.planned||[]).length?"Plán":"Volno");$("oTrainingNote").textContent=(d.training?.planned||[]).map(x=>x.name||x.type).join(" • ")||"Bez plánované aktivity";$("oFood").textContent=fmt(f.kcal)+" kcal";$("oFoodNote").textContent=fmt(num(d.calories?.target)-num(f.kcal))+" kcal do cíle";$("oProtein").textContent=fmt(d.nutrition?.protein)+" g";const days=state.week?.days||[];$("weekSummary").innerHTML=days.map(x=>{const a=x.daily?.training?.completed||[],p=x.daily?.training?.planned||[],e=num(x.food?.totals?.kcal),t=num(x.daily?.calories?.target);return '<div class="foodrow"><div><strong>'+esc(longDate(x.date))+'</strong><div class="small">'+(a.length?a.length+" aktivita":"volno")+(p.length?" · "+p.length+" plán":"")+'</div></div><div class="right">'+fmt(e)+' / '+fmt(t)+' kcal</div></div>'}).join("");barChart("calChart",days.map(x=>num(x.food?.totals?.kcal)),days.map(x=>num(x.daily?.calories?.target)),days.map(x=>dateLabel(x.date)));const wr=(state.weight?.records||[]).slice(-30);chartSvg("weightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))))}
+function renderTraining(){const days=state.week?.days||[];$("trainingRange").textContent=dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));$("trainingDays").innerHTML=days.map(x=>{const a=x.daily?.training?.completed||[],p=x.daily?.training?.planned||[],dur=a.reduce((s,z)=>s+num(z.durationHours),0);return '<div class="day '+(x.date===pragueToday()?"today":"")+'"><div class="dayhead">'+esc(longDate(x.date))+'</div><div class="small">'+fmt(dur,1)+' h dokončeno</div><div class="bar"><i style="width:'+Math.min(100,dur/2*100)+'%"></i></div>'+(a.length?a.map(z=>'<div class="small">'+esc(z.name||z.type||"Aktivita")+'</div>').join(""):"")+(p.length?p.map(z=>'<div style="margin-top:7px"><span class="pill">PLÁN</span> '+esc(z.name||z.type||"Workout")+'</div>').join(""):'<div class="muted" style="margin-top:7px">Bez plánu</div>')+'</div>'}).join("");const planned=days.flatMap(x=>(x.daily?.training?.planned||[]).map(z=>({...z,date:x.date}))),completed=days.flatMap(x=>(x.daily?.training?.completed||[]).map(z=>({...z,date:x.date})));$("plannedList").innerHTML=planned.length?planned.map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||"Workout")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+'</span></div>').join(""):'<div class="muted">Nic plánováno.</div>';$("completedList").innerHTML=completed.length?completed.slice().reverse().map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||x.type||"Activity")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.calories?" · "+fmt(x.calories)+" kcal":"")+'</span></div>').join(""):'<div class="muted">Zatím nic dokončeno.</div>';chartSvg("activityChart",days.map(x=>(x.daily?.training?.completed||[]).reduce((s,z)=>s+num(z.durationHours),0)),[],days.map(x=>dateLabel(x.date)),{W:1000,H:250})}
+function renderNutrition(){const days=state.week?.days||[];$("nutritionRange").textContent=dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));$("nutritionDays").innerHTML=days.map(x=>{const t=num(x.daily?.calories?.target),e=num(x.food?.totals?.kcal),pct=t?Math.min(100,e/t*100):0;return '<div class="day '+(x.date===pragueToday()?"today":"")+'"><div class="dayhead">'+esc(longDate(x.date))+'</div><div class="value" style="font-size:20px">'+fmt(e)+' <span class="small">/ '+fmt(t)+' kcal</span></div><div class="bar"><i style="width:'+pct+'%"></i></div><div class="small">P '+fmt(x.food?.totals?.protein_g,0)+' · C '+fmt(x.food?.totals?.carbs_g,0)+' · F '+fmt(x.food?.totals?.fat_g,0)+'</div></div>'}).join("");barChart("nutritionChart",days.map(x=>num(x.food?.totals?.kcal)),days.map(x=>num(x.daily?.calories?.target)),days.map(x=>dateLabel(x.date)));const selected=days.find(x=>x.date===pragueToday())||days[0],rec=selected?.recommendations?.recommendations||[];$("foodPlan").innerHTML=selected?'<div class="small" style="margin-bottom:8px">'+esc(selected.recommendations?.coaching||"")+'</div>'+(rec.length?rec.slice(0,6).map(r=>'<div class="foodrow"><div><strong>'+esc(r.title||r.name||"Jídlo")+'</strong><div class="small">'+esc(r.recommendation_reason||"")+'</div></div><div class="right">'+fmt(r.kcal)+' kcal</div></div>').join(""):'<div class="muted">Žádné doporučení.</div>'):'—';const nr=state.nutrition?.records||[];$("nutritionInfo").textContent=nr.length+" záznamů z Google Health";$("nutritionRows").innerHTML=(nr.slice().sort((a,b)=>String(b.startTime).localeCompare(String(a.startTime))).map(x=>'<tr><td>'+esc(x.startTime?new Date(x.startTime).toLocaleString("cs-CZ"):"—")+'</td><td>'+esc(x.foodDisplayName||"—")+'</td><td>'+esc(x.mealType||"—")+'</td><td>'+fmt(x.kcal)+'</td><td>'+fmt(x.protein_g,1)+' g</td><td>'+fmt(x.carbs_g,1)+' g</td><td>'+fmt(x.fat_g,1)+' g</td></tr>').join("")||'<tr><td colspan="7">Bez záznamů.</td></tr>')}
+function renderRecovery(){const ss=state.sleep?.sessions||[],last=ss[0];$("rLast").textContent=last?hm(last.durationMin):"—";$("rLastMeta").textContent=last?(last.startTime?new Date(last.startTime).toLocaleString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):"")+" → "+(last.endTime?new Date(last.endTime).toLocaleString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):""):"";$("rAvg").textContent=state.sleep?.averageDurationMin?hm(state.sleep.averageDurationMin):"—";$("rDeep").textContent=last?.stages?.DEEP?hm(last.stages.DEEP):"—";$("rRem").textContent=last?.stages?.REM?hm(last.stages.REM):"—";const hist=ss.slice().reverse();chartSvg("sleepChart",hist.map(x=>num(x.durationMin)/60),[],hist.map(x=>dateLabel(x.date)));if(last){const total=Object.values(last.stages||{}).reduce((a,b)=>a+num(b),0)||1;$("sleepStages").innerHTML='<div class="metric-line"><span>Deep</span><strong>'+hm(last.stages?.DEEP)+'</strong></div><div class="sleep-stage"><i class="stage-deep" style="width:'+num(last.stages?.DEEP)/total*100+'%"></i></div><div class="metric-line"><span>REM</span><strong>'+hm(last.stages?.REM)+'</strong></div><div class="sleep-stage"><i class="stage-rem" style="width:'+num(last.stages?.REM)/total*100+'%"></i></div><div class="metric-line"><span>Light</span><strong>'+hm(last.stages?.LIGHT)+'</strong></div><div class="sleep-stage"><i class="stage-light" style="width:'+num(last.stages?.LIGHT)/total*100+'%"></i></div><div class="metric-line"><span>Awake</span><strong>'+hm(last.stages?.AWAKE)+'</strong></div><div class="sleep-stage"><i class="stage-awake" style="width:'+num(last.stages?.AWAKE)/total*100+'%"></i></div>'}else $("sleepStages").innerHTML='<div class="muted">Bez dat.</div>';$("sleepRows").innerHTML=ss.map(x=>'<tr><td>'+esc(x.date||"—")+'</td><td>'+esc(x.startTime?new Date(x.startTime).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):"—")+'</td><td>'+esc(x.endTime?new Date(x.endTime).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):"—")+'</td><td>'+hm(x.durationMin)+'</td><td>'+hm(x.stages?.DEEP)+'</td><td>'+hm(x.stages?.REM)+'</td><td>'+hm(x.stages?.LIGHT)+'</td><td>'+hm(x.stages?.AWAKE)+'</td></tr>').join("")||'<tr><td colspan="8">Bez dat.</td></tr>'}
+function renderHealth(){const w=state.weight||{};$("hWeight").textContent=fmt(w.latest?.value_numeric,1);$("hAvg7").textContent=fmt(w.average7d,1);$("hAvg30").textContent=fmt(w.average30d,1);$("hActivities").textContent=state.activities?.count||0;const wr=(w.records||[]).slice(-30);chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))));const acts=(state.activities?.activities||[]).slice(0,30);$("healthActivityTable").innerHTML=acts.length?'<div class="scroll"><table><thead><tr><th>Datum</th><th>Aktivita</th><th>Typ</th><th>Zdroj</th></tr></thead><tbody>'+acts.map(x=>{let p={};try{p=JSON.parse(x.payload_json||"{}")}catch{}const e=p.exercise||{};return '<tr><td>'+esc(String(x.start_time||"").slice(0,16).replace("T"," "))+'</td><td>'+esc(p.name||p.title||e.displayName||e.exerciseType||"Activity")+'</td><td>'+esc(p.type||p.category||e.exerciseType||"")+'</td><td>'+esc(x.source_family==="intervals"?"Intervals.icu":"Google Health")+'</td></tr>'}).join("")+'</tbody></table></div>':'<div class="muted">Žádné aktivity.</div>'}
+function renderGym(){const values=state.gym?.values||[];const rows=values.slice(7).filter(r=>r.some(v=>String(v??"").trim()!==""));$("gymMeta").textContent=(values[2]?.[1]||"Dnešní silový trénink")+" · "+pragueToday();$("gymNotice").textContent=rows.length?rows.filter(r=>String(r[0]||"")==="WORK").length+" pracovních řádků · změny se zapisují zpět do Google Sheets":"Dnešní sheet je prázdný. Můžeš vygenerovat plán.";const start=values.slice(7).findIndex(r=>r.some(v=>String(v??"").trim()!==""));const actualRows=start<0?[]:values.slice(7+start);$("gymRows").innerHTML=actualRows.map((r,i)=>{const idx=i+(start<0?0:start),type=r[0]||"",exercise=r[1]||"",video=r[10]||"";return '<tr data-row="'+idx+'"><td><span class="gym-type">'+esc(type)+'</span></td><td><strong>'+esc(exercise)+'</strong></td><td>'+esc(r[2]||"")+'</td><td>'+esc(r[3]||"")+'</td><td>'+esc(r[4]||"")+'</td><td><input data-col="5" value="'+esc(r[5]||"")+'" inputmode="decimal"></td><td><input data-col="6" value="'+esc(r[6]||"")+'" inputmode="numeric"></td><td><input data-col="7" value="'+esc(r[7]||"")+'" inputmode="decimal"></td><td><input data-col="8" type="checkbox" '+(String(r[8]).toUpperCase()==="TRUE"||r[8]===true?"checked":"")+'></td><td>'+(video?'<a href="'+esc(video)+'" target="_blank" rel="noopener">▶ Video</a>':"—")+'</td></tr>'}).join("")||'<tr><td colspan="10" class="muted">Žádný plán.</td></tr>'}
+async function loadGym(){state.gym=await jsonFetch("/app/api/gym");renderGym()}
+async function saveGym(){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]);const rows=document.querySelectorAll("#gymRows tr[data-row]");rows.forEach(tr=>{const idx=Number(tr.dataset.row)+7;if(!values[idx])values[idx]=[];tr.querySelectorAll("input[data-col]").forEach(inp=>{const c=Number(inp.dataset.col);values[idx][c]=inp.type==="checkbox"?(inp.checked?"TRUE":"FALSE"):inp.value})});const used=values.slice(7);while(used.length&&used[used.length-1].every(v=>String(v??"").trim()===""))used.pop();await jsonFetch("/app/api/gym",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({values:used})});toast("Gym workout saved");await loadGym()}
+async function generateGym(){const b=$("generateGym");b.disabled=true;b.textContent="Generating…";try{await jsonFetch("/app/api/gym/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:pragueToday()})});toast("Today's plan generated");await loadGym()}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="Generate today's plan"}}
+async function load(){try{$("topStatus").textContent="Syncing…";const end=dateShift(weekStart,6);const [daily,week,weight,activities,nutrition,sleep,gym]=await Promise.all([jsonFetch("/app/api/daily"),jsonFetch("/app/api/week?start="+weekStart),jsonFetch("/app/api/weight"),jsonFetch("/app/api/activities"),jsonFetch("/app/api/nutrition?start="+weekStart+"&end="+dateShift(end,1)),jsonFetch("/app/api/sleep?start="+dateShift(pragueToday(),-30)+"&end="+dateShift(pragueToday(),1)),jsonFetch("/app/api/gym")]);state={daily,week,weight,activities,nutrition,sleep,gym};renderOverview();renderTraining();renderNutrition();renderRecovery();renderHealth();renderGym();$("topStatus").textContent="Live · "+new Date().toLocaleTimeString("cs-CZ");}catch(e){$("topStatus").textContent="Error";toast(e.message)}}
+document.querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>activate(b.dataset.view));$("refresh").onclick=load;$("prevWeek").onclick=()=>{weekStart=dateShift(weekStart,-7);load()};$("nextWeek").onclick=()=>{weekStart=dateShift(weekStart,7);load()};$("thisWeek").onclick=()=>{weekStart=pragueMonday();load()};$("saveGym").onclick=saveGym;$("generateGym").onclick=generateGym;load();
 </script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
