@@ -2554,7 +2554,8 @@ async function foodRecommend(env, url) {
   const targetKcal=Number(energy.calorieTarget||0);
   const targets=energy.macroTargets||dailyMacroTargets(energy.currentWeight,targetKcal,energy.nutritionContext||{});
   const eaten=log.entries.filter(r=>r.status==="eaten");
-  const mealTypes=new Set(eaten.map(r=>String(r.meal_type||"").toUpperCase()).filter(Boolean));
+  const normalizeMealType=v=>{const x=String(v||"").toUpperCase().trim();if(x==="SNACCK"||x==="SNACK")return "SNACK";if(x.includes("BREAKFAST")||x.includes("SNIDAN"))return "BREAKFAST";if(x.includes("LUNCH")||x.includes("OBED"))return "LUNCH";if(x.includes("DINNER")||x.includes("VECERE"))return "DINNER";return x;};
+  const mealTypes=new Set(eaten.map(r=>normalizeMealType(r.meal_type)).filter(Boolean));
   const hasBreakfast=mealTypes.has("BREAKFAST")||eaten.some(r=>/^0[5-9]:|^10:/.test(String(r.meal_time||"")));
   const hasLunch=mealTypes.has("LUNCH")||eaten.some(r=>/^1[12]:|^13:|^14:/.test(String(r.meal_time||"")));
   const hasDinner=mealTypes.has("DINNER")||eaten.some(r=>/^1[89]:|^2[0-3]:/.test(String(r.meal_time||"")));
