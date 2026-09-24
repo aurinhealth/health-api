@@ -19,10 +19,12 @@ function localDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: TZ })
 function n(v, d=0) { const x=Number(v); return Number.isFinite(x)?x:d; }
 function round(v,p=0){ const m=10**p; return Math.round(n(v)*m)/m; }
 function durationHours(p){
+  const active=String(p?.exercise?.activeDuration||"").match(/([0-9.]+)s/i);
+  if(active){const x=n(active[1]); if(x>0) return x/3600;}
   for(const k of ["duration","duration_seconds","moving_time","elapsed_time"]){let x=n(p?.[k]); if(x>0){if(x>1000)x/=3600; if(x>12)x/=3600; return x;}}
   return null;
 }
-function textFor(p){return `${p?.type||""} ${p?.activity_type||""} ${p?.category||""} ${p?.name||p?.title||""} ${p?.description||""}`.toLowerCase();}
+function textFor(p){return `${p?.type||""} ${p?.activity_type||""} ${p?.category||""} ${p?.name||p?.title||""} ${p?.description||""} ${p?.exercise?.exerciseType||""} ${p?.exercise?.displayName||""}`.toLowerCase();}
 function isRide(p){return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textFor(p));}
 function isIntensity(p){return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(textFor(p));}
 function recipeMinutes(r){return n(String(r?.time||"").match(/\d+/)?.[0],60);}
@@ -30,7 +32,16 @@ function calories(r){return n(r?.kcal);}
 function macros(r){return {protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g)};}
 
 async function rowsForDate(env,date,type){
-  const q= type === "activity" ? `SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND start_time LIKE ? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time` : `SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='planned-workout' AND start_time LIKE ? ORDER BY start_time`;
+  const q = type === "activity"
+    ? `SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints
+       WHERE ((source_family='intervals' AND data_type='activity')
+          OR (source_family='google-wearables' AND data_type='exercise'))
+         AND start_time LIKE ?
+         AND (record_role IS NULL OR record_role!='duplicate')
+       ORDER BY start_time`
+    : `SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints
+       WHERE source_family='intervals' AND data_type='planned-workout' AND start_time LIKE ?
+       ORDER BY start_time`;
   return (await env.DB.prepare(q).bind(date+"%").all()).results||[];
 }
 async function weightInfo(env,date){
@@ -57,14 +68,24 @@ function desiredWeightAdjustment(weight,trendKg){
   return {kcal:0,reason:"trend hmotnosti je v rozumném pásmu"};
 }
 function planCaloriesPerHour(p){return isRide(p) ? (isIntensity(p)?600:500) : 0;}
-function activityCalories(row){const p=JSON.parse(row.payload_json||"{}"); return n(p.calories_kcal ?? p.calories ?? p.icu_calories ?? row.value_numeric);}
-function activityObject(row){const p=JSON.parse(row.payload_json||"{}");return {id:row.external_id,start:row.start_time,end:row.end_time,type:p.type||p.category||"Unknown",name:p.name||p.title||"",calories:activityCalories(row),durationHours:durationHours(p),cycling:isRide(p),intensity:isIntensity(p),payload:p};}
+function activityCalories(row){const p=JSON.parse(row.payload_json||"{}"); return n(p.calories_kcal ?? p.calories ?? p.icu_calories ?? p.exercise?.metricsSummary?.caloriesKcal ?? row.value_numeric);}
+function activityObject(row){const p=JSON.parse(row.payload_json||"{}");const e=p.exercise||{};return {id:row.external_id,source:row.source_family,start:row.start_time||e.interval?.startTime,end:row.end_time||e.interval?.endTime,type:p.type||p.category||e.exerciseType||"Unknown",name:p.name||p.title||e.displayName||e.exerciseType||"",calories:activityCalories(row),durationHours:durationHours(p),cycling:isRide(p),intensity:isIntensity(p),payload:p};}
 function plannedObject(row){const p=JSON.parse(row.payload_json||"{}");const d=durationHours(p);return {id:row.external_id,start:row.start_time||p.start_date_local||p.start_date,end:row.end_time||p.end_date_local||p.end_date,type:p.type||p.activity_type||p.category||"",name:p.name||p.title||"",durationHours:d,cycling:isRide(p),intensity:isIntensity(p),enduranceOnly:isRide(p)&&!isIntensity(p),kcalPerHour:planCaloriesPerHour(p),payload:p};}
 
 async function training(env,date){
   const [ar,pr]=await Promise.all([rowsForDate(env,date,"activity"),rowsForDate(env,date,"planned")]);
-  const actual=ar.map(activityObject), planned=pr.map(plannedObject);
-  const paired=new Set(actual.flatMap(a=>{const p=a.payload;return [p.paired_event_id,p.pairedEventId,p.event_id,p.eventId,p.paired_activity_id,p.pairedActivityId].filter(Boolean).map(String)}));
+  const actualAll=ar.map(activityObject);
+  const actual=[];
+  for(const a of actualAll){
+    const duplicate=actual.some(x=>{
+      if(!x.start||!a.start) return false;
+      const dt=Math.abs(new Date(x.start).getTime()-new Date(a.start).getTime())/60000;
+      return dt<=20 && x.source==="intervals" && a.source==="google-wearables";
+    });
+    if(!duplicate) actual.push(a);
+  }
+  const planned=pr.map(plannedObject);
+  const paired=new Set(actual.flatMap(a=>{const p=a.payload||{};return [p.paired_event_id,p.pairedEventId,p.event_id,p.eventId,p.paired_activity_id,p.pairedActivityId].filter(Boolean).map(String)}));
   const unmatched=planned.filter(p=>!paired.has(String(p.id)));
   const rides=actual.filter(x=>x.cycling), plannedRides=unmatched.filter(x=>x.cycling);
   const latest=rides.filter(x=>x.end).sort((a,b)=>new Date(b.end)-new Date(a.end))[0]||null;
