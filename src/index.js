@@ -995,7 +995,7 @@ async function syncGoogle(env) {
     ["respiratory-rate-sleep-summary", "respiratory_rate_sleep_summary", "sample", "google-wearables", 7],
     ["sedentary-period", "sedentary_period", "interval", "google-wearables", 7],
     ["time-in-heart-rate-zone", "time_in_heart_rate_zone", "interval", "google-wearables", 7],
-    ["sleep", "sleep", "sleep", "google-wearables", 7],
+    ["sleep", "sleep", "sleep", "google-wearables", 365],
     ["exercise", "exercise", "exercise", "google-wearables", 30],
     ["weight", "weight", "sample", "google-sources", 30],
     ["body-fat", "body_fat", "sample", "google-sources", 30]
@@ -2761,7 +2761,7 @@ async function healthSleep(env, url) {
     WHERE data_type = 'sleep'
       AND source_family = 'google-wearables'
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
-    LIMIT 300
+    LIMIT 2000
   `).all();
 
   const sessions = (rows.results || []).map(row => {
