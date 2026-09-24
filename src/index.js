@@ -1236,113 +1236,109 @@ async function processGoogleSyncBatch(env) {
 
     if (configIndex >= GOOGLE_SYNC_CONFIGS.length) {
       const finishedAt = new Date().toISOString();
-      await setGoogleSyncStatus(env, "completed", {
+      const finalStatus = results.some(x => x.status === "error") ? "partial" : "completed";
+      await setGoogleSyncStatus(env, finalStatus, {
         ...details,
         finished_at: finishedAt,
         current: null,
         page_token: null,
         completed_configs: GOOGLE_SYNC_CONFIGS.length
       });
-      return { status: "completed", details };
+      return { status: finalStatus, details };
     }
 
     const [type, filterName, filterType, family, days] = GOOGLE_SYNC_CONFIGS[configIndex];
 
     try {
-    const token = await googleToken(env);
-    const start = dateDaysAgo(days);
-    const end = dateDaysFromNow(1);
+      const token = await googleToken(env);
+      const start = dateDaysAgo(days);
+      const end = dateDaysFromNow(1);
 
-    const page = await googleReconcilePage(
-      token,
-      type,
-      filterName,
-      filterType,
-      start,
-      `users/me/dataSourceFamilies/${family}`,
-      end,
-      pageToken
-    );
+      const page = await googleReconcilePage(
+        token,
+        type,
+        filterName,
+        filterType,
+        start,
+        `users/me/dataSourceFamilies/${family}`,
+        end,
+        pageToken
+      );
 
-    const saved = await saveGooglePointsBatch(env, family, type, page.dataPoints);
-    const existing = results.find(x => x.data_type === type);
+      const saved = await saveGooglePointsBatch(env, family, type, page.dataPoints);
+      const existing = results.find(x => x.data_type === type);
 
-    if (existing) {
-      existing.records_found = Number(existing.records_found || 0) + page.dataPoints.length;
-      existing.records_saved = Number(existing.records_saved || 0) + saved;
-      existing.pages = Number(existing.pages || 0) + 1;
-    } else {
+      if (existing) {
+        existing.records_found = Number(existing.records_found || 0) + page.dataPoints.length;
+        existing.records_saved = Number(existing.records_saved || 0) + saved;
+        existing.pages = Number(existing.pages || 0) + 1;
+        existing.status = page.nextPageToken ? "partial" : "ok";
+      } else {
+        results.push({
+          data_type: type,
+          records_found: page.dataPoints.length,
+          records_saved: saved,
+          pages: 1,
+          status: page.nextPageToken ? "partial" : "ok"
+        });
+      }
+
+      if (page.nextPageToken) {
+        details.page_token = page.nextPageToken;
+        details.config_index = configIndex;
+        details.completed_configs = configIndex;
+        details.current = type;
+      } else {
+        configIndex += 1;
+        details.config_index = configIndex;
+        details.page_token = null;
+        details.completed_configs = configIndex;
+        details.current = GOOGLE_SYNC_CONFIGS[configIndex]?.[0] || null;
+      }
+
+      details.results = results;
+      details.updated_at = new Date().toISOString();
+
+      if (configIndex >= GOOGLE_SYNC_CONFIGS.length && !page.nextPageToken) {
+        const finishedAt = new Date().toISOString();
+        const finalStatus = results.some(x => x.status === "error") ? "partial" : "completed";
+        await setGoogleSyncStatus(env, finalStatus, {
+          ...details,
+          finished_at: finishedAt,
+          current: null,
+          page_token: null
+        });
+        return { status: finalStatus, details };
+      }
+
+      await setGoogleSyncStatus(env, "running", details);
+      processed += 1;
+      if (processed >= 2) return { status: "running", details };
+    } catch (error) {
+      const message = error?.message || String(error);
       results.push({
         data_type: type,
-        records_found: page.dataPoints.length,
-        records_saved: saved,
-        pages: 1,
-        status: page.nextPageToken ? "partial" : "ok"
+        records_found: 0,
+        records_saved: 0,
+        pages: 0,
+        status: "error",
+        message
       });
-    }
-
-    if (page.nextPageToken) {
-      details.page_token = page.nextPageToken;
-      details.config_index = configIndex;
-      details.completed_configs = configIndex;
-      details.current = type;
-    } else {
-      const currentResult = results.find(x => x.data_type === type);
-      if (currentResult) currentResult.status = "ok";
 
       configIndex += 1;
       details.config_index = configIndex;
       details.page_token = null;
       details.completed_configs = configIndex;
       details.current = GOOGLE_SYNC_CONFIGS[configIndex]?.[0] || null;
+      details.results = results;
+      details.last_error = { data_type: type, message, at: new Date().toISOString() };
+
+      await setGoogleSyncStatus(env, "running", details);
+      processed += 1;
+      if (processed >= 2) return { status: "running", details };
     }
-
-    details.results = results;
-    details.updated_at = new Date().toISOString();
-
-    await setGoogleSyncStatus(env, "running", details);
-
-    // The final state is committed by the next short cron invocation, keeping
-    // every individual execution bounded even when Google returns many pages.
-    if (configIndex >= GOOGLE_SYNC_CONFIGS.length && !page.nextPageToken) {
-      const finishedAt = new Date().toISOString();
-      await setGoogleSyncStatus(env, "completed", {
-        ...details,
-        finished_at: finishedAt,
-        current: null,
-        page_token: null
-      });
-      return { status: "completed", details };
-    }
-
-    processed += 1;
-    if (processed >= 2) return { status: "running", details };
-  } catch (error) {
-    const message = error?.message || String(error);
-    results.push({
-      data_type: type,
-      records_found: 0,
-      records_saved: 0,
-      pages: 0,
-      status: "error",
-      message
-    });
-
-    // A failing dataset is isolated. Advance to the next dataset so one bad
-    // Google endpoint cannot stall the entire application.
-    configIndex += 1;
-    details.config_index = configIndex;
-    details.page_token = null;
-    details.completed_configs = configIndex;
-    details.current = GOOGLE_SYNC_CONFIGS[configIndex]?.[0] || null;
-    details.results = results;
-    details.last_error = { data_type: type, message, at: new Date().toISOString() };
-
-    await setGoogleSyncStatus(env, "partial", details);
-    return { status: "partial", details };
   }
 }
-
 // ======================================================
 // GOOGLE SYNC
 // ======================================================
