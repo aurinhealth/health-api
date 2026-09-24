@@ -29,21 +29,27 @@ export default {
         return await testIntervals(env);
       }
 
+      if (url.pathname === "/sync/google/status") {
+        return await googleSyncStatus(env);
+      }
+
       if (url.pathname === "/sync/google") {
-        // Google Health sync touches many datasets and can legitimately take
-        // longer than a browser request should remain open. Start it in the
-        // Worker background and return immediately; scheduled syncs still
-        // execute syncGoogle() directly as before.
+        // Google Health sync runs in the Worker background. Persist its state
+        // so the caller can poll /sync/google/status instead of waiting.
         if (ctx?.waitUntil) {
-          ctx.waitUntil(
-            syncGoogle(env).catch(error => {
+          const startedAt = new Date().toISOString();
+          await setGoogleSyncStatus(env, "running", { started_at: startedAt, finished_at: null });
+          ctx.waitUntil((async () => {
+            try {
+              const response = await syncGoogle(env);
+              const data = await response.clone().json();
+              await setGoogleSyncStatus(env, "completed", { started_at: startedAt, finished_at: new Date().toISOString(), result: data });
+            } catch (error) {
+              await setGoogleSyncStatus(env, "error", { started_at: startedAt, finished_at: new Date().toISOString(), message: error?.message || String(error) });
               console.error("Google sync failed:", error);
-            })
-          );
-          return Response.json(
-            { status: "started", source: "google", message: "Google Health sync started in the background." },
-            { status: 202, headers: { "Cache-Control": "no-store" } }
-          );
+            }
+          })());
+          return Response.json({ status: "started", source: "google", message: "Google Health sync started in the background.", status_url: "/sync/google/status" }, { status: 202, headers: { "Cache-Control": "no-store" } });
         }
         return await syncGoogle(env);
       }
@@ -433,6 +439,28 @@ async function testIntervals(env) {
   });
 }
 
+
+// ======================================================
+// GOOGLE SYNC STATUS
+// ======================================================
+async function ensureSyncStatusTable(env) {
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_status (sync_name TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, details_json TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)').run();
+}
+
+async function setGoogleSyncStatus(env, status, details = null) {
+  await ensureSyncStatusTable(env);
+  await env.DB.prepare('INSERT INTO sync_status (sync_name, status, started_at, finished_at, details_json, updated_at) VALUES (\'google\', ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(sync_name) DO UPDATE SET status = excluded.status, started_at = COALESCE(excluded.started_at, sync_status.started_at), finished_at = excluded.finished_at, details_json = excluded.details_json, updated_at = CURRENT_TIMESTAMP')
+    .bind(status, details?.started_at || null, details?.finished_at || null, details ? JSON.stringify(details) : null).run();
+}
+
+async function googleSyncStatus(env) {
+  await ensureSyncStatusTable(env);
+  const row = await env.DB.prepare('SELECT sync_name, status, started_at, finished_at, details_json, updated_at FROM sync_status WHERE sync_name = \'google\'').first();
+  if (!row) return Response.json({ status: 'idle', source: 'google' }, { headers: { 'Cache-Control': 'no-store' } });
+  let details = null;
+  try { details = row.details_json ? JSON.parse(row.details_json) : null; } catch {}
+  return Response.json({ status: row.status, source: 'google', started_at: row.started_at, finished_at: row.finished_at, updated_at: row.updated_at, details }, { headers: { 'Cache-Control': 'no-store' } });
+}
 
 // ======================================================
 // DATABASE
