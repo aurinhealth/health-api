@@ -88,7 +88,7 @@ async function training(env,date){
   const planned=[];
   const plannedKeys=new Set();
   for(const p of plannedRaw){
-    const key=String(p.start||"").slice(0,16)+"|"+String(p.name||"").toLowerCase()+"|"+Math.round(Number(p.durationHours||0)*100);
+    const key=String(p.start||"").slice(0,10)+"|"+String(p.name||"").toLowerCase()+"|"+Math.round(Number(p.durationHours||0)*100);
     if(plannedKeys.has(key)) continue;
     plannedKeys.add(key); planned.push(p);
   }
