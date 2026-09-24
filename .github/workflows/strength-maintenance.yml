@@ -41,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{"action":"sheet_maintenance","date":null,"preview":false}' "https://health-api.chelseafc-czsk.workers.dev/automation/strength")"
+            response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{"action":"sheet_maintenance","date":null,"preview":false}' "https://petrfitnessdata.eu/automation/strength")"
             code="${response##*$'\n'}"
             body="${response%$'\n'*}"
             if [ "$code" -lt 500 ] && [ "$code" != "429" ]; then
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            response="$(curl -sS -w '\n%{http_code}' "https://health-api.chelseafc-czsk.workers.dev/sync/intervals" || true)"
+            response="$(curl -sS -w '\n%{http_code}' "https://petrfitnessdata.eu/sync/intervals" || true)"
             code="${response##*$'\n'}"
             body="${response%$'\n'*}"
             if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
@@ -82,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://health-api.chelseafc-czsk.workers.dev/automation/planned-calories" || true)"
+          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://petrfitnessdata.eu/automation/planned-calories" || true)"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
           [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { printf '%s\n' "$body"; exit 1; }
@@ -95,7 +95,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://health-api.chelseafc-czsk.workers.dev/automation/nutrition-notes" || true)"
+          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://petrfitnessdata.eu/automation/nutrition-notes" || true)"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
           if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
@@ -110,5 +110,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          health="$(curl -fsS "https://health-api.chelseafc-czsk.workers.dev/mcp/health")"
+          health="$(curl -fsS "https://petrfitnessdata.eu/mcp/health")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok"; assert d.get("service") == "health-api-mcp"' <<< "$health"
