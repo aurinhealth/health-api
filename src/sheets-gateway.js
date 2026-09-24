@@ -135,8 +135,13 @@ async function readTodaySheet(env) {
 }
 
 function isAllowedStrengthWriteRange(range) {
+  const normalized = String(range || "").replace(/\s+/g, "");
+  const sheet = SHEET_NAME.replace(/'/g, "''");
+  if (normalized === `'${sheet}'!A3:M5` || normalized === `'${sheet}'!A7:K7`) return true;
+  return new RegExp("^'" + sheet.replace(/[.*+?^$()|[\\]\\\\]/g, "\\function isAllowedStrengthWriteRange(range) {
   const normalized = range.replace(/\s+/g, "");
   return normalized === `'${SHEET_NAME}'!A3:M5` || normalized === `'${SHEET_NAME}'!A8:M1000` || normalized === `'${SHEET_NAME}'!A7:K7`;
+}") + "'!A8:(?:K|M)[0-9]+$").test(normalized);
 }
 
 async function writeSheet(env, request) {
