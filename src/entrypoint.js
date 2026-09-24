@@ -105,6 +105,26 @@ function fromBase64url(s) {
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
 
+  if (url.pathname === "/app/api/fitness" && request.method === "GET") {
+    try {
+      const days = Math.max(42, Math.min(180, Number(url.searchParams.get("days") || 90)));
+      const newest = new Date();
+      const oldest = new Date(newest.getTime() - days * 86400000);
+      const isoDate = d => d.toISOString().slice(0,10);
+      const apiKey = String(env.INTERVALS_API_KEY || "");
+      if (!apiKey) return Response.json({status:"error",message:"INTERVALS_API_KEY is not configured"},{status:503});
+      const auth = "Basic " + btoa("API_KEY:" + apiKey);
+      const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(isoDate(oldest))+"&newest="+encodeURIComponent(isoDate(newest));
+      const response = await fetch(target,{headers:{Authorization:auth,Accept:"application/json"}});
+      const data = await response.json().catch(()=>[]);
+      if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
+      const wellness = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+      return Response.json({status:"ok",source:"intervals.icu",days,wellness},{headers:{"Cache-Control":"no-store"}});
+    } catch (error) {
+      return Response.json({status:"error",message:error.message},{status:502});
+    }
+  }
+
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
     const internal = new URL("/sync/all", request.url);
     const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
