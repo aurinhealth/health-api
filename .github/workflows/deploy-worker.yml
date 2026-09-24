@@ -8,6 +8,7 @@ on:
     paths:
       - "src/**"
       - "wrangler.jsonc"
+      - "migrations/**"
       - ".github/workflows/deploy-worker.yml"
 
 permissions:
@@ -30,6 +31,13 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
           workingDirectory: .
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply health-data --remote
+
       - name: Request GitHub OIDC token for strength smoke test
         id: oidc_strength
         shell: bash
