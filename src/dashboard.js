@@ -36,7 +36,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 <section id="overview" class="view active">
   <div class="hero"><div><div class="eyebrow">Performance overview</div><h1>Dobrý den, Petře</h1><p id="overviewDate">—</p></div></div>
   <div class="grid">
-    <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div class="small">kg</div></div>
+    <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div class="small">kg · cíl 80 kg</div></div>
     <div class="card"><div class="label">Spánek</div><div id="oSleep" class="value">—</div><div class="small">poslední noc</div></div>
     <div class="card"><div class="label">Fitness</div><div id="oFitness" class="value">—</div><div class="small">CTL · Intervals.icu</div></div>
     <div class="card"><div class="label">Form</div><div id="oForm" class="value">—</div><div class="small">TSB · dnes</div></div>
@@ -44,18 +44,15 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
   <div class="grid3" style="margin-top:12px">
     <div class="card"><div class="label">Dnešní trénink</div><div id="oTraining" class="value">—</div><div id="oTrainingNote" class="small"></div></div>
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
-    <div class="card"><div class="label">Recovery</div><div id="oRecovery" class="value">—</div><div id="oRecoveryNote" class="small">spánek + tréninková zátěž</div></div>
+    <div class="card"><div class="label">Recovery</div><div class="grid2" style="margin-top:4px"><div><div class="small">Spánek</div><div id="oRecoverySleep" class="value" style="font-size:22px">—</div></div><div><div class="small">Trénink</div><div id="oRecoveryTraining" class="value" style="font-size:22px">—</div></div></div><div id="oRecoveryNote" class="small">samostatně · celkové recovery</div></div>
   </div>
   <div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
-  <div class="grid2" style="margin-top:12px">
-    <div class="card"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="chart" viewBox="0 0 700 250"></svg></div>
-    <div class="card"><h3>Hmotnost</h3><svg id="weightChart" class="chart" viewBox="0 0 700 250"></svg></div>
-  </div>
+  <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="chart" viewBox="0 0 1000 260"></svg></div>
 </section>
 
 <section id="training" class="view">
-  <div class="weekbar"><div><div class="eyebrow">Training management</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Dnes</button><button class="btn" id="nextWeek">→</button></div></div>
+  <div class="weekbar"><div><div class="eyebrow">Training management</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="select-row"><select id="trainingWeekSelect"></select><select id="trainingDaySelect"></select><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Dnes</button><button class="btn" id="nextWeek">→</button></div></div></div>
   <div class="daygrid" id="trainingDays"></div>
   <div class="grid" style="margin-top:12px">
     <div class="card"><div class="label">Fitness</div><div id="tFitness" class="value">—</div><div class="small">CTL · 42denní trend</div></div>
@@ -64,8 +61,8 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><div class="label">Ramp rate</div><div id="tRamp" class="value">—</div><div class="small">změna Fitness</div></div>
   </div>
   <div class="grid2" style="margin-top:12px">
-    <div class="card"><h3>Fitness · Fatigue · Form</h3><svg id="pmcChart" class="chart" viewBox="0 0 1000 300"></svg></div>
-    <div class="card"><h3>TSS · plán vs. skutečnost</h3><svg id="tssChart" class="chart" viewBox="0 0 1000 300"></svg></div>
+    <div class="card"><h3>Fitness · Fatigue · Form</h3><svg id="pmcChart" class="chart" viewBox="0 0 1000 300"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>
+    <div class="card"><h3>Plán vs. skutečnost · TSS</h3><svg id="tssChart" class="chart" viewBox="0 0 1000 300"></svg><div id="tssInsight" class="notice" style="margin-top:10px"></div></div>
   </div>
   <div class="grid2" style="margin-top:12px">
     <div class="card"><h3>Tréninkový load · posledních 42 dní</h3><svg id="loadChart" class="chart" viewBox="0 0 1000 250"></svg></div>
@@ -89,12 +86,12 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><div class="label">Deep</div><div id="rDeep" class="value">—</div><div class="small">poslední noc</div></div>
     <div class="card"><div class="label">REM</div><div id="rRem" class="value">—</div><div class="small">poslední noc</div></div>
   </div>
-  <div class="grid2" style="margin-top:12px"><div class="card"><div class="select-row"><h3 style="margin-right:auto">Spánek · historie</h3><select id="sleepRange"><option value="7">7 dní</option><option value="30">Měsíc</option><option value="180">6 měsíců</option><option value="3650">All time</option></select></div><svg id="sleepChart" class="chart" viewBox="0 0 700 250"></svg></div><div class="card"><h3>Poslední noc · fáze</h3><div id="sleepScore" style="margin-bottom:10px"></div><div id="sleepStages"></div></div></div>
-  <div class="card" style="margin-top:12px"><h3>Historie spánku</h3><div class="scroll"><table><thead><tr><th>Datum</th><th>Usnutí</th><th>Probuzení</th><th>Délka</th><th>Deep</th><th>REM</th><th>Light</th><th>Awake</th></tr></thead><tbody id="sleepRows"></tbody></table></div></div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><div class="select-row"><h3 style="margin-right:auto">Spánek · historie</h3><select id="sleepRange"><option value="7">7 dní</option><option value="30">Měsíc</option><option value="180">6 měsíců</option><option value="365">1 rok</option><option value="3650">All time</option></select><select id="sleepDaySelect"></select></div><svg id="sleepChart" class="chart" viewBox="0 0 700 250"></svg></div><div class="card"><h3>Poslední noc · fáze</h3><div id="sleepScore" style="margin-bottom:10px"></div><div id="sleepStages"></div></div></div>
+  <div class="card" style="margin-top:12px"><h3>Vybraný den</h3><div id="sleepDayDetail" class="grid3"></div><details style="margin-top:12px"><summary>Kompletní seznam nocí</summary><div class="scroll"><table><thead><tr><th>Datum</th><th>Usnutí</th><th>Probuzení</th><th>Délka</th><th>Deep</th><th>REM</th><th>Light</th><th>Awake</th></tr></thead><tbody id="sleepRows"></tbody></table></div></details></div>
 </section>
 
 <section id="nutrition" class="view">
-  <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div></div></div>
+  <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div></div><div class="select-row"><select id="nutritionWeekSelect"></select><select id="nutritionDaySelect"></select></div></div>
   <div class="daygrid" id="nutritionDays"></div>
   <div class="grid2" style="margin-top:12px"><div class="card"><h3>Makra · příjem vs. cíl</h3><svg id="nutritionChart" class="stack-chart" viewBox="0 0 900 300"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
   <div class="section">Google Health · historie jídel</div><div class="card"><div id="nutritionInfo" class="small"></div><div class="scroll"><table><thead><tr><th>Datum</th><th>Jídlo</th><th>Typ</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Tuk</th></tr></thead><tbody id="nutritionRows"></tbody></table></div></div>
