@@ -302,6 +302,11 @@ async function googleToken(env) {
     await response.json();
 
   if (!response.ok) {
+    if (data?.error === "invalid_grant") {
+      throw new Error(
+        "Google OAuth refresh token is invalid or expired. Reauthorize at /oauth/google and replace the GOOGLE_REFRESH_TOKEN secret with the newly issued token."
+      );
+    }
     throw new Error(
       "Google OAuth error: " +
       JSON.stringify(data)
