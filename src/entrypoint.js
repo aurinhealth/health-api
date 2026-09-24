@@ -30,6 +30,8 @@ export default {
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) return googleOAuth;
     if (url.pathname === "/app" && request.method === "GET") return dashboardPage();
+    if (url.pathname === "/app/login" && request.method === "POST") return handleDashboardLogin(request, env);
+    if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     if (url.pathname.startsWith("/app/api/")) return handleDashboardApi(request, env, ctx, url);
     if (url.pathname === "/" && request.method === "GET") return homepagePage();
     if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
@@ -46,11 +48,62 @@ export default {
   }
 };
 
+async function handleDashboardLogin(request, env) {
+  const expected = String(env.STRENGTH_API_KEY || "");
+  if (!expected) return Response.json({status:"error",message:"Dashboard authentication is not configured."},{status:503});
+  const body = await request.json().catch(() => ({}));
+  const key = String(body?.key || "");
+  if (!key || key !== expected) return Response.json({status:"error",message:"Invalid dashboard access key."},{status:401});
+  const exp = Math.floor(Date.now()/1000) + 12*60*60;
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({exp})));
+  const signature = await dashboardHmac(payload, expected);
+  const cookie = "pfd_session="+payload+"."+signature+"; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax";
+  return Response.json({status:"ok",expiresAt:new Date(exp*1000).toISOString()},{headers:{"Set-Cookie":cookie,"Cache-Control":"no-store"}});
+}
+async function handleDashboardLogout() {
+  return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":"pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax","Cache-Control":"no-store"}});
+}
+async function verifyDashboardSession(request, secret) {
+  if (!secret) return false;
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const match = cookieHeader.split(";").map(x=>x.trim()).find(x=>x.startsWith("pfd_session="));
+  if (!match) return false;
+  const token = match.slice("pfd_session=".length);
+  const dot = token.lastIndexOf(".");
+  if (dot <= 0) return false;
+  const payload = token.slice(0,dot), sig = token.slice(dot+1);
+  const expected = await dashboardHmac(payload, secret);
+  if (!timingSafeEqualString(sig, expected)) return false;
+  try {
+    const data = JSON.parse(new TextDecoder().decode(fromBase64url(payload)));
+    return Number(data?.exp) > Math.floor(Date.now()/1000);
+  } catch { return false; }
+}
+async function dashboardHmac(value, secret) {
+  const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+  const sig = await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value));
+  return base64url(new Uint8Array(sig));
+}
+function timingSafeEqualString(a,b) {
+  if (a.length !== b.length) return false;
+  let x=0; for(let i=0;i<a.length;i++) x |= a.charCodeAt(i)^b.charCodeAt(i); return x===0;
+}
+function base64url(bytes) {
+  let s=""; for(const b of bytes) s+=String.fromCharCode(b);
+  return btoa(s).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");
+}
+function fromBase64url(s) {
+  s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4)s+="=";
+  const bin=atob(s); return Uint8Array.from(bin,c=>c.charCodeAt(0));
+}
+
 async function handleDashboardApi(request, env, ctx, url) {
   if (request.method !== "GET") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
   const expected = String(env.STRENGTH_API_KEY || "");
   const auth = request.headers.get("Authorization") || "";
-  if (!expected || auth !== "Bearer " + expected) {
+  let authorized = Boolean(expected && auth === "Bearer " + expected);
+  if (!authorized) authorized = await verifyDashboardSession(request, expected);
+  if (!authorized) {
     return Response.json({ status: "error", message: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
   }
 
