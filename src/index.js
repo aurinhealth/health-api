@@ -154,7 +154,7 @@ const CONFIG = {
   },
 
   minCalorieTarget: 2000,
-  maxCalorieTarget: 3200,
+  maxCalorieTarget: 3800,
 
   // Daily macro targets are derived from the calorie target rather than
   // using a hard-coded carbohydrate number. This keeps carbs responsive
@@ -1722,8 +1722,12 @@ function plannedMatchesActual(planned, actual){
   const token=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).find(t=>t.length>=5);
   return (actual||[]).some(a=>{
     if(!a?.start||!planned?.start) return false;
+    const plannedDate=String(planned.start).slice(0,10);
+    const actualDate=String(a.start).slice(0,10);
+    const dateOnly=/^\d{4}-\d{2}-\d{2}$/.test(String(planned.start));
     const dt=Math.abs(new Date(a.start).getTime()-new Date(planned.start).getTime())/60000;
-    if(dt>20) return false;
+    if(plannedDate!==actualDate) return false;
+    if(!dateOnly && dt>45) return false;
     const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
     const nameMatch=token?aName.includes(token):false;
     const typeMatch=String(planned.type||"").toLowerCase()===String(a.type||"").toLowerCase();
@@ -1902,6 +1906,8 @@ async function energyForDate(env, date) {
   const plannedWorkouts=[];
   const plannedKeys=new Set();
   for(const w of plannedRaw){
+    const genericWeekly=/^weekly$/i.test(String(w.name||"").trim()) || /^weekly$/i.test(String(w.type||"").trim());
+    if(genericWeekly) continue;
     const key=String(w.start||"").slice(0,10)+"|"+String(w.name||"").toLowerCase()+"|"+Math.round(Number(w.durationHours||0)*100);
     if(plannedKeys.has(key)) continue;
     plannedKeys.add(key); plannedWorkouts.push(w);
@@ -1931,6 +1937,11 @@ async function energyForDate(env, date) {
     .filter(activity => !isDuplicateOfIntervalsActivity(activity, activities.results));
 
   const completed = [...intervalsCompleted, ...googleCompleted]
+    .filter(a => {
+      const name=String(a.name||"").trim().toLowerCase();
+      const type=String(a.type||"").trim().toLowerCase();
+      return (name && name!=="unknown") || (type && type!=="unknown") || Number(a.durationHours||0)>0 || Number(a.calories||0)>0;
+    })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
 
   const completedPairedIds = new Set(
@@ -1986,6 +1997,13 @@ async function energyForDate(env, date) {
     }, 0)),
     actualActivityCalories: Math.round(completed.reduce((sum, a) => sum + Number(a.calories || 0), 0)),
     suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
+    calorieBreakdown: {
+      baselineRestTDEE: CONFIG.baselineRestTDEE,
+      activityAdjustment: Math.max(0, estimatedTDEE - CONFIG.baselineRestTDEE),
+      weightLossDeficit: Math.round(deficit),
+      uncappedTarget: Math.round(estimatedTDEE - deficit),
+      maxTarget: CONFIG.maxCalorieTarget
+    },
     unmatchedPlannedWorkouts: unmatchedPlanned,
     estimatedTDEE,
     calorieTarget: target,
@@ -2094,6 +2112,7 @@ async function analysisDaily(
 
     nutrition: {
       protein: protein,
+      calorieBreakdown: energy.calorieBreakdown,
       macros: energy.macroTargets,
       calorieTarget: energy.calorieTarget,
       targetWeightKg: CONFIG.targetWeightKg,
