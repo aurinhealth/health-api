@@ -2505,6 +2505,17 @@ async function foodRecommend(env, url) {
   const targets = energy.macroTargets || dailyMacroTargets(energy.currentWeight, targetKcal, energy.nutritionContext || {});
   const calorieDelta = targetKcal - log.totals.kcal;
   const remaining = { kcal: Math.max(0, calorieDelta), protein_g: Math.max(0, targets.protein_g-log.totals.protein_g), carbs_g: Math.max(0, targets.carbs_g-log.totals.carbs_g), fat_g: Math.max(0, targets.fat_g-log.totals.fat_g) };
+
+  const eaten = log.entries.filter(r => r.status === "eaten");
+  const mealTypes = new Set(eaten.map(r => String(r.meal_type || "").toUpperCase()).filter(Boolean));
+  const hasBreakfast = mealTypes.has("BREAKFAST") || eaten.some(r => String(r.meal_time || "").startsWith("0"));
+  const hasLunch = mealTypes.has("LUNCH") || eaten.some(r => /^1[01]:|^12:|^13:/.test(String(r.meal_time || "")));
+  const hasDinner = mealTypes.has("DINNER") || eaten.some(r => /^1[89]:|^2[0-3]:/.test(String(r.meal_time || "")));
+  let nextMeal = "SNACK";
+  if (!hasBreakfast) nextMeal = "BREAKFAST";
+  else if (!hasLunch) nextMeal = "LUNCH";
+  else if (!hasDinner) nextMeal = "DINNER";
+
   const explicitPostRide=url.searchParams.get('post_ride');
   const postRide=explicitPostRide==='1' || (explicitPostRide!=='0' && energy.nutritionContext?.postRide);
   const maxMinutes=Number(url.searchParams.get('max_minutes')||0);
@@ -2514,22 +2525,65 @@ async function foodRecommend(env, url) {
   const heavilyOverCalories=calorieDelta<-300;
   const cookbookData=await getCookbook();
   const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
+
+  const categoryForMeal = {
+    BREAKFAST:["breakfast","snidane","snídaně"],
+    LUNCH:["lunch","oběd","obed"],
+    DINNER:["dinner","večeře","vecere"],
+    SNACK:["snack","svačina","svacina"]
+  }[nextMeal] || [];
+
   let candidates=cookbook.filter(recipe=>{
     const kcal=Number(recipe.kcal);
     if(!Number.isFinite(kcal)||kcal<=0) return false;
     if(category && String(recipe.category||'').toLowerCase()!==category.toLowerCase()) return false;
     if(maxMinutes && recipeMinutes(recipe)>maxMinutes) return false;
     if(heavilyOverCalories && kcal>150) return false;
-    if(overCalories && !heavilyOverCalories && kcal>250) return false;
+    if(overCalories && !heavilyOverCalories && kcal>Math.max(250, remaining.kcal*1.15)) return false;
+    if(categoryForMeal.length){
+      const hay=String(recipe.category||"")+" "+String(recipe.meal||"")+" "+String(recipe.type||"")+" "+String(recipe.tags||"");
+      const matchesMeal=categoryForMeal.some(v=>hay.toLowerCase().includes(v));
+      if(matchesMeal) recipe.__mealMatch=true;
+    }
     return true;
   });
-  candidates=candidates.map(recipe=>({recipe,score:recipeFitScore(recipe,remaining,targets,{postRide,maxMinutes})})).filter(x=>x.score>-9000).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({...x.recipe,recommendation_score:x.score,recommendation_reason:recommendationReason(x.recipe,remaining,{postRide,maxMinutes})}));
+
+  candidates=candidates
+    .map(recipe=>({recipe,score:recipeFitScore(recipe,remaining,targets,{postRide,maxMinutes})+(recipe.__mealMatch?35:0)}))
+    .filter(x=>x.score>-9000)
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,limit)
+    .map(x=>({
+      ...x.recipe,
+      servings:1,
+      portion:1,
+      portion_label:"1 porce",
+      meal_type:nextMeal,
+      recommendation_score:Math.round(x.score*10)/10,
+      recommendation_reason:[recommendationReason(x.recipe,remaining,{postRide,maxMinutes}),x.recipe.__mealMatch?"odpovídá dalšímu jídlu dne":"vhodné podle zbývajících maker"].filter(Boolean).join(", ")
+    }));
+
+  const storeAlternatives=[];
+  const addStore=(name,kcal,protein,carbs,fat,reason)=>storeAlternatives.push({name,kcal,protein_g:protein,carbs_g:carbs,fat_g:fat,reason});
+  if(remaining.protein_g>=25) addStore("Skyr / vysokoproteinový jogurt",150,20,10,1,"rychle doplní protein");
+  if(remaining.protein_g>=25) addStore("Kuřecí prsa + zelenina",300,45,10,8,"vysoký protein, nízký přebytek tuku");
+  if(remaining.carbs_g>=40) addStore("Banán + pečivo",250,7,50,3,"rychlé doplnění sacharidů");
+  if(remaining.calories>=300 && remaining.protein_g>=20) addStore("Cottage + pečivo",350,28,35,10,"vyvážená jednoduchá večeře");
+  if(!storeAlternatives.length) addStore("Proteinový pudink / skyr",150,20,10,2,"malá porce podle zbývajícího příjmu");
+
   let coaching='';
-  if(heavilyOverCalories) coaching='Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.';
-  else if(overCalories) coaching='Kalorický cíl už je splněný/překročený. Pokud máš hlad, vybírej spíš malou svačinovou porci; další plnohodnotné jídlo není nutné jen kvůli makrům.';
-  else if(postRide) coaching='Jsi krátce po vytrvalostním tréninku. Pokud budeš ještě jíst, preferuj sacharidy a rozumný příjem bílkovin.';
+  if(heavilyOverCalories) coaching='Kalorický cíl je už výrazně překročený. Další plnohodnotné jídlo není potřeba; pokud máš hlad, vol spíše malou porci.';
+  else if(nextMeal==="DINNER" && (hasBreakfast || hasLunch)) coaching='Snídaně a oběd jsou zapsané. Teď vybírám už jen varianty pro večeři a jejich velikost držím na 1 porci; doporučení se přepočítává podle toho, co jsi dnes snědl.';
+  else if(postRide) coaching='Po kole máš vyšší prioritu pro sacharidy a dostatek bílkovin. Doporučení se přepočítává podle dnešního příjmu.';
   else if(energy.nutritionContext?.endurance) coaching='Dnes máš vytrvalostní zátěž, takže při dalším jídle mají vyšší prioritu sacharidy.';
-  return Response.json({status:'ok',date,foodTotals:log.totals,calorieTarget:targetKcal,calorieDelta,macroTargets:targets,remaining,nutritionContext:energy.nutritionContext||null,coaching,recommendations:candidates});
+  else coaching='Doporučení se průběžně přepočítává podle toho, co už jsi dnes snědl, a podle zbývajících maker.';
+
+  return Response.json({
+    status:'ok',date,mealToPlan:nextMeal,
+    mealsCompleted:{breakfast:hasBreakfast,lunch:hasLunch,dinner:hasDinner},
+    foodTotals:log.totals,calorieTarget:targetKcal,calorieDelta,macroTargets:targets,remaining,
+    nutritionContext:energy.nutritionContext||null,coaching,recommendations:candidates,storeAlternatives
+  });
 }
 
 // ======================================================
