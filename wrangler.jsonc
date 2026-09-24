@@ -16,13 +16,12 @@
     ]
   },
 
-  "migrations_dir": "migrations",
-
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "health-data",
-      "database_id": "07caba2e-ba9a-4191-8a2e-e2fd4c5082cd"
+      "database_id": "07caba2e-ba9a-4191-8a2e-e2fd4c5082cd",
+      "migrations_dir": "migrations"
     }
   ]
 }
