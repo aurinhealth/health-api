@@ -2559,6 +2559,7 @@ async function foodRecommend(env, url) {
   const hasBreakfast=mealTypes.has("BREAKFAST")||eaten.some(r=>/^0[5-9]:|^10:/.test(String(r.meal_time||"")));
   const hasLunch=mealTypes.has("LUNCH")||eaten.some(r=>/^1[12]:|^13:|^14:/.test(String(r.meal_time||"")));
   const hasDinner=mealTypes.has("DINNER")||eaten.some(r=>/^1[89]:|^2[0-3]:/.test(String(r.meal_time||"")));
+  const hasSnack=mealTypes.has("SNACK");
   const remaining={kcal:Math.max(0,targetKcal-log.totals.kcal),protein_g:Math.max(0,targets.protein_g-log.totals.protein_g),carbs_g:Math.max(0,targets.carbs_g-log.totals.carbs_g),fat_g:Math.max(0,targets.fat_g-log.totals.fat_g)};
   const explicitPostRide=url.searchParams.get('post_ride');
   const postRide=explicitPostRide==='1'||(explicitPostRide!=='0'&&energy.nutritionContext?.postRide);
@@ -2570,7 +2571,10 @@ async function foodRecommend(env, url) {
   let slots=[];
   if(!hasBreakfast) slots.push(["BREAKFAST","Snídaně"]);
   else if(!hasLunch) slots.push(["LUNCH","Oběd"]);
-  else if(!hasDinner) slots.push(["SNACK","Svačina"],["DINNER","Večeře"]);
+  else if(!hasDinner) {
+    if(!hasSnack) slots.push(["SNACK","Odpolední svačina"]);
+    slots.push(["DINNER","Večeře"]);
+  }
   if(!slots.length && !hasDinner && hasLunch) slots=[["DINNER","Večeře"]];
   if(slots.length>3) slots=slots.slice(0,3);
 
