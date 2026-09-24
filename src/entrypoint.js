@@ -142,7 +142,9 @@ async function handleDashboardApi(request, env, ctx, url) {
         recommendations: await recommendResponse.json()
       };
     }));
-    return Response.json({status:"ok",start,end:dates[6],days},{headers:{"Cache-Control":"no-store"}});
+    const headers = {"Cache-Control":"no-store"};
+    if (refreshSession) headers["Set-Cookie"] = await newDashboardSessionCookie(expected);
+    return Response.json({status:"ok",start,end:dates[6],days},{headers});
   }
 
   const routes = {
