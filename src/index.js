@@ -12,6 +12,7 @@ export default {
       ctx.waitUntil(
         (async () => {
           try {
+            await startGoogleSync(env);
             await syncIntervals(env);
             await matchActivities(env);
           } catch (error) {
@@ -1222,29 +1223,32 @@ async function startGoogleSync(env) {
 }
 
 async function processGoogleSyncBatch(env) {
-  const state = await readGoogleSyncState(env);
-  if (!state || state.status !== "running") return { status: "idle" };
+  let processed = 0;
 
-  const details = state.details || {};
-  let configIndex = Number(details.config_index || 0);
-  let pageToken = details.page_token || null;
-  const results = Array.isArray(details.results) ? details.results : [];
+  while (processed < 2) {
+    const state = await readGoogleSyncState(env);
+    if (!state || state.status !== "running") return { status: processed ? "running" : "idle" };
 
-  if (configIndex >= GOOGLE_SYNC_CONFIGS.length) {
-    const finishedAt = new Date().toISOString();
-    await setGoogleSyncStatus(env, "completed", {
-      ...details,
-      finished_at: finishedAt,
-      current: null,
-      page_token: null,
-      completed_configs: GOOGLE_SYNC_CONFIGS.length
-    });
-    return { status: "completed" };
-  }
+    const details = state.details || {};
+    let configIndex = Number(details.config_index || 0);
+    let pageToken = details.page_token || null;
+    const results = Array.isArray(details.results) ? details.results : [];
 
-  const [type, filterName, filterType, family, days] = GOOGLE_SYNC_CONFIGS[configIndex];
+    if (configIndex >= GOOGLE_SYNC_CONFIGS.length) {
+      const finishedAt = new Date().toISOString();
+      await setGoogleSyncStatus(env, "completed", {
+        ...details,
+        finished_at: finishedAt,
+        current: null,
+        page_token: null,
+        completed_configs: GOOGLE_SYNC_CONFIGS.length
+      });
+      return { status: "completed", details };
+    }
 
-  try {
+    const [type, filterName, filterType, family, days] = GOOGLE_SYNC_CONFIGS[configIndex];
+
+    try {
     const token = await googleToken(env);
     const start = dateDaysAgo(days);
     const end = dateDaysFromNow(1);
@@ -1311,7 +1315,8 @@ async function processGoogleSyncBatch(env) {
       return { status: "completed", details };
     }
 
-    return { status: "running", details };
+    processed += 1;
+    if (processed >= 2) return { status: "running", details };
   } catch (error) {
     const message = error?.message || String(error);
     results.push({
