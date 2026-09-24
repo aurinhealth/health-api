@@ -2692,16 +2692,17 @@ async function healthActivities(env) {
 async function healthSleep(env, url) {
   const start = url.searchParams.get("start") || dateDaysAgo(30);
   const end = url.searchParams.get("end") || dateDaysFromNow(1);
+  // Older Google Health imports may have null DB timestamps because the
+  // session interval is nested inside payload_json. Read recent sleep rows first,
+  // then normalize/filter using the nested interval as well.
   const rows = await env.DB.prepare(`
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE data_type = 'sleep'
       AND source_family = 'google-wearables'
-      AND start_time < ?
-      AND end_time >= ?
-    ORDER BY start_time DESC
-    LIMIT 100
-  `).bind(end, start).all();
+    ORDER BY COALESCE(start_time, end_time) DESC, id DESC
+    LIMIT 300
+  `).all();
 
   const sessions = (rows.results || []).map(row => {
     let p = {};
@@ -2735,13 +2736,19 @@ async function healthSleep(env, url) {
     };
   });
 
-  const totals = sessions.reduce((a,s)=>{
+  const filteredSessions = sessions.filter(s => {
+    const sStart = String(s.startTime || "").slice(0,10);
+    const sEnd = String(s.endTime || "").slice(0,10);
+    return (sStart && sStart < end && (!sEnd || sEnd >= start)) || (sEnd && sEnd >= start && sEnd < end);
+  });
+
+  const totals = filteredSessions.reduce((a,s)=>{
     a.durationMin += Number(s.durationMin||0);
     for(const [k,v] of Object.entries(s.stages||{})) a.stages[k]=(a.stages[k]||0)+Number(v||0);
     return a;
   },{durationMin:0,stages:{}});
-  const avg = sessions.length ? totals.durationMin/sessions.length : 0;
-  return Response.json({status:"ok",source:"google-health",start,end,count:sessions.length,averageDurationMin:Math.round(avg),totals,sessions});
+  const avg = filteredSessions.length ? totals.durationMin/filteredSessions.length : 0;
+  return Response.json({status:"ok",source:"google-health",start,end,count:filteredSessions.length,averageDurationMin:Math.round(avg),totals,sessions:filteredSessions});
 }
 
 
