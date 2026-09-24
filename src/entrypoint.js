@@ -2,7 +2,7 @@ import app from "./sheets-gateway.js";
 import { handleMcpCompat } from "./mcp-compat.js";
 import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
-import { syncDailyNutritionNotes } from "./intervals-nutrition-notes.js";
+import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
@@ -282,6 +282,9 @@ async function handleNutritionNotesAutomation(request, env) {
     await verifyGitHubActionsToken(request);
     const body=await request.json().catch(()=>({}));
     const today=new Date(), oldest=String(body?.oldest||today.toISOString().slice(0,10)), newest=String(body?.newest||new Date(today.getTime()+14*86400000).toISOString().slice(0,10));
+    if (String(body?.action || "").toLowerCase() === "delete") {
+      return Response.json(await deleteDailyNutritionNotes(env,{oldest,newest}));
+    }
     let weightKg=Number(body?.weightKg);
     if(!Number.isFinite(weightKg)){
       const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).first();
