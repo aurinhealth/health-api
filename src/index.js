@@ -134,7 +134,7 @@ const CONFIG = {
 
   // Rest-day energy baseline. This is intentionally conservative and
   // will later be calibrated against actual intake + weight trend.
-  baselineRestTDEE: 2450,
+  baselineRestTDEE: 2550,
 
   weightLossTargetKgPerWeek: 0.5,
   targetWeightKg: 80,
@@ -1987,7 +1987,10 @@ async function energyForDate(env, date) {
   }
 
   const deficit = CONFIG.weightLossTargetKgPerWeek * 7700 / 7;
-  const target = Math.max(CONFIG.minCalorieTarget, Math.min(CONFIG.maxCalorieTarget, Math.round(estimatedTDEE - deficit)));
+  const restIntakeTarget = 2000;
+  const plannedTrainingCalories = Math.max(0, estimatedTDEE - CONFIG.baselineRestTDEE);
+  const trainingCoverage = 0.70;
+  const target = Math.max(CONFIG.minCalorieTarget, Math.min(4000, Math.round(restIntakeTarget + plannedTrainingCalories * trainingCoverage)));
   const context = nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned });
   const macroTargets = dailyMacroTargets(weight ? Number(weight.value_numeric) : null, target, context);
 
@@ -2006,10 +2009,12 @@ async function energyForDate(env, date) {
     suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
     calorieBreakdown: {
       baselineRestTDEE: CONFIG.baselineRestTDEE,
-      activityAdjustment: Math.max(0, estimatedTDEE - CONFIG.baselineRestTDEE),
+      activityAdjustment: Math.max(0, plannedTrainingCalories),
+      trainingCoverage: 0.70,
+      restIntakeTarget: 2000,
       weightLossDeficit: Math.round(deficit),
       uncappedTarget: Math.round(estimatedTDEE - deficit),
-      maxTarget: CONFIG.maxCalorieTarget
+      maxTarget: 4000
     },
     unmatchedPlannedWorkouts: unmatchedPlanned,
     estimatedTDEE,
