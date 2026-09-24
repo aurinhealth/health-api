@@ -74,8 +74,8 @@ async function load(){
   const key=$("key").value.trim(); if(!key){$("status").textContent="Enter the dashboard access key.";return}
   sessionStorage.setItem("pfd_dashboard_key",key); $("status").textContent="Loading…"; $("status").className="status";
   try{
-    const [daily,weight,nutrition]=await Promise.all([
-      api("/app/api/daily",key),api("/app/api/weight",key),api("/app/api/nutrition",key)
+    const [daily,nutrition]=await Promise.all([
+      api("/app/api/daily",key),api("/app/api/nutrition",key)
     ]);
     $("content").hidden=false;
     $("calTarget").textContent=n(daily.calories?.target);$("tdee").textContent=n(daily.calories?.estimatedTDEE);
@@ -84,7 +84,7 @@ async function load(){
     const c=daily.training?.completed||[],p=daily.training?.planned||[];
     $("completed").innerHTML=c.length?c.slice(0,8).map(x=>'<div style="margin-bottom:7px"><span class="pill">'+esc(x.type||x.name||"Activity")+'</span> '+esc(x.name||"")+'</div>').join(""):"None";
     $("planned").innerHTML=p.length?p.slice(0,8).map(x=>'<div style="margin-bottom:7px"><span class="pill">'+esc(x.type||x.name||"Workout")+'</span> '+esc(x.name||"")+'</div>').join(""):"None";
-    const rows=weight.records||[];$("weights").innerHTML=rows.slice(-14).reverse().map(x=>'<tr><td>'+esc(x.date||x.sample_time||x.sample||"")+'</td><td>'+n(x.value??x.weight??x.value_numeric)+'</td><td>'+esc(x.unit||x.value_unit||"kg")+'</td></tr>').join("")||'<tr><td colspan="3">No records</td></tr>';
+    const rows=daily.weight?.records||[];$("weights").innerHTML=rows.slice(-14).reverse().map(x=>'<tr><td>'+esc(x.date||x.sample_time||x.sample||"")+'</td><td>'+n(x.value??x.weight??x.value_numeric)+'</td><td>'+esc(x.unit||x.value_unit||"kg")+'</td></tr>').join("")||'<tr><td colspan="3">No records</td></tr>';
     const nr=nutrition.records||[];$("nutritionInfo").textContent=(nr.length||0)+" Google Health nutrition records returned.";
     $("nutritionRows").innerHTML=nr.slice(-30).reverse().map(x=>'<tr><td>'+esc(x.startTime||x.start_time||x.sampleTime||"")+'</td><td>'+esc(x.foodDisplayName||x.food_display_name||x.name||"Nutrition entry")+'</td><td>'+esc(x.mealType||x.meal_type||"")+'</td></tr>').join("")||'<tr><td colspan="3">No Google Health nutrition records found.</td></tr>';
     $("status").textContent="Connected • last refresh "+new Date().toLocaleTimeString();$("status").className="status ok";
