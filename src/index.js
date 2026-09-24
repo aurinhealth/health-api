@@ -2670,12 +2670,22 @@ async function healthActivities(env) {
       )
       .all();
 
+  const activities = (rows.results || []).map(row => {
+    if(row.start_time && row.end_time) return row;
+    let p = {};
+    try { p = JSON.parse(row.payload_json || "{}"); } catch {}
+    const nested = p.exercise || p.sleep || p;
+    const interval = nested.interval || {};
+    return {
+      ...row,
+      start_time: row.start_time || interval.startTime || interval.civilStartTime || null,
+      end_time: row.end_time || interval.endTime || interval.civilEndTime || null
+    };
+  });
   return Response.json({
     status: "ok",
-    count:
-      rows.results.length,
-    activities:
-      rows.results
+    count: activities.length,
+    activities
   });
 }
 
