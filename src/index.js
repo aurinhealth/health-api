@@ -2,11 +2,24 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 
 export default {
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(
-      syncAll(env).catch(error => {
-        console.error("Scheduled sync failed:", error);
-      })
-    );
+    if (event.cron === "* * * * *") {
+      await processGoogleSyncBatch(env);
+      return;
+    }
+
+    // Keep the existing daily non-Google maintenance at 01:05 UTC.
+    if (event.cron === "5 1 * * *") {
+      ctx.waitUntil(
+        (async () => {
+          try {
+            await syncIntervals(env);
+            await matchActivities(env);
+          } catch (error) {
+            console.error("Scheduled maintenance failed:", error);
+          }
+        })()
+      );
+    }
   },
 
   async fetch(request, env, ctx) {
@@ -17,7 +30,7 @@ export default {
         return Response.json({
           status: "ok",
           service: "health-api",
-          version: "final-5-cookbook-v3.2.2"
+          version: "final-5-cookbook-v3.3.0-queued-google-sync"
         });
       }
 
@@ -34,24 +47,28 @@ export default {
       }
 
       if (url.pathname === "/sync/google") {
-        // Google Health sync runs in the Worker background. Persist its state
-        // so the caller can poll /sync/google/status instead of waiting.
-        if (ctx?.waitUntil) {
-          const startedAt = new Date().toISOString();
-          await setGoogleSyncStatus(env, "running", { started_at: startedAt, finished_at: null });
-          ctx.waitUntil((async () => {
-            try {
-              const response = await syncGoogle(env);
-              const data = await response.clone().json();
-              await setGoogleSyncStatus(env, "completed", { started_at: startedAt, finished_at: new Date().toISOString(), result: data });
-            } catch (error) {
-              await setGoogleSyncStatus(env, "error", { started_at: startedAt, finished_at: new Date().toISOString(), message: error?.message || String(error) });
-              console.error("Google sync failed:", error);
-            }
-          })());
-          return Response.json({ status: "started", source: "google", message: "Google Health sync started in the background.", status_url: "/sync/google/status" }, { status: 202, headers: { "Cache-Control": "no-store" } });
+        const start = await startGoogleSync(env);
+
+        if (start.started && ctx?.waitUntil) {
+          ctx.waitUntil(
+            processGoogleSyncBatch(env).catch(error => {
+              console.error("Google sync batch failed:", error);
+            })
+          );
         }
-        return await syncGoogle(env);
+
+        const status = start.started ? "started" : "already_running";
+        return Response.json({
+          status,
+          source: "google",
+          message: start.started
+            ? "Google Health sync queued. Data is processed in small background batches."
+            : "A Google Health sync is already running.",
+          status_url: "/sync/google/status"
+        }, {
+          status: start.started ? 202 : 200,
+          headers: { "Cache-Control": "no-store" }
+        });
       }
 
       if (url.pathname === "/sync/intervals") {
@@ -1024,6 +1041,301 @@ function googleInfo(type, p) {
   }
 
   return { value, unit, sample, start, end };
+}
+
+// ======================================================
+// GOOGLE SYNC QUEUE
+// ======================================================
+
+const GOOGLE_SYNC_CONFIGS = [
+  ["active-energy-burned", "active_energy_burned", "interval", "google-wearables", 7],
+  ["active-minutes", "active_minutes", "interval", "google-wearables", 7],
+  ["active-zone-minutes", "active_zone_minutes", "interval", "google-wearables", 7],
+  ["steps", "steps", "interval", "google-wearables", 7],
+  ["distance", "distance", "interval", "google-wearables", 7],
+  ["floors", "floors", "interval", "google-wearables", 7],
+  ["heart-rate", "heart_rate", "sample", "google-wearables", 7],
+  ["heart-rate-variability", "heart_rate_variability", "sample", "google-wearables", 7],
+  ["oxygen-saturation", "oxygen_saturation", "sample", "google-wearables", 7],
+  ["daily-resting-heart-rate", "daily_resting_heart_rate", "daily", "google-wearables", 30],
+  ["daily-heart-rate-variability", "daily_heart_rate_variability", "daily", "google-wearables", 30],
+  ["daily-oxygen-saturation", "daily_oxygen_saturation", "daily", "google-wearables", 30],
+  ["daily-respiratory-rate", "daily_respiratory_rate", "daily", "google-wearables", 30],
+  ["daily-vo2-max", "daily_vo2_max", "daily", "google-wearables", 30],
+  ["daily-heart-rate-zones", "daily_heart_rate_zones", "daily", "google-wearables", 30],
+  ["respiratory-rate-sleep-summary", "respiratory_rate_sleep_summary", "sample", "google-wearables", 7],
+  ["sedentary-period", "sedentary_period", "interval", "google-wearables", 7],
+  ["time-in-heart-rate-zone", "time_in_heart_rate_zone", "interval", "google-wearables", 7],
+  // Normal app sync only needs the recent sleep history requested by the app.
+  // Older sleep history can be backfilled separately without blocking daily sync.
+  ["sleep", "sleep", "sleep", "google-wearables", 30],
+  ["exercise", "exercise", "exercise", "google-wearables", 90],
+  ["weight", "weight", "sample", "google-sources", 365],
+  ["body-fat", "body_fat", "sample", "google-sources", 30]
+];
+
+const GOOGLE_SYNC_PAGE_LIMIT = 1;
+
+async function googleReconcilePage(
+  token,
+  type,
+  filterName,
+  filterType,
+  startDate,
+  sourceFamily,
+  endDate,
+  pageToken = null
+) {
+  const params = new URLSearchParams();
+  params.set("dataSourceFamily", sourceFamily);
+
+  const end = endDate || dateDaysFromNow(1);
+  let filter;
+
+  if (filterType === "interval") {
+    filter = `${filterName}.interval.start_time >= "${startDate}T00:00:00Z" AND ${filterName}.interval.start_time < "${end}T00:00:00Z"`;
+  } else if (filterType === "sample") {
+    filter = `${filterName}.sample_time.physical_time >= "${startDate}T00:00:00Z" AND ${filterName}.sample_time.physical_time < "${end}T00:00:00Z"`;
+  } else if (filterType === "daily") {
+    filter = `${filterName}.date >= "${startDate}" AND ${filterName}.date < "${end}"`;
+  } else if (filterType === "exercise") {
+    filter = `${filterName}.interval.civil_start_time >= "${startDate}T00:00:00" AND ${filterName}.interval.civil_start_time < "${end}T00:00:00"`;
+  } else if (filterType === "sleep") {
+    filter = `sleep.interval.civil_end_time >= "${startDate}" AND sleep.interval.civil_end_time < "${end}"`;
+  } else {
+    throw new Error(`Unsupported Google filter type: ${filterType}`);
+  }
+
+  params.set("filter", filter);
+  if (pageToken) params.set("pageToken", pageToken);
+
+  const response = await fetchWithTimeout(
+    `https://health.googleapis.com/v4/users/me/dataTypes/${type}/dataPoints:reconcile?${params.toString()}`,
+    {
+      headers: {
+        Authorization: "Bearer " + token,
+        Accept: "application/json"
+      }
+    },
+    12000
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(`${type} HTTP ${response.status}: ` + JSON.stringify(data));
+  }
+
+  return {
+    dataPoints: data.dataPoints || [],
+    nextPageToken: data.nextPageToken || null
+  };
+}
+
+async function saveGooglePointsBatch(env, family, type, points) {
+  if (!points.length) return 0;
+
+  const statements = points.map(point => {
+    const i = googleInfo(type, point);
+    const fallbackId = point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`;
+
+    return env.DB.prepare(
+      `INSERT INTO health_datapoints (
+        source_family,
+        data_type,
+        external_id,
+        sample_time,
+        start_time,
+        end_time,
+        value_numeric,
+        value_unit,
+        payload_json
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (source_family, data_type, external_id)
+      DO UPDATE SET
+        sample_time = excluded.sample_time,
+        start_time = excluded.start_time,
+        end_time = excluded.end_time,
+        value_numeric = excluded.value_numeric,
+        value_unit = excluded.value_unit,
+        payload_json = excluded.payload_json,
+        updated_at = CURRENT_TIMESTAMP`
+    ).bind(
+      family,
+      type,
+      fallbackId,
+      i.sample,
+      i.start,
+      i.end,
+      i.value,
+      i.unit,
+      JSON.stringify(point)
+    );
+  });
+
+  // D1 batch executes the statements sequentially in one database call.
+  await env.DB.batch(statements);
+  return points.length;
+}
+
+async function readGoogleSyncState(env) {
+  await ensureSyncStatusTable(env);
+  const row = await env.DB.prepare(
+    "SELECT status, started_at, finished_at, details_json, updated_at FROM sync_status WHERE sync_name = 'google'"
+  ).first();
+
+  if (!row) return null;
+
+  let details = {};
+  try {
+    details = row.details_json ? JSON.parse(row.details_json) : {};
+  } catch {}
+
+  return { ...row, details };
+}
+
+async function startGoogleSync(env) {
+  const current = await readGoogleSyncState(env);
+  const now = new Date().toISOString();
+
+  // Do not start a second job on top of a healthy running job.
+  if (current?.status === "running") {
+    const updated = current.updated_at ? new Date(current.updated_at + "Z").getTime() : 0;
+    if (updated && Date.now() - updated < 10 * 60 * 1000) {
+      return { started: false, details: current.details };
+    }
+  }
+
+  const details = {
+    started_at: now,
+    finished_at: null,
+    config_index: 0,
+    page_token: null,
+    completed_configs: 0,
+    total_configs: GOOGLE_SYNC_CONFIGS.length,
+    current: GOOGLE_SYNC_CONFIGS[0]?.[0] || null,
+    results: []
+  };
+
+  await setGoogleSyncStatus(env, "running", details);
+  return { started: true, details };
+}
+
+async function processGoogleSyncBatch(env) {
+  const state = await readGoogleSyncState(env);
+  if (!state || state.status !== "running") return { status: "idle" };
+
+  const details = state.details || {};
+  let configIndex = Number(details.config_index || 0);
+  let pageToken = details.page_token || null;
+  const results = Array.isArray(details.results) ? details.results : [];
+
+  if (configIndex >= GOOGLE_SYNC_CONFIGS.length) {
+    const finishedAt = new Date().toISOString();
+    await setGoogleSyncStatus(env, "completed", {
+      ...details,
+      finished_at: finishedAt,
+      current: null,
+      page_token: null,
+      completed_configs: GOOGLE_SYNC_CONFIGS.length
+    });
+    return { status: "completed" };
+  }
+
+  const [type, filterName, filterType, family, days] = GOOGLE_SYNC_CONFIGS[configIndex];
+
+  try {
+    const token = await googleToken(env);
+    const start = dateDaysAgo(days);
+    const end = dateDaysFromNow(1);
+
+    const page = await googleReconcilePage(
+      token,
+      type,
+      filterName,
+      filterType,
+      start,
+      `users/me/dataSourceFamilies/${family}`,
+      end,
+      pageToken
+    );
+
+    const saved = await saveGooglePointsBatch(env, family, type, page.dataPoints);
+    const existing = results.find(x => x.data_type === type);
+
+    if (existing) {
+      existing.records_found = Number(existing.records_found || 0) + page.dataPoints.length;
+      existing.records_saved = Number(existing.records_saved || 0) + saved;
+      existing.pages = Number(existing.pages || 0) + 1;
+    } else {
+      results.push({
+        data_type: type,
+        records_found: page.dataPoints.length,
+        records_saved: saved,
+        pages: 1,
+        status: page.nextPageToken ? "partial" : "ok"
+      });
+    }
+
+    if (page.nextPageToken) {
+      details.page_token = page.nextPageToken;
+      details.config_index = configIndex;
+      details.completed_configs = configIndex;
+      details.current = type;
+    } else {
+      const currentResult = results.find(x => x.data_type === type);
+      if (currentResult) currentResult.status = "ok";
+
+      configIndex += 1;
+      details.config_index = configIndex;
+      details.page_token = null;
+      details.completed_configs = configIndex;
+      details.current = GOOGLE_SYNC_CONFIGS[configIndex]?.[0] || null;
+    }
+
+    details.results = results;
+    details.updated_at = new Date().toISOString();
+
+    await setGoogleSyncStatus(env, "running", details);
+
+    // The final state is committed by the next short cron invocation, keeping
+    // every individual execution bounded even when Google returns many pages.
+    if (configIndex >= GOOGLE_SYNC_CONFIGS.length && !page.nextPageToken) {
+      const finishedAt = new Date().toISOString();
+      await setGoogleSyncStatus(env, "completed", {
+        ...details,
+        finished_at: finishedAt,
+        current: null,
+        page_token: null
+      });
+      return { status: "completed", details };
+    }
+
+    return { status: "running", details };
+  } catch (error) {
+    const message = error?.message || String(error);
+    results.push({
+      data_type: type,
+      records_found: 0,
+      records_saved: 0,
+      pages: 0,
+      status: "error",
+      message
+    });
+
+    // A failing dataset is isolated. Advance to the next dataset so one bad
+    // Google endpoint cannot stall the entire application.
+    configIndex += 1;
+    details.config_index = configIndex;
+    details.page_token = null;
+    details.completed_configs = configIndex;
+    details.current = GOOGLE_SYNC_CONFIGS[configIndex]?.[0] || null;
+    details.results = results;
+    details.last_error = { data_type: type, message, at: new Date().toISOString() };
+
+    await setGoogleSyncStatus(env, "partial", details);
+    return { status: "partial", details };
+  }
 }
 
 // ======================================================
@@ -2983,37 +3295,19 @@ async function healthDb(env) {
 // ======================================================
 
 async function syncAll(env) {
-  const google =
-    await syncGoogle(
-      env
-    );
-
-  const intervals =
-    await syncIntervals(
-      env
-    );
-
-  const matching =
-    await matchActivities(
-      env
-    );
-
-  const googleData =
-    await google.json();
-
-  const intervalsData =
-    await intervals.json();
+  const google = await startGoogleSync(env);
+  const intervals = await syncIntervals(env);
+  const matching = await matchActivities(env);
+  const intervalsData = await intervals.json();
 
   return Response.json({
     status: "ok",
-
-    google:
-      googleData,
-
-    intervals:
-      intervalsData,
-
-    matching:
-      matching
+    google: {
+      status: google.started ? "started" : "already_running",
+      source: "google",
+      status_url: "/sync/google/status"
+    },
+    intervals: intervalsData,
+    matching
   });
 }
