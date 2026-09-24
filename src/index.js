@@ -815,6 +815,27 @@ async function healthNutrition(env, url) {
     const end = url.searchParams.get("end") || dateDaysFromNow(1);
     const start = url.searchParams.get("start") || dateDaysAgo(30);
     const points = await googleNutritionList(token, start, end);
+    const records = points.map(point => {
+      const log = point?.nutritionLog || {};
+      const nutrients = Object.fromEntries(
+        (log.nutrients || []).map(item => [
+          String(item?.nutrient || "").toLowerCase(),
+          Number(item?.quantity?.grams ?? 0)
+        ])
+      );
+      return {
+        id: point?.name || null,
+        startTime: log?.interval?.startTime || log?.interval?.civilStartTime || null,
+        endTime: log?.interval?.endTime || log?.interval?.civilEndTime || null,
+        foodDisplayName: log?.foodDisplayName || null,
+        mealType: log?.mealType || null,
+        kcal: Number(log?.energy?.kcal ?? 0),
+        protein_g: Number(nutrients.protein ?? 0),
+        carbs_g: Number(log?.totalCarbohydrate?.grams ?? 0),
+        fat_g: Number(log?.totalFat?.grams ?? 0),
+        serving: Number(log?.serving?.amount ?? 0)
+      };
+    });
 
     return Response.json({
       status: "ok",
@@ -822,8 +843,8 @@ async function healthNutrition(env, url) {
       data_type: "nutrition-log",
       start,
       end,
-      count: points.length,
-      records: points
+      count: records.length,
+      records
     });
   } catch (error) {
     return Response.json(
