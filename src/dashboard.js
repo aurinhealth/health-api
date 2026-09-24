@@ -52,7 +52,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 
 <section id="training" class="view">
-  <div class="weekbar"><div><div class="eyebrow">Training management</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="select-row"><select id="trainingWeekSelect"></select><select id="trainingDaySelect"></select><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Dnes</button><button class="btn" id="nextWeek">→</button></div></div></div>
+  <div class="weekbar"><div><div class="eyebrow">Training management</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="select-row"><select id="trainingWeekSelect"></select><select id="trainingDaySelect"></select><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Tento týden</button><button class="btn" id="nextWeek">→</button></div></div></div>
   <div class="daygrid" id="trainingDays"></div>
   <div class="grid" style="margin-top:12px">
     <div class="card"><div class="label">Fitness</div><div id="tFitness" class="value">—</div><div class="small">CTL · 42denní trend</div></div>
