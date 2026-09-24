@@ -90,6 +90,14 @@ export default {
         return await healthDb(env);
       }
 
+      if (url.pathname === "/health/nutrition") {
+        return await healthNutrition(env, url);
+      }
+
+      if (url.pathname === "/health/nutrition/log") {
+        return await googleNutritionLogEndpoint(env, request);
+      }
+
       return Response.json(
         {
           status: "error",
@@ -619,6 +627,195 @@ async function googleReconcile(
   }
 
   return all;
+}
+
+// ======================================================
+// GOOGLE NUTRITION API
+// ======================================================
+
+async function googleNutritionList(token, startDate, endDate) {
+  const params = new URLSearchParams();
+  params.set(
+    "filter",
+    `nutrition_log.interval.start_time >= "${startDate}T00:00:00Z" AND nutrition_log.interval.start_time < "${endDate}T00:00:00Z"`
+  );
+  params.set("pageSize", "1000");
+
+  const all = [];
+  let pageToken = null;
+
+  for (let page = 0; page < 20; page++) {
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const response = await fetch(
+      `https://health.googleapis.com/v4/users/me/dataTypes/nutrition-log/dataPoints?${params.toString()}`,
+      {
+        headers: {
+          Authorization: "Bearer " + token,
+          Accept: "application/json"
+        }
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(
+        `nutrition-log HTTP ${response.status}: ` +
+        JSON.stringify(data)
+      );
+    }
+
+    all.push(...(data.dataPoints || []));
+    pageToken = data.nextPageToken || null;
+    if (!pageToken) break;
+  }
+
+  return all;
+}
+
+function googleNutritionWritePayload(body) {
+  const now = new Date();
+  const start = body.consumed_at
+    ? new Date(body.consumed_at)
+    : now;
+
+  if (Number.isNaN(start.getTime())) {
+    throw new Error("Invalid consumed_at");
+  }
+
+  const end = body.end_at
+    ? new Date(body.end_at)
+    : new Date(start.getTime() + 60 * 1000);
+
+  if (Number.isNaN(end.getTime()) || end <= start) {
+    throw new Error("Invalid end_at");
+  }
+
+  const log = {
+    interval: {
+      startTime: start.toISOString(),
+      endTime: end.toISOString()
+    },
+    foodDisplayName: body.name || body.foodDisplayName || "Food",
+    mealType: body.mealType || "UNKNOWN",
+    serving: {
+      amount: Number(body.servings || 1)
+    }
+  };
+
+  if (body.food) {
+    delete log.foodDisplayName;
+    log.food = String(body.food);
+  } else {
+    const kcal = Number(body.kcal);
+    if (Number.isFinite(kcal)) log.energy = { kcal };
+
+    const carbs = Number(body.carbs_g ?? body.carbohydrates_g);
+    if (Number.isFinite(carbs)) log.totalCarbohydrate = { grams: carbs };
+
+    const fat = Number(body.fat_g);
+    if (Number.isFinite(fat)) log.totalFat = { grams: fat };
+
+    const protein = Number(body.protein_g);
+    if (Number.isFinite(protein)) {
+      log.nutrients = [
+        {
+          nutrient: "PROTEIN",
+          quantity: { grams: protein }
+        }
+      ];
+    }
+  }
+
+  return { nutritionLog: log };
+}
+
+async function googleNutritionWrite(token, body) {
+  const payload = googleNutritionWritePayload(body);
+
+  const response = await fetch(
+    "https://health.googleapis.com/v4/users/me/dataTypes/nutrition-log/dataPoints",
+    {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(
+      `nutrition-log write HTTP ${response.status}: ` +
+      JSON.stringify(data)
+    );
+  }
+
+  return data;
+}
+
+async function googleNutritionLogEndpoint(env, request) {
+  if (request.method !== "POST") {
+    return Response.json(
+      { status: "error", message: "Method not allowed" },
+      { status: 405 }
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const token = await googleToken(env);
+    const result = await googleNutritionWrite(token, body);
+
+    return Response.json({
+      status: "ok",
+      source: "google-health",
+      operation: "nutrition-log.create",
+      result
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        status: "error",
+        source: "google-health",
+        operation: "nutrition-log.create",
+        message: error.message
+      },
+      { status: 500 }
+    );
+  }
+}
+
+async function healthNutrition(env, url) {
+  try {
+    const token = await googleToken(env);
+    const end = url.searchParams.get("end") || dateDaysFromNow(1);
+    const start = url.searchParams.get("start") || dateDaysAgo(30);
+    const points = await googleNutritionList(token, start, end);
+
+    return Response.json({
+      status: "ok",
+      source: "google-health",
+      data_type: "nutrition-log",
+      start,
+      end,
+      count: points.length,
+      records: points
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        status: "error",
+        source: "google-health",
+        data_type: "nutrition-log",
+        message: error.message
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // ======================================================
