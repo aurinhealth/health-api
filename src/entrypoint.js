@@ -54,10 +54,10 @@ async function handleDashboardLogin(request, env) {
   const body = await request.json().catch(() => ({}));
   const key = String(body?.key || "");
   if (!key || key !== expected) return Response.json({status:"error",message:"Invalid dashboard access key."},{status:401});
-  const exp = Math.floor(Date.now()/1000) + 12*60*60;
+  const exp = Math.floor(Date.now()/1000) + 30*24*60*60;
   const payload = base64url(new TextEncoder().encode(JSON.stringify({exp})));
   const signature = await dashboardHmac(payload, expected);
-  const cookie = "pfd_session="+payload+"."+signature+"; Path=/; Max-Age=43200; HttpOnly; Secure; SameSite=Lax";
+  const cookie = "pfd_session="+payload+"."+signature+"; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax";
   return Response.json({status:"ok",expiresAt:new Date(exp*1000).toISOString()},{headers:{"Set-Cookie":cookie,"Cache-Control":"no-store"}});
 }
 async function handleDashboardLogout() {
@@ -105,6 +105,30 @@ async function handleDashboardApi(request, env, ctx, url) {
   if (!authorized) authorized = await verifyDashboardSession(request, expected);
   if (!authorized) {
     return Response.json({ status: "error", message: "Unauthorized" }, { status: 401, headers: { "WWW-Authenticate": "Bearer" } });
+  }
+
+  if (url.pathname === "/app/api/week") {
+    const requestedStart = url.searchParams.get("start");
+    const start = requestedStart && /^\\d{4}-\\d{2}-\\d{2}$/.test(requestedStart)
+      ? requestedStart
+      : pragueWeekStart();
+    const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
+    const days = await Promise.all(dates.map(async date => {
+      const dailyUrl = new URL("/analysis/daily", request.url);
+      dailyUrl.searchParams.set("date", date);
+      const foodUrl = new URL("/food/log", request.url);
+      foodUrl.searchParams.set("date", date);
+      const [dailyResponse, foodResponse] = await Promise.all([
+        app.fetch(new Request(dailyUrl, {method:"GET"}), env, ctx),
+        app.fetch(new Request(foodUrl, {method:"GET"}), env, ctx)
+      ]);
+      return {
+        date,
+        daily: await dailyResponse.json(),
+        food: await foodResponse.json()
+      };
+    }));
+    return Response.json({status:"ok",start,end:dates[6],days},{headers:{"Cache-Control":"no-store"}});
   }
 
   const routes = {
@@ -262,4 +286,21 @@ async function handleNutritionNotesAutomation(request, env) {
     if(!Number.isFinite(weightKg)||weightKg<=0) weightKg=88;
     return Response.json(await syncDailyNutritionNotes(env,{oldest,newest,weightKg}));
   } catch(error){ return Response.json({status:"error",step:"nutrition_notes",message:error.message},{status:500}); }
+}
+
+
+function pragueWeekStart() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit",weekday:"short"}).formatToParts(now);
+  const y = Number(parts.find(x=>x.type==="year").value);
+  const m = Number(parts.find(x=>x.type==="month").value);
+  const d = Number(parts.find(x=>x.type==="day").value);
+  const weekday = parts.find(x=>x.type==="weekday").value;
+  const index = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[weekday] ?? 0;
+  return shiftDate(`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`, -index);
+}
+function shiftDate(date, days) {
+  const p = String(date).slice(0,10).split("-").map(Number);
+  const d = new Date(Date.UTC(p[0],p[1]-1,p[2]+Number(days)));
+  return d.toISOString().slice(0,10);
 }
