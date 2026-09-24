@@ -148,7 +148,7 @@ async function handleDashboardApi(request, env, ctx, url) {
 
   if (url.pathname === "/app/api/week") {
     const requestedStart = url.searchParams.get("start");
-    const start = requestedStart && /^\\d{4}-\\d{2}-\\d{2}$/.test(requestedStart)
+    const start = requestedStart && /^\d{4}-\d{2}-\d{2}$/.test(requestedStart)
       ? requestedStart
       : pragueWeekStart();
     const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
