@@ -90,7 +90,7 @@ function timingSafeEqualString(a,b) {
 }
 function base64url(bytes) {
   let s=""; for(const b of bytes) s+=String.fromCharCode(b);
-  return btoa(s).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"");
+  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 }
 function fromBase64url(s) {
   s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4)s+="=";
