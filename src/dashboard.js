@@ -240,7 +240,7 @@ function renderTraining(){
     const a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));
     const p=(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z));
     const plannedTss=p.reduce((s,z)=>s+num(z.tss),0),actualTss=a.reduce((s,z)=>s+num(z.tss),0);
-    const completion=p.length&&plannedTss?Math.round(Math.min(100,actualTss/plannedTss*100)):(a.length?100:null);
+    const plannedHours=p.reduce((s,z)=>s+num(z.durationHours),0),actualHours=a.reduce((s,z)=>s+num(z.durationHours),0); const completion=p.length&&plannedTss?Math.round(actualTss/plannedTss*100):(p.length&&plannedHours?Math.round(actualHours/plannedHours*100):(a.length?100:null));
     return '<div class="day '+(x.date===pragueToday()?"today":"")+'"><div class="dayhead">'+esc(longDate(x.date))+'</div><div class="small">'+fmt(a.reduce((s,z)=>s+num(z.durationHours),0),1)+' h dokončeno</div><div class="bar"><i style="width:'+Math.min(100,completion??0)+'%"></i></div><div class="small">'+(completion==null?"Bez hodnocení":scoreBadge(completion,"Dokončení"))+'</div>'+(a.length?a.map(z=>'<div class="small good">✓ '+esc(z.name||z.type||"Aktivita")+'</div>').join(""):"")+(p.length?p.map(z=>'<div style="margin-top:6px"><span class="pill">PLÁN</span> '+esc(z.name||z.type||"Workout")+'</div>').join(""):'<div class="muted" style="margin-top:6px">Bez plánu</div>')+'</div>';
   }).join("");
   const selected=days.find(x=>x.date===selectedHistoryDate)||days[0];
