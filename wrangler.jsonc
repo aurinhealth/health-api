@@ -1,6 +1,13 @@
 {
   "name": "health-api",
   "main": "src/entrypoint.js",
+  "rules": [
+    {
+      "type": "Text",
+      "globs": ["**/dashboard-client.js"],
+      "fallthrough": true
+    }
+  ],
   "compatibility_date": "2026-09-15",
   "observability": {
     "enabled": true,
@@ -24,3 +31,4 @@
   ],
   "workers_dev": true
 }
+
