@@ -290,8 +290,9 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 }
 
 async function googleToken(env) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     "https://oauth2.googleapis.com/token",
+
     {
       method: "POST",
       headers: {
