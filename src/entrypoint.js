@@ -5,6 +5,7 @@ import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
+import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -194,23 +195,62 @@ async function handleDashboardApi(request, env, ctx, url) {
       const internal = new URL("/strength/sheet/today", request.url);
       const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
       const data = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
-      return Response.json(data, { status: response.status, headers: {"Cache-Control":"no-store"} });
+      let history=[];
+      try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
+      return Response.json({...data,history},{ status: response.status, headers: {"Cache-Control":"no-store"} });
     }
     if (request.method === "POST") {
       const body = await request.json().catch(() => ({}));
       const values = Array.isArray(body?.values) ? body.values : null;
       if (!values) return Response.json({status:"error",message:"values must be a 2D array"}, {status:400});
-      const internal = new URL("/strength/sheet/write", request.url);
-      const response = await app.fetch(new Request(internal, {
-        method:"POST",
-        headers:{...internalAuth,"Content-Type":"application/json"},
-        body:JSON.stringify({range:"'Dnešní trénink'!A8:K"+(7+values.length),values})
-      }), env, ctx);
-      const result = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
-      if (!response.ok) return Response.json(result,{status:response.status});
-      const sync = await app.fetch(new Request(new URL("/strength/sync",request.url),{method:"POST",headers:internalAuth}),env,ctx);
-      const syncResult = await sync.json().catch(()=>null);
-      return Response.json({status:"ok",write:result,sync:syncResult},{headers:{"Cache-Control":"no-store"}});
+      let write=null, syncResult=null, sheetError=null;
+      try {
+        const internal = new URL("/strength/sheet/write", request.url);
+        const response = await app.fetch(new Request(internal, {
+          method:"POST",
+          headers:{...internalAuth,"Content-Type":"application/json"},
+          body:JSON.stringify({range:"'Dnešní trénink'!A8:K"+(7+values.length),values})
+        }), env, ctx);
+        write = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
+        if (!response.ok) sheetError=write?.message||("Google Sheets HTTP "+response.status);
+        else {
+          const sync = await app.fetch(new Request(new URL("/strength/sync",request.url),{method:"POST",headers:internalAuth}),env,ctx);
+          syncResult = await sync.json().catch(()=>null);
+          if (!sync.ok) sheetError=syncResult?.message||("Strength sync HTTP "+sync.status);
+        }
+      } catch(error) {
+        sheetError=error.message;
+      }
+
+      const date=new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+      const sets=values.map((r,i)=>({
+        type:String(r?.[0]||"WORK").toUpperCase(),
+        exercise:r?.[1]||"",
+        setNo:r?.[2],
+        plannedKg:r?.[3],
+        plannedReps:r?.[4],
+        actualKg:r?.[5],
+        actualReps:r?.[6],
+        rpe:r?.[7],
+        completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")),
+        note:r?.[9]||""
+      })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
+
+      let historyResult=null;
+      if(sets.length) {
+        try { historyResult=await importStrengthHistory(env.DB,{date,sets}); }
+        catch(error) { console.error("Gym history save failed",error); }
+      }
+      const history=await getStrengthHistory(env.DB,500);
+      return Response.json({
+        status:"ok",
+        write,
+        sync:syncResult,
+        history,
+        historySaved:historyResult,
+        sheetSaved:!sheetError,
+        sheetError
+      },{headers:{"Cache-Control":"no-store"}});
     }
     return Response.json({status:"error",message:"Method not allowed"},{status:405});
   }
@@ -262,7 +302,8 @@ async function handleDashboardApi(request, env, ctx, url) {
     "/app/api/weight": "/health/weight",
     "/app/api/activities": "/health/activities",
     "/app/api/nutrition": "/health/nutrition",
-    "/app/api/sleep": "/health/sleep"
+    "/app/api/sleep": "/health/sleep",
+    "/app/api/health-db": "/health/db"
   };
   const target = routes[url.pathname];
   if (!target) return Response.json({ status: "error", message: "Not found" }, { status: 404 });
