@@ -81,6 +81,13 @@ jobs:
           plan="$(curl -fsS "https://petrfitnessdata.eu/daily/plan")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert "training" in d and "nutrition" in d and "food" in d and "meals" in d' <<< "$plan"
 
+      - name: Smoke test Google Health nutrition
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl -fsS "https://petrfitnessdata.eu/health/nutrition")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert d.get("data_type")=="nutrition-log",d' <<< "$body"
+
       - name: Smoke test dashboard session
         shell: bash
         run: |
