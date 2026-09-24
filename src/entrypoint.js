@@ -180,9 +180,12 @@ async function handleDashboardApi(request, env, ctx, url) {
 
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
     const internal = new URL("/sync/all", request.url);
-    const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
-    const data = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
-    return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store"}});
+    ctx.waitUntil(
+      app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx)
+        .then(async response => { if (!response.ok) console.error("Dashboard background sync failed", response.status, await response.text()); })
+        .catch(error => console.error("Dashboard background sync failed", error))
+    );
+    return Response.json({status:"accepted",message:"Background synchronization started"},{status:202,headers:{"Cache-Control":"no-store"}});
   }
 
   if (url.pathname === "/app/api/gym") {
