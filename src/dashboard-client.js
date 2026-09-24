@@ -33,33 +33,7 @@ function nutritionScore(food,target){
   const scores=vals.filter(([,t])=>Number(t)>0).map(([k,t])=>Math.min(1,Number(food?.[k]||0)/Number(t)));
   return scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100):null;
 }
-function macroChart(id,days){
-  const svg=$(id),W=900,H=300,left=95,right=25,top=28,row=36;
-  const segs=[["carbs","Sacharidy","#f59e0b",45],["protein","Protein","#60a5fa",35],["fat","Tuk","#a78bfa",20]];
-  let out='<text x="'+left+'" y="14" fill="#91a0b5" font-size="10">CÍL · podíl kcal</text><text x="'+(left+330)+'" y="14" fill="#91a0b5" font-size="10">SNĚDENO · podíl cíle</text>';
-  days.forEach((d,i)=>{
-    const y=top+i*row, t=num(d.daily?.calories?.target), food=d.food?.totals||{}, m=macroTargetsOf(d);
-    out+='<text x="0" y="'+(y+12)+'" fill="#91a0b5" font-size="10">'+esc(dateLabel(d.date))+'</text>';
-    let x=left;
-    segs.forEach(([key,label,color,pct])=>{
-      const w=270*pct/100;
-      out+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="13" rx="2" fill="'+color+'" opacity=".55"/>';
-      out+='<text x="'+(x+w/2)+'" y="'+(y+10)+'" text-anchor="middle" fill="#08111e" font-size="9" font-weight="700">'+pct+'%</text>'; x+=w;
-    });
-    const targetParts={carbs:m.carbs*4,protein:m.protein*4,fat:m.fat*9};
-    const actualParts={carbs:num(food.carbs_g)*4,protein:num(food.protein_g)*4,fat:num(food.fat_g)*9};
-    let ax=left+330;
-    const scale=t>0?Math.min(1,(num(food.kcal)/t)):0;
-    segs.forEach(([key,label,color])=>{
-      const targetK=targetParts[key]||0, actualK=actualParts[key]||0;
-      const w=270*(targetK/Math.max(1,t))*scale;
-      if(w>0)out+='<rect x="'+ax+'" y="'+y+'" width="'+w+'" height="13" rx="2" fill="'+color+'"/>';
-      ax+=w;
-    });
-    out+='<text x="'+(W-right)+'" y="'+(y+11)+'" text-anchor="end" fill="#d8e0ea" font-size="10">'+fmt(food.kcal)+' / '+fmt(t)+' kcal</text>';
-  });
-  svg.innerHTML=out;
-}
+function macroChart(id,days){const svg=$(id),d=days.find(x=>x.date===pragueToday())||days[days.length-1];if(!d){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return;}const food=d.food?.totals||{},m=macroTargetsOf(d),items=[["Protein",num(food.protein_g),num(m.protein),"#60a5fa"],["Sacharidy",num(food.carbs_g),num(m.carbs),"#f59e0b"],["Tuk",num(food.fat_g),num(m.fat),"#a78bfa"]],max=Math.max(1,...items.map(x=>Math.max(x[1],x[2]))),base=220,gw=210,bw=62,gap=20,left=100;let out='<text x="'+left+'" y="16" fill="#91a0b5" font-size="10">DNEŠNÍ PŘÍJEM VS. CÍL · g</text>';items.forEach((x,i)=>{const gx=left+i*gw,ah=x[1]/max*base,th=x[2]/max*base;out+='<rect x="'+(gx+bw+gap)+'" y="'+(40+base-th)+'" width="'+bw+'" height="'+th+'" rx="5" fill="'+x[3]+'" opacity=".22"/><rect x="'+gx+'" y="'+(40+base-ah)+'" width="'+bw+'" height="'+ah+'" rx="5" fill="'+x[3]+'"/><text x="'+(gx+bw/2)+'" y="'+(40+base+20)+'" text-anchor="middle" fill="#d8e0ea" font-size="11">'+esc(x[0])+'</text><text x="'+(gx+bw/2)+'" y="'+Math.max(30,40+base-ah-7)+'" text-anchor="middle" fill="#d8e0ea" font-size="10">'+fmt(x[1])+'</text><text x="'+(gx+bw+gap+bw/2)+'" y="'+Math.max(30,40+base-th-7)+'" text-anchor="middle" fill="#91a0b5" font-size="10">'+fmt(x[2])+'</text>';});out+='<text x="100" y="292" fill="#d8e0ea" font-size="10">plné = příjem</text><text x="190" y="292" fill="#91a0b5" font-size="10">světlé = cíl</text><text x="650" y="292" fill="#91a0b5" font-size="10">Vybraný den: '+esc(longDate(d.date))+'</text>';svg.innerHTML=out;}
 function isoWeek(date){
   const d=new Date(date+"T12:00:00Z"), th=new Date(d);
   th.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
@@ -93,7 +67,7 @@ function renderOverview(){
   const completed=(d.training?.completed||[]).filter(x=>!isNutritionItem(x));
   const planned=(d.training?.planned||[]).filter(x=>!isNutritionItem(x));
   const lastSleep=state.sleep?.sessions?.[0];
-  $("oSleep").textContent=lastSleep?hm(lastSleep.durationMin):"—";
+  const sleepSessions=state.sleep?.sessions||[],sleepPrev=sleepSessions.slice(1,15).filter(x=>Number.isFinite(Number(x.durationMin))),sleepAvg=sleepPrev.length?sleepPrev.reduce((sum,x)=>sum+num(x.durationMin),0)/sleepPrev.length:null; $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin)+trendArrow(lastSleep.durationMin,sleepAvg,false," min vs avg"):"—"; $("overviewSleepHistory").innerHTML=sleepSessions.slice(0,7).map(x=>'<div class="metric-line"><span>'+esc(longDate(x.date||String(x.endTime||"").slice(0,10)))+'</span><strong>'+hm(x.durationMin)+'</strong></div>').join("")||'<div class="muted">Žádná historie spánku.</div>';
   $("oTraining").textContent=completed.length+" / "+planned.length+" dokončeno";
   $("oTrainingNote").textContent=planned.length?planned.map(x=>x.name||x.type).join(" • "):"Volno";
   const calTarget=Number(target.calorieTarget||d.calories?.target||0);
@@ -106,7 +80,7 @@ function renderOverview(){
   const sleepScore=last?Math.round(Math.min(100,Math.max(0,(num(last.durationMin)/480)*70+(num(last.stages?.DEEP)/90)*15+(num(last.stages?.REM)/90)*15))):null;
   const todayPlanTss=planned.reduce((a,z)=>a+num(z.tss),0),todayActualTss=completed.reduce((a,z)=>a+num(z.tss),0);
   const trainingScore=planned.length&&todayPlanTss?Math.round(Math.min(100,todayActualTss/todayPlanTss*100)):(completed.length?100:null);
-  $("oRecoverySleep").innerHTML=(sleepScore==null?"—":sleepScore+"%")+trendArrow(last?.durationMin,prevSleep?.durationMin,false," min");
+  const rs=sleep.slice(1,15).filter(x=>Number.isFinite(Number(x.durationMin)));const recoveryAvg=rs.length?rs.reduce((sum,x)=>sum+num(x.durationMin),0)/rs.length:null;$("oRecoverySleep").innerHTML=(sleepScore==null?"—":sleepScore+"%")+trendArrow(last?.durationMin,recoveryAvg,false," min vs avg");
   $("oRecoveryTraining").innerHTML=(trainingScore==null?"—":trainingScore+"%");
   $("oRecoveryNote").textContent="spánek · tréninková shoda";
   const today=pragueToday(),tomorrow=dateShift(today,1),days=state.week?.days||[];
@@ -126,7 +100,7 @@ function renderOverview(){
   const wr=(d.weight?.records||[]).filter(x=>x.value_numeric!=null).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time)));
   const currentW=wr.length?Number(wr[wr.length-1].value_numeric):Number(d.weight?.current);
   const weekW=wr.filter(x=>new Date(x.sample_time).getTime()<=Date.now()-7*86400000).slice(-1)[0];
-  $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+trendArrow(currentW,weekW?.value_numeric,true," kg"):"—";
+  const targetW=Number(d.nutrition?.targetWeightKg||80),remainingW=Number.isFinite(currentW)?currentW-targetW:null; $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+" kg"+trendArrow(currentW,weekW?.value_numeric,true," kg vs 7d"):"—"; $("oWeightMeta").textContent=Number.isFinite(remainingW)?"Aktuálně · cíl "+fmt(targetW,1)+" kg · zbývá "+fmt(Math.max(0,remainingW),1)+" kg":"aktuálně · cíl "+fmt(targetW,1)+" kg";
   chartSvg("calChart",days.map(x=>num(x.food?.totals?.kcal)),days.map(x=>num(x.daily?.calories?.target)),days.map(x=>dateLabel(x.date)),{W:1000,H:260});
 }
 function renderTraining(){
@@ -163,7 +137,7 @@ function renderNutrition(){
   populateWeekSelectors("nutritionWeekSelect",null,days);
   const today=days.find(x=>x.date===pragueToday())||days[days.length-1];
   $("nutritionReason").textContent=today?.daily?.nutrition?.reason||"Denní cíl se adaptuje podle tréninku, hmotnosti a cíle.";
-  $("nutritionDays").innerHTML=days.map(x=>{
+  const tn=today?.daily?.nutrition||{},cb=tn.calorieBreakdown||{},targetCal=num(tn.calorieTarget||today?.daily?.calories?.target),trainingCal=Math.max(0,num(cb.activityAdjustment));$("nutritionTargetSummary").innerHTML='<strong>Dnešní cíl: '+fmt(targetCal)+' kcal</strong> · základ '+fmt(Math.max(0,num(cb.baselineRestTDEE)-num(cb.weightLossDeficit)))+' kcal + '+fmt(trainingCal)+' kcal z tréninku − deficit '+fmt(cb.weightLossDeficit)+' kcal. <span class="muted">Tréninkový výdej je součástí cíle, ne navíc.</span>';  $("nutritionDays").innerHTML=days.map(x=>{
     const t=num(x.daily?.calories?.target),e=num(x.food?.totals?.kcal),m=macroTargetsOf(x);
     const p=num(x.food?.totals?.protein_g),c=num(x.food?.totals?.carbs_g),f=num(x.food?.totals?.fat_g);
     const score=nutritionScore({kcal:e,protein_g:p,carbs_g:c,fat_g:f},{calorieTarget:t,macros:m});
