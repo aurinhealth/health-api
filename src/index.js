@@ -129,7 +129,7 @@ export default {
 
 const CONFIG = {
   weightDays: 30,
-  activityDays: 30,
+  activityDays: 365,
   plannedDaysAhead: 7,
 
   // Rest-day energy baseline. This is intentionally conservative and
