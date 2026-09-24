@@ -81,6 +81,26 @@ jobs:
           plan="$(curl -fsS "https://petrfitnessdata.eu/daily/plan")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert "training" in d and "nutrition" in d and "food" in d and "meals" in d' <<< "$plan"
 
+      - name: Smoke test dashboard session
+        env:
+          DASHBOARD_KEY: ${{ secrets.STRENGTH_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DASHBOARD_KEY"
+          page="$(curl -fsS "https://petrfitnessdata.eu/app")"
+          python -c 'import sys; s=sys.stdin.read(); assert "Petr Fitness Data" in s; assert "/app/login" in s; assert "sessionStorage" not in s' <<< "$page"
+          headers="$(mktemp)"
+          curl -fsS -D "$headers" -o /tmp/dashboard-login.json -X POST -H "Content-Type: application/json" --data "{"key":"$DASHBOARD_KEY"}" "https://petrfitnessdata.eu/app/login"
+          python -c 'import json,sys; d=json.load(open("/tmp/dashboard-login.json")); assert d.get("status")=="ok",d' 
+          cookie="$(awk 'BEGIN{IGNORECASE=1} /^set-cookie:/ {print $2}' "$headers" | tr -d '\r' | cut -d";" -f1)"
+          test -n "$cookie"
+          api="$(curl -fsS -H "Cookie: $cookie" "https://petrfitnessdata.eu/app/api/daily")"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d' <<< "$api"
+          unauth="$(curl -sS -o /dev/null -w "%{http_code}" "https://petrfitnessdata.eu/app/api/daily")"
+          test "$unauth" = "401"
+          rm -f "$headers" /tmp/dashboard-login.json
+
       - name: Smoke test MCP endpoint
         shell: bash
         run: |
