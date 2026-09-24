@@ -72,7 +72,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 
 <section id="gym" class="view">
-  <div class="hero"><div><div class="eyebrow">Strength management</div><h1>Gym</h1><p id="gymMeta">Dnešní silový trénink</p></div><div class="actions"><button class="btn" id="generateGym">Generate today's plan</button><button class="btn primary" id="saveGym">Save workout</button></div></div>
+  <div class="hero"><div><div class="eyebrow">Strength management</div><h1>Gym</h1><p id="gymMeta">Dnešní silový trénink</p></div><div class="actions"><button class="btn" id="generateGym">Generate today's plan</button><button class="btn" id="addGymExercise">＋ Přidat cvik</button><button class="btn primary" id="saveGym">Save workout</button></div></div>
   <div class="notice" id="gymNotice">Načítám dnešní trénink…</div>
   <div class="card" style="margin-top:12px"><div class="scroll"><table class="gym-table"><thead><tr><th>Typ</th><th>Cvik</th><th>Série</th><th>Plán kg</th><th>Plán reps</th><th>Skutečně kg</th><th>Skutečně reps</th><th>RPE</th><th>Hotovo</th><th>Video</th></tr></thead><tbody id="gymRows"></tbody></table></div></div><div class="card" style="margin-top:12px"><details><summary>Historie silových tréninků</summary><div id="gymHistory" style="margin-top:10px"></div></details></div>
 </section>
