@@ -1901,7 +1901,7 @@ async function energyForDate(env, date) {
   const plannedWorkouts=[];
   const plannedKeys=new Set();
   for(const w of plannedRaw){
-    const key=String(w.start||"").slice(0,16)+"|"+String(w.name||"").toLowerCase()+"|"+Math.round(Number(w.durationHours||0)*100);
+    const key=String(w.start||"").slice(0,10)+"|"+String(w.name||"").toLowerCase()+"|"+Math.round(Number(w.durationHours||0)*100);
     if(plannedKeys.has(key)) continue;
     plannedKeys.add(key); plannedWorkouts.push(w);
   }
