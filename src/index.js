@@ -2063,8 +2063,14 @@ async function analysisDaily(
     },
 
     nutrition: {
-      protein:
-        protein,
+      protein: protein,
+      macros: energy.macroTargets,
+      calorieTarget: energy.calorieTarget,
+      reason: energy.nutritionContext?.endurance
+        ? "Dnešní cíl zohledňuje vytrvalostní zátěž a cílové tempo úbytku hmotnosti."
+        : energy.nutritionContext?.training
+          ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a cílové tempo úbytku hmotnosti."
+          : "Dnešní cíl vychází z klidového energetického základu a cílového tempa úbytku hmotnosti.",
       foodLog:
         await foodLogForDate(env, date)
     },
