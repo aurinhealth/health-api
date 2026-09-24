@@ -6,6 +6,7 @@ import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
+import legacyHealthApi from "./index.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -15,6 +16,12 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Legacy Google Health endpoints live in index.js. The deployed Worker
+    // uses entrypoint.js, so expose these routes explicitly instead of letting
+    // them fall through to the dashboard gateway.
+    if (url.pathname === "/sync/google" || url.pathname === "/health/sleep" || url.pathname === "/health/db") {
+      return legacyHealthApi.fetch(request, env, ctx);
+    }
     if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
