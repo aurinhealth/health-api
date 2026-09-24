@@ -5,7 +5,8 @@ const VERSION = "final-5-cookbook-v4.0.0";
 const TZ = "Europe/Prague";
 const DEFICIT = 550;
 const MIN_TARGET = 2000;
-const MAX_TARGET = 3200;
+const MAX_TARGET = 4000;
+const TRAINING_COVERAGE = 0.70;
 const PROTEIN_PER_KG = 2.0;
 const FAT_PER_KG = 0.8;
 const ENDURANCE_CARB_PER_KG = 5.0;
@@ -114,7 +115,7 @@ async function training(env,date){
   const hoursSince=latest?.end?Math.max(0,(Date.now()-new Date(latest.end).getTime())/3600000):null;
   return {actual,planned,unmatched,rides,plannedRides,actualRideCalories:rides.reduce((s,x)=>s+x.calories,0),plannedRideHours:round(plannedRides.reduce((s,x)=>s+n(x.durationHours),0),2),postRide:Boolean(latest&&hoursSince!=null&&hoursSince<=2.5),latestRideEnd:latest?.end||null,hoursSinceRide:hoursSince==null?null:round(hoursSince,2)};
 }
-function targetFromEnergy(energy,adjustment){const base=n(energy?.final?.calorieTarget,2900);return Math.max(MIN_TARGET,Math.min(MAX_TARGET,Math.round(base+adjustment)));}
+function targetFromEnergy(energy,adjustment){const training=Math.max(0,n(energy?.final?.actualActivityCalories)+n(energy?.final?.estimatedPlannedActivityCalories));return Math.max(MIN_TARGET,Math.min(MAX_TARGET,Math.round(2000+training*TRAINING_COVERAGE)));}
 function macroTargets(weight,target,ctx){const kg=weight||85.8;const p=Math.round(kg*PROTEIN_PER_KG),f=Math.round(kg*FAT_PER_KG);const ckg=ctx.endurance?ENDURANCE_CARB_PER_KG:ctx.training?TRAINING_CARB_PER_KG:REST_CARB_PER_KG;const floor=Math.round(kg*ckg);const derived=Math.round(Math.max(0,(target-p*4-f*9)/4));return {protein_g:p,carbs_g:Math.max(floor,derived),fat_g:f};}
 function score(r,need,ctx,slot){const m=macros(r),k=calories(r);if(!k)return -1e6;let s=0;if(need.kcal>0){const ratio=k/need.kcal;s+=50-Math.abs(1-ratio)*50;if(k<=need.kcal)s+=20;else s-=Math.min(70,(k-need.kcal)*.35);}else s-=Math.min(100,k*.5);const fatEx=Math.max(0,m.fat_g-need.fat_g);s-=Math.min(55,fatEx*1.8);if(need.carbs_g>0)s+=Math.min(ctx.endurance?35:24,(m.carbs_g/need.carbs_g)*(ctx.endurance?35:24));if(need.protein_g>0)s+=Math.min(20,(m.protein_g/need.protein_g)*20);if(slot==="pre")s+=m.carbs_g*0.35;if(slot==="post")s+=m.carbs_g*0.35+m.protein_g*0.2;if(r.meal_prep)s+=4;if(r.level==="Easy")s+=3;return s;}
 function pickRecipes(cookbook,need,ctx,slot,count=3){return cookbook.filter(r=>calories(r)>0).map(r=>({...r,_score:score(r,need,ctx,slot)})).sort((a,b)=>b._score-a._score).slice(0,count).map(({_score,...r})=>({...r,recommendation_score:round(_score,1),slot}));}
