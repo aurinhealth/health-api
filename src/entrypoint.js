@@ -105,6 +105,59 @@ function fromBase64url(s) {
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
 
+  if (url.pathname === "/app/api/nutrition/log" && request.method === "POST") {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const entries = Array.isArray(body?.entries) ? body.entries : [body];
+      if (!entries.length) return Response.json({status:"error",message:"entries is required"},{status:400});
+      const results = [];
+      for (const entry of entries) {
+        const foodBody = {
+          date: entry.date || null,
+          consumed_at: entry.consumed_at || null,
+          name: entry.name || "Manual entry",
+          kcal: Number(entry.kcal || 0),
+          protein_g: Number(entry.protein_g || 0),
+          carbs_g: Number(entry.carbs_g || 0),
+          fat_g: Number(entry.fat_g || 0),
+          fiber_g: Number(entry.fiber_g || 0),
+          source: entry.source || "dashboard",
+          note: entry.note || null
+        };
+        const foodResponse = await app.fetch(new Request(new URL("/food/log", request.url), {
+          method:"POST",
+          headers:{...internalAuth,"Content-Type":"application/json"},
+          body:JSON.stringify(foodBody)
+        }), env, ctx);
+        const foodResult = await foodResponse.json().catch(()=>({}));
+        if (!foodResponse.ok) throw new Error(foodResult.message || "Food log write failed");
+        let googleResult=null;
+        if (entry.google !== false) {
+          const nutritionResponse = await app.fetch(new Request(new URL("/health/nutrition/log", request.url), {
+            method:"POST",
+            headers:{...internalAuth,"Content-Type":"application/json"},
+            body:JSON.stringify({
+              consumed_at: entry.consumed_at || null,
+              name: entry.name || "Food",
+              mealType: entry.mealType || "SNACK",
+              kcal: Number(entry.kcal || 0),
+              protein_g: Number(entry.protein_g || 0),
+              carbs_g: Number(entry.carbs_g || 0),
+              fat_g: Number(entry.fat_g || 0),
+              servings: Number(entry.servings || 1)
+            })
+          }), env, ctx);
+          googleResult=await nutritionResponse.json().catch(()=>({}));
+          if (!nutritionResponse.ok) throw new Error(googleResult.message || "Google Health nutrition write failed");
+        }
+        results.push({food:foodResult,google:googleResult});
+      }
+      return Response.json({status:"ok",count:results.length,results},{headers:{"Cache-Control":"no-store"}});
+    } catch (error) {
+      return Response.json({status:"error",message:error.message},{status:500});
+    }
+  }
+
   if (url.pathname === "/app/api/fitness" && request.method === "GET") {
     try {
       const days = Math.max(42, Math.min(180, Number(url.searchParams.get("days") || 90)));
