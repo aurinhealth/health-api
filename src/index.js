@@ -276,6 +276,19 @@ function hoursBetween(start, end) {
 // GOOGLE AUTH
 // ======================================================
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error(`Request timeout after ${timeoutMs} ms`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function googleToken(env) {
   const response = await fetch(
     "https://oauth2.googleapis.com/token",
@@ -620,14 +633,15 @@ async function googleReconcile(
   for (let page = 0; page < 60; page++) {
     if (pageToken) params.set("pageToken", pageToken);
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://health.googleapis.com/v4/users/me/dataTypes/${type}/dataPoints:reconcile?${params.toString()}`,
       {
         headers: {
           Authorization: "Bearer " + token,
           Accept: "application/json"
         }
-      }
+      },
+      12000
     );
 
     const data = await response.json();
@@ -1002,20 +1016,14 @@ async function syncGoogle(env) {
     ["body-fat", "body_fat", "sample", "google-sources", 30]
   ];
 
-  for (const [type, filterName, filterType, family, days] of configs) {
+  const runConfig = async ([type, filterName, filterType, family, days]) => {
     try {
       const end = dateDaysFromNow(1);
       const start = dateDaysAgo(days);
       const points = await googleReconcile(
-        token,
-        type,
-        filterName,
-        filterType,
-        start,
-        `users/me/dataSourceFamilies/${family}`,
-        end
+        token, type, filterName, filterType, start,
+        `users/me/dataSourceFamilies/${family}`, end
       );
-
       let saved = 0;
       for (const point of points) {
         const i = googleInfo(type, point);
@@ -1023,10 +1031,15 @@ async function syncGoogle(env) {
         await savePoint(env, family, type, point, i.value, i.unit, i.sample, i.start, i.end, fallbackId);
         saved++;
       }
-      results.push({ data_type: type, records_found: points.length, records_saved: saved, status: "ok" });
+      return { data_type: type, records_found: points.length, records_saved: saved, status: "ok" };
     } catch (error) {
-      results.push({ data_type: type, records_found: 0, records_saved: 0, status: "error", message: error.message });
+      return { data_type: type, records_found: 0, records_saved: 0, status: "error", message: error?.message || String(error) };
     }
+  };
+
+  // Small concurrent batches prevent one slow Google dataset from blocking the whole sync.
+  for (let offset = 0; offset < configs.length; offset += 4) {
+    results.push(...await Promise.all(configs.slice(offset, offset + 4).map(runConfig)));
   }
 
   // Total calories is a daily rollup and is the source of truth for total
