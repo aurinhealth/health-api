@@ -70,7 +70,7 @@ function desiredWeightAdjustment(weight,trendKg){
 }
 function activityCalories(row){const p=JSON.parse(row.payload_json||"{}"); return n(p.calories_kcal ?? p.calories ?? p.icu_calories ?? p.exercise?.metricsSummary?.caloriesKcal ?? row.value_numeric);}
 function activityObject(row){const p=JSON.parse(row.payload_json||"{}");const e=p.exercise||{};return {id:row.external_id,source:row.source_family,start:row.start_time||e.interval?.startTime,end:row.end_time||e.interval?.endTime,type:p.type||p.category||e.exerciseType||"Unknown",name:p.name||p.title||e.displayName||e.exerciseType||"",calories:activityCalories(row),durationHours:durationHours(p),cycling:isRide(p),intensity:isIntensity(p),payload:p};}
-function plannedObject(row){const p=JSON.parse(row.payload_json||"{}");const d=durationHours(p);const name=String(p.name||p.title||"").trim();const type=String(p.type||p.activity_type||p.category||"").trim();if(/^nutrition\s*[—-]/i.test(name)||/^nutrition$/i.test(type))return null;return {id:row.external_id,start:row.start_time||p.start_date_local||p.start_date,end:row.end_time||p.end_date_local||p.end_date,type,name,durationHours:d,cycling:isRide(p),intensity:isIntensity(p),enduranceOnly:isRide(p)&&!isIntensity(p),payload:p};}
+function plannedObject(row){const p=JSON.parse(row.payload_json||"{}");const d=durationHours(p);const name=String(p.name||p.title||"").trim();const type=String(p.type||p.activity_type||p.category||"").trim();if(/^nutrition\s*[—-]/i.test(name)||/^nutrition$/i.test(type))return null;if((/^weekly$/i.test(name)||/^weekly$/i.test(type))&&!d&&!Number(p.tss??p.icu_training_load??p.planned_tss))return null;return {id:row.external_id,start:row.start_time||p.start_date_local||p.start_date,end:row.end_time||p.end_date_local||p.end_date,type,name,durationHours:d,tss:n(p.tss??p.icu_training_load??p.planned_tss),cycling:isRide(p),intensity:isIntensity(p),enduranceOnly:isRide(p)&&!isIntensity(p),payload:p};}
 
 async function training(env,date){
   const [ar,pr]=await Promise.all([rowsForDate(env,date,"activity"),rowsForDate(env,date,"planned")]);
@@ -84,9 +84,31 @@ async function training(env,date){
     });
     if(!duplicate) actual.push(a);
   }
-  const planned=pr.map(plannedObject).filter(Boolean);
+  const plannedRaw=pr.map(plannedObject).filter(Boolean);
+  const planned=[];
+  const plannedKeys=new Set();
+  for(const p of plannedRaw){
+    const key=String(p.start||"").slice(0,16)+"|"+String(p.name||"").toLowerCase()+"|"+Math.round(Number(p.durationHours||0)*100);
+    if(plannedKeys.has(key)) continue;
+    plannedKeys.add(key); planned.push(p);
+  }
   const paired=new Set(actual.flatMap(a=>{const p=a.payload||{};return [p.paired_event_id,p.pairedEventId,p.event_id,p.eventId,p.paired_activity_id,p.pairedActivityId].filter(Boolean).map(String)}));
-  const unmatched=planned.filter(p=>!paired.has(String(p.id)));
+  const unmatched=planned.filter(p=>{
+    if(paired.has(String(p.id))) return false;
+    return !actual.some(a=>{
+      if(!a.start||!p.start) return false;
+      const dt=Math.abs(new Date(a.start).getTime()-new Date(p.start).getTime())/60000;
+      if(dt>20) return false;
+      const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
+      const pName=(String(p.name||"")+" "+String(p.type||"")).toLowerCase();
+      const token=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).find(t=>t.length>=5);
+      const nameMatch=token?aName.includes(token):false;
+      const typeMatch=String(p.type||"").toLowerCase()===String(a.type||"").toLowerCase();
+      const da=Number(a.durationHours||0),dp=Number(p.durationHours||0);
+      const durMatch=!da||!dp||Math.abs(da-dp)/Math.max(da,dp)<0.25;
+      return (nameMatch||typeMatch)&&durMatch;
+    });
+  });
   const rides=actual.filter(x=>x.cycling), plannedRides=unmatched.filter(x=>x.cycling);
   const latest=rides.filter(x=>x.end).sort((a,b)=>new Date(b.end)-new Date(a.end))[0]||null;
   const hoursSince=latest?.end?Math.max(0,(Date.now()-new Date(latest.end).getTime())/3600000):null;
