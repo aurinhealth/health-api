@@ -70,7 +70,7 @@ function desiredWeightAdjustment(weight,trendKg){
 }
 function activityCalories(row){const p=JSON.parse(row.payload_json||"{}"); return n(p.calories_kcal ?? p.calories ?? p.icu_calories ?? p.exercise?.metricsSummary?.caloriesKcal ?? row.value_numeric);}
 function activityObject(row){const p=JSON.parse(row.payload_json||"{}");const e=p.exercise||{};return {id:row.external_id,source:row.source_family,start:row.start_time||e.interval?.startTime,end:row.end_time||e.interval?.endTime,type:p.type||p.category||e.exerciseType||"Unknown",name:p.name||p.title||e.displayName||e.exerciseType||"",calories:activityCalories(row),durationHours:durationHours(p),cycling:isRide(p),intensity:isIntensity(p),payload:p};}
-function plannedObject(row){const p=JSON.parse(row.payload_json||"{}");const d=durationHours(p);return {id:row.external_id,start:row.start_time||p.start_date_local||p.start_date,end:row.end_time||p.end_date_local||p.end_date,type:p.type||p.activity_type||p.category||"",name:p.name||p.title||"",durationHours:d,cycling:isRide(p),intensity:isIntensity(p),enduranceOnly:isRide(p)&&!isIntensity(p),kcalPerHour:planCaloriesPerHour(p),payload:p};}
+function plannedObject(row){const p=JSON.parse(row.payload_json||"{}");const d=durationHours(p);const name=String(p.name||p.title||"").trim();const type=String(p.type||p.activity_type||p.category||"").trim();if(/^nutrition\s*[—-]/i.test(name)||/^nutrition$/i.test(type))return null;return {id:row.external_id,start:row.start_time||p.start_date_local||p.start_date,end:row.end_time||p.end_date_local||p.end_date,type,name,durationHours:d,cycling:isRide(p),intensity:isIntensity(p),enduranceOnly:isRide(p)&&!isIntensity(p),payload:p};}
 
 async function training(env,date){
   const [ar,pr]=await Promise.all([rowsForDate(env,date,"activity"),rowsForDate(env,date,"planned")]);
@@ -84,7 +84,7 @@ async function training(env,date){
     });
     if(!duplicate) actual.push(a);
   }
-  const planned=pr.map(plannedObject);
+  const planned=pr.map(plannedObject).filter(Boolean);
   const paired=new Set(actual.flatMap(a=>{const p=a.payload||{};return [p.paired_event_id,p.pairedEventId,p.event_id,p.eventId,p.paired_activity_id,p.pairedActivityId].filter(Boolean).map(String)}));
   const unmatched=planned.filter(p=>!paired.has(String(p.id)));
   const rides=actual.filter(x=>x.cycling), plannedRides=unmatched.filter(x=>x.cycling);
