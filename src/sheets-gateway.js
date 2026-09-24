@@ -139,7 +139,6 @@ function isAllowedStrengthWriteRange(range) {
   return normalized === "'Dnešní trénink'!A3:M5"
     || normalized === "'Dnešní trénink'!A7:K7"
     || /^'Dnešní trénink'!A8:(?:K|M)[0-9]+$/.test(normalized);
-}") + "'!A8:(?:K|M)[0-9]+$").test(normalized);
 }
 
 async function writeSheet(env, request) {
