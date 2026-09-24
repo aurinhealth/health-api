@@ -272,16 +272,6 @@ function hoursBetween(start, end) {
 // ======================================================
 
 async function googleToken(env) {
-  const clientId = env.GOOGLE_HEALTH_CLIENT_ID || env.GOOGLE_CLIENT_ID;
-  const clientSecret = env.GOOGLE_HEALTH_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = env.GOOGLE_HEALTH_REFRESH_TOKEN;
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      "Google Health OAuth is not configured. Authorize at /oauth/google-health and store the returned token as GOOGLE_HEALTH_REFRESH_TOKEN."
-    );
-  }
-
   const response = await fetch(
     "https://oauth2.googleapis.com/token",
     {
@@ -290,10 +280,17 @@ async function googleToken(env) {
         "Content-Type": "application/x-www-form-urlencoded"
       },
       body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: "refresh_token"
+        client_id: env.GOOGLE_CLIENT_ID,
+        client_secret: env.GOOGLE_CLIENT_SECRET,
+        refresh_token: env.GOOGLE_REFRESH_TOKEN,
+        grant_type: "refresh_token",
+        scope: [
+          "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+          "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+          "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+          "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
+          "https://www.googleapis.com/auth/googlehealth.nutrition.writeonly"
+        ].join(" ")
       })
     }
   );
@@ -303,10 +300,10 @@ async function googleToken(env) {
   if (!response.ok) {
     if (data?.error === "invalid_grant") {
       throw new Error(
-        "Google Health OAuth refresh token is invalid or expired. Reauthorize at /oauth/google-health and replace the GOOGLE_HEALTH_REFRESH_TOKEN secret."
+        "Google OAuth refresh token is invalid or expired. Reauthorize at /oauth/google and replace the GOOGLE_REFRESH_TOKEN secret with the newly issued token."
       );
     }
-    throw new Error("Google Health OAuth error: " + JSON.stringify(data));
+    throw new Error("Google OAuth error: " + JSON.stringify(data));
   }
 
   return data.access_token;
