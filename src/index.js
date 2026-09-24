@@ -2753,7 +2753,7 @@ async function healthActivities(env) {
            OR data_type = 'planned-workout'
          )
          ORDER BY start_time DESC
-         LIMIT 100`
+         LIMIT 500`
       )
       .all();
 
