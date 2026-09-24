@@ -86,6 +86,10 @@ export default {
         return await healthActivities(env);
       }
 
+      if (url.pathname === "/health/sleep") {
+        return await healthSleep(env, url);
+      }
+
       if (url.pathname === "/health/db") {
         return await healthDb(env);
       }
@@ -2672,6 +2676,63 @@ async function healthActivities(env) {
       rows.results
   });
 }
+
+async function healthSleep(env, url) {
+  const start = url.searchParams.get("start") || dateDaysAgo(30);
+  const end = url.searchParams.get("end") || dateDaysFromNow(1);
+  const rows = await env.DB.prepare(`
+    SELECT external_id, start_time, end_time, payload_json
+    FROM health_datapoints
+    WHERE data_type = 'sleep'
+      AND source_family = 'google-wearables'
+      AND start_time < ?
+      AND end_time >= ?
+    ORDER BY start_time DESC
+    LIMIT 100
+  `).bind(end, start).all();
+
+  const sessions = (rows.results || []).map(row => {
+    let p = {};
+    try { p = JSON.parse(row.payload_json || "{}"); } catch {}
+    const sleep = p.sleep || p;
+    const interval = sleep.interval || {};
+    const stages = sleep.stages || sleep.sleepStages || [];
+    const stageMinutes = {};
+    for (const stage of stages) {
+      const a = new Date(stage.startTime || stage.start_time || 0).getTime();
+      const b = new Date(stage.endTime || stage.end_time || 0).getTime();
+      if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
+        const type = String(stage.type || "UNKNOWN").toUpperCase();
+        stageMinutes[type] = (stageMinutes[type] || 0) + (b-a)/60000;
+      }
+    }
+    const startTime = row.start_time || interval.startTime || interval.civilStartTime || null;
+    const endTime = row.end_time || interval.endTime || interval.civilEndTime || null;
+    const durationMin = hoursBetween(startTime,endTime) * 60;
+    const day = dateOnly(endTime || startTime);
+    return {
+      id: row.external_id,
+      date: day,
+      startTime,
+      endTime,
+      durationMin: Number.isFinite(durationMin) ? Math.round(durationMin) : null,
+      type: sleep.type || sleep.sleepType || null,
+      stages: Object.fromEntries(Object.entries(stageMinutes).map(([k,v])=>[k,Math.round(v)])),
+      minutesToFallAsleep: sleep.minutesToFallAsleep ?? null,
+      minutesAfterWakeup: sleep.minutesAfterWakeup ?? null
+    };
+  });
+
+  const totals = sessions.reduce((a,s)=>{
+    a.durationMin += Number(s.durationMin||0);
+    for(const [k,v] of Object.entries(s.stages||{})) a.stages[k]=(a.stages[k]||0)+Number(v||0);
+    return a;
+  },{durationMin:0,stages:{}});
+  const avg = sessions.length ? totals.durationMin/sessions.length : 0;
+  return Response.json({status:"ok",source:"google-health",start,end,count:sessions.length,averageDurationMin:Math.round(avg),totals,sessions});
+}
+
+
 
 
 // ======================================================
