@@ -1716,6 +1716,22 @@ function plannedWorkoutInfo(
 // DAILY ENERGY
 // ======================================================
 
+function plannedMatchesActual(planned, actual){
+  const pName=(String(planned?.name||"")+" "+String(planned?.type||"")).toLowerCase();
+  const token=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).find(t=>t.length>=5);
+  return (actual||[]).some(a=>{
+    if(!a?.start||!planned?.start) return false;
+    const dt=Math.abs(new Date(a.start).getTime()-new Date(planned.start).getTime())/60000;
+    if(dt>20) return false;
+    const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
+    const nameMatch=token?aName.includes(token):false;
+    const typeMatch=String(planned.type||"").toLowerCase()===String(a.type||"").toLowerCase();
+    const da=Number(a.durationHours||0),dp=Number(planned.durationHours||0);
+    const durMatch=!da||!dp||Math.abs(da-dp)/Math.max(da,dp)<0.25;
+    return (nameMatch||typeMatch)&&durMatch;
+  });
+}
+
 function activityIsCycling(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
   return ["ride", "bike", "cycling", "cycle", "gravel", "mountain bike", "mtb", "road cycling", "indoor cycling"].some(x => text.includes(x));
@@ -1874,10 +1890,21 @@ async function energyForDate(env, date) {
     ORDER BY sample_time DESC, id DESC LIMIT 1
   `).first();
 
-  const plannedWorkouts = planned.results.map(r => ({
+  const plannedRaw = planned.results.map(r => ({
     id: r.external_id,
     ...plannedWorkoutInfo(JSON.parse(r.payload_json))
-  }));
+  })).filter(w => {
+    const name=String(w.name||"").trim();
+    const type=String(w.type||"").trim();
+    return !((/^weekly$/i.test(name)||/^weekly$/i.test(type))&&!w.durationHours&&!w.tss);
+  });
+  const plannedWorkouts=[];
+  const plannedKeys=new Set();
+  for(const w of plannedRaw){
+    const key=String(w.start||"").slice(0,16)+"|"+String(w.name||"").toLowerCase()+"|"+Math.round(Number(w.durationHours||0)*100);
+    if(plannedKeys.has(key)) continue;
+    plannedKeys.add(key); plannedWorkouts.push(w);
+  }
 
   const intervalsCompleted = activities.results.map(row => {
     const payload = JSON.parse(row.payload_json);
@@ -1909,7 +1936,9 @@ async function energyForDate(env, date) {
     completed.flatMap(a => [a.pairedEventId, a.plannedEventId]).filter(Boolean).map(String)
   );
 
-  const unmatchedPlanned = plannedWorkouts.filter(w => !completedPairedIds.has(String(w.id)));
+  const unmatchedPlanned = plannedWorkouts.filter(w =>
+    !completedPairedIds.has(String(w.id)) && !plannedMatchesActual(w, completed)
+  );
 
   // Historical complete days: Fitbit/Google total-calories is authoritative.
   // Today/future: total calories may be incomplete, so project from rest-day
