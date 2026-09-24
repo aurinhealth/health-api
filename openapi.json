@@ -6,7 +6,7 @@
     "description": "Private strength-training API for ChatGPT."
   },
   "servers": [
-    { "url": "https://health-api.chelseafc-czsk.workers.dev" }
+    { "url": "https://petrfitnessdata.eu" }
   ],
   "components": {
     "securitySchemes": {
