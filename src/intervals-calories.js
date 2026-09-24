@@ -83,32 +83,3 @@ export async function syncPlannedEventCalories(env, options = {}) {
 
   return { status: "ok", oldest, newest, updatedCount: updated.length, updated };
 }
-
-
-export async function removeEstimatedEventCalories(env, options = {}) {
-  const oldest = String(options.oldest || "2020-01-01");
-  const newest = String(options.newest || "2035-01-01");
-  const response = await fetch(
-    BASE_URL + "/athlete/0/events?oldest=" + encodeURIComponent(oldest) + "&newest=" + encodeURIComponent(newest) + "&category=WORKOUT",
-    { headers: { Authorization: auth(env), Accept: "application/json" } }
-  );
-  const raw = await response.text();
-  let events = [];
-  try { events = JSON.parse(raw); } catch {}
-  if (!response.ok) throw new Error("Intervals.icu HTTP " + response.status + ": " + raw);
-  const updated = [];
-  for (const event of Array.isArray(events) ? events : []) {
-    const description = String(event?.description || "");
-    const cleaned = description.replace(/\n?Estimated calories:\s*\d+\s*kcal\s*$/i, "").trim();
-    if (cleaned === description.trim()) continue;
-    const put = await fetch(BASE_URL + "/athlete/0/events/" + encodeURIComponent(event.id), {
-      method: "PUT",
-      headers: { Authorization: auth(env), "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ ...event, description: cleaned })
-    });
-    const putText = await put.text();
-    if (!put.ok) throw new Error("Intervals.icu HTTP " + put.status + ": " + putText);
-    updated.push({ id: event.id, date: event.start_date_local, name: event.name });
-  }
-  return { status: "ok", oldest, newest, updatedCount: updated.length, updated };
-}
