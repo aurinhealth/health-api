@@ -1715,6 +1715,58 @@ function activityIsCycling(activity) {
   return ["ride", "bike", "cycling", "cycle", "gravel", "mountain bike", "mtb", "road cycling", "indoor cycling"].some(x => text.includes(x));
 }
 
+function googleExerciseActivity(row) {
+  const payload = JSON.parse(row.payload_json || "{}");
+  const exercise = payload.exercise || {};
+  const metrics = exercise.metricsSummary || {};
+  const exerciseType = String(exercise.exerciseType || "EXERCISE");
+  const typeMap = {
+    WALKING: "Walk",
+    RUNNING: "Run",
+    BIKING: "Ride",
+    CYCLING: "Ride",
+    MOUNTAIN_BIKING: "Ride",
+    INDOOR_BIKING: "Ride",
+    SWIMMING: "Swim",
+    HIKING: "Hike",
+    WEIGHTLIFTING: "WeightTraining",
+    STRENGTH_TRAINING: "WeightTraining",
+    AEROBIC_WORKOUT: "Workout"
+  };
+  const type = typeMap[exerciseType] || exerciseType;
+  const name = exercise.displayName || type;
+  const activeSeconds = String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
+  const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
+  const durationHours = activeHours || hoursBetween(row.start_time, row.end_time);
+  return {
+    id: row.external_id,
+    source: "google-health",
+    type,
+    calories: Number(metrics.caloriesKcal || 0),
+    start: row.start_time,
+    end: row.end_time,
+    durationHours: durationHours || 0,
+    pairedEventId: null,
+    plannedEventId: null,
+    name,
+    payload
+  };
+}
+
+function isDuplicateOfIntervalsActivity(googleActivity, intervalsRows) {
+  return intervalsRows.some(row => {
+    if (row.record_role === "duplicate") return false;
+    let payload = {};
+    try { payload = JSON.parse(row.payload_json || "{}"); } catch {}
+    return activitySimilarity(payload, {
+      start_date_local: googleActivity.start,
+      end_date_local: googleActivity.end
+    }) >= 0.70;
+  });
+}
+
+
+
 function activityIsStrength(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
   return ["weight", "strength", "gym", "lifting", "bodybuilding"].some(x => text.includes(x));
@@ -1799,6 +1851,17 @@ async function energyForDate(env, date) {
     ORDER BY start_time
   `).bind(date, nextDate).all();
 
+  const googleExercises = await env.DB.prepare(`
+    SELECT *
+    FROM health_datapoints
+    WHERE source_family = 'google-wearables'
+      AND data_type = 'exercise'
+      AND start_time >= ?
+      AND start_time < ?
+      AND (record_role IS NULL OR record_role != 'duplicate')
+    ORDER BY start_time
+  `).bind(date, nextDate).all();
+
   const weight = await env.DB.prepare(`
     SELECT value_numeric, sample_time FROM health_datapoints
     WHERE data_type = 'weight' AND value_numeric IS NOT NULL
@@ -1810,12 +1873,13 @@ async function energyForDate(env, date) {
     ...plannedWorkoutInfo(JSON.parse(r.payload_json))
   }));
 
-  const completed = activities.results.map(row => {
+  const intervalsCompleted = activities.results.map(row => {
     const payload = JSON.parse(row.payload_json);
     const actualCalories =
       Number(payload.calories_kcal ?? payload.calories ?? payload.icu_calories ?? row.value_numeric ?? 0);
     return {
       id: row.external_id,
+      source: "intervals",
       type: payload.type || payload.category || "Unknown",
       calories: actualCalories,
       start: row.start_time,
@@ -1827,6 +1891,13 @@ async function energyForDate(env, date) {
       payload
     };
   });
+
+  const googleCompleted = googleExercises.results
+    .map(googleExerciseActivity)
+    .filter(activity => !isDuplicateOfIntervalsActivity(activity, activities.results));
+
+  const completed = [...intervalsCompleted, ...googleCompleted]
+    .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
 
   const completedPairedIds = new Set(
     completed.flatMap(a => [a.pairedEventId, a.plannedEventId]).filter(Boolean).map(String)
@@ -2585,6 +2656,7 @@ async function healthActivities(env) {
          FROM health_datapoints
          WHERE (
            data_type = 'activity'
+           OR data_type = 'exercise'
            OR data_type = 'planned-workout'
          )
          ORDER BY start_time DESC
