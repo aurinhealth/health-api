@@ -616,7 +616,7 @@ async function googleReconcile(
   const all = [];
   let pageToken = null;
 
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < 60; page++) {
     if (pageToken) params.set("pageToken", pageToken);
 
     const response = await fetch(
@@ -995,9 +995,9 @@ async function syncGoogle(env) {
     ["respiratory-rate-sleep-summary", "respiratory_rate_sleep_summary", "sample", "google-wearables", 7],
     ["sedentary-period", "sedentary_period", "interval", "google-wearables", 7],
     ["time-in-heart-rate-zone", "time_in_heart_rate_zone", "interval", "google-wearables", 7],
-    ["sleep", "sleep", "sleep", "google-wearables", 365],
-    ["exercise", "exercise", "exercise", "google-wearables", 30],
-    ["weight", "weight", "sample", "google-sources", 30],
+    ["sleep", "sleep", "sleep", "google-wearables", 730],
+    ["exercise", "exercise", "exercise", "google-wearables", 365],
+    ["weight", "weight", "sample", "google-sources", 365],
     ["body-fat", "body_fat", "sample", "google-sources", 30]
   ];
 
@@ -2761,7 +2761,7 @@ async function healthSleep(env, url) {
     WHERE data_type = 'sleep'
       AND source_family = 'google-wearables'
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
-    LIMIT 2000
+    LIMIT 5000
   `).all();
 
   const sessions = (rows.results || []).map(row => {
