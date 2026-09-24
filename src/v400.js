@@ -32,17 +32,18 @@ function calories(r){return n(r?.kcal);}
 function macros(r){return {protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g)};}
 
 async function rowsForDate(env,date,type){
-  const q = type === "activity"
-    ? `SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints
-       WHERE ((source_family='intervals' AND data_type='activity')
-          OR (source_family='google-wearables' AND data_type='exercise'))
-         AND start_time LIKE ?
-         AND (record_role IS NULL OR record_role!='duplicate')
-       ORDER BY start_time`
-    : `SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints
-       WHERE source_family='intervals' AND data_type='planned-workout' AND start_time LIKE ?
-       ORDER BY start_time`;
-  return (await env.DB.prepare(q).bind(date+"%").all()).results||[];
+  if(type !== "activity"){
+    return (await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='planned-workout' AND start_time LIKE ? ORDER BY start_time`).bind(date+"%").all()).results||[];
+  }
+  const intervals=(await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND start_time LIKE ? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(date+"%").all()).results||[];
+  const google=(await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='google-wearables' AND data_type='exercise' AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time DESC LIMIT 200`).all()).results||[];
+  const googleForDate=google.filter(row=>{
+    try{
+      const p=JSON.parse(row.payload_json||"{}"), i=p.exercise?.interval||p.interval||{};
+      return String(i.startTime||i.civilStartTime||row.start_time||"").slice(0,10)===date;
+    }catch{return false}
+  });
+  return [...intervals,...googleForDate];
 }
 async function weightInfo(env,date){
   const latest=await env.DB.prepare(`SELECT value_numeric,sample_time FROM health_datapoints WHERE data_type='weight' AND value_numeric IS NOT NULL ORDER BY sample_time DESC,id DESC LIMIT 1`).first();
