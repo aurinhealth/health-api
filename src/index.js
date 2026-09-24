@@ -146,7 +146,7 @@ const CONFIG = {
   fluidMlPerHour: 700,
 
   activityKcalPerHour: {
-    Ride: 600,
+    Ride: 500,
     Run: 650,
     Walk: 250,
     WeightTraining: 400,
@@ -1737,6 +1737,13 @@ function plannedMatchesActual(planned, actual){
   });
 }
 
+function cyclingKcalPerHour(item) {
+  const text = `${item?.type || ""} ${item?.name || ""} ${item?.payload?.type || ""} ${item?.payload?.name || ""}`.toLowerCase();
+  // Our agreed planning model: Endurance/Z2 rides = 500 kcal/h;
+  // harder/intensity rides = 600 kcal/h.
+  return /endurance|z2|recovery|easy/.test(text) ? 500 : 600;
+}
+
 function activityIsCycling(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
   return ["ride", "bike", "cycling", "cycle", "gravel", "mountain bike", "mtb", "road cycling", "indoor cycling"].some(x => text.includes(x));
@@ -1972,7 +1979,7 @@ async function energyForDate(env, date) {
     for (const w of unmatchedPlanned) {
       if (w.durationHours) {
         const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
-        const rate = CONFIG.activityKcalPerHour[type] || 400;
+        const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : (CONFIG.activityKcalPerHour[type] || 400);
         activityAdjustment += w.durationHours * rate;
       }
     }
@@ -1993,7 +2000,7 @@ async function energyForDate(env, date) {
     estimatedPlannedActivityCalories: Math.round(unmatchedPlanned.reduce((sum, w) => {
       if (!w.durationHours) return sum;
       const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
-      return sum + w.durationHours * (CONFIG.activityKcalPerHour[type] || 400);
+      return sum + w.durationHours * (type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : (CONFIG.activityKcalPerHour[type] || 400));
     }, 0)),
     actualActivityCalories: Math.round(completed.reduce((sum, a) => sum + Number(a.calories || 0), 0)),
     suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
