@@ -224,6 +224,17 @@ function dateDaysFromNow(days) {
   return d.toISOString().slice(0, 10);
 }
 
+function dateDaysFromDate(date, days) {
+  const p = String(date).slice(0, 10).split("-");
+  const d = new Date(Date.UTC(
+    Number(p[0]),
+    Number(p[1]) - 1,
+    Number(p[2]) + Number(days)
+  ));
+  return d.toISOString().slice(0, 10);
+}
+
+
 
 function dateOnly(value) {
   if (!value) {
@@ -1494,19 +1505,27 @@ async function matchActivities(env) {
 // WEIGHT
 // ======================================================
 
-async function weightHistory(env) {
-  const rows =
-    await env.DB
-      .prepare(
-        `SELECT
-           sample_time,
-           value_numeric
-         FROM health_datapoints
-         WHERE data_type = 'weight'
-         AND value_numeric IS NOT NULL
-         ORDER BY sample_time ASC`
-      )
-      .all();
+async function weightHistory(env, days = null) {
+  if (Number.isFinite(Number(days)) && Number(days) > 0) {
+    const cutoff = dateDaysAgo(Number(days));
+    const rows = await env.DB.prepare(`
+      SELECT sample_time, value_numeric
+      FROM health_datapoints
+      WHERE data_type = 'weight'
+        AND value_numeric IS NOT NULL
+        AND sample_time >= ?
+      ORDER BY sample_time ASC
+    `).bind(cutoff).all();
+    return rows.results;
+  }
+
+  const rows = await env.DB.prepare(`
+    SELECT sample_time, value_numeric
+    FROM health_datapoints
+    WHERE data_type = 'weight'
+      AND value_numeric IS NOT NULL
+    ORDER BY sample_time ASC
+  `).all();
 
   return rows.results;
 }
@@ -1717,30 +1736,38 @@ function nutritionContext(energy) {
 }
 
 async function energyForDate(env, date) {
+  const nextDate = dateDaysFromDate(date, 1);
+
   const google = await env.DB.prepare(`
-    SELECT * FROM health_datapoints
+    SELECT value_numeric, sample_time
+    FROM health_datapoints
     WHERE data_type = 'total-calories'
-    AND sample_time LIKE ?
+      AND sample_time >= ?
+      AND sample_time < ?
     ORDER BY sample_time DESC, id DESC
     LIMIT 1
-  `).bind(date + "%").first();
+  `).bind(date, nextDate).first();
 
   const planned = await env.DB.prepare(`
-    SELECT * FROM health_datapoints
+    SELECT *
+    FROM health_datapoints
     WHERE source_family = 'intervals'
-    AND data_type = 'planned-workout'
-    AND start_time LIKE ?
+      AND data_type = 'planned-workout'
+      AND start_time >= ?
+      AND start_time < ?
     ORDER BY start_time
-  `).bind(date + "%").all();
+  `).bind(date, nextDate).all();
 
   const activities = await env.DB.prepare(`
-    SELECT * FROM health_datapoints
+    SELECT *
+    FROM health_datapoints
     WHERE source_family = 'intervals'
-    AND data_type = 'activity'
-    AND start_time LIKE ?
-    AND (record_role IS NULL OR record_role != 'duplicate')
+      AND data_type = 'activity'
+      AND start_time >= ?
+      AND start_time < ?
+      AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(date + "%").all();
+  `).bind(date, nextDate).all();
 
   const weight = await env.DB.prepare(`
     SELECT value_numeric, sample_time FROM health_datapoints
@@ -1852,7 +1879,8 @@ async function analysisDaily(
 
   const weights =
     await weightHistory(
-      env
+      env,
+      CONFIG.weightDays
     );
 
   const weight7 =
@@ -1921,7 +1949,10 @@ async function analysisDaily(
         weight7,
 
       average30d:
-        weight30
+        weight30,
+
+      records:
+        weights
     },
 
     nutrition: {
