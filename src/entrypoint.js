@@ -209,47 +209,39 @@ async function handleDashboardApi(request, env, ctx, url) {
       } catch(error) {
         console.error("Gym sheet plan read failed",error);
         data={status:"partial",values:[],videoLinks:{},message:"Dnešní plán ze Sheets není dostupný."};
-        responseStatus=200;
       }
+      try {
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (workout_date TEXT PRIMARY KEY, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+        const saved=await env.DB.prepare(`SELECT values_json FROM gym_plans WHERE workout_date=?`).bind(pragueToday()).first();
+        if(saved?.values_json) data.values=JSON.parse(saved.values_json);
+      } catch(error) { console.error("Gym plan read failed",error); }
       let history=[];
       try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
-      return Response.json({...data,history,storage:"d1"},{ status: responseStatus, headers: {"Cache-Control":"no-store"} });
+      return Response.json({...data,history,storage:"d1"},{status:responseStatus,headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
       const body = await request.json().catch(() => ({}));
-      const values = Array.isArray(body?.values) ? body.values : null;
-      if (!values) return Response.json({status:"error",message:"values must be a 2D array"}, {status:400});
+      const date = body?.date || pragueToday();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (workout_date TEXT PRIMARY KEY, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
 
-      const date = new Intl.DateTimeFormat("en-CA",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
-      const sets = values.map((r,i)=>({
-        type:String(r?.[0]||"WORK").toUpperCase(),
-        exercise:r?.[1]||"",
-        setNo:r?.[2],
-        plannedKg:r?.[3],
-        plannedReps:r?.[4],
-        actualKg:r?.[5],
-        actualReps:r?.[6],
-        rpe:r?.[7],
-        completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")),
-        note:r?.[9]||""
-      })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
-
-      let historyResult=null;
-      if(sets.length) {
-        historyResult=await importStrengthHistory(env.DB,{date,sets});
+      if (body?.action === "plan") {
+        const values = Array.isArray(body?.values) ? body.values : null;
+        if (!values) return Response.json({status:"error",message:"values must be a 2D array"},{status:400});
+        await env.DB.prepare(`INSERT INTO gym_plans(workout_date,values_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(date,JSON.stringify(values)).run();
+        return Response.json({status:"ok",storage:"d1",message:"Plán uložen."},{headers:{"Cache-Control":"no-store"}});
       }
 
+      const values = Array.isArray(body?.values) ? body.values : null;
+      if (!values) return Response.json({status:"error",message:"values must be a 2D array"},{status:400});
+      const sets = values.map((r,i)=>({
+        type:String(r?.[0]||"WORK").toUpperCase(), exercise:r?.[1]||"", setNo:r?.[2],
+        plannedKg:r?.[3], plannedReps:r?.[4], actualKg:r?.[5], actualReps:r?.[6],
+        rpe:r?.[7], completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")), note:r?.[9]||""
+      })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
+      let historyResult=null;
+      if(sets.length) historyResult=await importStrengthHistory(env.DB,{date,sets});
       const history=await getStrengthHistory(env.DB,500);
-      return Response.json({
-        status:"ok",
-        storage:"d1",
-        history,
-        historySaved:historyResult,
-        sheetSaved:false,
-        message:sets.length
-          ? "Workout uložen do interní databáze."
-          : "Nebyla označena žádná dokončená série."
-      },{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",storage:"d1",history,historySaved:historyResult,sheetSaved:false,message:sets.length?"Workout uložen do interní databáze.":"Nebyla označena žádná dokončená série."},{headers:{"Cache-Control":"no-store"}});
     }
     return Response.json({status:"error",message:"Method not allowed"},{status:405});
   }
