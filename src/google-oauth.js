@@ -1,7 +1,8 @@
+const GOOGLE_OAUTH_ORIGIN = "https://petrfitnessdata.eu";
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly","https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly","https://www.googleapis.com/auth/googlehealth.sleep.readonly","https://www.googleapis.com/auth/googlehealth.nutrition.readonly","https://www.googleapis.com/auth/googlehealth.nutrition.writeonly"];
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
-    const origin = new URL(request.url).origin; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
+    const origin = GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code"); u.searchParams.set("scope", GOOGLE_SCOPES.join(" ")); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
     return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+encodeURIComponent(state)+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});
@@ -10,7 +11,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
   const url = new URL(request.url); const code=url.searchParams.get("code"); const state=url.searchParams.get("state"); const cookie=request.headers.get("Cookie")||""; const m=cookie.match(/(?:^|;\\s*)pfd_google_oauth_state=([^;]+)/);
   if (!code || !state || !m || decodeURIComponent(m[1]) !== state) return html("Google OAuth failed","Invalid or missing OAuth state. Start again from /oauth/google.",400);
   if (url.searchParams.get("error")) return html("Google OAuth cancelled", esc(url.searchParams.get("error")),400);
-  const redirectUri=url.origin+"/oauth/google/callback";
+  const redirectUri=GOOGLE_OAUTH_ORIGIN+"/oauth/google/callback";
   const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:redirectUri,grant_type:"authorization_code"})});
   const data=await response.json();
   if (!response.ok || !data.refresh_token) return html("Google OAuth token exchange failed","Google did not return a refresh token. Response: "+esc(JSON.stringify(data)),502);
