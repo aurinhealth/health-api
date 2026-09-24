@@ -67,17 +67,19 @@ function isoWeek(date){
   return String(Math.ceil((((th-jan)/86400000)+1)/7)).padStart(2,"0");
 }
 function populateWeekSelectors(weekId,dayId,days){
-  const ws=$(weekId),ds=$(dayId);
-  if(!ws||!ds)return;
+  const ws=$(weekId),ds=dayId?$(dayId):null;
+  if(!ws)return;
   const opts=[];
   for(let i=-12;i<=8;i++){
     const d=dateShift(pragueMonday(),i*7);
     opts.push('<option value="'+d+'" '+(d===weekStart?"selected":"")+'>Týden '+isoWeek(d)+' · '+dateLabel(d)+'–'+dateLabel(dateShift(d,6))+'</option>');
   }
   ws.innerHTML=opts.join("");
-  ds.innerHTML=days.map(x=>'<option value="'+x.date+'" '+(x.date===selectedHistoryDate?"selected":"")+'>'+esc(longDate(x.date))+'</option>').join("");
+  if(ds){
+    ds.innerHTML=days.map(x=>'<option value="'+x.date+'" '+(x.date===selectedHistoryDate?"selected":"")+'>'+esc(longDate(x.date))+'</option>').join("");
+    ds.onchange=()=>{selectedHistoryDate=ds.value;renderTraining();renderNutrition()};
+  }
   ws.onchange=()=>{weekStart=ws.value;selectedHistoryDate=weekStart;load()};
-  ds.onchange=()=>{selectedHistoryDate=ds.value;renderTraining();renderNutrition()};
 }
 function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
 async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options});const d=await r.json().catch(()=>({message:"Invalid response"}));if(!r.ok)throw new Error(d.message||"HTTP "+r.status);return d}
@@ -130,16 +132,8 @@ function renderOverview(){
 function renderTraining(){
   const days=state.week?.days||[],fw=state.fitness?.wellness||[];
   $("trainingRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));
-  populateWeekSelectors("trainingWeekSelect","trainingDaySelect",days);
-  $("trainingDays").innerHTML=days.map(x=>{
-    const a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));
-    const p=(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z));
-    const plannedTss=p.reduce((s,z)=>s+num(z.tss),0),actualTss=a.reduce((s,z)=>s+num(z.tss),0);
-    const plannedHours=p.reduce((s,z)=>s+num(z.durationHours),0),actualHours=a.reduce((s,z)=>s+num(z.durationHours),0); const completion=p.length&&plannedTss?Math.round(actualTss/plannedTss*100):(p.length&&plannedHours?Math.round(actualHours/plannedHours*100):(a.length?100:null));
-    return '<div class="day '+(x.date===pragueToday()?"today":"")+'"><div class="dayhead">'+esc(longDate(x.date))+'</div><div class="small">'+fmt(a.reduce((s,z)=>s+num(z.durationHours),0),1)+' h dokončeno</div><div class="bar"><i style="width:'+Math.min(100,completion??0)+'%"></i></div><div class="small">'+(completion==null?"Bez hodnocení":scoreBadge(completion,"Dokončení"))+'</div>'+(a.length?a.map(z=>'<div class="small good">✓ '+esc(z.name||z.type||"Aktivita")+'</div>').join(""):"")+(p.length?p.map(z=>'<div style="margin-top:6px"><span class="pill">PLÁN</span> '+esc(z.name||z.type||"Workout")+'</div>').join(""):'<div class="muted" style="margin-top:6px">Bez plánu</div>')+'</div>';
-  }).join("");
-  const selected=days.find(x=>x.date===selectedHistoryDate)||days[0];
-  if(selected) $("trainingDaySelect").value=selected.date;
+  populateWeekSelectors("trainingWeekSelect",null,days);
+  const selected=days.find(x=>x.date===pragueToday())||days[0];
   const planned=days.flatMap(x=>(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
   const completed=days.flatMap(x=>(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
   $("plannedList").innerHTML=planned.length?planned.map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||"Workout")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+'</span></div>').join(""):'<div class="muted">Nic plánováno.</div>';
@@ -166,7 +160,7 @@ function renderTraining(){
 function renderNutrition(){
   const days=state.week?.days||[];
   $("nutritionRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));
-  populateWeekSelectors("nutritionWeekSelect","nutritionDaySelect",days);
+  populateWeekSelectors("nutritionWeekSelect",null,days);
   const today=days.find(x=>x.date===pragueToday())||days[days.length-1];
   $("nutritionReason").textContent=today?.daily?.nutrition?.reason||"Denní cíl se adaptuje podle tréninku, hmotnosti a cíle.";
   $("nutritionDays").innerHTML=days.map(x=>{
@@ -177,8 +171,7 @@ function renderNutrition(){
   }).join("");
   macroChart("nutritionChart",days);
 
-  const selected=days.find(x=>x.date===selectedHistoryDate)||today;
-  if(selected) $("nutritionDaySelect").value=selected.date;
+  const selected=today;
   const mealGroups=selected?.recommendations?.mealRecommendations||[];
   const stores=selected?.recommendations?.storeAlternatives||[];
   $("foodPlan").innerHTML=selected?'<div class="reason">'+esc(selected.recommendations?.coaching||"Doporučení se přepočítává podle dnešního příjmu.")+'</div>'+
@@ -203,9 +196,7 @@ function renderRecovery(){
   const sleepScore=last?Math.round(Math.min(100,Math.max(0,(num(last.durationMin)/480)*70+(num(last.stages?.DEEP)/90)*15+(num(last.stages?.REM)/90)*15))):null;
   $("sleepScore").innerHTML=sleepScore!=null?scoreBadge(sleepScore,"Kvalita"):'<span class="muted">Bez dat</span>';
   chartSvg("sleepChart",filtered.slice().reverse().map(x=>num(x.durationMin)/60),[],filtered.slice().reverse().map(x=>dateLabel(x.date)),{W:700,H:250});
-  const opts=filtered.map(x=>'<option value="'+esc(x.date)+'">'+esc(longDate(x.date))+'</option>').join("");
-  const sd=$("sleepDaySelect"); sd.innerHTML=opts; if(last) sd.value=filtered.find(x=>x.date===selectedHistoryDate)?.date||last.date;
-  const selected=filtered.find(x=>x.date===sd.value)||last;
+  const selected=last;
   if(selected){
     const total=Object.values(selected.stages||{}).reduce((a,b)=>a+num(b),0)||1;
     $("sleepStages").innerHTML='<div class="metric-line"><span>Deep</span><strong>'+hm(selected.stages?.DEEP)+'</strong></div><div class="sleep-stage"><i class="stage-deep" style="width:'+num(selected.stages?.DEEP)/total*100+'%"></i></div><div class="metric-line"><span>REM</span><strong>'+hm(selected.stages?.REM)+'</strong></div><div class="sleep-stage"><i class="stage-rem" style="width:'+num(selected.stages?.REM)/total*100+'%"></i></div><div class="metric-line"><span>Light</span><strong>'+hm(selected.stages?.LIGHT)+'</strong></div><div class="sleep-stage"><i class="stage-light" style="width:'+num(selected.stages?.LIGHT)/total*100+'%"></i></div><div class="metric-line"><span>Awake</span><strong>'+hm(selected.stages?.AWAKE)+'</strong></div><div class="sleep-stage"><i class="stage-awake" style="width:'+num(selected.stages?.AWAKE)/total*100+'%"></i></div>';
@@ -228,5 +219,4 @@ $("nextWeek").onclick=()=>{weekStart=dateShift(weekStart,7);selectedHistoryDate=
 $("thisWeek").onclick=()=>{weekStart=pragueMonday();selectedHistoryDate=weekStart;load()};
 $("saveGym").onclick=saveGym;$("generateGym").onclick=generateGym;
 $("sleepRange").onchange=renderRecovery;
-$("sleepDaySelect").onchange=()=>{selectedHistoryDate=$("sleepDaySelect").value;renderRecovery};
 load();
