@@ -106,7 +106,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 <div id="toast" class="toast"></div>
 <script>
 const $=id=>document.getElementById(id);
-let weekStart=pragueMonday(),state={};
+let weekStart=pragueMonday(),selectedHistoryDate=pragueToday(),state={};
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function num(v,d=0){const n=Number(v);return Number.isFinite(n)?n:d}
 function fmt(v,d=0){return Math.round(num(v)*10**d)/10**d}
@@ -119,10 +119,54 @@ function hm(min){if(!Number.isFinite(Number(min)))return "—";return Math.floor
 function isNutritionItem(x){const n=String(x?.name||"").trim(),t=String(x?.type||"").trim();return /nutrition/i.test(n)||/^nutrition$/i.test(t)}
 function scoreClass(v){return v>=80?"":" "+(v>=60?"mid":"low")}
 function scoreBadge(v,label="Skóre"){return '<span class="score'+scoreClass(v)+'">'+label+" "+fmt(v)+"%</span>"}
-function trendArrow(current,previous,invert=false,unit=""){const a=num(current),b=num(previous);if(!Number.isFinite(a)||!Number.isFinite(b)||a===b)return "";const delta=a-b,good=invert?delta<0:delta>0,arrow=delta>0?"↑":"↓";return '<div class="trend '+(good?"good":"bad")+'">'+arrow+" "+(delta>0?"+":"")+fmt(delta,1)+" "+esc(unit)+'</div>'}
-function nutritionScore(food,target){const vals=[["calories",target.calorieTarget],["protein_g",target.macros?.proteinGrams],["carbs_g",target.macros?.carbsGrams],["fat_g",target.macros?.fatGrams]],scores=vals.map(([k,t])=>t?Math.min(1,num(food?.[k])/num(t)):1);return Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100)}
-function macroChart(id,days){const svg=$(id),W=900,H=300,left=105,right=35,top=20,row=38;let out="";const cols=[["protein_g","Protein","#60a5fa","proteinGrams"],["carbs_g","Sach.","#f59e0b","carbsGrams"],["fat_g","Tuk","#a78bfa","fatGrams"]];days.forEach((d,i)=>{const y=top+i*row;out+='<text x="0" y="'+(y+16)+'" fill="#91a0b5" font-size="11">'+esc(dateLabel(d.date))+'</text>';cols.forEach((c,j)=>{const y2=y+j*8,w=Math.min(100,num(d.food?.totals?.[c[0]])/Math.max(1,num(d.daily?.nutrition?.macros?.[c[3]]||d.daily?.macros?.[c[3]]||d.daily?.calories?.[c[3]])));out+='<rect x="'+left+'" y="'+y2+'" width="'+(W-left-right)+'" height="6" rx="3" fill="#202936"/><rect x="'+left+'" y="'+y2+'" width="'+((W-left-right)*Math.min(1,w))+'" height="6" rx="3" fill="'+c[2]+'"/><text x="'+(W-right)+'" y="'+(y2+6)+'" text-anchor="end" fill="#d8e0ea" font-size="10">'+fmt(d.food?.totals?.[c[0]])+"/"+fmt(d.daily?.nutrition?.macros?.[c[3]]||0)+" g"+'</text>'});});svg.innerHTML=out}
-
+function trendArrow(current,previous,invert=false,unit=""){
+  const a=Number(current),b=Number(previous);
+  if(!Number.isFinite(a)||!Number.isFinite(b)||a===b)return "";
+  const delta=a-b,good=invert?delta<0:delta>0,arrow=delta>0?"↑":"↓";
+  return '<div class="trend '+(good?"good":"bad")+'">'+arrow+" "+(delta>0?"+":"")+fmt(delta,1)+" "+esc(unit)+'</div>';
+}
+function macroTargetsOf(d){
+  const m=d?.daily?.nutrition?.macros||d?.daily?.macros||d?.daily?.calories?.macros||{};
+  return {
+    protein:Number(m.protein_g ?? m.proteinGrams ?? d?.daily?.nutrition?.protein ?? 0),
+    carbs:Number(m.carbs_g ?? m.carbsGrams ?? 0),
+    fat:Number(m.fat_g ?? m.fatGrams ?? 0)
+  };
+}
+function nutritionScore(food,target){
+  const kcal=Number(food?.kcal||0),p=Number(food?.protein_g||0),c=Number(food?.carbs_g||0),f=Number(food?.fat_g||0);
+  if(kcal<=0 && p<=0 && c<=0 && f<=0) return null;
+  const vals=[["kcal",target.calorieTarget],["protein_g",target.macros?.protein],["carbs_g",target.macros?.carbs],["fat_g",target.macros?.fat]];
+  const scores=vals.filter(([,t])=>Number(t)>0).map(([k,t])=>Math.min(1,Number(food?.[k]||0)/Number(t)));
+  return scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100):null;
+}
+function macroChart(id,days){
+  const svg=$(id),W=900,H=300,left=95,right=25,top=28,row=36;
+  const segs=[["carbs","Sacharidy","#f59e0b",45],["protein","Protein","#60a5fa",35],["fat","Tuk","#a78bfa",20]];
+  let out='<text x="'+left+'" y="14" fill="#91a0b5" font-size="10">CÍL · podíl kcal</text><text x="'+(left+330)+'" y="14" fill="#91a0b5" font-size="10">SNĚDENO · podíl cíle</text>';
+  days.forEach((d,i)=>{
+    const y=top+i*row, t=num(d.daily?.calories?.target), food=d.food?.totals||{}, m=macroTargetsOf(d);
+    out+='<text x="0" y="'+(y+12)+'" fill="#91a0b5" font-size="10">'+esc(dateLabel(d.date))+'</text>';
+    let x=left;
+    segs.forEach(([key,label,color,pct])=>{
+      const w=270*pct/100;
+      out+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="13" rx="2" fill="'+color+'" opacity=".55"/>';
+      out+='<text x="'+(x+w/2)+'" y="'+(y+10)+'" text-anchor="middle" fill="#08111e" font-size="9" font-weight="700">'+pct+'%</text>'; x+=w;
+    });
+    const targetParts={carbs:m.carbs*4,protein:m.protein*4,fat:m.fat*9};
+    const actualParts={carbs:num(food.carbs_g)*4,protein:num(food.protein_g)*4,fat:num(food.fat_g)*9};
+    let ax=left+330;
+    const scale=t>0?Math.min(1,(num(food.kcal)/t)):0;
+    segs.forEach(([key,label,color])=>{
+      const targetK=targetParts[key]||0, actualK=actualParts[key]||0;
+      const w=270*(targetK/Math.max(1,t))*scale;
+      if(w>0)out+='<rect x="'+ax+'" y="'+y+'" width="'+w+'" height="13" rx="2" fill="'+color+'"/>';
+      ax+=w;
+    });
+    out+='<text x="'+(W-right)+'" y="'+(y+11)+'" text-anchor="end" fill="#d8e0ea" font-size="10">'+fmt(food.kcal)+' / '+fmt(t)+' kcal</text>';
+  });
+  svg.innerHTML=out;
+}
 function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
 async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options});const d=await r.json().catch(()=>({message:"Invalid response"}));if(!r.ok)throw new Error(d.message||"HTTP "+r.status);return d}
 function activate(view){document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===view))}
