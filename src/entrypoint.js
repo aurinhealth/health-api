@@ -1,7 +1,6 @@
 import app from "./sheets-gateway.js";
 import { handleMcpCompat } from "./mcp-compat.js";
 import { handleOAuthCompat } from "./oauth-compat.js";
-import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
@@ -18,7 +17,6 @@ export default {
     if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
-    if (url.pathname === "/automation/planned-calories") return handlePlannedCaloriesAutomation(request, env);
     if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, env);
     const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
@@ -160,9 +158,9 @@ async function handleDashboardApi(request, env, ctx, url) {
       const recommendUrl = new URL("/food/recommend", request.url);
       recommendUrl.searchParams.set("date", date);
       const [dailyResponse, foodResponse, recommendResponse] = await Promise.all([
-        app.fetch(new Request(dailyUrl, {method:"GET"}), env, ctx),
-        app.fetch(new Request(foodUrl, {method:"GET"}), env, ctx),
-        app.fetch(new Request(recommendUrl, {method:"GET"}), env, ctx)
+        app.fetch(new Request(dailyUrl, {method:"GET",headers:internalAuth}), env, ctx),
+        app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx),
+        app.fetch(new Request(recommendUrl, {method:"GET",headers:internalAuth}), env, ctx)
       ]);
       return {
         date,
@@ -279,40 +277,6 @@ function policyPage(title, text) {
 function logoResponse() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" rx="48" fill="#111827"/><path d="M68 132h32l18-54 30 100 20-46h20" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><circle cx="68" cy="132" r="8" fill="#fff"/></svg>`;
   return new Response(svg, { status: 200, headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" } });
-}
-
-
-async function handlePlannedCaloriesAutomation(request, env) {
-  if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
-  try {
-    await verifyGitHubActionsToken(request);
-    const body = await request.json().catch(() => ({}));
-    const today = new Date();
-    const oldest = String(body?.oldest || today.toISOString().slice(0, 10));
-    const newest = String(body?.newest || new Date(today.getTime() + 14 * 86400000).toISOString().slice(0, 10));
-    let weightKg = Number(body?.weightKg);
-    if (!Number.isFinite(weightKg)) {
-      const weightRow = await env.DB.prepare(
-        `SELECT value_numeric FROM health_datapoints
-         WHERE LOWER(data_type) LIKE '%weight%'
-           AND value_numeric IS NOT NULL
-         ORDER BY COALESCE(sample_time, start_time) DESC
-         LIMIT 1`
-      ).first();
-      weightKg = Number(weightRow?.value_numeric);
-    }
-    if (!Number.isFinite(weightKg) || weightKg <= 0) weightKg = 88;
-
-    const result = await syncPlannedEventCalories(env, {
-      oldest,
-      newest,
-      weightKg,
-      ftp: body?.ftp
-    });
-    return Response.json(result);
-  } catch (error) {
-    return Response.json({ status: "error", step: "planned_calories", message: error.message }, { status: 500 });
-  }
 }
 
 
