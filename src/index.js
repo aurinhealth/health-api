@@ -2527,91 +2527,89 @@ function recommendationReason(recipe, remaining, options) {
 }
 
 async function foodRecommend(env, url) {
-  const date = url.searchParams.get('date') || pragueDate();
-  const log = await foodLogForDate(env, date);
-  const energy = await energyForDate(env, date);
-  const targetKcal = Number(energy.calorieTarget || 0);
-  const targets = energy.macroTargets || dailyMacroTargets(energy.currentWeight, targetKcal, energy.nutritionContext || {});
-  const calorieDelta = targetKcal - log.totals.kcal;
-  const remaining = { kcal: Math.max(0, calorieDelta), protein_g: Math.max(0, targets.protein_g-log.totals.protein_g), carbs_g: Math.max(0, targets.carbs_g-log.totals.carbs_g), fat_g: Math.max(0, targets.fat_g-log.totals.fat_g) };
-
-  const eaten = log.entries.filter(r => r.status === "eaten");
-  const mealTypes = new Set(eaten.map(r => String(r.meal_type || "").toUpperCase()).filter(Boolean));
-  const hasBreakfast = mealTypes.has("BREAKFAST") || eaten.some(r => String(r.meal_time || "").startsWith("0"));
-  const hasLunch = mealTypes.has("LUNCH") || eaten.some(r => /^1[01]:|^12:|^13:/.test(String(r.meal_time || "")));
-  const hasDinner = mealTypes.has("DINNER") || eaten.some(r => /^1[89]:|^2[0-3]:/.test(String(r.meal_time || "")));
-  let nextMeal = "SNACK";
-  if (!hasBreakfast) nextMeal = "BREAKFAST";
-  else if (!hasLunch) nextMeal = "LUNCH";
-  else if (!hasDinner) nextMeal = "DINNER";
-
+  const date=url.searchParams.get('date')||pragueDate();
+  const log=await foodLogForDate(env,date);
+  const energy=await energyForDate(env,date);
+  const targetKcal=Number(energy.calorieTarget||0);
+  const targets=energy.macroTargets||dailyMacroTargets(energy.currentWeight,targetKcal,energy.nutritionContext||{});
+  const eaten=log.entries.filter(r=>r.status==="eaten");
+  const mealTypes=new Set(eaten.map(r=>String(r.meal_type||"").toUpperCase()).filter(Boolean));
+  const hasBreakfast=mealTypes.has("BREAKFAST")||eaten.some(r=>/^0[5-9]:|^10:/.test(String(r.meal_time||"")));
+  const hasLunch=mealTypes.has("LUNCH")||eaten.some(r=>/^1[12]:|^13:|^14:/.test(String(r.meal_time||"")));
+  const hasDinner=mealTypes.has("DINNER")||eaten.some(r=>/^1[89]:|^2[0-3]:/.test(String(r.meal_time||"")));
+  const remaining={kcal:Math.max(0,targetKcal-log.totals.kcal),protein_g:Math.max(0,targets.protein_g-log.totals.protein_g),carbs_g:Math.max(0,targets.carbs_g-log.totals.carbs_g),fat_g:Math.max(0,targets.fat_g-log.totals.fat_g)};
   const explicitPostRide=url.searchParams.get('post_ride');
-  const postRide=explicitPostRide==='1' || (explicitPostRide!=='0' && energy.nutritionContext?.postRide);
+  const postRide=explicitPostRide==='1'||(explicitPostRide!=='0'&&energy.nutritionContext?.postRide);
   const maxMinutes=Number(url.searchParams.get('max_minutes')||0);
-  const category=(url.searchParams.get('category')||'').trim();
-  const limit=Math.max(1,Math.min(10,Number(url.searchParams.get('limit')||5)));
-  const overCalories=calorieDelta<0;
-  const heavilyOverCalories=calorieDelta<-300;
+  const limit=Math.max(2,Math.min(5,Number(url.searchParams.get('limit')||3)));
   const cookbookData=await getCookbook();
   const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
 
-  const categoryForMeal = {
+  let slots=[];
+  if(!hasBreakfast) slots.push(["BREAKFAST","Snídaně"]);
+  else if(!hasLunch) slots.push(["LUNCH","Oběd"]);
+  else if(!hasDinner) slots.push(["SNACK","Svačina"],["DINNER","Večeře"]);
+  if(!slots.length && !hasDinner && hasLunch) slots=[["DINNER","Večeře"]];
+  if(slots.length>3) slots=slots.slice(0,3);
+
+  const mealKeywords={
     BREAKFAST:["breakfast","snidane","snídaně"],
-    LUNCH:["lunch","oběd","obed"],
-    DINNER:["dinner","večeře","vecere"],
-    SNACK:["snack","svačina","svacina"]
-  }[nextMeal] || [];
-
-  let candidates=cookbook.filter(recipe=>{
-    const kcal=Number(recipe.kcal);
-    if(!Number.isFinite(kcal)||kcal<=0) return false;
-    if(category && String(recipe.category||'').toLowerCase()!==category.toLowerCase()) return false;
-    if(maxMinutes && recipeMinutes(recipe)>maxMinutes) return false;
-    if(heavilyOverCalories && kcal>150) return false;
-    if(overCalories && !heavilyOverCalories && kcal>Math.max(250, remaining.kcal*1.15)) return false;
-    if(categoryForMeal.length){
+    LUNCH:["lunch","obed","oběd"],
+    DINNER:["dinner","vecere","večeře"],
+    SNACK:["snack","svacina","svačina"]
+  };
+  const remainingSlots=Math.max(1,slots.length);
+  const mealRecommendations=slots.map(([mealType,label])=>{
+    const share={
+      kcal:remaining.kcal/remainingSlots,
+      protein_g:remaining.protein_g/remainingSlots,
+      carbs_g:remaining.carbs_g/remainingSlots,
+      fat_g:remaining.fat_g/remainingSlots
+    };
+    const keys=mealKeywords[mealType]||[];
+    let candidates=cookbook.filter(recipe=>{
+      const kcal=Number(recipe.kcal);
+      if(!Number.isFinite(kcal)||kcal<=0)return false;
+      if(maxMinutes&&recipeMinutes(recipe)>maxMinutes)return false;
+      if(remaining.kcal<=0&&kcal>150)return false;
       const hay=String(recipe.category||"")+" "+String(recipe.meal||"")+" "+String(recipe.type||"")+" "+String(recipe.tags||"");
-      const matchesMeal=categoryForMeal.some(v=>hay.toLowerCase().includes(v));
-      if(matchesMeal) recipe.__mealMatch=true;
-    }
-    return true;
-  });
-
-  candidates=candidates
-    .map(recipe=>({recipe,score:recipeFitScore(recipe,remaining,targets,{postRide,maxMinutes})+(recipe.__mealMatch?35:0)}))
-    .filter(x=>x.score>-9000)
-    .sort((a,b)=>b.score-a.score)
-    .slice(0,limit)
-    .map(x=>({
-      ...x.recipe,
-      servings:1,
-      portion:1,
-      portion_label:"1 porce",
-      meal_type:nextMeal,
-      recommendation_score:Math.round(x.score*10)/10,
-      recommendation_reason:[recommendationReason(x.recipe,remaining,{postRide,maxMinutes}),x.recipe.__mealMatch?"odpovídá dalšímu jídlu dne":"vhodné podle zbývajících maker"].filter(Boolean).join(", ")
+      recipe.__mealMatch=keys.some(k=>hay.toLowerCase().includes(k));
+      if(mealType==="SNACK"&&kcal>450)return false;
+      return true;
+    });
+    candidates=candidates.map(recipe=>({
+      recipe,
+      score:recipeFitScore(recipe,share,targets,{postRide:postRide&&mealType!=="SNACK",maxMinutes})+(recipe.__mealMatch?40:0)
+    })).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({
+      ...x.recipe,servings:1,portion:1,portion_label:"1 porce",meal_type:mealType,
+      recommendation_score:Math.round(Math.max(0,Math.min(100,x.score))*10)/10,
+      recommendation_reason:[recommendationReason(x.recipe,share,{postRide:postRide&&mealType!=="SNACK",maxMinutes}),x.recipe.__mealMatch?"odpovídá typu jídla":"vhodné podle zbývajícího příjmu"].filter(Boolean).join(", ")
     }));
+    return {meal_type:mealType,label,recommendations:candidates,target:share};
+  });
 
   const storeAlternatives=[];
   const addStore=(name,kcal,protein,carbs,fat,reason)=>storeAlternatives.push({name,kcal,protein_g:protein,carbs_g:carbs,fat_g:fat,reason});
-  if(remaining.protein_g>=25) addStore("Skyr / vysokoproteinový jogurt",150,20,10,1,"rychle doplní protein");
-  if(remaining.protein_g>=25) addStore("Kuřecí prsa + zelenina",300,45,10,8,"vysoký protein, nízký přebytek tuku");
-  if(remaining.carbs_g>=40) addStore("Banán + pečivo",250,7,50,3,"rychlé doplnění sacharidů");
-  if(remaining.calories>=300 && remaining.protein_g>=20) addStore("Cottage + pečivo",350,28,35,10,"vyvážená jednoduchá večeře");
-  if(!storeAlternatives.length) addStore("Proteinový pudink / skyr",150,20,10,2,"malá porce podle zbývajícího příjmu");
+  if(remaining.protein_g>=20)addStore("Skyr / vysokoproteinový jogurt",150,20,10,1,"rychle doplní protein");
+  if(remaining.protein_g>=25)addStore("Kuřecí prsa + zelenina",300,45,10,8,"vysoký protein, nízký přebytek tuku");
+  if(remaining.carbs_g>=35)addStore("Banán + pečivo",250,7,50,3,"rychlé doplnění sacharidů");
+  if(remaining.kcal>=300&&remaining.protein_g>=20)addStore("Cottage + pečivo",350,28,35,10,"jednoduchá vyvážená varianta");
+  if(!storeAlternatives.length)addStore("Proteinový pudink / skyr",150,20,10,2,"malá porce podle zbývajícího příjmu");
 
-  let coaching='';
-  if(heavilyOverCalories) coaching='Kalorický cíl je už výrazně překročený. Další plnohodnotné jídlo není potřeba; pokud máš hlad, vol spíše malou porci.';
-  else if(nextMeal==="DINNER" && (hasBreakfast || hasLunch)) coaching='Snídaně a oběd jsou zapsané. Teď vybírám už jen varianty pro večeři a jejich velikost držím na 1 porci; doporučení se přepočítává podle toho, co jsi dnes snědl.';
-  else if(postRide) coaching='Po kole máš vyšší prioritu pro sacharidy a dostatek bílkovin. Doporučení se přepočítává podle dnešního příjmu.';
-  else if(energy.nutritionContext?.endurance) coaching='Dnes máš vytrvalostní zátěž, takže při dalším jídle mají vyšší prioritu sacharidy.';
-  else coaching='Doporučení se průběžně přepočítává podle toho, co už jsi dnes snědl, a podle zbývajících maker.';
+  let coaching;
+  if(!eaten.length)coaching="Dnes zatím nemám zapsané žádné jídlo, takže skóre zůstává bez hodnocení. Doporučení začínají od celého denního cíle.";
+  else if(hasLunch&&!hasDinner)coaching="Snídaně a oběd jsou zapsané. Proto teď doporučuji jen zbývající svačinu a večeři; každá varianta je 1 porce a přepočítává se podle toho, co už jsi snědl.";
+  else if(postRide)coaching="Po kole máš vyšší prioritu pro sacharidy a dostatek bílkovin. Doporučení se přepočítává podle dnešního příjmu.";
+  else coaching="Doporučení se průběžně přepočítává podle toho, co už jsi dnes snědl, a podle zbývajících maker.";
 
   return Response.json({
-    status:'ok',date,mealToPlan:nextMeal,
+    status:"ok",date,mealToPlan:slots[0]?.[0]||null,
     mealsCompleted:{breakfast:hasBreakfast,lunch:hasLunch,dinner:hasDinner},
-    foodTotals:log.totals,calorieTarget:targetKcal,calorieDelta,macroTargets:targets,remaining,
-    nutritionContext:energy.nutritionContext||null,coaching,recommendations:candidates,storeAlternatives
+    foodTotals:log.totals,calorieTarget:targetKcal,calorieDelta:targetKcal-log.totals.kcal,
+    macroTargets:targets,remaining,nutritionContext:energy.nutritionContext||null,
+    coaching,mealRecommendations,
+    recommendations:mealRecommendations[0]?.recommendations||[],
+    storeAlternatives
   });
 }
 
