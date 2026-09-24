@@ -272,45 +272,41 @@ function hoursBetween(start, end) {
 // ======================================================
 
 async function googleToken(env) {
+  const clientId = env.GOOGLE_HEALTH_CLIENT_ID || env.GOOGLE_CLIENT_ID;
+  const clientSecret = env.GOOGLE_HEALTH_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = env.GOOGLE_HEALTH_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error(
+      "Google Health OAuth is not configured. Authorize at /oauth/google-health and store the returned token as GOOGLE_HEALTH_REFRESH_TOKEN."
+    );
+  }
+
   const response = await fetch(
     "https://oauth2.googleapis.com/token",
     {
       method: "POST",
-
       headers: {
-        "Content-Type":
-          "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded"
       },
-
       body: new URLSearchParams({
-        client_id:
-          env.GOOGLE_CLIENT_ID,
-
-        client_secret:
-          env.GOOGLE_CLIENT_SECRET,
-
-        refresh_token:
-          env.GOOGLE_REFRESH_TOKEN,
-
-        grant_type:
-          "refresh_token"
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token"
       })
     }
   );
 
-  const data =
-    await response.json();
+  const data = await response.json();
 
   if (!response.ok) {
     if (data?.error === "invalid_grant") {
       throw new Error(
-        "Google OAuth refresh token is invalid or expired. Reauthorize at /oauth/google and replace the GOOGLE_REFRESH_TOKEN secret with the newly issued token."
+        "Google Health OAuth refresh token is invalid or expired. Reauthorize at /oauth/google-health and replace the GOOGLE_HEALTH_REFRESH_TOKEN secret."
       );
     }
-    throw new Error(
-      "Google OAuth error: " +
-      JSON.stringify(data)
-    );
+    throw new Error("Google Health OAuth error: " + JSON.stringify(data));
   }
 
   return data.access_token;
@@ -650,17 +646,14 @@ async function googleReconcile(
 // ======================================================
 
 async function googleNutritionList(token, startDate, endDate) {
-  const params = new URLSearchParams();
-  params.set(
-    "filter",
-    `nutrition_log.interval.start_time >= "${startDate}T00:00:00Z" AND nutrition_log.interval.start_time < "${endDate}T00:00:00Z"`
-  );
-  params.set("pageSize", "1000");
-
+  const cutoffStart = new Date(startDate + "T00:00:00Z").getTime();
+  const cutoffEnd = new Date(endDate + "T00:00:00Z").getTime();
   const all = [];
   let pageToken = null;
 
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < 50; page++) {
+    const params = new URLSearchParams();
+    params.set("pageSize", "1000");
     if (pageToken) params.set("pageToken", pageToken);
 
     const response = await fetch(
@@ -676,12 +669,26 @@ async function googleNutritionList(token, startDate, endDate) {
     const data = await response.json();
     if (!response.ok) {
       throw new Error(
-        `nutrition-log HTTP ${response.status}: ` +
-        JSON.stringify(data)
+        `nutrition-log HTTP ${response.status}: ` + JSON.stringify(data)
       );
     }
 
-    all.push(...(data.dataPoints || []));
+    const points = data.dataPoints || [];
+    for (const point of points) {
+      const start = point?.nutritionLog?.interval?.startTime;
+      const time = start ? new Date(start).getTime() : NaN;
+      if (Number.isFinite(time) && time >= cutoffStart && time < cutoffEnd) {
+        all.push(point);
+      }
+    }
+
+    const times = points
+      .map(point => point?.nutritionLog?.interval?.startTime)
+      .map(value => value ? new Date(value).getTime() : NaN)
+      .filter(Number.isFinite);
+
+    if (times.length && Math.max(...times) < cutoffStart) break;
+
     pageToken = data.nextPageToken || null;
     if (!pageToken) break;
   }
