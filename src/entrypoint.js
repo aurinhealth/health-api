@@ -5,6 +5,7 @@ import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { syncDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
+import { handleGoogleOAuth } from "./google-oauth.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -26,6 +27,8 @@ export default {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
       return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     }
+    const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
+    if (googleOAuth) return googleOAuth;
     if (url.pathname === "/app" && request.method === "GET") return dashboardPage();
     if (url.pathname.startsWith("/app/api/")) return handleDashboardApi(request, env, ctx, url);
     if (url.pathname === "/" && request.method === "GET") return homepagePage();
