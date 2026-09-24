@@ -77,19 +77,6 @@ jobs:
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
-      - name: Sync daily nutrition notes
-        if: steps.request.outputs.skip != 'true'
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{"oldest":"'"$(TZ=Europe/Prague date +%F)"'","newest":"'"$(TZ=Europe/Prague date -d "+1 day" +%F)"'"}' "https://petrfitnessdata.eu/automation/nutrition-notes" || true)"
-          code="${response##*$'\n'}"; body="${response%$'\n'*}"
-          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { printf '%s\n' "$body"; exit 1; }
-          printf '%s\n' "$body"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d' <<< "$body"
-
       - name: Generate and write strength plan
         if: steps.request.outputs.skip != 'true'
         env:
@@ -113,18 +100,3 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$body" \
             "https://petrfitnessdata.eu/automation/strength"
-
-      - name: Sync planned workout calorie estimates
-        if: steps.request.outputs.skip != 'true' && steps.request.outputs.preview != 'true'
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-        run: |
-          set -euo pipefail
-          response="$(curl -fsS \
-            -X POST \
-            -H "Authorization: Bearer $OIDC_TOKEN" \
-            -H "Content-Type: application/json" \
-            --data '{"oldest":"'"$(TZ=Europe/Prague date +%F)"'","newest":"'"$(TZ=Europe/Prague date -d "+14 days" +%F)"'"}' \
-            "https://petrfitnessdata.eu/automation/planned-calories")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok", d' <<< "$response"
-          echo "$response"
