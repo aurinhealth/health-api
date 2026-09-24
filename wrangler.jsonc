@@ -21,11 +21,5 @@
       "migrations_dir": "migrations"
     }
   ],
-  "routes": [
-    {
-      "pattern": "petrfitnessdata.eu",
-      "custom_domain": true
-    }
-  ],
-  "workers_dev": false
+  "workers_dev": true
 }
