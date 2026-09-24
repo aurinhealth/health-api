@@ -105,6 +105,13 @@ function fromBase64url(s) {
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
 
+  if (url.pathname === "/app/api/sync" && request.method === "POST") {
+    const internal = new URL("/sync", request.url);
+    const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
+    const data = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
+    return Response.json(data,{status:response.status,headers:{"Cache-Control":"no-store"}});
+  }
+
   if (url.pathname === "/app/api/gym") {
     if (request.method === "GET") {
       const internal = new URL("/strength/sheet/today", request.url);
