@@ -137,6 +137,7 @@ const CONFIG = {
   baselineRestTDEE: 2450,
 
   weightLossTargetKgPerWeek: 0.5,
+  targetWeightKg: 80,
   proteinGramsPerKg: 2.0,
 
   defaultRideCarbsPerHour: 90,
@@ -2095,11 +2096,12 @@ async function analysisDaily(
       protein: protein,
       macros: energy.macroTargets,
       calorieTarget: energy.calorieTarget,
+      targetWeightKg: CONFIG.targetWeightKg,
       reason: energy.nutritionContext?.endurance
-        ? "Dnešní cíl zohledňuje vytrvalostní zátěž a cílové tempo úbytku hmotnosti."
+        ? "Dnešní cíl zohledňuje vytrvalostní zátěž a cílové tempo úbytku hmotnosti směrem k 80 kg."
         : energy.nutritionContext?.training
-          ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a cílové tempo úbytku hmotnosti."
-          : "Dnešní cíl vychází z klidového energetického základu a cílového tempa úbytku hmotnosti.",
+          ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a cílové tempo úbytku hmotnosti směrem k 80 kg."
+          : "Dnešní cíl vychází z klidového energetického základu a cílového tempa úbytku hmotnosti směrem k cílové hmotnosti 80 kg.",
       foodLog:
         await foodLogForDate(env, date)
     },
