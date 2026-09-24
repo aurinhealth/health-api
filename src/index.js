@@ -2741,14 +2741,24 @@ async function healthSleep(env, url) {
     const sEnd = String(s.endTime || "").slice(0,10);
     return (sStart && sStart < end && (!sEnd || sEnd >= start)) || (sEnd && sEnd >= start && sEnd < end);
   });
+  // Google can expose the same nightly session more than once through different
+  // imported records. The dashboard should show one night, not duplicate rows.
+  const uniqueSessions = [];
+  const seenSessions = new Set();
+  for (const session of filteredSessions.sort((a,b)=>new Date(b.endTime||b.startTime||0)-new Date(a.endTime||a.startTime||0))) {
+    const key = String(session.startTime||"")+"|"+String(session.endTime||"");
+    if (!key || seenSessions.has(key)) continue;
+    seenSessions.add(key);
+    uniqueSessions.push(session);
+  }
 
-  const totals = filteredSessions.reduce((a,s)=>{
+  const totals = uniqueSessions.reduce((a,s)=>{
     a.durationMin += Number(s.durationMin||0);
     for(const [k,v] of Object.entries(s.stages||{})) a.stages[k]=(a.stages[k]||0)+Number(v||0);
     return a;
   },{durationMin:0,stages:{}});
-  const avg = filteredSessions.length ? totals.durationMin/filteredSessions.length : 0;
-  return Response.json({status:"ok",source:"google-health",start,end,count:filteredSessions.length,averageDurationMin:Math.round(avg),totals,sessions:filteredSessions});
+  const avg = uniqueSessions.length ? totals.durationMin/uniqueSessions.length : 0;
+  return Response.json({status:"ok",source:"google-health",start,end,count:uniqueSessions.length,averageDurationMin:Math.round(avg),totals,sessions:uniqueSessions});
 }
 
 
