@@ -23,8 +23,9 @@
   ],
   "routes": [
     {
-      "pattern": "petrfitnessdata.eu/*",
-      "zone_name": "petrfitnessdata.eu"
+      "pattern": "petrfitnessdata.eu",
+      "custom_domain": true
     }
-  ]
+  ],
+  "workers_dev": false
 }
