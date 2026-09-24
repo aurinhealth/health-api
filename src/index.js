@@ -874,9 +874,11 @@ function googleInfo(type, p) {
   let start = null;
   let end = null;
 
-  if (p.interval) {
-    start = p.interval.startTime || p.interval.civilStartTime || null;
-    end = p.interval.endTime || p.interval.civilEndTime || null;
+  const nestedSession = p[type.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] || null;
+  const interval = p.interval || nestedSession?.interval || null;
+  if (interval) {
+    start = interval.startTime || interval.civilStartTime || null;
+    end = interval.endTime || interval.civilEndTime || null;
   }
 
   if (p.sampleTime) {
