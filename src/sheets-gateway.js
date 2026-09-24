@@ -100,7 +100,20 @@ async function fetchTodayValues(env) {
   const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   const data = await response.json();
   if (!response.ok) throw new Error(`Google Sheets read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
-  return { range: data.range || range, values: data.values || [] };
+
+  // The values API returns HYPERLINK formulas as text. The dashboard needs the
+  // actual destination URL, so read rich-link metadata for column K as well.
+  const linkUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent(`'${SHEET_NAME.replace(/'/g, "''")}'!K8:K1000`)}`;
+  const linkResponse = await fetch(linkUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const linkData = await linkResponse.json();
+  if (!linkResponse.ok) throw new Error(`Google Sheets link metadata HTTP ${linkResponse.status}: ${JSON.stringify(linkData.error || linkData)}`);
+  const rows = linkData.sheets?.[0]?.data?.[0]?.rowData || [];
+  const videoLinks = rows.map(row => {
+    const cell = row?.values?.[0] || {};
+    return cell.hyperlink || cell.userEnteredFormat?.textFormat?.link?.uri || null;
+  });
+
+  return { range: data.range || range, values: data.values || [], videoLinks };
 }
 
 async function testGoogleSheetsAuth(env) {
@@ -117,7 +130,7 @@ async function testGoogleSheetsAuth(env) {
 async function readTodaySheet(env) {
   try {
     const data = await fetchTodayValues(env);
-    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, range: data.range, values: data.values });
+    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, range: data.range, values: data.values, videoLinks: data.videoLinks || [] });
   } catch (error) { return Response.json({ status: "error", step: "sheets_read", message: error.message }, { status: 500 }); }
 }
 
