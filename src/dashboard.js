@@ -49,7 +49,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
   <div class="section">Tým odborných poradců</div><div class="card coach-council"><div id="coachPriorities"></div><div id="coachCards" class="grid3" style="margin-top:12px"></div><details style="margin-top:12px"><summary>Pravidla a použité důkazy</summary><div id="coachGuardrails" class="small" style="margin-top:8px"></div></details></div>
   <div class="section">Spánek · trend regenerace</div><div class="card"><div id="overviewSleepHistory"></div></div><div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
-  <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="chart" viewBox="0 0 1000 260"></svg></div>
+  <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div>
 </section>
 
 <section id="training" class="view">
@@ -93,7 +93,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 <section id="nutrition" class="view">
   <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div><div id="nutritionTargetSummary" class="notice" style="margin-top:8px"></div></div><div class="select-row"><select id="nutritionWeekSelect"></select><select id="nutritionDaySelect"></select></div></div>
   <div class="daygrid" id="nutritionDays"></div>
-  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Makra · příjem vs. cíl</h3><svg id="nutritionChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Kalorie · cíl vs. příjem</h3><svg id="nutritionChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
   <div class="section">Google Health · historie jídel</div><div class="card"><details><summary>Historie jídel ▾</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div id="nutritionRows"></div></details></div>
 </section>
 
@@ -104,7 +104,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260925-15" defer></script>
+<script src="/app/dashboard-client.js?v=20260925-16" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
