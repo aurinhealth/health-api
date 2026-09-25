@@ -113,7 +113,7 @@ function renderCoachCouncil(){
   const council=state.coaches||{},cards=council.coaches||[];
   const p=$("coachPriorities"),c=$("coachCards"),g=$("coachGuardrails");if(!p||!c||!g)return;
   p.innerHTML='<div class="eyebrow">KOORDINÁTOR · DNEŠNÍ PRIORITY</div>'+(council.priorities?.length?'<ol class="coach-actions">'+council.priorities.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ol>':'<div class="muted">Zatím bez společného doporučení.</div>');
-  c.innerHTML=cards.map(x=>'<div class="coach-card '+esc(x.status||"")+'"><div class="eyebrow">'+esc(x.title)+'</div><h3>'+esc(x.headline)+'</h3><div class="small">Jistota: '+esc(x.confidence||"—")+'</div><ul class="coach-actions">'+(x.actions||[]).map(a=>'<li>'+esc(a)+'</li>').join("")+'</ul><details><summary>Proč?</summary><div class="small">'+(x.evidence||[]).map(e=>esc(e)).join("<br>")+'</div></details></div>').join("");
+  c.innerHTML=cards.map(x=>'<div class="coach-card '+esc(x.status||"")+'"><div class="eyebrow">'+esc(x.title)+'</div><h3>'+esc(x.headline)+'</h3><div class="small">Jistota: '+esc(x.confidence||"—")+'</div><ul class="coach-actions">'+(x.actions||[]).map(a=>'<li>'+esc(a)+'</li>').join("")+'</ul><details><summary>Proč?</summary><div class="small">'+(x.evidence||[]).map(e=>esc(e)).join("<br>")+'</div>'+((x.resources||[]).length?'<div class="small" style="margin-top:8px">'+x.resources.filter(r=>/^https:\/\//.test(String(r.url||""))).map(r=>'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.label||"Otevřít postup")+'</a>').join("<br>")+'</div>':"")+'</details></div>').join("");
   g.innerHTML=(council.guardrails||[]).map(x=>"• "+esc(x)).join("<br>");
 }
 
