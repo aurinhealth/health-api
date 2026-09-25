@@ -2095,36 +2095,36 @@ function plannedWorkoutInfo(
 // DAILY ENERGY
 // ======================================================
 
-function plannedMatch(planned, actuals){
-  const paired = (actuals || []).find(a =>
-    [a?.pairedEventId, a?.plannedEventId].filter(Boolean).some(id => String(id) === String(planned?.id))
-  );
-  if (paired) return paired;
-
-  const pName=(String(planned?.name||"")+" "+String(planned?.type||"")).toLowerCase();
-  const stopWords=new Set(["workout","training","trénink","planned","plan"]);
-  const tokens=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).filter(t=>t.length>=5&&!stopWords.has(t));
-  return (actuals||[]).find(a=>{
-    if(!a?.start||!planned?.start) return false;
-    const plannedDate=String(planned.start).slice(0,10);
-    const actualDate=String(a.start).slice(0,10);
-    if(plannedDate!==actualDate) return false;
-    const dateOnly=/^\d{4}-\d{2}-\d{2}$/.test(String(planned.start));
-    const dt=Math.abs(new Date(a.start).getTime()-new Date(planned.start).getTime())/60000;
-    if(!dateOnly && dt>120) return false;
-    const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
-    const nameMatch=tokens.some(token=>aName.includes(token));
-    const typeMatch=String(planned.type||"").toLowerCase()===String(a.type||"").toLowerCase();
-    const da=Number(a.durationHours||0),dp=Number(planned.durationHours||0);
-    const durMatch=!da||!dp||Math.abs(da-dp)/Math.max(da,dp)<0.25;
-    // Generic type alone is only safe when both the timing and duration agree.
-    // A distinctive workout name (for example “Threshold 3×15”) is the
-    // strongest signal.  Planned and recorded duration often differ because
-    // warm-up/cool-down is included only in the completed activity.
-    return nameMatch || (typeMatch && durMatch && !dateOnly && dt<=90);
-  }) || null;
+function activityFamily(item){
+  const text=(String(item?.type||"")+" "+String(item?.name||"")).toLowerCase();
+  if(/weight|strength|weights|posil/.test(text)) return "strength";
+  if(/ride|cycling|cycle|bike|road|mtb|gravel/.test(text)) return "cycling";
+  if(/run|běh/.test(text)) return "running";
+  if(/walk|chůz/.test(text)) return "walking";
+  if(/swim|plav/.test(text)) return "swimming";
+  return String(item?.type||"").toLowerCase() || "other";
 }
 
+function plannedMatch(planned, actuals){
+  const paired=(actuals||[]).find(a =>
+    [a?.pairedEventId,a?.plannedEventId].filter(Boolean).some(id=>String(id)===String(planned?.id))
+  );
+  if(paired) return paired;
+
+  const pName=(String(planned?.name||"")+" "+String(planned?.type||"")).toLowerCase();
+  const stopWords=new Set(["workout","training","trénink","planned","plan","upper","body"]);
+  const tokens=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).filter(t=>t.length>=5&&!stopWords.has(t));
+  const family=activityFamily(planned);
+  // This function is called after both records have already been restricted to
+  // one Prague calendar day by D1. Event titles/IDs may be absent in Intervals,
+  // so the shared activity family is the correct final pairing signal.
+  return (actuals||[]).find(a=>{
+    const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
+    const nameMatch=tokens.some(token=>aName.includes(token));
+    const sameFamily=family!=="other" && activityFamily(a)===family;
+    return nameMatch || sameFamily;
+  }) || null;
+}
 function plannedMatchesActual(planned, actual){
   return Boolean(plannedMatch(planned, actual));
 }
