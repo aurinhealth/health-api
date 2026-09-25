@@ -86,14 +86,14 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><div class="label">REM</div><div id="rRem" class="value">—</div><div class="small">poslední noc</div></div>
   </div>
   <div class="grid2" style="margin-top:12px"><div class="card"><div class="select-row"><h3 style="margin-right:auto">Spánek · historie</h3><select id="sleepRange"><option value="7">7 dní</option><option value="30">Měsíc</option><option value="180">6 měsíců</option><option value="365">1 rok</option><option value="3650">All time</option></select></div><svg id="sleepChart" class="chart" viewBox="0 0 760 300"></svg><div id="sleepTrendMeta" class="small" style="margin-top:6px"></div></div><div class="card"><h3>Poslední noc · fáze</h3><div id="sleepScore" style="margin-bottom:10px"></div><div id="sleepStages"></div></div></div>
-  <div class="card" style="margin-top:12px"><details open><summary>Historie nocí</summary><div class="scroll" style="margin-top:10px"><table><thead><tr><th>Datum</th><th>Usnutí</th><th>Probuzení</th><th>Délka</th><th>Deep</th><th>REM</th><th>Light</th><th>Awake</th></tr></thead><tbody id="sleepRows"></tbody></table></div></details></div>
+  <div class="card" style="margin-top:12px"><details open><summary>Historie nocí</summary><div id="sleepRows" style="margin-top:10px"></div></details></div>
 </section>
 
 <section id="nutrition" class="view">
   <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div><div id="nutritionTargetSummary" class="notice" style="margin-top:8px"></div></div><div class="select-row"><select id="nutritionWeekSelect"></select><select id="nutritionDaySelect"></select></div></div>
   <div class="daygrid" id="nutritionDays"></div>
   <div class="grid2" style="margin-top:12px"><div class="card"><h3>Makra · příjem vs. cíl</h3><svg id="nutritionChart" class="stack-chart" viewBox="0 0 900 300"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
-  <div class="section">Google Health · historie jídel</div><div class="card"><details><summary>Historie jídel ▾</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div class="scroll"><table><thead><tr><th>Datum</th><th>Jídlo</th><th>Typ</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Tuk</th></tr></thead><tbody id="nutritionRows"></tbody></table></div></details></div>
+  <div class="section">Google Health · historie jídel</div><div class="card"><details><summary>Historie jídel ▾</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div id="nutritionRows"></div></details></div>
 </section>
 
 <section id="health" class="view">
@@ -103,7 +103,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260925-6" defer></script>
+<script src="/app/dashboard-client.js?v=20260925-7" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
