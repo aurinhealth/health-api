@@ -114,6 +114,11 @@ function fromBase64url(s) {
   const bin=atob(s); return Uint8Array.from(bin,c=>c.charCodeAt(0));
 }
 
+function pragueToday() {
+  const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+  return parts.find(x=>x.type==="year").value+"-"+parts.find(x=>x.type==="month").value+"-"+parts.find(x=>x.type==="day").value;
+}
+
 async function ensureCoachInboxTable(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS coach_inbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
