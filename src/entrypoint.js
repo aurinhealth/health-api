@@ -327,6 +327,7 @@ async function handleDashboardApi(request, env, ctx, url) {
       return Response.json({...data,history,storage:"d1"},{status:responseStatus,headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
+      try {
       const body = await request.json().catch(() => ({}));
       const date = body?.date || pragueToday();
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (workout_date TEXT PRIMARY KEY, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
@@ -353,6 +354,10 @@ async function handleDashboardApi(request, env, ctx, url) {
       await env.DB.prepare(`INSERT INTO gym_plans(workout_date,values_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(date,JSON.stringify(storedValues)).run();
       const history=await getStrengthHistory(env.DB,500);
       return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,sheetSaved:false,message:sets.length?"Workout uložen do interní databáze.":"Změny plánu jsou uložené; dokončené série označ Hotovo."},{headers:{"Cache-Control":"no-store"}});
+      } catch(error) {
+        console.error("Gym save failed", error);
+        return Response.json({status:"error",message:"Gym save: "+(error?.message||"unknown error")},{status:500,headers:{"Cache-Control":"no-store"}});
+      }
     }
     return Response.json({status:"error",message:"Method not allowed"},{status:405});
   }
