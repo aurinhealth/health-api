@@ -1502,9 +1502,18 @@ async function syncIntervalsActivities(env) {
 
   let saved = 0;
 
-  for (const a of activities) {
-    const id =
-      String(a.id);
+  for (const sourceActivity of activities) {
+    const id = String(sourceActivity.id);
+    let a = sourceActivity;
+    if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
+      const existing = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind("activity:"+id).first();
+      if (existing?.payload_json) {
+        try {
+          const previous=JSON.parse(existing.payload_json);
+          a={...sourceActivity,name:previous.name||sourceActivity.name,type:previous.type||sourceActivity.type,category:previous.category||sourceActivity.category};
+        } catch {}
+      }
+    }
 
     await savePoint(
       env,
@@ -2348,7 +2357,7 @@ async function energyForDate(env, date) {
       pairedEventId: payload.paired_event_id || payload.pairedEventId || payload.event_id || payload.eventId || null,
       plannedEventId: payload.paired_activity_id || payload.pairedActivityId || payload.activity_id || payload.activityId || null,
       tss: activityNumber(payload, ["icu_training_load", "training_load", "tss"]),
-      name: payload.name || payload.title || payload.description || "",
+      name: payload.name || payload.title || payload.description || (payload._note ? "Aktivita z Intervals" : ""),
       payload
     };
   });
