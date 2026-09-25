@@ -37,17 +37,15 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
   <div class="hero"><div><div class="eyebrow">Performance overview</div><h1>Dobrý den, Petře</h1><p id="overviewDate">—</p></div></div>
   <div class="grid">
     <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div id="oWeightMeta" class="small">aktuálně · cíl 80 kg</div></div>
-    <div class="card"><div class="label">Spánek</div><div id="oSleep" class="value">—</div><div class="small">poslední noc</div></div>
+    <div class="card"><div class="label">Spánek</div><div id="oSleep" class="value">—</div><div id="oSleepMeta" class="small">recovery vs. 30 dní</div></div>
     <div class="card"><div class="label">Fitness</div><div id="oFitness" class="value">—</div><div class="small">CTL · Intervals.icu</div></div>
     <div class="card"><div class="label">Form</div><div id="oForm" class="value">—</div><div class="small">TSB · dnes</div></div>
   </div>
-  <div class="grid3" style="margin-top:12px">
+  <div class="grid2" style="margin-top:12px">
     <div class="card"><div class="label">Dnešní trénink</div><div id="oTraining" class="value">—</div><div id="oTrainingNote" class="small"></div></div>
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
-    <div class="card"><div class="label">Recovery</div><div class="grid2" style="margin-top:4px"><div><div class="small">Spánek</div><div id="oRecoverySleep" class="value" style="font-size:22px">—</div></div><div><div class="small">Trénink</div><div id="oRecoveryTraining" class="value" style="font-size:22px">—</div></div></div><div id="oRecoveryNote" class="small">samostatně · celkové recovery</div></div>
   </div>
   <div class="section">Tým odborných poradců</div><div class="card coach-council"><div id="coachPriorities"></div><div id="coachCards" class="grid3" style="margin-top:12px"></div><details style="margin-top:12px"><summary>Pravidla a použité důkazy</summary><div id="coachGuardrails" class="small" style="margin-top:8px"></div></details></div>
-  <div class="section">Spánek · trend regenerace</div><div class="card"><div id="overviewSleepHistory"></div></div><div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
   <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div>
 </section>
@@ -104,7 +102,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260925-16" defer></script>
+<script src="/app/dashboard-client.js?v=20260925-17" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

@@ -127,29 +127,19 @@ function renderOverview(){
   const planned=(d.training?.planned||[]).filter(x=>!isNutritionItem(x));
   const sleepSessions=primarySleepSessions(state.sleep?.sessions);
   const lastSleep=sleepSessions[0];
-  const sleepPrev=sleepSessions.slice(1,15),sleepAvg=sleepPrev.length?sleepPrev.reduce((sum,x)=>sum+num(x.durationMin),0)/sleepPrev.length:null;
-  $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin)+trendArrow(lastSleep.durationMin,sleepAvg,false," min vs avg"):"—";
-  const recent=sleepSessions.slice(0,7),durations=recent.map(x=>num(x.durationMin)),avg7=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
-  const delta=lastSleep&&avg7?num(lastSleep.durationMin)-avg7:0;
-  $("overviewSleepHistory").innerHTML=recent.length?'<div class="grid3"><div><div class="small">Poslední noc</div><strong>'+hm(lastSleep.durationMin)+'</strong></div><div><div class="small">7denní průměr</div><strong>'+hm(avg7)+'</strong></div><div><div class="small">Odchylka</div><strong>'+(delta>=0?"+":"")+fmt(delta)+' min</strong></div></div><div class="notice" style="margin-top:10px">'+(avg7>=450?"Regenerace je délkou spánku v dobrém pásmu.":avg7>=390?"Spánek je použitelný, ale pro lepší adaptaci míř k 7,5–8 hodinám.":"Nízký průměr spánku může brzdit regeneraci i výkon.")+'</div>':'<div class="muted">Žádná historie spánku.</div>';
-  const focus=planned[0]||completed[0];
-  if(focus){const hrs=num(focus.durationHours),cycling=/ride|cycl|bike|endurance|threshold/i.test((focus.name||"")+" "+(focus.type||""));$("oTraining").textContent=focus.name||focus.type||"Dnešní trénink";$("oTrainingNote").textContent=cycling?(hrs>=2?"Vytrvalostní trénink: drž plánovanou intenzitu, začni doplňovat sacharidy od první hodiny a pij průběžně.":hrs>=1?"Kratší cyklistika: soustřeď se na kvalitu intervalů; obvykle stačí voda a běžné jídlo před tréninkem.":"Krátká jízda: priorita je technika a přesné provedení."):"Dnešní aktivita: hlídej techniku, postupné zatížení a nechoď do selhání u všech sérií.";}else{$("oTraining").textContent="Regenerace / volný den";$("oTrainingNote").textContent="Bez plánovaného tréninku. Lehká chůze a mobilita jsou vhodné, pokud se cítíš dobře.";}
+  const sleepRecovery=x=>x?Math.round(Math.min(100,Math.max(0,(num(x.durationMin)/480)*70+(num(x.stages?.DEEP)/90)*15+(num(x.stages?.REM)/90)*15))):null;
+  const recovery30=sleepSessions.slice(1,31).map(sleepRecovery).filter(Number.isFinite),avgRecovery=recovery30.length?recovery30.reduce((a,b)=>a+b,0)/recovery30.length:null,lastRecovery=sleepRecovery(lastSleep);
+  $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin):"—";
+  $("oSleepMeta").innerHTML=lastRecovery==null?"bez dat pro recovery":'Recovery '+lastRecovery+'/100'+trendArrow(lastRecovery,avgRecovery,false," b vs 30 dní");
+  const focus=planned[0]||completed[0],gymRows=(state.gym?.values||[]).slice(7).filter(r=>String(r?.[0]||"").toUpperCase()==="WORK"),gymName=state.gym?.values?.[2]?.[1],gymSummary=[...new Set(gymRows.map(r=>String(r?.[1]||"").trim()).filter(Boolean))].slice(0,3).map(ex=>{const rows=gymRows.filter(r=>String(r?.[1]||"").trim()===ex);const first=rows[0]||[];return ex+(first[2]?" "+first[2]+" série":"")+(first[4]?" × "+first[4]:"");}).join(" · ");
+  if(focus){const hrs=num(focus.durationHours),label=(focus.name||focus.type||"").toLowerCase(),cycling=/ride|cycl|bike|endurance|threshold/i.test(label);if(cycling){$("oTraining").textContent=focus.name||focus.type||"Dnešní kolo";$("oTrainingNote").textContent=hrs>=2?"Dodrž předepsanou intenzitu; sacharidy začni doplňovat od první hodiny a průběžně pij.":"Soustřeď se na kvalitu intervalů a přesné provedení.";}else if(/weight|strength|gym|posil/.test(label)){ $("oTraining").textContent=gymName||"Silový trénink"; $("oTrainingNote").textContent=gymSummary?"Dnes: "+gymSummary+". Konkrétní váhy a RPE zapisuj v Gymu.":"Dnes je zaznamenané posilování, ale konkrétní cviky nejsou v Gymu naplánované.";}else{$("oTraining").textContent=focus.name||focus.type||"Dnešní trénink";$("oTrainingNote").textContent="Otevři detail v Tréninku pro konkrétní provedení.";}}else{$("oTraining").textContent="Regenerace / volný den";$("oTrainingNote").textContent="Bez plánovaného tréninku. Lehká chůze a mobilita jsou vhodné, pokud se cítíš dobře.";}
   const calTarget=Number(target.calorieTarget||d.calories?.target||0);
   const score=nutritionScore({kcal:f.kcal,protein_g:f.protein_g,carbs_g:f.carbs_g,fat_g:f.fat_g},{calorieTarget:calTarget,macros:{protein:target.macros?.protein_g??target.macros?.proteinGrams,carbs:target.macros?.carbs_g??target.macros?.carbsGrams,fat:target.macros?.fat_g??target.macros?.fatGrams}});
   $("oFood").textContent=fmt(f.kcal)+" / "+fmt(calTarget)+" kcal";
   $("oFoodNote").innerHTML=(score==null?"Zatím bez záznamu":scoreBadge(score,"Výživa"));
   const m=macroTargetsOf({daily:{nutrition:{macros:target.macros}}});
   $("oMacros").innerHTML='<div class="macro-line"><b style="color:#60a5fa">P</b><span>'+fmt(f.protein_g)+' / '+fmt(m.protein)+' g</span></div><div class="macro-line"><b style="color:#f59e0b">C</b><span>'+fmt(f.carbs_g)+' / '+fmt(m.carbs)+' g</span></div><div class="macro-line"><b style="color:#a78bfa">F</b><span>'+fmt(f.fat_g)+' / '+fmt(m.fat)+' g</span></div>';
-  const sleep=primarySleepSessions(state.sleep?.sessions),last=sleep[0],prevSleep=sleep[1];
-  const sleepScore=last?Math.round(Math.min(100,Math.max(0,(num(last.durationMin)/480)*70+(num(last.stages?.DEEP)/90)*15+(num(last.stages?.REM)/90)*15))):null;
-  const todayPlanTss=planned.reduce((a,z)=>a+num(z.tss),0),todayActualTss=completed.reduce((a,z)=>a+num(z.tss),0);
-  const trainingScore=planned.length&&todayPlanTss?Math.round(Math.min(100,todayActualTss/todayPlanTss*100)):(completed.length?100:null);
-  const rs=sleep.slice(1,15).filter(x=>Number.isFinite(Number(x.durationMin)));const recoveryAvg=rs.length?rs.reduce((sum,x)=>sum+num(x.durationMin),0)/rs.length:null;$("oRecoverySleep").innerHTML=(sleepScore==null?"—":sleepScore+"%")+trendArrow(last?.durationMin,recoveryAvg,false," min vs avg");
-  $("oRecoveryTraining").innerHTML=(trainingScore==null?"—":trainingScore+"%");
-  $("oRecoveryNote").textContent="spánek · tréninková shoda";
-  const today=pragueToday(),tomorrow=dateShift(today,1),days=state.week?.days||[];
-  const compact=days.filter(x=>x.date===today||x.date===tomorrow);
-  $("overviewPlan").innerHTML=compact.map(trainingDayMarkup).join("");
+  const days=state.week?.days||[];
   $("overviewWeekPlan").innerHTML=days.map(trainingDayMarkup).join("");
   const fw=state.fitness?.wellness||[],latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
   $("oFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
