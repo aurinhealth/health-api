@@ -115,6 +115,15 @@ function fromBase64url(s) {
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
 
+  if (url.pathname === "/app/api/weight" && request.method === "POST") {
+    const body = await request.text();
+    return app.fetch(new Request(new URL("/app/api/weight", request.url), {
+      method:"POST",
+      headers:{...internalAuth,"Content-Type":"application/json"},
+      body
+    }), env, ctx);
+  }
+
   if (url.pathname === "/app/api/nutrition/log" && request.method === "POST") {
     try {
       const body = await request.json().catch(() => ({}));
