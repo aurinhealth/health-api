@@ -155,8 +155,12 @@ function renderNutrition(){
   const selected=today;
   const mealGroups=selected?.recommendations?.mealRecommendations||[];
   const stores=selected?.recommendations?.storeAlternatives||[];
-  const remKcal=Math.max(0,targetCal-num(selected?.food?.totals?.kcal)),rem=selected?.recommendations?.remaining||{};
-  $("foodPlan").innerHTML=selected?'<div class="reason"><strong>Zbývá '+fmt(remKcal)+' kcal</strong> · P '+fmt(rem.protein_g)+' g · C '+fmt(rem.carbs_g)+' g · F '+fmt(rem.fat_g)+' g<br>'+esc(selected.recommendations?.coaching||"Doporučení se přepočítává podle toho, co už jsi snědl.")+'</div>'+
+  const selectedMacros=macroTargetsOf(selected||{});
+  const selectedFood=selected?.food?.totals||{};
+  const remKcal=Math.max(0,targetCal-num(selectedFood.kcal));
+  const rem={protein_g:Math.max(0,num(selectedMacros.protein)-num(selectedFood.protein_g)),carbs_g:Math.max(0,num(selectedMacros.carbs)-num(selectedFood.carbs_g)),fat_g:Math.max(0,num(selectedMacros.fat)-num(selectedFood.fat_g))};
+  const coaching=trainingCal>100?"Dnešní cíl už zahrnuje započtený trénink.":"Dnes nemáš započtenou významnou cyklistickou zátěž.";
+  $("foodPlan").innerHTML=selected?'<div class="reason"><strong>Zbývá '+fmt(remKcal)+' kcal</strong> · P '+fmt(rem.protein_g)+' g · C '+fmt(rem.carbs_g)+' g · F '+fmt(rem.fat_g)+' g<br>'+esc(coaching)+'</div>'+
     (mealGroups.length?mealGroups.map(group=>'<div style="margin-top:12px"><h3 style="margin-bottom:6px">'+esc(group.label)+'</h3>'+
       (group.recommendations?.length?group.recommendations.slice(0,3).map(r=>'<div class="foodrow"><div><strong>'+esc(r.name||r.title||"Jídlo")+'</strong><div class="small">'+esc(r.recommendation_reason||"")+'</div><div class="small">1 porce · '+fmt(r.kcal||r.calories)+' kcal · P '+fmt(r.protein_g)+' · C '+fmt(r.carbs_g)+' · F '+fmt(r.fat_g)+'</div></div><div class="right">'+scoreBadge(Math.min(100,Math.max(0,Number(r.recommendation_score||0))))+'</div></div>').join(""):'<div class="muted">Pro tuto část dne nemám vhodný recept.</div>')+'</div>').join(""):'<div class="muted">Dnešní zbývající jídla jsou pokrytá.</div>')+
     (stores.length?'<details style="margin-top:12px"><summary>Alternativa z běžného obchodu</summary>'+stores.slice(0,4).map(r=>'<div class="foodrow"><div><strong>'+esc(r.name)+'</strong><div class="small">'+esc(r.reason||"")+'</div></div><div class="right">'+fmt(r.kcal)+' kcal</div></div>').join("")+'</details>':''):'—';
