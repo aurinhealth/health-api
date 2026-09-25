@@ -253,8 +253,12 @@ function renderRecovery(){
   $("rAvgLabel").textContent=range>=3000?"all time":range===365?"poslední rok":range===180?"posledních 6 měsíců":range===30?"poslední měsíc":"posledních 7 dní";
   $("rDeep").textContent=last?.stages?.DEEP?hm(last.stages.DEEP):"—"; $("rRem").textContent=last?.stages?.REM?hm(last.stages.REM):"—";
   const sleepScore=last?Math.round(Math.min(100,Math.max(0,(num(last.durationMin)/480)*70+(num(last.stages?.DEEP)/90)*15+(num(last.stages?.REM)/90)*15))):null;
+  const baselineRows=ss.filter(x=>new Date(x.endTime||x.startTime||0).getTime()>=Date.now()-30*86400000),baseline=baselineRows.length?baselineRows.reduce((a,x)=>a+Math.min(100,Math.max(0,(num(x.durationMin)/480)*70+(num(x.stages?.DEEP)/90)*15+(num(x.stages?.REM)/90)*15)),0)/baselineRows.length:null,delta=sleepScore!=null&&baseline!=null?Math.round(sleepScore-baseline):null,restorative=num(last?.stages?.DEEP)+num(last?.stages?.REM),sleepWord=sleepScore==null?"Čekám na spánek":sleepScore>=85?"Silná regenerace":sleepScore>=65?"Použitelná regenerace":"Regenerace pod tlakem";
+  $("rRestorative").textContent=last?hm(restorative):"—";
+  $("recoveryOrb").style.setProperty("--orb-value",sleepScore??0);$("recoveryOrb").style.setProperty("--orb-color",sleepScore>=85?"#35c48b":sleepScore>=65?"#e9b44c":"#ef6b73");$("recoveryScore").textContent=sleepScore??"—";$("recoveryTitle").textContent=sleepWord;$("recoveryVsBaseline").textContent=delta==null?"čekám na 30denní baseline":"vs. 30 dní "+(delta>=0?"+":"")+delta+" bodů";$("recoverySignal").textContent=last?"Spánek · poslední noc":"Bez aktuálního záznamu";$("recoveryInsight").textContent=last?(delta!=null&&delta>=0?"Dnešní spánek je nad tvou osobní normou. Drž plán, ale respektuj lokální únavu nohou.":"Dnešní spánek je pod osobní normou. Kvalitu můžeš držet, ale objem uprav podle pocitu."):"Po načtení spánku vyhodnotím připravenost proti vlastnímu trendu.";$("recoveryGuide").textContent=sleepScore==null?"Doplň data":sleepScore>=85?"Kvalita může zůstat":sleepScore>=65?"Drž plán s rezervou":"Sniž objem";$("recoveryGuideMeta").textContent=sleepScore==null?"bez poslední noci":sleepScore>=85?"dnes není potřeba kompenzovat únavu":sleepScore>=65?"nechoď zbytečně do selhání":"priorita je spánek a lehká aktivita";
   $("sleepScore").innerHTML=sleepScore!=null?scoreBadge(sleepScore,"Kvalita"):'<span class="muted">Bez dat</span>';
   chartSvg("sleepChart",filtered.slice().reverse().map(x=>num(x.durationMin)/60),[],filtered.slice().reverse().map(x=>dateLabel(x.date)),{W:700,H:250,axis:true,unit:" h",decimals:1,min:range===7?4:undefined});
+  $("sleepTrendMeta").textContent=filtered.length?"Průměr "+hm(avg)+" · "+filtered.length+" nocí · cíl není dokonalé číslo, ale stabilní osobní trend.":"Bez dostatečné historie.";
   const selected=last;
   if(selected){
     const total=Object.values(selected.stages||{}).reduce((a,b)=>a+num(b),0)||1;
@@ -268,9 +272,11 @@ function layeredHistory(records,dateOf,rowOf){
 }
 function renderHealth(){
   const w=state.weight||{},weightDisplay=v=>Number.isFinite(Number(v))&&Number(v)>0?fmt(v,1):"—";
-  $("hWeight").textContent=weightDisplay(w.latest?.value_numeric);$("hAvg7").textContent=weightDisplay(w.average7d);$("hAvg30").textContent=weightDisplay(w.average30d);$("hActivities").textContent=state.activities?.count||0;
+  $("hWeight").textContent=weightDisplay(w.latest?.value_numeric);$("hAvg30").textContent=weightDisplay(w.average30d);const latest=num(w.latest?.value_numeric),avg7=num(w.average7d),avg30=num(w.average30d),diff=latest&&avg30?fmt(latest-avg30,1):null;$("weightSignal").textContent=diff==null?"aktuální baseline":(diff>=0?"+":"")+diff+" kg vs. 30 dní";
   const wr=(w.records||[]).filter(x=>num(x.value_numeric)>0&&/^\d{4}-\d{2}-\d{2}/.test(String(x.sample_time||""))).slice(-365);
-  chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))),{W:1000,H:360,axis:true,unit:" kg",decimals:1});
+  chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))),{W:760,H:300,axis:true,unit:" kg",decimals:1});
+  $("weightTrendMeta").textContent=wr.length?"Aktuálně "+weightDisplay(w.latest?.value_numeric)+" kg · 7 dní "+weightDisplay(avg7)+" kg · 30 dní "+weightDisplay(avg30)+" kg.":"Bez záznamů hmotnosti.";
+  const sessions=primarySleepSessions(state.sleep?.sessions),last=sessions[0],activityCount=state.activities?.count||0;$("healthContext").innerHTML='<div class="metric-line"><span>Hmotnost vs. 30 dní</span><strong>'+esc(diff==null?"—":(diff>=0?"+":"")+diff+" kg")+'</strong></div><div class="metric-line"><span>Poslední noc</span><strong>'+esc(last?hm(last.durationMin):"—")+'</strong></div><div class="metric-line"><span>Záznamy aktivit</span><strong>'+esc(activityCount)+'</strong></div><div class="notice" style="margin-top:12px">Trend hmotnosti a spánku je kontext pro rozhodnutí o zátěži; jednotlivý den není verdikt.</div>';
   $("weightHistory").innerHTML=layeredHistory(wr,x=>x.sample_time,x=>'<div class="history-workout"><strong>'+esc(longDate(String(x.sample_time).slice(0,10)))+'</strong><div class="small">'+fmt(x.value_numeric,1)+' kg · '+esc(x.source_family||"zdroj")+'</div></div>');
 }
 let gymSaveQueue=Promise.resolve();
