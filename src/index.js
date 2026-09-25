@@ -2233,21 +2233,42 @@ function dailyMacroTargets(weightKg, calorieTarget, context = {}) {
   const kg = Number(weightKg) || 85.8;
   const kcal = Number(calorieTarget) || 0;
   const protein = Math.round(kg * CONFIG.proteinGramsPerKg);
-  const fat = Math.round(kg * CONFIG.fatGramsPerKg);
-
-  let carbPerKg = CONFIG.defaultDailyCarbGramsPerKg;
-  if (context.endurance) carbPerKg = CONFIG.enduranceDailyCarbGramsPerKg;
-  else if (context.training) carbPerKg = CONFIG.trainingDailyCarbGramsPerKg;
-
-  let carbs = Math.round(kg * carbPerKg);
-  const macroKcal = protein * 4 + fat * 9;
-  const calorieDerivedCarbs = Math.round(Math.max(0, (kcal - macroKcal) / 4));
-
-  // Use the calorie-derived value when it is higher, so the macro target
-  // actually remains compatible with the daily calorie target.
-  carbs = Math.max(carbs, calorieDerivedCarbs);
+  // The calories and macros must describe the same plan.  Protein stays
+  // stable for recovery; fat moves slightly with the training sequence and
+  // carbohydrates receive the remainder of the available energy.
+  let fatPerKg = 0.90; // ordinary rest day: more satiating, lower carbohydrate
+  if (context.endurance) fatPerKg = 0.70;
+  else if (context.preRide) fatPerKg = 0.70; // make room for glycogen before the ride
+  else if (context.recoveryRide) fatPerKg = 0.75;
+  else if (context.strength) fatPerKg = 0.85;
+  const fat = Math.round(kg * fatPerKg);
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
 
   return { protein_g: protein, carbs_g: carbs, fat_g: fat };
+}
+
+async function nearbyRideContext(env, date) {
+  const start = dateDaysFromDate(date, 1);
+  const end = dateDaysFromDate(date, 3);
+  const rows = await env.DB.prepare(`
+    SELECT payload_json, start_time
+    FROM health_datapoints
+    WHERE source_family = 'intervals'
+      AND data_type = 'planned-workout'
+      AND start_time >= ? AND start_time < ?
+    ORDER BY start_time
+  `).bind(start, end).all();
+  const nextRide = rows.results.map(row => {
+    try { return plannedWorkoutInfo(JSON.parse(row.payload_json || '{}')); } catch { return null; }
+  }).find(workout => workout?.cycling && Number(workout.durationHours || 0) >= 1);
+  return {
+    // Only the day immediately before a ride gets the glycogen top-up.
+    // A ride two days away should not turn an ordinary rest day into a
+    // high-carbohydrate day yet.
+    preRide: Boolean(nextRide && String(nextRide.start || '').slice(0, 10) === start),
+    nextRideName: nextRide?.name || nextRide?.type || null,
+    nextRideDate: nextRide?.start ? String(nextRide.start).slice(0, 10) : null
+  };
 }
 
 function nutritionContext(energy) {
@@ -2421,7 +2442,10 @@ async function energyForDate(env, date) {
   const plannedTrainingCalories = Math.max(0, estimatedTDEE - CONFIG.baselineRestTDEE);
   const trainingCoverage = 0.70;
   const target = Math.max(CONFIG.minCalorieTarget, Math.min(4000, Math.round(restIntakeTarget + plannedTrainingCalories * trainingCoverage)));
-  const context = nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned });
+  const context = {
+    ...nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned }),
+    ...(await nearbyRideContext(env, date))
+  };
   const macroTargets = dailyMacroTargets(weight ? Number(weight.value_numeric) : null, target, context);
 
   return {
@@ -2562,6 +2586,8 @@ async function analysisDaily(
       targetWeightKg: CONFIG.targetWeightKg,
       reason: energy.nutritionContext?.endurance
         ? "Dnešní cíl zohledňuje vytrvalostní zátěž a cílové tempo úbytku hmotnosti směrem k 80 kg."
+        : energy.nutritionContext?.preRide
+          ? "Zítřejší kolo je zohledněné už dnes: mírně více sacharidů pro doplnění glykogenu, méně tuku, protein zůstává stabilní."
         : energy.nutritionContext?.training
           ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a cílové tempo úbytku hmotnosti směrem k 80 kg."
           : "Dnešní cíl vychází z klidového energetického základu a cílového tempa úbytku hmotnosti směrem k cílové hmotnosti 80 kg.",

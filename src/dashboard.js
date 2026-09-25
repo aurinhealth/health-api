@@ -93,7 +93,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 <section id="nutrition" class="view">
   <div class="weekbar"><div><div class="eyebrow">Nutrition intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div><div id="nutritionTargetSummary" class="notice" style="margin-top:8px"></div></div><div class="select-row"><select id="nutritionWeekSelect"></select><select id="nutritionDaySelect"></select></div></div>
   <div class="daygrid" id="nutritionDays"></div>
-  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Makra · příjem vs. cíl</h3><svg id="nutritionChart" class="stack-chart" style="height:420px" viewBox="0 0 1000 440"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
+  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Makra · příjem vs. cíl</h3><svg id="nutritionChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div><div class="card"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div></div>
   <div class="section">Google Health · historie jídel</div><div class="card"><details><summary>Historie jídel ▾</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div id="nutritionRows"></div></details></div>
 </section>
 
@@ -104,7 +104,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 </section>
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260925-11" defer></script>
+<script src="/app/dashboard-client.js?v=20260925-12" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
