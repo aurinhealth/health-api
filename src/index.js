@@ -117,6 +117,10 @@ export default {
         return await foodRecommend(env, url);
       }
 
+      if (url.pathname === "/app/api/weight" && request.method === "POST") {
+        return await appWeight(env, request);
+      }
+
       if (url.pathname === "/health/weight") {
         return await healthWeight(env);
       }
@@ -161,6 +165,15 @@ export default {
   }
 };
 
+
+async function appWeight(env, request) {
+  const body = await request.json();
+  const value = Number(body?.kg);
+  if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:"Neplatná hmotnost."},{status:400});
+  const date = body?.date || pragueDate(), at = date+"T12:00:00+02:00";
+  await savePoint(env,"manual","weight",{value_kg:value,source:"manual"},value,"kg",at,at,at,"manual-weight:"+date);
+  return Response.json({status:"ok",date,kg:value});
+}
 
 // ======================================================
 // CONFIGURATION
