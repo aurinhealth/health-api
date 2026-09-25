@@ -34,30 +34,11 @@ function nutritionScore(food,target){
   return scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100):null;
 }
 function macroChart(id,days){
-  const svg=$(id),d=days.find(x=>x.date===pragueToday())||days[days.length-1];
-  if(!d){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return;}
-  const food=d.food?.totals||{}, target=Math.max(1,num(d.daily?.nutrition?.calorieTarget||d.daily?.calories?.target));
-  const segments=[
-    {label:"Protein",kcal:num(food.protein_g)*4,color:"#60a5fa"},
-    {label:"Sacharidy",kcal:num(food.carbs_g)*4,color:"#f59e0b"},
-    {label:"Tuk",kcal:num(food.fat_g)*9,color:"#a78bfa"}
-  ];
-  const eaten=Math.max(0,num(food.kcal)),filled=Math.min(target,eaten),macroTotal=segments.reduce((sum,x)=>sum+x.kcal,0);
-  const other=Math.max(0,filled-Math.min(filled,macroTotal));
-  const W=900,H=300,top=36,bottom=38,bh=H-top-bottom,bw=150,x=375;
-  let out='<text x="24" y="24" fill="#91a0b5" font-size="11">DNEŠNÍ KALORIE · PŘÍJEM V RÁMCI CÍLE</text>';
-  out+='<rect x="'+x+'" y="'+top+'" width="'+bw+'" height="'+bh+'" rx="12" fill="#14253a" stroke="#2b405b"/>';
-  let y=top+bh;
-  const draw=(value,color)=>{const h=Math.max(0,value/target*bh);if(!h)return;y-=h;out+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+color+'"/>';};
-  draw(other,"#64748b");
-  let remaining=Math.min(filled,macroTotal);
-  segments.slice().reverse().forEach(seg=>{const value=Math.min(remaining,seg.kcal);draw(value,seg.color);remaining-=value;});
-  const goalY=top+bh; out+='<text x="'+(x+bw/2)+'" y="'+(goalY+25)+'" text-anchor="middle" fill="#d8e0ea" font-size="13">'+fmt(eaten)+' / '+fmt(target)+' kcal</text>';
-  out+='<text x="'+(x-12)+'" y="'+(top+5)+'" text-anchor="end" fill="#91a0b5" font-size="11">'+fmt(target)+' kcal cíl</text><text x="'+(x-12)+'" y="'+(top+bh)+'" text-anchor="end" fill="#91a0b5" font-size="11">0</text>';
-  let ly=62;segments.forEach(seg=>{out+='<rect x="600" y="'+(ly-10)+'" width="10" height="10" rx="2" fill="'+seg.color+'"/><text x="618" y="'+ly+'" fill="#d8e0ea" font-size="12">'+seg.label+' · '+fmt(seg.kcal)+' kcal</text>';ly+=30;});
-  if(other>1)out+='<rect x="600" y="'+(ly-10)+'" width="10" height="10" rx="2" fill="#64748b"/><text x="618" y="'+ly+'" fill="#d8e0ea" font-size="12">Ostatní energie · '+fmt(other)+' kcal</text>';
-  out+='<text x="'+(x+bw/2)+'" y="286" text-anchor="middle" fill="#91a0b5" font-size="11">'+esc(longDate(d.date))+'</text>';
-  svg.innerHTML=out;
+  const svg=$(id),shown=(days||[]).slice(-7);if(!shown.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return}
+  const W=900,H=320,top=34,bottom=54,left=44,plot=H-top-bottom,slot=(W-left-20)/shown.length,bw=Math.min(70,slot*.58);
+  let out='<text x="20" y="20" fill="#91a0b5" font-size="11">DENNÍ KALORIE · CELÝ TÝDEN</text>';
+  shown.forEach((d,i)=>{const food=d.food?.totals||{},target=Math.max(1,num(d.daily?.nutrition?.calorieTarget||d.daily?.calories?.target)),eaten=Math.max(0,num(food.kcal));const vals=[[num(food.protein_g)*4,"#60a5fa"],[num(food.carbs_g)*4,"#f59e0b"],[num(food.fat_g)*9,"#a78bfa"]];const x=left+i*slot+(slot-bw)/2;out+='<rect x="'+x+'" y="'+top+'" width="'+bw+'" height="'+plot+'" rx="8" fill="#14253a" stroke="#2b405b"/>';let y=top+plot,remaining=Math.min(target,eaten);vals.forEach(v=>{const amount=Math.min(remaining,v[0]),h=amount/target*plot;y-=h;remaining-=amount;if(h>0)out+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+v[1]+'"/>';});if(remaining>0){const h=remaining/target*plot;y-=h;out+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="#64748b"/>';}out+='<text x="'+(x+bw/2)+'" y="'+(H-30)+'" text-anchor="middle" fill="#d8e0ea" font-size="10">'+esc(dateLabel(d.date))+'</text><text x="'+(x+bw/2)+'" y="'+(H-14)+'" text-anchor="middle" fill="#91a0b5" font-size="9">'+fmt(eaten)+'/'+fmt(target)+'</text>';});
+  out+='<rect x="590" y="12" width="9" height="9" fill="#60a5fa"/><text x="604" y="20" fill="#91a0b5" font-size="10">Protein</text><rect x="665" y="12" width="9" height="9" fill="#f59e0b"/><text x="679" y="20" fill="#91a0b5" font-size="10">Sacharidy</text><rect x="760" y="12" width="9" height="9" fill="#a78bfa"/><text x="774" y="20" fill="#91a0b5" font-size="10">Tuk</text>';svg.innerHTML=out;
 }
 function isoWeek(date){
   const d=new Date(date+"T12:00:00Z"), th=new Date(d);
@@ -138,10 +119,10 @@ function renderOverview(){
   const sleepPrev=sleepSessions.slice(1,15),sleepAvg=sleepPrev.length?sleepPrev.reduce((sum,x)=>sum+num(x.durationMin),0)/sleepPrev.length:null;
   $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin)+trendArrow(lastSleep.durationMin,sleepAvg,false," min vs avg"):"—";
   const recent=sleepSessions.slice(0,7),durations=recent.map(x=>num(x.durationMin)),avg7=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
-  const spread=durations.length?Math.max(...durations)-Math.min(...durations):0;
-  $("overviewSleepHistory").innerHTML=recent.length?'<div class="grid3" style="margin-bottom:10px"><div><div class="small">Průměr</div><strong>'+hm(avg7)+'</strong></div><div><div class="small">Pravidelnost</div><strong>rozptyl '+hm(spread)+'</strong></div><div><div class="small">Cíl</div><strong>'+fmt(Math.round(avg7/480*100))+' % z 8 h</strong></div></div>'+recent.map(x=>{const pct=Math.min(100,num(x.durationMin)/480*100);return '<div class="metric-line"><span>'+esc(longDate(x.date||String(x.endTime||"").slice(0,10)))+'</span><span style="flex:1;max-width:180px;height:7px;background:#18263a;border-radius:4px;margin:0 10px"><i style="display:block;width:'+pct+'%;height:100%;border-radius:4px;background:'+(pct>=95?"#35c48b":pct>=80?"#f59e0b":"#ef6b73")+'"></i></span><strong>'+hm(x.durationMin)+'</strong></div>';}).join(""):'<div class="muted">Žádná historie spánku.</div>';
-  $("oTraining").textContent=completed.length+" / "+planned.length+" dokončeno";
-  $("oTrainingNote").textContent=planned.length?planned.map(x=>x.name||x.type).join(" • "):"Volno";
+  const delta=lastSleep&&avg7?num(lastSleep.durationMin)-avg7:0;
+  $("overviewSleepHistory").innerHTML=recent.length?'<div class="grid3"><div><div class="small">Poslední noc</div><strong>'+hm(lastSleep.durationMin)+'</strong></div><div><div class="small">7denní průměr</div><strong>'+hm(avg7)+'</strong></div><div><div class="small">Odchylka</div><strong>'+(delta>=0?"+":"")+fmt(delta)+' min</strong></div></div><div class="notice" style="margin-top:10px">'+(avg7>=450?"Regenerace je délkou spánku v dobrém pásmu.":avg7>=390?"Spánek je použitelný, ale pro lepší adaptaci míř k 7,5–8 hodinám.":"Nízký průměr spánku může brzdit regeneraci i výkon.")+'</div>':'<div class="muted">Žádná historie spánku.</div>';
+  const focus=planned[0]||completed[0];
+  if(focus){const hrs=num(focus.durationHours),cycling=/ride|cycl|bike|endurance|threshold/i.test((focus.name||"")+" "+(focus.type||""));$("oTraining").textContent=focus.name||focus.type||"Dnešní trénink";$("oTrainingNote").textContent=cycling?(hrs>=2?"Vytrvalostní trénink: drž plánovanou intenzitu, začni doplňovat sacharidy od první hodiny a pij průběžně.":hrs>=1?"Kratší cyklistika: soustřeď se na kvalitu intervalů; obvykle stačí voda a běžné jídlo před tréninkem.":"Krátká jízda: priorita je technika a přesné provedení."):"Dnešní aktivita: hlídej techniku, postupné zatížení a nechoď do selhání u všech sérií.";}else{$("oTraining").textContent="Regenerace / volný den";$("oTrainingNote").textContent="Bez plánovaného tréninku. Lehká chůze a mobilita jsou vhodné, pokud se cítíš dobře.";}
   const calTarget=Number(target.calorieTarget||d.calories?.target||0);
   const score=nutritionScore({kcal:f.kcal,protein_g:f.protein_g,carbs_g:f.carbs_g,fat_g:f.fat_g},{calorieTarget:calTarget,macros:{protein:target.macros?.protein_g??target.macros?.proteinGrams,carbs:target.macros?.carbs_g??target.macros?.carbsGrams,fat:target.macros?.fat_g??target.macros?.fatGrams}});
   $("oFood").textContent=fmt(f.kcal)+" / "+fmt(calTarget)+" kcal";
@@ -164,8 +145,10 @@ function renderOverview(){
   $("oForm").innerHTML=(Number.isFinite(Number(latest.tsb))?fmt(latest.tsb):"—")+trendArrow(latest.tsb,prev.tsb,false,"");
   const wr=(d.weight?.records||[]).filter(x=>x.value_numeric!=null).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time)));
   const currentW=wr.length?Number(wr[wr.length-1].value_numeric):Number(d.weight?.current);
-  const weekW=wr.filter(x=>new Date(x.sample_time).getTime()<=Date.now()-7*86400000).slice(-1)[0];
-  const targetW=Number(d.nutrition?.targetWeightKg||80),remainingW=Number.isFinite(currentW)?currentW-targetW:null; $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+" kg"+trendArrow(currentW,weekW?.value_numeric,true," kg vs 7d"):"—"; $("oWeightMeta").textContent=Number.isFinite(remainingW)?"Aktuálně · cíl "+fmt(targetW,1)+" kg · zbývá "+fmt(Math.max(0,remainingW),1)+" kg":"aktuálně · cíl "+fmt(targetW,1)+" kg";
+  const startW=wr[0];
+  const weightDelta=Number.isFinite(currentW)&&startW?currentW-num(startW.value_numeric):null;
+  const weightTrend=weightDelta==null||Math.abs(weightDelta)<.05?"":'<div class="trend '+(weightDelta<0?"good":"bad")+'">'+(weightDelta>0?"↑ +":"↓ ")+fmt(weightDelta,1)+' kg od počáteční váhy</div>';
+  const targetW=Number(d.nutrition?.targetWeightKg||80),remainingW=Number.isFinite(currentW)?currentW-targetW:null; $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+" kg"+weightTrend:"—"; $("oWeightMeta").textContent=Number.isFinite(remainingW)?"Aktuálně · cíl "+fmt(targetW,1)+" kg · zbývá "+fmt(Math.max(0,remainingW),1)+" kg":"aktuálně · cíl "+fmt(targetW,1)+" kg";
   macroChart("calChart",days);
 }
 function renderTraining(){
@@ -262,7 +245,20 @@ function renderRecovery(){
    } else { $("sleepStages").innerHTML='<div class="muted">Bez dat.</div>'; }
   $("sleepRows").innerHTML=ss.map(x=>'<tr><td>'+esc(x.date||"—")+'</td><td>'+esc(x.startTime?new Date(x.startTime).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):"—")+'</td><td>'+esc(x.endTime?new Date(x.endTime).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):"—")+'</td><td>'+hm(x.durationMin)+'</td><td>'+hm(x.stages?.DEEP)+'</td><td>'+hm(x.stages?.REM)+'</td><td>'+hm(x.stages?.LIGHT)+'</td><td>'+hm(x.stages?.AWAKE)+'</td></tr>').join("")||'<tr><td colspan="8">Bez dat.</td></tr>';
 }
-function renderHealth(){const w=state.weight||{};const weightDisplay=v=>Number.isFinite(Number(v))&&Number(v)>0?fmt(v,1):"—";$("hWeight").textContent=weightDisplay(w.latest?.value_numeric);$("hAvg7").textContent=weightDisplay(w.average7d);$("hAvg30").textContent=weightDisplay(w.average30d);$("hActivities").textContent=state.activities?.count||0;const wr=(w.records||[]).slice(-365);chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))));const acts=(state.activities?.activities||[]).slice(0,30);$("healthActivityTable").innerHTML=acts.length?'<div class="scroll"><table><thead><tr><th>Datum</th><th>Aktivita</th><th>Typ</th><th>Zdroj</th></tr></thead><tbody>'+acts.map(x=>{let p={};try{p=JSON.parse(x.payload_json||"{}")}catch{}const e=p.exercise||{};return '<tr><td>'+esc(String(x.start_time||"").slice(0,16).replace("T"," "))+'</td><td>'+esc(p.name||p.title||e.displayName||e.exerciseType||"Activity")+'</td><td>'+esc(p.type||p.category||e.exerciseType||"")+'</td><td>'+esc(x.source_family==="intervals"?"Intervals.icu":"Google Health")+'</td></tr>'}).join("")+'</tbody></table></div>':'<div class="muted">Žádné aktivity.</div>'}
+function layeredHistory(records,dateOf,rowOf){
+  const years={};(records||[]).forEach(r=>{const date=String(dateOf(r)||"").slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return;const y=date.slice(0,4),m=date.slice(0,7);(((years[y]||(years[y]={}))[m]||(years[y][m]=[]))).push(r);});
+  return Object.keys(years).sort().reverse().map(y=>'<details '+(y==="2026"?"open":"")+'><summary>'+y+'</summary>'+Object.keys(years[y]).sort().reverse().map(m=>'<details><summary>'+new Intl.DateTimeFormat("cs-CZ",{month:"long",year:"numeric"}).format(new Date(m+"-01T12:00:00Z"))+'</summary><div class="history-sets">'+years[y][m].sort((a,b)=>String(dateOf(b)).localeCompare(String(dateOf(a)))).map(rowOf).join("")+'</div></details>').join("")+'</details>').join("")||'<div class="muted">Bez historie.</div>';
+}
+function renderHealth(){
+  const w=state.weight||{},weightDisplay=v=>Number.isFinite(Number(v))&&Number(v)>0?fmt(v,1):"—";
+  $("hWeight").textContent=weightDisplay(w.latest?.value_numeric);$("hAvg7").textContent=weightDisplay(w.average7d);$("hAvg30").textContent=weightDisplay(w.average30d);$("hActivities").textContent=state.activities?.count||0;
+  const wr=(w.records||[]).filter(x=>num(x.value_numeric)>0).slice(-365);
+  chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))),{W:1000,H:360,axis:true,unit:" kg",decimals:1});
+  $("weightHistory").innerHTML=layeredHistory(wr,x=>x.sample_time,x=>'<div class="history-workout"><strong>'+esc(longDate(String(x.sample_time).slice(0,10)))+'</strong><div class="small">'+fmt(x.value_numeric,1)+' kg · '+esc(x.source_family||"zdroj")+'</div></div>');
+  const acts=(state.activities?.activities||[]).slice(0,365);
+  $("healthActivityTable").innerHTML=layeredHistory(acts,x=>x.start_time,x=>{let p={};try{p=JSON.parse(x.payload_json||"{}")}catch{}const e=p.exercise||{};return '<div class="history-workout"><strong>'+esc(longDate(String(x.start_time).slice(0,10)))+' · '+esc(p.name||p.title||e.displayName||e.exerciseType||"Aktivita")+'</strong><div class="small">'+esc(p.type||p.category||e.exerciseType||"")+" · "+esc(x.source_family==="intervals"?"Intervals.icu":"Google Health")+'</div></div>'});
+  $("healthDataSummary").innerHTML='<div class="notice">Historie je seskupená jako rok → měsíc → všechny dny. Hmotnost, aktivity, spánek a výživa používají stejný princip.</div>';
+}
 let gymSaveQueue=Promise.resolve();
 function gymRowValues(tr){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]),idx=Number(tr.dataset.row)+7;if(!values[idx])values[idx]=[];tr.querySelectorAll("input[data-col]").forEach(inp=>{const c=Number(inp.dataset.col);values[idx][c]=inp.type==="checkbox"?(inp.checked?"TRUE":"FALSE"):inp.value;});return {values,idx};}
 function persistGymRow(tr){const {values}=gymRowValues(tr),used=values.slice(7);while(used.length&&used[used.length-1].every(v=>String(v??"").trim()===""))used.pop();gymSaveQueue=gymSaveQueue.then(async()=>{const result=await jsonFetch("/app/api/gym",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({values:used})});state.gym={...state.gym,values:used,history:result.history||state.gym?.history||[]};$("gymNotice").textContent=result.status==="error"?"Uložení do databáze selhalo: "+(result.message||"neznámá chyba"):"✓ Zapsáno do interní databáze · "+new Date().toLocaleTimeString("cs-CZ");});return gymSaveQueue.catch(e=>{$("gymNotice").textContent="Uložení selhalo: "+e.message;throw e;});}
