@@ -59,6 +59,8 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><div class="label">Form</div><div id="tForm" class="value">—</div><div class="small">TSB = Fitness − Fatigue</div></div>
     <div class="card"><div class="label">Ramp rate</div><div id="tRamp" class="value">—</div><div class="small">změna Fitness</div></div>
   </div>
+  <div class="section">Týdenní plán · skutečnost</div>
+  <div class="card"><div id="trainingWeekOverview" class="plan-grid"></div></div>
   <div class="grid2" style="margin-top:12px">
     <div class="card"><h3>Fitness · Fatigue · Form</h3><svg id="pmcChart" class="chart" viewBox="0 0 1000 300"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>
     <div class="card"><h3>Plán vs. skutečnost · TSS</h3><svg id="tssChart" class="chart" viewBox="0 0 1000 300"></svg><div id="tssInsight" class="notice" style="margin-top:10px"></div></div>
