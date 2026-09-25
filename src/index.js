@@ -2118,7 +2118,10 @@ function plannedMatch(planned, actuals){
     const da=Number(a.durationHours||0),dp=Number(planned.durationHours||0);
     const durMatch=!da||!dp||Math.abs(da-dp)/Math.max(da,dp)<0.25;
     // Generic type alone is only safe when both the timing and duration agree.
-    return nameMatch ? durMatch : (typeMatch && durMatch && !dateOnly && dt<=90);
+    // A distinctive workout name (for example “Threshold 3×15”) is the
+    // strongest signal.  Planned and recorded duration often differ because
+    // warm-up/cool-down is included only in the completed activity.
+    return nameMatch || (typeMatch && durMatch && !dateOnly && dt<=90);
   }) || null;
 }
 
