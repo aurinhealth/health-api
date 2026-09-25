@@ -33,7 +33,32 @@ function nutritionScore(food,target){
   const scores=vals.filter(([,t])=>Number(t)>0).map(([k,t])=>Math.min(1,Number(food?.[k]||0)/Number(t)));
   return scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100):null;
 }
-function macroChart(id,days){const svg=$(id),d=days.find(x=>x.date===pragueToday())||days[days.length-1];if(!d){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return;}const food=d.food?.totals||{},m=macroTargetsOf(d),items=[["Protein",num(food.protein_g),num(m.protein),"#60a5fa"],["Sacharidy",num(food.carbs_g),num(m.carbs),"#f59e0b"],["Tuk",num(food.fat_g),num(m.fat),"#a78bfa"]],max=Math.max(1,...items.map(x=>Math.max(x[1],x[2]))),base=220,gw=210,bw=62,gap=20,left=100;let out='<text x="'+left+'" y="16" fill="#91a0b5" font-size="10">DNEŠNÍ PŘÍJEM VS. CÍL · g</text>';items.forEach((x,i)=>{const gx=left+i*gw,ah=x[1]/max*base,th=x[2]/max*base;out+='<rect x="'+(gx+bw+gap)+'" y="'+(40+base-th)+'" width="'+bw+'" height="'+th+'" rx="5" fill="'+x[3]+'" opacity=".22"/><rect x="'+gx+'" y="'+(40+base-ah)+'" width="'+bw+'" height="'+ah+'" rx="5" fill="'+x[3]+'"/><text x="'+(gx+bw/2)+'" y="'+(40+base+20)+'" text-anchor="middle" fill="#d8e0ea" font-size="11">'+esc(x[0])+'</text><text x="'+(gx+bw/2)+'" y="'+Math.max(30,40+base-ah-7)+'" text-anchor="middle" fill="#d8e0ea" font-size="10">'+fmt(x[1])+'</text><text x="'+(gx+bw+gap+bw/2)+'" y="'+Math.max(30,40+base-th-7)+'" text-anchor="middle" fill="#91a0b5" font-size="10">'+fmt(x[2])+'</text>';});out+='<text x="100" y="292" fill="#d8e0ea" font-size="10">plné = příjem</text><text x="190" y="292" fill="#91a0b5" font-size="10">světlé = cíl</text><text x="650" y="292" fill="#91a0b5" font-size="10">Vybraný den: '+esc(longDate(d.date))+'</text>';svg.innerHTML=out;}
+function macroChart(id,days){
+  const svg=$(id),d=days.find(x=>x.date===pragueToday())||days[days.length-1];
+  if(!d){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return;}
+  const food=d.food?.totals||{}, target=Math.max(1,num(d.daily?.nutrition?.calorieTarget||d.daily?.calories?.target));
+  const segments=[
+    {label:"Protein",kcal:num(food.protein_g)*4,color:"#60a5fa"},
+    {label:"Sacharidy",kcal:num(food.carbs_g)*4,color:"#f59e0b"},
+    {label:"Tuk",kcal:num(food.fat_g)*9,color:"#a78bfa"}
+  ];
+  const eaten=Math.max(0,num(food.kcal)),filled=Math.min(target,eaten),macroTotal=segments.reduce((sum,x)=>sum+x.kcal,0);
+  const other=Math.max(0,filled-Math.min(filled,macroTotal));
+  const W=900,H=300,top=36,bottom=38,bh=H-top-bottom,bw=150,x=375;
+  let out='<text x="24" y="24" fill="#91a0b5" font-size="11">DNEŠNÍ KALORIE · PŘÍJEM V RÁMCI CÍLE</text>';
+  out+='<rect x="'+x+'" y="'+top+'" width="'+bw+'" height="'+bh+'" rx="12" fill="#14253a" stroke="#2b405b"/>';
+  let y=top+bh;
+  const draw=(value,color)=>{const h=Math.max(0,value/target*bh);if(!h)return;y-=h;out+='<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+h+'" fill="'+color+'"/>';};
+  draw(other,"#64748b");
+  let remaining=Math.min(filled,macroTotal);
+  segments.slice().reverse().forEach(seg=>{const value=Math.min(remaining,seg.kcal);draw(value,seg.color);remaining-=value;});
+  const goalY=top+bh; out+='<text x="'+(x+bw/2)+'" y="'+(goalY+25)+'" text-anchor="middle" fill="#d8e0ea" font-size="13">'+fmt(eaten)+' / '+fmt(target)+' kcal</text>';
+  out+='<text x="'+(x-12)+'" y="'+(top+5)+'" text-anchor="end" fill="#91a0b5" font-size="11">'+fmt(target)+' kcal cíl</text><text x="'+(x-12)+'" y="'+(top+bh)+'" text-anchor="end" fill="#91a0b5" font-size="11">0</text>';
+  let ly=62;segments.forEach(seg=>{out+='<rect x="600" y="'+(ly-10)+'" width="10" height="10" rx="2" fill="'+seg.color+'"/><text x="618" y="'+ly+'" fill="#d8e0ea" font-size="12">'+seg.label+' · '+fmt(seg.kcal)+' kcal</text>';ly+=30;});
+  if(other>1)out+='<rect x="600" y="'+(ly-10)+'" width="10" height="10" rx="2" fill="#64748b"/><text x="618" y="'+ly+'" fill="#d8e0ea" font-size="12">Ostatní energie · '+fmt(other)+' kcal</text>';
+  out+='<text x="'+(x+bw/2)+'" y="286" text-anchor="middle" fill="#91a0b5" font-size="11">'+esc(longDate(d.date))+'</text>';
+  svg.innerHTML=out;
+}
 function isoWeek(date){
   const d=new Date(date+"T12:00:00Z"), th=new Date(d);
   th.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));
@@ -59,7 +84,20 @@ function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show")
 async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options});const d=await r.json().catch(()=>({message:"Invalid response"}));if(!r.ok)throw new Error(d.message||"HTTP "+r.status);return d}
 function activate(view){document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===view))}
 function multiLineChart(id,series,labels,opts={}){const svg=$(id),W=opts.W||1000,H=opts.H||300,pad=40,all=series.flatMap(s=>s.values.map(Number).filter(Number.isFinite));if(!all.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return}let min=Math.min(...all),max=Math.max(...all);if(min===max){min-=1;max+=1}const x=i=>pad+(W-pad*2)*(labels.length<=1?.5:i/(labels.length-1)),y=v=>H-pad-(H-pad*2)*(v-min)/(max-min);let out='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#24364d"/>';for(let i=0;i<labels.length;i++){if(i===0||i===labels.length-1||i%Math.max(1,Math.floor(labels.length/6))===0)out+='<text x="'+x(i)+'" y="'+(H-10)+'" text-anchor="middle" fill="#91a0b5" font-size="10">'+esc(labels[i])+'</text>'}series.forEach(s=>{const pts=[];s.values.forEach((v,i)=>{if(Number.isFinite(Number(v)))pts.push(x(i)+","+y(Number(v)))});if(pts.length>1)out+='<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+s.stroke+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'});let lx=pad;series.forEach(s=>{out+='<line x1="'+lx+'" y1="16" x2="'+(lx+18)+'" y2="16" stroke="'+s.stroke+'" stroke-width="3"/><text x="'+(lx+24)+'" y="20" fill="#91a0b5" font-size="11">'+esc(s.label)+'</text>';lx+=95+String(s.label).length*4});svg.innerHTML=out}
-function chartSvg(id,values,targets,labels,opts={}){const svg=$(id),W=opts.W||700,H=opts.H||250,pad=34,vals=values.map(v=>Number(v)).filter(Number.isFinite),tar=(targets||[]).map(v=>Number(v)).filter(Number.isFinite),all=vals.concat(tar);if(!all.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#8d99aa">Bez dat</text>';return}let min=Math.min(...all),max=Math.max(...all);if(min===max){min-=1;max+=1}const x=i=>pad+(W-pad*2)*(values.length<=1?.5:i/(values.length-1)),y=v=>H-pad-(H-pad*2)*(v-min)/(max-min);let out='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#26303d"/>';const pts=[];values.forEach((v,i)=>{if(Number.isFinite(Number(v))){pts.push(x(i)+","+y(Number(v)));out+='<circle cx="'+x(i)+'" cy="'+y(Number(v))+'" r="3" fill="#7c5cff"/>'}if(labels[i])out+='<text x="'+x(i)+'" y="'+(H-8)+'" text-anchor="middle" fill="#8d99aa" font-size="10">'+esc(labels[i])+'</text>'});if(pts.length>1)out+='<polyline points="'+pts.join(" ")+'" fill="none" stroke="#7c5cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';if(targets?.length){const p=targets.map((v,i)=>Number.isFinite(Number(v))?x(i)+","+y(Number(v)):null).filter(Boolean);if(p.length>1)out+='<polyline points="'+p.join(" ")+'" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="6 5"/>'}svg.innerHTML=out}
+function chartSvg(id,values,targets,labels,opts={}){
+  const svg=$(id),W=opts.W||700,H=opts.H||250,padL=opts.axis?58:34,padR=20,padB=42,padT=28;
+  const vals=values.map(v=>Number(v)).filter(Number.isFinite),tar=(targets||[]).map(v=>Number(v)).filter(Number.isFinite),all=vals.concat(tar);
+  if(!all.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#8d99aa">Bez dat</text>';return}
+  let min=opts.min!=null?opts.min:Math.min(...all),max=opts.max!=null?opts.max:Math.max(...all);
+  if(min===max){min-=1;max+=1}
+  const x=i=>padL+(W-padL-padR)*(values.length<=1?.5:i/(values.length-1)),y=v=>H-padB-(H-padB-padT)*(v-min)/(max-min);
+  let out='<line x1="'+padL+'" y1="'+(H-padB)+'" x2="'+(W-padR)+'" y2="'+(H-padB)+'" stroke="#26303d"/>';
+  if(opts.axis){for(let tick=0;tick<=4;tick++){const v=min+(max-min)*tick/4, yy=y(v);out+='<line x1="'+padL+'" y1="'+yy+'" x2="'+(W-padR)+'" y2="'+yy+'" stroke="#1d2b3c"/><text x="'+(padL-8)+'" y="'+(yy+4)+'" text-anchor="end" fill="#91a0b5" font-size="10">'+fmt(v,opts.decimals??0)+(opts.unit||"")+'</text>';}}
+  const pts=[];values.forEach((v,i)=>{if(Number.isFinite(Number(v))){pts.push(x(i)+","+y(Number(v)));out+='<circle cx="'+x(i)+'" cy="'+y(Number(v))+'" r="3" fill="#7c5cff"/>'}if(labels[i]&&(i===0||i===labels.length-1||i%Math.max(1,Math.ceil(labels.length/6))===0))out+='<text x="'+x(i)+'" y="'+(H-13)+'" text-anchor="middle" fill="#8d99aa" font-size="10">'+esc(labels[i])+'</text>'});
+  if(pts.length>1)out+='<polyline points="'+pts.join(" ")+'" fill="none" stroke="#7c5cff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+  if(targets?.length){const p=targets.map((v,i)=>Number.isFinite(Number(v))?x(i)+","+y(Number(v)):null).filter(Boolean);if(p.length>1)out+='<polyline points="'+p.join(" ")+'" fill="none" stroke="#34d399" stroke-width="2" stroke-dasharray="6 5"/>'}
+  svg.innerHTML=out
+}
 function barChart(id,values,targets,labels){const svg=$(id),W=700,H=250,pad=28,all=values.concat(targets||[]).map(num),max=Math.max(1,...all)*1.12,bw=(W-pad*2)/Math.max(1,values.length)*.58;let out="";values.forEach((v,i)=>{const x=pad+i*(W-pad*2)/Math.max(1,values.length)+(W-pad*2)/Math.max(1,values.length)*.21,h=num(v)/max*(H-55),ht=num(targets?.[i])/max*(H-55);out+='<rect x="'+x+'" y="'+(H-30-ht)+'" width="'+bw+'" height="'+ht+'" rx="4" fill="#34d399" opacity=".25"/><rect x="'+x+'" y="'+(H-30-h)+'" width="'+bw+'" height="'+h+'" rx="4" fill="#7c5cff"/><text x="'+(x+bw/2)+'" y="'+(H-9)+'" text-anchor="middle" fill="#8d99aa" font-size="10">'+esc(labels[i])+'</text>'});svg.innerHTML=out}
 function primarySleepSessions(sessions){
   return (sessions||[])
@@ -67,6 +105,25 @@ function primarySleepSessions(sessions){
     .slice()
     .sort((a,b)=>new Date(b?.endTime||b?.startTime||0)-new Date(a?.endTime||a?.startTime||0));
 }
+function trainingDayMarkup(x){
+  const training=x?.daily?.training||{};
+  const planned=(training.planned||[]).filter(z=>!isNutritionItem(z));
+  const completed=(training.completed||[]).filter(z=>!isNutritionItem(z));
+  const matched=training.matched||[];
+  const paired=new Map(matched.map(m=>[String(m.actualId),m.planned]));
+  const entries=[];
+  completed.forEach(actual=>entries.push({actual,planned:paired.get(String(actual.id))||null}));
+  planned.forEach(plan=>entries.push({planned:plan,actual:null}));
+  const items=entries.map(({planned,actual})=>{
+    const item=actual||planned, done=Boolean(actual), linked=Boolean(actual&&planned);
+    const label=linked?"✓ Podle plánu":done?"✓ Mimo plán":"Plánováno";
+    const tone=linked?"done":done?"unplanned":"";
+    const planName=linked&&planned.name&&planned.name!==actual.name?'<div class="small">Plán: '+esc(planned.name)+'</div>':"";
+    return '<div class="plan-item '+tone+'"><div class="name">'+esc(actual?.name||planned?.name||actual?.type||planned?.type||"Aktivita")+'</div><div class="meta">'+label+(item.durationHours?" · "+fmt(item.durationHours,1)+" h":"")+(actual?.tss?" · TSS "+fmt(actual.tss):planned?.tss?" · TSS "+fmt(planned.tss):"")+(actual?.calories?" · "+fmt(actual.calories)+" kcal":"")+'</div>'+planName+'</div>';
+  }).join("");
+  return '<div class="plan-day '+(x.date===pragueToday()?"today":"")+'"><div class="dow">'+esc(longDate(x.date))+'</div>'+(items||'<div class="muted">Volno</div>')+'</div>';
+}
+
 function renderOverview(){
   const d=state.daily||{},f=d.nutrition?.foodLog?.totals||{},target=d.nutrition||{};
   $("overviewDate").textContent=longDate(pragueToday());
@@ -74,7 +131,11 @@ function renderOverview(){
   const planned=(d.training?.planned||[]).filter(x=>!isNutritionItem(x));
   const sleepSessions=primarySleepSessions(state.sleep?.sessions);
   const lastSleep=sleepSessions[0];
-  const sleepPrev=sleepSessions.slice(1,15),sleepAvg=sleepPrev.length?sleepPrev.reduce((sum,x)=>sum+num(x.durationMin),0)/sleepPrev.length:null; $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin)+trendArrow(lastSleep.durationMin,sleepAvg,false," min vs avg"):"—"; $("overviewSleepHistory").innerHTML=sleepSessions.slice(0,7).map(x=>'<div class="metric-line"><span>'+esc(longDate(x.date||String(x.endTime||"").slice(0,10)))+'</span><strong>'+hm(x.durationMin)+'</strong></div>').join("")||'<div class="muted">Žádná historie spánku.</div>';
+  const sleepPrev=sleepSessions.slice(1,15),sleepAvg=sleepPrev.length?sleepPrev.reduce((sum,x)=>sum+num(x.durationMin),0)/sleepPrev.length:null;
+  $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin)+trendArrow(lastSleep.durationMin,sleepAvg,false," min vs avg"):"—";
+  const recent=sleepSessions.slice(0,7),durations=recent.map(x=>num(x.durationMin)),avg7=durations.length?durations.reduce((a,b)=>a+b,0)/durations.length:0;
+  const spread=durations.length?Math.max(...durations)-Math.min(...durations):0;
+  $("overviewSleepHistory").innerHTML=recent.length?'<div class="grid3" style="margin-bottom:10px"><div><div class="small">Průměr</div><strong>'+hm(avg7)+'</strong></div><div><div class="small">Pravidelnost</div><strong>rozptyl '+hm(spread)+'</strong></div><div><div class="small">Cíl</div><strong>'+fmt(Math.round(avg7/480*100))+' % z 8 h</strong></div></div>'+recent.map(x=>{const pct=Math.min(100,num(x.durationMin)/480*100);return '<div class="metric-line"><span>'+esc(longDate(x.date||String(x.endTime||"").slice(0,10)))+'</span><span style="flex:1;max-width:180px;height:7px;background:#18263a;border-radius:4px;margin:0 10px"><i style="display:block;width:'+pct+'%;height:100%;border-radius:4px;background:'+(pct>=95?"#35c48b":pct>=80?"#f59e0b":"#ef6b73")+'"></i></span><strong>'+hm(x.durationMin)+'</strong></div>';}).join(""):'<div class="muted">Žádná historie spánku.</div>';
   $("oTraining").textContent=completed.length+" / "+planned.length+" dokončeno";
   $("oTrainingNote").textContent=planned.length?planned.map(x=>x.name||x.type).join(" • "):"Volno";
   const calTarget=Number(target.calorieTarget||d.calories?.target||0);
@@ -92,15 +153,8 @@ function renderOverview(){
   $("oRecoveryNote").textContent="spánek · tréninková shoda";
   const today=pragueToday(),tomorrow=dateShift(today,1),days=state.week?.days||[];
   const compact=days.filter(x=>x.date===today||x.date===tomorrow);
-  const renderPlanDay=x=>{
-    const p=(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z));
-    const a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));
-    const items=p.map(z=>{const match=a.find(y=>String(y.pairedEventId||y.paired_event_id||"")===String(z.id||""))||a.find(y=>Math.abs(num(y.tss)-num(z.tss))<=5&&String(y.name||"").toLowerCase().includes(String(z.name||"").toLowerCase().slice(0,12)));return {z,done:Boolean(match),actual:match};});
-    a.filter(y=>!p.some(z=>String(z.name||"").toLowerCase()===String(y.name||"").toLowerCase())).forEach(y=>items.push({z:y,done:true}));
-    return '<div class="plan-day '+(x.date===today?"today":"")+'"><div class="dow">'+esc(longDate(x.date))+'</div>'+ (items.length?items.map(({z,done,actual})=>'<div class="plan-item '+(done?"done":"")+'"><div class="name">'+esc(z.name||z.type||"Aktivita")+'</div><div class="meta">'+(done?"✓ Dokončeno":"Plán")+(z.durationHours?" · "+fmt(z.durationHours,1)+" h":"")+(z.tss?" · TSS "+fmt(z.tss):"")+(done&&actual?" · skutečně "+fmt(actual.tss):"")+'</div></div>').join(""):'<div class="muted">Volno</div>')+'</div>';
-  };
-  $("overviewPlan").innerHTML=compact.map(renderPlanDay).join("");
-  $("overviewWeekPlan").innerHTML=days.map(renderPlanDay).join("");
+  $("overviewPlan").innerHTML=compact.map(trainingDayMarkup).join("");
+  $("overviewWeekPlan").innerHTML=days.map(trainingDayMarkup).join("");
   const fw=state.fitness?.wellness||[],latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
   $("oFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
   $("oForm").innerHTML=(Number.isFinite(Number(latest.tsb))?fmt(latest.tsb):"—")+trendArrow(latest.tsb,prev.tsb,false,"");
@@ -108,7 +162,7 @@ function renderOverview(){
   const currentW=wr.length?Number(wr[wr.length-1].value_numeric):Number(d.weight?.current);
   const weekW=wr.filter(x=>new Date(x.sample_time).getTime()<=Date.now()-7*86400000).slice(-1)[0];
   const targetW=Number(d.nutrition?.targetWeightKg||80),remainingW=Number.isFinite(currentW)?currentW-targetW:null; $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+" kg"+trendArrow(currentW,weekW?.value_numeric,true," kg vs 7d"):"—"; $("oWeightMeta").textContent=Number.isFinite(remainingW)?"Aktuálně · cíl "+fmt(targetW,1)+" kg · zbývá "+fmt(Math.max(0,remainingW),1)+" kg":"aktuálně · cíl "+fmt(targetW,1)+" kg";
-  chartSvg("calChart",days.map(x=>num(x.food?.totals?.kcal)),days.map(x=>num(x.daily?.calories?.target)),days.map(x=>dateLabel(x.date)),{W:1000,H:260});
+  macroChart("calChart",days);
 }
 function renderTraining(){
   const days=state.week?.days||[],fw=state.fitness?.wellness||[];
@@ -117,8 +171,10 @@ function renderTraining(){
   const selected=days.find(x=>x.date===pragueToday())||days[0];
   const planned=days.flatMap(x=>(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
   const completed=days.flatMap(x=>(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
-  $("plannedList").innerHTML=planned.length?planned.map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||"Workout")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+'</span></div>').join(""):'<div class="muted">Nic plánováno.</div>';
-  $("completedList").innerHTML=completed.length?completed.slice().reverse().map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||x.type||"Activity")+'</strong><span class="small">'+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+(x.calories?" · "+fmt(x.calories)+" kcal":"")+'</span></div>').join(""):'<div class="muted">Zatím nic dokončeno.</div>';
+  const matched=days.flatMap(x=>(x.daily?.training?.matched||[]).map(z=>({...z,date:x.date})));
+  $("trainingWeekOverview").innerHTML=days.map(trainingDayMarkup).join("");
+  $("plannedList").innerHTML=planned.length?planned.map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||"Workout")+'</strong><span class="small">Plánováno · '+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+'</span></div>').join(""):'<div class="muted">Všechny plánované tréninky jsou splněné nebo tento týden žádné nejsou.</div>';
+  $("completedList").innerHTML=completed.length?completed.slice().reverse().map(x=>{const plan=matched.find(m=>String(m.actualId)===String(x.id));return '<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||x.type||"Activity")+'</strong><span class="small">'+(plan?"Podle plánu":"Mimo plán")+" · "+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+(x.calories?" · "+fmt(x.calories)+" kcal":"")+'</span></div>'}).join(""):'<div class="muted">Zatím nic dokončeno.</div>';
   const latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
   $("tFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
   $("tFatigue").innerHTML=(Number.isFinite(Number(latest.atl))?fmt(latest.atl):"—")+trendArrow(latest.atl,prev.atl,true,"");
@@ -128,7 +184,7 @@ function renderTraining(){
   multiLineChart("pmcChart",[{label:"Fitness",stroke:"#3b82f6",values:fw.map(x=>num(x.ctl))},{label:"Fatigue",stroke:"#ef6b73",values:fw.map(x=>num(x.atl))},{label:"Form",stroke:"#35c48b",values:fw.map(x=>num(x.tsb))}],labels,{W:1000,H:300});
   const form=num(latest.tsb),ramp=num(latest.rampRate);
   $("pmcInsight").textContent=!Number.isFinite(form)?"Bez aktuálních wellness dat.":form<0?"Form je záporný: zátěž je vyšší než dlouhodobá připravenost. Zaměř se na regeneraci a nepřidávej další intenzitu bez důvodu.":ramp>5?"Fitness roste rychleji. Sleduj kumulovanou únavu; další zvyšování objemu má smysl jen při stabilní regeneraci.":"Fitness/form jsou v relativně stabilním pásmu. Pokračuj podle plánu a sleduj vývoj TSB.";
-  const tssDays=days.map(x=>{const p=(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z)),a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));return {date:x.date,planned:p.reduce((s,z)=>s+num(z.tss),0),actual:a.reduce((s,z)=>s+num(z.tss),0)};});
+  const tssDays=days.map(x=>{const p=[...(x.daily?.training?.planned||[]),...(x.daily?.training?.matched||[]).map(m=>m.planned)].filter(z=>!isNutritionItem(z)),a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));return {date:x.date,planned:p.reduce((s,z)=>s+num(z.tss),0),actual:a.reduce((s,z)=>s+num(z.tss),0)};});
   barChart("tssChart",tssDays.map(x=>x.actual),tssDays.map(x=>x.planned),tssDays.map(x=>dateLabel(x.date)));
   const totalP=tssDays.reduce((s,x)=>s+x.planned,0),totalA=tssDays.reduce((s,x)=>s+x.actual,0);
   $("tssInsight").innerHTML=(totalP?scoreBadge(Math.min(100,Math.round(totalA/totalP*100)),"Týden"):"Bez TSS plánu")+" · "+fmt(totalA)+" / "+fmt(totalP)+" TSS. <span class=\"muted\">Zelený sloupec = plán, modrý = skutečnost.</span>";
@@ -144,7 +200,8 @@ function renderNutrition(){
   populateWeekSelectors("nutritionWeekSelect",null,days);
   const today=days.find(x=>x.date===pragueToday())||days[days.length-1];
   $("nutritionReason").textContent=today?.daily?.nutrition?.reason||"Denní cíl se adaptuje podle tréninku, hmotnosti a cíle.";
-  const tn=today?.daily?.nutrition||{},cb=tn.calorieBreakdown||{},targetCal=num(tn.calorieTarget||today?.daily?.calories?.target),trainingCal=Math.max(0,num(cb.activityAdjustment)),restTarget=Math.max(0,targetCal-trainingCal);$("nutritionTargetSummary").innerHTML='<strong>Dnešní cíl: '+fmt(targetCal)+' kcal</strong> · klidový cíl '+fmt(restTarget)+' kcal + '+fmt(trainingCal)+' kcal z tréninku. <span class="muted">Deficit je už zahrnutý v klidovém cíli; tréninkový výdej se nepřičítá podruhé.</span>';  $("nutritionDays").innerHTML=days.map(x=>{
+  const tn=today?.daily?.nutrition||{},cb=tn.calorieBreakdown||{},targetCal=num(tn.calorieTarget||today?.daily?.calories?.target),trainingCal=Math.max(0,num(cb.activityAdjustment)),restTarget=Math.max(0,targetCal-trainingCal),burn=today?.daily?.burned||{};
+  $("nutritionTargetSummary").innerHTML='<strong>Dnešní cíl: '+fmt(targetCal)+' kcal</strong> · klidový cíl '+fmt(restTarget)+' kcal + '+fmt(trainingCal)+' kcal z tréninku.<br><strong>Výdej dnes: '+fmt(burn.total)+' kcal</strong> · '+fmt(burn.activity)+' kcal z evidovaných aktivit (chůze, gym i cyklistika). <span class="muted">'+(burn.source==="observed"?"Celkový denní výdej je z naměřených dat.":"Celkový denní výdej je průběžný odhad.")+'</span>';  $("nutritionDays").innerHTML=days.map(x=>{
     const t=num(x.daily?.calories?.target),e=num(x.food?.totals?.kcal),m=macroTargetsOf(x);
     const p=num(x.food?.totals?.protein_g),c=num(x.food?.totals?.carbs_g),f=num(x.food?.totals?.fat_g);
     const score=nutritionScore({kcal:e,protein_g:p,carbs_g:c,fat_g:f},{calorieTarget:t,macros:m});
@@ -153,7 +210,19 @@ function renderNutrition(){
   macroChart("nutritionChart",days);
 
   const selected=today;
-  const mealGroups=selected?.recommendations?.mealRecommendations||[];
+  const allMealGroups=selected?.recommendations?.mealRecommendations||[];
+  const loggedMealText=(state.nutrition?.records||[]).filter(x=>String(x.startTime||"").slice(0,10)===String(selected?.date||"")).map(x=>String(x.mealType||"")).join(" ").toLowerCase();
+  const hour=new Date().getHours();
+  const isGroupNeeded=group=>{
+    const label=String(group.label||"").toLowerCase();
+    const isBreakfast=/snídan|breakfast/.test(label),isLunch=/oběd|lunch/.test(label),isDinner=/večeř|dinner/.test(label),isSnack=/svačin|snack/.test(label);
+    if((isBreakfast&&/snídan|breakfast/.test(loggedMealText))||(isLunch&&/oběd|lunch/.test(loggedMealText))||(isDinner&&/večeř|dinner/.test(loggedMealText)))return false;
+    if(hour<9)return isBreakfast||isSnack||isLunch;
+    if(hour<13)return isSnack||isLunch;
+    if(hour<17)return isSnack||isDinner;
+    return isDinner||isSnack;
+  };
+  const mealGroups=allMealGroups.filter(isGroupNeeded).slice(0,3);
   const stores=selected?.recommendations?.storeAlternatives||[];
   const selectedMacros=macroTargetsOf(selected||{});
   const selectedFood=selected?.food?.totals||{};
@@ -181,7 +250,7 @@ function renderRecovery(){
   $("rDeep").textContent=last?.stages?.DEEP?hm(last.stages.DEEP):"—"; $("rRem").textContent=last?.stages?.REM?hm(last.stages.REM):"—";
   const sleepScore=last?Math.round(Math.min(100,Math.max(0,(num(last.durationMin)/480)*70+(num(last.stages?.DEEP)/90)*15+(num(last.stages?.REM)/90)*15))):null;
   $("sleepScore").innerHTML=sleepScore!=null?scoreBadge(sleepScore,"Kvalita"):'<span class="muted">Bez dat</span>';
-  chartSvg("sleepChart",filtered.slice().reverse().map(x=>num(x.durationMin)/60),[],filtered.slice().reverse().map(x=>dateLabel(x.date)),{W:700,H:250});
+  chartSvg("sleepChart",filtered.slice().reverse().map(x=>num(x.durationMin)/60),[],filtered.slice().reverse().map(x=>dateLabel(x.date)),{W:700,H:250,axis:true,unit:" h",decimals:1,min:range===7?4:undefined});
   const selected=last;
   if(selected){
     const total=Object.values(selected.stages||{}).reduce((a,b)=>a+num(b),0)||1;
