@@ -46,7 +46,7 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
     <div class="card"><div class="label">Recovery</div><div class="grid2" style="margin-top:4px"><div><div class="small">Spánek</div><div id="oRecoverySleep" class="value" style="font-size:22px">—</div></div><div><div class="small">Trénink</div><div id="oRecoveryTraining" class="value" style="font-size:22px">—</div></div></div><div id="oRecoveryNote" class="small">samostatně · celkové recovery</div></div>
   </div>
-  <div class="section">Spánek · posledních 7 nocí</div><div class="card"><div id="overviewSleepHistory"></div></div><div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
+  <div class="section">Spánek · trend regenerace</div><div class="card"><div id="overviewSleepHistory"></div></div><div class="section">Dnešní plán · další 2 dny</div><div class="card"><div id="overviewPlan" class="compact-plan"></div></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
   <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="chart" viewBox="0 0 1000 260"></svg></div>
 </section>
@@ -99,11 +99,11 @@ button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-
 <section id="health" class="view">
   <div class="hero"><div><div class="eyebrow">Health data</div><h1>Health data</h1><p>Historie pohybu, hmotnosti a zdrojových dat</p></div></div>
   <div class="grid"><div class="card"><div class="label">Hmotnost</div><div id="hWeight" class="value">—</div><div class="small">kg</div></div><div class="card"><div class="label">7denní průměr</div><div id="hAvg7" class="value">—</div><div class="small">kg</div></div><div class="card"><div class="label">30denní průměr</div><div id="hAvg30" class="value">—</div><div class="small">kg</div></div><div class="card"><div class="label">Aktivity</div><div id="hActivities" class="value">—</div><div class="small">záznamů</div></div></div>
-  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Vývoj hmotnosti</h3><svg id="healthWeightChart" class="chart" viewBox="0 0 760 300"></svg></div><div class="card"><h3>Aktivita · historie</h3><div id="healthActivityTable"></div></div></div><div class="card" style="margin-top:12px"><h3>Health data · historie zdrojů</h3><div id="healthDataSummary"></div></div>
+  <div class="card" style="margin-top:12px"><h3>Vývoj hmotnosti</h3><svg id="healthWeightChart" class="chart" style="height:360px" viewBox="0 0 1000 360"></svg><div id="weightHistory"></div></div><div class="card" style="margin-top:12px"><h3>Aktivita · historie</h3><div id="healthActivityTable"></div></div><div class="card" style="margin-top:12px"><h3>Health data · historie zdrojů</h3><div id="healthDataSummary"></div></div>
 </section>
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260925-5" defer></script>
+<script src="/app/dashboard-client.js?v=20260925-6" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
