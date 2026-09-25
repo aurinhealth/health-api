@@ -8,6 +8,7 @@ import { dashboardPage } from "./dashboard.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
+import { searchCookbookRecipes, logFood } from "./food-log.js";
 import legacyHealthApi from "./index.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
@@ -113,8 +114,84 @@ function fromBase64url(s) {
   const bin=atob(s); return Uint8Array.from(bin,c=>c.charCodeAt(0));
 }
 
+async function ensureCoachInboxTable(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS coach_inbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel TEXT NOT NULL,
+    message TEXT NOT NULL,
+    draft_json TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    confirmed_at TEXT
+  )`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_coach_inbox_created ON coach_inbox(created_at DESC)`).run();
+}
+
+function coachChannel(value, message) {
+  const requested=String(value||"").toLowerCase();
+  if (["cycling","gym","nutrition","food"].includes(requested)) return requested;
+  const t=String(message||"").toLowerCase();
+  if (/j[ií]d|recept|kalori|protein|sachar|sni?d|ob[eě]d|ve[cč]eř|zapsat/.test(t)) return "nutrition";
+  if (/posil|gym|dřep|drep|bench|mrtv|s[eé]ri/.test(t)) return "gym";
+  return "cycling";
+}
+
+async function createCoachDraft(env, ctx, internalAuth, body) {
+  const message=String(body?.message||"").trim();
+  if(!message) throw new Error("Napiš zprávu pro trenéra.");
+  const channel=coachChannel(body?.channel,message), date=String(body?.date||pragueToday()).slice(0,10);
+  let reply="", action={type:"advice",date};
+  if(channel==="gym") {
+    const r=await app.fetch(new Request("https://internal/strength/generate-plan",{method:"POST",headers:{...internalAuth,"Content-Type":"application/json"},body:JSON.stringify({date,preview:true})}),env,ctx);
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||d.status!=="ok") throw new Error(d.message||"Gym plán se nepodařilo připravit.");
+    const rows=(d.plan?.rows||[]).filter(x=>String(x.type||"").toUpperCase()==="WORK");
+    reply=`Připravil jsem návrh ${d.plan?.planName||"silového tréninku"}: ${[...new Set(rows.map(x=>x.exercise))].slice(0,4).join(" · ")}. Je postavený podle regenerace, cyklistiky a tvé historie.`;
+    action={type:"gym_generate",date};
+  } else if(channel==="nutrition") {
+    const page=Number((message.match(/(?:str(?:ana|\.)?|page)\s*(\d{1,3})/i)||[])[1]);
+    const recipes=await searchCookbookRecipes({page:Number.isFinite(page)&&page>0?page:undefined,name:Number.isFinite(page)&&page>0?undefined:message,limit:3});
+    const recipe=recipes.recipes?.[0]||null;
+    if(recipe) {
+      reply=`Našel jsem v kuchařce „${recipe.name}“${recipe.page?` (str. ${recipe.page})`:""}: ${Math.round(Number(recipe.calories||0))} kcal · B ${Math.round(Number(recipe.protein_g||0))} g · S ${Math.round(Number(recipe.carbs_g||0))} g · T ${Math.round(Number(recipe.fat_g||0))} g. Potvrzením ho zapíšeš do dnešní výživy.`;
+      action={type:"food_log",date,page:recipe.page,name:recipe.name};
+    } else reply="V kuchařce jsem nenašel jednoznačný recept. Napiš název receptu nebo číslo strany a připravím zápis.";
+  } else {
+    reply=channel==="cycling"?"Cyklistický trenér bere kolo jako hlavní prioritu. Pro přesný návrh napiš délku, typ jízdy a zda chceš plán nebo kontrolu existující jednotky.":"Připravil jsem doporučení.";
+  }
+  const draft={channel,message,date,reply,action};
+  const ins=await env.DB.prepare("INSERT INTO coach_inbox(channel,message,draft_json) VALUES(?,?,?)").bind(channel,message,JSON.stringify(draft)).run();
+  return {status:"ok",draftId:ins.meta?.last_row_id,draft};
+}
+
+async function handleCoachInbox(request, env, ctx, internalAuth) {
+  try {
+    await ensureCoachInboxTable(env.DB);
+    if(request.method==="GET") {
+      const rows=await env.DB.prepare("SELECT id,channel,message,draft_json,status,created_at,confirmed_at FROM coach_inbox ORDER BY id DESC LIMIT 30").all();
+      return Response.json({status:"ok",items:(rows.results||[]).map(r=>({...r,draft:JSON.parse(r.draft_json||"{}")}))},{headers:{"Cache-Control":"no-store"}});
+    }
+    const body=await request.json().catch(()=>({}));
+    if(body?.action!=="confirm") return Response.json(await createCoachDraft(env,ctx,internalAuth,body),{headers:{"Cache-Control":"no-store"}});
+    const id=Number(body?.draftId); if(!id) return Response.json({status:"error",message:"Chybí návrh k potvrzení."},{status:400});
+    const row=await env.DB.prepare("SELECT * FROM coach_inbox WHERE id=?").bind(id).first();
+    if(!row) return Response.json({status:"error",message:"Návrh už neexistuje."},{status:404});
+    if(row.status==="confirmed") return Response.json({status:"ok",message:"Tento návrh už je potvrzený."});
+    const draft=JSON.parse(row.draft_json||"{}"); let result={status:"ok"};
+    if(draft.action?.type==="gym_generate") {
+      const r=await app.fetch(new Request("https://internal/strength/generate-plan",{method:"POST",headers:{...internalAuth,"Content-Type":"application/json"},body:JSON.stringify({date:draft.date})}),env,ctx);
+      result=await r.json().catch(()=>({status:"error",message:"Neplatná odpověď Gymu"})); if(!r.ok||result.status!=="ok") throw new Error(result.message||"Gym plán se nepodařilo uložit.");
+    }
+    if(draft.action?.type==="food_log") result=await logFood(env.DB,{date:draft.date,page:draft.action.page,name:draft.action.name,source:"cookbook",note:"Zapsáno ze schránky trenérů"});
+    await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+    return Response.json({status:"ok",message:draft.action?.type==="food_log"?"Jídlo je zapsané ve výživě.":draft.action?.type==="gym_generate"?"Gym plán je uložený a odeslaný do tréninku.":"Doporučení potvrzeno.",result},{headers:{"Cache-Control":"no-store"}});
+  } catch(error) { return Response.json({status:"error",message:error.message},{status:500}); }
+}
+
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+
+  if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
 
   if (url.pathname === "/app/api/coaches" && request.method === "GET") {
     try {
@@ -270,8 +347,12 @@ async function handleDashboardApi(request, env, ctx, url) {
       })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
       let historyResult=null;
       if(sets.length) historyResult=await importStrengthHistory(env.DB,{date,sets});
+      // Keep the editable workout snapshot together with the completed-set
+      // history.  The UI can then be safely reloaded after every autosave.
+      const storedValues = Array.isArray(body?.fullValues) ? body.fullValues : values;
+      await env.DB.prepare(`INSERT INTO gym_plans(workout_date,values_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(date,JSON.stringify(storedValues)).run();
       const history=await getStrengthHistory(env.DB,500);
-      return Response.json({status:"ok",storage:"d1",history,historySaved:historyResult,sheetSaved:false,message:sets.length?"Workout uložen do interní databáze.":"Nebyla označena žádná dokončená série."},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,sheetSaved:false,message:sets.length?"Workout uložen do interní databáze.":"Změny plánu jsou uložené; dokončené série označ Hotovo."},{headers:{"Cache-Control":"no-store"}});
     }
     return Response.json({status:"error",message:"Method not allowed"},{status:405});
   }
