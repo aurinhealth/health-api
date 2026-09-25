@@ -1525,19 +1525,24 @@ async function syncIntervalsActivities(env) {
 // ======================================================
 
 async function syncIntervalsEvents(env) {
-  const oldest =
-    pragueDate();
-
-  const newest =
-    dateDaysFromNow(
-      CONFIG.plannedDaysAhead
-    );
+  // Reconcile a small history window as well as upcoming sessions. Intervals is
+  // the source of truth: a deleted/rescheduled event must not remain as a
+  // phantom plan in the dashboard.
+  const oldest = dateDaysAgo(7);
+  const newest = dateDaysFromNow(CONFIG.plannedDaysAhead);
+  const rangeEnd = dateDaysFromDate(newest, 1);
 
   const events =
     await intervalsGet(
       env,
       `/athlete/0/events?oldest=${oldest}&newest=${newest}`
     );
+
+  await env.DB.prepare(
+    `DELETE FROM health_datapoints
+     WHERE source_family = 'intervals' AND data_type = 'planned-workout'
+       AND start_time >= ? AND start_time < ?`
+  ).bind(oldest, rangeEnd).run();
 
   let saved = 0;
 
@@ -1582,6 +1587,9 @@ async function syncIntervalsEvents(env) {
 
     events_saved:
       saved,
+
+    reconciled_from:
+      oldest,
 
     events
   };
@@ -2087,24 +2095,35 @@ function plannedWorkoutInfo(
 // DAILY ENERGY
 // ======================================================
 
-function plannedMatchesActual(planned, actual){
+function plannedMatch(planned, actuals){
+  const paired = (actuals || []).find(a =>
+    [a?.pairedEventId, a?.plannedEventId].filter(Boolean).some(id => String(id) === String(planned?.id))
+  );
+  if (paired) return paired;
+
   const pName=(String(planned?.name||"")+" "+String(planned?.type||"")).toLowerCase();
-  const token=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).find(t=>t.length>=5);
-  return (actual||[]).some(a=>{
+  const stopWords=new Set(["workout","training","trénink","planned","plan"]);
+  const tokens=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).filter(t=>t.length>=5&&!stopWords.has(t));
+  return (actuals||[]).find(a=>{
     if(!a?.start||!planned?.start) return false;
     const plannedDate=String(planned.start).slice(0,10);
     const actualDate=String(a.start).slice(0,10);
+    if(plannedDate!==actualDate) return false;
     const dateOnly=/^\d{4}-\d{2}-\d{2}$/.test(String(planned.start));
     const dt=Math.abs(new Date(a.start).getTime()-new Date(planned.start).getTime())/60000;
-    if(plannedDate!==actualDate) return false;
-    if(!dateOnly && dt>45) return false;
+    if(!dateOnly && dt>120) return false;
     const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
-    const nameMatch=token?aName.includes(token):false;
+    const nameMatch=tokens.some(token=>aName.includes(token));
     const typeMatch=String(planned.type||"").toLowerCase()===String(a.type||"").toLowerCase();
     const da=Number(a.durationHours||0),dp=Number(planned.durationHours||0);
     const durMatch=!da||!dp||Math.abs(da-dp)/Math.max(da,dp)<0.25;
-    return (nameMatch||typeMatch)&&durMatch;
-  });
+    // Generic type alone is only safe when both the timing and duration agree.
+    return nameMatch ? durMatch : (typeMatch && durMatch && !dateOnly && dt<=90);
+  }) || null;
+}
+
+function plannedMatchesActual(planned, actual){
+  return Boolean(plannedMatch(planned, actual));
 }
 
 function cyclingKcalPerHour(item) {
@@ -2304,6 +2323,7 @@ async function energyForDate(env, date) {
       durationHours: hoursBetween(row.start_time, row.end_time),
       pairedEventId: payload.paired_event_id || payload.pairedEventId || payload.event_id || payload.eventId || null,
       plannedEventId: payload.paired_activity_id || payload.pairedActivityId || payload.activity_id || payload.activityId || null,
+      tss: activityNumber(payload, ["icu_training_load", "training_load", "tss"]),
       name: payload.name || payload.title || payload.description || "",
       payload
     };
@@ -2321,13 +2341,19 @@ async function energyForDate(env, date) {
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
 
-  const completedPairedIds = new Set(
-    completed.flatMap(a => [a.pairedEventId, a.plannedEventId]).filter(Boolean).map(String)
-  );
-
-  const unmatchedPlanned = plannedWorkouts.filter(w =>
-    !completedPairedIds.has(String(w.id)) && !plannedMatchesActual(w, completed)
-  );
+  // One planned session is paired with at most one real activity.  The pairing
+  // becomes part of the API response so the UI can render one combined card
+  // instead of a misleading “plan + completed activity” duplicate.
+  const matchedPlannedWorkouts = [];
+  const unmatchedPlanned = [];
+  for (const workout of plannedWorkouts) {
+    const actual = plannedMatch(workout, completed);
+    if (actual) {
+      matchedPlannedWorkouts.push({ planned: workout, actualId: actual.id, source: actual.source });
+    } else {
+      unmatchedPlanned.push(workout);
+    }
+  }
 
   // Historical complete days: Fitbit/Google total-calories is authoritative.
   // Today/future: total calories may be incomplete, so project from rest-day
@@ -2370,6 +2396,8 @@ async function energyForDate(env, date) {
     googleTotalCalories: observed,
     completedActivities: completed,
     plannedWorkouts,
+    unmatchedPlannedWorkouts: unmatchedPlanned,
+    matchedPlannedWorkouts,
     estimatedPlannedActivityCalories: Math.round(unmatchedPlanned.reduce((sum, w) => {
       if (!w.durationHours) return sum;
       const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
@@ -2442,8 +2470,8 @@ async function analysisDaily(
 
   const actualRide = energy.completedActivities.find(activityIsCycling);
   const plannedRide =
-    energy.plannedWorkouts.find(
-      x => x.cycling && !energy.completedActivities.some(a => [a.pairedEventId, a.plannedEventId].some(id => String(id || "") === String(x.id)))
+    energy.unmatchedPlannedWorkouts.find(
+      x => x.cycling
     );
 
   let fueling = null;
@@ -2508,11 +2536,17 @@ async function analysisDaily(
     },
 
     training: {
-      completed:
-        energy.completedActivities,
+      completed: energy.completedActivities,
+      // Only plans with no matching completed activity stay in this list.
+      planned: energy.unmatchedPlannedWorkouts,
+      matched: energy.matchedPlannedWorkouts
+    },
 
-      planned:
-        energy.plannedWorkouts
+    burned: {
+      total: energy.estimatedTDEE,
+      observedTotal: energy.googleTotalCalories,
+      activity: energy.actualActivityCalories,
+      source: energy.googleTotalCalories != null && date < pragueDate() ? "observed" : "estimated"
     },
 
     fueling
