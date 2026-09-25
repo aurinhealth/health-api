@@ -252,7 +252,7 @@ function layeredHistory(records,dateOf,rowOf){
 function renderHealth(){
   const w=state.weight||{},weightDisplay=v=>Number.isFinite(Number(v))&&Number(v)>0?fmt(v,1):"—";
   $("hWeight").textContent=weightDisplay(w.latest?.value_numeric);$("hAvg7").textContent=weightDisplay(w.average7d);$("hAvg30").textContent=weightDisplay(w.average30d);$("hActivities").textContent=state.activities?.count||0;
-  const wr=(w.records||[]).filter(x=>num(x.value_numeric)>0).slice(-365);
+  const wr=(w.records||[]).filter(x=>num(x.value_numeric)>0&&/^\d{4}-\d{2}-\d{2}/.test(String(x.sample_time||""))).slice(-365);
   chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))),{W:1000,H:360,axis:true,unit:" kg",decimals:1});
   $("weightHistory").innerHTML=layeredHistory(wr,x=>x.sample_time,x=>'<div class="history-workout"><strong>'+esc(longDate(String(x.sample_time).slice(0,10)))+'</strong><div class="small">'+fmt(x.value_numeric,1)+' kg · '+esc(x.source_family||"zdroj")+'</div></div>');
   const acts=(state.activities?.activities||[]).slice(0,365);
