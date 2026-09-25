@@ -1,4 +1,5 @@
 import app from "./sheets-gateway.js";
+import { buildCoachCouncil } from "./coach-engine.js";
 import { handleMcpCompat } from "./mcp-compat.js";
 import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
@@ -114,6 +115,25 @@ function fromBase64url(s) {
 
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+
+  if (url.pathname === "/app/api/coaches" && request.method === "GET") {
+    try {
+      const today=new Date(), oldest=new Date(today.getTime()-14*86400000).toISOString().slice(0,10), newest=today.toISOString().slice(0,10);
+      const dailyResponse=await app.fetch(new Request(new URL("/analysis/daily",request.url),{headers:internalAuth}),env,ctx);
+      const sleepUrl=new URL("/health/sleep",request.url);sleepUrl.searchParams.set("start",oldest);sleepUrl.searchParams.set("end",newest);
+      const sleepResponse=await app.fetch(new Request(sleepUrl,{headers:internalAuth}),env,ctx);
+      const [daily,sleepData]=await Promise.all([dailyResponse.json(),sleepResponse.json()]);
+      let fitness={};
+      if(env.INTERVALS_API_KEY){
+        const auth="Basic "+btoa("API_KEY:"+String(env.INTERVALS_API_KEY));
+        const response=await fetch("https://intervals.icu/api/v1/athlete/0/wellness?oldest="+oldest+"&newest="+newest,{headers:{Authorization:auth,Accept:"application/json"}});
+        const rows=await response.json().catch(()=>[]);
+        const latest=Array.isArray(rows)&&rows.length?rows[rows.length-1]:{};
+        fitness={...latest,tsb:Number.isFinite(Number(latest.ctl))&&Number.isFinite(Number(latest.atl))?Number(latest.ctl)-Number(latest.atl):null};
+      }
+      return Response.json({status:"ok",...buildCoachCouncil({daily,fitness,sleepSessions:sleepData.sessions||[]})},{headers:{"Cache-Control":"no-store"}});
+    } catch(error){return Response.json({status:"error",message:error.message},{status:500});}
+  }
 
   if (url.pathname === "/app/api/weight" && request.method === "POST") {
     const body = await request.text();
