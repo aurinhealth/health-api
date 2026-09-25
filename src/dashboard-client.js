@@ -111,9 +111,13 @@ function trainingDayMarkup(x){
   const completed=(training.completed||[]).filter(z=>!isNutritionItem(z));
   const matched=training.matched||[];
   const paired=new Map(matched.map(m=>[String(m.actualId),m.planned]));
+  // Defensive UI pairing while older cached API responses are still in flight.
+  // A distinctive matching title on the same daily response is one session.
+  const norm=v=>String(v||"").toLowerCase().replace(/[^a-z0-9áéěíóúůýčďňřšťž]+/g," ").trim();
+  planned.forEach(plan=>{const key=norm(plan.name);if(!key)return;const candidate=completed.find(actual=>!paired.has(String(actual.id))&&(norm(actual.name).includes(key)||key.includes(norm(actual.name))));if(candidate)paired.set(String(candidate.id),plan);});
   const entries=[];
   completed.forEach(actual=>entries.push({actual,planned:paired.get(String(actual.id))||null}));
-  planned.forEach(plan=>entries.push({planned:plan,actual:null}));
+  planned.filter(plan=>!Array.from(paired.values()).includes(plan)).forEach(plan=>entries.push({planned:plan,actual:null}));
   const items=entries.map(({planned,actual})=>{
     const item=actual||planned, done=Boolean(actual), linked=Boolean(actual&&planned);
     const label=linked?"✓ Podle plánu":done?"✓ Mimo plán":"Plánováno";
