@@ -13,6 +13,9 @@ import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
 import {activityDetail} from './activity-detail.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
+import {googleDashboard} from './google-dashboard.js';
+import {energyBudget} from './energy-budget.js';
+import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -208,6 +211,9 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (id INTEGER PRIMARY KEY,profile_json TEXT NOT NULL)").run();if(request.method==='POST'){const p=await request.json(),profile={sex:['male','female'].includes(p.sex)?p.sex:'',age:Number(p.age)||null,height:Number(p.height)||null,hrmax:Number(p.hrmax)||null,rhr:Number(p.rhr)||null};await env.DB.prepare('INSERT INTO dashboard_profile(id,profile_json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json').bind(JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
+  if(url.pathname==='/app/api/google-health'&&request.method==='GET')return Response.json(await googleDashboard(env.DB,pragueToday()),{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
 
   if(url.pathname==='/app/api/food/day'&&request.method==='GET'){
     const target=new URL('/food/log',request.url);target.searchParams.set('date',url.searchParams.get('date')||pragueToday());
@@ -215,7 +221,7 @@ async function handleDashboardApi(request, env, ctx, url) {
   }
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
-    try {const body=await request.json();return Response.json(await resolveFood({name:String(body.name||'').slice(0,180),barcode:String(body.barcode||'').slice(0,24),limit:12}),{headers:{'Cache-Control':'no-store'}});}
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),personal=await searchPersonalFoods(env.DB,name,barcode);let result;try{const brands=['monster','redbull','snickers','hollandia'],word=name.toLowerCase().replace(/\s/g,''),suggestion=brands.filter(b=>foodSimilarity(word,b)>=.7).sort((a,b)=>foodSimilarity(word,b)-foodSimilarity(word,a))[0];result=await resolveFood({name:suggestion||name,barcode,limit:12});if(suggestion&&suggestion!==word)result.suggestion=suggestion;}catch(e){if(!personal.length)throw e;result={status:'ok',candidates:[],providerUnavailable:true};}result.candidates=[...personal,...(result.candidates?.length?result.candidates:result.product?[result.product]:[])];return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:'Databáze potravin právě neodpovídá. Zkus to znovu nebo načti etiketu.',detail:String(error.message).slice(0,160)},{status:502});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
@@ -490,6 +496,7 @@ async function handleDashboardApi(request, env, ctx, url) {
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
   const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
+  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first(),health=await googleDashboard(env.DB,pragueToday()),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });

@@ -362,15 +362,7 @@ async function googleToken(env) {
         client_id: env.GOOGLE_CLIENT_ID,
         client_secret: env.GOOGLE_CLIENT_SECRET,
         refresh_token: env.GOOGLE_REFRESH_TOKEN,
-        grant_type: "refresh_token",
-        scope: [
-          "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
-          "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
-  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.writeonly",
-          "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
-          "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
-          "https://www.googleapis.com/auth/googlehealth.nutrition.writeonly"
-        ].join(" ")
+        grant_type: "refresh_token"
       })
     }
   );
@@ -2364,7 +2356,8 @@ async function energyForDate(env, date) {
     plannedKeys.add(key); plannedWorkouts.push(w);
   }
 
-  const intervalsCompleted = activities.results.map(row => {
+  const cyclingRows=activities.results.filter(row=>{try{const p=JSON.parse(row.payload_json||'{}');return /^(ride|virtualride|ebikeride|cycling|mountainbikeride|gravelride)$/i.test(p.type||p.category||'');}catch{return false;}});
+  const intervalsCompleted = cyclingRows.map(row => {
     const payload = JSON.parse(row.payload_json);
     const actualCalories =
       Number(payload.calories_kcal ?? payload.calories ?? payload.icu_calories ?? row.value_numeric ?? 0);
@@ -2386,7 +2379,7 @@ async function energyForDate(env, date) {
 
   const googleCompleted = googleExercises.results
     .map(googleExerciseActivity)
-    .filter(activity => !isDuplicateOfIntervalsActivity(activity, activities.results));
+    .filter(activity => !isDuplicateOfIntervalsActivity(activity, cyclingRows));
 
   const completed = [...intervalsCompleted, ...googleCompleted]
     .filter(a => {
@@ -3317,7 +3310,8 @@ async function healthSleep(env, url) {
       date: day,
       startTime,
       endTime,
-      durationMin: Number.isFinite(durationMin) ? Math.round(durationMin) : null,
+      timeInBedMin: Number.isFinite(durationMin) ? Math.round(durationMin) : null,
+      durationMin: Object.keys(stageMinutes).some(k=>['DEEP','REM','LIGHT'].includes(k)) ? Math.round(['DEEP','REM','LIGHT'].reduce((s,k)=>s+(stageMinutes[k]||0),0)) : Number.isFinite(durationMin) ? Math.round(durationMin) : null,
       type: sleep.type || sleep.sleepType || null,
       stages: Object.fromEntries(Object.entries(stageMinutes).map(([k,v])=>[k,Math.round(v)])),
       minutesToFallAsleep: sleep.minutesToFallAsleep ?? null,

@@ -93,6 +93,7 @@ export function productFromLabel(input = {}) {
     name: str(input.name),
     brand: str(input.brand),
     serving_size: str(input.serving_size ?? input.servingSize),
+    nutrition_basis: ['g','ml','portion'].includes(input.nutrition_basis)?input.nutrition_basis:'g',
     calories_100g: calories,
     protein_100g: protein,
     carbs_100g: carbs,
