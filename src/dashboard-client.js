@@ -125,6 +125,14 @@ function renderCoachCouncil(){
   g.innerHTML=(council.guardrails||[]).map(x=>"• "+esc(x)).join("<br>");
 }
 
+function renderPlannedRideReview(){
+  const today=pragueToday(),days=state.week?.days||[],rides=days.flatMap(d=>(d.daily?.training?.planned||[]).map(p=>({...p,date:d.date}))).filter(p=>p.date>=today&&(p.cycling||/ride|cycl|bike|endurance|threshold|sweet spot/i.test(p.type+' '+p.name))).sort((a,b)=>a.date.localeCompare(b.date)),ride=rides[0],el=$('plannedRideReview');
+  if(!ride){el.innerHTML='<h3>Bez nadcházejícího kola ve vybraném týdnu</h3><p class="small">Vyber další týden v Tréninku, pokud je plán až tam. Dokončenou jízdu nehodnotím jako plánovanou.</p>';return}
+  const hours=num(ride.durationHours),tss=num(ride.tss),intensity=hours>0&&tss>0?Math.sqrt(tss/(hours*100)):null,quality=/threshold|sweet.?spot|tempo|vo2|interval/i.test(ride.name||''),prior=days.filter(d=>d.date<ride.date&&d.date>=dateShift(ride.date,-3)).flatMap(d=>d.daily?.training?.completed||[]),priorTss=prior.reduce((s,p)=>s+num(p.tss),0),wellness=state.fitness?.wellness?.at(-1),fresh=wellness?.id===today,form=fresh&&measured(wellness?.tsb)?Number(wellness.tsb):null;
+  const purpose=quality?'Podle názvu jde o trénink s intenzivnějšími bloky. Cílem je rozvoj výkonu při vyšší intenzitě; přesný stimul závisí na předepsaných intervalech.':hours>=2?'Podle názvu a délky jde o vytrvalostní práci: dlouhé souvislé zatížení a udržení stabilního výkonu i v závěru.':'Podle názvu jde o kratší aerobní trénink. Konkrétní zaměření musí potvrdit struktura jednotky.';
+  const concern=hours>=3&&priorTss>=150?'Dlouhá jízda navazuje na '+fmt(priorTss)+' TSS za předchozí až tři dny. Neplánoval bych další intenzitu nad rámec jednotky; před startem zvaž zkrácení podle skutečné únavy.':quality&&form!=null&&form<0?'Intenzivní jednotka připadá na zápornou formu ('+fmt(form)+'). Není to samo o sobě důvod ke zrušení, ale kvalitu ověř v rozjetí a nepřidávej další intervaly.':'Z dostupné délky a zátěže nevyplývá jednoznačný důvod plán změnit. To není potvrzení připravenosti: rozhoduje také aktuální stav a přesná struktura.';
+  el.innerHTML='<div class="eyebrow">'+esc(longDate(ride.date))+' · nejbližší plánovaná jízda</div><h3>'+esc(ride.name||'Kolo')+'</h3><div class="detail-stats"><div><span>Délka</span><strong>'+ (hours?hm(hours*60):'—')+'</strong></div><div><span>Plánovaná zátěž</span><strong>'+(tss?fmt(tss)+' TSS':'—')+'</strong></div><div><span>Odhad IF z TSS</span><strong>'+(intensity==null?'—':fmt(intensity,2))+'</strong></div><div><span>Předchozí 3 dny</span><strong>'+fmt(priorTss)+' TSS</strong></div></div><div class="grid2"><div><h3>Proč tato jednotka</h3><p>'+esc(purpose)+'</p><h3>Na co se zaměřit</h3><p>'+esc(quality?'Dodrž konkrétní bloky z plánu; nepřeváděj přestávky na další práci. Sleduj, jestli výkon držíš bez postupného zhoršování provedení.':'Drž předepsanou vytrvalostní intenzitu, ne výkon skupiny nebo segmentů. Důležitá je konzistence a zvládnutý závěr, ne co nejvyšší průměr.')+'</p></div><div><h3>Co bych upravil a proč</h3><p>'+esc(concern)+'</p><h3>Co zatím nelze posoudit</h3><p class="small">'+esc(fresh?'Wellness je z dneška.':'Aktuální wellness chybí nebo je starší ('+(wellness?.id||'bez data')+'); připravenost nelze potvrdit.')+' Struktura intervalů a cílové watty nejsou v tomto souhrnu dostupné. IF je pouze výpočet z plánované délky a TSS, nikoli naměřená intenzita. Předchozí zátěž zahrnuje jen záznamy dostupné ve vybraném týdnu.</p></div></div><div class="small">Datové hodnocení podle dostupného plánu · nejde o hloubkovou AI analýzu intervalů.</div>';
+}
 function renderOverview(){
   const d=state.daily||{},f=d.nutrition?.foodLog?.totals||{},target=d.nutrition||{};
   $("overviewDate").textContent=longDate(pragueToday());
@@ -163,6 +171,18 @@ function renderOverview(){
   const weightTrend=weightDelta==null||Math.abs(weightDelta)<.05?"":'<div class="trend '+(weightDelta<0?"good":"bad")+'">'+(weightDelta>0?"↑ +":"↓ ")+fmt(weightDelta,1)+' kg od počáteční váhy</div>';
   const targetW=Number(d.nutrition?.targetWeightKg||80),remainingW=Number.isFinite(currentW)?currentW-targetW:null; $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+" kg"+weightTrend:"—"; $("oWeightMeta").textContent=Number.isFinite(remainingW)?"Aktuálně · cíl "+fmt(targetW,1)+" kg · zbývá "+fmt(Math.max(0,remainingW),1)+" kg":"aktuálně · cíl "+fmt(targetW,1)+" kg";
   macroChart("calChart",days);
+  renderPlannedRideReview();
+}
+function renderPmcChart(){
+  const range=num($('pmcRange').value,14),rows=(state.fitness?.wellness||[]).filter(r=>r.id>=dateShift(pragueToday(),1-range)&&r.id<=pragueToday()),svg=$('pmcChart'),W=1000,H=420,L=72,R=26,T=48,B=52;
+  $('pmcRange').onchange=renderPmcChart;
+  const series=[['Fitness','ctl','#3b82f6'],['Fatigue','atl','#ef6b73'],['Form','tsb','#35c48b']],values=rows.flatMap(r=>series.map(s=>r[s[1]]).filter(measured).map(Number));
+  if(!values.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat v tomto období</text>';return}
+  const lo=Math.floor(Math.min(0,...values)/20)*20,hi=Math.max(lo+20,Math.ceil(Math.max(...values)/20)*20),x=date=>L+(W-L-R)*(new Date(date+'T12:00:00Z')-new Date(dateShift(pragueToday(),1-range)+'T12:00:00Z'))/((range-1)*86400000),y=v=>H-B-(H-T-B)*(v-lo)/(hi-lo);
+  let out='';for(let i=0;i<=5;i++){const v=lo+(hi-lo)*i/5,yy=y(v);out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+yy+'" y2="'+yy+'" stroke="#2c3745"/><text x="'+(L-12)+'" y="'+(yy+5)+'" text-anchor="end" fill="#aeb9c9" font-size="15">'+fmt(v)+'</text>'}
+  out+='<line x1="'+L+'" x2="'+L+'" y1="'+T+'" y2="'+(H-B)+'" stroke="#728096"/><text x="12" y="25" fill="#aeb9c9" font-size="13">Zátěž</text>';
+  const step=range<=14?1:range<=30?3:7;for(let i=0;i<range;i++){if(i%step&&i!==range-1)continue;if(i===range-1&&(range-1)%step<step/2)continue;const date=dateShift(pragueToday(),i+1-range),xx=x(date);out+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+(H-B)+'" stroke="#24303d"/><text transform="translate('+xx+','+(H-25)+') rotate(-35)" text-anchor="end" fill="#aeb9c9" font-size="13">'+esc(dateLabel(date))+'</text>'}
+  series.forEach(([name,key,color],i)=>{let segment=[];const flush=()=>{if(segment.length>1)out+='<polyline points="'+segment.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="3"/>';segment=[]};rows.forEach((r,j)=>{if(j&&dateShift(rows[j-1].id,1)!==r.id)flush();if(!measured(r[key])){flush();return}const xx=x(r.id),yy=y(Number(r[key]));segment.push(xx+','+yy);out+='<circle cx="'+xx+'" cy="'+yy+'" r="3" fill="'+color+'"><title>'+esc(dateLabel(r.id)+' · '+name+': '+fmt(r[key],1))+'</title></circle>'});flush();out+='<text x="'+(L+i*150)+'" y="25" fill="'+color+'" font-size="16">'+name+'</text>'});svg.innerHTML=out;
 }
 function renderTraining(){
   const days=state.week?.days||[],fw=state.fitness?.wellness||[];
@@ -173,15 +193,12 @@ function renderTraining(){
   const completed=days.flatMap(x=>(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
   const matched=days.flatMap(x=>(x.daily?.training?.matched||[]).map(z=>({...z,date:x.date})));
   $("trainingWeekOverview").innerHTML=days.map(trainingDayMarkup).join("");
-  $("plannedList").innerHTML=planned.length?planned.map(x=>'<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||"Workout")+'</strong><span class="small">Plánováno · '+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+'</span></div>').join(""):'<div class="muted">Všechny plánované tréninky jsou splněné nebo tento týden žádné nejsou.</div>';
-  $("completedList").innerHTML=completed.length?completed.slice().reverse().map(x=>{const plan=matched.find(m=>String(m.actualId)===String(x.id));return '<div class="activity"><strong>'+esc(longDate(x.date))+' · '+esc(x.name||x.type||"Activity")+'</strong><span class="small">'+(plan?"Podle plánu":"Mimo plán")+" · "+esc(x.type||"")+(x.durationHours?" · "+fmt(x.durationHours,1)+" h":"")+(x.tss?" · TSS "+fmt(x.tss):"")+(x.calories?" · "+fmt(x.calories)+" kcal":"")+'</span></div>'}).join(""):'<div class="muted">Zatím nic dokončeno.</div>';
   const latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
   $("tFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
   $("tFatigue").innerHTML=(Number.isFinite(Number(latest.atl))?fmt(latest.atl):"—")+trendArrow(latest.atl,prev.atl,true,"");
   $("tForm").innerHTML=(Number.isFinite(Number(latest.tsb))?fmt(latest.tsb):"—")+trendArrow(latest.tsb,prev.tsb,false,"");
   $("tRamp").innerHTML=(Number.isFinite(Number(latest.rampRate))?fmt(latest.rampRate,1):"—")+trendArrow(latest.rampRate,prev.rampRate,false,"");
-  const labels=fw.map(x=>dateLabel(String(x.id||"").slice(0,10)));
-  multiLineChart("pmcChart",[{label:"Fitness",stroke:"#3b82f6",values:fw.map(x=>num(x.ctl))},{label:"Fatigue",stroke:"#ef6b73",values:fw.map(x=>num(x.atl))},{label:"Form",stroke:"#35c48b",values:fw.map(x=>num(x.tsb))}],labels,{W:1000,H:420});
+  renderPmcChart();
   const form=num(latest.tsb),ramp=num(latest.rampRate);
   $("pmcInsight").textContent=!Number.isFinite(form)?"Bez aktuálních wellness dat.":form<0?"Form je záporný: zátěž je vyšší než dlouhodobá připravenost. Zaměř se na regeneraci a nepřidávej další intenzitu bez důvodu.":ramp>5?"Fitness roste rychleji. Sleduj kumulovanou únavu; další zvyšování objemu má smysl jen při stabilní regeneraci.":"Fitness/form jsou v relativně stabilním pásmu. Pokračuj podle plánu a sleduj vývoj TSB.";
   const tssDays=days.map(x=>{const p=[...(x.daily?.training?.planned||[]),...(x.daily?.training?.matched||[]).map(m=>m.planned)].filter(z=>!isNutritionItem(z)),a=(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z));return {date:x.date,planned:p.reduce((s,z)=>s+num(z.tss),0),actual:a.reduce((s,z)=>s+num(z.tss),0)};});

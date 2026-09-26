@@ -55,6 +55,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
     <div class="card"><div class="label">Dnešní trénink</div><div id="oTraining" class="value">—</div><div id="oTrainingNote" class="small"></div></div>
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
   </div>
+  <div class="section">Hodnocení plánovaného kola</div><div id="plannedRideReview" class="card"></div>
   <div class="section">Tým odborných poradců</div><div class="card coach-council"><div class="label" style="margin-bottom:8px">Společné rozhodnutí pro výkon na kole</div><div id="coachPriorities"></div><div id="coachCards" class="grid3" style="margin-top:12px"></div><details style="margin-top:12px"><summary>Pravidla a použité důkazy</summary><div id="coachGuardrails" class="small" style="margin-top:8px"></div></details></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
   <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div>
@@ -70,14 +71,13 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   </div>
   <div class="section">Týdenní rytmus · plán vs. skutečnost</div>
   <div class="card"><div id="trainingWeekOverview" class="plan-grid"></div></div>
-  <div class="card" style="margin-top:12px"><h3>Fitness · Fatigue · Form</h3><svg id="pmcChart" class="chart" style="height:420px" viewBox="0 0 1000 420"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>
+  <div class="card" style="margin-top:12px"><div class="weekbar"><h3>Fitness · Fatigue · Form</h3><select id="pmcRange" aria-label="Období grafu zátěže"><option value="14">14 dní</option><option value="30">30 dní</option><option value="90">90 dní</option></select></div><svg id="pmcChart" class="chart" style="height:420px" viewBox="0 0 1000 420"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>
   <div class="card" style="margin-top:12px"><h3>Týdenní zátěž · plán a skutečnost</h3><svg id="tssChart" class="chart" style="height:320px" viewBox="0 0 1000 320"></svg><div id="tssInsight" class="notice" style="margin-top:10px"></div></div>
   <div class="grid2" style="margin-top:12px">
     <div class="card"><h3>Tréninkový load · posledních 42 dní</h3><svg id="loadChart" class="chart" viewBox="0 0 1000 250"></svg></div>
     <div class="card"><h3>Aktivity · historie</h3><div id="trainingSummary" class="small"></div><div id="trainingActivityTable"></div></div>
   </div>
 
-  <div class="grid2" style="margin-top:12px"><div class="card"><h3>Plánované aktivity</h3><div id="plannedList"></div></div><div class="card"><h3>Dokončené aktivity</h3><div id="completedList"></div></div></div>
 </section>
 
 <section id="inbox" class="view">
@@ -108,7 +108,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260926-03" defer></script>
+<script src="/app/dashboard-client.js?v=20260926-04" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
