@@ -10,3 +10,9 @@ export function parseNutritionLabel(text){
   }
   return result;
 }
+
+export function parseNutritionPortion(text){
+  // In a two-column table, the portion is normally the last value. Show all OCR text for correction.
+  const lines=String(text||'').split(/\r?\n/).map(line=>{const values=[...line.matchAll(/([\d]+(?:[.,]\d+)?)\s*(kcal|g)\b/gi)];if(values.length>1){const unit=/kcal/i.test(line)?'kcal':'g',matches=values.filter(v=>v[2].toLowerCase()===unit);if(matches.length>1)return line.slice(0,matches[0].index)+matches.at(-1)[0];}return line;});
+  return {values:parseNutritionLabel(lines.join('\n')),basis:'portion',ambiguous:/100\s*(?:g|ml)/i.test(text),name:String(text||'').split(/\r?\n/).map(s=>s.trim()).find(s=>s.length>2&&!/\d|energie|kcal|b[ií]lkov|sachar|tuk|nutri[cč]|hodnot/i.test(s))?.slice(0,120)||'Jídlo z fotografie'};
+}

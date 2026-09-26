@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {foodIntake,foodPortionDefaults,parseFoodQuantity} from '../src/food-portions.js';
+import {cleanFoodSearch} from '../src/food-sources.js';
+import {parseNutritionPortion} from '../src/food-label.js';
+const product={name:'Tyčinka',quantity:'50 g',nutrition_basis:'g',calories_100g:500,protein_100g:8,carbs_100g:60,fat_100g:25};
+test('fractions and decimal comma are accepted, invalid amounts rejected',()=>{assert.equal(parseFoodQuantity('1/2'),.5);assert.equal(parseFoodQuantity('0,5'),.5);for(const v of ['','0','1/0','-1','text'])assert.equal(parseFoodQuantity(v),null);});
+test('half a packaged bar needs no manual gram calculation',()=>{const r=foodIntake(product,'1/2','pack');assert.equal(r.amount,25);assert.equal(r.calories,125);});
+test('500ml can has a known default and uses volume nutrition',()=>{const p={...product,quantity:'500 ml',nutrition_basis:'ml',calories_100g:45};assert.equal(foodPortionDefaults(p).package.amount,500);assert.equal(foodIntake(p,500,'ml').calories,225);});
+test('cross-unit density conversion is explicit and returns correct basis',()=>{assert.throws(()=>foodIntake(product,100,'ml'),/hustotu/);const r=foodIntake(product,100,'ml',{density:1.2});assert.equal(r.amount,120);assert.equal(r.unit,'g');assert.equal(r.calories,600);});
+test('piece sizes cannot be invented',()=>{assert.throws(()=>foodIntake(product,1,'piece'),/velikost/);assert.equal(foodIntake(product,'1/2','piece',{pieceAmount:50,pieceUnit:'g'}).calories,125);});
+test('portion photo is not multiplied as per100g nutrition',()=>{const r=parseNutritionPortion('Můj oběd\nEnergie 1200 kcal\nBílkoviny 40 g\nSacharidy 140 g\nTuky 45 g');const p={...r.values,nutrition_basis:'portion'};assert.equal(foodIntake(p,1,'portion').calories,1200);assert.equal(foodIntake(p,'1/2','portion').calories,600);});
+test('two column photo selects last column and warns about ambiguity',()=>{const r=parseNutritionPortion('100 g / porce\nEnergie 100 kcal 350 kcal\nBílkoviny 10 g 35 g');assert.equal(r.values.calories_100g,350);assert.equal(r.values.protein_100g,35);assert.equal(r.ambiguous,true);});
+test('name results remove incomplete energy and exact duplicates, keep real zero energy',()=>{const a={...product,name:'Banán'};const out=cleanFoodSearch([a,{...a},{name:'Banán',calories_100g:null},{name:'Voda',calories_100g:0}],'banán');assert.equal(out.length,2);assert.equal(out[0].name,'Banán');});

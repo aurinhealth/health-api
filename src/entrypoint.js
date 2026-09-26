@@ -9,7 +9,8 @@ import { connectionStatus } from "./connections.js";
 import { whoopOAuth, whoopData } from "./whoop.js";
 import { connectionEnvironment, saveConnectionSecret } from "./connection-secrets.js";
 import { resolveFood, calculateAmount } from './food-sources.js';
-import { parseNutritionLabel } from './food-label.js';
+import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
+import { foodIntake } from './food-portions.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -216,14 +217,14 @@ async function handleDashboardApi(request, env, ctx, url) {
     catch(error){return Response.json({message:'Databáze potravin právě neodpovídá. Zkus to znovu nebo načti etiketu.',detail:String(error.message).slice(0,160)},{status:502});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
-    const body=await request.json().catch(()=>({}));return Response.json({status:'ok',values:parseNutritionLabel(String(body.text||'').slice(0,12000))});
+    const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});
   }
   if(url.pathname==='/app/api/food/log'&&request.method==='POST'){
-    try {const body=await request.json(),p=body.product||{},grams=Number(body.grams);
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(body.date)||!String(p.name||'').trim()||!Number.isFinite(grams)||grams<=0||grams>10000) return Response.json({message:'Zkontroluj název, datum a množství.'},{status:400});
-      for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?1000:100))return Response.json({message:'Doplň a ověř energii i všechna tři makra na 100 g.'},{status:400});
-      const amount=calculateAmount(p,grams);
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:p.source==='openfoodfacts'?'openfoodfacts':'package_label',note:JSON.stringify({grams,barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null})})}),env,ctx);
+    try {const body=await request.json(),p=body.product||{};
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(body.date)||!String(p.name||'').trim()) return Response.json({message:'Zkontroluj název a datum.'},{status:400});
+      for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:'Doplň energii i všechna tři makra pro zvolený základ tabulky.'},{status:400});
+      let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:p.source==='openfoodfacts'?'openfoodfacts':'package_label',note:JSON.stringify({amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error('Uložení selhalo.');
       return Response.json({...result,message:'Jídlo je uložené do denního příjmu.'},{headers:{'Cache-Control':'no-store'}});
     }catch{return Response.json({message:'Jídlo se nepodařilo uložit. Zkontroluj hodnoty a zkus to znovu.'},{status:500});}

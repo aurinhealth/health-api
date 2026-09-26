@@ -33,12 +33,18 @@ function publicProduct(product, barcode, source = "openfoodfacts") {
     brand: str(product?.brands),
     quantity: str(product?.quantity),
     serving_size: str(product?.serving_size),
+    nutrition_basis: /(?:ml|cl|\bl)\b/i.test(str(product?.quantity)+' '+str(product?.serving_size))?'ml':'g',
     image_url: str(product?.image_front_url),
     ...nutrients,
     source,
     source_url: product?.code ? `${OFF_BASE}/product/${product.code}` : null,
     confidence: nutrients.calories_100g != null ? "high" : "low"
   };
+}
+
+export function cleanFoodSearch(products,query=''){
+  const normalize=value=>str(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),seen=new Set(),q=normalize(query);
+  return products.filter(p=>p.name&&p.calories_100g!=null&&Number.isFinite(Number(p.calories_100g))&&Number(p.calories_100g)>=0).sort((a,b)=>{const score=p=>(normalize(p.name)===q?100:normalize(p.name).startsWith(q+' ')?20:0)+['protein_100g','carbs_100g','fat_100g'].filter(k=>p[k]!=null).length;return score(b)-score(a);}).filter(p=>{const key=normalize(p.name)+'|'+normalize(p.brand)+'|'+normalize(p.quantity);if(seen.has(key))return false;seen.add(key);return true;});
 }
 
 export async function lookupOpenFoodFactsBarcode(barcode) {
@@ -129,7 +135,8 @@ export async function resolveFood(input = {}) {
 
   const name = str(input.name);
   if (name) {
-    const off = await searchOpenFoodFacts(name, input.limit || 8);
+    const off = await searchOpenFoodFacts(name, 20);
+    off.products=cleanFoodSearch(off.products||[],name).slice(0,input.limit||8);
     if (off.products?.length) return { status: "ok", match: "name", product: off.products[0], candidates: off.products, reference: nutridatabazeReference(name) };
     return { status: "reference_required", match: "nutridatabaze", product: null, candidates: [], reference: nutridatabazeReference(name) };
   }
