@@ -11,6 +11,7 @@ import { connectionEnvironment, saveConnectionSecret } from "./connection-secret
 import { resolveFood, calculateAmount } from './food-sources.js';
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
+import {activityDetail} from './activity-detail.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -249,6 +250,7 @@ async function handleDashboardApi(request, env, ctx, url) {
     catch { return Response.json({message:'WHOOP nelze načíst. Zkontroluj připojení v Nastavení.'},{status:502}); }
   }
 
+  if(url.pathname==='/app/api/activity-detail'&&request.method==='GET')return activityDetail(request,env,url.searchParams.get('id'),await verifyDashboardSession(request,env.STRENGTH_API_KEY));
   if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
 
   if (url.pathname === "/app/api/coaches" && request.method === "GET") {
