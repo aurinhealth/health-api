@@ -17,5 +17,5 @@ body{background:var(--bg);font-size:14px}.shell{grid-template-columns:220px minm
 #nutritionInsights,#tssChart,#tssInsight{display:none}
 .card:has(>#tssChart){display:none}
 #nutrition>.section-hero .eyebrow,#nutritionReason,#nutritionTargetSummary{display:none}
-@media(max-width:700px){.overview-nutrition{grid-template-columns:1fr}}
+@media(max-width:700px){.overview-nutrition{grid-template-columns:1fr}#nutrition .daygrid{grid-template-columns:repeat(2,minmax(0,1fr))}#nutritionBalance .experience-stats{grid-template-columns:1fr}.food-editor-grid{grid-template-columns:1fr}}
 `;
