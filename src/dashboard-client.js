@@ -651,6 +651,7 @@ function installFoodEntry(){
 installDetailViews();installFoodEntry();installExperience();installRequestedExperience();installPortionControls();$('recovery').insertAdjacentHTML('afterbegin','<div id="whoopSignals" class="card" hidden style="margin-bottom:12px"></div>');
 if(location.hash==='#settings')activate('settings');
 function installDataCorrections(){
+  $('foodEditor').addEventListener('input',()=>{for(const span of $('basketRows').querySelectorAll('span'))span.textContent=span.textContent.replace(/\bportion\b/g,'porce');});
   const originalTraining=renderTraining;renderTraining=function(){originalTraining();renderTrainingClarity();};
   $('foodManual').onclick=()=>{selectFoodProduct({name:$('foodQuery').value.trim(),source:'package_label',nutrition_basis:'portion'});foodMessage('Zadej celkové hodnoty toho, co jsi snědl nebo vypil. Výchozí množství je jedna porce.');};
   $('foodBasis').addEventListener('change',()=>{if($('foodBasis').value==='portion'){$('foodUnit').value='portion';$('foodGrams').value='1';}else if($('foodUnit').value==='portion'){$('foodUnit').value=$('foodBasis').value;$('foodGrams').value='100';}updateFoodPreview();$('foodGrams').dispatchEvent(new Event('input',{bubbles:true}));});

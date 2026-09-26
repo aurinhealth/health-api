@@ -294,7 +294,9 @@ async function handleDashboardApi(request, env, ctx, url) {
         const detail=await response.json(),review=council.reviews.find(r=>r.id==='review-'+a.id);if(!review)return;
         const sections=rideReviewSections(detail.analysis);if(!sections.length)return;
         review.analysis=[review.analysis?.[0],...sections].filter(Boolean);review.evidence=['Hodnocení využívá výkonový a tepový stream z Intervals.icu.'];
-        council.priorities.unshift(a.name+': '+sections[0].text);
+        const measured=detail.activity,impact=sections.find(s=>s.label==='Tréninkový dopad a další krok');
+        review.actions=['Dokončeno: '+Math.round(Number(measured.moving_time)/60)+' min · '+(Number(measured.distance)/1000).toFixed(1)+' km · '+Math.round(Number(measured.total_elevation_gain))+' m převýšení.',...(impact?[impact.text]:[])];
+        council.priorities.unshift(a.name+': '+(impact?.text||sections[0].text));
       }));
       return Response.json({status:"ok",...council},{headers:{"Cache-Control":"no-store"}});
     } catch(error){return Response.json({status:"error",message:error.message},{status:500});}

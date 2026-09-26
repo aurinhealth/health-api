@@ -1206,7 +1206,7 @@ async function saveGooglePointsBatch(env, family, type, points) {
   return points.length;
 }
 async function syncGoogleRecent(env){
-  const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise','weight'],configs=[...GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])),['weight','weight','sample','google-wearables',2]];
+  const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise','weight'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])).map(c=>c[0]==='weight'?['weight','weight','sample','all-sources',2]:c);
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:'error',message:error.message};}}));
   const result={status:results.some(r=>r.status!=='ok')?'partial':'ok',results};
   await ensureSyncStatusTable(env);
