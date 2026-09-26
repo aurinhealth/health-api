@@ -667,4 +667,54 @@ function installDataCorrections(){
   const oldLoad=load;load=async()=>{try{state.googleHealth=await jsonFetch('/app/api/google-health');}catch(e){state.googleHealth={wellness:[],sync:{status:'error',error:e.message}};}await oldLoad();const today=state.week?.days?.find(d=>d.date===pragueToday());if(today&&state.daily?.nutrition?.energyBudget){today.daily.nutrition=state.daily.nutrition;today.daily.calories=state.daily.calories;renderOverview();renderNutrition();}correctDataPresentation();};
   const oldActivate=activate;activate=function(id){oldActivate(id);if(state.daily)correctDataPresentation();};
 }
-installDataCorrections();loadConnections();load().then(async()=>{try{const data=await jsonFetch('/app/api/connections');if(data.providers.find(p=>p.id==='whoop')?.connected)await loadWhoop();}catch{}});
+function simpleFoodPortions(product){
+  const meta=foodPortionDefaults(product),options=[];
+  if(product.nutrition_basis==='portion')return [{key:'portion',label:'Porce',unit:'portion',size:1}];
+  if(meta.package)options.push({key:'pack',label:'Balení ('+meta.package.amount+' '+meta.package.unit+')',unit:'pack',size:1});
+  if(meta.serving)options.push({key:'serving',label:'Porce ('+meta.serving.amount+' '+meta.serving.unit+')',unit:meta.serving.unit,size:meta.serving.amount});
+  if(meta.basis==='ml')options.push({key:'ml100',label:'100 ml',unit:'ml',size:100},{key:'ml',label:'Mililitry',unit:'ml',size:1});
+  else options.push({key:'g100',label:'100 g',unit:'g',size:100},{key:'g',label:'Gramy',unit:'g',size:1});
+  return options;
+}
+function installSimpleFoodEditor(){
+  const editor=$('foodEditor'),advanced=document.createElement('details');advanced.id='foodAdvanced';advanced.innerHTML='<summary>Upravit název a nutriční hodnoty</summary><div class="food-editor-grid" id="foodAdvancedFields"></div>';
+  const fields=advanced.querySelector('#foodAdvancedFields'),context=document.createElement('div');context.id='simpleFoodContext';context.className='simple-food-context';
+  for(const id of ['foodDate','foodMeal'])context.append($(id).closest('label'));
+  $('foodEntry').querySelector('.food-controls').before(context);
+  for(const label of [...editor.querySelectorAll('.food-editor-grid>label')])fields.append(label);
+  const source=$('foodSource');advanced.append(source,$('foodBasisLabel'),$('foodPieceSettings'),$('foodDensitySettings'),$('foodPackEditor'),$('savePersonalFood'));
+  $('foodMultiplierLabel').hidden=true;$('foodMultiplierHelp').hidden=true;$('foodAmountHelp').hidden=true;
+  for(const grid of [...editor.querySelectorAll(':scope>.food-editor-grid')])if(!grid.children.length)grid.remove();
+  editor.querySelector('h3').hidden=true;
+  editor.prepend(Object.assign(document.createElement('div'),{id:'simpleFoodHero',className:'simple-food-hero'}));
+  $('simpleFoodHero').innerHTML='<div class="eyebrow" id="simpleFoodBrand"></div><h3 id="simpleFoodName"></h3><div id="simpleFoodMacros" class="simple-food-macros"></div>';
+  const controls=document.createElement('div');controls.className='simple-food-controls';controls.innerHTML='<div class="simple-food-picker"><label>Množství<input id="simpleFoodAmount" class="food-input" inputmode="decimal" value="1" aria-label="Počet porcí nebo množství"></label><label>Porce<select id="simpleFoodPortion" class="food-input" aria-label="Velikost porce"></select></label></div><div class="simple-food-fractions">'+['1/4','1/3','1/2','3/4','1','2'].map(q=>'<button type="button" class="btn" data-simple-amount="'+q+'">'+q+'</button>').join('')+'</div>';
+  $('simpleFoodHero').after(controls);controls.after($('foodPortionPreview'),$('ingredientAdd'),advanced);
+  $('ingredientAdd').textContent='Přidat do seznamu';$('ingredientAdd').classList.add('primary','simple-food-add');
+  $('foodQuickAmounts').hidden=true;
+  let portions=[],updating=false;
+  function updateSimple(){
+    if(!foodSelected)return;
+    const p=foodEditorProduct();$('simpleFoodName').textContent=p.name||'Vlastní jídlo';$('simpleFoodBrand').textContent=p.brand||'Vybraná potravina';
+    try{const a=foodIntake(p,$('foodGrams').value,$('foodUnit').value,{pieceAmount:$('foodPieceAmount').value,pieceUnit:$('foodPieceUnit').value,density:$('foodDensity').value});
+      $('simpleFoodMacros').innerHTML=[['Kalorie',a.calories,'kcal'],['Sacharidy',a.carbs_g,'g'],['Bílkoviny',a.protein_g,'g'],['Tuky',a.fat_g,'g']].map(([label,value,unit])=>'<div><strong>'+(value==null?'—':fmt(value,1))+' <small>'+unit+'</small></strong><span>'+label+'</span></div>').join('');
+      $('foodPortionPreview').textContent='Vybráno '+fmt(a.amount,2)+' '+(a.unit==='portion'?'porce':a.unit);$('ingredientAdd').disabled=['calories','carbs_g','protein_g','fat_g'].some(k=>a[k]==null||!Number.isFinite(a[k])||a[k]<0);
+    }catch(e){$('simpleFoodMacros').innerHTML='<p class="small">Zkontroluj množství a hodnoty.</p>';$('foodPortionPreview').textContent=e.message;$('ingredientAdd').disabled=true;}
+  }
+  function chooseAmount(){
+    const amount=parseFoodQuantity($('simpleFoodAmount').value),portion=portions.find(p=>p.key===$('simpleFoodPortion').value);if(!portion)return;
+    updating=true;try{$('foodUnit').value=portion.unit;$('foodGrams').value=amount?String(amount*portion.size):$('simpleFoodAmount').value;$('foodMultiplier').value='1';updateFoodPreview();$('foodGrams').dispatchEvent(new Event('input',{bubbles:true}));}finally{updating=false;}updateSimple();
+  }
+  function prepareSimple(){
+    const p=foodEditorProduct();portions=simpleFoodPortions(p);$('simpleFoodPortion').innerHTML=portions.map(o=>'<option value="'+o.key+'">'+esc(o.label)+'</option>').join('');
+    const unit=$('foodUnit').value,amount=parseFoodQuantity($('foodGrams').value),chosen=portions.find(o=>o.unit===unit&&(o.size===amount||o.key==='pack'||o.key==='portion'))||portions.find(o=>o.unit===unit&&o.size===1)||portions[0];
+    $('simpleFoodPortion').value=chosen.key;$('simpleFoodAmount').value=amount?String(amount/chosen.size):'1';advanced.open=['calories_100g','carbs_100g','protein_100g','fat_100g'].some(k=>p[k]==null);updateSimple();
+  }
+  $('simpleFoodAmount').oninput=chooseAmount;$('simpleFoodPortion').onchange=chooseAmount;
+  controls.querySelectorAll('[data-simple-amount]').forEach(b=>b.onclick=()=>{$('simpleFoodAmount').value=b.dataset.simpleAmount;chooseAmount();});
+  const originalSelect=selectFoodProduct;selectFoodProduct=function(p){originalSelect(p);prepareSimple();};
+  const originalPreview=updateFoodPreview;updateFoodPreview=function(){originalPreview();if($('simpleFoodMacros'))updateSimple();};
+  editor.addEventListener('input',()=>{updateSimple();});editor.addEventListener('change',e=>{if(!updating&&e.target.id!=='simpleFoodPortion')prepareSimple();});
+  const style=document.createElement('style');style.textContent='#foodEditor{border:1px solid #33404a;border-radius:20px!important;padding:24px!important}.simple-food-hero h3{display:block!important;font-size:27px;margin:9px 0 22px;line-height:1.2}.simple-food-macros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:18px 0;border-top:1px solid #2d3944;border-bottom:1px solid #2d3944;margin-bottom:20px}.simple-food-macros strong{display:block;font-size:21px;white-space:nowrap}.simple-food-macros strong small{font-size:12px;font-weight:500}.simple-food-macros span{display:block;font-size:12px;color:#a6b5c4;margin-top:6px}.simple-food-picker{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px}.simple-food-picker label{display:grid;gap:6px;color:#a6b5c4;font-size:12px}.simple-food-picker .food-input{font-size:16px;padding:13px}.simple-food-fractions{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.simple-food-fractions .btn{padding:7px 12px;min-width:40px}#foodEditor #foodPortionPreview{border:0;background:none;padding:0;color:#a6b5c4;font-size:13px;margin:12px 0}.simple-food-add{width:100%;padding:14px!important;border-radius:14px!important;font-size:16px}#foodAdvanced{margin-top:18px;border-top:1px solid #2d3944;padding-top:15px}#foodAdvanced summary{cursor:pointer;color:#a6b5c4;font-size:13px}#foodAdvanced .food-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#foodAdvanced #savePersonalFood{margin-top:12px}.simple-food-context{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.simple-food-context label{display:grid;gap:5px;font-size:12px;color:#a6b5c4}.simple-food-context .food-input{min-height:42px}.food-selection-layout #foodResults{max-height:550px}.food-selection-layout{grid-template-columns:minmax(0,1fr) minmax(360px,1fr)}@media(max-width:900px){.food-selection-layout{grid-template-columns:minmax(0,1fr)}#foodEditor{padding:18px!important}.simple-food-macros{gap:6px}.simple-food-macros strong{font-size:19px}.simple-food-macros span{font-size:11px}}';document.head.append(style);
+}
+installDataCorrections();installSimpleFoodEditor();loadConnections();load().then(async()=>{try{const data=await jsonFetch('/app/api/connections');if(data.providers.find(p=>p.id==='whoop')?.connected)await loadWhoop();}catch{}});
