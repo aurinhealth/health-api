@@ -118,21 +118,13 @@ function trainingDayMarkup(x){
 }
 
 function renderCoachCouncil(){
-  const council=state.coaches||{},cards=council.coaches||[];
+  const council=state.coaches||{},cards=[...(council.coaches||[]),...(council.reviews||[])];
   const p=$("coachPriorities"),c=$("coachCards"),g=$("coachGuardrails");if(!p||!c||!g)return;
   p.innerHTML='<div class="eyebrow">KOORDINÁTOR · DNEŠNÍ PRIORITY</div>'+(council.priorities?.length?'<ol class="coach-actions">'+council.priorities.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ol>':'<div class="muted">Zatím bez společného doporučení.</div>');
   c.innerHTML=cards.map(x=>'<div class="coach-card '+esc(x.status||"")+'"><div class="eyebrow">'+esc(x.title)+'</div><h3>'+esc(x.headline)+'</h3><div class="small">Jistota: '+esc(x.confidence||"—")+'</div><ul class="coach-actions">'+(x.actions||[]).map(a=>'<li>'+esc(a)+'</li>').join("")+'</ul><details><summary>Proč?</summary><div class="small">'+(x.evidence||[]).map(e=>esc(e)).join("<br>")+'</div>'+((x.resources||[]).length?'<div class="small" style="margin-top:8px">'+x.resources.filter(r=>/^https:\/\//.test(String(r.url||""))).map(r=>'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.label||"Otevřít postup")+'</a>').join("<br>")+'</div>':"")+'</details></div>').join("");
   g.innerHTML=(council.guardrails||[]).map(x=>"• "+esc(x)).join("<br>");
 }
 
-function renderPlannedRideReview(){
-  const today=pragueToday(),days=state.week?.days||[],rides=days.flatMap(d=>(d.daily?.training?.planned||[]).map(p=>({...p,date:d.date}))).filter(p=>p.date>=today&&(p.cycling||/ride|cycl|bike|endurance|threshold|sweet spot/i.test(p.type+' '+p.name))).sort((a,b)=>a.date.localeCompare(b.date)),ride=rides[0],el=$('plannedRideReview');
-  if(!ride){el.innerHTML='<h3>Bez nadcházejícího kola ve vybraném týdnu</h3><p class="small">Vyber další týden v Tréninku, pokud je plán až tam. Dokončenou jízdu nehodnotím jako plánovanou.</p>';return}
-  const hours=num(ride.durationHours),tss=num(ride.tss),intensity=hours>0&&tss>0?Math.sqrt(tss/(hours*100)):null,quality=/threshold|sweet.?spot|tempo|vo2|interval/i.test(ride.name||''),prior=days.filter(d=>d.date<ride.date&&d.date>=dateShift(ride.date,-3)).flatMap(d=>d.daily?.training?.completed||[]),priorTss=prior.reduce((s,p)=>s+num(p.tss),0),wellness=state.fitness?.wellness?.at(-1),fresh=wellness?.id===today,form=fresh&&measured(wellness?.tsb)?Number(wellness.tsb):null;
-  const purpose=quality?'Podle názvu jde o trénink s intenzivnějšími bloky. Cílem je rozvoj výkonu při vyšší intenzitě; přesný stimul závisí na předepsaných intervalech.':hours>=2?'Podle názvu a délky jde o vytrvalostní práci: dlouhé souvislé zatížení a udržení stabilního výkonu i v závěru.':'Podle názvu jde o kratší aerobní trénink. Konkrétní zaměření musí potvrdit struktura jednotky.';
-  const concern=hours>=3&&priorTss>=150?'Dlouhá jízda navazuje na '+fmt(priorTss)+' TSS za předchozí až tři dny. Neplánoval bych další intenzitu nad rámec jednotky; před startem zvaž zkrácení podle skutečné únavy.':quality&&form!=null&&form<0?'Intenzivní jednotka připadá na zápornou formu ('+fmt(form)+'). Není to samo o sobě důvod ke zrušení, ale kvalitu ověř v rozjetí a nepřidávej další intervaly.':'Z dostupné délky a zátěže nevyplývá jednoznačný důvod plán změnit. To není potvrzení připravenosti: rozhoduje také aktuální stav a přesná struktura.';
-  el.innerHTML='<div class="eyebrow">'+esc(longDate(ride.date))+' · nejbližší plánovaná jízda</div><h3>'+esc(ride.name||'Kolo')+'</h3><div class="detail-stats"><div><span>Délka</span><strong>'+ (hours?hm(hours*60):'—')+'</strong></div><div><span>Plánovaná zátěž</span><strong>'+(tss?fmt(tss)+' TSS':'—')+'</strong></div><div><span>Odhad IF z TSS</span><strong>'+(intensity==null?'—':fmt(intensity,2))+'</strong></div><div><span>Předchozí 3 dny</span><strong>'+fmt(priorTss)+' TSS</strong></div></div><div class="grid2"><div><h3>Proč tato jednotka</h3><p>'+esc(purpose)+'</p><h3>Na co se zaměřit</h3><p>'+esc(quality?'Dodrž konkrétní bloky z plánu; nepřeváděj přestávky na další práci. Sleduj, jestli výkon držíš bez postupného zhoršování provedení.':'Drž předepsanou vytrvalostní intenzitu, ne výkon skupiny nebo segmentů. Důležitá je konzistence a zvládnutý závěr, ne co nejvyšší průměr.')+'</p></div><div><h3>Co bych upravil a proč</h3><p>'+esc(concern)+'</p><h3>Co zatím nelze posoudit</h3><p class="small">'+esc(fresh?'Wellness je z dneška.':'Aktuální wellness chybí nebo je starší ('+(wellness?.id||'bez data')+'); připravenost nelze potvrdit.')+' Struktura intervalů a cílové watty nejsou v tomto souhrnu dostupné. IF je pouze výpočet z plánované délky a TSS, nikoli naměřená intenzita. Předchozí zátěž zahrnuje jen záznamy dostupné ve vybraném týdnu.</p></div></div><div class="small">Datové hodnocení podle dostupného plánu · nejde o hloubkovou AI analýzu intervalů.</div>';
-}
 function renderOverview(){
   const d=state.daily||{},f=d.nutrition?.foodLog?.totals||{},target=d.nutrition||{};
   $("overviewDate").textContent=longDate(pragueToday());
@@ -150,9 +142,7 @@ function renderOverview(){
   $("readinessInsight").textContent=lastRecovery==null?"Po načtení spánku vyhodnotím připravenost pro dnešní trénink.":lastRecovery>=67?"Spánek a regenerace dávají prostor držet plánovanou kvalitu. Trénink přizpůsob konkrétní únavě ve svalech.":"Regenerace není na plný plyn. Drž kvalitu, ale sniž objem nebo intenzitu, pokud se necítíš svěže.";
   const dial=(label,value,color)=>'<div class="dial"><div class="dial-ring" style="--dial-value:'+value+';--dial-color:'+color+'"><strong>'+value+'</strong></div><label>'+label+'</label></div>';
   $("readinessDials").innerHTML=dial("Spánek",sleepPct,"#60a5fa")+dial("Zátěž",loadPct,"#a78bfa")+dial("Form",Math.round(Math.max(0,Math.min(100,50+num(state.fitness?.wellness?.slice(-1)[0]?.tsb)*3))),"#f59e0b");
-  const focus=planned[0]||completed[0],gymRows=(state.gym?.values||[]).slice(7).filter(r=>String(r?.[0]||"").toUpperCase()==="WORK"),rawGymName=String(state.gym?.values?.[2]?.[1]||"").trim(),gymName=/^\d{1,2}\.\d{2}\.\d{4}$/.test(rawGymName)?"Silový trénink":rawGymName,gymSummary=[...new Set(gymRows.map(r=>String(r?.[1]||"").trim()).filter(Boolean))].slice(0,3).map(ex=>{const rows=gymRows.filter(r=>String(r?.[1]||"").trim()===ex);const first=rows[0]||[];return ex+" "+rows.length+" série"+(first[4]?" × "+first[4]:"");}).join(" · ");
-  if(focus){const hrs=num(focus.durationHours),label=(focus.name||focus.type||"").toLowerCase(),cycling=/ride|cycl|bike|endurance|threshold/i.test(label);if(cycling){$("oTraining").textContent=focus.name||focus.type||"Dnešní kolo";$("oTrainingNote").textContent=hrs>=2?"Dodrž předepsanou intenzitu; sacharidy začni doplňovat od první hodiny a průběžně pij.":"Soustřeď se na kvalitu intervalů a přesné provedení.";}else if(/weight|strength|gym|posil/.test(label)){ $("oTraining").textContent=gymName||"Silový trénink"; $("oTrainingNote").textContent=gymSummary?"Dnes: "+gymSummary+". Konkrétní váhy a RPE zapisuj v Gymu.":"Dnes je zaznamenané posilování, ale konkrétní cviky nejsou v Gymu naplánované.";}else{$("oTraining").textContent=focus.name||focus.type||"Dnešní trénink";$("oTrainingNote").textContent="Otevři detail v Tréninku pro konkrétní provedení.";}}else{$("oTraining").textContent="Regenerace / volný den";$("oTrainingNote").textContent="Bez plánovaného tréninku. Lehká chůze a mobilita jsou vhodné, pokud se cítíš dobře.";}
-  $("readinessFocus").textContent="Dnešní priorita · "+$("oTraining").textContent;
+  $("readinessFocus").textContent=planned.length?"Dnešní priorita · "+(planned[0].name||"Plánovaná aktivita"):completed.length?"Dnešní priorita · regenerace po aktivitě":"Dnešní priorita · výživa a regenerace";
   const calTarget=Number(target.calorieTarget||d.calories?.target||0);
   const score=nutritionScore({kcal:f.kcal,protein_g:f.protein_g,carbs_g:f.carbs_g,fat_g:f.fat_g},{calorieTarget:calTarget,macros:{protein:target.macros?.protein_g??target.macros?.proteinGrams,carbs:target.macros?.carbs_g??target.macros?.carbsGrams,fat:target.macros?.fat_g??target.macros?.fatGrams}});
   $("oFood").textContent=fmt(f.kcal)+" / "+fmt(calTarget)+" kcal";
@@ -171,7 +161,6 @@ function renderOverview(){
   const weightTrend=weightDelta==null||Math.abs(weightDelta)<.05?"":'<div class="trend '+(weightDelta<0?"good":"bad")+'">'+(weightDelta>0?"↑ +":"↓ ")+fmt(weightDelta,1)+' kg od počáteční váhy</div>';
   const targetW=Number(d.nutrition?.targetWeightKg||80),remainingW=Number.isFinite(currentW)?currentW-targetW:null; $("oWeight").innerHTML=Number.isFinite(currentW)?fmt(currentW,1)+" kg"+weightTrend:"—"; $("oWeightMeta").textContent=Number.isFinite(remainingW)?"Aktuálně · cíl "+fmt(targetW,1)+" kg · zbývá "+fmt(Math.max(0,remainingW),1)+" kg":"aktuálně · cíl "+fmt(targetW,1)+" kg";
   macroChart("calChart",days);
-  renderPlannedRideReview();
 }
 function renderPmcChart(){
   const range=num($('pmcRange').value,14),rows=(state.fitness?.wellness||[]).filter(r=>r.id>=dateShift(pragueToday(),1-range)&&r.id<=pragueToday()),svg=$('pmcChart'),W=1000,H=420,L=72,R=26,T=48,B=52;
@@ -184,6 +173,16 @@ function renderPmcChart(){
 const step=range<=14?1:range<=30?3:7;for(let i=0;i<range;i++){if(i%step&&i!==range-1)continue;if(step>1&&i===range-1&&(range-1)%step>0&&(range-1)%step<step/2)continue;const date=dateShift(pragueToday(),i+1-range),xx=x(date);out+='<line x1="'+xx+'" x2="'+xx+'" y1="'+T+'" y2="'+(H-B)+'" stroke="#24303d"/><text transform="translate('+xx+','+(H-25)+') rotate(-35)" text-anchor="end" fill="#aeb9c9" font-size="13">'+esc(dateLabel(date))+'</text>'}
   series.forEach(([name,key,color],i)=>{let segment=[];const flush=()=>{if(segment.length>1)out+='<polyline points="'+segment.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="3"/>';segment=[]};rows.forEach((r,j)=>{if(j&&dateShift(rows[j-1].id,1)!==r.id)flush();if(!measured(r[key])){flush();return}const xx=x(r.id),yy=y(Number(r[key]));segment.push(xx+','+yy);out+='<circle cx="'+xx+'" cy="'+yy+'" r="3" fill="'+color+'"><title>'+esc(dateLabel(r.id)+' · '+name+': '+fmt(r[key],1))+'</title></circle>'});flush();out+='<text x="'+(L+i*150)+'" y="25" fill="'+color+'" font-size="16">'+name+'</text>'});svg.innerHTML=out;
 }
+
+// Refresh lifecycle after source sync, including when returning to this tab.
+let coachRefreshRunning=false;
+async function refreshCoachLifecycle(){
+  if(document.hidden||coachRefreshRunning)return;
+  coachRefreshRunning=true;
+  try{const [daily,coaches]=await Promise.all([jsonFetch('/app/api/daily'),jsonFetch('/app/api/coaches')]);state.daily=daily;state.coaches=coaches;renderOverview();renderCoachCouncil();}catch{}finally{coachRefreshRunning=false;}
+}
+setInterval(refreshCoachLifecycle,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCoachLifecycle();});
 function renderTraining(){
   const days=state.week?.days||[],fw=state.fitness?.wellness||[];
   $("trainingRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));

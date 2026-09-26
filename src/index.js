@@ -2375,7 +2375,7 @@ async function energyForDate(env, date) {
       calories: actualCalories,
       start: row.start_time,
       end: row.end_time,
-      durationHours: hoursBetween(row.start_time, row.end_time),
+      durationHours: (activityNumber(payload, ["moving_time", "elapsed_time", "duration_seconds", "duration"]) || 0) / 3600 || hoursBetween(row.start_time, row.end_time),
       pairedEventId: payload.paired_event_id || payload.pairedEventId || payload.event_id || payload.eventId || null,
       plannedEventId: payload.paired_activity_id || payload.pairedActivityId || payload.activity_id || payload.activityId || null,
       tss: activityNumber(payload, ["icu_training_load", "training_load", "tss"]),

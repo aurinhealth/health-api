@@ -51,12 +51,10 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
     <div class="card"><div class="label">Fitness</div><div id="oFitness" class="value">—</div><div class="small">CTL · Intervals.icu</div></div>
     <div class="card"><div class="label">Form</div><div id="oForm" class="value">—</div><div class="small">TSB · dnes</div></div>
   </div>
-  <div class="today-grid">
-    <div class="card"><div class="label">Dnešní trénink</div><div id="oTraining" class="value">—</div><div id="oTrainingNote" class="small"></div></div>
+  <div class="section">Dnešní poradci a hodnocení</div><div class="card coach-council"><div id="coachPriorities"></div><div id="coachCards" class="grid2" style="margin-top:12px"></div><details style="margin-top:12px"><summary>Pravidla a použité důkazy</summary><div id="coachGuardrails" class="small" style="margin-top:8px"></div></details></div>
+  <div class="today-grid" style="grid-template-columns:1fr">
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
   </div>
-  <div class="section">Hodnocení plánovaného kola</div><div id="plannedRideReview" class="card"></div>
-  <div class="section">Tým odborných poradců</div><div class="card coach-council"><div class="label" style="margin-bottom:8px">Společné rozhodnutí pro výkon na kole</div><div id="coachPriorities"></div><div id="coachCards" class="grid3" style="margin-top:12px"></div><details style="margin-top:12px"><summary>Pravidla a použité důkazy</summary><div id="coachGuardrails" class="small" style="margin-top:8px"></div></details></div>
   <div class="section">Týdenní tréninkový plán</div><div class="card"><div id="overviewWeekPlan" class="plan-grid"></div></div>
   <div class="card" style="margin-top:12px"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="stack-chart" style="height:440px" viewBox="0 0 1000 440"></svg></div>
 </section>
@@ -108,7 +106,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260926-04" defer></script>
+<script src="/app/dashboard-client.js?v=20260926-05" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
