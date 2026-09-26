@@ -1207,7 +1207,10 @@ async function saveGooglePointsBatch(env, family, type, points) {
 async function syncGoogleRecent(env){
   const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0]));
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:'error',message:error.message};}}));
-  return{status:results.some(r=>r.status!=='ok')?'partial':'ok',results};
+  const result={status:results.some(r=>r.status!=='ok')?'partial':'ok',results};
+  await ensureSyncStatusTable(env);
+  await env.DB.prepare("INSERT INTO sync_status(sync_name,status,details_json,updated_at) VALUES('google_recent',?,?,datetime('now')) ON CONFLICT(sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(result.status,JSON.stringify(result)).run();
+  return result;
 }
 
 async function readGoogleSyncState(env) {
