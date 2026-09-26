@@ -20,16 +20,17 @@ export function parseNutritionPortion(text){
   const values=parseNutritionLabel(summary.join('\n'));
   for(let i=0;i<summary.length-1;i++){
     const numbers=[...summary[i].matchAll(/(\d+(?:[.,]\d+)?)\s*(?:kcal|g)\b/gi)],labels=[...summary[i+1].matchAll(/kalorie|energie|sacharidy|b[ií]lkoviny|tuky/gi)];
-    if(numbers.length&&numbers.length===labels.length)labels.forEach((label,j)=>{const key=/kalorie|energie/i.test(label[0])?'calories_100g':/sacharidy/i.test(label[0])?'carbs_100g':/b[ií]lkoviny/i.test(label[0])?'protein_100g':'fat_100g';values[key]=Number(numbers[j][1].replace(',','.'));});
+    if(numbers.length&&numbers.length<=labels.length)labels.slice(0,numbers.length).forEach((label,j)=>{const key=/kalorie|energie/i.test(label[0])?'calories_100g':/sacharidy/i.test(label[0])?'carbs_100g':/b[ií]lkoviny/i.test(label[0])?'protein_100g':'fat_100g';values[key]=Number(numbers[j][1].replace(',','.'));});
   }
   for(const [field,pattern] of [['calories_100g',/^kalorie$|^energie$/i],['protein_100g',/^b[ií]lkoviny$|^proteins?$/i],['carbs_100g',/^sacharidy$|^carbohydrates?$/i],['fat_100g',/^tuky$|^fat$/i]]){
     if(values[field]!=null)continue;
     const i=summary.findIndex(s=>pattern.test(s));
     if(i>=0){const previous=summary[i-1]?.match(/^([\d]+(?:[.,]\d+)?)\s*(?:g|kcal)$/i),next=summary[i+1]?.match(/^([\d]+(?:[.,]\d+)?)\s*(?:g|kcal)$/i);const match=previous||next;if(match)values[field]=Number(match[1].replace(',','.'));}
   }
-  if(['calories_100g','protein_100g','carbs_100g','fat_100g'].every(k=>values[k]!=null)&&!/100\s*(?:g|ml)/i.test(summary.join('\n'))){
+  if((labelRows.length||['calories_100g','protein_100g','carbs_100g','fat_100g'].every(k=>values[k]!=null))&&values.calories_100g!=null&&!/100\s*(?:g|ml)/i.test(summary.join('\n'))){
     const mealTitle=summary.find(s=>/sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina/i.test(s))?.match(/sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina/i)?.[0];
-    const name=summary.find(s=>s.length>2&&!/\d|energie|kalorie|kcal|b[ií]lkov|sachar|tuk|nutri[cč]|hodnot|ned[aá]vno|ulo[zž]it|přidat|^[<>]|^(?:sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina)$/i.test(s))||mealTitle;
+    const valueIndex=summary.findIndex(s=>/\d\s*kcal/i.test(s));
+    const name=summary.slice(0,valueIndex<0?summary.length:valueIndex).reverse().find(s=>s.length>2&&!/\d|energie|kalorie|kcal|b[ií]lkov|sachar|tuk|nutri[cč]|hodnot|ned[aá]vno|ulo[zž]it|přidat|^[<>]|^(?:sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina)$/i.test(s))||mealTitle;
     return {values,basis:'portion',ambiguous:false,name:name?.slice(0,120)||null};
   }
   // In a two-column table, the portion is normally the last value. Show all OCR text for correction.
