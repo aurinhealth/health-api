@@ -136,6 +136,11 @@ export async function resolveFood(input = {}) {
 
   const name = str(input.name);
   if (name) {
+    const plain=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    if(/^nektarink[ayu]?$|^nektarinky$|^nectarines?$/.test(plain)){
+      const product={name:'Nektarinka · čerstvá, bez pecky',brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g:48,protein_100g:1.1,carbs_100g:9.3,fat_100g:.3,fiber_100g:1.7,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id=360',confidence:'reference'};
+      return {status:'ok',match:'generic_food',product,candidates:[product]};
+    }
     const off = await searchOpenFoodFacts(name, 20);
     off.products=cleanFoodSearch(off.products||[],name).slice(0,input.limit||8);
     if (off.products?.length) return { status: "ok", match: "name", product: off.products[0], candidates: off.products, reference: nutridatabazeReference(name) };
