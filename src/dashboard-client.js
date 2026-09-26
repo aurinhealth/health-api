@@ -127,10 +127,9 @@ function trainingDayMarkup(x){
 
 function renderCoachCouncil(){
   const council=state.coaches||{},cards=[...(council.coaches||[]),...(council.reviews||[])];
-  const p=$("coachPriorities"),c=$("coachCards"),g=$("coachGuardrails");if(!p||!c||!g)return;
+  const p=$("coachPriorities"),c=$("coachCards");if(!p||!c)return;
   p.innerHTML='<div class="eyebrow">KOORDINÁTOR · DNEŠNÍ PRIORITY</div>'+(council.priorities?.length?'<ol class="coach-actions">'+council.priorities.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ol>':'<div class="muted">Zatím bez společného doporučení.</div>');
   c.innerHTML=cards.map(x=>'<div class="coach-card '+esc(x.status||"")+'"><div class="eyebrow">'+esc(x.title)+'</div><h3>'+esc(x.headline)+'</h3><div class="small">Jistota: '+esc(x.confidence||"—")+'</div><ul class="coach-actions">'+(x.actions||[]).map(a=>'<li>'+esc(a)+'</li>').join("")+'</ul><details><summary>Proč?</summary><div class="small">'+(x.evidence||[]).map(e=>esc(e)).join("<br>")+'</div>'+((x.resources||[]).length?'<div class="small" style="margin-top:8px">'+x.resources.filter(r=>/^https:\/\//.test(String(r.url||""))).map(r=>'<a href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">'+esc(r.label||"Otevřít postup")+'</a>').join("<br>")+'</div>':"")+'</details></div>').join("");
-  g.innerHTML=(council.guardrails||[]).map(x=>"• "+esc(x)).join("<br>");
 }
 
 function renderOverview(){
@@ -149,7 +148,7 @@ function renderOverview(){
   $("readinessOrb").style.setProperty("--orb-value",lastRecovery??0);$("readinessOrb").style.setProperty("--orb-color",recoveryTone);$("readinessScore").textContent=lastRecovery??"—";$("readinessTitle").textContent=recoveryWord;$("readinessCaption").textContent=lastRecovery==null?"spánek nedostupný":'vs 30 dní '+(avgRecovery==null?"—":(lastRecovery-avgRecovery>=0?"+":"")+fmt(lastRecovery-avgRecovery,1)+" bodu");
   $("readinessInsight").textContent=lastRecovery==null?"Po načtení spánku vyhodnotím připravenost pro dnešní trénink.":lastRecovery>=67?"Spánek a regenerace dávají prostor držet plánovanou kvalitu. Trénink přizpůsob konkrétní únavě ve svalech.":"Regenerace není na plný plyn. Drž kvalitu, ale sniž objem nebo intenzitu, pokud se necítíš svěže.";
   const dial=(label,value,color)=>'<div class="dial"><div class="dial-ring" style="--dial-value:'+value+';--dial-color:'+color+'"><strong>'+value+'</strong></div><label>'+label+'</label></div>';
-  $("readinessDials").innerHTML=dial("Spánek",sleepPct,"#60a5fa")+dial("Zátěž",loadPct,"#a78bfa")+dial("Form",Math.round(Math.max(0,Math.min(100,50+num(state.fitness?.wellness?.slice(-1)[0]?.tsb)*3))),"#f59e0b");
+  $("readinessDials").innerHTML=dial("Zátěž",loadPct,"#a78bfa")+dial("Form",Math.round(Math.max(0,Math.min(100,50+num(state.fitness?.wellness?.slice(-1)[0]?.tsb)*3))),"#f59e0b");
   $("readinessFocus").textContent=planned.length?"Dnešní priorita · "+(planned[0].name||"Plánovaná aktivita"):completed.length?"Dnešní priorita · regenerace po aktivitě":"Dnešní priorita · výživa a regenerace";
   const calTarget=Number(target.calorieTarget||d.calories?.target||0);
   const score=nutritionScore({kcal:f.kcal,protein_g:f.protein_g,carbs_g:f.carbs_g,fat_g:f.fat_g},{calorieTarget:calTarget,macros:{protein:target.macros?.protein_g??target.macros?.proteinGrams,carbs:target.macros?.carbs_g??target.macros?.carbsGrams,fat:target.macros?.fat_g??target.macros?.fatGrams}});
