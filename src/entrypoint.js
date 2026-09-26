@@ -211,6 +211,7 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+  if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (id INTEGER PRIMARY KEY,profile_json TEXT NOT NULL)").run();if(request.method==='POST'){const p=await request.json(),profile={sex:['male','female'].includes(p.sex)?p.sex:'',age:Number(p.age)||null,height:Number(p.height)||null,hrmax:Number(p.hrmax)||null,rhr:Number(p.rhr)||null};await env.DB.prepare('INSERT INTO dashboard_profile(id,profile_json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json').bind(JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
   if(url.pathname==='/app/api/google-health'&&request.method==='GET')return Response.json(await googleDashboard(env.DB,pragueToday()),{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
@@ -373,6 +374,7 @@ async function handleDashboardApi(request, env, ctx, url) {
   }
 
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
+    ctx.waitUntil(legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx).then(async r=>{if(!r.ok)console.error('Recent Google sync failed',r.status);}).catch(e=>console.error('Recent Google sync failed',e.message)));
     const internal = new URL("/sync/all", request.url);
     ctx.waitUntil(
       app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx)

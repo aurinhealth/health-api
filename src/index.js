@@ -3,6 +3,7 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "* * * * *") {
+      if(new Date().getUTCMinutes()===0)await syncGoogleRecent(env);
       await processGoogleSyncBatch(env);
       return;
     }
@@ -46,6 +47,7 @@ export default {
       if (url.pathname === "/sync/google/status") {
         return await googleSyncStatus(env);
       }
+      if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
 
       if (url.pathname === "/sync/google") {
         const start = await startGoogleSync(env);
@@ -1132,6 +1134,7 @@ async function googleReconcilePage(
 
   params.set("filter", filter);
   if (pageToken) params.set("pageToken", pageToken);
+  params.set('pageSize',filterType==='sleep'||filterType==='exercise'?'25':'500');
 
   const response = await fetchWithTimeout(
     `https://health.googleapis.com/v4/users/me/dataTypes/${type}/dataPoints:reconcile?${params.toString()}`,
@@ -1198,8 +1201,13 @@ async function saveGooglePointsBatch(env, family, type, points) {
   });
 
   // D1 batch executes the statements sequentially in one database call.
-  await env.DB.batch(statements);
+  for(let i=0;i<statements.length;i+=50)await env.DB.batch(statements.slice(i,i+50));
   return points.length;
+}
+async function syncGoogleRecent(env){
+  const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0]));
+  const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:'error',message:error.message};}}));
+  return{status:results.some(r=>r.status!=='ok')?'partial':'ok',results};
 }
 
 async function readGoogleSyncState(env) {
