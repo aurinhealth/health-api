@@ -14,19 +14,22 @@ export function parseNutritionLabel(text){
 export function parseNutritionPortion(text){
   const raw=String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
   const boundary=raw.findIndex(s=>/^suroviny$|^ingredients$|^přidat další$/i.test(s));
-  const summary=boundary<0?raw:raw.slice(0,boundary);
+  const labelRows=raw.map((s,i)=>/^(?:(?:kalorie|energie|sacharidy|b[ií]lkoviny|tuky)\s*)+$/i.test(s)?i:-1).filter(i=>i>=0);
+  const headerEnd=labelRows.length?Math.max(...labelRows)+1:raw.length;
+  const summary=raw.slice(0,Math.min(boundary<0?raw.length:boundary,headerEnd));
   const values=parseNutritionLabel(summary.join('\n'));
   for(let i=0;i<summary.length-1;i++){
     const numbers=[...summary[i].matchAll(/(\d+(?:[.,]\d+)?)\s*(?:kcal|g)\b/gi)],labels=[...summary[i+1].matchAll(/kalorie|energie|sacharidy|b[ií]lkoviny|tuky/gi)];
-    if(numbers.length&&numbers.length===labels.length)labels.forEach((label,j)=>{const key=/kalorie|energie/i.test(label[0])?'calories_100g':/sacharidy/i.test(label[0])?'carbs_100g':/b[ií]lkoviny/i.test(label[0])?'protein_100g':'fat_100g';if(values[key]==null)values[key]=Number(numbers[j][1].replace(',','.'));});
+    if(numbers.length&&numbers.length===labels.length)labels.forEach((label,j)=>{const key=/kalorie|energie/i.test(label[0])?'calories_100g':/sacharidy/i.test(label[0])?'carbs_100g':/b[ií]lkoviny/i.test(label[0])?'protein_100g':'fat_100g';values[key]=Number(numbers[j][1].replace(',','.'));});
   }
   for(const [field,pattern] of [['calories_100g',/^kalorie$|^energie$/i],['protein_100g',/^b[ií]lkoviny$|^proteins?$/i],['carbs_100g',/^sacharidy$|^carbohydrates?$/i],['fat_100g',/^tuky$|^fat$/i]]){
     if(values[field]!=null)continue;
     const i=summary.findIndex(s=>pattern.test(s));
     if(i>=0){const previous=summary[i-1]?.match(/^([\d]+(?:[.,]\d+)?)\s*(?:g|kcal)$/i),next=summary[i+1]?.match(/^([\d]+(?:[.,]\d+)?)\s*(?:g|kcal)$/i);const match=previous||next;if(match)values[field]=Number(match[1].replace(',','.'));}
   }
-  if(['calories_100g','protein_100g','carbs_100g','fat_100g'].every(k=>values[k]!=null)&&!/100\s*(?:g|ml)/i.test(text)){
-    const name=summary.find(s=>s.length>2&&!/\d|energie|kalorie|kcal|b[ií]lkov|sachar|tuk|nutri[cč]|hodnot|ned[aá]vno|ulo[zž]it|přidat/i.test(s));
+  if(['calories_100g','protein_100g','carbs_100g','fat_100g'].every(k=>values[k]!=null)&&!/100\s*(?:g|ml)/i.test(summary.join('\n'))){
+    const mealTitle=summary.find(s=>/sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina/i.test(s))?.match(/sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina/i)?.[0];
+    const name=summary.find(s=>s.length>2&&!/\d|energie|kalorie|kcal|b[ií]lkov|sachar|tuk|nutri[cč]|hodnot|ned[aá]vno|ulo[zž]it|přidat|^[<>]|^(?:sn[ií]dan[eě]|ob[eě]d|ve[cč]e[rř]e|sva[cč]ina)$/i.test(s))||mealTitle;
     return {values,basis:'portion',ambiguous:false,name:name?.slice(0,120)||null};
   }
   // In a two-column table, the portion is normally the last value. Show all OCR text for correction.
