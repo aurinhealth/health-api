@@ -5,6 +5,9 @@ import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
+import { connectionStatus } from "./connections.js";
+import { whoopOAuth, whoopData } from "./whoop.js";
+import { connectionEnvironment, saveConnectionSecret } from "./connection-secrets.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -15,10 +18,13 @@ const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/
 
 export default {
   async scheduled(controller, env, ctx) {
+    env = await connectionEnvironment(env);
     return app.scheduled(controller, env, ctx);
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Static assets stay independent of provider storage availability.
+    if (url.pathname !== '/app' && url.pathname !== '/app/dashboard-client.js') env = await connectionEnvironment(env);
     // Legacy Google Health endpoints live in index.js. The deployed Worker
     // uses entrypoint.js, so expose these routes explicitly instead of letting
     // them fall through to the dashboard gateway.
@@ -37,6 +43,8 @@ export default {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
       return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     }
+    if (url.pathname.startsWith('/oauth/whoop')) return whoopOAuth(request, env, await verifyDashboardSession(request, env.STRENGTH_API_KEY));
+    if (url.pathname.startsWith('/oauth/google') && !(await verifyDashboardSession(request, env.STRENGTH_API_KEY))) return new Response('Připojení vyžaduje přihlášení do dashboardu.',{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) return googleOAuth;
     if (url.pathname === "/app" && request.method === "GET") return dashboardPage();
@@ -195,6 +203,25 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+
+  if (url.pathname === "/app/api/connections" && request.method === "GET") {
+    return Response.json(await connectionStatus(env), {headers:{"Cache-Control":"no-store"}});
+  }
+  if (url.pathname === '/app/api/connections' && request.method === 'POST') {
+    if (!(await verifyDashboardSession(request, env.STRENGTH_API_KEY))) return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if (request.headers.get('Origin') !== url.origin) return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    const body=await request.json().catch(()=>({}));
+    if(body.provider!=='intervals'||typeof body.key!=='string'||body.key.length<8||body.key.length>512) return Response.json({message:'Zadej platný API klíč Intervals.icu.'},{status:400});
+    const check=await fetch('https://intervals.icu/api/v1/athlete/0',{headers:{Authorization:'Basic '+btoa('API_KEY:'+body.key),Accept:'application/json'}});
+    if(!check.ok) return Response.json({message:'Intervals klíč nepřijal. Zkontroluj klíč v nastavení Intervals.'},{status:400});
+    await saveConnectionSecret(env,'intervals',body.key);
+    return Response.json({status:'ok',message:'Intervals.icu je připojené.'},{headers:{'Cache-Control':'no-store'}});
+  }
+  if (url.pathname === '/app/api/whoop' && request.method === 'GET') {
+    if (!(await verifyDashboardSession(request, env.STRENGTH_API_KEY))) return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    try { return Response.json(await whoopData(env),{headers:{'Cache-Control':'no-store'}}); }
+    catch { return Response.json({message:'WHOOP nelze načíst. Zkontroluj připojení v Nastavení.'},{status:502}); }
+  }
 
   if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
 
