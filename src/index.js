@@ -362,7 +362,16 @@ async function googleToken(env) {
         client_id: env.GOOGLE_CLIENT_ID,
         client_secret: env.GOOGLE_CLIENT_SECRET,
         refresh_token: env.GOOGLE_REFRESH_TOKEN,
-        grant_type: "refresh_token"
+        grant_type: "refresh_token",
+        // Health rejects the Sheets ("wise") scope on a shared refresh token.
+        // Request only the previously consented, supported Health scopes.
+        scope: [
+          "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
+          "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
+          "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
+          "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
+          "https://www.googleapis.com/auth/googlehealth.nutrition.writeonly"
+        ].join(" ")
       })
     }
   );
@@ -1042,8 +1051,8 @@ function googleInfo(type, p) {
   if (p.dailyRestingHeartRate?.beatsPerMinute !== undefined) {
     value = Number(p.dailyRestingHeartRate.beatsPerMinute); unit = "bpm";
   }
-  if (p.dailyHeartRateVariability?.rmssd !== undefined) {
-    value = Number(p.dailyHeartRateVariability.rmssd); unit = "ms";
+  if (p.dailyHeartRateVariability?.averageHeartRateVariabilityMilliseconds !== undefined || p.dailyHeartRateVariability?.rmssd !== undefined) {
+    value = Number(p.dailyHeartRateVariability.averageHeartRateVariabilityMilliseconds ?? p.dailyHeartRateVariability.rmssd); unit = "ms";
   }
   if (p.dailyOxygenSaturation?.percentage !== undefined) {
     value = Number(p.dailyOxygenSaturation.percentage); unit = "%";

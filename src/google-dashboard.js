@@ -7,7 +7,7 @@ export function googleHealthSummary(rows,today){
     if(!date)continue;coverage[row.data_type]=[coverage[row.data_type],date].filter(Boolean).sort().at(-1);
     const item=days.get(date)||{id:date,source:'google-health'};let key,value;
     if(row.data_type==='daily-resting-heart-rate'){key='restingHR';value=finite(row.value_numeric)??finite(obj.beatsPerMinute);}
-    if(row.data_type==='daily-heart-rate-variability'){key='hrv';value=finite(row.value_numeric)??finite(obj.rmssd);}
+    if(row.data_type==='daily-heart-rate-variability'){key='hrv';value=finite(obj.averageHeartRateVariabilityMilliseconds)??finite(row.value_numeric)??finite(obj.rmssd);}
     if(row.data_type==='daily-vo2-max'){key='vo2max';value=finite(row.value_numeric)??finite(obj.vo2Max);}
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
