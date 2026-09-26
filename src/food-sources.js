@@ -1,7 +1,7 @@
 const OFF_BASE = "https://world.openfoodfacts.org";
 const USER_AGENT = "health-api-food/1.0 (health-api)";
 
-const num = (v) => Number.isFinite(Number(v)) ? Number(v) : null;
+const num = (v) => v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)) ? Number(v) : null;
 const str = (v) => v == null ? "" : String(v).trim();
 
 export function normalizeBarcode(value) {
@@ -29,7 +29,7 @@ function publicProduct(product, barcode, source = "openfoodfacts") {
   const nutrients = extractNutrients(product);
   return {
     barcode: normalizeBarcode(barcode || product?.code),
-    name: str(product?.product_name || product?.product_name_cs || product?.generic_name),
+    name: str(product?.product_name_cs || product?.product_name || product?.generic_name),
     brand: str(product?.brands),
     quantity: str(product?.quantity),
     serving_size: str(product?.serving_size),
@@ -46,6 +46,7 @@ export async function lookupOpenFoodFactsBarcode(barcode) {
   if (!code) return { status: "not_found", source: "openfoodfacts", reason: "invalid_barcode" };
   const url = `${OFF_BASE}/api/v2/product/${encodeURIComponent(code)}.json?fields=code,product_name,product_name_cs,generic_name,brands,quantity,serving_size,image_front_url,nutriments`;
   const response = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } });
+  if (response.status===404) return {status:"not_found",source:"openfoodfacts",barcode:code};
   if (!response.ok) throw new Error(`Open Food Facts HTTP ${response.status}`);
   const data = await response.json();
   if (Number(data?.status) !== 1 || !data?.product) return { status: "not_found", source: "openfoodfacts", barcode: code };
@@ -55,8 +56,9 @@ export async function lookupOpenFoodFactsBarcode(barcode) {
 export async function searchOpenFoodFacts(name, limit = 8) {
   const q = str(name);
   if (!q) return { status: "ok", source: "openfoodfacts", products: [] };
-  const url = `${OFF_BASE}/api/v2/search?categories_tags_en=foods&search_terms=${encodeURIComponent(q)}&page_size=${Math.min(20, Math.max(1, Number(limit) || 8))}&fields=code,product_name,product_name_cs,generic_name,brands,quantity,serving_size,image_front_url,nutriments`;
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } });
+  // Full-text search belongs to the legacy search endpoint; v2 ignores search_terms.
+  const url = `https://cz.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=${Math.min(20, Math.max(1, Number(limit) || 8))}&lc=cs&fields=code,product_name,product_name_cs,generic_name,brands,quantity,serving_size,image_front_url,nutriments`;
+  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" },signal:AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(`Open Food Facts search HTTP ${response.status}`);
   const data = await response.json();
   return { status: "ok", source: "openfoodfacts", count: Number(data?.count || 0), products: (data?.products || []).map(p => publicProduct(p, p.code)).filter(p => p.name) };

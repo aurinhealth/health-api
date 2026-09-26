@@ -108,7 +108,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 </div></main></div>
 <div id="toast" class="toast"></div>
-<script src="/app/dashboard-client.js?v=20260926-02" defer></script>
+<script src="/app/dashboard-client.js?v=20260926-03" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }
