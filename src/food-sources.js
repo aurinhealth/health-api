@@ -1,4 +1,5 @@
 const OFF_BASE = "https://world.openfoodfacts.org";
+import {foodPackageSize} from './food-portions.js';
 const USER_AGENT = "health-api-food/1.0 (health-api)";
 
 const num = (v) => v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)) ? Number(v) : null;
@@ -44,7 +45,7 @@ function publicProduct(product, barcode, source = "openfoodfacts") {
 
 export function cleanFoodSearch(products,query=''){
   const normalize=value=>str(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),seen=new Set(),q=normalize(query);
-  return products.filter(p=>p.name&&p.calories_100g!=null&&Number.isFinite(Number(p.calories_100g))&&Number(p.calories_100g)>=0).sort((a,b)=>{const score=p=>(normalize(p.name)===q?100:normalize(p.name).startsWith(q+' ')?20:0)+['protein_100g','carbs_100g','fat_100g'].filter(k=>p[k]!=null).length;return score(b)-score(a);}).filter(p=>{const key=normalize(p.name)+'|'+normalize(p.brand)+'|'+normalize(p.quantity);if(seen.has(key))return false;seen.add(key);return true;});
+  return products.filter(p=>p.name&&p.calories_100g!=null&&Number.isFinite(Number(p.calories_100g))&&Number(p.calories_100g)>=0&&(Number(p.calories_100g)<=20||!['protein_100g','carbs_100g','fat_100g'].every(k=>p[k]!=null)||Math.abs(Number(p.calories_100g)-(Number(p.protein_100g)*4+Number(p.carbs_100g)*4+Number(p.fat_100g)*9))<=Math.max(35,Number(p.calories_100g)*.65))).sort((a,b)=>{const score=p=>(normalize(p.name)===q?100:normalize(p.name).startsWith(q+' ')?20:0)+['protein_100g','carbs_100g','fat_100g'].filter(k=>p[k]!=null).length;return score(b)-score(a);}).filter(p=>{const pack=foodPackageSize(p.quantity),key=normalize(p.name)+'|'+normalize(String(p.brand||'').split(',')[0])+'|'+(pack?pack.amount+' '+pack.unit+' x'+pack.count:normalize(p.quantity));if(seen.has(key))return false;seen.add(key);return true;});
 }
 
 export async function lookupOpenFoodFactsBarcode(barcode) {

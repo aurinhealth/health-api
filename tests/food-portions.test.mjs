@@ -4,6 +4,7 @@ import {foodIntake,foodPortionDefaults,parseFoodQuantity} from '../src/food-port
 import {cleanFoodSearch} from '../src/food-sources.js';
 import {parseNutritionPortion} from '../src/food-label.js';
 const product={name:'Tyčinka',quantity:'50 g',nutrition_basis:'g',calories_100g:500,protein_100g:8,carbs_100g:60,fat_100g:25};
+test('equivalent package units deduplicate and contradictory macros are excluded',()=>{const p={name:'Monster Energy',brand:'Monster Energy',quantity:'500ml',calories_100g:47,protein_100g:0,carbs_100g:12,fat_100g:0};const out=cleanFoodSearch([p,{...p,quantity:'0,5 l'},{...p,name:'Bad entry',protein_100g:11}]);assert.equal(out.length,1);});
 test('fractions and decimal comma are accepted, invalid amounts rejected',()=>{assert.equal(parseFoodQuantity('1/2'),.5);assert.equal(parseFoodQuantity('0,5'),.5);for(const v of ['','0','1/0','-1','text'])assert.equal(parseFoodQuantity(v),null);});
 test('half a packaged bar needs no manual gram calculation',()=>{const r=foodIntake(product,'1/2','pack');assert.equal(r.amount,25);assert.equal(r.calories,125);});
 test('500ml can has a known default and uses volume nutrition',()=>{const p={...product,quantity:'500 ml',nutrition_basis:'ml',calories_100g:45};assert.equal(foodPortionDefaults(p).package.amount,500);assert.equal(foodIntake(p,500,'ml').calories,225);});
