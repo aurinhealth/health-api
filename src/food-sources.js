@@ -58,7 +58,9 @@ export async function searchOpenFoodFacts(name, limit = 8) {
   if (!q) return { status: "ok", source: "openfoodfacts", products: [] };
   // Full-text search belongs to the legacy search endpoint; v2 ignores search_terms.
   const url = `https://cz.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=${Math.min(20, Math.max(1, Number(limit) || 8))}&lc=cs&fields=code,product_name,product_name_cs,generic_name,brands,quantity,serving_size,image_front_url,nutriments`;
-  const response = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" },signal:AbortSignal.timeout(15000) });
+  let response;
+  try {response=await fetch(url,{headers:{"User-Agent":USER_AGENT,Accept:"application/json"},signal:AbortSignal.timeout(10000)});}catch{}
+  if(!response?.ok){const fallback=url.replace('https://cz.openfoodfacts.org','https://world.openfoodfacts.org')+'&cc=cz';response=await fetch(fallback,{headers:{"User-Agent":USER_AGENT,Accept:"application/json"},signal:AbortSignal.timeout(15000)});}
   if (!response.ok) throw new Error(`Open Food Facts search HTTP ${response.status}`);
   const data = await response.json();
   return { status: "ok", source: "openfoodfacts", count: Number(data?.count || 0), products: (data?.products || []).map(p => publicProduct(p, p.code)).filter(p => p.name) };
