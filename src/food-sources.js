@@ -56,6 +56,15 @@ export async function lookupOpenFoodFactsBarcode(barcode) {
 export async function searchOpenFoodFacts(name, limit = 8) {
   const q = str(name);
   if (!q) return { status: "ok", source: "openfoodfacts", products: [] };
+  // Official full-text service, with Czech-market results first. Legacy search is a fallback.
+  const query=q.replace(/[^\p{L}\p{N}\s-]/gu,' ').trim();
+  try {
+    const endpoint=new URL('https://search.openfoodfacts.org/search');endpoint.searchParams.set('q','('+query+') AND countries_tags:"en:czech-republic"');endpoint.searchParams.set('langs','cs,en');endpoint.searchParams.set('page_size',String(Math.min(20,Math.max(1,Number(limit)||8))));
+    let result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+    if(result.ok){let data=await result.json();if(!data.hits?.length){endpoint.searchParams.set('q',query);result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(12000)});if(result.ok)data=await result.json();}
+      if(Array.isArray(data.hits))return {status:'ok',source:'openfoodfacts',count:data.hits.length,products:data.hits.map(p=>publicProduct(p,p.code)).filter(p=>p.name)};
+    }
+  }catch{}
   // Full-text search belongs to the legacy search endpoint; v2 ignores search_terms.
   const url = `https://cz.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=${Math.min(20, Math.max(1, Number(limit) || 8))}&lc=cs&fields=code,product_name,product_name_cs,generic_name,brands,quantity,serving_size,image_front_url,nutriments`;
   let response;
