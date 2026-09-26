@@ -251,7 +251,6 @@ function renderRecovery(){
   const avg=filtered.length?filtered.reduce((a,x)=>a+num(x.durationMin),0)/filtered.length:0;
   $("rAvg").textContent=avg?hm(avg):"—";
   $("rAvgLabel").textContent=range>=3000?"all time":range===365?"poslední rok":range===180?"posledních 6 měsíců":range===30?"poslední měsíc":"posledních 7 dní";
-  $("rDeep").textContent=last?.stages?.DEEP?hm(last.stages.DEEP):"—"; $("rRem").textContent=last?.stages?.REM?hm(last.stages.REM):"—";
   const sleepScore=last?Math.round(Math.min(100,Math.max(0,(num(last.durationMin)/480)*70+(num(last.stages?.DEEP)/90)*15+(num(last.stages?.REM)/90)*15))):null;
   const baselineRows=ss.filter(x=>new Date(x.endTime||x.startTime||0).getTime()>=Date.now()-30*86400000),baseline=baselineRows.length?baselineRows.reduce((a,x)=>a+Math.min(100,Math.max(0,(num(x.durationMin)/480)*70+(num(x.stages?.DEEP)/90)*15+(num(x.stages?.REM)/90)*15)),0)/baselineRows.length:null,delta=sleepScore!=null&&baseline!=null?Math.round(sleepScore-baseline):null,restorative=num(last?.stages?.DEEP)+num(last?.stages?.REM),sleepWord=sleepScore==null?"Čekám na spánek":sleepScore>=85?"Silná regenerace":sleepScore>=65?"Použitelná regenerace":"Regenerace pod tlakem";
   $("rRestorative").textContent=last?hm(restorative):"—";
