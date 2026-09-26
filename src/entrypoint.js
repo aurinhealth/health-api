@@ -213,7 +213,7 @@ async function handleDashboardApi(request, env, ctx, url) {
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
     try {const body=await request.json();return Response.json(await resolveFood({name:String(body.name||'').slice(0,180),barcode:String(body.barcode||'').slice(0,24),limit:12}),{headers:{'Cache-Control':'no-store'}});}
-    catch{return Response.json({message:'Databáze potravin právě neodpovídá. Zkus to znovu nebo načti etiketu.'},{status:502});}
+    catch(error){return Response.json({message:'Databáze potravin právě neodpovídá. Zkus to znovu nebo načti etiketu.',detail:String(error.message).slice(0,160)},{status:502});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({}));return Response.json({status:'ok',values:parseNutritionLabel(String(body.text||'').slice(0,12000))});
