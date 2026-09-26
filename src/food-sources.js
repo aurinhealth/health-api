@@ -138,6 +138,8 @@ export async function resolveFood(input = {}) {
   const name = str(input.name);
   if (name) {
     const plain=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    const reference=/^banan(?:y|u)?$/.test(plain)?['Banán · bez slupky',32,98,1.1,21.6,.3,2.3]:/^jablk[oa]$/.test(plain)?['Jablko · jedlý podíl',37,52,.4,10.5,.4,2.3]:null;
+    if(reference){const [name,id,calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g]=reference,product={name,brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id='+id,confidence:'reference'};return{status:'ok',match:'generic_food',product,candidates:[product]};}
     if(/^nektarink[ayu]?$|^nektarinky$|^nectarines?$/.test(plain)){
       const product={name:'Nektarinka · čerstvá, bez pecky',brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g:48,protein_100g:1.1,carbs_100g:9.3,fat_100g:.3,fiber_100g:1.7,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id=360',confidence:'reference'};
       return {status:'ok',match:'generic_food',product,candidates:[product]};
