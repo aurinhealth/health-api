@@ -44,11 +44,11 @@ function nutritionScore(food,target){
 }
 function macroChart(id,days){
   const svg=$(id),shown=(days||[]).slice(-7);if(!shown.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return}
-  const W=1000,H=440,top=60,bottom=18,left=24,plot=H-top-bottom,slot=(W-left-20)/shown.length,bw=Math.min(112,slot*.78),dayNames=["Neděle","Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota"];
+  const compact=id==='calChart',W=compact?700:1000,H=440,top=60,bottom=18,left=12,plot=H-top-bottom,slot=(W-left-12)/shown.length,bw=Math.min(112,slot*.86),dayNames=["Neděle","Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota"];svg.setAttribute('viewBox','0 0 '+W+' '+H);
   let out='';
   shown.forEach((d,i)=>{const food=d.food?.totals||{},target=Math.max(1,num(d.daily?.nutrition?.calorieTarget||d.daily?.calories?.target)),eaten=Math.max(0,num(food.kcal)),macroKcal=num(food.protein_g)*4+num(food.carbs_g)*4+num(food.fat_g)*9,vals=[{kcal:num(food.protein_g)*4,color:"#60a5fa"},{kcal:num(food.carbs_g)*4,color:"#f59e0b"},{kcal:num(food.fat_g)*9,color:"#a78bfa"}],x=left+i*slot+(slot-bw)/2,base=top+plot;
     out+='<text x="'+(x+bw/2)+'" y="32" text-anchor="middle" fill="#f4f7fb" font-size="19" font-weight="800">'+dayNames[new Date(d.date+"T12:00:00").getDay()]+'</text><rect x="'+x+'" y="'+top+'" width="'+bw+'" height="'+plot+'" rx="12" fill="#14253a" stroke="#355270" stroke-width="2"/>';
-    const totalY=top+40;out+='<text x="'+(x+bw/2)+'" y="'+totalY+'" text-anchor="middle" fill="#f4f7fb" font-size="17" font-weight="850">'+fmt(eaten)+' / '+fmt(target)+'</text>';
+    const totalY=top+35;out+='<text x="'+(x+bw/2)+'" y="'+totalY+'" text-anchor="middle" fill="#f4f7fb" font-size="'+(compact?23:17)+'" font-weight="850">'+(compact?fmt(eaten):fmt(eaten)+' / '+fmt(target))+'</text>'+(compact?'<text x="'+(x+bw/2)+'" y="'+(totalY+27)+'" text-anchor="middle" fill="#aebcd0" font-size="20">/ '+fmt(target)+'</text>':'');
     let y=base,remaining=Math.min(target,eaten),visible=vals.filter(v=>Math.min(remaining,v.kcal)>0).length;vals.forEach(v=>{const amount=Math.min(remaining,v.kcal),raw=amount/target*plot;remaining-=amount;if(raw>0){const h=Math.max(4,raw-(visible>1?4:0)),share=macroKcal>0?Math.round(v.kcal/macroKcal*100):0;y-=h;out+='<rect x="'+(x+3)+'" y="'+y+'" width="'+(bw-6)+'" height="'+h+'" rx="6" fill="'+v.color+'"/>';if(h>=15)out+='<text x="'+(x+bw/2)+'" y="'+(y+h/2+5)+'" text-anchor="middle" fill="#07101d" font-size="'+(h<24?'13':'16')+'" font-weight="900">'+share+'%</text>';y-=4;}});});
   svg.innerHTML=out;
 }
