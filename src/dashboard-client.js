@@ -679,6 +679,7 @@ function simpleFoodPortions(product){
 function installSimpleFoodEditor(){
   const editor=$('foodEditor'),advanced=document.createElement('details');advanced.id='foodAdvanced';advanced.innerHTML='<summary>Upravit název a nutriční hodnoty</summary><div class="food-editor-grid" id="foodAdvancedFields"></div>';
   const fields=advanced.querySelector('#foodAdvancedFields'),context=document.createElement('div');context.id='simpleFoodContext';context.className='simple-food-context';
+  editor.append(advanced);
   for(const id of ['foodDate','foodMeal'])context.append($(id).closest('label'));
   $('foodEntry').querySelector('.food-controls').before(context);
   for(const label of [...editor.querySelectorAll('.food-editor-grid>label')])fields.append(label);
