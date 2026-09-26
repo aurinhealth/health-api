@@ -12,6 +12,7 @@ import { resolveFood, calculateAmount } from './food-sources.js';
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
 import {activityDetail} from './activity-detail.js';
+import {rideReviewSections} from './ride-analysis.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {energyBudget} from './energy-budget.js';
@@ -287,7 +288,15 @@ async function handleDashboardApi(request, env, ctx, url) {
         const latest=Array.isArray(rows)&&rows.length?rows[rows.length-1]:{};
         fitness={...latest,tsb:Number.isFinite(Number(latest.ctl))&&Number.isFinite(Number(latest.atl))?Number(latest.ctl)-Number(latest.atl):null};
       }
-      return Response.json({status:"ok",...buildCoachCouncil({daily,fitness,sleepSessions:sleepData.sessions||[]})},{headers:{"Cache-Control":"no-store"}});
+      const council=buildCoachCouncil({daily,fitness,sleepSessions:sleepData.sessions||[]});
+      await Promise.all((daily.training?.completed||[]).filter(a=>/^(Ride|VirtualRide|EBikeRide|Cycling|MountainBikeRide|GravelRide)$/i.test(a.type||'')).slice(0,2).map(async a=>{
+        const response=await activityDetail(request,env,String(a.id).replace(/^activity:/,''),true);if(!response.ok)return;
+        const detail=await response.json(),review=council.reviews.find(r=>r.id==='review-'+a.id);if(!review)return;
+        const sections=rideReviewSections(detail.analysis);if(!sections.length)return;
+        review.analysis=[review.analysis?.[0],...sections].filter(Boolean);review.evidence=['Hodnocení využívá výkonový a tepový stream z Intervals.icu.'];
+        council.priorities.unshift(a.name+': '+sections[0].text);
+      }));
+      return Response.json({status:"ok",...council},{headers:{"Cache-Control":"no-store"}});
     } catch(error){return Response.json({status:"error",message:error.message},{status:500});}
   }
 

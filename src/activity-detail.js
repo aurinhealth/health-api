@@ -1,3 +1,4 @@
+import {analyzeRide} from './ride-analysis.js';
 const present=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
 export function sampleActivityStreams(streams,limit=1200){
   const rows=Array.isArray(streams)?streams:[],time=rows.find(s=>s.type==='time')?.data||[];
@@ -16,7 +17,10 @@ export async function activityDetail(request,env,id,authorized){
   const headers={Authorization:'Basic '+btoa('API_KEY:'+String(env.INTERVALS_API_KEY)),Accept:'application/json'},base='https://intervals.icu/api/v1/activity/'+encodeURIComponent(id);
   try{
     const [detail,streams]=await Promise.all([fetch(base+'?intervals=true',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson),fetch(base+'/streams?types=time,watts,heartrate,altitude,cadence,latlng',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson).catch(()=>[])]);
-    const keys=['id','name','type','distance','moving_time','elapsed_time','total_elevation_gain','average_watts','icu_normalized_watts','icu_weighted_average_watts','icu_ftp','average_heartrate','max_heartrate','average_cadence','icu_training_load','calories'];
-    return Response.json({status:'ok',activity:Object.fromEntries(keys.filter(k=>detail[k]!=null).map(k=>[k,detail[k]])),streams:sampleActivityStreams(streams),source:'intervals.icu'},{headers:{'Cache-Control':'private, no-store'}});
+    const keys=['id','name','type','distance','moving_time','elapsed_time','total_elevation_gain','average_watts','icu_average_watts','icu_weighted_avg_watts','icu_normalized_watts','icu_weighted_average_watts','icu_ftp','average_heartrate','max_heartrate','average_cadence','icu_training_load','calories'];
+    const activity=Object.fromEntries(keys.filter(k=>detail[k]!=null).map(k=>[k,detail[k]]));
+    activity.average_watts=detail.icu_average_watts??detail.average_watts;
+    activity.icu_normalized_watts=detail.icu_weighted_avg_watts??detail.icu_normalized_watts??detail.icu_weighted_average_watts;
+    return Response.json({status:'ok',activity,analysis:analyzeRide(activity,streams),streams:sampleActivityStreams(streams),source:'intervals.icu'},{headers:{'Cache-Control':'private, no-store'}});
   }catch{return Response.json({message:'Detail není dostupný. Některé aktivity nemají přístupný GPS nebo výkonový stream.'},{status:502,headers:{'Cache-Control':'no-store'}});}
 }
