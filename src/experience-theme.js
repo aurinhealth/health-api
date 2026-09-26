@@ -7,4 +7,15 @@ body{background:var(--bg);font-size:14px}.shell{grid-template-columns:220px minm
 @media(max-width:1050px){.shell{grid-template-columns:1fr}.sidebar{height:auto;position:sticky;padding:9px 12px}.nav{scrollbar-width:none}.nav::-webkit-scrollbar{display:none}.topbar{top:64px}.pulse-grid{gap:10px}.pulse-card{display:block}.pulse-ring{margin-bottom:15px}.content{padding:22px 18px}.activity-gallery{grid-template-columns:1fr}}
 @media(max-width:700px){.pulse-header h1{font-size:29px}.pulse-header{align-items:flex-start;flex-direction:column}.pulse-grid{grid-template-columns:1fr}.pulse-card{display:grid;grid-template-columns:88px 1fr}.pulse-ring{margin:0}.experience-grid,.nutrition-layout{grid-template-columns:1fr}.nutrition-donut{margin:auto}.experience-stats{gap:10px}.experience-stats strong{font-size:23px}.nutrient-row{grid-template-columns:85px 1fr 75px;gap:8px}.healthspan-metrics{grid-template-columns:1fr 1fr}.content{padding:19px 12px 50px}.card{padding:18px}.topbar{padding:0 12px}.chart,.detail-chart{min-height:180px}.experience-grid .detail-stats{grid-template-columns:1fr}.experience-heading{align-items:flex-start;flex-direction:column}.pulse-header .btn{font-size:12px}.pulse-insight{align-items:flex-start}.healthspan-title{font-size:24px}}
 @media(max-width:700px){.quick-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.quick-grid .metric-link{min-height:115px;padding:15px}.quick-grid .value{font-size:26px}.quick-grid .small{font-size:11px}.top-title{font-size:12px;max-width:85px}.actions{width:auto}.actions .btn{padding:8px 9px;font-size:12px}.topbar{gap:8px}.pulse-card h3{font-size:17px}}
+.overview-nutrition{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
+.experience-grid>*,.experience-stats>*,.food-editor-grid>*{min-width:0}
+#nutritionBalance .experience-stats strong{font-size:22px;overflow-wrap:anywhere}
+#nutritionBalance .experience-stats span{display:block;min-height:36px}
+#nutrition .daygrid{grid-template-columns:repeat(7,minmax(0,1fr))}
+#nutrition .daygrid>*{min-width:0;overflow-wrap:anywhere}
+.food-input{box-sizing:border-box;max-width:100%}
+#nutritionInsights,#tssChart,#tssInsight{display:none}
+.card:has(>#tssChart){display:none}
+#nutrition>.section-hero .eyebrow,#nutritionReason,#nutritionTargetSummary{display:none}
+@media(max-width:700px){.overview-nutrition{grid-template-columns:1fr}}
 `;

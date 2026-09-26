@@ -12,6 +12,7 @@ import { resolveFood, calculateAmount } from './food-sources.js';
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
 import {activityDetail} from './activity-detail.js';
+import {getCookbookRecipeByPage} from './cookbook.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -220,12 +221,17 @@ async function handleDashboardApi(request, env, ctx, url) {
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});
   }
+  if(url.pathname==='/app/api/food/recipe'&&request.method==='GET'){
+    const recipe=await getCookbookRecipeByPage(url.searchParams.get('page'));
+    return Response.json(recipe?{recipe}:{message:'Na této stránce není známý recept.'},{status:recipe?200:404,headers:{'Cache-Control':'no-store'}});
+  }
   if(url.pathname==='/app/api/food/log'&&request.method==='POST'){
     try {const body=await request.json(),p=body.product||{};
       if(!/^\d{4}-\d{2}-\d{2}$/.test(body.date)||!String(p.name||'').trim()) return Response.json({message:'Zkontroluj název a datum.'},{status:400});
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:'Doplň energii i všechna tři makra pro zvolený základ tabulky.'},{status:400});
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:p.source==='openfoodfacts'?'openfoodfacts':'package_label',note:JSON.stringify({amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null})})}),env,ctx);
+      const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:p.source==='openfoodfacts'?'openfoodfacts':'package_label',note:JSON.stringify({amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error('Uložení selhalo.');
       return Response.json({...result,message:'Jídlo je uložené do denního příjmu.'},{headers:{'Cache-Control':'no-store'}});
     }catch{return Response.json({message:'Jídlo se nepodařilo uložit. Zkontroluj hodnoty a zkus to znovu.'},{status:500});}
@@ -250,7 +256,13 @@ async function handleDashboardApi(request, env, ctx, url) {
     catch { return Response.json({message:'WHOOP nelze načíst. Zkontroluj připojení v Nastavení.'},{status:502}); }
   }
 
-  if(url.pathname==='/app/api/activity-detail'&&request.method==='GET')return activityDetail(request,env,url.searchParams.get('id'),await verifyDashboardSession(request,env.STRENGTH_API_KEY));
+  if(url.pathname==='/app/api/activity-detail'&&request.method==='GET'){
+    const id=url.searchParams.get('id');
+    if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:'Neplatná aktivita.'},{status:400});
+    const known=await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind('activity:'+id).first();
+    if(!known)return Response.json({message:'Aktivita není v tvé synchronizované historii.'},{status:404});
+    return activityDetail(request,env,id,true);
+  }
   if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
 
   if (url.pathname === "/app/api/coaches" && request.method === "GET") {
