@@ -1,4 +1,12 @@
 const $=id=>document.getElementById(id);
+let coachRefreshRunning=false;
+async function refreshCoachLifecycle(){
+  if(document.hidden||coachRefreshRunning)return;
+  coachRefreshRunning=true;
+  try{const [daily,coaches]=await Promise.all([jsonFetch('/app/api/daily'),jsonFetch('/app/api/coaches')]);state.daily=daily;state.coaches=coaches;renderOverview();renderCoachCouncil();}catch{}finally{coachRefreshRunning=false;}
+}
+setInterval(refreshCoachLifecycle,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCoachLifecycle();});
 let weekStart=pragueMonday(),selectedHistoryDate=pragueToday(),state={};
 let inboxChannel="cycling";
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
@@ -174,15 +182,6 @@ const step=range<=14?1:range<=30?3:7;for(let i=0;i<range;i++){if(i%step&&i!==ran
   series.forEach(([name,key,color],i)=>{let segment=[];const flush=()=>{if(segment.length>1)out+='<polyline points="'+segment.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="3"/>';segment=[]};rows.forEach((r,j)=>{if(j&&dateShift(rows[j-1].id,1)!==r.id)flush();if(!measured(r[key])){flush();return}const xx=x(r.id),yy=y(Number(r[key]));segment.push(xx+','+yy);out+='<circle cx="'+xx+'" cy="'+yy+'" r="3" fill="'+color+'"><title>'+esc(dateLabel(r.id)+' · '+name+': '+fmt(r[key],1))+'</title></circle>'});flush();out+='<text x="'+(L+i*150)+'" y="25" fill="'+color+'" font-size="16">'+name+'</text>'});svg.innerHTML=out;
 }
 
-// Refresh lifecycle after source sync, including when returning to this tab.
-let coachRefreshRunning=false;
-async function refreshCoachLifecycle(){
-  if(document.hidden||coachRefreshRunning)return;
-  coachRefreshRunning=true;
-  try{const [daily,coaches]=await Promise.all([jsonFetch('/app/api/daily'),jsonFetch('/app/api/coaches')]);state.daily=daily;state.coaches=coaches;renderOverview();renderCoachCouncil();}catch{}finally{coachRefreshRunning=false;}
-}
-setInterval(refreshCoachLifecycle,60000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCoachLifecycle();});
 function renderTraining(){
   const days=state.week?.days||[],fw=state.fitness?.wellness||[];
   $("trainingRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));
