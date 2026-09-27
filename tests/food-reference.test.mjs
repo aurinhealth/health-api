@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {searchReferenceFoods,foodReferenceDataset} from '../src/food-reference.js';
-import {resolveFood,searchOpenFoodFacts,lookupOpenFoodFactsBarcode} from '../src/food-sources.js';
+import {resolveFood,searchOpenFoodFacts,lookupOpenFoodFactsBarcode,cleanFoodSearch} from '../src/food-sources.js';
 
 test('130 Czech reference foods keep numeric macros, citations and redistribution licence',()=>{
  assert.equal(foodReferenceDataset.products.length,130);
@@ -30,4 +30,9 @@ test('invalid Czech hits cannot suppress a usable global branded product',async(
 test('per-serving energy must not masquerade as per-100g energy',async()=>{
  const old=globalThis.fetch;globalThis.fetch=async()=>Response.json({status:1,product:{code:'12345678',product_name:'Test',nutriments:{'energy-kcal_value':200,proteins_100g:10,fat_100g:3,carbohydrates_100g:20}}});
  try{const r=await lookupOpenFoodFactsBarcode('12345678');assert.equal(r.product.calories_100g,null);}finally{globalThis.fetch=old;}
+});
+test('known metric packages rank before ambiguous packages, sugar-free variants are not merged',()=>{
+ const common={name:'Monster',brand:'Monster',protein_100g:0,fat_100g:0};
+ const r=cleanFoodSearch([{...common,quantity:'',calories_100g:2,carbs_100g:1},{...common,quantity:'500 ml',calories_100g:47,carbs_100g:12},{...common,quantity:'500 ml',calories_100g:2,carbs_100g:1}],'monster');
+ assert.equal(r.length,3);assert.equal(r[0].quantity,'500 ml');assert.equal(r[1].quantity,'500 ml');
 });

@@ -48,7 +48,7 @@ function publicProduct(product, barcode, source = "openfoodfacts") {
 
 export function cleanFoodSearch(products,query=''){
   const normalize=value=>str(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim(),seen=new Set(),q=normalize(query);
-  return products.filter(p=>p.name&&p.calories_100g!=null&&Number.isFinite(Number(p.calories_100g))&&Number(p.calories_100g)>=0&&(Number(p.calories_100g)<=20||!['protein_100g','carbs_100g','fat_100g'].every(k=>p[k]!=null)||Math.abs(Number(p.calories_100g)-(Number(p.protein_100g)*4+Number(p.carbs_100g)*4+Number(p.fat_100g)*9))<=Math.max(35,Number(p.calories_100g)*.65))).sort((a,b)=>{const score=p=>(normalize(p.name)===q?100:normalize(p.name).startsWith(q+' ')?20:0)+['protein_100g','carbs_100g','fat_100g'].filter(k=>p[k]!=null).length;return score(b)-score(a);}).filter(p=>{const pack=foodPackageSize(p.quantity),key=normalize(p.name)+'|'+normalize(String(p.brand||'').split(',')[0])+'|'+(pack?pack.amount+' '+pack.unit+' x'+pack.count:normalize(p.quantity));if(seen.has(key))return false;seen.add(key);return true;});
+  return products.filter(p=>p.name&&p.calories_100g!=null&&Number.isFinite(Number(p.calories_100g))&&Number(p.calories_100g)>=0&&(Number(p.calories_100g)<=20||!['protein_100g','carbs_100g','fat_100g'].every(k=>p[k]!=null)||Math.abs(Number(p.calories_100g)-(Number(p.protein_100g)*4+Number(p.carbs_100g)*4+Number(p.fat_100g)*9))<=Math.max(35,Number(p.calories_100g)*.65))).sort((a,b)=>{const score=p=>{const pack=foodPackageSize(p.quantity);return (normalize(p.name)===q?100:normalize(p.name).startsWith(q+' ')?20:0)+['protein_100g','carbs_100g','fat_100g'].filter(k=>p[k]!=null).length+(pack?10+(pack.count===1?2:0):0)+(p.czech_market?5:0);};return score(b)-score(a);}).filter(p=>{const pack=foodPackageSize(p.quantity),key=normalize(p.name)+'|'+normalize(String(p.brand||'').split(',')[0])+'|'+(pack?pack.amount+' '+pack.unit+' x'+pack.count:normalize(p.quantity))+'|'+JSON.stringify([p.calories_100g,p.protein_100g,p.carbs_100g,p.fat_100g].map(v=>v==null?null:Math.round(Number(v)*100)/100));if(seen.has(key))return false;seen.add(key);return true;});
 }
 
 export async function lookupOpenFoodFactsBarcode(barcode) {
@@ -71,7 +71,7 @@ export async function searchOpenFoodFacts(name, limit = 8) {
   try {
     const endpoint=new URL('https://search.openfoodfacts.org/search');endpoint.searchParams.set('q','('+query+') AND countries_tags:"en:czech-republic"');endpoint.searchParams.set('langs','cs,en');endpoint.searchParams.set('page_size',String(Math.min(20,Math.max(1,Number(limit)||8))));
     let result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(8000)});
-    if(result.ok){let data=await result.json(),products=Array.isArray(data.hits)?cleanFoodSearch(data.hits.map(p=>publicProduct(p,p.code)),q):null;
+    if(result.ok){let data=await result.json(),products=Array.isArray(data.hits)?cleanFoodSearch(data.hits.map(p=>({...publicProduct(p,p.code),czech_market:true})),q):null;
       // Invalid Czech hits must not suppress a useful global result. Keep Czech matches first.
       if(products&&products.length<Math.min(4,Number(limit)||8)){
         endpoint.searchParams.set('q',query);

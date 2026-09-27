@@ -741,7 +741,7 @@ function installSimpleFoodEditor(){
 function installFoodDatabaseSources(){
  const attribution='<a href="https://www.opennutrition.app" target="_blank" rel="noopener noreferrer">OpenNutrition</a> a <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer">Open Food Facts</a> · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL</a> · <a href="/app/api/food/reference-data">Referenční data a licence</a>';
  $('foodEntryStatus').textContent='Běžné suroviny s českými názvy · značkové výrobky · tvoje uložené potraviny.';
- const note=$('foodEntry').querySelector(':scope>p:last-child');if(note)note.innerHTML='Zdroje: '+attribution+'. Referenční hodnoty nejsou etiketou konkrétní značky.';
+ const note=$('foodEntry').querySelector('a[href="https://world.openfoodfacts.org/"]')?.closest('p');if(note)note.innerHTML='Zdroje: '+attribution+'. Referenční hodnoty nejsou etiketou konkrétní značky.';
  document.querySelector('.content').insertAdjacentHTML('beforeend','<footer class="small" style="margin:24px 0 8px;color:#a6b5c4">Potravinová data: '+attribution+'</footer>');
  const select=selectFoodProduct;selectFoodProduct=function(p){select(p);if(p.source==='opennutrition')$('foodSource').innerHTML='Běžná surovina · referenční hodnoty na 100 g · <a href="https://www.opennutrition.app" target="_blank" rel="noopener noreferrer">OpenNutrition</a>'+((p.citations||[]).length?' · zdroj '+esc(p.citations.map(c=>c.database).filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i).join(', ')):'');};
 }
