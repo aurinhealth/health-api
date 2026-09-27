@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
+const ctx=vm.createContext({dateShift:()=> '2026-08-28'});
+vm.runInContext(source.slice(source.indexOf('function sleepIndex('),source.indexOf('function correctDataPresentation(')),ctx);
+const night={date:'2026-09-27',durationMin:513,timeInBedMin:600,stages:{DEEP:120,REM:120}};
+test('long sleep cannot offset awakenings with excess stage points',()=>{assert.equal(ctx.sleepIndex(night),96);assert.equal(ctx.sleepIndex({...night,timeInBedMin:900}),87);});
+test('missing sleep components are unavailable rather than zero',()=>{assert.equal(ctx.sleepIndex({durationMin:480}),null);});
+test('recovery requires fresh HRV, pulse, sleep and sufficient personal baseline',()=>{const rows=Array.from({length:20},(_,i)=>({id:'2026-09-'+String(i+1).padStart(2,'0'),hrv:80,restingHR:55}));assert.equal(ctx.recoveryIndex(rows,night,'2026-09-27').score,null);rows.push({id:'2026-09-27',hrv:80,restingHR:55});assert.equal(ctx.recoveryIndex(rows,night,'2026-09-27').score,59);assert.equal(ctx.recoveryIndex(rows,{...night,date:'2026-09-26'},'2026-09-27').score,null);rows.at(-1).hrv=40;rows.at(-1).restingHR=65;assert.ok(ctx.recoveryIndex(rows,night,'2026-09-27').score<30);});
