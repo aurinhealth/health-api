@@ -9,6 +9,7 @@ import { connectionStatus } from "./connections.js";
 import { whoopOAuth, whoopData } from "./whoop.js";
 import { connectionEnvironment, saveConnectionSecret } from "./connection-secrets.js";
 import { resolveFood, calculateAmount } from './food-sources.js';
+import {foodReferenceDataset} from './food-reference.js';
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
 import {activityDetail} from './activity-detail.js';
@@ -32,6 +33,8 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Public, licensed reference subset only. This never exports personal foods or journals.
+    if(url.pathname==='/app/api/food/reference-data'&&request.method==='GET')return Response.json(foodReferenceDataset,{headers:{'Cache-Control':'public, max-age=3600','Content-Disposition':'attachment; filename="food-reference-cs.json"'}});
     // Static assets stay independent of provider storage availability.
     if (url.pathname !== '/app' && url.pathname !== '/app/dashboard-client.js') env = await connectionEnvironment(env);
     // Legacy Google Health endpoints live in index.js. The deployed Worker

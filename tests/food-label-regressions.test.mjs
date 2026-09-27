@@ -13,6 +13,6 @@ test('unreadable values remain missing instead of becoming zero',()=>{
 });
 test('name search uses official full-text service with Czech-market filter',async()=>{
  const old=globalThis.fetch;let request;
- globalThis.fetch=async url=>{request=new URL(url);return Response.json({hits:[{code:'12345678',product_name:'Yogurt',product_name_cs:'Jogurt',nutriments:{'energy-kcal_100g':65}}]});};
+ globalThis.fetch=async url=>{request||=new URL(url);return Response.json({hits:[{code:'12345678',product_name:'Yogurt',product_name_cs:'Jogurt',nutriments:{'energy-kcal_100g':65}}]});};
  try {const result=await searchOpenFoodFacts('Hollandia jogurt');assert.equal(request.hostname,'search.openfoodfacts.org');assert.ok(request.searchParams.get('q').includes('Hollandia jogurt'));assert.ok(request.searchParams.get('q').includes('en:czech-republic'));assert.equal(result.products[0].name,'Jogurt');assert.equal(result.products[0].protein_100g,null);}finally{globalThis.fetch=old;}
 });

@@ -1,5 +1,6 @@
 const OFF_BASE = "https://world.openfoodfacts.org";
 import {foodPackageSize} from './food-portions.js';
+import {searchReferenceFoods} from './food-reference.js';
 const USER_AGENT = "health-api-food/1.0 (health-api)";
 
 const num = (v) => v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)) ? Number(v) : null;
@@ -15,7 +16,8 @@ export function normalizeBarcode(value) {
 
 function extractNutrients(product) {
   const n = product?.nutriments || {};
-  const kcal = num(n["energy-kcal_100g"] ?? n["energy-kcal_value"] ?? (num(n["energy_100g"]) != null ? Number(n["energy_100g"]) / 4.184 : null));
+  // *_value can be a serving value: mixing it with per-100g macros corrupts portions.
+  const kcal = num(n["energy-kcal_100g"] ?? (num(n["energy_100g"]) != null ? Number(n["energy_100g"]) / 4.184 : null));
   return {
     calories_100g: kcal,
     protein_100g: num(n["proteins_100g"] ?? n["protein_100g"]),
@@ -36,10 +38,11 @@ function publicProduct(product, barcode, source = "openfoodfacts") {
     serving_size: str(product?.serving_size),
     nutrition_basis: /(?:ml|cl|\bl)\b/i.test(str(product?.quantity)+' '+str(product?.serving_size))?'ml':'g',
     image_url: str(product?.image_front_url),
+    czech_market: Array.isArray(product?.countries_tags)&&product.countries_tags.includes('en:czech-republic'),
     ...nutrients,
     source,
     source_url: product?.code ? `${OFF_BASE}/product/${product.code}` : null,
-    confidence: nutrients.calories_100g != null ? "high" : "low"
+    confidence: nutrients.calories_100g != null ? "database" : "low"
   };
 }
 
@@ -67,9 +70,14 @@ export async function searchOpenFoodFacts(name, limit = 8) {
   const query=q.replace(/[^\p{L}\p{N}\s-]/gu,' ').trim();
   try {
     const endpoint=new URL('https://search.openfoodfacts.org/search');endpoint.searchParams.set('q','('+query+') AND countries_tags:"en:czech-republic"');endpoint.searchParams.set('langs','cs,en');endpoint.searchParams.set('page_size',String(Math.min(20,Math.max(1,Number(limit)||8))));
-    let result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
-    if(result.ok){let data=await result.json();if(!data.hits?.length){endpoint.searchParams.set('q',query);result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(12000)});if(result.ok)data=await result.json();}
-      if(Array.isArray(data.hits))return {status:'ok',source:'openfoodfacts',count:data.hits.length,products:data.hits.map(p=>publicProduct(p,p.code)).filter(p=>p.name)};
+    let result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(8000)});
+    if(result.ok){let data=await result.json(),products=Array.isArray(data.hits)?cleanFoodSearch(data.hits.map(p=>publicProduct(p,p.code)),q):null;
+      // Invalid Czech hits must not suppress a useful global result. Keep Czech matches first.
+      if(products&&products.length<Math.min(4,Number(limit)||8)){
+        endpoint.searchParams.set('q',query);
+        try{result=await fetch(endpoint,{headers:{'User-Agent':USER_AGENT,Accept:'application/json'},signal:AbortSignal.timeout(8000)});if(result.ok){data=await result.json();if(Array.isArray(data.hits))products=cleanFoodSearch([...products,...data.hits.map(p=>publicProduct(p,p.code))],q);}}catch{}
+      }
+      if(products?.length)return {status:'ok',source:'openfoodfacts',count:products.length,products};
     }
   }catch{}
   // Full-text search belongs to the legacy search endpoint; v2 ignores search_terms.
@@ -137,6 +145,7 @@ export async function resolveFood(input = {}) {
 
   const name = str(input.name);
   if (name) {
+    const basics=searchReferenceFoods(name,input.limit||12);
     const plain=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
     const reference=/^banan(?:y|u)?$/.test(plain)?['Banán · bez slupky',32,98,1.1,21.6,.3,2.3]:/^jablk[oa]$/.test(plain)?['Jablko · jedlý podíl',37,52,.4,10.5,.4,2.3]:null;
     if(reference){const [name,id,calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g]=reference,product={name,brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id='+id,confidence:'reference'};return{status:'ok',match:'generic_food',product,candidates:[product]};}
@@ -144,7 +153,9 @@ export async function resolveFood(input = {}) {
       const product={name:'Nektarinka · čerstvá, bez pecky',brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g:48,protein_100g:1.1,carbs_100g:9.3,fat_100g:.3,fiber_100g:1.7,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id=360',confidence:'reference'};
       return {status:'ok',match:'generic_food',product,candidates:[product]};
     }
-    const off = await searchOpenFoodFacts(name, 20);
+    // Generic reference foods work without an external service or a country tag.
+    if(basics.length&&!barcode)return {status:'ok',match:'generic_food',product:basics[0],candidates:basics};
+    let off;try{off=await searchOpenFoodFacts(name,20);}catch(error){if(basics.length)return {status:'ok',match:'generic_food',product:basics[0],candidates:basics,providerUnavailable:true};throw error;}
     off.products=cleanFoodSearch(off.products||[],name).slice(0,input.limit||8);
     if (off.products?.length) return { status: "ok", match: "name", product: off.products[0], candidates: off.products, reference: nutridatabazeReference(name) };
     return { status: "reference_required", match: "nutridatabaze", product: null, candidates: [], reference: nutridatabazeReference(name) };
