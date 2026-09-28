@@ -17,6 +17,8 @@ import {rideReviewSections} from './ride-analysis.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {energyBudget} from './energy-budget.js';
+import {gymExerciseCatalog} from './gym-catalog.js';
+import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
@@ -36,7 +38,7 @@ export default {
     // Public, licensed reference subset only. This never exports personal foods or journals.
     if(url.pathname==='/app/api/food/reference-data'&&request.method==='GET')return Response.json(foodReferenceDataset,{headers:{'Cache-Control':'public, max-age=3600','Content-Disposition':'attachment; filename="food-reference-cs.json"'}});
     // Static assets stay independent of provider storage availability.
-    if (url.pathname !== '/app' && url.pathname !== '/app/dashboard-client.js') env = await connectionEnvironment(env);
+    if (!['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg'].includes(url.pathname)) env = await connectionEnvironment(env);
     // Legacy Google Health endpoints live in index.js. The deployed Worker
     // uses entrypoint.js, so expose these routes explicitly instead of letting
     // them fall through to the dashboard gateway.
@@ -69,6 +71,7 @@ export default {
     if (url.pathname === "/terms" && request.method === "GET") return policyPage("Terms of Use", `Health & Strength is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.`);
     if (url.pathname === "/support" && request.method === "GET") return policyPage("Support", `Support for Health & Strength is provided through the project repository and its maintainer. Include the affected tool name, approximate time, and non-sensitive error message when reporting a problem. Never include API keys, OAuth refresh tokens, or other secrets in a support request.`);
     if (url.pathname === "/logo.svg" && request.method === "GET") return logoResponse();
+    if (url.pathname === "/manifest.webmanifest" && request.method === "GET") return Response.json({name:"Petr Fitness Data",short_name:"Fitness Data",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
     if (url.pathname === "/openapi.json" && request.method === "GET") {
       const response = await fetch(OPENAPI_URL, { cf: { cacheTtl: 60 } });
       if (!response.ok) return new Response(JSON.stringify({ status: "error", message: "OpenAPI schema unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
@@ -215,9 +218,31 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 
 async function handleDashboardApi(request, env, ctx, url) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (id INTEGER PRIMARY KEY,profile_json TEXT NOT NULL)").run();if(request.method==='POST'){const p=await request.json(),profile={sex:['male','female'].includes(p.sex)?p.sex:'',age:Number(p.age)||null,height:Number(p.height)||null,hrmax:Number(p.hrmax)||null,rhr:Number(p.rhr)||null};await env.DB.prepare('INSERT INTO dashboard_profile(id,profile_json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json').bind(JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
-  if(url.pathname==='/app/api/google-health'&&request.method==='GET')return Response.json(await googleDashboard(env.DB,pragueToday()),{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
+    const date=url.searchParams.get('date')||pragueToday();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
+    return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/assistant'&&request.method==='POST'){
+    if(!(await verifyDashboardSession(request,env.STRENGTH_API_KEY)))return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena. Nastav serverový secret OPENAI_API_KEY; předplatné ChatGPT není API klíč.'},{status:503});
+    const body=await request.json().catch(()=>({})),message=String(body.message||'').trim();
+    if(!message||message.length>4000)return Response.json({message:'Zadej požadavek do 4000 znaků.'},{status:400});
+    const date=pragueToday(),start=pragueWeekStart();
+    const [dailyResponse,fitnessResponse,weekResponse,health,gymResponse]=await Promise.all([
+      app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
+      handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')),
+      handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start)),
+      googleDashboard(env.DB,date),
+      handleDashboardApi(new Request('https://internal/app/api/gym'),env,ctx,new URL('https://internal/app/api/gym'))
+    ]);
+    const [daily,fitness,week,gym]=await Promise.all([dailyResponse.json().catch(()=>({})),fitnessResponse.json().catch(()=>({})),weekResponse.json().catch(()=>({})),gymResponse.json().catch(()=>({}))]);
+    try{return Response.json(await askCoach(env,message,coachContext({date,daily,week,fitness,health,gym})),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
+  }
   if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
 
   if(url.pathname==='/app/api/food/day'&&request.method==='GET'){
@@ -278,8 +303,9 @@ async function handleDashboardApi(request, env, ctx, url) {
 
   if (url.pathname === "/app/api/coaches" && request.method === "GET") {
     try {
-      const today=new Date(), oldest=new Date(today.getTime()-14*86400000).toISOString().slice(0,10), newest=today.toISOString().slice(0,10);
-      const dailyResponse=await app.fetch(new Request(new URL("/analysis/daily",request.url),{headers:internalAuth}),env,ctx);
+      const requestedDate=url.searchParams.get('date'),newest=requestedDate&&/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)&&requestedDate<=pragueToday()?requestedDate:pragueToday(),today=new Date(newest+'T12:00:00Z'),oldest=new Date(today.getTime()-14*86400000).toISOString().slice(0,10);
+      const dailyUrl=new URL('/analysis/daily',request.url);dailyUrl.searchParams.set('date',newest);
+      const dailyResponse=await app.fetch(new Request(dailyUrl,{headers:internalAuth}),env,ctx);
       const sleepUrl=new URL("/health/sleep",request.url);sleepUrl.searchParams.set("start",oldest);sleepUrl.searchParams.set("end",newest);
       const sleepResponse=await app.fetch(new Request(sleepUrl,{headers:internalAuth}),env,ctx);
       const [daily,sleepData]=await Promise.all([dailyResponse.json(),sleepResponse.json()]);
@@ -301,7 +327,7 @@ async function handleDashboardApi(request, env, ctx, url) {
         review.actions=['Dokončeno: '+Math.round(Number(measured.moving_time)/60)+' min · '+(Number(measured.distance)/1000).toFixed(1)+' km · '+Math.round(Number(measured.total_elevation_gain))+' m převýšení.',...(impact?[impact.text]:[])];
         council.priorities.unshift(a.name+': '+(impact?.text||sections[0].text));
       }));
-      return Response.json({status:"ok",...council},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",date:newest,...council},{headers:{"Cache-Control":"no-store"}});
     } catch(error){return Response.json({status:"error",message:error.message},{status:500});}
   }
 
@@ -512,7 +538,7 @@ async function handleDashboardApi(request, env, ctx, url) {
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
   const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
-  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first(),health=await googleDashboard(env.DB,pragueToday()),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
+  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first(),health=await googleDashboard(env.DB,date),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });

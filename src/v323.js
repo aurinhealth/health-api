@@ -1,5 +1,6 @@
 import legacy from "./index.js";
 import { getCookbook } from "./cookbook.js";
+import { completedMealTypes, nextUnloggedMeals } from "./nutrition-next.js";
 
 const V323 = "final-5-cookbook-v3.2.3";
 const BASELINE_REST_TDEE = 2450;
@@ -266,6 +267,44 @@ async function foodRecommendV323(env, url) {
       recommendation_reason: recommendationReason(x.recipe, remaining, context, maxMinutes)
     }));
 
+  const localToday=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Prague'}).format(new Date());
+  const localHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
+  const slots=nextUnloggedMeals(completedMealTypes(food.entries),date===localToday?localHour:0);
+  const categories={BREAKFAST:['Snídaně'],LUNCH:['Hlavní jídla'],SNACK:['Svačiny','Smoothie','Dezerty'],DINNER:['Hlavní jídla']};
+  const mealRecommendations=slots.map(meal=>{
+    const share=Object.fromEntries(Object.entries(remaining).map(([key,value])=>[key,value/Math.max(1,slots.length)]));
+    const filtered=cookbook.filter(recipe=>{
+      const kcal=Number(recipe.kcal);
+      return Number.isFinite(kcal)&&kcal>0&&categories[meal.type].includes(recipe.category)&&(!maxMinutes||recipeMinutes(recipe)<=maxMinutes)&&(!overCalories||kcal<=(heavilyOverCalories?150:250));
+    });
+    const recommendations=filtered.map(recipe=>({recipe,score:scoreRecipe(recipe,share,targets,context,maxMinutes)}))
+      .sort((a,b)=>b.score-a.score).slice(0,3).map(({recipe,score})=>({
+        ...recipe,meal_type:meal.type,servings:1,portion_label:'1 porce',recommendation_score:score,
+        recommendation_reason:recommendationReason(recipe,share,context,maxMinutes)
+      }));
+    return {meal_type:meal.type,label:meal.label,target:share,recommendations};
+  });
+  const everyday={
+    BREAKFAST:[
+      {name:'Ovesné vločky + skyr + banán',kcal:480,protein_g:29,carbs_g:72,fat_g:8,reason:'běžná snídaně'},
+      {name:'Vejce + pečivo + zelenina',kcal:420,protein_g:24,carbs_g:40,fat_g:18,reason:'snídaně s bílkovinami'}
+    ],
+    LUNCH:[
+      {name:'Kuřecí maso + rýže + zelenina',kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:'běžný oběd'},
+      {name:'Tuňák + těstoviny + zelenina',kcal:520,protein_g:38,carbs_g:65,fat_g:9,reason:'rychlý oběd'}
+    ],
+    SNACK:[
+      {name:'Skyr + banán',kcal:250,protein_g:22,carbs_g:35,fat_g:1,reason:'rychlá svačina'},
+      {name:'Cottage + pečivo',kcal:350,protein_g:28,carbs_g:35,fat_g:10,reason:'svačina s bílkovinami'}
+    ],
+    DINNER:[
+      {name:'Kuřecí maso + rýže + zelenina',kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:'běžná večeře'},
+      {name:'Cottage + pečivo + zelenina',kcal:380,protein_g:30,carbs_g:40,fat_g:10,reason:'jednoduchá večeře'}
+    ]
+  };
+  const storeAlternatives=(everyday[slots[0]?.type]||[]).filter(item=>item.kcal<=remaining.kcal*1.1);
+  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180)storeAlternatives.push({name:'Bílý jogurt + ovoce',kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:'menší běžná porce'});
+
   let coaching = "";
   if (heavilyOverCalories) coaching = "Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.";
   else if (overCalories) coaching = "Kalorický cíl už je splněný/překročený. Pokud máš hlad, vybírej spíš malou svačinovou porci; další plnohodnotné jídlo není nutné jen kvůli makrům.";
@@ -287,7 +326,9 @@ async function foodRecommendV323(env, url) {
     plannedRideHours: context.plannedRideHours,
     plannedEnduranceRideHours: context.plannedEnduranceRideHours,
     coaching,
-    recommendations: candidates
+    recommendations: candidates,
+    mealRecommendations,
+    storeAlternatives
   });
 }
 

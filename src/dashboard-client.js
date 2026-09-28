@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);
 let coachRefreshRunning=false;
 async function refreshCoachLifecycle(){
-  if(document.hidden||coachRefreshRunning)return;
+  if(document.hidden||coachRefreshRunning||selectedHistoryDate!==pragueToday())return;
   coachRefreshRunning=true;
   try{const [daily,coaches]=await Promise.all([jsonFetch('/app/api/daily'),jsonFetch('/app/api/coaches')]);state.daily=daily;state.coaches=coaches;renderOverview();renderCoachCouncil();}catch{}finally{coachRefreshRunning=false;}
 }
@@ -15,6 +15,7 @@ function fmt(v,d=0){return Math.round(num(v)*10**d)/10**d}
 function dateShift(date,days){const p=date.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]+days)).toISOString().slice(0,10)}
 function pragueToday(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value+"-"+p.find(x=>x.type==="day").value}
 function pragueMonday(){const d=pragueToday().split("-").map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
+function mondayOf(date){const d=date.split('-').map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
 function dateLabel(d){return new Intl.DateTimeFormat("cs-CZ",{day:"2-digit",month:"2-digit"}).format(new Date(d+"T12:00:00Z"))}
 function longDate(d){return new Intl.DateTimeFormat("cs-CZ",{weekday:"long",day:"numeric",month:"numeric"}).format(new Date(d+"T12:00:00Z"))}
 function hm(min){if(!Number.isFinite(Number(min)))return "—";return Math.floor(Number(min)/60)+"h "+Math.round(Number(min)%60)+"m"}
@@ -134,10 +135,10 @@ function renderCoachCouncil(){
 
 function renderOverview(){
   const d=state.daily||{},f=d.nutrition?.foodLog?.totals||{},target=d.nutrition||{};
-  $("overviewDate").textContent=longDate(pragueToday());
+  $("overviewDate").textContent=longDate(selectedHistoryDate);
   const completed=(d.training?.completed||[]).filter(x=>!isNutritionItem(x));
   const planned=(d.training?.planned||[]).filter(x=>!isNutritionItem(x));
-  const sleepSessions=primarySleepSessions(state.sleep?.sessions);
+  const sleepSessions=primarySleepSessions(state.sleep?.sessions).filter(s=>(s.date||String(s.endTime||'').slice(0,10))<=selectedHistoryDate);
   const lastSleep=sleepSessions[0];
   const sleepRecovery=sleepIndex;
   const recovery30=sleepSessions.slice(1,31).map(sleepRecovery).filter(Number.isFinite),avgRecovery=recovery30.length?recovery30.reduce((a,b)=>a+b,0)/recovery30.length:null,lastRecovery=sleepRecovery(lastSleep);
@@ -158,11 +159,11 @@ function renderOverview(){
   $("oMacros").innerHTML='<div class="macro-line"><b style="color:#60a5fa">P</b><span>'+fmt(f.protein_g)+' / '+fmt(m.protein)+' g</span></div><div class="macro-line"><b style="color:#f59e0b">C</b><span>'+fmt(f.carbs_g)+' / '+fmt(m.carbs)+' g</span></div><div class="macro-line"><b style="color:#a78bfa">F</b><span>'+fmt(f.fat_g)+' / '+fmt(m.fat)+' g</span></div>';
   const days=state.week?.days||[];
   $("overviewWeekPlan").innerHTML=days.map(trainingDayMarkup).join("");
-  const fw=state.fitness?.wellness||[],latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
+  const fw=(state.fitness?.wellness||[]).filter(r=>r.id<=selectedHistoryDate),latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
   $("oFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
   $("oForm").innerHTML=(Number.isFinite(Number(latest.tsb))?fmt(latest.tsb):"—")+trendArrow(latest.tsb,prev.tsb,false,"");
-  const wr=(d.weight?.records||[]).filter(x=>x.value_numeric!=null).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time)));
-  const currentW=wr.length?Number(wr[wr.length-1].value_numeric):Number(d.weight?.current);
+  const wr=(d.weight?.records||[]).filter(x=>x.value_numeric!=null&&String(x.sample_time).slice(0,10)<=selectedHistoryDate).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time)));
+  const currentW=wr.length?Number(wr[wr.length-1].value_numeric):selectedHistoryDate===pragueToday()?Number(d.weight?.current):NaN;
   const startW=wr[0];
   const weightDelta=Number.isFinite(currentW)&&startW?currentW-num(startW.value_numeric):null;
   const weightTrend=weightDelta==null||Math.abs(weightDelta)<.05?"":'<div class="trend '+(weightDelta<0?"good":"bad")+'">'+(weightDelta>0?"↑ +":"↓ ")+fmt(weightDelta,1)+' kg od počáteční váhy</div>';
@@ -183,7 +184,7 @@ const step=range<=14?1:range<=30?3:7;for(let i=0;i<range;i++){if(i%step&&i!==ran
 }
 
 function renderTraining(){
-  const days=state.week?.days||[],fw=state.fitness?.wellness||[];
+  const days=state.week?.days||[],fw=(state.fitness?.wellness||[]).filter(r=>r.id<=selectedHistoryDate);
   $("trainingRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));
   populateWeekSelectors("trainingWeekSelect",null,days);
   const selected=days.find(x=>x.date===selectedHistoryDate)||days.find(x=>x.date===pragueToday())||days[0];
@@ -213,7 +214,7 @@ function renderNutrition(){
   const days=state.week?.days||[];
   $("nutritionRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));
   populateWeekSelectors("nutritionWeekSelect",null,days);
-  const today=days.find(x=>x.date===pragueToday())||days[days.length-1];
+  const today=days.find(x=>x.date===selectedHistoryDate)||days[days.length-1];
   $("nutritionReason").textContent=today?.daily?.nutrition?.reason||"Denní cíl se adaptuje podle tréninku, hmotnosti a cíle.";
   const tn=today?.daily?.nutrition||{},cb=tn.calorieBreakdown||{},targetCal=num(tn.calorieTarget||today?.daily?.calories?.target),trainingCal=Math.max(0,num(cb.activityAdjustment)),restTarget=Math.max(0,targetCal-trainingCal),burn=today?.daily?.burned||{};
   $("nutritionTargetSummary").innerHTML='<strong>Dnešní cíl: '+fmt(targetCal)+' kcal</strong> · klidový cíl '+fmt(restTarget)+' kcal + '+fmt(trainingCal)+' kcal z tréninku.<br><strong>Výdej dnes: '+fmt(burn.total)+' kcal</strong> · '+fmt(burn.activity)+' kcal z evidovaných aktivit (chůze, gym i cyklistika). <span class="muted">'+(burn.source==="observed"?"Celkový denní výdej je z naměřených dat.":"Celkový denní výdej je průběžný odhad.")+'</span>';  $("nutritionDays").innerHTML=days.map(x=>{
@@ -226,18 +227,7 @@ function renderNutrition(){
 
   const selected=today;
   const allMealGroups=selected?.recommendations?.mealRecommendations||[];
-  const loggedMealText=(state.nutrition?.records||[]).filter(x=>String(x.startTime||"").slice(0,10)===String(selected?.date||"")).map(x=>String(x.mealType||"")).join(" ").toLowerCase();
-  const hour=new Date().getHours();
-  const isGroupNeeded=group=>{
-    const label=String(group.label||"").toLowerCase();
-    const isBreakfast=/snídan|breakfast/.test(label),isLunch=/oběd|lunch/.test(label),isDinner=/večeř|dinner/.test(label),isSnack=/svačin|snack/.test(label);
-    if((isBreakfast&&/snídan|breakfast/.test(loggedMealText))||(isLunch&&/oběd|lunch/.test(loggedMealText))||(isDinner&&/večeř|dinner/.test(loggedMealText)))return false;
-    if(hour<9)return isBreakfast||isSnack||isLunch;
-    if(hour<13)return isSnack||isLunch;
-    if(hour<17)return isSnack||isDinner;
-    return isDinner||isSnack;
-  };
-  const mealGroups=allMealGroups.filter(isGroupNeeded).slice(0,3);
+  const nextMeal=allMealGroups[0];
   const stores=selected?.recommendations?.storeAlternatives||[];
   const selectedMacros=macroTargetsOf(selected||{});
   const selectedFood=selected?.food?.totals||{};
@@ -248,10 +238,10 @@ function renderNutrition(){
   const coaching=trainingCal>100?"Dnešní cíl už zahrnuje započtený trénink.":nextRideNote;
   const fallback='<div style="margin-top:12px"><h3 style="margin-bottom:6px">Nejbližší jídlo</h3><div class="foodrow"><div><strong>'+ (rem.protein_g>=30?'Jídlo s 30–45 g bílkovin':'Vyvážené běžné jídlo') +'</strong><div class="small">'+(rem.carbs_g>=60?'Přidej zdroj sacharidů podle zbývajících '+fmt(rem.carbs_g)+' g; ':'')+(rem.fat_g>=15?'tuk doplň běžnou porcí, ne celým cílem najednou.':'')+'</div></div><div class="right">'+fmt(remKcal)+' kcal zbývá</div></div></div>';
   $("foodPlan").innerHTML=selected?'<div class="reason"><strong>Zbývá '+fmt(remKcal)+' kcal</strong> · P '+fmt(rem.protein_g)+' g · C '+fmt(rem.carbs_g)+' g · F '+fmt(rem.fat_g)+' g<br>'+esc(coaching)+'</div>'+
-    (mealGroups.length?mealGroups.map(group=>'<div style="margin-top:12px"><h3 style="margin-bottom:6px">'+esc(group.label)+'</h3>'+
-      (group.recommendations?.length?group.recommendations.slice(0,3).map(r=>'<div class="foodrow"><div><strong>'+esc(r.name||r.title||"Jídlo")+'</strong><div class="small">'+esc(r.recommendation_reason||"")+'</div><div class="small">1 porce · '+fmt(r.kcal||r.calories)+' kcal · P '+fmt(r.protein_g)+' · C '+fmt(r.carbs_g)+' · F '+fmt(r.fat_g)+'</div></div><div class="right">'+scoreBadge(Math.min(100,Math.max(0,Number(r.recommendation_score||0))))+'</div></div>').join(""):'<div class="muted">Pro tuto část dne nemám vhodný recept.</div>')+'</div>').join(""):'<div class="muted">Dnešní zbývající jídla jsou pokrytá.</div>')+
-    (mealGroups.length?'':fallback)+
-    (stores.length?'<details style="margin-top:12px"><summary>Alternativa z běžného obchodu</summary>'+stores.slice(0,4).map(r=>'<div class="foodrow"><div><strong>'+esc(r.name)+'</strong><div class="small">'+esc(r.reason||"")+'</div></div><div class="right">'+fmt(r.kcal)+' kcal</div></div>').join("")+'</details>':''):'—';
+    (nextMeal?'<div class="next-meal"><h3>'+esc(nextMeal.label)+' · z kuchařky</h3>'+
+      (nextMeal.recommendations?.length?nextMeal.recommendations.slice(0,3).map(r=>'<div class="foodrow"><div><strong>'+esc(r.title||r.name||"Jídlo")+'</strong><div class="small">'+esc(r.recommendation_reason||"")+'</div><div class="small">1 porce · '+fmt(r.kcal||r.calories)+' kcal · P '+fmt(r.protein_g)+' · C '+fmt(r.carbs_g)+' · F '+fmt(r.fat_g)+'</div></div><div class="right">'+fmt(r.kcal||r.calories)+' kcal</div></div>').join(""):'<div class="muted">Pro tuto část dne nemám vhodný recept.</div>')+'</div>':'<div class="muted">Dnešní jídla jsou zapsaná nebo už je po jejich obvyklém čase.</div>')+
+    (nextMeal?'':fallback)+
+    (stores.length?'<div class="next-meal"><h3>Rychle z běžných potravin</h3>'+stores.slice(0,2).map(r=>'<div class="foodrow"><div><strong>'+esc(r.name)+'</strong><div class="small">'+esc(r.reason||"")+' · P '+fmt(r.protein_g)+' g · C '+fmt(r.carbs_g)+' g</div></div><div class="right">'+fmt(r.kcal)+' kcal</div></div>').join("")+'</div>':''):'—';
 
   const nr=state.nutrition?.records||[];
   const selectedFoods=nr.filter(x=>String(x.startTime||"").slice(0,10)===String(selected?.date||""));
@@ -259,7 +249,7 @@ function renderNutrition(){
   $("nutritionRows").innerHTML=layeredHistory(nr,x=>x.startTime,x=>'<div class="history-workout"><strong>'+esc(x.foodDisplayName||"Jídlo")+' · '+fmt(x.kcal)+' kcal</strong><div class="small">'+esc(x.startTime?new Date(x.startTime).toLocaleString("cs-CZ"):"—")+' · '+esc(x.mealType||"—")+' · P '+fmt(x.protein_g,1)+' g · C '+fmt(x.carbs_g,1)+' g · F '+fmt(x.fat_g,1)+' g</div></div>');
 }
 function renderRecovery(){
-  const ss=primarySleepSessions(state.sleep?.sessions),last=ss[0],range=Number($("sleepRange")?.value||30);
+  const ss=primarySleepSessions(state.sleep?.sessions).filter(s=>(s.date||String(s.endTime||'').slice(0,10))<=selectedHistoryDate),last=ss[0],range=Number($("sleepRange")?.value||30);
   const filtered=ss.filter(x=>{const t=new Date(x.endTime||x.startTime||0).getTime();return range>=3000||t>=Date.now()-range*86400000;});
   $("rLast").textContent=last?hm(last.durationMin):"—";
   $("rLastMeta").textContent=last?(last.startTime?new Date(last.startTime).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):"")+" → "+(last.endTime?new Date(last.endTime).toLocaleTimeString("cs-CZ",{hour:"2-digit",minute:"2-digit"}):""):"";
@@ -285,35 +275,91 @@ function layeredHistory(records,dateOf,rowOf){
   return Object.keys(years).sort().reverse().map(y=>'<details '+(y==="2026"?"open":"")+'><summary>'+y+'</summary>'+Object.keys(years[y]).sort().reverse().map(m=>'<details><summary>'+new Intl.DateTimeFormat("cs-CZ",{month:"long",year:"numeric"}).format(new Date(m+"-01T12:00:00Z"))+'</summary><div class="history-sets">'+years[y][m].sort((a,b)=>String(dateOf(b)).localeCompare(String(dateOf(a)))).map(rowOf).join("")+'</div></details>').join("")+'</details>').join("")||'<div class="muted">Bez historie.</div>';
 }
 function renderHealth(){
-  const w=state.weight||{},weightDisplay=v=>Number.isFinite(Number(v))&&Number(v)>0?fmt(v,1):"—";
-  $("hWeight").textContent=weightDisplay(w.latest?.value_numeric);$("hAvg30").textContent=weightDisplay(w.average30d);const latest=num(w.latest?.value_numeric),avg7=num(w.average7d),avg30=num(w.average30d),diff=latest&&avg30?fmt(latest-avg30,1):null;$("weightSignal").textContent=diff==null?"aktuální baseline":(diff>=0?"+":"")+diff+" kg vs. 30 dní";
+  const w=state.weight||{},weightDisplay=v=>Number.isFinite(Number(v))&&Number(v)>0?fmt(v,1):"—",historical=(w.records||[]).filter(x=>String(x.sample_time||'').slice(0,10)<=selectedHistoryDate).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time))),lastWeight=historical.at(-1),mean=days=>{const values=historical.filter(x=>String(x.sample_time).slice(0,10)>=dateShift(selectedHistoryDate,-days+1)).map(x=>Number(x.value_numeric)).filter(x=>Number.isFinite(x)&&x>0);return values.length?values.reduce((s,x)=>s+x,0)/values.length:null;};
+  $("hWeight").textContent=weightDisplay(lastWeight?.value_numeric);$("hAvg30").textContent=weightDisplay(mean(30));const latest=num(lastWeight?.value_numeric),avg7=num(mean(7)),avg30=num(mean(30)),diff=latest&&avg30?fmt(latest-avg30,1):null;$("weightSignal").textContent=diff==null?"bez baseline":(diff>=0?"+":"")+diff+" kg vs. 30 dní";
   const wr=(w.records||[]).filter(x=>num(x.value_numeric)>0&&/^\d{4}-\d{2}-\d{2}/.test(String(x.sample_time||""))).slice(-365);
   chartSvg("healthWeightChart",wr.map(x=>num(x.value_numeric)),[],wr.map(x=>dateLabel(String(x.sample_time).slice(0,10))),{W:760,H:300,axis:true,unit:" kg",decimals:1});
-  $("weightTrendMeta").textContent=wr.length?"Aktuálně "+weightDisplay(w.latest?.value_numeric)+" kg · 7 dní "+weightDisplay(avg7)+" kg · 30 dní "+weightDisplay(avg30)+" kg.":"Bez záznamů hmotnosti.";
-  const sessions=primarySleepSessions(state.sleep?.sessions),last=sessions[0],activityCount=state.activities?.count||0;$("healthContext").innerHTML='<div class="metric-line"><span>Hmotnost vs. 30 dní</span><strong>'+esc(diff==null?"—":(diff>=0?"+":"")+diff+" kg")+'</strong></div><div class="metric-line"><span>Poslední noc</span><strong>'+esc(last?hm(last.durationMin):"—")+'</strong></div><div class="metric-line"><span>Záznamy aktivit</span><strong>'+esc(activityCount)+'</strong></div><div class="notice" style="margin-top:12px">Trend hmotnosti a spánku je kontext pro rozhodnutí o zátěži; jednotlivý den není verdikt.</div>';
+  $("weightTrendMeta").textContent=historical.length?"K "+dateLabel(selectedHistoryDate)+" "+weightDisplay(lastWeight?.value_numeric)+" kg · 7 dní "+weightDisplay(avg7)+" kg · 30 dní "+weightDisplay(avg30)+" kg.":"Bez záznamů hmotnosti.";
+  const sessions=primarySleepSessions(state.sleep?.sessions).filter(s=>(s.date||String(s.endTime||'').slice(0,10))<=selectedHistoryDate),last=sessions[0],activityCount=state.activities?.count||0;$("healthContext").innerHTML='<div class="metric-line"><span>Hmotnost vs. 30 dní</span><strong>'+esc(diff==null?"—":(diff>=0?"+":"")+diff+" kg")+'</strong></div><div class="metric-line"><span>Poslední noc</span><strong>'+esc(last?hm(last.durationMin):"—")+'</strong></div><div class="metric-line"><span>Záznamy aktivit</span><strong>'+esc(activityCount)+'</strong></div><div class="notice" style="margin-top:12px">Trend hmotnosti a spánku je kontext pro rozhodnutí o zátěži; jednotlivý den není verdikt.</div>';
   $("weightHistory").innerHTML=layeredHistory(wr,x=>x.sample_time,x=>'<div class="history-workout"><strong>'+esc(longDate(String(x.sample_time).slice(0,10)))+'</strong><div class="small">'+fmt(x.value_numeric,1)+' kg · '+esc(x.source_family||"zdroj")+'</div></div>');
 }
 let gymSaveQueue=Promise.resolve();
+let gymExerciseCatalog=[],visibleGymExercises=[],gymExerciseIndex=0;
 function gymRowValues(tr){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]),idx=Number(tr.dataset.row)+7;if(!values[idx])values[idx]=[];tr.querySelectorAll("input[data-col]").forEach(inp=>{const c=Number(inp.dataset.col);values[idx][c]=inp.type==="checkbox"?(inp.checked?"TRUE":"FALSE"):inp.value;});return {values,idx};}
 function persistGymRow(tr){const {values}=gymRowValues(tr),used=values.slice(7);while(used.length&&used[used.length-1].every(v=>String(v??"").trim()===""))used.pop();const fullValues=values.slice(0,7).concat(used);gymSaveQueue=gymSaveQueue.then(async()=>{const result=await jsonFetch("/app/api/gym",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({values:used,fullValues})});state.gym={...state.gym,values:result.values||fullValues,history:result.history||state.gym?.history||[]};renderGym();renderGymHistory(state.gym.history);$("gymNotice").textContent=result.status==="error"?"Uložení do databáze selhalo: "+(result.message||"neznámá chyba"):"✓ Uloženo do Gym historie · "+new Date().toLocaleTimeString("cs-CZ");});return gymSaveQueue.catch(e=>{$("gymNotice").textContent="Uložení selhalo: "+e.message;throw e;});}
 function renderGymHistory(history){$("gymHistory").innerHTML=layeredHistory(history,x=>x.workout_date||x.date||x.started_at,x=>'<div class="history-workout"><strong>'+esc(x.exercise||"Cvik")+'</strong><div class="small">'+esc(String(x.actual_kg??x.actualKg??x.weightKg??"—"))+' kg × '+esc(String(x.actual_reps??x.actualReps??x.reps??"—"))+'</div></div>');}
 async function saveGymPlanValues(values){const rows=values.slice(7);while(rows.length&&rows[rows.length-1].every(v=>String(v??'').trim()===''))rows.pop();values=values.slice(0,7).concat(rows);await jsonFetch("/app/api/gym",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"plan",date:pragueToday(),values})});state.gym={...state.gym,values};renderGym();}
-function gymPlanEdit(action,idx){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]);const rows=values.slice(7);if(action==="remove-set"){rows.splice(idx,1);}else if(action==="add-set"){const src=rows[idx]||["WORK","","1","","10","","","","FALSE","",""];const copy=src.slice();copy[2]=String(Number(src[2]||1)+1);copy[5]="";copy[6]="";copy[7]="";copy[8]="FALSE";rows.splice(idx+1,0,copy);}else if(action==="remove-exercise"){const ex=String(rows[idx]?.[1]||"");for(let i=rows.length-1;i>=0;i--)if(String(rows[i]?.[1]||"")===ex)rows.splice(i,1);}else if(action==="add-exercise"){const ex=prompt("Název cviku:");if(!ex)return;for(let n=1;n<=3;n++)rows.push(["WORK",ex,String(n),"","8-12","","","","FALSE","",""]);}values.splice(7,values.length-7,...rows);saveGymPlanValues(values).catch(e=>toast("Úprava plánu selhala: "+e.message));}
+function gymPlanEdit(action,idx,exercise){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]);const rows=values.slice(7);if(action==="remove-set"){rows.splice(idx,1);}else if(action==="add-set"){const src=rows[idx]||["WORK","","1","","10","","","","FALSE","",""];const copy=src.slice();copy[2]=String(Number(src[2]||1)+1);copy[5]="";copy[6]="";copy[7]="";copy[8]="FALSE";rows.splice(idx+1,0,copy);}else if(action==="remove-exercise"){const ex=String(rows[idx]?.[1]||"");for(let i=rows.length-1;i>=0;i--)if(String(rows[i]?.[1]||"")===ex)rows.splice(i,1);}else if(action==="add-exercise"){const selected=gymExerciseCatalog.find(item=>item.name===exercise?.name);if(!selected||rows.some(row=>row[1]===selected.name))return;for(let n=1;n<=selected.sets;n++)rows.push(["WORK",selected.name,String(n),"",selected.reps,"","","","FALSE","",""]);}values.splice(7,values.length-7,...rows);saveGymPlanValues(values).then(()=>{if(action==='add-exercise')toast('Cvik přidán do plánu.');}).catch(e=>toast("Úprava plánu selhala: "+e.message));}
+function renderGymExerciseChoices(){
+  const query=$('gymExerciseSearch').value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('cs').trim(),words=query.split(/\s+/).filter(Boolean),existing=new Set((state.gym?.values||[]).slice(7).map(row=>String(row?.[1]||'')));
+  const recent=new Set((state.gym?.history||[]).slice(0,100).map(row=>String(row.exercise||'')));
+  visibleGymExercises=gymExerciseCatalog.filter(item=>!existing.has(item.name)&&words.every(word=>[item.name,item.muscle,item.search].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('cs').includes(word))).sort((a,b)=>Number(recent.has(b.name))-Number(recent.has(a.name))||a.name.localeCompare(b.name,'cs')).slice(0,40);
+  gymExerciseIndex=Math.min(gymExerciseIndex,Math.max(0,visibleGymExercises.length-1));
+  $('gymExerciseResults').innerHTML=visibleGymExercises.map((item,i)=>'<button type="button" role="option" id="gymExerciseOption'+i+'" aria-selected="'+(i===gymExerciseIndex)+'" data-index="'+i+'" title="'+esc(item.note)+'"><strong>'+esc(item.name)+'</strong><small>'+esc(item.muscle)+' · '+esc(item.sets)+' × '+esc(item.reps)+'</small></button>').join('');
+  $('gymExerciseHint').textContent=visibleGymExercises.length?visibleGymExercises.length+' cviků k výběru.':'Žádný další cvik v katalogu neodpovídá hledání.';
+  $('gymExerciseSearch').setAttribute('aria-activedescendant',visibleGymExercises.length?'gymExerciseOption'+gymExerciseIndex:'');
+}
+async function openGymExercisePicker(){
+  const dialog=$('gymExerciseDialog');$('gymExerciseSearch').value='';$('gymExerciseResults').innerHTML='';$('gymExerciseHint').textContent='Načítám katalog cviků…';dialog.showModal();$('gymExerciseSearch').focus();
+  try{gymExerciseCatalog=(await jsonFetch('/app/api/gym/exercises')).exercises||[];gymExerciseIndex=0;renderGymExerciseChoices();}
+  catch(error){$('gymExerciseHint').textContent='Katalog cviků se nepodařilo načíst: '+error.message;}
+}
+function chooseGymExercise(index){const item=visibleGymExercises[index];if(!item)return;$('gymExerciseDialog').close();gymPlanEdit('add-exercise',0,item);}
 function renderGym(){const values=state.gym?.values||[];const rows=values.slice(7).filter(r=>r.some(v=>String(v??"").trim()!==""));$("gymMeta").textContent=(values[2]?.[1]||"Dnešní silový trénink")+" · "+pragueToday();$("gymNotice").textContent=rows.length?rows.filter(r=>String(r[0]||"")==="WORK").length+" pracovních řádků · plán i výsledky jsou v interní databázi":"Dnešní plán je prázdný. Přidej cvik nebo vygeneruj plán.";const start=values.slice(7).findIndex(r=>r.some(v=>String(v??"").trim()!==""));const actualRows=start<0?[]:values.slice(7+start);$("gymRows").innerHTML=actualRows.map((r,i)=>{const idx=i+(start<0?0:start),type=r[0]||"",exercise=r[1]||"";const rawVideo=state.gym?.videoLinks?.[idx+7]||r[10]||"";const formula=String(rawVideo);const formulaUrl=formula.match(/HYPERLINK\(\s*"([^"]+)"/i)?.[1]||"";const video=/^https?:\/\//i.test(formula)?formula:formulaUrl||("https://www.youtube.com/results?search_query="+encodeURIComponent(String(exercise||"")+" exercise technique"));return '<tr data-row="'+idx+'"><td><span class="gym-type">'+esc(type)+'</span></td><td><strong>'+esc(exercise)+'</strong></td><td>'+esc(r[2]||"")+'</td><td>'+esc(r[3]||"")+'</td><td>'+esc(r[4]||"")+'</td><td><input data-col="5" value="'+esc(r[5]||"")+'" inputmode="decimal"></td><td><input data-col="6" value="'+esc(r[6]||"")+'" inputmode="numeric"></td><td><input data-col="7" value="'+esc(r[7]||"")+'" inputmode="decimal"></td><td><input data-col="8" type="checkbox" '+(String(r[8]).toUpperCase()==="TRUE"||r[8]===true?"checked":"")+'></td><td><a href="'+esc(video)+'" target="_blank" rel="noopener noreferrer">▶ Video</a></td><td><button class="btn gym-action" data-action="add-set" data-idx="'+idx+'">+ série</button> <button class="btn gym-action" data-action="remove-set" data-idx="'+idx+'">− série</button> <button class="btn gym-action" data-action="remove-exercise" data-idx="'+idx+'">🗑 cvik</button></td></tr>'}).join("")||'<tr><td colspan="11" class="muted">Žádný plán.</td></tr>'}
 async function loadGym(){state.gym=await jsonFetch("/app/api/gym");renderGym();renderGymHistory(state.gym.history||[])}
 async function saveGym(){const b=$("saveGym");b.disabled=true;b.textContent="Ukládám…";try{for(const tr of document.querySelectorAll("#gymRows tr[data-row]"))await persistGymRow(tr);await loadGym();toast("Trénink uložen a historie obnovena");}catch(e){toast("Uložení selhalo: "+e.message)}finally{b.disabled=false;b.textContent="Uložit trénink"}}
 async function generateGym(){const b=$("generateGym");b.disabled=true;b.textContent="Generuji…";try{await jsonFetch("/app/api/gym/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:pragueToday()})});toast("Dnešní plán vygenerován");await loadGym()}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="Vygenerovat dnešní plán"}}
+const selectedGymMuscles=new Set();
+function renderGymFocus(){
+  document.querySelectorAll('#gym .gym-focus-builder [data-muscle]').forEach(el=>el.setAttribute('aria-pressed',String(selectedGymMuscles.has(el.dataset.muscle))));
+  $('gymFocusCount').textContent=selectedGymMuscles.size+' / 5 partií';
+  $('generateFocusedGym').disabled=selectedGymMuscles.size===0;
+  $('gymFocusStatus').textContent=selectedGymMuscles.size?('Vybráno: '+[...selectedGymMuscles].map(id=>$('gymFocusChoices').querySelector('[data-muscle="'+id+'"]').textContent).join(', ')+'.'):'Vyber až 5 partií na postavě nebo v seznamu.';
+}
+function toggleGymMuscle(id){
+  if(!$('gymFocusChoices').querySelector('[data-muscle="'+id+'"]'))return;
+  if(selectedGymMuscles.has(id))selectedGymMuscles.delete(id);
+  else if(selectedGymMuscles.size<5)selectedGymMuscles.add(id);
+  else{$('gymFocusStatus').textContent='Nejvýše 5 partií v jednom tréninku.';return;}
+  renderGymFocus();
+}
+async function generateFocusedGym(){
+  if(!selectedGymMuscles.size)return;
+  const button=$('generateFocusedGym');button.disabled=true;button.textContent='Generuji…';
+  $('gymFocusStatus').textContent='Sestavuji trénink podle zvolených partií a dostupné zátěže…';
+  try{
+    const result=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:pragueToday(),focusMuscles:[...selectedGymMuscles],durationMinutes:Number($('gymFocusDuration').value)})});
+    await loadGym();
+    $('gymFocusStatus').textContent=result.rationale||'Cílený plán je připraven.';
+    toast('Cílený plán vygenerován');
+  }catch(error){$('gymFocusStatus').textContent='Generování selhalo: '+error.message;toast(error.message)}
+  finally{button.disabled=false;button.textContent='Vygenerovat pro vybrané partie';}
+}
 window.addEventListener("error",e=>{try{toast("Chyba aplikace: "+(e.error?.message||e.message||"neznámá chyba"))}catch{}});
 window.addEventListener("unhandledrejection",e=>{try{toast("Chyba aplikace: "+(e.reason?.message||String(e.reason||"Promise rejected")))}catch{}});
-async function load(){ $("topStatus").textContent="Načítám…"; const end=dateShift(weekStart,6); const jobs=[["daily","/app/api/daily"],["coaches","/app/api/coaches"],["fitness","/app/api/fitness?days=90"],["week","/app/api/week?start="+weekStart],["weight","/app/api/weight"],["activities","/app/api/activities"],["nutrition","/app/api/nutrition?start=2026-01-01&end="+dateShift(pragueToday(),1)],["sleep","/app/api/sleep?start="+dateShift(pragueToday(),-365)+"&end="+dateShift(pragueToday(),1)],["gym","/app/api/gym"]]; const results=await Promise.allSettled(jobs.map(([,url])=>jsonFetch(url))); state={...state}; let failed=0; results.forEach((r,i)=>{const key=jobs[i][0]; if(r.status==="fulfilled") state[key]=r.value; else {failed++; state[key]={status:"error",message:r.reason?.message||"Načtení selhalo"};}}); try{renderOverview();}catch{} try{renderCoachCouncil();}catch{} try{renderTraining();}catch{} try{renderNutrition();}catch{} try{renderRecovery();}catch{} try{renderHealth();}catch{} try{renderGym();}catch{} loadInbox(); $("topStatus").textContent=failed===0?"Live · "+new Date().toLocaleTimeString("cs-CZ"):(failed<jobs.length?"Částečně načteno":"Data unavailable"); $("topStatus").className=failed===0?"status-label small":failed<jobs.length?"status-label small status-partial":"status-label small status-error"; if(failed) toast("Některá datová služba není dostupná.");}
+async function load(){ $("topStatus").textContent="Načítám…"; const end=dateShift(weekStart,6); const jobs=[["daily","/app/api/daily?date="+selectedHistoryDate],["coaches","/app/api/coaches"],["fitness","/app/api/fitness?days=90"],["week","/app/api/week?start="+weekStart],["weight","/app/api/weight"],["activities","/app/api/activities"],["nutrition","/app/api/nutrition?start=2026-01-01&end="+dateShift(pragueToday(),1)],["sleep","/app/api/sleep?start="+dateShift(pragueToday(),-365)+"&end="+dateShift(pragueToday(),1)],["gym","/app/api/gym"]]; const results=await Promise.allSettled(jobs.map(([,url])=>jsonFetch(url))); state={...state}; let failed=0; results.forEach((r,i)=>{const key=jobs[i][0]; if(r.status==="fulfilled") state[key]=r.value; else {failed++; state[key]={status:"error",message:r.reason?.message||"Načtení selhalo"};}}); try{renderOverview();}catch{} try{renderCoachCouncil();}catch{} try{renderTraining();}catch{} try{renderNutrition();}catch{} try{renderRecovery();}catch{} try{renderHealth();}catch{} try{renderGym();}catch{} loadInbox(); $("topStatus").textContent=failed===0?"Live · "+new Date().toLocaleTimeString("cs-CZ"):(failed<jobs.length?"Částečně načteno":"Data unavailable"); $("topStatus").className=failed===0?"status-label small":failed<jobs.length?"status-label small status-partial":"status-label small status-error"; if(failed) toast("Některá datová služba není dostupná.");}
 document.querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>activate(b.dataset.view));
 $("refresh").onclick=async()=>{const b=$("refresh");b.disabled=true;b.textContent="Syncing…";try{const r=await jsonFetch("/app/api/sync",{method:"POST"});toast(r.status==="accepted"?"Synchronizace běží na pozadí. Kontroluji nová data…":"Data synchronized");let n=0;const poll=()=>{n++;b.textContent=n<4?"Syncing…":"Refreshing…";load();if(n<4)setTimeout(poll,4500);else{b.disabled=false;b.textContent="Refresh"}};setTimeout(poll,3000)}catch(e){toast("Sync selhal: "+e.message);b.disabled=false;b.textContent="Refresh"}};
 $("prevWeek").onclick=()=>{weekStart=dateShift(weekStart,-7);selectedHistoryDate=weekStart;load()};
 $("nextWeek").onclick=()=>{weekStart=dateShift(weekStart,7);selectedHistoryDate=weekStart;load()};
 $("thisWeek").onclick=()=>{weekStart=pragueMonday();selectedHistoryDate=weekStart;load()};
-$("saveGym").onclick=saveGym;$("generateGym").onclick=generateGym;$("addGymExercise").onclick=()=>gymPlanEdit("add-exercise",0);$("gymRows").addEventListener("click",e=>{const b=e.target.closest(".gym-action");if(b)gymPlanEdit(b.dataset.action,Number(b.dataset.idx));});
+$("saveGym").onclick=saveGym;$("generateGym").onclick=generateGym;$("addGymExercise").onclick=openGymExercisePicker;$("gymRows").addEventListener("click",e=>{const b=e.target.closest(".gym-action");if(b)gymPlanEdit(b.dataset.action,Number(b.dataset.idx));});
+$('gymFocusChoices').addEventListener('click',e=>{const choice=e.target.closest('[data-muscle]');if(choice)toggleGymMuscle(choice.dataset.muscle);});
+document.querySelector('.gym-figures').addEventListener('click',e=>{const muscle=e.target.closest('[data-muscle]');if(muscle)toggleGymMuscle(muscle.dataset.muscle);});
+document.querySelector('.gym-figures').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const muscle=e.target.closest('[data-muscle]');if(muscle){e.preventDefault();toggleGymMuscle(muscle.dataset.muscle);}}});
+document.querySelector('.gym-view-switch').addEventListener('click',e=>{
+  const side=e.target.closest('[data-side]')?.dataset.side;
+  if(!['front','back'].includes(side))return;
+  document.querySelectorAll('.gym-view-switch [data-side]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.side===side)));
+  document.querySelectorAll('.gym-figure[data-side]').forEach(figure=>figure.classList.toggle('active',figure.dataset.side===side));
+});
+$('generateFocusedGym').onclick=generateFocusedGym;
+$("closeGymExercise").onclick=()=>$("gymExerciseDialog").close();$("gymExerciseSearch").oninput=()=>{gymExerciseIndex=0;renderGymExerciseChoices();};$("gymExerciseResults").onclick=e=>{const option=e.target.closest('[data-index]');if(option)chooseGymExercise(Number(option.dataset.index));};$("gymExerciseSearch").onkeydown=e=>{if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!visibleGymExercises.length)return;gymExerciseIndex=(gymExerciseIndex+(e.key==='ArrowDown'?1:-1)+visibleGymExercises.length)%visibleGymExercises.length;renderGymExerciseChoices();$('gymExerciseResults').querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});}else if(e.key==='Enter'){e.preventDefault();chooseGymExercise(gymExerciseIndex);}};
 $('openAssistant').onclick=()=>$('assistantDialog').showModal();$('closeAssistant').onclick=()=>$('assistantDialog').close();
-$('assistantForm').onsubmit=e=>{e.preventDefault();const text=$('assistantMessage').value.trim();if(!text)return;$('assistantConversation').innerHTML='<p><strong>Tvůj požadavek</strong></p><p>'+esc(text)+'</p><div class="notice">Požadavek zatím nebyl proveden ani odeslán externímu modelu. Nejprve je potřeba dopojit AI model. Žádný trénink ani záznam nebyl změněn.</div>';};
+$('assistantForm').onsubmit=async e=>{e.preventDefault();const message=$('assistantMessage').value.trim();if(!message)return;const button=$('assistantForm').querySelector('button[type=submit]');button.disabled=true;$('assistantStatus').textContent='Připravuji návrh podle dostupných dat…';try{const result=await jsonFetch('/app/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});$('assistantConversation').innerHTML='<p><strong>Tvůj požadavek</strong></p><p>'+esc(message)+'</p><div class="notice" style="white-space:pre-wrap">'+esc(result.answer)+'</div>';$('assistantStatus').textContent='Návrh není automaticky uložen do tréninku.';}catch(error){$('assistantStatus').textContent=error.message;}finally{button.disabled=false;}};
+$('viewDate').max=pragueToday();$('viewDate').value=selectedHistoryDate;
+async function selectDay(date){if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return;selectedHistoryDate=date;weekStart=mondayOf(date);$('viewDate').value=date;$('nextDay').disabled=date>=pragueToday();await load();}
+$('previousDay').onclick=()=>selectDay(dateShift(selectedHistoryDate,-1));$('nextDay').onclick=()=>selectDay(dateShift(selectedHistoryDate,1));$('viewDate').onchange=e=>selectDay(e.target.value);
 $("gymRows").addEventListener("change",e=>{if(e.target.matches("input[data-col]")){const tr=e.target.closest("tr[data-row]");if(tr)persistGymRow(tr).catch(()=>{});}});
 $("gymRows").addEventListener("input",e=>{if(e.target.matches("input[data-col]:not([type=checkbox])")){const tr=e.target.closest("tr[data-row]");if(!tr)return;clearTimeout(tr._saveTimer);tr._saveTimer=setTimeout(()=>persistGymRow(tr).catch(()=>{}),700);}});
 
@@ -487,7 +533,7 @@ function experienceBars(rows,{height=260,max=10,colors=['#7ec8ff'],labels=true}=
 }
 function renderExperience(){
   if(!$('dailyPulse'))return;
-  const daily=state.daily||{},food=daily.nutrition?.foodLog?.totals||{},target=num(daily.nutrition?.calorieTarget),sessions=primarySleepSessions(state.sleep?.sessions).map(r=>({...r,date:r.date||String(r.endTime||r.startTime||'').slice(0,10)})),last=sessions[0],wellness=(state.fitness?.wellness||[]).filter(r=>r.id<=pragueToday()),latest=wellness.at(-1)||{},done=(daily.training?.completed||[]).filter(a=>!isNutritionItem(a)),plan=(daily.training?.planned||[]).filter(a=>!isNutritionItem(a)),actualTss=done.reduce((s,a)=>s+num(a.tss),0),plannedTss=plan.reduce((s,a)=>s+num(a.tss),0)||(daily.training?.matched||[]).reduce((s,m)=>s+num(m.planned?.tss),0),hasSleep=last&&last.date>=dateShift(pragueToday(),-1),sleepScore=hasSleep?Math.round(Math.min(100,num(last.durationMin)/480*100)):null;
+  const daily=state.daily||{},food=daily.nutrition?.foodLog?.totals||{},target=num(daily.nutrition?.calorieTarget),sessions=primarySleepSessions(state.sleep?.sessions).map(r=>({...r,date:r.date||String(r.endTime||r.startTime||'').slice(0,10)})).filter(r=>r.date<=selectedHistoryDate),last=sessions[0],wellness=(state.fitness?.wellness||[]).filter(r=>r.id<=selectedHistoryDate),latest=wellness.at(-1)||{},done=(daily.training?.completed||[]).filter(a=>!isNutritionItem(a)),plan=(daily.training?.planned||[]).filter(a=>!isNutritionItem(a)),actualTss=done.reduce((s,a)=>s+num(a.tss),0),plannedTss=plan.reduce((s,m)=>s+num(m.tss),0)||(daily.training?.matched||[]).reduce((s,m)=>s+num(m.planned?.tss),0),hasSleep=last&&last.date>=dateShift(selectedHistoryDate,-1),sleepScore=hasSleep?Math.round(Math.min(100,num(last.durationMin)/480*100)):null;
   $('dailyPulse').innerHTML='<div class="pulse-header"><div><div class="eyebrow">TVŮJ DEN · '+esc(longDate(pragueToday()))+'</div><h1>Výkon začíná rovnováhou.</h1><p>Spánek, pohyb a jídlo v jednom pohledu.</p></div><button class="btn" id="pulseHealth">Prozkoumat zdravotní data ↗</button></div><div class="pulse-grid">'+experienceRing('Spánek vs. 8 h',sleepScore==null?'—':sleepScore+'%',sleepScore,'#a99bff',last?hm(last.durationMin):'Čekám na noc',last?'Poslední záznam '+dateLabel(last.date)+' · '+(hasSleep?'orientační cíl, ne recovery skóre':'starší noc, ne dnešní připravenost'):'Připoj zdroj spánku')+experienceRing('Tréninková zátěž',actualTss?fmt(actualTss):'—',plannedTss?actualTss/plannedTss*100:0,'#83e9c3',actualTss?'TSS dokončených aktivit':'Dnes bez evidované zátěže',plannedTss?'Plán '+fmt(plannedTss)+' TSS · poměr není známka kvality':'Bez srovnatelného TSS plánu; žádné fiktivní strain skóre')+experienceRing('Příjem energie',target?fmt(num(food.kcal)/target*100)+'%':'—',target?num(food.kcal)/target*100:0,'#ffc274',fmt(food.kcal)+' / '+(target?fmt(target):'—')+' kcal','Z evidovaných jídel · '+(target?fmt(Math.max(0,target-num(food.kcal)))+' kcal zbývá':'čekám na denní cíl'))+'</div><div class="pulse-insight"><span>↗</span><span>'+esc(done.length?'Aktivita je dokončená. Níže najdeš její hodnocení a zbývající výživu.':plan.length?'Před tebou je '+(plan[0].name||'plánovaný trénink')+'. Zkontroluj připravenost a doporučení trenéra.':'Dnes bez evidovaného tréninku. Přehled se změní, jakmile přijde nová aktivita.')+'</span></div>';
   $('pulseHealth').onclick=()=>activate('recovery');
   const older=sessions.filter(r=>r.date<last?.date&&r.date>=dateShift(last?.date||pragueToday(),-30)),sleepMean=older.length?older.reduce((s,r)=>s+num(r.durationMin),0)/older.length:null;
@@ -504,6 +550,18 @@ function renderExperience(){
 function appProfile(){try{return JSON.parse(localStorage.getItem('fitnessProfile')||'{}');}catch{return {};}}
 function googleWellness(){return state.googleHealth?.wellness||[];}
 function latestGoogleMetric(key){return googleWellness().filter(r=>measured(r[key])).at(-1);}
+function latestVo2(){const google=latestGoogleMetric('vo2max'),intervals=(state.fitness?.wellness||[]).filter(r=>r.id<=selectedHistoryDate&&measured(r.vo2max??r.vo2Max)).at(-1);if(google&&(!intervals||google.id>=intervals.id))return {value:Number(google.vo2max),date:google.id,source:'Google Health'};if(intervals)return {value:Number(intervals.vo2max??intervals.vo2Max),date:intervals.id,source:'Intervals.icu'};return null;}
+function labelSelectedDay(){
+  const past=selectedHistoryDate!==pragueToday(),sections=document.querySelectorAll('#overview>.section');
+  if(sections[0])sections[0].textContent=past?'Signály dne':'Denní signály';
+  if(sections[1])sections[1].textContent=past?'Poradci a hodnocení dne':'Dnešní poradci a hodnocení';
+  if(sections[2])sections[2].textContent=past?'Výživa dne':'Dnešní výživa';
+  const heading=document.querySelector('#nutritionBalance h3');if(heading)heading.textContent=past?'Palivo dne':'Dnešní palivo';
+  for(const node of document.querySelectorAll('#nutritionBalance .experience-stats span')){
+    if(node.textContent==='Dnešní cíl'||node.textContent==='Cíl dne')node.textContent=past?'Cíl dne':'Dnešní cíl';
+    if(node.textContent==='Kroky dnes'||node.textContent==='Kroky dne')node.textContent=past?'Kroky dne':'Kroky dnes';
+  }
+}
 function sleepIndex(night){
   if(!night||!(Number(night.durationMin)>0))return null;
   const duration=Number(night.durationMin),bed=Number(night.timeInBedMin),deep=Number(night.stages?.DEEP),rem=Number(night.stages?.REM);
@@ -519,34 +577,35 @@ function recoveryIndex(rows,night,today){
   return {score:Math.round(.5*hrv+.3*heart+.2*sleep),current,h,r};
 }
 function correctDataPresentation(){
-  const nights=primarySleepSessions(state.sleep?.sessions),last=nights[0],prior=nights.filter(n=>n.date<last?.date&&n.date>=dateShift(last?.date||pragueToday(),-30)),avg=prior.length?prior.reduce((s,n)=>s+num(n.durationMin),0)/prior.length:null;
-  const score=sleepIndex(last),delta=last&&avg!=null?last.durationMin-avg:null,cards=$('dailyPulse')?.querySelectorAll('.pulse-card'),stale=last?.date!==pragueToday();
+  const nights=primarySleepSessions(state.sleep?.sessions).filter(n=>(n.date||String(n.endTime||'').slice(0,10))<=selectedHistoryDate),last=nights[0],prior=nights.filter(n=>n.date<last?.date&&n.date>=dateShift(last?.date||selectedHistoryDate,-30)),avg=prior.length?prior.reduce((s,n)=>s+num(n.durationMin),0)/prior.length:null;
+  const pulseDay=$('dailyPulse')?.querySelector('.pulse-header .eyebrow');if(pulseDay)pulseDay.textContent='TVŮJ DEN · '+longDate(selectedHistoryDate);
+  const score=sleepIndex(last),delta=last&&avg!=null?last.durationMin-avg:null,cards=$('dailyPulse')?.querySelectorAll('.pulse-card'),stale=last?.date!==selectedHistoryDate;
   if(cards?.[0])cards[0].outerHTML=experienceRing('Spánek',score==null?'—':score+'%',score||0,'#a99bff','Spánkový index',last?(delta==null?'':(delta>=0?'+':'−')+hm(Math.abs(delta))+' proti průměru 30 dní · ')+dateLabel(last.date)+(stale?' · starší noc':''):'Čekám na noc');
   const food=state.daily?.nutrition?.foodLog?.totals||{},target=num(state.daily?.nutrition?.calorieTarget),macroEnergy=num(food.protein_g)*4+num(food.carbs_g)*4+num(food.fat_g)*9,fill=target?Math.min(100,num(food.kcal)/target*100):0,p=macroEnergy?num(food.protein_g)*4/macroEnergy*fill:0,c=macroEnergy?num(food.carbs_g)*4/macroEnergy*fill:0;
   const calorieCard=$('dailyPulse')?.querySelectorAll('.pulse-card')[2];if(calorieCard){calorieCard.querySelector('.label').textContent='Kalorie';const ring=calorieCard.querySelector('.pulse-ring');if(ring){ring.style.background='conic-gradient(#60a5fa 0 '+p+'%,#f59e0b '+p+'% '+(p+c)+'%,#a78bfa '+(p+c)+'% '+fill+'%,#2a343e '+fill+'% 100%)';const strong=ring.querySelector('strong');if(strong)strong.textContent='';}}
   $('recoveryScore').textContent=score==null?'—':score+'%';$('recoveryOrb').style.setProperty('--orb-value',score||0);$('recoveryOrb').querySelector('span').textContent='Spánek';$('recoveryVsBaseline').textContent='';
   $('recoveryTitle').textContent='Spánek a regenerace';$('recoveryInsight').textContent=last?'Poslední noc '+dateLabel(last.date)+' · skutečný spánek '+hm(last.durationMin)+(last.timeInBedMin?' · v posteli '+hm(last.timeInBedMin):''):'Čekám na měření';
-  const signal=recoverySignals(googleWellness(),last,pragueToday());$('recoveryGuide').textContent=signal.title;$('recoveryGuideMeta').textContent=signal.text;
-  const recovery=recoveryIndex(googleWellness(),last,pragueToday());
+  const signal=recoverySignals(googleWellness(),last,selectedHistoryDate);$('recoveryGuide').textContent=signal.title;$('recoveryGuideMeta').textContent=signal.text;
+  const recovery=recoveryIndex(googleWellness(),last,selectedHistoryDate);
   let panel=$('recoveryIndices');if(!panel){panel=document.createElement('div');panel.id='recoveryIndices';panel.className='recovery-indices';$('recoveryOrb').parentElement.after(panel);}
   panel.innerHTML='<div class="score-orb" style="--orb-value:'+(recovery.score??0)+';--orb-color:#83e9c3"><div><strong>'+(recovery.score??'—')+'</strong><span>Regenerace</span></div></div><div class="score-caption">Vlastní index · 0–100</div>';
   let metrics=$('recoveryVitals');if(!metrics){metrics=document.createElement('div');metrics.id='recoveryVitals';metrics.className='recovery-vitals';document.querySelector('.recovery-command').append(metrics);}
   metrics.innerHTML=[['HRV',recovery.current?.hrv,recovery.h,'ms'],['Klidový tep',recovery.current?.restingHR,recovery.r,'bpm']].map(([label,value,baseline,unit])=>'<div class="vital-tile"><span class="label">'+label+'</span><strong>'+(value>0?fmt(value,1)+' <small>'+unit+'</small>':'—')+'</strong><span class="small">'+(baseline.count>=14&&value>0?(value-baseline.mean>=0?'+':'')+fmt(value-baseline.mean,1)+' proti 30dennímu průměru':'Čekám na aktuální data a 14 dní historie')+'</span></div>').join('')+'<details class="index-method"><summary>O skóre</summary><p>Spánek: délka vůči 8 h (50 bodů), efektivita spánku (30), hluboký spánek a REM vůči 90 minutám (po 10). Každá složka má vlastní strop. Jde o vlastní index, ne skóre Google nebo Bevel.</p><p>Regenerace: HRV 50 %, klidový tep 30 %, spánek 20 %. Tep a HRV porovnáváme s předchozími 30 dny: osobní průměr odpovídá 50 bodům v každé tepové složce. Minimálně 14 měření, pouze dnešní hodnoty. Index není procento zotavení ani klinicky ověřený model WHOOP.</p></details>';
   $('recoveryScore').style.fontSize='39px';$('recoveryVsBaseline').textContent='Vlastní spánkový index';$('sleepScore').innerHTML=score==null?'Bez dostatečných dat':scoreBadge(score,'Spánek');
   const w=googleWellness();metricDetail('detail-hrv','Variabilita srdečního tepu · HRV',w.map(r=>({date:r.id,value:r.hrv})),'ms','#3fda9c');metricDetail('detail-rhr','Klidový tep',w.map(r=>({date:r.id,value:r.restingHR})),'bpm','#ff9b80');
-  const healthMetrics=$('healthspan').querySelectorAll('.healthspan-metrics>div');for(const [i,key,unit]of [[0,'restingHR','bpm'],[1,'hrv','ms'],[2,'vo2max','ml/kg/min']]){const rows=w.filter(r=>measured(r[key])),value=key==='vo2max'?rows.at(-1)?.[key]:rows.length?rows.reduce((s,r)=>s+Number(r[key]),0)/rows.length:null;if(healthMetrics[i]){healthMetrics[i].querySelector('strong').textContent=value==null?'—':fmt(value,1)+' '+unit;healthMetrics[i].querySelector('small').textContent='Google Health · '+(rows.at(-1)?.id||'bez měření');}}
+  const healthMetrics=$('healthspan').querySelectorAll('.healthspan-metrics>div');for(const [i,key,unit]of [[0,'restingHR','bpm'],[1,'hrv','ms'],[2,'vo2max','ml/kg/min']]){const rows=w.filter(r=>measured(r[key])),reading=key==='vo2max'?latestVo2():null,value=reading?.value??(rows.length?rows.reduce((s,r)=>s+Number(r[key]),0)/rows.length:null);if(healthMetrics[i]){healthMetrics[i].querySelector('strong').textContent=value==null?'—':fmt(value,1)+' '+unit;healthMetrics[i].querySelector('small').textContent=reading?reading.source+' · '+reading.date:'Google Health · '+(rows.at(-1)?.id||'bez měření');}}
   document.querySelector('.recovery-command .eyebrow').textContent='Spánek a regenerace';
   const g=state.googleHealth||{};$('sourceCoverage').innerHTML='<h3>Dostupnost dat · Google Health</h3>'+[['Spánek',last?.date],['HRV',latestGoogleMetric('hrv')?.id],['Klidový tep',latestGoogleMetric('restingHR')?.id],['Kroky',g.coverage?.steps],['Aktivní energie',g.coverage?.['active-energy-burned']]].map(([label,date])=>'<div class="metric-line"><span>'+label+'</span><strong>'+(date?dateLabel(date):'Bez měření')+'</strong></div>').join('')+'<p class="small">Synchronizace: '+esc(g.sync?.status||'neznámý stav')+(g.sync?.error?' · '+esc(g.sync.error):'')+'</p>';
   const labels={P:'Bílkoviny',C:'Sacharidy',F:'Tuky',Protein:'Bílkoviny',Tuk:'Tuky',Deep:'Hluboký spánek',Light:'Lehký spánek',Awake:'Bdění','Daily readiness':'Denní připravenost','Recovery & Health':'Spánek a zdraví','Recovery & Health ↗':'Spánek a zdraví ↗','rolling average':'klouzavý průměr','all time':'celá historie'};
   Object.assign(labels,{Fitness:'Kondice',Form:'Forma',Fatigue:'Únava',Refresh:'Obnovit','Private training workspace':'Osobní tréninkový přehled','Data is loaded server-side':'Data načítá server','Performance Command Center':'Trénink, zdraví a výživa','Training intelligence · Health · Nutrition':'Trénink · Zdraví · Výživa','Sleep consistency':'Pravidelnost spánku','Sleep architecture':'Fáze spánku','Body baseline':'Hmotnost a osobní trend','Health context':'Zdravotní souvislosti','Deep + REM':'Hluboký spánek + REM','Historie recovery a spánku':'Historie spánku a regenerace'});
   const walker=document.createTreeWalker(document.querySelector('.shell'),NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){const text=node.textContent.trim();if(labels[text])node.textContent=node.textContent.replace(text,labels[text]);else node.textContent=node.textContent.replace(/ · P (?=\d)/g,' · B ').replace(/ · C (?=\d)/g,' · S ').replace(/ · F (?=\d)/g,' · T ').replace(/kg · rolling average/g,'kg · klouzavý průměr');}
 }
-function cardioStrain(activities,rest,max){
-  if(!(max>rest&&rest>0))return null;
-  const measuredActivities=activities.filter(a=>Number(a.durationHours)>0&&Number(a.averageHeartRate??a.payload?.average_heartrate)>0);
-  if(!measuredActivities.length)return null;
-  const load=measuredActivities.reduce((s,a)=>{const reserve=Math.max(0,Math.min(1,(Number(a.averageHeartRate??a.payload?.average_heartrate)-rest)/(max-rest)));return s+Number(a.durationHours)*60*reserve*reserve;},0);
-  return {score:Math.min(21,21*Math.log1p(load)/Math.log1p(400)),count:measuredActivities.length};
+function daywideStrain(date){
+  const rows=googleWellness(),row=rows.find(r=>r.id===date);
+  if(!row||!measured(row.activeCalories))return null;
+  const prior=rows.filter(r=>r.id<date&&r.id>=dateShift(date,-30)&&measured(r.activeCalories)&&Number(r.activeCalories)>0).map(r=>Number(r.activeCalories)).sort((a,b)=>a-b);
+  const activeCalories=Math.round(Number(row.activeCalories)),baseline=prior.length>=7?prior[Math.floor(prior.length/2)]:null;
+  return {activeCalories,baseline:baseline?Math.round(baseline):null,score:baseline?Math.round(Math.min(21,21*(1-Math.exp(-activeCalories/(baseline*1.2))))*10)/10:null};
 }
 function recoverySignals(rows,last,today){
   const current=rows.find(r=>r.id===today),baseline=rows.filter(r=>r.id<today&&r.id>=dateShift(today,-30)),summarize=key=>{const values=baseline.map(r=>r[key]).filter(v=>measured(v)).map(Number),mean=values.length?values.reduce((s,v)=>s+v,0)/values.length:null,sd=mean==null?null:Math.sqrt(values.reduce((s,v)=>s+(v-mean)**2,0)/values.length);return {count:values.length,mean,sd};},h=summarize('hrv'),r=summarize('restingHR'),details=[];
@@ -557,30 +616,23 @@ function recoverySignals(rows,last,today){
   return {title:!signals?'Regenerace · čekám na dnešní měření':adverse>=2?'Regenerace · dnes zvolni':adverse===1?'Regenerace · jeden slabší signál':'Regenerace · obvyklé pásmo',text:details.join(' · ')+(signals?' . '+(adverse>=2?'Více signálů je oslabených. Upřednostni odpočinek a další intenzitu přizpůsob pocitu únavy.':adverse?'Sleduj únavu; jeden ukazatel sám nerozhoduje o tréninku.':'Dostupné signály nejsou výrazně oslabené; zohledni i svalovou únavu.'):' Pro srovnání potřebuji aktuální měření a alespoň 7 předchozích hodnot.')};
 }
 function renderTrainingClarity(){
-  const days=state.week?.days||[],profile=appProfile(),rows=days.map(d=>{const activities=(d.daily?.training?.completed||[]).filter(a=>!isNutritionItem(a)),rest=Number(profile.rhr||googleWellness().find(r=>r.id===d.date)?.restingHR),max=Number(profile.hrmax||activities.find(a=>Number(a.payload?.athlete_max_hr)>0)?.payload?.athlete_max_hr),s=cardioStrain(activities,rest,max);return {label:dateLabel(d.date),values:[s?.score??null],title:longDate(d.date)+(s?' · zátěž '+fmt(s.score,1):' · chybí tep nebo kalibrace')};});
-  const chart=$('loadChart'),card=chart.parentElement;card.querySelector('h3').textContent='Denní zátěž · vybraný týden';chart.outerHTML='<div id="loadChart">'+experienceBars(rows,{max:21,height:290,colors:['#a99bff']})+'</div>';let note=card.querySelector('.load-explanation');if(!note){note=document.createElement('p');note.className='small load-explanation';card.append(note);}note.textContent='Osa Y: zátěž 0–21 z délky a tepu. Vyšší sloupec znamená větší náročnost, ne lepší výkon. Chybějící měření není nula. Součet denních skóre není týdenní skóre.';
+  const days=state.week?.days||[],rows=days.map(d=>{const s=daywideStrain(d.date);return {label:dateLabel(d.date),values:[s?.score??null],title:longDate(d.date)+(s?.score!=null?' · celodenní zátěž '+fmt(s.score,1):s?' · '+s.activeCalories+' kcal aktivní energie, čekám na 7 dní baseline':' · celodenní aktivní energie není dostupná')};});
+  const chart=$('loadChart'),card=chart.parentElement;card.querySelector('h3').textContent='Celodenní zátěž · vybraný týden';chart.outerHTML='<div id="loadChart">'+experienceBars(rows,{max:21,height:290,colors:['#a99bff']})+'</div>';let note=card.querySelector('.load-explanation');if(!note){note=document.createElement('p');note.className='small load-explanation';card.append(note);}note.textContent='Vlastní stupnice 0–21 z celodenní aktivní energie Google Health vůči osobnímu mediánu posledních 30 dní (minimálně 7 dní). Zahrnuje měřený běžný pohyb i sport, nikoli jen dokončené aktivity. Není to skóre WHOOP/Bevel. Chybějící měření není nula.';
   const selected=days.find(d=>d.date===selectedHistoryDate)||days.find(d=>d.date===pragueToday())||days[0],activities=(selected?.daily?.training?.completed||[]).filter(a=>!isNutritionItem(a));
   $('trainingActivityTable').innerHTML='<div class="notice">Vybraný den: <strong>'+esc(selected?longDate(selected.date):'—')+'</strong></div>'+(activities.length?'<div class="scroll"><table><thead><tr><th>Aktivita</th><th>Délka</th><th>Stav</th></tr></thead><tbody>'+activities.map(a=>'<tr><td>'+esc(a.name||'Aktivita')+'</td><td>'+hm(num(a.durationHours)*60)+'</td><td><span class="pill good">Dokončeno</span></td></tr>').join('')+'</tbody></table></div>':'<p class="small">Zatím žádná dokončená aktivita.</p>');
 }
-function fitnessAge(vo2,sex){
-  const norms=sex==='male'?[54,49,47,42,39,34]:sex==='female'?[43,40,38,34,31,27]:null;
-  if(!norms||!(Number(vo2)>0))return null;
-  if(vo2>=norms[0])return '≤ 25';if(vo2<=norms[5])return '≥ 75';
-  for(let i=0;i<5;i++)if(vo2<=norms[i]&&vo2>=norms[i+1])return String(Math.round(25+i*10+(norms[i]-vo2)/(norms[i]-norms[i+1])*10));
-  return null;
-}
 function renderRequestedExperience(done,latest,vo2,daily){
-  const profile=appProfile(),rhr=Number(profile.rhr||latestGoogleMetric('restingHR')?.restingHR),max=Number(profile.hrmax||done.find(a=>Number(a.payload?.athlete_max_hr)>0)?.payload?.athlete_max_hr),strain=cardioStrain(done,rhr,max),cards=$('dailyPulse').querySelectorAll('.pulse-card');
-  if(cards[1])cards[1].outerHTML=experienceRing('Zátěž',strain?fmt(strain.score,1):'—',strain?strain.score/21*100:0,'#83e9c3','Zátěž',strain?'Vlastní stupnice 0–21 · '+strain.count+' aktivit s tepem.':'Chybí '+(!(rhr>0)?'klidový tep z Googlu nebo profilu':!(Number(profile.hrmax)>rhr)?'maximální tep v profilu':'tep dokončené aktivity')+'.');
-  vo2=latestGoogleMetric('vo2max')?.vo2max;const age=fitnessAge(vo2,profile.sex),note=$('healthspan').querySelector('.healthspan-note');
-  $('healthspan').querySelector('.healthspan-title').textContent='Kondiční věk a dlouhodobý trend';
-  note.innerHTML='<strong>Kondiční věk · '+(age?age+' let':'doplň referenční pohlaví v Nastavení')+'</strong><p>Vlastní orientační interpolace VO₂ max mezi věkovými průměry HUNT3. Není to WHOOP Age ani biologický věk; přesnost závisí na zdroji VO₂ max.</p><a href="https://www.ntnu.edu/cerg/fitness-numbers" target="_blank" rel="noopener noreferrer">Zdroj: NTNU · HUNT3</a>';
+  const strain=daywideStrain(selectedHistoryDate),cards=$('dailyPulse').querySelectorAll('.pulse-card');
+  if(cards[1])cards[1].outerHTML=experienceRing('Celodenní zátěž',strain?.score!=null?fmt(strain.score,1):'—',strain?.score!=null?strain.score/21*100:0,'#83e9c3','Zátěž',strain?.score!=null?'Google Health · '+strain.activeCalories+' aktivních kcal · osobní baseline '+strain.baseline+' kcal.':strain?'Google Health · '+strain.activeCalories+' aktivních kcal. Pro skóre potřebuji 7 předchozích dní.':'Celodenní aktivní energie není dostupná. Wahoo aktivita sama nezměří celý den.');
+  const vo2Reading=latestVo2();vo2=vo2Reading?.value;const note=$('healthspan').querySelector('.healthspan-note');
+  $('healthspan').querySelector('.healthspan-title').textContent='Kondice a dlouhodobý trend';
+  note.innerHTML='<strong>VO₂ max · '+(measured(vo2)?fmt(vo2,1)+' ml/kg/min':'bez měření')+'</strong><p>'+(vo2Reading?esc(vo2Reading.source)+' · '+esc(vo2Reading.date)+'. ':'')+'Intervals.icu využívám pro jízdy a tréninkovou zátěž; samotné Wahoo aktivity nejsou přímé měření VO₂ max. Kondiční věk z jediné hodnoty nevyvozuji.</p>';
 }
 function renderFuelingBreakdown(daily){
   const profile=appProfile(),done=(daily.training?.completed||[]).filter(a=>!isNutritionItem(a));
   const weight=Number(daily.weight?.current??daily.nutrition?.currentWeight),bmr=weight>0&&profile.age&&profile.height&&profile.sex?10*weight+6.25*Number(profile.height)-5*Number(profile.age)+(profile.sex==='male'?5:-161):null;
-  const current=state.week?.days?.find(d=>d.date===pragueToday())?.daily?.nutrition||daily.nutrition||{},breakdown=current.calorieBreakdown||{},burned=done.reduce((s,a)=>s+num(a.calories),0);
-  const today=state.googleHealth?.today||{},active=measured(today.activeCalories)?Number(today.activeCalories):null,steps=measured(today.steps)?fmt(today.steps):'—';
+  const current=state.week?.days?.find(d=>d.date===selectedHistoryDate)?.daily?.nutrition||daily.nutrition||{},breakdown=current.calorieBreakdown||{},burned=done.reduce((s,a)=>s+num(a.calories),0);
+  const today=googleWellness().find(r=>r.id===selectedHistoryDate)||{},active=measured(today.activeCalories)?Number(today.activeCalories):null,steps=measured(today.steps)?fmt(today.steps):'—';
   const budget=daily.nutrition?.energyBudget;
   if(budget)$('nutritionBalance').insertAdjacentHTML('beforeend','<p class="small">Průběžný cíl: bazální metabolismus + dosud zaznamenaná aktivní energie + trávení (10 % výdeje), minus plánovaný deficit '+fmt(budget.deficit)+' kcal. Cíl se během dne mění s novými daty.</p>');
   $('nutritionBalance').insertAdjacentHTML('beforeend','<div class="experience-stats"><div><span>Dnešní cíl</span><strong>'+fmt(daily.nutrition?.calorieTarget)+' kcal</strong></div><div><span title="Výpočet Mifflin–St Jeor z hmotnosti, věku, výšky a referenčního pohlaví">Bazální metabolismus</span><strong>'+(bmr?fmt(bmr)+' kcal':'Doplň profil')+'</strong></div><div><span>Aktivní výdej · celý den</span><strong>'+(active==null?'Čekám na Google':fmt(active)+' kcal')+'</strong></div><div><span>Kroky dnes</span><strong>'+steps+'</strong></div></div><p class="small">'+done.map(a=>esc(a.name)+': '+(measured(a.calories)?fmt(a.calories)+' kcal':'výdej chybí')).join(' · ')+'</p><p class="small">'+(active==null?'Dnešní celodenní energie z Googlu chybí. Starší kroky ani energii nepřičítám k dnešku; cíl zatím vychází z tréninkového plánu.':'Celodenní aktivní výdej zahrnuje běžný pohyb i sport. Stejné aktivity ani kroky nepřičítám podruhé.')+'</p>');
@@ -677,14 +729,14 @@ function installDataCorrections(){
   $('foodBasis').addEventListener('change',()=>{if($('foodBasis').value==='portion'){$('foodUnit').value='portion';$('foodGrams').value='1';}else if($('foodUnit').value==='portion'){$('foodUnit').value=$('foodBasis').value;$('foodGrams').value='100';}updateFoodPreview();$('foodGrams').dispatchEvent(new Event('input',{bubbles:true}));});
   const saveBasket=$('basketSave').onclick;$('basketSave').onclick=async()=>{try{if(!$('foodEditor').hidden){const p=foodEditorProduct();if(['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||!Number.isFinite(p[k])||p[k]<0))throw new Error('Doplň energii a všechna makra. Nula je platná hodnota.');foodIntake(p,$('foodGrams').value,$('foodUnit').value,{pieceAmount:$('foodPieceAmount').value,pieceUnit:$('foodPieceUnit').value,density:$('foodDensity').value});$('foodGrams').dispatchEvent(new Event('input',{bubbles:true}));if(!$('basketName').value.trim()&&$('basketRows').querySelectorAll('[data-edit-ingredient]').length===1)$('basketName').value=p.name;}await saveBasket();}catch(e){foodMessage(e.message);}};
   for(const heading of $('settings').querySelectorAll('h3')){if(heading.textContent==='Jak pracujeme s více zdroji'){heading.parentElement.querySelector('p').textContent='Cyklistické aktivity čerpáme z Intervals.icu. Spánek, HRV, klidový tep, kroky, celodenní aktivní energii a ostatní dokončené aktivity čerpáme z Google Health. Dostupnost a stáří konkrétních měření najdeš v části Spánek a zdraví.';}}
-  $('fitnessProfileForm').previousElementSibling.textContent='Profil se ukládá na server i do tohoto prohlížeče. Zátěž je vlastní výpočet z délky a tepu vůči tepové rezervě; nepoužívá TSS ani algoritmus WHOOP.';
+  $('fitnessProfileForm').previousElementSibling.textContent='Profil se ukládá na server i do tohoto prohlížeče. Celodenní zátěž vychází z aktivní energie Google Health a osobní baseline; nejde o algoritmus WHOOP ani Bevel.';
   const css=document.createElement('style');css.textContent='#calChart,#nutritionChart{height:auto!important;width:100%;aspect-ratio:1000/440;display:block}.experience-stats{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.macro-line{gap:12px;white-space:nowrap}.pulse-card{min-width:0}.pulse-card h3{font-size:19px}.pulse-card p{overflow-wrap:anywhere}.stack-chart{max-width:none!important}';document.head.append(css);
   $('profileHrmax').parentElement.insertAdjacentHTML('afterend','<label>Klidový tep · bpm<input id="profileRhr" class="food-input" type="number" min="25" max="120" placeholder="Automaticky z Googlu"></label>');$('profileRhr').value=appProfile().rhr||'';
   const saveProfile=$('fitnessProfileForm').onsubmit;$('fitnessProfileForm').onsubmit=async e=>{saveProfile(e);localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),rhr:$('profileRhr').value}));try{await jsonFetch('/app/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(appProfile())});await load();toast('Profil uložen a výpočty aktualizované.');}catch(error){toast('Profil je pouze v prohlížeči: '+error.message);}renderExperience();correctDataPresentation();};
   $('foodSaveButton').insertAdjacentHTML('beforebegin','<button type="button" class="btn" id="savePersonalFood">Uložit potravinu pro příště</button>');$('savePersonalFood').onclick=async()=>{try{await jsonFetch('/app/api/food/personal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(foodEditorProduct())});foodMessage('Potravina je uložená v tvojí databázi. Příště ji najdeš podle názvu i podobného zadání.');}catch(e){foodMessage(e.message);}};
   const selectWithSource=selectFoodProduct;selectFoodProduct=function(p){selectWithSource(p);if(p.source==='personal')$('foodSource').textContent='Moje databáze · tvoje uložené nutriční hodnoty';};
   const oldExperience=renderExperience;renderExperience=function(){oldExperience();correctDataPresentation();};
-  const oldLoad=load;load=async()=>{try{state.googleHealth=await jsonFetch('/app/api/google-health');}catch(e){state.googleHealth={wellness:[],sync:{status:'error',error:e.message}};}await oldLoad();const today=state.week?.days?.find(d=>d.date===pragueToday());if(today&&state.daily?.nutrition?.energyBudget){today.daily.nutrition=state.daily.nutrition;today.daily.calories=state.daily.calories;renderOverview();renderNutrition();}correctDataPresentation();};
+  const oldLoad=load;load=async()=>{$('viewDate').value=selectedHistoryDate;$('nextDay').disabled=selectedHistoryDate>=pragueToday();if($('foodDate'))$('foodDate').value=selectedHistoryDate;try{state.googleHealth=await jsonFetch('/app/api/google-health?date='+selectedHistoryDate);}catch(e){state.googleHealth={wellness:[],sync:{status:'error',error:e.message}};}await oldLoad();if(selectedHistoryDate!==pragueToday()){try{const coaches=await jsonFetch('/app/api/coaches?date='+selectedHistoryDate);if(coaches.date!==selectedHistoryDate)throw new Error('Historická data poradců chybí.');state.coaches=coaches;renderCoachCouncil();}catch{$('coachPriorities').textContent='Historické hodnocení není dostupné.';$('coachCards').innerHTML='';}}const today=state.week?.days?.find(d=>d.date===selectedHistoryDate);if(today&&state.daily?.nutrition?.energyBudget){today.daily.nutrition=state.daily.nutrition;today.daily.calories=state.daily.calories;renderOverview();renderNutrition();}correctDataPresentation();labelSelectedDay();if($('enteredFood'))loadEnteredFood();};
   const oldActivate=activate;activate=function(id){oldActivate(id);if(state.daily)correctDataPresentation();};
 }
 function simpleFoodPortions(product){

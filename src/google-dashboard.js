@@ -18,7 +18,7 @@ export function googleHealthSummary(rows,today){
 }
 export async function googleDashboard(db,today){
   const oldest=new Date(today+'T12:00:00Z');oldest.setUTCDate(oldest.getUTCDate()-31);
-  const data=await db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE source_family='google-wearables' AND record_role='primary' AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-vo2-max','steps','active-energy-burned') AND COALESCE(sample_time,end_time,start_time,'')>=? ORDER BY id LIMIT 40000`).bind(oldest.toISOString().slice(0,10)).all();
+  const data=await db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE source_family='google-wearables' AND record_role='primary' AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-vo2-max','steps','active-energy-burned') AND COALESCE(sample_time,end_time,start_time,'')>=? AND COALESCE(sample_time,end_time,start_time,'')<? ORDER BY id LIMIT 40000`).bind(oldest.toISOString().slice(0,10),new Date(new Date(today+'T12:00:00Z').getTime()+86400000).toISOString().slice(0,10)).all();
   const summary=googleHealthSummary(data.results||[],today);
   const sync=await db.prepare("SELECT status,updated_at,details_json FROM sync_status WHERE sync_name IN ('google','google_recent') ORDER BY updated_at DESC LIMIT 1").first();
   let detail={};try{detail=JSON.parse(sync?.details_json||'{}');}catch{}

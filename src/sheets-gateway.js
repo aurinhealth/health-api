@@ -268,6 +268,7 @@ async function generateStrengthPlanRoute(env, request, url) {
       forceProtectLegs: body?.forceProtectLegs === true,
       durationMinutes: body?.durationMinutes == null ? undefined : Number(body.durationMinutes),
       maxExercises: body?.maxExercises == null ? undefined : Number(body.maxExercises),
+      focusMuscles: body?.focusMuscles,
       excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
     };
 

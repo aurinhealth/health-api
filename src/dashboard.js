@@ -1,10 +1,16 @@
 import {experienceTheme} from './experience-theme.js';
+import {mobileTheme} from './mobile-theme.js';
+import {gymFocusView,gymFocusTheme} from './gym-focus-view.js';
 export function dashboardPage() {
   const html = `<!doctype html>
 <html lang="cs">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0d131a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
 <meta name="robots" content="noindex,nofollow">
 <title>Petr Fitness Data — Command Center</title>
 <style>
@@ -33,16 +39,16 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
     <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
     <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
     <button class="navbtn" data-view="gym">▣ <span>Gym</span></button>
-    <button class="navbtn" data-view="recovery">◒ <span>Recovery & Health</span></button>
+    <button class="navbtn" data-view="recovery">◒ <span>Zdraví</span></button>
     <button class="navbtn" data-view="nutrition">◉ <span>Výživa</span></button>
-    <button class="navbtn" data-view="settings">⚙ <span>Nastavení</span></button>
+    <button class="navbtn" data-view="settings" aria-label="Nastavení">⚙ <span>Nastavení</span></button>
   </nav>
   <div class="sidebar-foot">Private training workspace<br>Data is loaded server-side</div>
 </aside>
 <main class="main">
 <header class="topbar">
   <div><div class="top-title">Petr Fitness Data</div><div class="top-sub">Training intelligence · Health · Nutrition</div></div>
-  <div class="actions"><button class="btn" id="openAssistant">✦ Asistent</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
+  <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><button class="btn" id="openAssistant">✦ Asistent</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
 </header>
 <div class="content">
 <section id="overview" class="view active">
@@ -80,10 +86,12 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 </section>
 
-<dialog id="assistantDialog" class="assistant-dialog"><div class="detail-heading"><h3>Osobní asistent</h3><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></div><p class="small">Jedno místo pro kolo, gym, výživu a zdravotní data.</p><div class="notice" id="assistantStatus">AI model zatím není připojený. Okno je připravené; generování a změny plánů zatím nejsou aktivní.</div><div id="assistantConversation" aria-live="polite"></div><form id="assistantForm"><label class="small" for="assistantMessage">Co potřebuješ?</label><textarea id="assistantMessage" placeholder="Vygeneruj mi kolo na týden. Zhodnoť dnešní jízdu. Připrav gym na úterý." required maxlength="4000"></textarea><button class="btn primary" type="submit">Odeslat</button></form></dialog>
+<dialog id="assistantDialog" class="assistant-dialog"><div class="detail-heading"><h3>Osobní asistent</h3><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></div><p class="small">Jedno místo pro kolo, gym, výživu a zdravotní data.</p><div class="notice" id="assistantStatus">Návrhy se tvoří z dostupných dat; žádné změny se neukládají automaticky.</div><div id="assistantConversation" aria-live="polite"></div><form id="assistantForm"><label class="small" for="assistantMessage">Co potřebuješ?</label><textarea id="assistantMessage" placeholder="Vygeneruj mi kolo na týden. Zhodnoť dnešní jízdu. Připrav gym na úterý." required maxlength="4000"></textarea><button class="btn primary" type="submit">Odeslat</button></form></dialog>
 
 <section id="gym" class="view">
+  <dialog id="gymExerciseDialog" class="gym-exercise-dialog" aria-labelledby="gymExerciseTitle"><div class="detail-heading"><h3 id="gymExerciseTitle">Přidat cvik</h3><button class="btn" id="closeGymExercise" type="button" aria-label="Zavřít výběr cviku">✕</button></div><label for="gymExerciseSearch" class="small">Hledat cvik nebo partii</label><input id="gymExerciseSearch" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="gymExerciseResults" aria-expanded="true" placeholder="Např. dřep, záda, triceps"><div id="gymExerciseResults" role="listbox" aria-label="Nalezené cviky"></div><p id="gymExerciseHint" class="small" role="status"></p></dialog>
   <div class="hero section-hero"><div><div class="eyebrow">Strength · supports cycling</div><h1>Gym</h1><p id="gymMeta">Dnešní silový trénink</p></div><div class="hero-status"><span>PROGRES</span><strong>Technika → síla → kolo</strong></div><div class="actions"><button class="btn" id="generateGym">Vygenerovat dnešní plán</button><button class="btn" id="addGymExercise">＋ Přidat cvik</button><button class="btn primary" id="saveGym">Uložit trénink</button></div></div>
+  ${gymFocusView()}
   <div class="notice" id="gymNotice">Načítám dnešní trénink…</div>
   <div class="card" style="margin-top:12px"><div class="scroll"><table class="gym-table"><thead><tr><th>Typ</th><th>Cvik</th><th>Série</th><th>Plán kg</th><th>Plán reps</th><th>Skutečně kg</th><th>Skutečně reps</th><th>RPE</th><th>Hotovo</th><th>Video</th></tr></thead><tbody id="gymRows"></tbody></table></div></div><div class="card" style="margin-top:12px"><details><summary>Historie silových tréninků</summary><div id="gymHistory" style="margin-top:10px"></div></details></div>
 </section>
@@ -105,8 +113,8 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 </div></main></div>
 <div id="toast" class="toast"></div>
-<style>${experienceTheme}</style>
-<script src="/app/dashboard-client.js?v=20260926-13" defer></script>
+<style>${experienceTheme}${mobileTheme}${gymFocusTheme}</style>
+<script src="/app/dashboard-client.js?v=20260928-2" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

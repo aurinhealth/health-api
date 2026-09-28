@@ -5,7 +5,61 @@ import { isIntensity } from "../src/strength-context.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
 import { parseStrengthSheet } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
-import { generateStrengthPlan } from "../src/strength-generator.js";
+import { FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles } from "../src/strength-generator.js";
+import { gymFocusView } from "../src/gym-focus-view.js";
+
+test('every focused muscle has a visual target and text choice', () => {
+  const markup=gymFocusView();
+  for(const id of Object.keys(FOCUS_GROUPS)){
+    assert.match(markup,new RegExp('<path[^>]+data-muscle="'+id+'"'));
+    assert.match(markup,new RegExp('<button[^>]+data-muscle="'+id+'"'));
+  }
+  assert.match(markup,/data-side="front"/);
+  assert.match(markup,/data-side="back"/);
+});
+
+test('focused gym validates the selected groups', () => {
+  assert.deepEqual(validateFocusMuscles(['chest', 'upper_back']), ['chest', 'upper_back']);
+  assert.equal(validateFocusMuscles([]), null);
+  assert.equal(validateFocusMuscles(['chest', 'chest']), null);
+  assert.equal(validateFocusMuscles(['unknown']), null);
+  assert.equal(validateFocusMuscles(['chest', 'upper_back', 'front_delts', 'biceps', 'triceps', 'abs']), null);
+});
+
+test('focused gym only generates exercises for selected groups', () => {
+  const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
+  const plan=generateStrengthPlan(context,{focusMuscles:['chest','upper_back','abs'],durationMinutes:60});
+  const work=[...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))];
+  assert.equal(work.length,3);
+  assert.deepEqual(plan.focusMuscles,['chest','upper_back','abs']);
+  assert.equal(plan.adaptive.volumeModifier,.9);
+  for(const exercise of work)assert.ok(['chest','upper_back','abs'].some(group=>FOCUS_GROUPS[group].exercises.includes(exercise)));
+  assert.ok(plan.planName.includes('Cílený trénink'));
+});
+
+test('short focused gym scales volume without adding unselected muscles', () => {
+  const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
+  const plan=generateStrengthPlan(context,{focusMuscles:['front_delts','biceps','triceps','calves','abs'],durationMinutes:45});
+  assert.equal(plan.adaptive.volumeModifier,.75);
+  assert.equal([...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))].length,5);
+  assert.ok(plan.rows.filter(row=>row[0]==='WORK').length<=10);
+});
+
+test('front, side and rear shoulders map to distinct exercises', () => {
+  const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
+  const plan=generateStrengthPlan(context,{focusMuscles:['front_delts','side_delts','rear_delts']});
+  const exercises=[...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))];
+  assert.equal(exercises.length,3);
+  for(const group of ['front_delts','side_delts','rear_delts'])assert.ok(exercises.some(name=>FOCUS_GROUPS[group].exercises.includes(name)));
+});
+
+test('focused legs preserve cycling protection', () => {
+  const context={date:'2026-09-28',cycling:{recentRideTss:800,recentRideHours:10,recentActivities:[],nextRide:{intensity:true,durationHours:2}},recovery:{},strength:{recentCompletedSets:[]}};
+  const plan=generateStrengthPlan(context,{focusMuscles:['quads']});
+  assert.equal(plan.protectedLegs,true);
+  assert.deepEqual([...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))],['Leg extension Prime']);
+  assert.match(plan.rationale,/rezervu u nohou/);
+});
 import { completedRowsAreSynced } from "../src/strength-sync-guard.js";
 import { strengthPlanToIntervalsEvent } from "../src/intervals-strength.js";
 import { buildNutritionPlan } from "../src/nutrition-intelligence.js";

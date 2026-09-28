@@ -1,4 +1,5 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
+import { nextUnloggedMeals } from "./nutrition-next.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -3058,15 +3059,9 @@ async function foodRecommend(env, url) {
   const cookbookData=await getCookbook();
   const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
 
-  let slots=[];
-  if(!hasBreakfast) slots.push(["BREAKFAST","Snídaně"]);
-  else if(!hasLunch) slots.push(["LUNCH","Oběd"]);
-  else if(!hasDinner) {
-    if(!hasSnack) slots.push(["SNACK","Odpolední svačina"]);
-    slots.push(["DINNER","Večeře"]);
-  }
-  if(!slots.length && !hasDinner && hasLunch) slots=[["DINNER","Večeře"]];
-  if(slots.length>3) slots=slots.slice(0,3);
+  const localHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
+  const completed=new Set([hasBreakfast&&'BREAKFAST',hasLunch&&'LUNCH',hasSnack&&'SNACK',hasDinner&&'DINNER'].filter(Boolean));
+  const slots=nextUnloggedMeals(completed,date===pragueDate()?localHour:0).map(meal=>[meal.type,meal.label]);
 
   const mealKeywords={
     BREAKFAST:["breakfast","snidane","snídaně"],
@@ -3088,18 +3083,17 @@ async function foodRecommend(env, url) {
       if(!Number.isFinite(kcal)||kcal<=0)return false;
       if(maxMinutes&&recipeMinutes(recipe)>maxMinutes)return false;
       if(remaining.kcal<=0&&kcal>150)return false;
-      const hay=String(recipe.category||"")+" "+String(recipe.meal||"")+" "+String(recipe.type||"")+" "+String(recipe.tags||"");
-      recipe.__mealMatch=keys.some(k=>hay.toLowerCase().includes(k));
       if(mealType==="SNACK"&&kcal>450)return false;
       return true;
     });
-    candidates=candidates.map(recipe=>({
-      recipe,
-      score:recipeFitScore(recipe,share,targets,{postRide:postRide&&mealType!=="SNACK",maxMinutes})+(recipe.__mealMatch?40:0)
-    })).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({
+    candidates=candidates.map(recipe=>{
+      const hay=(String(recipe.category||'')+' '+String(recipe.meal||'')+' '+String(recipe.type||'')+' '+String(recipe.tags||'')).toLowerCase();
+      const mealMatch=keys.some(k=>hay.includes(k));
+      return {recipe,mealMatch,score:recipeFitScore(recipe,share,targets,{postRide:postRide&&mealType!=="SNACK",maxMinutes})+(mealMatch?40:0)};
+    }).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({
       ...x.recipe,servings:1,portion:1,portion_label:"1 porce",meal_type:mealType,
       recommendation_score:Math.round(Math.max(0,Math.min(100,x.score))*10)/10,
-      recommendation_reason:[recommendationReason(x.recipe,share,{postRide:postRide&&mealType!=="SNACK",maxMinutes}),x.recipe.__mealMatch?"odpovídá typu jídla":"vhodné podle zbývajícího příjmu"].filter(Boolean).join(", ")
+      recommendation_reason:[recommendationReason(x.recipe,share,{postRide:postRide&&mealType!=="SNACK",maxMinutes}),x.mealMatch?"odpovídá typu jídla":"vhodné podle zbývajícího příjmu"].filter(Boolean).join(", ")
     }));
     return {meal_type:mealType,label,recommendations:candidates,target:share};
   });
