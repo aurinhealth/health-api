@@ -1,4 +1,5 @@
 import healthApp from "./sheets-gateway.js";
+import { searchWorkoutLibrary, getCapabilities, scheduleWorkoutInIntervals, recordWorkoutFeedback } from "./workout-library.js";
 
 const MCP_PROTOCOL_VERSION = "2026-07-28";
 const SERVER_VERSION = "1.1.0";
@@ -6,6 +7,11 @@ const DEMO_API_KEY = "health-strength-demo-2026";
 
 export const TOOLS = [
   { name:"getCyclingContext", title:"Get adaptive cycling context", description:"Read season, weather, wind, daylight, and time-window context used to adapt cycling plans.", inputSchema:{type:"object",properties:{date:{type:"string"},lat:{type:"number"},lon:{type:"number"},rideType:{type:"string"},durationMinutes:{type:"integer",minimum:20,maximum:360},startTime:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:true}},
+
+  { name:"searchCyclingWorkouts", title:"Search personalized cycling workouts", description:"Search the adaptive workout library by training system, duration, load and difficulty, ranked against the athlete's stored capability and optional readiness context.", inputSchema:{type:"object",properties:{environment:{type:"string",enum:["indoor","outdoor"],description:"indoor (trainer, ERG) or outdoor (ranges, free sprints)"},system:{type:"string",enum:["recovery","endurance","tempo","sweet_spot","threshold","vo2max","anaerobic","sprint"]},durationMinutes:{type:"integer",minimum:20,maximum:360},durationTolerance:{type:"integer",minimum:0,maximum:90},targetLoad:{type:"number",minimum:0,maximum:500},loadTolerance:{type:"number",minimum:0,maximum:250},maxDifficulty:{type:"number",minimum:1,maximum:10},readiness:{type:"string",enum:["green","yellow","red"]},hardBikeDaysRolling7d:{type:"integer",minimum:0,maximum:7},phase:{type:"string",enum:["base","build","recovery","taper"]},limit:{type:"integer",minimum:1,maximum:50}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getCyclingCapabilities", title:"Get cycling capabilities", description:"Read the athlete's adaptive 1-10 capability levels and confidence for endurance, tempo, sweet spot, threshold, VO2max, anaerobic, sprint and recovery.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"scheduleCyclingWorkout", title:"Schedule cycling workout", description:"Add one selected workout-library workout to Intervals.icu on a chosen date. Only call after the user explicitly approves that exact workout and date; confirm must be true.", inputSchema:{type:"object",required:["workoutId","date","confirm"],properties:{environment:{type:"string",enum:["indoor","outdoor"],description:"Write the indoor or outdoor version to Intervals.icu"},workoutId:{type:"string"},date:{type:"string"},confirm:{type:"boolean"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:true}},
+  { name:"recordCyclingWorkoutFeedback", title:"Record cycling workout feedback", description:"Record completion percentage and optional RPE for a workout-library session and update the corresponding cycling capability.", inputSchema:{type:"object",required:["workoutId"],properties:{workoutId:{type:"string"},scheduledDate:{type:"string"},completedPercent:{type:"number",minimum:0,maximum:150},rpe:{type:"number",minimum:1,maximum:10},survey:{type:"string"},notes:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
 
   { name:"getStrengthContext", title:"Get strength training context", description:"Read integrated training context for a date, including cycling load, recovery data, and strength history.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
@@ -49,7 +55,7 @@ export async function handleMcp(request,env){
  if(message.method!=="initialize"&&protocolHeader&&!isSupportedProtocol(protocolHeader))return json({jsonrpc:"2.0",id:message.id??null,error:{code:-32602,message:"Unsupported MCP protocol version"}},400,cors);
  if(message.method==="initialize"){
    const requested=message.params?.protocolVersion,protocolVersion=isSupportedProtocol(requested)?requested:MCP_PROTOCOL_VERSION,sessionId=crypto.randomUUID();
-   return json({jsonrpc:"2.0",id:message.id,result:{protocolVersion,capabilities:{tools:{}},serverInfo:{name:"health-api-strength-coach",title:"Health API Strength Coach",version:SERVER_VERSION},instructions:"Use the shared daily context for training and nutrition. generateStrengthPlan writes the adaptive workout to the Google Sheet unless preview=true. getNutritionPlan returns the daily nutrition plan from cycling, recovery, and strength context."}},200,{...cors,"Mcp-Session-Id":sessionId,"MCP-Protocol-Version":protocolVersion});
+   return json({jsonrpc:"2.0",id:message.id,result:{protocolVersion,capabilities:{tools:{}},serverInfo:{name:"health-api-strength-coach",title:"Health API Strength Coach",version:SERVER_VERSION},instructions:"Use the shared daily context for training and nutrition. For cycling, use getDailyDecision or current training context first when readiness matters, then searchCyclingWorkouts for ranked library candidates. scheduleCyclingWorkout must only be called after explicit user approval of the exact workout and date. generateStrengthPlan writes the adaptive workout to the Google Sheet unless preview=true."}},200,{...cors,"Mcp-Session-Id":sessionId,"MCP-Protocol-Version":protocolVersion});
  }
  if(message.method==="notifications/initialized"||message.method==="notifications/cancelled"||message.method==="ping"){if(message.id===undefined)return new Response(null,{status:202,headers:cors});return json({jsonrpc:"2.0",id:message.id,result:{}},200,cors)}
  if(message.method==="tools/list")return json({jsonrpc:"2.0",id:message.id,result:{tools:TOOLS}},200,cors);
@@ -68,6 +74,10 @@ function corsHeaders(o){return o?{"Access-Control-Allow-Origin":o,Vary:"Origin"}
 function demoTool(name,args){
  const date=String(args.date||"2026-09-21");
  if(name==="getStrengthContext")return{status:"ok",date,demo:true,recentCycling:[{date:"2026-09-19",name:"Long Endurance",hours:3,tss:121}],plannedCycling:[{date:"2026-09-20",name:"Tempo + Endurance",hours:2.6,tss:129}],recovery:{restingHr:52,hrvMs:89,sleepMinutes:374},strength:{historyReady:true,completedSetCount:0}};
+ if(name==="searchCyclingWorkouts")return{status:"ok",demo:true,count:1,workouts:[{id:"pfd-vo2-5x4-90",name:"VO₂ 5×4 · 90 min",primary_system:"vo2max",duration_minutes:90,suitability:90}]};
+ if(name==="getCyclingCapabilities")return{status:"ok",demo:true,capabilities:{vo2max:{level:5.5,confidence:.6}}};
+ if(name==="scheduleCyclingWorkout")return{status:"ok",demo:true,workout:{id:args.workoutId||"demo",name:"Demo workout"},date:args.date||date};
+ if(name==="recordCyclingWorkoutFeedback")return{status:"ok",demo:true,system:"vo2max",before:5.5,after:5.65};
  if(name==="getStrengthHistory")return{status:"ok",demo:true,count:0,rows:[]};
  if(name==="getTodayStrengthSheet")return{status:"ok",demo:true,sheet:"Dnešní trénink",workoutDate:date};
  if(name==="findStrengthAlternatives")return{status:"ok",demo:true,exercise:args.exercise||null,alternatives:[]};
@@ -86,6 +96,29 @@ function demoTool(name,args){
  throw new Error(`Unsupported demo tool: ${name}`);
 }
 async function callHealthApi(request,env,toolName,args){
+ if(toolName==="searchCyclingWorkouts"){
+   return searchWorkoutLibrary(env.DB,{
+     environment:args.environment,
+     system:args.system,
+     durationMinutes:args.durationMinutes,
+     durationTolerance:args.durationTolerance,
+     targetLoad:args.targetLoad,
+     loadTolerance:args.loadTolerance,
+     maxDifficulty:args.maxDifficulty,
+     limit:args.limit??20
+   },{
+     readiness:args.readiness||"green",
+     hardBikeDaysRolling7d:args.hardBikeDaysRolling7d??0,
+     phase:args.phase||""
+   });
+ }
+ if(toolName==="getCyclingCapabilities") return {status:"ok",capabilities:await getCapabilities(env.DB)};
+ if(toolName==="scheduleCyclingWorkout") return scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(args.workoutId||""),date:String(args.date||""),confirm:args.confirm===true,environment:args.environment});
+ if(toolName==="recordCyclingWorkoutFeedback") return recordWorkoutFeedback(env.DB,{
+   workoutId:String(args.workoutId||""),scheduledDate:args.scheduledDate||null,
+   completedPercent:args.completedPercent??100,rpe:args.rpe??null,
+   survey:args.survey||"completed",notes:args.notes||null
+ });
  const base=new URL(request.url).origin;
  const routes={
   getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,

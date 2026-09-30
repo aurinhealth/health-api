@@ -23,6 +23,9 @@ import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
+import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted } from "./workout-library.js";
+import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
+import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
 import legacyHealthApi from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout } from "./dashboard-auth.js";
@@ -214,6 +217,45 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
   } catch(error) { return Response.json({status:"error",message:error.message},{status:500}); }
 }
 
+// Marks scheduled library workouts as done once Intervals.icu shows the ride.
+// Capability only changes with the athlete's own feedback (see calculateCapabilityUpdate).
+async function reconcileWorkoutLibraryCompletions(env,ctx,internalAuth){
+  try{
+    for(const link of await pendingScheduledWorkouts(env.DB,pragueToday())){
+      if(await hasFeedback(env.DB,link.workout_id,link.scheduled_date)){await markScheduleCompleted(env.DB,link.id);continue}
+      const response=await app.fetch(new Request('https://internal/analysis/daily?date='+link.scheduled_date,{headers:internalAuth}),env,ctx);
+      if(!response.ok)continue;const daily=await response.json().catch(()=>({})),matched=daily.training?.matched||[],completed=daily.training?.completed||[];
+      const match=matched.find(m=>String(m.planned?.id||'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
+      if(!match)continue;
+      const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>String(a.pairedEventId||a.plannedEventId||'')===String(link.intervals_event_id||''));
+      if(!actual)continue;
+      const actualMinutes=Number(actual.durationHours)>0?Number(actual.durationHours)*60:null;
+      if(actualMinutes==null)continue;
+      const completedPercent=Math.max(0,Math.min(120,actualMinutes/Math.max(1,Number(link.duration_minutes))*100));
+      const rawRpe=actual.rpe??actual.payload?.rpe,rpe=Number.isFinite(Number(rawRpe))&&Number(rawRpe)>=1&&Number(rawRpe)<=10?Number(rawRpe):null;
+      await recordWorkoutFeedback(env.DB,{workoutId:link.workout_id,scheduledDate:link.scheduled_date,completedPercent,rpe,survey:"auto_completed",notes:"Automaticky spárováno s dokončenou aktivitou v Intervals.icu"});
+    }
+  }catch(error){console.error("Workout capability reconciliation failed",error)}
+}
+
+// Everything the coaches look at for one day: the day, fitness, three weeks
+// around it, gym history, sleep and Google Health.
+async function loadCoachInputs(env,ctx,internalAuth,date){
+  const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
+  const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
+  const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
+  const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health,...weekResponses]=await Promise.all([
+    app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
+    internal('/app/api/fitness?days=90'),internal('/app/api/gym'),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx),
+    googleDashboard(env.DB,date).catch(()=>({})),
+    ...weeks.map(w=>internal('/app/api/week?start='+w))
+  ]);
+  const json=r=>r.json().catch(()=>({}));
+  const [daily,fitness,gym,sleep,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),...weekResponses.map(json)]);
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])}};
+}
+
 // Available before the required providers are connected.
 const SETUP_API_PATHS = new Set(["/app/api/me", "/app/api/connections", "/app/api/profile", "/app/api/gym/exercises"]);
 
@@ -234,24 +276,46 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
     return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
   }
+  if(url.pathname.startsWith('/app/api/workouts/')){
+    const r=await handleWorkoutsApi(request,env,ctx,url,session,internalAuth);
+    if(r)return r;
+  }
+
   if(url.pathname==='/app/api/assistant'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena. Nastav serverový secret OPENAI_API_KEY; předplatné ChatGPT není API klíč.'},{status:503});
     const body=await request.json().catch(()=>({})),message=String(body.message||'').trim();
     if(!message||message.length>4000)return Response.json({message:'Zadej požadavek do 4000 znaků.'},{status:400});
-    const date=pragueToday(),start=pragueWeekStart();
-    const [dailyResponse,fitnessResponse,weekResponse,health,gymResponse]=await Promise.all([
-      app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
-      handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')),
-      handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start)),
-      googleDashboard(env.DB,date),
-      handleDashboardApi(new Request('https://internal/app/api/gym'),env,ctx,new URL('https://internal/app/api/gym'))
-    ]);
-    const [daily,fitness,week,gym]=await Promise.all([dailyResponse.json().catch(()=>({})),fitnessResponse.json().catch(()=>({})),weekResponse.json().catch(()=>({})),gymResponse.json().catch(()=>({}))]);
-    try{return Response.json(await askCoach(env,message,coachContext({date,daily,week,fitness,health,gym})),{headers:{'Cache-Control':'no-store'}});}
+    const date=pragueToday(),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
+    const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
+    const manualReadiness=Number.isFinite(Number(body.manualReadiness))?Number(body.manualReadiness):null;
+    const goal=body.goal&&typeof body.goal==='object'?body.goal:null;
+    const preferences=body.preferences&&typeof body.preferences==='object'?body.preferences:{};
+    try{
+      await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);
+      const capabilities=await getCapabilities(env.DB);
+      const coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities});
+      const rec=coachCtx.cyclingCoachV2?.recommendation?.session||{},kind=rec.kind==="long_endurance"?"endurance":rec.kind==="vo2"?"vo2max":rec.kind;
+      const library=await searchWorkoutLibrary(env.DB,{system:kind,durationMinutes:rec.durationMinutes||availabilityMinutes||90,durationTolerance:20,limit:8},{
+        readiness:coachCtx.cyclingCoachV2?.readiness?.status,
+        hardBikeDaysRolling7d:coachCtx.cyclingCoachV2?.load?.hardBikeDaysRolling7d,
+        phase:coachCtx.cyclingCoachV2?.constraints?.phase
+      });
+      coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
+      return Response.json(await askCoach(env,message,coachCtx),{headers:{'Cache-Control':'no-store'}});
+    }
     catch(error){console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
   }
   if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
+
+  if(url.pathname==='/app/api/food/entry'&&['PATCH','POST','DELETE'].includes(request.method)){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    try{
+      const body=await request.json(),id=body.id;
+      const result=request.method==='PATCH'?await updateFoodEntry(env.DB,id,body):request.method==='POST'?await copyFoodEntry(env.DB,id,body.targetDate):await deleteFoodEntry(env.DB,id);
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
 
   if(url.pathname==='/app/api/food/day'&&request.method==='GET'){
     const target=new URL('/food/log',request.url);target.searchParams.set('date',url.searchParams.get('date')||pragueToday());
@@ -553,6 +617,40 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });
+}
+
+// Workout library: search, generate, schedule, feedback, capabilities.
+async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
+  if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+  const sport=url.searchParams.get('sport')==='run'?'run':'ride';
+  const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+  try{
+    if(url.pathname==='/app/api/workouts/capabilities'&&request.method==='GET')return Response.json({status:'ok',sport,capabilities:await getCapabilities(env.DB,sport)},{headers:{'Cache-Control':'no-store'}});
+    if(url.pathname==='/app/api/workouts/scheduled'&&request.method==='GET')return Response.json({status:'ok',workouts:await getScheduledWorkouts(env.DB)},{headers:{'Cache-Control':'no-store'}});
+    if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
+      await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);
+      const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
+      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport)});
+      const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
+      const result=await searchWorkoutLibrary(env.DB,parseWorkoutSearchFilters(url.searchParams),context);
+      return Response.json({...result,date,rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:'Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.'},{headers:{'Cache-Control':'no-store'}});
+    }
+    if(url.pathname==='/app/api/workouts/generate'&&request.method==='POST'){
+      const body=await request.json().catch(()=>({}));
+      const date=validDate(body.date)?body.date:pragueToday();
+      if(date<pragueToday())return Response.json({status:'error',message:'Vyber dnešní nebo budoucí datum.'},{status:400});
+      const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))&&Number(body.availabilityMinutes)>0?Number(body.availabilityMinutes):null;
+      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,'ride'),goal:body.phase?{phase:String(body.phase)}:null});
+      return Response.json(await generateWorkout(env.DB,{sport:'ride',environment:body.environment,date,coach,availabilityMinutes,variant:body.variant}),{headers:{'Cache-Control':'no-store'}});
+    }
+    if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST')return Response.json(await recordWorkoutFeedback(env.DB,await request.json()),{headers:{'Cache-Control':'no-store'}});
+    if(url.pathname==='/app/api/workouts/schedule'&&request.method==='POST'){
+      const body=await request.json().catch(()=>({})),date=String(body.date||'');
+      if(!validDate(date)||date<pragueToday())return Response.json({status:'error',message:'Vyber dnešní nebo budoucí datum.'},{status:400});
+      return Response.json(await scheduleWorkoutInIntervals(env,env.DB,{workoutId:String(body.workoutId||''),date,confirm:body.confirm===true,environment:body.environment}),{headers:{'Cache-Control':'no-store'}});
+    }
+  }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  return null;
 }
 
 async function handleAdminApi(request, env, url, session) {

@@ -51,8 +51,8 @@ export const mobileTheme = `
   #nutrition>.section-hero{order:0}
   #nutrition>.grid2{display:contents}
   #nutrition>.grid2>.card:last-child{order:1;margin:0 0 12px}
-  #nutrition>#foodEntry{order:2}
-  #nutrition>#enteredFood{order:3}
+  #nutrition>#enteredFood{order:2}
+  #nutrition>#foodEntry{order:3}
   #nutrition>.experience-grid{order:4}
   #nutrition>#nutritionDays{order:5}
   #nutrition>.grid2>.card:first-child{order:6;margin-top:12px}

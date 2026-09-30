@@ -28,8 +28,15 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 @media(max-width:1050px){.shell{grid-template-columns:1fr}.content{padding:22px 18px 55px}.topbar{padding:0 18px}.sidebar{border-bottom-color:#262c36}.readiness-hero h1,.recovery-command h1{font-size:32px}}@media(max-width:700px){.content{padding:16px 12px 45px}.topbar{padding:0 12px}.card{padding:15px}.readiness-hero,.recovery-command{border-radius:18px}.readiness-hero h1,.recovery-command h1{font-size:29px}.value,.metric-number{font-size:28px}}
 .value .trend,.value .small,.metric-number .trend{letter-spacing:normal;word-spacing:normal;line-height:1.5;font-size:12px;font-weight:600}.value .trend{margin-top:8px;margin-bottom:3px}
 #overview .readiness-hero{grid-template-columns:minmax(0,1fr) 108px;gap:16px;padding:18px;border-radius:16px}#overview .readiness-hero h1{font-size:25px}#overview .readiness-hero p{font-size:12px;line-height:1.5}#overview .readiness-metrics{display:none}#overview .score-orb{width:82px;height:82px}#overview .score-orb strong{font-size:27px}#overview .focus-chip{margin-top:9px;padding:6px 9px;font-size:11px}#overview .quick-grid .card{padding:13px}#overview .quick-grid .value{font-size:25px}#overview .section{margin-top:20px}.assistant-dialog{width:min(600px,calc(100vw - 24px));max-height:85vh;overflow:auto;background:#121722;color:#eff3fa;border:1px solid #484052;border-radius:18px;padding:22px}.assistant-dialog::backdrop{background:#0008}.assistant-dialog textarea{width:100%;min-height:110px;margin:8px 0;background:#0b1019;color:#fff;border:1px solid #383f4e;border-radius:10px;padding:12px;font:inherit}.meal-preferences{display:flex;flex-wrap:wrap;gap:12px;margin:12px 0}.meal-card{padding:14px}.meal-target{font-size:12px;color:#bac5d6;line-height:1.7;margin:8px 0}.meal-row{border-bottom:1px solid #303743;padding:7px 0;font-size:12px}.meal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}@media(max-width:700px){#overview .readiness-hero{grid-template-columns:minmax(0,1fr) 86px}.top-sub{display:none}.topbar{padding:0 12px}.topStatus{display:none}}
-</style>
+.workout-filter-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:end}.workout-filter-grid label{display:grid;gap:5px}.workout-filter-grid input,.workout-filter-grid select,.workout-feedback input{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px}.workout-filter-actions{display:flex;gap:8px;align-items:end}.capability-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.capability-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}.capability-card strong{font-size:22px;display:block}.workout-results{display:grid;gap:12px}.workout-result{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:15px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(230px,.7fr);gap:16px}.workout-result-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.workout-score{font-size:24px;font-weight:800}.workout-meta{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0}.workout-structure{white-space:pre-wrap;background:#0b1523;border:1px solid var(--line);padding:10px;border-radius:8px;font:12px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;max-height:230px;overflow:auto}.workout-source{font-size:11px;color:var(--muted)}.scheduled-workouts{display:grid;gap:10px}.scheduled-workout{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}.scheduled-workout:first-child{border-top:0}.workout-feedback{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.workout-feedback label{display:grid;gap:4px;min-width:85px}.workout-feedback input{max-width:100px}@media(max-width:1000px){.workout-filter-grid,.capability-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.workout-result{grid-template-columns:1fr}}@media(max-width:620px){.workout-filter-grid,.capability-grid{grid-template-columns:1fr}.scheduled-workout{align-items:stretch;flex-direction:column}.workout-filter-actions{flex-wrap:wrap}}</style>
 <style>[hidden]{display:none!important}.sidebar,.nav{min-width:0}.plan-day[role=button]{cursor:pointer}.plan-day[role=button]:hover{border-color:#a978ff}.plan-day[role=button]:focus-visible{outline:2px solid #c3a8ff;outline-offset:3px}@media(max-width:1050px){.shell{grid-template-columns:minmax(0,1fr)}.nav{max-width:100%;overflow-x:auto}.topbar{top:96px}}@media(max-width:700px){.sidebar{padding:8px 10px}.nav button{padding:9px 10px;font-size:12px}.topbar{top:52px}}</style>
+<style>
+.workout-profile{margin:12px 0;background:#0c1c25;border:1px solid #31545d;border-radius:8px;overflow:hidden}.workout-profile-head,.workout-profile-foot{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;color:#b8ced2;font-size:11px}.workout-profile-head strong{font-size:12px;color:#f3f6f2}.workout-profile svg{display:block;width:100%;height:76px;background:#10272d}.workout-profile-foot{padding-top:3px}.workout-details summary{cursor:pointer;font-weight:700;color:#a8d6ca}.workout-details .workout-structure{margin-top:8px}
+.meal-row{padding:11px 0}.meal-row-main{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.meal-row-main span{color:var(--muted)}.meal-row-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}.meal-row-actions select{min-width:155px;max-width:190px;padding:7px}.meal-row-actions .btn{padding:7px 9px;font-size:12px}
+#enteredFood>.detail-heading{display:flex;align-items:center;gap:10px;flex-wrap:wrap}#enteredFood>.detail-heading h3{margin:0 auto 0 0}.meal-diary-date{width:auto;min-width:145px;padding:7px}#enteredFood>.detail-heading .pill{white-space:nowrap}
+#foodManageDialog{width:min(620px,calc(100vw - 24px));max-height:88vh;overflow:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);padding:20px}#foodManageDialog::backdrop{background:#000a}.food-manage-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0}.food-manage-grid label,.food-copy-controls label{display:grid;gap:5px;font-size:12px;color:var(--muted)}.food-manage-grid input,.food-manage-grid select{width:100%}.food-manage-actions,.food-copy-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px}.food-copy-controls{border-top:1px solid var(--line);padding-top:14px}.food-copy-controls label{min-width:170px}@media(max-width:620px){.food-manage-grid{grid-template-columns:1fr}.meal-row-main{display:block}.meal-row-main strong,.meal-row-main span{display:block}.meal-row-actions select{max-width:none;width:100%}}
+#foodManageDialog .detail-heading{display:flex;align-items:center;justify-content:space-between;flex-direction:row;gap:12px}#foodManageDialog .detail-heading h3{margin:0}#foodManageClose{flex:none}
+</style>
 </head>
 <body>
 <div class="shell">
@@ -38,6 +45,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   <nav class="nav">
     <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
     <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
+    <button class="navbtn" data-view="workouts">⌁ <span>Workouty</span></button>
     <button class="navbtn" data-view="gym">▣ <span>Gym</span></button>
     <button class="navbtn" data-view="recovery">◒ <span>Zdraví</span></button>
     <button class="navbtn" data-view="nutrition">◉ <span>Výživa</span></button>
@@ -86,6 +94,49 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 </section>
 
+<section id="workouts" class="view">
+  <div class="hero section-hero">
+    <div><div class="eyebrow">Adaptive library · cycling</div><h1>Workouty</h1><p>Nech si vygenerovat trénink na den, nebo vyber z knihovny stovek workoutů seřazených podle tvé úrovně, připravenosti a kontextu týdne.</p></div>
+    <div class="hero-status"><span>PERSONALIZACE</span><strong>Úroveň → výzva → hodnocení</strong></div>
+  </div>
+  <div class="card generate-card">
+    <div class="detail-heading"><div><div class="eyebrow">Doporučení na den</div><h3 style="margin:4px 0">Vygenerovat trénink</h3></div></div>
+    <p class="small" style="margin-top:0">Trenér zváží únavu, spánek, tvrdé dny v týdnu, gym a tvoji aktuální úroveň a vybere trénink, který tě posune.</p>
+    <div class="workout-filter-grid">
+      <label><span class="small">Den</span><input id="generateDate" type="date"></label>
+      <label><span class="small">Čas na trénink (min)</span><input id="generateMinutes" type="number" min="30" max="360" step="15" placeholder="podle plánu"></label>
+      <label><span class="small">Kde</span><select id="generateEnvironment"><option value="indoor">Indoor · trenažér</option><option value="outdoor">Outdoor · venku</option></select></label>
+      <div class="workout-filter-actions"><button class="btn primary" id="generateWorkoutBtn">Vygenerovat trénink</button></div>
+    </div>
+    <div id="generatedWorkout" style="margin-top:12px"></div>
+  </div>
+  <div class="section">Knihovna workoutů</div>
+  <div class="card">
+    <div class="workout-filter-grid">
+      <label><span class="small">Typ</span><select id="workoutSystem">
+        <option value="">Všechny</option><option value="recovery">Recovery</option><option value="endurance">Endurance</option><option value="tempo">Tempo</option><option value="sweet_spot">Sweet Spot</option><option value="threshold">Threshold</option><option value="vo2max">VO₂max</option><option value="anaerobic">Anaerobic</option><option value="sprint">Sprint</option>
+      </select></label>
+      <label><span class="small">Délka (min)</span><input id="workoutDuration" type="number" min="30" max="360" step="5" value="90"></label>
+      <label><span class="small">Tolerance délky</span><select id="workoutDurationTolerance"><option value="5">±5 min</option><option value="10">±10 min</option><option value="15" selected>±15 min</option><option value="30">±30 min</option></select></label>
+      <label><span class="small">Cílový load (volitelně)</span><input id="workoutLoad" type="number" min="0" max="400" step="5" placeholder="např. 100"></label>
+      <label><span class="small">Max. obtížnost</span><select id="workoutDifficulty"><option value="">Bez limitu</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option></select></label>
+      <label><span class="small">Fáze</span><select id="workoutPhase"><option value="">Auto</option><option value="base">Base</option><option value="build">Build</option><option value="recovery">Recovery</option><option value="taper">Taper</option></select></label>
+      <label><span class="small">Kde</span><select id="workoutEnvironment"><option value="indoor">Indoor · trenažér</option><option value="outdoor">Outdoor · venku</option></select></label>
+      <label><span class="small">Zdroj</span><select id="workoutSource"><option value="">Všechny</option><option value="original">PFD knihovna</option><option value="research">Výzkumné protokoly</option><option value="public_reference">Veřejné tréninky profi</option></select></label>
+      <label><span class="small">Naplánovat na</span><input id="workoutScheduleDate" type="date"></label>
+      <div class="workout-filter-actions"><button class="btn primary" id="searchWorkouts">Najít workouty</button></div>
+    </div>
+    <div id="workoutSourceNote" class="small" style="margin-top:12px">Vlastní PFD workouty, výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje.</div>
+  </div>
+  <div class="section">Moje capability</div>
+  <div id="workoutCapabilities" class="capability-grid"></div>
+  <div id="workoutRankingContext" class="notice" style="margin-top:12px">Zvol parametry a spusť hledání.</div>
+  <div class="section">Doporučené workouty</div>
+  <div id="workoutResults" class="workout-results"><div class="small">Načítám knihovnu…</div></div>
+  <div class="section">Naplánované workouty</div>
+  <div id="scheduledWorkouts" class="scheduled-workouts"></div>
+</section>
+
 <dialog id="assistantDialog" class="assistant-dialog"><div class="detail-heading"><h3>Osobní asistent</h3><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></div><p class="small">Jedno místo pro kolo, gym, výživu a zdravotní data.</p><div class="notice" id="assistantStatus">Návrhy se tvoří z dostupných dat; žádné změny se neukládají automaticky.</div><div id="assistantConversation" aria-live="polite"></div><form id="assistantForm"><label class="small" for="assistantMessage">Co potřebuješ?</label><textarea id="assistantMessage" placeholder="Vygeneruj mi kolo na týden. Zhodnoť dnešní jízdu. Připrav gym na úterý." required maxlength="4000"></textarea><button class="btn primary" type="submit">Odeslat</button></form></dialog>
 
 <section id="gym" class="view">
@@ -114,7 +165,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 </div></main></div>
 <div id="toast" class="toast"></div>
 <style>${experienceTheme}${mobileTheme}${gymFocusTheme}</style>
-<script src="/app/dashboard-client.js?v=20260930-1" defer></script>
+<script src="/app/dashboard-client.js?v=20260930-library" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

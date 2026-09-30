@@ -21,7 +21,12 @@ export const PERSONAL_TABLES = {
   coach_inbox: { indexes: [["user_id", "created_at DESC"]] },
   sync_status: { pk: ["user_id", "sync_name"] },
   connection_credentials: { pk: ["user_id", "provider"] },
-  provider_tokens: { pk: ["user_id", "provider"] }
+  provider_tokens: { pk: ["user_id", "provider"] },
+  // Created with user_id from the start (workout-library.js); listed so the
+  // scoped database enforces the filter.
+  training_capabilities: { pk: ["user_id", "sport", "system"] },
+  workout_feedback: {},
+  workout_schedule_links: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
