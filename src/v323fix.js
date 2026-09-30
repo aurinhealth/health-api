@@ -26,6 +26,8 @@ function wrapDB(db) {
   const originalPrepare = db.prepare.bind(db);
 
   return {
+    userId: db.userId,
+    batch: statements => db.batch(statements.map(statement => statement.__raw || statement)),
     prepare(query) {
       const statement = originalPrepare(query);
       const plannedQuery = String(query).includes("data_type = 'planned-workout'");
@@ -41,6 +43,7 @@ function wrapDB(db) {
       };
 
       const wrapBound = (bound) => ({
+        __raw: bound,
         all: async (...args) => wrapResult(await bound.all(...args)),
         first: async (...args) => wrapResult(await bound.first(...args), true),
         run: (...args) => bound.run(...args),

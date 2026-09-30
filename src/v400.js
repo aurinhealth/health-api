@@ -34,10 +34,10 @@ function macros(r){return {protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g
 
 async function rowsForDate(env,date,type){
   if(type !== "activity"){
-    return (await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='planned-workout' AND start_time LIKE ? ORDER BY start_time`).bind(date+"%").all()).results||[];
+    return (await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND source_family='intervals' AND data_type='planned-workout' AND start_time LIKE ? ORDER BY start_time`).bind(env.USER_ID, date+"%").all()).results||[];
   }
-  const intervals=(await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND start_time LIKE ? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(date+"%").all()).results||[];
-  const google=(await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE source_family='google-wearables' AND data_type='exercise' AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time DESC LIMIT 200`).all()).results||[];
+  const intervals=(await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND source_family='intervals' AND data_type='activity' AND start_time LIKE ? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(env.USER_ID, date+"%").all()).results||[];
+  const google=(await env.DB.prepare(`SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND source_family='google-wearables' AND data_type='exercise' AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time DESC LIMIT 200`).bind(env.USER_ID).all()).results||[];
   const googleForDate=google.filter(row=>{
     try{
       const p=JSON.parse(row.payload_json||"{}"), i=p.exercise?.interval||p.interval||{};
@@ -47,11 +47,11 @@ async function rowsForDate(env,date,type){
   return [...intervals,...googleForDate];
 }
 async function weightInfo(env,date){
-  const latest=await env.DB.prepare(`SELECT value_numeric,sample_time FROM health_datapoints WHERE data_type='weight' AND value_numeric IS NOT NULL ORDER BY sample_time DESC,id DESC LIMIT 1`).first();
+  const latest=await env.DB.prepare(`SELECT value_numeric,sample_time FROM health_datapoints WHERE user_id = ? AND data_type='weight' AND value_numeric IS NOT NULL ORDER BY sample_time DESC,id DESC LIMIT 1`).bind(env.USER_ID).first();
   const windows={7:[],14:[],28:[]};
   for(const [days,arr] of Object.entries(windows)){
     const since=new Date(`${date}T00:00:00+02:00`); since.setDate(since.getDate()-Number(days)+1);
-    const r=await env.DB.prepare(`SELECT value_numeric,sample_time FROM health_datapoints WHERE data_type='weight' AND value_numeric IS NOT NULL AND sample_time>=? AND sample_time<=? ORDER BY sample_time`).bind(since.toISOString(),`${date}T23:59:59+02:00`).all();
+    const r=await env.DB.prepare(`SELECT value_numeric,sample_time FROM health_datapoints WHERE user_id = ? AND data_type='weight' AND value_numeric IS NOT NULL AND sample_time>=? AND sample_time<=? ORDER BY sample_time`).bind(env.USER_ID, since.toISOString(),`${date}T23:59:59+02:00`).all();
     arr.push(...(r.results||[]));
   }
   const avg=a=>a.length? a.reduce((s,x)=>s+n(x.value_numeric),0)/a.length:null;
@@ -119,7 +119,7 @@ function targetFromEnergy(energy,adjustment){const training=Math.max(0,n(energy?
 function macroTargets(weight,target,ctx){const kg=weight||85.8;const p=Math.round(kg*PROTEIN_PER_KG),f=Math.round(kg*FAT_PER_KG);const ckg=ctx.endurance?ENDURANCE_CARB_PER_KG:ctx.training?TRAINING_CARB_PER_KG:REST_CARB_PER_KG;const floor=Math.round(kg*ckg);const derived=Math.round(Math.max(0,(target-p*4-f*9)/4));return {protein_g:p,carbs_g:Math.max(floor,derived),fat_g:f};}
 function score(r,need,ctx,slot){const m=macros(r),k=calories(r);if(!k)return -1e6;let s=0;if(need.kcal>0){const ratio=k/need.kcal;s+=50-Math.abs(1-ratio)*50;if(k<=need.kcal)s+=20;else s-=Math.min(70,(k-need.kcal)*.35);}else s-=Math.min(100,k*.5);const fatEx=Math.max(0,m.fat_g-need.fat_g);s-=Math.min(55,fatEx*1.8);if(need.carbs_g>0)s+=Math.min(ctx.endurance?35:24,(m.carbs_g/need.carbs_g)*(ctx.endurance?35:24));if(need.protein_g>0)s+=Math.min(20,(m.protein_g/need.protein_g)*20);if(slot==="pre")s+=m.carbs_g*0.35;if(slot==="post")s+=m.carbs_g*0.35+m.protein_g*0.2;if(r.meal_prep)s+=4;if(r.level==="Easy")s+=3;return s;}
 function pickRecipes(cookbook,need,ctx,slot,count=3){return cookbook.filter(r=>calories(r)>0).map(r=>({...r,_score:score(r,need,ctx,slot)})).sort((a,b)=>b._score-a._score).slice(0,count).map(({_score,...r})=>({...r,recommendation_score:round(_score,1),slot}));}
-async function foodTotals(env,date){const r=await env.DB.prepare(`SELECT COALESCE(SUM(kcal),0) kcal,COALESCE(SUM(protein_g),0) protein_g,COALESCE(SUM(carbs_g),0) carbs_g,COALESCE(SUM(fat_g),0) fat_g,COALESCE(SUM(fiber_g),0) fiber_g FROM food_logs WHERE consumed_date=?`).bind(date).first();return {kcal:n(r?.kcal),protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g),fiber_g:n(r?.fiber_g)};}
+async function foodTotals(env,date){const r=await env.DB.prepare(`SELECT COALESCE(SUM(kcal),0) kcal,COALESCE(SUM(protein_g),0) protein_g,COALESCE(SUM(carbs_g),0) carbs_g,COALESCE(SUM(fat_g),0) fat_g,COALESCE(SUM(fiber_g),0) fiber_g FROM food_logs WHERE user_id = ? AND consumed_date=?`).bind(env.USER_ID, date).first();return {kcal:n(r?.kcal),protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g),fiber_g:n(r?.fiber_g)};}
 
 async function dayPlan(env,url){
   const date=url.searchParams.get("date")||localDate();

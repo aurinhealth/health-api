@@ -24,6 +24,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply health-data --remote
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v4
         with:
@@ -31,12 +38,19 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy
           workingDirectory: .
-      - name: Apply D1 migrations
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply health-data --remote
+
+      # The first requests after a deploy may finish a database upgrade in
+      # chunks; the API answers 503 until it is done.
+      - name: Wait for the database upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/me" || true)"
+            if [ "$code" != "503" ] && [ "$code" != "000" ]; then echo "API ready (HTTP $code)"; exit 0; fi
+            echo "Database upgrade in progress (attempt $attempt)"; sleep 10
+          done
+          echo "Database upgrade did not finish in time"; exit 1
 
       - name: Request GitHub OIDC token for strength smoke test
         id: oidc_strength
@@ -65,46 +79,56 @@ jobs:
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert d.get("preview") is True, d; p=d.get("plan") or {}; assert p.get("rows"), p; assert p.get("loadEstimates") is not None, p' <<< "$body"
 
       - name: Smoke test food resolution
+        env:
+          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
           body='{"name":"Milbona High Protein Pudding","brand":"Milbona","calories_100g":81,"protein_100g":10,"carbs_100g":6.4,"fat_100g":1.6,"fiber_100g":0.7,"salt_100g":0.28}'
-          resolved="$(curl -fsS -X POST -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/food/resolve")"
+          resolved="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" -X POST -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/food/resolve")"
           python -c 'import json,sys; d=json.load(sys.stdin); p=d.get("product") or {}; assert d.get("status")=="ok",d; assert d.get("match")=="package_label",d; assert p.get("calories_100g")==81,p; assert p.get("protein_100g")==10,p; assert p.get("fiber_100g")==0.7,p; assert p.get("salt_100g")==0.28,p' <<< "$resolved"
-          product="$(curl -fsS "https://petrfitnessdata.eu/food/product?barcode=4056489918325")"
+          product="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/food/product?barcode=4056489918325")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert d.get("product") or d.get("products"),d' <<< "$product"
 
       - name: Smoke test daily plan
+        env:
+          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
-          plan="$(curl -fsS "https://petrfitnessdata.eu/daily/plan")"
+          plan="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/daily/plan")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert "training" in d and "nutrition" in d and "food" in d and "meals" in d' <<< "$plan"
 
       - name: Smoke test Google Health nutrition
+        env:
+          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
-          body="$(curl -fsS "https://petrfitnessdata.eu/health/nutrition")"
+          body="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert d.get("data_type")=="nutrition-log",d' <<< "$body"
 
       - name: Smoke test dashboard
+        env:
+          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
           page="$(curl -fsS "https://petrfitnessdata.eu/app")"
+          anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/daily")"
+          [ "$anonymous" = "401" ] || { echo "Dashboard API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
           python -c 'import sys; s=sys.stdin.read(); assert "Petr Fitness Data" in s; assert "Gym" in s; assert "Recovery & Health" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
           curl -fsS "https://petrfitnessdata.eu/app/dashboard-client.js?deployment=$GITHUB_SHA" -o /tmp/dashboard-client.js
           node --check /tmp/dashboard-client.js
-          daily="$(curl -fsS "https://petrfitnessdata.eu/app/api/daily")"
+          daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/daily")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"' <<< "$daily"
-          sleep="$(curl -fsS "https://petrfitnessdata.eu/app/api/sleep")"
+          sleep="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/sleep")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "sessions" in d' <<< "$sleep"
-          gym="$(curl -fsS "https://petrfitnessdata.eu/app/api/gym")"
+          gym="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/gym")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "values" in d; assert "videoLinks" in d' <<< "$gym"
-          activities="$(curl -fsS "https://petrfitnessdata.eu/app/api/activities")"
+          activities="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/activities")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "activities" in d' <<< "$activities"
-          week="$(curl -fsS "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
+          week="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,d' <<< "$week"
 
       - name: Smoke test MCP endpoint

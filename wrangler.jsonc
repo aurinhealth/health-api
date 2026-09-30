@@ -29,5 +29,9 @@
       "migrations_dir": "migrations"
     }
   ],
-  "workers_dev": true
+  "workers_dev": true,
+  // The owner is the first admin; existing single-user data belongs to this account.
+  "vars": {
+    "OWNER_EMAIL": "chelseafc.czsk@gmail.com"
+  }
 }

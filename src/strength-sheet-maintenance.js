@@ -35,9 +35,9 @@ export async function mirrorStrengthHistoryToAllSets(accessToken, db) {
     SELECT workout_date, type, exercise, set_no, planned_kg, planned_reps,
            actual_kg, actual_reps, rpe, completed, note, source
     FROM strength_sets
-    WHERE completed = 1
+    WHERE user_id = ? AND completed = 1
     ORDER BY workout_date ASC, sheet_row ASC, id ASC
-  `).all();
+  `).bind(db.userId).all();
 
   const values = (rows.results || []).map(r => [
     cell(r.workout_date), cell(r.type), cell(r.exercise), cell(r.set_no),
@@ -211,27 +211,27 @@ async function refreshStrengthOverview(accessToken, db) {
   const last = await db.prepare(`
     SELECT workout_date, COUNT(*) AS sets
     FROM strength_sets
-    WHERE completed = 1
+    WHERE user_id = ? AND completed = 1
     GROUP BY workout_date
     ORDER BY workout_date DESC
     LIMIT 1
-  `).first();
+  `).bind(db.userId).first();
 
   const recent = await db.prepare(`
     SELECT workout_date, COUNT(*) AS sets
     FROM strength_sets
-    WHERE completed = 1
+    WHERE user_id = ? AND completed = 1
     GROUP BY workout_date
     ORDER BY workout_date DESC
     LIMIT 10
-  `).all();
+  `).bind(db.userId).all();
 
   const progression = await db.prepare(`
     SELECT workout_date, exercise, actual_kg, actual_reps, rpe
     FROM strength_sets
-    WHERE completed = 1 AND type = 'WORK'
+    WHERE user_id = ? AND completed = 1 AND type = 'WORK'
     ORDER BY workout_date DESC, exercise ASC, set_no ASC
-  `).all();
+  `).bind(db.userId).all();
 
   const latestByExercise = new Map();
   for (const r of progression.results || []) {

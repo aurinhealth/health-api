@@ -98,6 +98,7 @@ export async function ensureStrengthTable(db) {
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS strength_sets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
       workout_date TEXT NOT NULL,
       sheet_row INTEGER NOT NULL,
       type TEXT NOT NULL,
@@ -114,14 +115,15 @@ export async function ensureStrengthTable(db) {
       replacement TEXT,
       execution TEXT,
       source TEXT NOT NULL DEFAULT 'google-sheet',
-      source_key TEXT NOT NULL UNIQUE,
+      source_key TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (user_id, source_key)
     )
   `).run();
 
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_exercise_date ON strength_sets(exercise, workout_date DESC)`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_date ON strength_sets(workout_date DESC)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_user_exercise_date ON strength_sets(user_id, exercise, workout_date DESC)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_user_date ON strength_sets(user_id, workout_date DESC)`).run();
 }
 
 async function purgeLegacyTestRows(db) {
@@ -129,10 +131,10 @@ async function purgeLegacyTestRows(db) {
   // the exact test date/exercise/value so a real future 51kg performance is safe.
   const result = await db.prepare(`
     DELETE FROM strength_sets
-    WHERE workout_date = '2026-09-17'
+    WHERE user_id = ? AND workout_date = '2026-09-17'
       AND lower(exercise) = 'db bench press'
       AND (actual_kg = 51 OR planned_kg = 51)
-  `).run();
+  `).bind(db.userId).run();
   return Number(result.meta?.changes || 0);
 }
 
@@ -149,12 +151,12 @@ export async function syncStrengthSheet(db, values) {
   for (const row of parsed.rows) {
     const sourceKey = `${parsed.date}:${row.sheetRow}`;
     await db.prepare(`
-      INSERT INTO strength_sets (
+      INSERT INTO strength_sets (user_id, 
         workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
         actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
         source, source_key, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google-sheet', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(source_key) DO UPDATE SET
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google-sheet', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, source_key) DO UPDATE SET
         workout_date=excluded.workout_date,
         sheet_row=excluded.sheet_row,
         type=excluded.type,
@@ -171,7 +173,7 @@ export async function syncStrengthSheet(db, values) {
         replacement=excluded.replacement,
         execution=excluded.execution,
         updated_at=CURRENT_TIMESTAMP
-    `).bind(
+    `).bind(db.userId, 
       parsed.date,
       row.sheetRow,
       row.type,
@@ -228,12 +230,12 @@ export async function importStrengthHistory(db, workout) {
     const sourceKey = `manual:${date}:${i + 1}`;
 
     await db.prepare(`
-      INSERT INTO strength_sets (
+      INSERT INTO strength_sets (user_id, 
         workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
         actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
         source, source_key, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, '', '', '', 'manual', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(source_key) DO UPDATE SET
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, '', '', '', 'manual', ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, source_key) DO UPDATE SET
         workout_date=excluded.workout_date,
         sheet_row=excluded.sheet_row,
         type=excluded.type,
@@ -247,7 +249,7 @@ export async function importStrengthHistory(db, workout) {
         completed=1,
         note=excluded.note,
         updated_at=CURRENT_TIMESTAMP
-    `).bind(
+    `).bind(db.userId, 
       date, 1000000 + i + 1, type, exercise, setNo, plannedKg, plannedReps,
       actualKg, actualReps, rpe, note, sourceKey
     ).run();
@@ -265,10 +267,10 @@ export async function getStrengthHistory(db, limit = 100) {
            actual_kg, actual_reps, rpe, completed, note, replacement, execution,
            source, updated_at
     FROM strength_sets
-    WHERE completed = 1 AND type = 'WORK'
+    WHERE user_id = ? AND completed = 1 AND type = 'WORK'
     ORDER BY workout_date DESC, sheet_row ASC
     LIMIT ?
-  `).bind(safeLimit).all();
+  `).bind(db.userId, safeLimit).all();
   return (result.results || []).map(row => ({ ...row, exercise: normalizeExerciseName(row.exercise) }));
 }
 
@@ -279,9 +281,9 @@ export async function getExerciseHistory(db, exercise, limit = 30) {
     SELECT workout_date, type, exercise, set_no, planned_kg, planned_reps,
            actual_kg, actual_reps, rpe, completed, note, replacement, execution
     FROM strength_sets
-    WHERE completed = 1 AND type = 'WORK' AND lower(exercise) = lower(?)
+    WHERE user_id = ? AND completed = 1 AND type = 'WORK' AND lower(exercise) = lower(?)
     ORDER BY workout_date DESC, set_no ASC
     LIMIT ?
-  `).bind(text(exercise), safeLimit).all();
+  `).bind(db.userId, text(exercise), safeLimit).all();
   return (result.results || []).map(row => ({ ...row, exercise: normalizeExerciseName(row.exercise) }));
 }

@@ -488,18 +488,18 @@ async function testIntervals(env) {
 // GOOGLE SYNC STATUS
 // ======================================================
 async function ensureSyncStatusTable(env) {
-  await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_status (sync_name TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, details_json TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL, sync_name TEXT NOT NULL, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, details_json TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, sync_name))').run();
 }
 
 async function setGoogleSyncStatus(env, status, details = null) {
   await ensureSyncStatusTable(env);
-  await env.DB.prepare('INSERT INTO sync_status (sync_name, status, started_at, finished_at, details_json, updated_at) VALUES (\'google\', ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(sync_name) DO UPDATE SET status = excluded.status, started_at = COALESCE(excluded.started_at, sync_status.started_at), finished_at = excluded.finished_at, details_json = excluded.details_json, updated_at = CURRENT_TIMESTAMP')
-    .bind(status, details?.started_at || null, details?.finished_at || null, details ? JSON.stringify(details) : null).run();
+  await env.DB.prepare('INSERT INTO sync_status (user_id, sync_name, status, started_at, finished_at, details_json, updated_at) VALUES (?, \'google\', ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id, sync_name) DO UPDATE SET status = excluded.status, started_at = COALESCE(excluded.started_at, sync_status.started_at), finished_at = excluded.finished_at, details_json = excluded.details_json, updated_at = CURRENT_TIMESTAMP')
+    .bind(env.USER_ID, status, details?.started_at || null, details?.finished_at || null, details ? JSON.stringify(details) : null).run();
 }
 
 async function googleSyncStatus(env) {
   await ensureSyncStatusTable(env);
-  const row = await env.DB.prepare('SELECT sync_name, status, started_at, finished_at, details_json, updated_at FROM sync_status WHERE sync_name = \'google\'').first();
+  const row = await env.DB.prepare('SELECT sync_name, status, started_at, finished_at, details_json, updated_at FROM sync_status WHERE user_id = ? AND sync_name = \'google\'').bind(env.USER_ID).first();
   if (!row) return Response.json({ status: 'idle', source: 'google' }, { headers: { 'Cache-Control': 'no-store' } });
   let details = null;
   try { details = row.details_json ? JSON.parse(row.details_json) : null; } catch {}
@@ -530,6 +530,7 @@ async function savePoint(
   await env.DB
     .prepare(
       `INSERT INTO health_datapoints (
+        user_id,
         source_family,
         data_type,
         external_id,
@@ -540,8 +541,9 @@ async function savePoint(
         value_unit,
         payload_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (
+        user_id,
         source_family,
         data_type,
         external_id
@@ -556,6 +558,7 @@ async function savePoint(
         updated_at = CURRENT_TIMESTAMP`
     )
     .bind(
+      env.USER_ID,
       source,
       type,
       id,
@@ -589,7 +592,8 @@ async function markMatch(
          matched_activity_id = ?,
          match_confidence = ?,
          updated_at = CURRENT_TIMESTAMP
-       WHERE source_family = ?
+       WHERE user_id = ?
+       AND source_family = ?
        AND data_type = ?
        AND external_id = ?`
     )
@@ -597,6 +601,7 @@ async function markMatch(
       role,
       matchedId,
       confidence,
+      env.USER_ID,
       source,
       type,
       externalId
@@ -1169,6 +1174,7 @@ async function saveGooglePointsBatch(env, family, type, points) {
 
     return env.DB.prepare(
       `INSERT INTO health_datapoints (
+        user_id,
         source_family,
         data_type,
         external_id,
@@ -1179,8 +1185,8 @@ async function saveGooglePointsBatch(env, family, type, points) {
         value_unit,
         payload_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT (source_family, data_type, external_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (user_id, source_family, data_type, external_id)
       DO UPDATE SET
         sample_time = excluded.sample_time,
         start_time = excluded.start_time,
@@ -1190,6 +1196,7 @@ async function saveGooglePointsBatch(env, family, type, points) {
         payload_json = excluded.payload_json,
         updated_at = CURRENT_TIMESTAMP`
     ).bind(
+      env.USER_ID,
       family,
       type,
       fallbackId,
@@ -1211,15 +1218,15 @@ async function syncGoogleRecent(env){
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:'error',message:error.message};}}));
   const result={status:results.some(r=>r.status!=='ok')?'partial':'ok',results};
   await ensureSyncStatusTable(env);
-  await env.DB.prepare("INSERT INTO sync_status(sync_name,status,details_json,updated_at) VALUES('google_recent',?,?,datetime('now')) ON CONFLICT(sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(result.status,JSON.stringify(result)).run();
+  await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'google_recent',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.USER_ID,result.status,JSON.stringify(result)).run();
   return result;
 }
 
 async function readGoogleSyncState(env) {
   await ensureSyncStatusTable(env);
   const row = await env.DB.prepare(
-    "SELECT status, started_at, finished_at, details_json, updated_at FROM sync_status WHERE sync_name = 'google'"
-  ).first();
+    "SELECT status, started_at, finished_at, details_json, updated_at FROM sync_status WHERE user_id = ? AND sync_name = 'google'"
+  ).bind(env.USER_ID).first();
 
   if (!row) return null;
 
@@ -1521,7 +1528,7 @@ async function syncIntervalsActivities(env) {
     const id = String(sourceActivity.id);
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
-      const existing = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind("activity:"+id).first();
+      const existing = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind(env.USER_ID,"activity:"+id).first();
       if (existing?.payload_json) {
         try {
           const previous=JSON.parse(existing.payload_json);
@@ -1585,9 +1592,9 @@ async function syncIntervalsEvents(env) {
 
   await env.DB.prepare(
     `DELETE FROM health_datapoints
-     WHERE source_family = 'intervals' AND data_type = 'planned-workout'
+     WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'planned-workout'
        AND start_time >= ? AND start_time < ?`
-  ).bind(oldest, rangeEnd).run();
+  ).bind(env.USER_ID, oldest, rangeEnd).run();
 
   let saved = 0;
 
@@ -1746,11 +1753,10 @@ async function syncIntervals(env) {
       env
     );
 
-  const historySheet =
-    await mirrorIntervalsActivitiesToSheet(
-      env,
-      activities.activities
-    );
+  // Only the owner's activities are mirrored to the legacy Google Sheet.
+  const historySheet = env.USER_IS_OWNER
+    ? await mirrorIntervalsActivitiesToSheet(env, activities.activities)
+    : null;
 
   return Response.json({
     status: "ok",
@@ -1862,11 +1868,13 @@ async function matchActivities(env) {
       .prepare(
         `SELECT *
          FROM health_datapoints
-         WHERE source_family = 'intervals'
+         WHERE user_id = ?
+         AND source_family = 'intervals'
          AND data_type = 'activity'
          AND start_time IS NOT NULL
          ORDER BY start_time`
       )
+      .bind(env.USER_ID)
       .all();
 
   const google =
@@ -1874,11 +1882,13 @@ async function matchActivities(env) {
       .prepare(
         `SELECT *
          FROM health_datapoints
-         WHERE source_family = 'google-wearables'
+         WHERE user_id = ?
+         AND source_family = 'google-wearables'
          AND data_type = 'exercise'
          AND start_time IS NOT NULL
          ORDER BY start_time`
       )
+      .bind(env.USER_ID)
       .all();
 
   let matched = 0;
@@ -1971,21 +1981,23 @@ async function weightHistory(env, days = null) {
     const rows = await env.DB.prepare(`
       SELECT sample_time, value_numeric
       FROM health_datapoints
-      WHERE data_type = 'weight'
+      WHERE user_id = ?
+        AND data_type = 'weight'
         AND value_numeric IS NOT NULL
         AND sample_time >= ?
       ORDER BY sample_time ASC
-    `).bind(cutoff).all();
+    `).bind(env.USER_ID, cutoff).all();
     return rows.results;
   }
 
   const rows = await env.DB.prepare(`
     SELECT sample_time, value_numeric
     FROM health_datapoints
-    WHERE data_type = 'weight'
+    WHERE user_id = ?
+      AND data_type = 'weight'
       AND value_numeric IS NOT NULL
     ORDER BY sample_time ASC
-  `).all();
+  `).bind(env.USER_ID).all();
 
   return rows.results;
 }
@@ -2267,11 +2279,11 @@ async function nearbyRideContext(env, date) {
   const rows = await env.DB.prepare(`
     SELECT payload_json, start_time
     FROM health_datapoints
-    WHERE source_family = 'intervals'
+    WHERE user_id = ? AND source_family = 'intervals'
       AND data_type = 'planned-workout'
       AND start_time >= ? AND start_time < ?
     ORDER BY start_time
-  `).bind(start, end).all();
+  `).bind(env.USER_ID, start, end).all();
   const nextRide = rows.results.map(row => {
     try { return plannedWorkoutInfo(JSON.parse(row.payload_json || '{}')); } catch { return null; }
   }).find(workout => workout?.cycling && Number(workout.durationHours || 0) >= 1);
@@ -2315,50 +2327,50 @@ async function energyForDate(env, date) {
   const google = await env.DB.prepare(`
     SELECT value_numeric, sample_time
     FROM health_datapoints
-    WHERE data_type = 'total-calories'
+    WHERE user_id = ? AND data_type = 'total-calories'
       AND sample_time >= ?
       AND sample_time < ?
     ORDER BY sample_time DESC, id DESC
     LIMIT 1
-  `).bind(date, nextDate).first();
+  `).bind(env.USER_ID, date, nextDate).first();
 
   const planned = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE source_family = 'intervals'
+    WHERE user_id = ? AND source_family = 'intervals'
       AND data_type = 'planned-workout'
       AND start_time >= ?
       AND start_time < ?
     ORDER BY start_time
-  `).bind(date, nextDate).all();
+  `).bind(env.USER_ID, date, nextDate).all();
 
   const activities = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE source_family = 'intervals'
+    WHERE user_id = ? AND source_family = 'intervals'
       AND data_type = 'activity'
       AND start_time >= ?
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(date, nextDate).all();
+  `).bind(env.USER_ID, date, nextDate).all();
 
   const googleExercises = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE source_family = 'google-wearables'
+    WHERE user_id = ? AND source_family = 'google-wearables'
       AND data_type = 'exercise'
       AND start_time >= ?
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(date, nextDate).all();
+  `).bind(env.USER_ID, date, nextDate).all();
 
   const weight = await env.DB.prepare(`
     SELECT value_numeric, sample_time FROM health_datapoints
-    WHERE data_type = 'weight' AND value_numeric IS NOT NULL
+    WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
     ORDER BY sample_time DESC, id DESC LIMIT 1
-  `).first();
+  `).bind(env.USER_ID).first();
 
   const plannedRaw = planned.results.map(r => ({
     id: r.external_id,
@@ -2889,9 +2901,9 @@ function scaleRecipe(recipe, servings) {
 async function foodLogForDate(env, date) {
   const rows = await env.DB.prepare(`
     SELECT * FROM food_logs
-    WHERE consumed_date = ?
+    WHERE user_id = ? AND consumed_date = ?
     ORDER BY consumed_at, id
-  `).bind(date).all();
+  `).bind(env.USER_ID, date).all();
 
   const entries = rows.results || [];
   const totals = entries.reduce((sum, row) => {
@@ -2950,11 +2962,11 @@ async function foodLog(env, request, url) {
   }
 
   const result = await env.DB.prepare(`
-    INSERT INTO food_logs (
+    INSERT INTO food_logs (user_id, 
       consumed_date, consumed_at, cookbook_page, recipe_title,
       servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(env.USER_ID, 
     date,
     consumedAt,
     recipe ? recipe.page : null,
@@ -3132,7 +3144,7 @@ async function deleteFoodLog(env, url) {
   if (!Number.isInteger(id) || id <= 0) {
     return Response.json({ status: "error", message: "Valid id is required" }, { status: 400 });
   }
-  const result = await env.DB.prepare(`DELETE FROM food_logs WHERE id = ?`).bind(id).run();
+  const result = await env.DB.prepare(`DELETE FROM food_logs WHERE user_id = ? AND id = ?`).bind(env.USER_ID, id).run();
   return Response.json({ status: "ok", id, deleted: Number(result.meta.changes || 0) > 0 });
 }
 
@@ -3168,7 +3180,7 @@ async function foodLogText(env, request, url) {
   const uniquePages = [...new Set(pageNumbers)];
   const logged = [];
   const errors = [];
-  const existingRecent = await env.DB.prepare(`SELECT id,cookbook_page,recipe_title,source FROM food_logs WHERE consumed_date=? AND note=? AND created_at>=datetime('now','-30 seconds')`).bind(date,text).all();
+  const existingRecent = await env.DB.prepare(`SELECT id,cookbook_page,recipe_title,source FROM food_logs WHERE user_id = ? AND consumed_date=? AND note=? AND created_at>=datetime('now','-30 seconds')`).bind(env.USER_ID, date,text).all();
   const existingKeys = new Set((existingRecent.results||[]).map(r=>`${r.cookbook_page||''}|${r.recipe_title||''}|${r.source||''}`));
 
   for (const page of uniquePages) {
@@ -3185,9 +3197,9 @@ async function foodLogText(env, request, url) {
       continue;
     }
     const result = await env.DB.prepare(`
-      INSERT INTO food_logs (consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
-      VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'cookbook-text', ?)
-    `).bind(date, body.consumed_at || new Date().toISOString(), recipe.page, recipe.title, scaled.kcal, scaled.protein_g, scaled.carbs_g, scaled.fat_g, scaled.fiber_g, text).run();
+      INSERT INTO food_logs (user_id, consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'cookbook-text', ?)
+    `).bind(env.USER_ID, date, body.consumed_at || new Date().toISOString(), recipe.page, recipe.title, scaled.kcal, scaled.protein_g, scaled.carbs_g, scaled.fat_g, scaled.fiber_g, text).run();
     existingKeys.add(dedupKey);
     logged.push({ id: result.meta.last_row_id, page: recipe.page, title: recipe.title, ...scaled });
   }
@@ -3205,9 +3217,9 @@ async function foodLogText(env, request, url) {
   for (const [key, value] of Object.entries(fruit)) {
     if (text.toLowerCase().includes(key)) {
       const result = await env.DB.prepare(`
-        INSERT INTO food_logs (consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
-        VALUES (?, ?, NULL, ?, 1, ?, ?, ?, ?, ?, 'manual-text', ?)
-      `).bind(date, body.consumed_at || new Date().toISOString(), value.name, value.kcal, value.protein_g, value.carbs_g, value.fat_g, value.fiber_g, text).run();
+        INSERT INTO food_logs (user_id, consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
+        VALUES (?, ?, ?, NULL, ?, 1, ?, ?, ?, ?, ?, 'manual-text', ?)
+      `).bind(env.USER_ID, date, body.consumed_at || new Date().toISOString(), value.name, value.kcal, value.protein_g, value.carbs_g, value.fat_g, value.fiber_g, text).run();
       logged.push({ id: result.meta.last_row_id, ...value, source: "manual-text" });
       break;
     }
@@ -3257,7 +3269,7 @@ async function healthActivities(env) {
       .prepare(
         `SELECT *
          FROM health_datapoints
-         WHERE (
+         WHERE user_id = ? AND (
            data_type = 'activity'
            OR data_type = 'exercise'
            OR data_type = 'planned-workout'
@@ -3265,6 +3277,7 @@ async function healthActivities(env) {
          ORDER BY start_time DESC
          LIMIT 500`
       )
+      .bind(env.USER_ID)
       .all();
 
   const activities = (rows.results || []).map(row => {
@@ -3295,11 +3308,11 @@ async function healthSleep(env, url) {
   const rows = await env.DB.prepare(`
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
-    WHERE data_type = 'sleep'
+    WHERE user_id = ? AND data_type = 'sleep'
       AND source_family = 'google-wearables'
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
     LIMIT 5000
-  `).all();
+  `).bind(env.USER_ID).all();
 
   const sessions = (rows.results || []).map(row => {
     let p = {};
@@ -3376,6 +3389,7 @@ async function healthDb(env) {
           record_role,
           COUNT(*) AS count
          FROM health_datapoints
+         WHERE user_id = ?
          GROUP BY
            source_family,
            data_type,
@@ -3384,6 +3398,7 @@ async function healthDb(env) {
            source_family,
            data_type`
       )
+      .bind(env.USER_ID)
       .all();
 
   return Response.json({

@@ -8,7 +8,7 @@ export async function buildWeeklyReview(env,context,date){
   const rides=activities.filter(a=>a.cycling);
   const strength=(context?.strength?.recentCompletedSets||[]).filter(r=>dateKey(r.workout_date)>=start&&dateKey(r.workout_date)<=end&&String(r.type||"WORK").toUpperCase()==="WORK"&&Number(r.completed)===1);
   const byDate=[...new Set(strength.map(r=>dateKey(r.workout_date)).filter(Boolean))];
-  const foodRows=await env.DB.prepare("SELECT date,calories,protein_g,carbs_g,fat_g,status FROM food_log WHERE date>=? AND date<=? ORDER BY date").bind(start,end).all();
+  const foodRows=await env.DB.prepare("SELECT date,calories,protein_g,carbs_g,fat_g,status FROM food_log WHERE user_id = ? AND date>=? AND date<=? ORDER BY date").bind(env.USER_ID, start,end).all();
   const food=foodRows.results||[];
   const eaten=food.filter(r=>r.status==="eaten");
   const foodDays=[...new Set(eaten.map(r=>r.date))];

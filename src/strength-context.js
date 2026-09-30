@@ -17,8 +17,8 @@ async function d1WeightTrend(env, endDate) {
   try {
     const end = String(endDate || localDate()).slice(0,10);
     const start = localDate(-35);
-    const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE lower(data_type) LIKE '%weight%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time <= ? OR start_time <= ?) ORDER BY COALESCE(sample_time,start_time)`)
-      .bind(`${start}T00:00:00`,`${start}T00:00:00`,`${end}T23:59:59`,`${end}T23:59:59`).all();
+    const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND lower(data_type) LIKE '%weight%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time <= ? OR start_time <= ?) ORDER BY COALESCE(sample_time,start_time)`)
+      .bind(env.USER_ID, `${start}T00:00:00`,`${start}T00:00:00`,`${end}T23:59:59`,`${end}T23:59:59`).all();
     const points=[];
     for(const row of rows.results||[]){
       let value=n(row.value_numeric,NaN);
@@ -76,7 +76,7 @@ async function intervalsGet(env, path) {
   return data;
 }
 async function d1Recovery(env, startDate, endDate) {
-  const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE source_family LIKE 'google%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time < ? OR start_time < ?) ORDER BY COALESCE(sample_time, start_time)`).bind(`${startDate}T00:00:00`, `${startDate}T00:00:00`, `${endDate}T23:59:59`, `${endDate}T23:59:59`).all();
+  const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time < ? OR start_time < ?) ORDER BY COALESCE(sample_time, start_time)`).bind(env.USER_ID, `${startDate}T00:00:00`, `${startDate}T00:00:00`, `${endDate}T23:59:59`, `${endDate}T23:59:59`).all();
   const out = {}; for (const r of rows.results || []) { let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {} (out[r.data_type] ||= []).push({ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }); } return out;
 }
 async function syncCurrentStrengthSheet(env) {

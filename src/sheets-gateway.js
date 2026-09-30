@@ -226,8 +226,8 @@ async function ensureCurrentWorkoutSafeToReplace(env) {
     `SELECT sheet_row, type, exercise, set_no, planned_kg, planned_reps,
             actual_kg, actual_reps, rpe, completed
      FROM strength_sets
-     WHERE workout_date = ? AND source = 'google-sheet' AND completed = 1`
-  ).bind(parsed.date).all();
+     WHERE user_id = ? AND workout_date = ? AND source = 'google-sheet' AND completed = 1`
+  ).bind(env.USER_ID, parsed.date).all();
 
   const unsynced = completed.filter(row => !completedRowsAreSynced([row], dbRows.results || []));
   if (unsynced.length) {

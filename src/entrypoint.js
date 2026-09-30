@@ -6,8 +6,7 @@ import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
-import { whoopOAuth, whoopData } from "./whoop.js";
-import { connectionEnvironment, saveConnectionSecret } from "./connection-secrets.js";
+import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders } from "./connection-secrets.js";
 import { resolveFood, calculateAmount } from './food-sources.js';
 import {foodReferenceDataset} from './food-reference.js';
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
@@ -25,31 +24,75 @@ import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
 import legacyHealthApi from "./index.js";
+import { handleGoogleLogin } from "./google-login.js";
+import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout } from "./dashboard-auth.js";
+import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
+const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/app/api/food/reference-data','/mcp/health']);
+
+// Runs fn once per active user (with that user's env and credentials), for
+// cron jobs and GitHub automations that act on everyone's data.
+async function forEachUser(env, providers, fn) {
+  const results = [];
+  for (const user of await usersWithProviders(env.DB, env, providers)) {
+    try {
+      const scoped = await connectionEnvironment(userEnv(env, user));
+      if (providers.some(p => (scoped.CONNECTED_PROVIDERS || []).includes(p))) results.push({ userId: user.id, result: await fn(scoped, user) });
+    } catch (error) {
+      console.error("Per-user job failed", user.id, error.message);
+      results.push({ userId: user.id, error: error.message });
+    }
+  }
+  return results;
+}
+
 export default {
   async scheduled(controller, env, ctx) {
-    env = await connectionEnvironment(env);
-    return app.scheduled(controller, env, ctx);
+    await ensureTenancy(env.DB, env);
+    await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     // Public, licensed reference subset only. This never exports personal foods or journals.
     if(url.pathname==='/app/api/food/reference-data'&&request.method==='GET')return Response.json(foodReferenceDataset,{headers:{'Cache-Control':'public, max-age=3600','Content-Disposition':'attachment; filename="food-reference-cs.json"'}});
-    // Static assets stay independent of provider storage availability.
-    if (!['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg'].includes(url.pathname)) env = await connectionEnvironment(env);
+    // Static pages stay independent of storage availability.
+    if (STATIC_PATHS.has(url.pathname) && request.method === 'GET') return staticRoute(url);
+    try { await ensureTenancy(env.DB, env, { request }); }
+    catch (error) {
+      if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
+      throw error;
+    }
+    const rawEnv = env;
+    // Deny by default: only allowlisted routes are reachable without a session or API key.
+    const principal = await resolvePrincipal(request, env);
+    const isPublic = isPublicPath(url.pathname);
+    if (!isPublic && !principal) return unauthorizedResponse();
+    let user = null;
+    if (principal?.kind === "user") {
+      user = await findUser(env.DB, principal.userId, env);
+      if (!user && !isPublic) return unauthorizedResponse();
+    } else if (principal?.kind === "owner" || principal?.kind === "system" || url.pathname === "/mcp") {
+      // The shared API key (MCP, API clients) and GitHub automations act as the owner.
+      user = await ownerUser(env.DB, env);
+    }
+    if (user) env = await connectionEnvironment(userEnv(rawEnv, user));
+    else env = { ...rawEnv, DB: null, RAW_DB: rawEnv.DB };
+    const signedIn = principal?.kind === "user" && Boolean(user);
+
     // Legacy Google Health endpoints live in index.js. The deployed Worker
     // uses entrypoint.js, so expose these routes explicitly instead of letting
     // them fall through to the dashboard gateway.
+    if (url.pathname === "/sync/intervals" && principal?.kind === "system") {
+      return Response.json({status:"ok",users:await forEachUser(rawEnv,["intervals"],scoped=>legacyHealthApi.fetch(request.clone(),scoped,ctx).then(r=>r.json().catch(()=>({status:r.status}))))});
+    }
     if (url.pathname === "/sync/google" || url.pathname === "/sync/google/status" || url.pathname === "/health/sleep" || url.pathname === "/health/db") {
       return legacyHealthApi.fetch(request, env, ctx);
     }
-    if (url.pathname === "/mcp/health" && request.method === "GET") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
-    if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, env);
-    if (url.pathname === "/automation/planned-calories-cleanup") return handlePlannedCaloriesCleanup(request, env);
+    if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, rawEnv);
     const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcpCompat(request, env);
@@ -57,84 +100,37 @@ export default {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
       return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     }
-    if (url.pathname.startsWith('/oauth/whoop')) return whoopOAuth(request, env, await verifyDashboardSession(request, env.STRENGTH_API_KEY));
-    if (url.pathname.startsWith('/oauth/google') && !(await verifyDashboardSession(request, env.STRENGTH_API_KEY))) return new Response('Připojení vyžaduje přihlášení do dashboardu.',{status:401});
+    if (url.pathname.startsWith('/oauth/google') && !signedIn) return new Response('Připojení vyžaduje přihlášení do dashboardu.',{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) return googleOAuth;
-    if (url.pathname === "/app" && request.method === "GET") return dashboardPage();
-    if (url.pathname === "/app/dashboard-client.js" && request.method === "GET") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-store" } });
-    if (url.pathname === "/app/login" && request.method === "POST") return handleDashboardLogin(request, env);
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
-    if (url.pathname.startsWith("/app/api/")) return handleDashboardApi(request, env, ctx, url);
-    if (url.pathname === "/" && request.method === "GET") return homepagePage();
-    if (url.pathname === "/privacy" && request.method === "GET") return privacyPage();
-    if (url.pathname === "/terms" && request.method === "GET") return policyPage("Terms of Use", `Health & Strength is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.`);
-    if (url.pathname === "/support" && request.method === "GET") return policyPage("Support", `Support for Health & Strength is provided through the project repository and its maintainer. Include the affected tool name, approximate time, and non-sensitive error message when reporting a problem. Never include API keys, OAuth refresh tokens, or other secrets in a support request.`);
-    if (url.pathname === "/logo.svg" && request.method === "GET") return logoResponse();
-    if (url.pathname === "/manifest.webmanifest" && request.method === "GET") return Response.json({name:"Petr Fitness Data",short_name:"Fitness Data",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
+    const googleLogin = await handleGoogleLogin(request, rawEnv, url.pathname);
+    if (googleLogin) return googleLogin;
+    if (url.pathname.startsWith("/app/api/")) {
+      if (!user) return unauthorizedResponse();
+      return handleDashboardApi(request, env, ctx, url, { user, signedIn });
+    }
     if (url.pathname === "/openapi.json" && request.method === "GET") {
       const response = await fetch(OPENAPI_URL, { cf: { cacheTtl: 60 } });
       if (!response.ok) return new Response(JSON.stringify({ status: "error", message: "OpenAPI schema unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
       const text = await response.text();
       return new Response(text, { status: 200, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60" } });
     }
+    if (!user) return unauthorizedResponse();
     return app.fetch(request, env, ctx);
   }
 };
 
-async function handleDashboardLogin(request, env) {
-  const expected = String(env.STRENGTH_API_KEY || "");
-  if (!expected) return Response.json({status:"error",message:"Dashboard authentication is not configured."},{status:503});
-  const body = await request.json().catch(() => ({}));
-  const key = String(body?.key || "");
-  if (!key || key !== expected) return Response.json({status:"error",message:"Invalid dashboard access key."},{status:401});
-  const exp = Math.floor(Date.now()/1000) + 30*24*60*60;
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({exp})));
-  const signature = await dashboardHmac(payload, expected);
-  const cookie = "pfd_session="+payload+"."+signature+"; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax";
-  return Response.json({status:"ok",expiresAt:new Date(exp*1000).toISOString()},{headers:{"Set-Cookie":cookie,"Cache-Control":"no-store"}});
-}
-async function handleDashboardLogout() {
-  return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":"pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax","Cache-Control":"no-store"}});
-}
-async function verifyDashboardSession(request, secret) {
-  if (!secret) return false;
-  const cookieHeader = request.headers.get("Cookie") || "";
-  const match = cookieHeader.split(";").map(x=>x.trim()).find(x=>x.startsWith("pfd_session="));
-  if (!match) return false;
-  const token = match.slice("pfd_session=".length);
-  const dot = token.lastIndexOf(".");
-  if (dot <= 0) return false;
-  const payload = token.slice(0,dot), sig = token.slice(dot+1);
-  const expected = await dashboardHmac(payload, secret);
-  if (!timingSafeEqualString(sig, expected)) return false;
-  try {
-    const data = JSON.parse(new TextDecoder().decode(fromBase64url(payload)));
-    return Number(data?.exp) > Math.floor(Date.now()/1000);
-  } catch { return false; }
-}
-async function newDashboardSessionCookie(secret) {
-  const exp = Math.floor(Date.now()/1000) + 30*24*60*60;
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({exp})));
-  const signature = await dashboardHmac(payload, secret);
-  return "pfd_session="+payload+"."+signature+"; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax";
-}
-async function dashboardHmac(value, secret) {
-  const key = await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
-  const sig = await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value));
-  return base64url(new Uint8Array(sig));
-}
-function timingSafeEqualString(a,b) {
-  if (a.length !== b.length) return false;
-  let x=0; for(let i=0;i<a.length;i++) x |= a.charCodeAt(i)^b.charCodeAt(i); return x===0;
-}
-function base64url(bytes) {
-  let s=""; for(const b of bytes) s+=String.fromCharCode(b);
-  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-}
-function fromBase64url(s) {
-  s=s.replace(/-/g,"+").replace(/_/g,"/"); while(s.length%4)s+="=";
-  const bin=atob(s); return Uint8Array.from(bin,c=>c.charCodeAt(0));
+function staticRoute(url) {
+  if (url.pathname === "/mcp/health") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
+  if (url.pathname === "/app") return dashboardPage();
+  if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-store" } });
+  if (url.pathname === "/") return homepagePage();
+  if (url.pathname === "/privacy") return privacyPage();
+  if (url.pathname === "/terms") return policyPage("Terms of Use", `Health & Strength is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.`);
+  if (url.pathname === "/support") return policyPage("Support", `Support for Health & Strength is provided through the project repository and its maintainer. Include the affected tool name, approximate time, and non-sensitive error message when reporting a problem. Never include API keys, OAuth refresh tokens, or other secrets in a support request.`);
+  if (url.pathname === "/logo.svg") return logoResponse();
+  return Response.json({name:"Petr Fitness Data",short_name:"Fitness Data",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
 }
 
 function pragueToday() {
@@ -145,6 +141,7 @@ function pragueToday() {
 async function ensureCoachInboxTable(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS coach_inbox (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
     channel TEXT NOT NULL,
     message TEXT NOT NULL,
     draft_json TEXT NOT NULL,
@@ -152,7 +149,7 @@ async function ensureCoachInboxTable(db) {
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     confirmed_at TEXT
   )`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_coach_inbox_created ON coach_inbox(created_at DESC)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_coach_inbox_user_0 ON coach_inbox(user_id, created_at DESC)`).run();
 }
 
 function coachChannel(value, message) {
@@ -170,6 +167,7 @@ async function createCoachDraft(env, ctx, internalAuth, body) {
   const channel=coachChannel(body?.channel,message), date=String(body?.date||pragueToday()).slice(0,10);
   let reply="", action={type:"advice",date};
   if(channel==="gym") {
+    if(!env.USER_IS_OWNER) throw new Error("Generování silového plánu bude pro další uživatele dostupné po přechodu plánů do databáze.");
     const r=await app.fetch(new Request("https://internal/strength/generate-plan",{method:"POST",headers:{...internalAuth,"Content-Type":"application/json"},body:JSON.stringify({date,preview:true})}),env,ctx);
     const d=await r.json().catch(()=>({}));
     if(!r.ok||d.status!=="ok") throw new Error(d.message||"Gym plán se nepodařilo připravit.");
@@ -188,7 +186,7 @@ async function createCoachDraft(env, ctx, internalAuth, body) {
     reply=channel==="cycling"?"Cyklistický trenér bere kolo jako hlavní prioritu. Pro přesný návrh napiš délku, typ jízdy a zda chceš plán nebo kontrolu existující jednotky.":"Připravil jsem doporučení.";
   }
   const draft={channel,message,date,reply,action};
-  const ins=await env.DB.prepare("INSERT INTO coach_inbox(channel,message,draft_json) VALUES(?,?,?)").bind(channel,message,JSON.stringify(draft)).run();
+  const ins=await env.DB.prepare("INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)").bind(env.USER_ID,channel,message,JSON.stringify(draft)).run();
   return {status:"ok",draftId:ins.meta?.last_row_id,draft};
 }
 
@@ -196,13 +194,13 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
   try {
     await ensureCoachInboxTable(env.DB);
     if(request.method==="GET") {
-      const rows=await env.DB.prepare("SELECT id,channel,message,draft_json,status,created_at,confirmed_at FROM coach_inbox ORDER BY id DESC LIMIT 30").all();
+      const rows=await env.DB.prepare("SELECT id,channel,message,draft_json,status,created_at,confirmed_at FROM coach_inbox WHERE user_id=? ORDER BY id DESC LIMIT 30").bind(env.USER_ID).all();
       return Response.json({status:"ok",items:(rows.results||[]).map(r=>({...r,draft:JSON.parse(r.draft_json||"{}")}))},{headers:{"Cache-Control":"no-store"}});
     }
     const body=await request.json().catch(()=>({}));
     if(body?.action!=="confirm") return Response.json(await createCoachDraft(env,ctx,internalAuth,body),{headers:{"Cache-Control":"no-store"}});
     const id=Number(body?.draftId); if(!id) return Response.json({status:"error",message:"Chybí návrh k potvrzení."},{status:400});
-    const row=await env.DB.prepare("SELECT * FROM coach_inbox WHERE id=?").bind(id).first();
+    const row=await env.DB.prepare("SELECT * FROM coach_inbox WHERE id=? AND user_id=?").bind(id,env.USER_ID).first();
     if(!row) return Response.json({status:"error",message:"Návrh už neexistuje."},{status:404});
     if(row.status==="confirmed") return Response.json({status:"ok",message:"Tento návrh už je potvrzený."});
     const draft=JSON.parse(row.draft_json||"{}"); let result={status:"ok"};
@@ -211,23 +209,33 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
       result=await r.json().catch(()=>({status:"error",message:"Neplatná odpověď Gymu"})); if(!r.ok||result.status!=="ok") throw new Error(result.message||"Gym plán se nepodařilo uložit.");
     }
     if(draft.action?.type==="food_log") result=await logFood(env.DB,{date:draft.date,page:draft.action.page,name:draft.action.name,source:"cookbook",note:"Zapsáno ze schránky trenérů"});
-    await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE id=?").bind(id).run();
+    await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=?").bind(id,env.USER_ID).run();
     return Response.json({status:"ok",message:draft.action?.type==="food_log"?"Jídlo je zapsané ve výživě.":draft.action?.type==="gym_generate"?"Gym plán je uložený a odeslaný do tréninku.":"Doporučení potvrzeno.",result},{headers:{"Cache-Control":"no-store"}});
   } catch(error) { return Response.json({status:"error",message:error.message},{status:500}); }
 }
 
-async function handleDashboardApi(request, env, ctx, url) {
+// Available before the required providers are connected.
+const SETUP_API_PATHS = new Set(["/app/api/me", "/app/api/connections", "/app/api/profile", "/app/api/gym/exercises"]);
+
+async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
+  if (url.pathname === "/app/api/me" && request.method === "GET") {
+    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env)},{headers:{"Cache-Control":"no-store"}});
+  }
+  if (url.pathname.startsWith("/app/api/admin/")) return handleAdminApi(request, env, url, session);
+  if (!SETUP_API_PATHS.has(url.pathname) && missingProviders(env).length) {
+    return Response.json({status:"onboarding",message:"Nejdřív připoj Google Health a Intervals.icu.",missingProviders:missingProviders(env)},{status:409,headers:{"Cache-Control":"no-store"}});
+  }
   if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (id INTEGER PRIMARY KEY,profile_json TEXT NOT NULL)").run();if(request.method==='POST'){const p=await request.json(),profile={sex:['male','female'].includes(p.sex)?p.sex:'',age:Number(p.age)||null,height:Number(p.height)||null,hrmax:Number(p.hrmax)||null,rhr:Number(p.rhr)||null};await env.DB.prepare('INSERT INTO dashboard_profile(id,profile_json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET profile_json=excluded.profile_json').bind(JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const p=await request.json(),profile={sex:['male','female'].includes(p.sex)?p.sex:'',age:Number(p.age)||null,height:Number(p.height)||null,hrmax:Number(p.hrmax)||null,rhr:Number(p.rhr)||null};await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
   if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
     const date=url.searchParams.get('date')||pragueToday();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
     return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
   }
   if(url.pathname==='/app/api/assistant'&&request.method==='POST'){
-    if(!(await verifyDashboardSession(request,env.STRENGTH_API_KEY)))return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena. Nastav serverový secret OPENAI_API_KEY; předplatné ChatGPT není API klíč.'},{status:503});
     const body=await request.json().catch(()=>({})),message=String(body.message||'').trim();
     if(!message||message.length>4000)return Response.json({message:'Zadej požadavek do 4000 znaků.'},{status:400});
@@ -276,26 +284,27 @@ async function handleDashboardApi(request, env, ctx, url) {
   if (url.pathname === "/app/api/connections" && request.method === "GET") {
     return Response.json(await connectionStatus(env), {headers:{"Cache-Control":"no-store"}});
   }
-  if (url.pathname === '/app/api/connections' && request.method === 'POST') {
-    if (!(await verifyDashboardSession(request, env.STRENGTH_API_KEY))) return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+  if (url.pathname === '/app/api/connections' && (request.method === 'POST' || request.method === 'DELETE')) {
+    if (!session.signedIn) return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:'Neplatný původ požadavku.'},{status:403});
     const body=await request.json().catch(()=>({}));
-    if(body.provider!=='intervals'||typeof body.key!=='string'||body.key.length<8||body.key.length>512) return Response.json({message:'Zadej platný API klíč Intervals.icu.'},{status:400});
-    const check=await fetch('https://intervals.icu/api/v1/athlete/0',{headers:{Authorization:'Basic '+btoa('API_KEY:'+body.key),Accept:'application/json'}});
+    if (request.method === 'DELETE') {
+      if(!['google','intervals'].includes(body.provider)) return Response.json({message:'Neznámé připojení.'},{status:400});
+      await deleteConnectionSecret(env,body.provider);
+      return Response.json({status:'ok',message:'Připojení je odebrané.'},{headers:{'Cache-Control':'no-store'}});
+    }
+    if(body.provider!=='intervals'||typeof body.key!=='string'||body.key.trim().length<8||body.key.length>512) return Response.json({message:'Zadej platný API klíč Intervals.icu.'},{status:400});
+    const apiKey=body.key.trim();
+    const check=await fetch('https://intervals.icu/api/v1/athlete/0',{headers:{Authorization:'Basic '+btoa('API_KEY:'+apiKey),Accept:'application/json'}});
     if(!check.ok) return Response.json({message:'Intervals klíč nepřijal. Zkontroluj klíč v nastavení Intervals.'},{status:400});
-    await saveConnectionSecret(env,'intervals',body.key);
-    return Response.json({status:'ok',message:'Intervals.icu je připojené.'},{headers:{'Cache-Control':'no-store'}});
+    const athlete=await check.json().catch(()=>({}));
+    await saveConnectionSecret(env,'intervals',apiKey);
+    return Response.json({status:'ok',athleteId:athlete.id||null,message:'Intervals.icu je připojené'+(athlete.name?' ('+athlete.name+')':'')+'.'},{headers:{'Cache-Control':'no-store'}});
   }
-  if (url.pathname === '/app/api/whoop' && request.method === 'GET') {
-    if (!(await verifyDashboardSession(request, env.STRENGTH_API_KEY))) return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
-    try { return Response.json(await whoopData(env),{headers:{'Cache-Control':'no-store'}}); }
-    catch { return Response.json({message:'WHOOP nelze načíst. Zkontroluj připojení v Nastavení.'},{status:502}); }
-  }
-
   if(url.pathname==='/app/api/activity-detail'&&request.method==='GET'){
     const id=url.searchParams.get('id');
     if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:'Neplatná aktivita.'},{status:400});
-    const known=await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind('activity:'+id).first();
+    const known=await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind(env.USER_ID,'activity:'+id).first();
     if(!known)return Response.json({message:'Aktivita není v tvé synchronizované historii.'},{status:404});
     return activityDetail(request,env,id,true);
   }
@@ -428,7 +437,8 @@ async function handleDashboardApi(request, env, ctx, url) {
     if (request.method === "GET") {
       let data={status:"ok",values:[],videoLinks:{}};
       let responseStatus=200;
-      try {
+      // Until the strength plan moves to D1 only the owner's plan lives in Google Sheets.
+      if (env.USER_IS_OWNER) try {
         const internal = new URL("/strength/sheet/today", request.url);
         const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
         data = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
@@ -438,8 +448,8 @@ async function handleDashboardApi(request, env, ctx, url) {
         data={status:"partial",values:[],videoLinks:{},message:"Dnešní plán ze Sheets není dostupný."};
       }
       try {
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (workout_date TEXT PRIMARY KEY, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
-        const saved=await env.DB.prepare(`SELECT values_json FROM gym_plans WHERE workout_date=?`).bind(pragueToday()).first();
+        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))`).run();
+        const saved=await env.DB.prepare(`SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?`).bind(env.USER_ID,pragueToday()).first();
         if(saved?.values_json) data.values=JSON.parse(saved.values_json);
       } catch(error) { console.error("Gym plan read failed",error); }
       let history=[];
@@ -450,12 +460,12 @@ async function handleDashboardApi(request, env, ctx, url) {
       try {
       const body = await request.json().catch(() => ({}));
       const date = body?.date || pragueToday();
-      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (workout_date TEXT PRIMARY KEY, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`).run();
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))`).run();
 
       if (body?.action === "plan") {
         const values = Array.isArray(body?.values) ? body.values : null;
         if (!values) return Response.json({status:"error",message:"values must be a 2D array"},{status:400});
-        await env.DB.prepare(`INSERT INTO gym_plans(workout_date,values_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(date,JSON.stringify(values)).run();
+        await env.DB.prepare(`INSERT INTO gym_plans(user_id,workout_date,values_json,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(env.USER_ID,date,JSON.stringify(values)).run();
         return Response.json({status:"ok",storage:"d1",message:"Plán uložen."},{headers:{"Cache-Control":"no-store"}});
       }
 
@@ -471,7 +481,7 @@ async function handleDashboardApi(request, env, ctx, url) {
       // Keep the editable workout snapshot together with the completed-set
       // history.  The UI can then be safely reloaded after every autosave.
       const storedValues = Array.isArray(body?.fullValues) ? body.fullValues : values;
-      await env.DB.prepare(`INSERT INTO gym_plans(workout_date,values_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(date,JSON.stringify(storedValues)).run();
+      await env.DB.prepare(`INSERT INTO gym_plans(user_id,workout_date,values_json,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(env.USER_ID,date,JSON.stringify(storedValues)).run();
       const history=await getStrengthHistory(env.DB,500);
       return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,sheetSaved:false,message:sets.length?"Workout uložen do interní databáze.":"Změny plánu jsou uložené; dokončené série označ Hotovo."},{headers:{"Cache-Control":"no-store"}});
       } catch(error) {
@@ -483,6 +493,7 @@ async function handleDashboardApi(request, env, ctx, url) {
   }
 
   if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
+    if (!env.USER_IS_OWNER) return Response.json({status:"error",message:"Generování silového plánu bude pro další uživatele dostupné po přechodu plánů do databáze."},{status:409});
     const body = await request.json().catch(() => ({}));
     const internal = new URL("/strength/generate-plan", request.url);
     const response = await app.fetch(new Request(internal,{
@@ -538,10 +549,25 @@ async function handleDashboardApi(request, env, ctx, url) {
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
   const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
-  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE id=1').first(),health=await googleDashboard(env.DB,date),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
+  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first(),health=await googleDashboard(env.DB,date),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });
+}
+
+async function handleAdminApi(request, env, url, session) {
+  const user = session.user;
+  if (!session.signedIn || !user?.isAdmin) return Response.json({status:"error",message:"Jen pro správce."},{status:403});
+  if (request.method !== "GET" && request.headers.get("Origin") !== url.origin) return Response.json({message:"Neplatný původ požadavku."},{status:403});
+  const db = env.RAW_DB;
+  try {
+    if (url.pathname === "/app/api/admin/users" && request.method === "GET") return Response.json({status:"ok",...await listUsersAndInvites(db)},{headers:{"Cache-Control":"no-store"}});
+    const body = await request.json().catch(() => ({}));
+    if (url.pathname === "/app/api/admin/invites" && request.method === "POST") return Response.json({status:"ok",email:await inviteUser(db, body.email, user.id),message:"Pozvánka je uložená. Uživatel se může přihlásit přes Google."});
+    if (url.pathname === "/app/api/admin/invites" && request.method === "DELETE") { await removeInvite(db, body.email); return Response.json({status:"ok",message:"Pozvánka je zrušená."}); }
+    if (url.pathname === "/app/api/admin/users" && request.method === "POST") { await setUserDisabled(db, env, body.id, body.disabled === true); return Response.json({status:"ok",message:body.disabled===true?"Přístup je zablokovaný.":"Přístup je obnovený."}); }
+  } catch (error) { return Response.json({status:"error",message:error.message},{status:400}); }
+  return Response.json({status:"error",message:"Not found"},{status:404});
 }
 
 async function handleStrengthAutomation(request, env, ctx) {
@@ -634,22 +660,26 @@ function logoResponse() {
 }
 
 
-async function handleNutritionNotesAutomation(request, env) {
+// Keeps each user's daily nutrition NOTE events in Intervals.icu up to date.
+async function handleNutritionNotesAutomation(request, rawEnv) {
   if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
   try {
     await verifyGitHubActionsToken(request);
     const body=await request.json().catch(()=>({}));
     const today=new Date(), oldest=String(body?.oldest||today.toISOString().slice(0,10)), newest=String(body?.newest||new Date(today.getTime()+14*86400000).toISOString().slice(0,10));
-    if (String(body?.action || "").toLowerCase() === "delete") {
-      return Response.json(await deleteDailyNutritionNotes(env,{oldest,newest}));
-    }
-    let weightKg=Number(body?.weightKg);
-    if(!Number.isFinite(weightKg)){
-      const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).first();
-      weightKg=Number(row?.value_numeric);
-    }
-    if(!Number.isFinite(weightKg)||weightKg<=0) weightKg=88;
-    return Response.json(await syncDailyNutritionNotes(env,{oldest,newest,weightKg}));
+    const remove=String(body?.action || "").toLowerCase() === "delete";
+    const users=await forEachUser(rawEnv,["intervals"],async env=>{
+      if (remove) return deleteDailyNutritionNotes(env,{oldest,newest});
+      let weightKg=Number(body?.weightKg);
+      if(!Number.isFinite(weightKg)){
+        const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE user_id=? AND LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).bind(env.USER_ID).first();
+        weightKg=Number(row?.value_numeric);
+      }
+      if(!Number.isFinite(weightKg)||weightKg<=0) weightKg=88;
+      return syncDailyNutritionNotes(env,{oldest,newest,weightKg});
+    });
+    const failed=users.filter(u=>u.error);
+    return Response.json({status:failed.length&&failed.length===users.length?"error":"ok",users},{status:failed.length&&failed.length===users.length?500:200});
   } catch(error){ return Response.json({status:"error",step:"nutrition_notes",message:error.message},{status:500}); }
 }
 

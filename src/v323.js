@@ -85,21 +85,21 @@ async function loadTrainingContext(env, date) {
   const plannedRows = await env.DB.prepare(`
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
-    WHERE source_family = 'intervals'
+    WHERE user_id = ? AND source_family = 'intervals'
       AND data_type = 'planned-workout'
       AND start_time LIKE ?
     ORDER BY start_time
-  `).bind(date + "%").all();
+  `).bind(env.USER_ID, date + "%").all();
 
   const activityRows = await env.DB.prepare(`
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
-    WHERE source_family = 'intervals'
+    WHERE user_id = ? AND source_family = 'intervals'
       AND data_type = 'activity'
       AND start_time LIKE ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(date + "%").all();
+  `).bind(env.USER_ID, date + "%").all();
 
   const actual = (activityRows.results || []).map(activityInfo);
   const completedIds = new Set(actual.flatMap(a => a.pairedIds));
@@ -222,9 +222,9 @@ async function foodRecommendV323(env, url) {
 
   const weightRow = await env.DB.prepare(`
     SELECT value_numeric FROM health_datapoints
-    WHERE data_type = 'weight' AND value_numeric IS NOT NULL
+    WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
     ORDER BY sample_time DESC, id DESC LIMIT 1
-  `).first();
+  `).bind(env.USER_ID).first();
   const currentWeight = weightRow ? Number(weightRow.value_numeric) : null;
   const targets = macroTargets(currentWeight, calorieTarget, context);
   const calorieDelta = calorieTarget - Number(food.totals?.kcal || 0);
