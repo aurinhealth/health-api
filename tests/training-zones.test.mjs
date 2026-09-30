@@ -21,12 +21,16 @@ test("FTP methods", () => {
 test("power zone models and custom bounds", () => {
   const coggan = powerZones({}, 300);
   assert.equal(coggan.length, 7);
-  assert.deepEqual([coggan[1].percentLow, coggan[1].percentHigh, coggan[1].wattsLow, coggan[1].wattsHigh], [56, 75, 168, 225]);
+  assert.deepEqual([coggan[1].percentLow, coggan[1].percentHigh, coggan[1].wattsLow, coggan[1].wattsHigh], [56, 75, 166, 225]);
   assert.equal(coggan[6].percentHigh, null);
   assert.equal(powerZones({ powerZoneModel: "seiler3" }, 300).length, 3);
   const custom = powerZones(sanitizeTrainingProfile({ powerZoneModel: "custom", powerZoneBounds: [60, 80, 100] }), 250);
   assert.deepEqual(custom.map(z => z.percentHigh), [60, 80, 100, null]);
   assert.equal(zoneForPercent(coggan, 98).name, "Z4 Práh");
+  // Bounds typed in watts are stored as fractional % and come back as the same watts.
+  const watts = powerZones(sanitizeTrainingProfile({ powerZoneModel: "custom", powerZoneBounds: [140 / 2.5, 191 / 2.5, 226 / 2.5] }), 250);
+  assert.deepEqual(watts.map(z => [z.wattsLow, z.wattsHigh]), [[0, 140], [141, 191], [192, 226], [227, null]]);
+  assert.equal(zoneForPercent(watts, 76.5).zone, 3);
   assert.throws(() => sanitizeTrainingProfile({ powerZoneModel: "custom", powerZoneBounds: [80, 60] }), /rostoucí/);
 });
 

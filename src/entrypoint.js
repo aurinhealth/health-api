@@ -23,11 +23,11 @@ import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
-import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted } from "./workout-library.js";
+import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { saveTrainingProfile } from "./training-profile.js";
-import { estimateFtp, FTP_METHODS, POWER_ZONE_MODELS, HR_ZONE_MODELS, powerZones, hrZones } from "./training-zones.js";
+import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, PACE_ZONE_MODELS, HR_ZONE_MODELS, powerZones, hrZones } from "./training-zones.js";
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
 import legacyHealthApi from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
@@ -282,12 +282,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/training-profile'||url.pathname==='/app/api/training-profile/estimate'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     try{
-      if(request.method==='POST'&&url.pathname.endsWith('/estimate')){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...estimateFtp(String(body.method||''),body.inputs||{})});}
+      if(request.method==='POST'&&url.pathname.endsWith('/estimate')){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...(body.kind==='pace'?estimateThresholdPace(String(body.method||''),body.inputs||{}):estimateFtp(String(body.method||''),body.inputs||{}))});}
       if(request.method==='POST'){await saveTrainingProfile(env.DB,await request.json().catch(()=>({})));}
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const t=await athleteThresholds(env);
-      return Response.json({status:'ok',profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr},powerZones:t.powerZones,hrZones:t.hrZones,
+      return Response.json({status:'ok',profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr},powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
         ftpMethods:Object.entries(FTP_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
+        paceMethods:Object.entries(PACE_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
+        paceZoneModels:Object.entries(PACE_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds})),
         powerZoneModels:Object.entries(POWER_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds})),hrZoneModels:Object.entries(HR_ZONE_MODELS).map(([id,m])=>({id,label:m.label,reference:m.reference}))},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
@@ -645,19 +647,22 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
       await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);
       const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
-      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport)});
+      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport),sport});
       const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
       const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,parseWorkoutSearchFilters(url.searchParams),context),athleteThresholds(env)]);
-      return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:thresholds.indoorFtp,source:thresholds.source},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:'Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.'},{headers:{'Cache-Control':'no-store'}});
+      // Step rows with watts or paces for each card.
+      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:w.environment==='indoor'&&thresholds.indoorFtp?thresholds.indoorFtp:thresholds.ftp,zones:thresholds.powerZones});}
+      return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:thresholds.indoorFtp,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?'Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.':'Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.'},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/generate'&&request.method==='POST'){
       const body=await request.json().catch(()=>({}));
       const date=validDate(body.date)?body.date:pragueToday();
       if(date<pragueToday())return Response.json({status:'error',message:'Vyber dnešní nebo budoucí datum.'},{status:400});
       const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))&&Number(body.availabilityMinutes)>0?Number(body.availabilityMinutes):null;
-      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,'ride'),goal:body.phase?{phase:String(body.phase)}:null});
+      const genSport=body.sport==='run'?'run':'ride';
+      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal:body.phase?{phase:String(body.phase)}:null,sport:genSport});
       const thresholds=await athleteThresholds(env);
-      return Response.json(await generateWorkout(env.DB,{sport:'ride',environment:body.environment,date,coach,availabilityMinutes,variant:body.variant,thresholds}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(await generateWorkout(env.DB,{sport:genSport,environment:body.environment,date,coach,availabilityMinutes,variant:body.variant,thresholds}),{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST')return Response.json(await recordWorkoutFeedback(env.DB,await request.json()),{headers:{'Cache-Control':'no-store'}});
     if(url.pathname==='/app/api/workouts/schedule'&&request.method==='POST'){

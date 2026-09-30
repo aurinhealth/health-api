@@ -4,12 +4,13 @@
 // Every query on personal tables filters by db.userId (see tenancy.js).
 import { renderForEnvironment, n, clamp } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
+import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
 
 export const SYSTEMS = ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"];
 const HARD_SYSTEMS = new Set(["sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"]);
-export { CYCLING_WORKOUTS, stepRows };
-const BUILT_IN = { ride: CYCLING_WORKOUTS };
+export { CYCLING_WORKOUTS, RUNNING_WORKOUTS, stepRows };
+const BUILT_IN = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS };
 const BUILT_IN_BY_ID = new Map(Object.values(BUILT_IN).flat().map(w => [w.id, w]));
 const now = () => new Date().toISOString();
 const sportOf = value => value === "run" ? "run" : "ride";
@@ -130,9 +131,12 @@ export async function searchWorkoutLibrary(db, filters = {}, context = {}) {
 // right challenge for the day; the library picks the best match. `variant`
 // walks through the top candidates for a different but equally fitting option.
 export async function generateWorkout(db, { sport = "ride", environment = "indoor", date, coach = {}, availabilityMinutes = null, variant = 0, thresholds = {} } = {}) {
+  sport = sportOf(sport);
   const rec = coach.recommendation?.session || {};
-  const kind = rec.kind === "long_endurance" ? "endurance" : rec.kind === "vo2" ? "vo2max" : rec.kind || "endurance";
-  const minutes = clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
+  let kind = rec.kind === "long_endurance" ? "endurance" : rec.kind === "vo2" ? "vo2max" : rec.kind || "endurance";
+  // Running has no sweet-spot band; the nearest is sub-threshold work.
+  if (sport === "run" && kind === "sweet_spot") kind = "threshold";
+  const minutes = sport === "run" ? clamp(n(availabilityMinutes, n(rec.durationMinutes, 60)), 20, 240) : clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
   const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, phase: coach.constraints?.phase === "auto" ? "" : coach.constraints?.phase, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
   let result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 15, limit: 12 }, context);
   if (!result.workouts.length) result = await searchWorkoutLibrary(db, { sport, environment, system: kind, durationMinutes: minutes, durationTolerance: 45, limit: 12 }, context);
@@ -147,7 +151,7 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
     status: "ok", sport, environment, date, system: kind, durationMinutes: minutes,
     readiness: coach.readiness || null, progression: coach.recommendation?.progression || null, adaptations: coach.recommendation?.adaptations || [],
     workout: pick, alternatives: pool.filter(w => w.id !== pick.id).slice(0, 3), variantCount: pool.length,
-    explanation: explainWorkout(pick, { coach, environment: pick.environment || environment, thresholds, planned })
+    explanation: explainWorkout(pick, { coach, environment: pick.environment || environment, thresholds, planned, sport })
   };
 }
 

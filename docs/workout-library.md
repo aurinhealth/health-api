@@ -1,6 +1,6 @@
 # Adaptive Workout Library
 
-Every user has their own capability levels, feedback and Intervals.icu schedule. The workout catalog is shared.
+Every user has their own capability levels, feedback and Intervals.icu schedule. The workout catalog is shared. The library covers cycling and running.
 
 ## User flow
 
@@ -58,6 +58,55 @@ Difficulty (1–10) is computed from the structure (`difficultyFromStructure` in
 - intensity relative to the band
 - work:rest density
 - quality done late in a long ride
+
+## Running
+
+Switch **Kolo / Běh** at the top of **Workouty**. The generator, the library, capability levels and feedback are then all for running (`sport = run`). The choice is remembered in the browser.
+
+### Intensity and thresholds
+- Running intensity is **% of threshold speed**, the `% Pace` target of Intervals.icu: 100 % = threshold pace, 90 % = slower, 110 % = faster.
+- Threshold pace priority:
+  1. the value set in **Nastavení → FTP a zóny → Běh**
+  2. the Run sport settings in Intervals.icu (`threshold_pace`, stored as m/s)
+- It can be calculated from:
+  - a 30 min test (average pace of the last 20 min, Friel)
+  - a 5 km, 10 km or half-marathon race, or any distance and time (Riegel: the pace you could hold for 60 min)
+- Pace zone models:
+  - Friel 7 zones (the Intervals.icu default)
+  - Daniels E/M/T/I/R
+  - 5 zones
+  - custom bounds, entered in % or as m:ss /km
+- Running LTHR gives the Friel running HR zones; easy runs show a heart-rate cap.
+- Load uses average speed relative to threshold (rTSS-like), not the 4th-power mean used for power.
+
+### Catalog (`src/running-workouts.js`, 229 workouts)
+| System | Families |
+|---|---|
+| Recovery | recovery jog |
+| Endurance | easy, easy + strides, long, long with fast finish, long with marathon-pace blocks, progression |
+| Tempo | tempo run, marathon-pace blocks |
+| Threshold | cruise intervals, sub-threshold (Norwegian principle), continuous threshold |
+| VO₂max | 3–5 min intervals, short 2–2.5 min, 30/30, fartlek pyramid, hills |
+| Anaerobic | 45 s – 90 s repetitions |
+| Sprint | 10 s hill sprints |
+
+- **Research:** Helgerud 4×4, Billat 30-30, Seiler 4×8, Daniels cruise intervals (all with citation).
+- **Public references:** Yasso 800s, Norwegian double threshold (morning and afternoon session).
+- There is no sweet-spot band for running; a sweet-spot decision maps to sub-threshold work.
+
+### Run coach
+`buildCyclingCoachV2({ sport: "run" })` uses the same readiness model, applied to runs:
+- **Runs** are detected by activity type (`Run`, `VirtualRun`, `TrailRun`); untyped entries are detected by name.
+- **Hard runs** are detected by name (tempo, intervals, hills, fartlek, race), by Intervals intensity ≥ 88 %, or by load density.
+- **Long run** from 90 min. Without a plan the default is 60 min.
+- **Planned runs** in Intervals.icu are read from their `% Pace` / `Z2 Pace` steps.
+
+### Treadmill / outdoor
+- **Treadmill** (`VirtualRun`): exact paces with 1 % incline. Hill sessions use 6–8 % incline for the efforts.
+- **Outdoor** (`Run`):
+  - pace ranges: ±2 % at threshold and above, ±3–4 % below
+  - hints to pick flat or hilly terrain
+  - easy runs are run by heart rate
 
 ## Indoor / outdoor
 

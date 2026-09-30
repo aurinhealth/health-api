@@ -64,7 +64,8 @@ test("the explanation lists why, how, fuelling and a step table in watts", () =>
 test("FTP comes from Intervals sport settings, indoor FTP included", async () => {
   const fetchImpl = async () => Response.json({ sportSettings: [{ types: ["Run"], threshold_pace: 3.9 }, { types: ["Ride", "VirtualRide"], ftp: 290, indoor_ftp: 275, lthr: 168 }] });
   const t = await athleteThresholds({ INTERVALS_API_KEY: "k" }, fetchImpl);
-  assert.deepEqual([t.ftp, t.indoorFtp, t.lthr, t.runThresholdPace, t.source], [290, 275, 168, 3.9, "intervals-settings"]);
+  assert.deepEqual([t.ftp, t.indoorFtp, t.lthr, t.runThresholdPace, t.source], [290, 275, 168, 256, "intervals-settings"]);
+  assert.equal(t.runPaceSource, "intervals-settings");
   assert.equal((await athleteThresholds({})).ftp, null);
 });
 

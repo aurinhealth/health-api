@@ -343,7 +343,21 @@ async function generateFocusedGym(){
 }
 window.addEventListener("error",e=>{try{toast("Chyba aplikace: "+(e.error?.message||e.message||"neznámá chyba"))}catch{}});
 window.addEventListener("unhandledrejection",e=>{try{toast("Chyba aplikace: "+(e.reason?.message||String(e.reason||"Promise rejected")))}catch{}});
-function capabilityLabel(system){return ({recovery:"Recovery",endurance:"Endurance",tempo:"Tempo",sweet_spot:"Sweet Spot",threshold:"Threshold",vo2max:"VO₂max",anaerobic:"Anaerobic",sprint:"Sprint"}[system]||system)}
+function workoutSport(){return state.workoutSport==='run'?'run':'ride'}
+function capabilityLabel(system,sport=workoutSport()){return (sport==='run'?{recovery:"Regenerace",endurance:"Lehký / dlouhý běh",tempo:"Tempo",threshold:"Práh",vo2max:"VO₂max",anaerobic:"Rychlost",sprint:"Sprinty do kopce"}:{recovery:"Recovery",endurance:"Endurance",tempo:"Tempo",sweet_spot:"Sweet Spot",threshold:"Threshold",vo2max:"VO₂max",anaerobic:"Anaerobic",sprint:"Sprint"})[system]||system}
+// Kolo / Běh switch: one sport for the generator and the library.
+function setWorkoutSport(sport){
+  state.workoutSport=sport==='run'?'run':'ride';const run=state.workoutSport==='run';
+  document.querySelectorAll('.sport-switch [data-sport]').forEach(b=>{const on=b.dataset.sport===state.workoutSport;b.classList.toggle('primary',on);b.setAttribute('aria-pressed',String(on))});
+  const eyebrow=$('workoutsEyebrow');if(eyebrow)eyebrow.textContent='Adaptive library · '+(run?'running':'cycling');
+  document.querySelectorAll('[data-env-select]').forEach(sel=>{sel.options[0].textContent=run?'Pás · indoor':'Indoor · trenažér';sel.options[1].textContent=run?'Venku · outdoor':'Outdoor · venku'});
+  document.querySelectorAll('#workoutSystem option').forEach(o=>{if(o.value)o.textContent=capabilityLabel(o.value);if(o.hasAttribute('data-ride-only')){o.hidden=run;if(run&&o.selected)$('workoutSystem').value=''}});
+  // Typical lengths differ: 60 min for a run, 90 min for a ride.
+  const duration=$('workoutDuration');if(duration&&run&&(duration.value==='90'||Number(duration.value)>150))duration.value='60';if(duration&&!run&&(duration.value==='60'||Number(duration.value)<45))duration.value='90';
+  $('generatedWorkout').innerHTML='';
+  const btn=$('generateWorkoutBtn');if(btn)btn.textContent=run?'Vygenerovat běh':'Vygenerovat trénink';
+  try{localStorage.setItem('pfdWorkoutSport',state.workoutSport)}catch{}
+}
 function workoutProfile(workout){
   let structure=[];try{structure=JSON.parse(workout.structure_json||'[]')}catch{}
   const steps=[];
@@ -354,16 +368,18 @@ function workoutProfile(workout){
   const bars=steps.map(step=>{
     const duration=Math.max(0,num(step.durationMinutes)),x=elapsed/total*1000,width=duration/total*1000;elapsed+=duration;
     const from=Math.max(0,Math.min(190,num(step.powerStart,step.power))),to=Math.max(0,Math.min(190,num(step.powerEnd,step.power)));
-    const color=Math.max(from,to)>=125?'#ed7393':Math.max(from,to)>=105?'#f3a65a':Math.max(from,to)>=85?'#e6c76b':Math.max(from,to)>=70?'#60c4ba':'#52a8c9';
+    // Running % of threshold pace mapped onto the cycling colour scale.
+    const scale=v=>workout.sport==='run'?50+(v-72)*1.78:v,hi=scale(Math.max(from,to));
+    const color=hi>=125?'#ed7393':hi>=105?'#f3a65a':hi>=85?'#e6c76b':hi>=70?'#60c4ba':'#52a8c9';
     const y1=76-from/190*64,y2=76-to/190*64;
     const shape=step.ramp?'<polygon points="'+x+',76 '+x+','+y1+' '+(x+width)+','+y2+' '+(x+width)+',76" fill="'+color+'"/>':'<rect x="'+x+'" y="'+y1+'" width="'+width+'" height="'+(76-y1)+'" fill="'+color+'"/>';
-    return '<g><title>'+fmt(duration,1)+' min · '+fmt(from)+'–'+fmt(to)+' % FTP</title>'+shape+'</g>';
+    return '<g><title>'+fmt(duration,1)+' min · '+fmt(from)+'–'+fmt(to)+(workout.sport==='run'?' % prahového tempa':' % FTP')+'</title>'+shape+'</g>';
   }).join('');
-  return '<div class="workout-profile"><div class="workout-profile-head"><span>Profil výkonu</span><strong>'+hm(total)+'</strong></div><svg role="img" aria-label="Profil cílového výkonu v čase" viewBox="0 0 1000 84" preserveAspectRatio="none"><path d="M0 42H1000 M0 76H1000" stroke="#40505f" stroke-width="1"/>'+bars+'</svg><div class="workout-profile-foot"><span>0 min</span><span>'+Math.round(total)+' min</span></div></div>';
+  return '<div class="workout-profile"><div class="workout-profile-head"><span>'+(workout.sport==='run'?'Profil tempa':'Profil výkonu')+'</span><strong>'+hm(total)+'</strong></div><svg role="img" aria-label="Profil cílového výkonu v čase" viewBox="0 0 1000 84" preserveAspectRatio="none"><path d="M0 42H1000 M0 76H1000" stroke="#40505f" stroke-width="1"/>'+bars+'</svg><div class="workout-profile-foot"><span>0 min</span><span>'+Math.round(total)+' min</span></div></div>';
 }
 function renderWorkoutCapabilities(capabilities={}){
   const el=$("workoutCapabilities");if(!el)return;
-  const order=["endurance","tempo","sweet_spot","threshold","vo2max","anaerobic","sprint","recovery"];
+  const order=workoutSport()==='run'?["endurance","tempo","threshold","vo2max","anaerobic","sprint","recovery"]:["endurance","tempo","sweet_spot","threshold","vo2max","anaerobic","sprint","recovery"];
   el.innerHTML=order.map(k=>{const x=capabilities[k]||{level:3,confidence:.2,attempts:0};return '<div class="capability-card"><span class="label">'+esc(capabilityLabel(k))+'</span><strong>'+fmt(x.level,2)+'</strong><div class="small">confidence '+Math.round(num(x.confidence,.2)*100)+'% · '+num(x.attempts)+' pokusů</div></div>'}).join("");
 }
 function renderWorkoutLibrary(result){
@@ -375,7 +391,7 @@ function renderWorkoutLibrary(result){
   el.innerHTML=rows.map((w,i)=>{
     const source=w.source_url?'<a href="'+esc(w.source_url)+'" target="_blank" rel="noopener">'+esc(w.source_name||w.source_kind)+'</a>':esc(w.source_name||w.source_kind||"Zdroj");
     const reason=(w.reasons||[]).slice(0,4).join(" · ");
-    return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div><div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span><span class="pill">capability '+fmt(w.capability_level,1)+'</span><span class="pill">'+esc(w.cadence||"kadence dle bloku")+'</span></div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+(()=>{let st=[];try{st=JSON.parse(w.structure_json||'[]')}catch{}const ftp=result.athlete?.[w.environment==='indoor'&&result.athlete?.indoorFtp?'indoorFtp':'ftp']||null;return stepTableHtml(stepRowsFromStructure(st,ftp,w.environment),ftp)})()+'</details><p>'+esc(w.description||"")+'</p><div class="reason">'+esc(reason||"Seřazeno podle cíle, capability a aktuálního kontextu.")+'</div><div class="workout-source">Zdroj: '+source+(w.attribution?' · '+esc(w.attribution):'')+'</div></div><div><details class="workout-details"><summary>Intervalový předpis</summary><div class="workout-structure">'+esc(w.intervals_description||"")+'</div></details><button class="btn primary schedule-workout" data-id="'+esc(w.id)+'" style="width:100%;margin-top:10px">Přidat na vybraný den</button></div></article>'
+    return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div><div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span><span class="pill">capability '+fmt(w.capability_level,1)+'</span>'+(w.sport==='run'?'':'<span class="pill">'+esc(w.cadence||"kadence dle bloku")+'</span>')+'</div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+(()=>{const a=result.athlete||{};if(w.sport==='run')return stepTableHtml(w.steps||[],null,{sport:'run',pace:a.runThresholdPace});const ftp=a[w.environment==='indoor'&&a.indoorFtp?'indoorFtp':'ftp']||null;return stepTableHtml(w.steps||[],ftp)})()+'</details><p>'+esc(w.description||"")+'</p><div class="reason">'+esc(reason||"Seřazeno podle cíle, capability a aktuálního kontextu.")+'</div><div class="workout-source">Zdroj: '+source+(w.attribution?' · '+esc(w.attribution):'')+'</div></div><div><details class="workout-details"><summary>Intervalový předpis</summary><div class="workout-structure">'+esc(w.intervals_description||"")+'</div></details><button class="btn primary schedule-workout" data-id="'+esc(w.id)+'" style="width:100%;margin-top:10px">Přidat na vybraný den</button></div></article>'
   }).join("");
 }
 function renderScheduledWorkouts(rows){
@@ -383,7 +399,7 @@ function renderScheduledWorkouts(rows){
   el.innerHTML=rows.length?rows.map(w=>{
     const reviewed=Boolean(w.feedback_id),due=w.scheduled_date<=today;
     return '<article class="scheduled-workout" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><div><strong>'+esc(w.name)+'</strong><div class="small">'+esc(w.scheduled_date)+' · '+esc(capabilityLabel(w.primary_system))+' · '+num(w.duration_minutes)+' min · '+(reviewed?'Hodnoceno':w.status==='completed'?'Spárováno s aktivitou':'Naplánováno')+'</div></div>'+
-      (reviewed?'<span class="small">RPE uloženo</span>':due?'<form class="workout-feedback"><label><span class="small">Dokončeno %</span><input name="completedPercent" type="number" min="0" max="150" value="100" required></label><label><span class="small">RPE 1–10</span><input name="rpe" type="number" min="1" max="10" step="0.5" required></label><button class="btn primary" type="submit">Uložit hodnocení</button></form>':'<span class="small">Čeká na jízdu</span>')+'</article>';
+      (reviewed?'<span class="small">RPE uloženo</span>':due?'<form class="workout-feedback"><label><span class="small">Dokončeno %</span><input name="completedPercent" type="number" min="0" max="150" value="100" required></label><label><span class="small">RPE 1–10</span><input name="rpe" type="number" min="1" max="10" step="0.5" required></label><button class="btn primary" type="submit">Uložit hodnocení</button></form>':'<span class="small">'+(w.sport==='run'?'Čeká na běh':'Čeká na jízdu')+'</span>')+'</article>';
   }).join(''):'<div class="small">Zatím není naplánovaný žádný workout.</div>';
 }
 async function loadScheduledWorkouts(){
@@ -393,7 +409,7 @@ async function loadScheduledWorkouts(){
 async function loadWorkoutLibrary(){
   const date=$("workoutScheduleDate");if(date&&!date.value)date.value=pragueToday();if(date)date.min=pragueToday();
   const p=new URLSearchParams(),system=$("workoutSystem")?.value,duration=$("workoutDuration")?.value,tol=$("workoutDurationTolerance")?.value,load=$("workoutLoad")?.value,difficulty=$("workoutDifficulty")?.value,phase=$("workoutPhase")?.value;
-  if(system)p.set("system",system);p.set("environment",$("workoutEnvironment")?.value||"indoor");if($("workoutSource")?.value)p.set("source",$("workoutSource").value);if(duration)p.set("duration",duration);if(tol)p.set("durationTolerance",tol);if(load)p.set("load",load);if(difficulty)p.set("maxDifficulty",difficulty);if(phase)p.set("phase",phase);if(date?.value)p.set("date",date.value);p.set("limit","40");
+  p.set("sport",workoutSport());if(system)p.set("system",system);p.set("environment",$("workoutEnvironment")?.value||"indoor");if($("workoutSource")?.value)p.set("source",$("workoutSource").value);if(duration)p.set("duration",duration);if(tol)p.set("durationTolerance",tol);if(load)p.set("load",load);if(difficulty)p.set("maxDifficulty",difficulty);if(phase)p.set("phase",phase);if(date?.value)p.set("date",date.value);p.set("limit","40");
   $("workoutResults").innerHTML='<div class="small">Počítám vhodnost workoutů…</div>';
   try{const r=await jsonFetch("/app/api/workouts/search?"+p.toString());state.workoutLibrary=r;renderWorkoutLibrary(r);$("workoutSourceNote").textContent=r.sourcePolicy||"Veřejné reference mají zdroj; proprietární knihovny se nekopírují.";await loadScheduledWorkouts()}
   catch(e){$("workoutResults").innerHTML='<div class="notice status-error">'+esc(e.message)+'</div>'}
@@ -416,21 +432,23 @@ async function saveWorkoutFeedback(form){
 }
 
 // "Vygenerovat trénink": one recommended workout for the chosen day.
-function environmentLabel(env){return env==="outdoor"?"Outdoor":"Indoor"}
+function environmentLabel(env,sport=workoutSport()){return sport==='run'?(env==="outdoor"?"Venku":"Pás"):env==="outdoor"?"Outdoor":"Indoor"}
+function fmtPace(sec){sec=Math.round(Number(sec));return sec>0?Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'):''}
 function fmtStepTime(sec){sec=Math.round(sec);if(sec<60)return sec+' s';const m=Math.floor(sec/60),r=sec%60;return m>=60?Math.floor(m/60)+' h '+(m%60?m%60+' min':''):m+(r?' min '+r+' s':' min')}
 // Step table from server rows ({repeats, steps:[{durationSeconds, percentLow/High, wattsLow/High, free, ramp, cadence, note}]}).
-function stepTableHtml(rows,ftp){
+function stepTableHtml(rows,ftp,opts={}){
   const target=s=>s.free?'naplno':s.ramp?s.percentLow+' → '+s.percentHigh+' %':s.percentLow===s.percentHigh?s.percentLow+' %':s.percentLow+'–'+s.percentHigh+' %';
+  if(opts.sport==='run'){
+    // Running: pace per km (the faster pace belongs to the higher %).
+    const pace=s=>s.free?'naplno':!s.paceFast&&!s.paceSlow?'—':s.ramp?s.paceSlow+' → '+s.paceFast:s.paceFast===s.paceSlow?s.paceFast:s.paceFast+'–'+s.paceSlow;
+    const line=s=>'<tr><td>'+esc(fmtStepTime(s.durationSeconds))+'</td><td>'+esc(target(s))+'</td><td><strong>'+esc(pace(s))+'</strong>'+(s.paceFast||s.paceSlow?' <span class="small">/km</span>':'')+'</td><td class="small">'+esc(s.zone||'')+'</td><td class="small">'+esc(s.note||'')+'</td></tr>';
+    return '<div class="step-table-wrap"><table class="step-table"><thead><tr><th>Čas</th><th>% prahu</th><th>Tempo'+(opts.pace?' (práh '+esc(fmtPace(opts.pace))+' /km)':'')+'</th><th>Zóna</th><th>Poznámka</th></tr></thead><tbody>'+
+      rows.map(g=>g.repeats>1?'<tr class="step-repeat"><td colspan="5">'+g.repeats+'× opakuj'+(g.note?' · '+esc(g.note):'')+'</td></tr>'+g.steps.map(line).join('')+'<tr class="step-repeat-end"><td colspan="5"></td></tr>':g.steps.map(line).join('')).join('')+'</tbody></table></div>';
+  }
   const watts=s=>s.free||s.wattsLow==null?'—':s.ramp?s.wattsLow+' → '+s.wattsHigh+' W':s.wattsLow===s.wattsHigh?s.wattsLow+' W':s.wattsLow+'–'+s.wattsHigh+' W';
   const line=s=>'<tr><td>'+esc(fmtStepTime(s.durationSeconds))+'</td><td>'+esc(target(s))+'</td><td><strong>'+esc(watts(s))+'</strong></td><td class="small">'+esc(s.zone||'')+'</td><td>'+esc(s.cadence?String(s.cadence).replace(/rpm/i,'')+' rpm':'')+'</td><td class="small">'+esc(s.note||'')+'</td></tr>';
   return '<div class="step-table-wrap"><table class="step-table"><thead><tr><th>Čas</th><th>% FTP</th><th>Výkon'+(ftp?' (FTP '+esc(ftp)+' W)':'')+'</th><th>Zóna</th><th>Kadence</th><th>Poznámka</th></tr></thead><tbody>'+
     rows.map(g=>g.repeats>1?'<tr class="step-repeat"><td colspan="6">'+g.repeats+'× opakuj'+(g.note?' · '+esc(g.note):'')+'</td></tr>'+g.steps.map(line).join('')+'<tr class="step-repeat-end"><td colspan="6"></td></tr>':g.steps.map(line).join('')).join('')+'</tbody></table></div>';
-}
-// Same rows computed in the browser for library cards.
-function stepRowsFromStructure(structure,ftp,env){
-  const width=p=>env==='outdoor'?(p>=106?4:p>=76?3:5):0,w=p=>ftp?Math.round(ftp*p/100):null;
-  const Z={Z1:[40,55],Z2:[56,75],Z3:[76,90],Z4:[91,105],Z5:[106,120],Z6:[121,150],Z7:[151,200]};const row=s=>{const z=Z[String(s.note||'').toUpperCase()];const lo=z?z[0]:s.ramp?num(s.powerStart):num(s.power)-width(num(s.power)),hi=z?z[1]:s.ramp?num(s.powerEnd):num(s.power)+width(num(s.power));return {durationSeconds:num(s.durationMinutes)*60,percentLow:Math.round(lo),percentHigh:Math.round(hi),wattsLow:s.free?null:w(lo),wattsHigh:s.free?null:w(hi),free:!!s.free,ramp:!!s.ramp,cadence:s.cadence,note:s.note}};
-  return (structure||[]).map(b=>b.steps?{repeats:num(b.repeats)||1,note:b.note,steps:b.steps.map(row)}:{repeats:1,steps:[row(b)]});
 }
 function explainList(title,items){return items&&items.length?'<div class="explain-block"><h4>'+esc(title)+'</h4><ul>'+items.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul></div>':''}
 function renderGeneratedWorkout(r){
@@ -438,12 +456,13 @@ function renderGeneratedWorkout(r){
   if(r.status!=="ok"){el.innerHTML='<div class="notice">'+esc(r.message||"Trénink se nepodařilo vygenerovat.")+'</div>';return}
   const w=r.workout,x=r.explanation||{};
   const source=w.citation?esc(w.citation):w.source_url?'<a href="'+esc(w.source_url)+'" target="_blank" rel="noopener">'+esc(w.source_name)+'</a>':esc(w.source_name||"");
-  const planned=x.planned?'<details class="explain-block" open><summary><strong>Tvůj plán v Intervals.icu:</strong> '+esc(x.planned.name||'trénink')+(x.planned.minutes?' · '+x.planned.minutes+' min':'')+(x.planned.intensityFactor?' · IF '+fmt(x.planned.intensityFactor,2):'')+'</summary>'+(x.planned.steps?.length?stepTableHtml(x.planned.steps,x.ftp):'<p class="small">Plán nemá strukturu kroků.</p>')+'<p class="small">Níže je odpovídající trénink z knihovny, pokud chceš strukturu podle PFD – jinak klidně jeď svůj plán.</p></details>':'';
-  el.innerHTML=planned+'<article class="workout-result generated"><div><div class="workout-result-head"><div><div class="eyebrow">'+esc(longDate(r.date))+' · '+esc(capabilityLabel(w.primary_system))+' · '+environmentLabel(r.environment)+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+
-    '<div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span>'+(x.ftp?'<span class="pill">FTP '+esc(x.ftp)+' W</span>':'')+'</div>'+
+  const run=r.sport==='run',stepOpts=run?{sport:'run',pace:x.thresholdPace}:{};
+  const planned=x.planned?'<details class="explain-block" open><summary><strong>Tvůj plán v Intervals.icu:</strong> '+esc(x.planned.name||'trénink')+(x.planned.minutes?' · '+x.planned.minutes+' min':'')+(x.planned.intensityFactor?' · IF '+fmt(x.planned.intensityFactor,2):'')+'</summary>'+(x.planned.steps?.length?stepTableHtml(x.planned.steps,x.ftp,stepOpts):'<p class="small">Plán nemá strukturu kroků.</p>')+'<p class="small">Níže je odpovídající trénink z knihovny, pokud chceš strukturu podle PFD – jinak klidně jeď svůj plán.</p></details>':'';
+  el.innerHTML=planned+'<article class="workout-result generated"><div><div class="workout-result-head"><div><div class="eyebrow">'+esc(longDate(r.date))+' · '+esc(capabilityLabel(w.primary_system,r.sport))+' · '+environmentLabel(r.environment,r.sport)+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+
+    '<div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span>'+(x.ftp?'<span class="pill">FTP '+esc(x.ftp)+' W</span>':'')+(x.thresholdPace?'<span class="pill">práh '+esc(fmtPace(x.thresholdPace))+' /km</span>':'')+'</div>'+
     '<p>'+esc(w.description||"")+'</p>'+
-    '<div class="explain-grid">'+explainList('Proč tento trénink',x.why)+explainList('Jak ho jet',x.how)+explainList(r.environment==='outdoor'?'Venku':'Na trenažéru',x.environment)+explainList('Jídlo a pití',x.fueling)+'</div>'+
-    '<h4 style="margin:14px 0 6px">Rozpis</h4>'+stepTableHtml(x.steps||[],x.ftp)+workoutProfile(w)+
+    '<div class="explain-grid">'+explainList('Proč tento trénink',x.why)+explainList('Jak ho jet',x.how)+explainList(r.environment==='outdoor'?'Venku':run?'Na páse':'Na trenažéru',x.environment)+explainList('Jídlo a pití',x.fueling)+'</div>'+
+    '<h4 style="margin:14px 0 6px">Rozpis</h4>'+stepTableHtml(x.steps||[],x.ftp,stepOpts)+workoutProfile(w)+
     '<p class="small">Zdroj: '+source+'</p>'+
     '<div class="workout-filter-actions" style="margin-top:10px"><button class="btn primary" id="scheduleGenerated">Přidat do Intervals.icu</button>'+(r.variantCount>1?'<button class="btn" id="anotherGenerated">Jiný návrh</button>':'')+'</div></div></article>'+
     (r.alternatives?.length?'<div class="small" style="margin-top:8px">Další možnosti: '+r.alternatives.map(a=>esc(a.name)).join(' · ')+'</div>':'');
@@ -454,7 +473,7 @@ async function generateWorkoutForDay(variant=0){
   const b=$("generateWorkoutBtn"),date=$("generateDate");if(date&&!date.value)date.value=pragueToday();
   b.disabled=true;$("generatedWorkout").innerHTML='<div class="small">Trenér vybírá trénink…</div>';
   try{
-    const body={date:date?.value||pragueToday(),environment:$("generateEnvironment").value,variant};
+    const body={date:date?.value||pragueToday(),environment:$("generateEnvironment").value,variant,sport:workoutSport()};
     const minutes=Number($("generateMinutes").value);if(minutes>0)body.availabilityMinutes=minutes;
     const r=await jsonFetch("/app/api/workouts/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     state.generated=r;state.generatedVariant=variant;renderGeneratedWorkout(r);
@@ -464,6 +483,8 @@ async function generateWorkoutForDay(variant=0){
 async function load(){ $("topStatus").textContent="Načítám…"; const end=dateShift(weekStart,6); const jobs=[["daily","/app/api/daily?date="+selectedHistoryDate],["coaches","/app/api/coaches"],["fitness","/app/api/fitness?days=90"],["week","/app/api/week?start="+weekStart],["weight","/app/api/weight"],["activities","/app/api/activities"],["nutrition","/app/api/nutrition?start=2026-01-01&end="+dateShift(pragueToday(),1)],["sleep","/app/api/sleep?start="+dateShift(pragueToday(),-365)+"&end="+dateShift(pragueToday(),1)],["gym","/app/api/gym"]]; const results=await Promise.allSettled(jobs.map(([,url])=>jsonFetch(url))); state={...state}; let failed=0; results.forEach((r,i)=>{const key=jobs[i][0]; if(r.status==="fulfilled") state[key]=r.value; else {failed++; state[key]={status:"error",message:r.reason?.message||"Načtení selhalo"};}}); try{renderOverview();}catch{} try{renderCoachCouncil();}catch{} try{renderTraining();}catch{} try{renderNutrition();}catch{} try{renderRecovery();}catch{} try{renderHealth();}catch{} try{renderGym();}catch{} loadInbox(); $("topStatus").textContent=failed===0?"Live · "+new Date().toLocaleTimeString("cs-CZ"):(failed<jobs.length?"Částečně načteno":"Data unavailable"); $("topStatus").className=failed===0?"status-label small":failed<jobs.length?"status-label small status-partial":"status-label small status-error"; if(failed) toast("Některá datová služba není dostupná.");}
 document.querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>{activate(b.dataset.view);if(b.dataset.view==="workouts")loadWorkoutLibrary();});
 $("searchWorkouts").onclick=loadWorkoutLibrary;
+document.querySelectorAll('.sport-switch [data-sport]').forEach(b=>b.onclick=()=>{setWorkoutSport(b.dataset.sport);loadWorkoutLibrary()});
+{let saved='ride';try{saved=localStorage.getItem('pfdWorkoutSport')||'ride'}catch{}setWorkoutSport(saved);}
 $("generateWorkoutBtn").onclick=()=>generateWorkoutForDay(0);{const d=$("generateDate");if(d){d.value=pragueToday();d.min=pragueToday();}}
 $("workoutResults").addEventListener("click",e=>{const b=e.target.closest(".schedule-workout");if(b)scheduleLibraryWorkout(b.dataset.id);});
 $("scheduledWorkouts").addEventListener("submit",e=>{if(e.target.matches('.workout-feedback')){e.preventDefault();saveWorkoutFeedback(e.target)}});
@@ -960,6 +981,29 @@ async function loadTrainingProfile(){
   catch(e){card.innerHTML='<h3>FTP a zóny</h3><div class="notice">'+esc(e.message)+'</div>'}
 }
 function zoneBoundsEditor(id,bounds,unit){return '<div class="select-row" style="flex-wrap:wrap;gap:6px">'+bounds.map((b,i)=>'<label class="small">Z'+(i+1)+' do <input data-bound="'+id+'" type="number" value="'+esc(b)+'" style="'+inputStyle+';width:70px"> '+unit+'</label>').join('')+'</div>'}
+// Power zone bounds can be typed in % FTP or in watts; the two fields stay in sync.
+function powerBoundsEditor(bounds,ftp){
+  const pct=b=>Math.round(b*10)/10;
+  return '<p class="small" style="margin:8px 0 4px">Horní hranice zón – zadej v % FTP nebo ve wattech'+(ftp?' (z FTP '+esc(ftp)+' W; uloží se v %, takže se při změně FTP přepočítají)':' (watty jdou zadat po nastavení FTP)')+'.</p><div style="display:grid;gap:6px">'+bounds.map((b,i)=>'<div class="select-row" style="gap:6px;flex-wrap:wrap"><span class="small" style="min-width:34px">Z'+(i+1)+' do</span><input data-bound="power" data-index="'+i+'" type="number" step="0.1" value="'+esc(pct(b))+'" aria-label="Z'+(i+1)+' horní hranice v % FTP" style="'+inputStyle+';width:80px"><span class="small">%</span><input data-bound-watts="'+i+'" type="number" value="'+(ftp?Math.round(ftp*b/100):'')+'"'+(ftp?'':' disabled')+' aria-label="Z'+(i+1)+' horní hranice ve wattech" style="'+inputStyle+';width:80px"><span class="small">W</span></div>').join('')+'</div>';
+}
+// Pace zone bounds in % of threshold speed or as a pace (m:ss /km).
+function paceBoundsEditor(bounds,pace){
+  const pct=b=>Math.round(b*10)/10,at=b=>pace?fmtPace(pace*100/b):'';
+  return '<p class="small" style="margin:8px 0 4px">Hranice zón (rychlejší konec zóny) – zadej v % prahového tempa nebo jako tempo m:ss /km'+(pace?'':' (tempo jde zadat po nastavení prahového tempa)')+'.</p><div style="display:grid;gap:6px">'+bounds.map((b,i)=>'<div class="select-row" style="gap:6px;flex-wrap:wrap"><span class="small" style="min-width:34px">Z'+(i+1)+' do</span><input data-bound="pace" data-index="'+i+'" type="number" step="0.1" value="'+esc(pct(b))+'" aria-label="Z'+(i+1)+' hranice v % prahového tempa" style="'+inputStyle+';width:80px"><span class="small">%</span><input data-bound-pace="'+i+'" type="text" inputmode="numeric" placeholder="m:ss" value="'+esc(at(b))+'"'+(pace?'':' disabled')+' aria-label="Z'+(i+1)+' hranice jako tempo" style="'+inputStyle+';width:80px"><span class="small">/km</span></div>').join('')+'</div>';
+}
+function parsePaceInput(v){const m=String(v||'').trim().match(/^(\d{1,2})[:.](\d{1,2})$/);return m?Number(m[1])*60+Number(m[2]):null}
+function wirePaceBoundsEditor(pace){
+  if(!pace)return;
+  document.querySelectorAll('[data-bound-pace]').forEach(t=>{const p=document.querySelector('[data-bound="pace"][data-index="'+t.dataset.boundPace+'"]');
+    t.oninput=()=>{const sec=parsePaceInput(t.value);if(sec)p.value=Math.round(pace/sec*1000)/10};
+    p.oninput=()=>{if(Number(p.value)>0)t.value=fmtPace(pace*100/Number(p.value))}});
+}
+function wirePowerBoundsEditor(ftp){
+  if(!ftp)return;
+  document.querySelectorAll('[data-bound-watts]').forEach(w=>{const p=document.querySelector('[data-bound="power"][data-index="'+w.dataset.boundWatts+'"]');
+    w.oninput=()=>{if(w.value)p.value=Math.round(Number(w.value)/ftp*1000)/10};
+    p.oninput=()=>{if(p.value)w.value=Math.round(ftp*Number(p.value)/100)}});
+}
 function renderTrainingProfile(d){
   const p=d.profile||{},r=d.resolved||{},card=$('trainingProfileCard');
   const src={manual:'nastaveno ručně','intervals-settings':'z nastavení Intervals.icu','latest-ride':'z poslední jízdy'}[r.ftpSource]||'nenastaveno';
@@ -971,17 +1015,25 @@ function renderTrainingProfile(d){
     '<div class="select-row" style="gap:8px;flex-wrap:wrap"><label class="small">Ruční FTP <input id="tpFtp" type="number" min="50" max="600" value="'+esc(p.ftp||'')+'" placeholder="W" style="'+inputStyle+';width:90px"></label>'+(p.ftp?'<button class="btn" type="button" id="tpClearFtp">Použít FTP z Intervals</button>':'')+'</div>'+
     '<details class="explain-block"><summary>Spočítat FTP z testu</summary><div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpMethod" style="'+inputStyle+'">'+d.ftpMethods.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('')+'</select><span id="tpMethodInputs"></span><button class="btn" type="button" id="tpEstimate">Spočítat</button></div><div class="small" id="tpEstimateResult" aria-live="polite"></div></details>'+
     '<h4 style="margin:14px 0 6px">Výkonové zóny</h4><select id="tpPowerModel" style="'+inputStyle+'">'+d.powerZoneModels.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===powerModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(powerModel==='custom'?' selected':'')+'>Vlastní hranice</option></select>'+
-    (powerModel==='custom'?zoneBoundsEditor('power',powerBounds,'% FTP'):'')+
-    '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>% FTP</th><th>Watty</th></tr></thead><tbody>'+d.powerZones.map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+z.percentLow+(z.percentHigh!=null?'–'+z.percentHigh:'+')+' %</td><td>'+(z.wattsLow!=null?z.wattsLow+(z.wattsHigh!=null?'–'+z.wattsHigh:'+')+' W':'—')+'</td></tr>').join('')+'</tbody></table>'+
+    (powerModel==='custom'?powerBoundsEditor(powerBounds,r.ftp):'<button class="btn" type="button" id="tpEditPower" style="margin-left:8px">Upravit hranice (% / W)</button>')+
+    '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>% FTP</th><th>Watty</th></tr></thead><tbody>'+d.powerZones.map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+Math.round(z.percentLow)+(z.percentHigh!=null?'–'+Math.round(z.percentHigh):'+')+' %</td><td>'+(z.wattsLow!=null?z.wattsLow+(z.wattsHigh!=null?'–'+z.wattsHigh:'+')+' W':'—')+'</td></tr>').join('')+'</tbody></table>'+
     '<h4 style="margin:14px 0 6px">Tepové zóny</h4><div class="select-row" style="gap:8px;flex-wrap:wrap">'+[['tpLthr','LTHR',r.lthr],['tpMaxHr','Max. tep',r.maxHr],['tpRestHr','Klidový tep',r.restHr]].map(([id,l,v])=>'<label class="small">'+l+' <input id="'+id+'" type="number" value="'+esc(v||'')+'" placeholder="bpm" style="'+inputStyle+';width:80px"></label>').join('')+
     '<select id="tpHrModel" style="'+inputStyle+'">'+d.hrZoneModels.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===hrModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(hrModel==='custom'?' selected':'')+'>Vlastní hranice (bpm)</option></select></div>'+
-    (hrModel==='custom'?zoneBoundsEditor('hr',hrBounds.length?hrBounds:[130,145,155,165],'bpm'):'')+
+    (hrModel==='custom'?zoneBoundsEditor('hr',hrBounds.length?hrBounds:[130,145,155,165],'bpm'):'<button class="btn" type="button" id="tpEditHr" style="margin-left:8px">Upravit hranice (bpm)</button>')+
     '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>Tep</th></tr></thead><tbody>'+d.hrZones.map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+(z.bpmLow==null&&z.bpmHigh==null?'—':z.bpmLow==null?'do '+z.bpmHigh+' bpm':z.bpmLow+(z.bpmHigh!=null?'–'+z.bpmHigh:'+')+' bpm')+'</td></tr>').join('')+'</tbody></table>'+
     (d.hrZones.every(z=>z.bpmHigh==null&&z.bpmLow==null)?'<p class="small">Pro výpočet tepových zón doplň LTHR, max. tep, nebo max. a klidový tep podle zvoleného modelu.</p>':'')+
+    runProfileHtml(d)+
     '<div class="workout-filter-actions" style="margin-top:12px"><button class="btn primary" type="button" id="tpSave">Uložit</button><span class="small" id="tpResult" aria-live="polite"></span></div>';
   const methodInputs=()=>{const m=d.ftpMethods.find(x=>x.id===$('tpMethod').value);$('tpMethodInputs').innerHTML=m.inputs.map(i=>'<label class="small">'+esc(i.label)+' <input data-ftp-input="'+esc(i.key)+'" type="number" step="0.1" style="'+inputStyle+';width:90px"></label>').join(' ')};
   $('tpMethod').onchange=methodInputs;methodInputs();
   $('tpEstimate').onclick=async()=>{const inputs={};document.querySelectorAll('[data-ftp-input]').forEach(i=>inputs[i.dataset.ftpInput]=i.value);try{const r2=await jsonFetch('/app/api/training-profile/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({method:$('tpMethod').value,inputs})});$('tpEstimateResult').innerHTML='FTP ≈ <strong>'+r2.ftp+' W</strong> <button class="btn" type="button" id="tpUseEstimate">Použít</button>';$('tpUseEstimate').onclick=()=>{$('tpFtp').value=r2.ftp;state.tpFtpMethod=$('tpMethod').value;toast('FTP '+r2.ftp+' W – ulož nastavení.')}}catch(e){$('tpEstimateResult').textContent=e.message}};
+  // Switching to custom bounds starts from the zones shown now.
+  const paceModel=p.paceZoneModel||'friel';
+  state.tpSeed={power:powerBounds,hr:hrBounds.length?hrBounds:[130,145,155,165],pace:paceModel==='custom'?(p.paceZoneBounds||[]):(d.paceZoneModels?.find(m=>m.id===paceModel)?.bounds||[77.5,87.7,94.3,100,103.4,111.5])};
+  wireRunProfile(d);
+  wirePowerBoundsEditor(r.ftp);
+  const editPower=$('tpEditPower');if(editPower)editPower.onclick=()=>{$('tpPowerModel').value='custom';saveTrainingProfileForm()};
+  const editHr=$('tpEditHr');if(editHr)editHr.onclick=()=>{$('tpHrModel').value='custom';saveTrainingProfileForm()};
   // Changing a model saves right away so the tables show the new zones.
   $('tpPowerModel').onchange=saveTrainingProfileForm;$('tpHrModel').onchange=saveTrainingProfileForm;
   const clear=$('tpClearFtp');if(clear)clear.onclick=()=>{$('tpFtp').value='';saveTrainingProfileForm()};
@@ -990,13 +1042,41 @@ function renderTrainingProfile(d){
 function collectTrainingProfile(){
   const v=id=>$(id)?.value?Number($(id).value):undefined,bounds=k=>[...document.querySelectorAll('[data-bound="'+k+'"]')].map(i=>Number(i.value));
   const out={ftp:v('tpFtp'),ftpMethod:state.tpFtpMethod,powerZoneModel:$('tpPowerModel').value,lthr:v('tpLthr'),maxHr:v('tpMaxHr'),restHr:v('tpRestHr'),hrZoneModel:$('tpHrModel').value};
-  if(out.powerZoneModel==='custom'){const b=bounds('power');out.powerZoneBounds=b.length?b:[55,75,90,105,120,150]}
-  if(out.hrZoneModel==='custom'){const b=bounds('hr');out.hrZoneBounds=b.length?b:[130,145,155,165]}
+  if(out.powerZoneModel==='custom'){const b=bounds('power');out.powerZoneBounds=b.length?b:(state.tpSeed?.power||[55,75,90,105,120,150])}
+  if(out.hrZoneModel==='custom'){const b=bounds('hr');out.hrZoneBounds=b.length?b:(state.tpSeed?.hr||[130,145,155,165])}
+  if($('tpPaceModel')){
+    Object.assign(out,{runThresholdPace:$('tpRunPace').value.trim()||undefined,runLthr:v('tpRunLthr'),paceZoneModel:$('tpPaceModel').value,paceMethod:state.tpPaceMethod});
+    if(out.paceZoneModel==='custom'){const b=bounds('pace');out.paceZoneBounds=b.length?b:state.tpSeed?.pace}
+  }
   return out;
 }
 async function saveTrainingProfileForm(){
   try{const d=await jsonFetch('/app/api/training-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(collectTrainingProfile())});state.trainingProfile=d;renderTrainingProfile(d);toast('FTP a zóny jsou uložené.')}
   catch(e){const el=$('tpResult');if(el)el.textContent=e.message;toast(e.message)}
+}
+// Running: threshold pace (manual, from a race or from Intervals) and pace zones.
+function runProfileHtml(d){
+  const p=d.profile||{},r=d.resolved||{},paceModel=p.paceZoneModel||'friel',pace=r.runThresholdPace;
+  const src={manual:'nastaveno ručně','intervals-settings':'z nastavení Intervals.icu'}[r.runPaceSource]||'nenastaveno';
+  const bounds=paceModel==='custom'?(p.paceZoneBounds||[]):(d.paceZoneModels||[]).find(m=>m.id===paceModel)?.bounds||[];
+  const zoneRange=z=>!pace?'—':z.paceSlow==null?'pomaleji než '+fmtPace(z.paceFast):z.paceFast==null?'rychleji než '+fmtPace(z.paceSlow):fmtPace(z.paceSlow)+'–'+fmtPace(z.paceFast);
+  return '<h4 style="margin:18px 0 6px">🏃 Běh – prahové tempo a zóny</h4>'+
+    '<p class="small">Aktuální prahové tempo: <strong>'+(pace?esc(fmtPace(pace))+' /km':'—')+'</strong> ('+esc(src)+')'+(r.intervalsRunPace&&r.runPaceSource==='manual'?' · Intervals.icu '+esc(fmtPace(r.intervalsRunPace))+' /km':'')+'. Prahové tempo ≈ tempo, které udržíš zhruba hodinu.</p>'+
+    '<div class="select-row" style="gap:8px;flex-wrap:wrap"><label class="small">Ruční prahové tempo <input id="tpRunPace" type="text" inputmode="numeric" placeholder="m:ss" value="'+esc(p.runThresholdPace?fmtPace(p.runThresholdPace):'')+'" style="'+inputStyle+';width:80px"> /km</label>'+(p.runThresholdPace?'<button class="btn" type="button" id="tpClearPace">Použít tempo z Intervals</button>':'')+'<label class="small">LTHR běh <input id="tpRunLthr" type="number" value="'+esc(p.runLthr||'')+'" placeholder="'+esc(r.runLthr||'bpm')+'" style="'+inputStyle+';width:80px"></label></div>'+
+    '<details class="explain-block"><summary>Spočítat prahové tempo ze závodu nebo testu</summary><div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpPaceMethod" style="'+inputStyle+'">'+(d.paceMethods||[]).map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('')+'</select><span id="tpPaceInputs"></span><button class="btn" type="button" id="tpPaceEstimate">Spočítat</button></div><div class="small" id="tpPaceResult" aria-live="polite"></div><p class="small">Ze závodu přepočítávám na tempo na 60 min (Riegel). Test 30 min: průměrné tempo posledních 20 min (Friel).</p></details>'+
+    '<div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpPaceModel" style="'+inputStyle+'">'+(d.paceZoneModels||[]).map(m=>'<option value="'+esc(m.id)+'"'+(m.id===paceModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(paceModel==='custom'?' selected':'')+'>Vlastní hranice</option></select>'+(paceModel==='custom'?'':'<button class="btn" type="button" id="tpEditPace">Upravit hranice (% / tempo)</button>')+'</div>'+
+    (paceModel==='custom'?paceBoundsEditor(bounds,pace):'')+
+    '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>% prahu</th><th>Tempo /km</th></tr></thead><tbody>'+(d.paceZones||[]).map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+(z.percentLow?Math.round(z.percentLow*10)/10:0)+(z.percentHigh!=null?'–'+Math.round(z.percentHigh*10)/10:'+')+' %</td><td>'+esc(zoneRange(z))+'</td></tr>').join('')+'</tbody></table>';
+}
+function wireRunProfile(d){
+  if(!$('tpPaceModel'))return;
+  const inputs=()=>{const m=(d.paceMethods||[]).find(x=>x.id===$('tpPaceMethod').value);$('tpPaceInputs').innerHTML=(m?.inputs||[]).map(i=>'<label class="small">'+esc(i.label)+' <input data-pace-input="'+esc(i.key)+'" type="text" style="'+inputStyle+';width:90px"></label>').join(' ')};
+  $('tpPaceMethod').onchange=inputs;inputs();
+  $('tpPaceEstimate').onclick=async()=>{const values={};document.querySelectorAll('[data-pace-input]').forEach(i=>values[i.dataset.paceInput]=i.value);try{const r=await jsonFetch('/app/api/training-profile/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'pace',method:$('tpPaceMethod').value,inputs:values})});$('tpPaceResult').innerHTML='Prahové tempo ≈ <strong>'+esc(r.formatted)+' /km</strong> <button class="btn" type="button" id="tpUsePace">Použít</button>';$('tpUsePace').onclick=()=>{$('tpRunPace').value=r.formatted;state.tpPaceMethod=$('tpPaceMethod').value;toast('Prahové tempo '+r.formatted+' /km – ulož nastavení.')}}catch(e){$('tpPaceResult').textContent=e.message}};
+  $('tpPaceModel').onchange=saveTrainingProfileForm;
+  const edit=$('tpEditPace');if(edit)edit.onclick=()=>{$('tpPaceModel').value='custom';saveTrainingProfileForm()};
+  const clear=$('tpClearPace');if(clear)clear.onclick=()=>{$('tpRunPace').value='';saveTrainingProfileForm()};
+  wirePaceBoundsEditor(d.resolved?.runThresholdPace);
 }
 // Account, onboarding and (for admins) user management.
 async function loadAccount(){const me=await jsonFetch('/app/api/me');const card=$('accountCard');if(card){card.innerHTML='<div class="detail-heading"><h3>Účet</h3><button class="btn" type="button" id="logoutBtn">Odhlásit</button></div><p class="small" style="margin:0">Přihlášen jako <strong>'+esc(me.user?.email||'')+'</strong>'+(me.user?.isAdmin?' · správce':'')+'</p>';$('logoutBtn').onclick=logout;}if(me.missingProviders?.length)showOnboarding(me.missingProviders);if(!$('trainingProfileCard')&&$('settings')){$('connectionCards').insertAdjacentHTML('afterend','<article class="card" id="trainingProfileCard" style="margin-top:12px"><h3>FTP a zóny</h3><div class="small">Načítám…</div></article>');loadTrainingProfile();}if(me.user?.isAdmin)installAdmin();return me;}
