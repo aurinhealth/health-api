@@ -117,7 +117,7 @@ export function intervalsText(structure = [], { sport = "ride", environment = "i
 // Converts a (trainer-style) workout for riding or running outside: longer
 // warm-up, rounded step lengths, very short efforts become free efforts and
 // micro-intervals get a terrain hint. Indoor keeps the exact prescription.
-export function adaptStructure(structure = [], environment = "indoor", sport = "ride") {
+export function adaptStructure(structure = [], environment = "indoor", sport = "ride", system = null) {
   if (environment !== "outdoor") return structure;
   const roundStep = s => {
     const d = n(s.durationMinutes, 0);
@@ -130,14 +130,20 @@ export function adaptStructure(structure = [], environment = "indoor", sport = "
     ? { ...block, steps: block.steps.map(roundStep), note: block.steps.some(s => n(s.durationMinutes, 0) < 1 && n(s.power, 0) >= 106) ? "rovný úsek nebo mírné stoupání bez křižovatek" : block.note }
     : roundStep(block));
   const first = out[0];
-  if (first && !first.steps && n(first.durationMinutes, 0) < 15 && n(first.power, 100) <= 65) out[0] = { ...first, durationMinutes: 15 };
+  // Only sessions with real intensity need the longer outdoor warm-up.
+  const easy = system === "recovery" || system === "endurance";
+  if (!easy && first && !first.steps && n(first.durationMinutes, 0) < 15 && n(first.power, 100) <= 65) out[0] = { ...first, durationMinutes: 15 };
   return out;
 }
 
-export function environmentNotes(environment, sport = "ride") {
+export function environmentNotes(environment, sport = "ride", system = null) {
+  const easy = system === "recovery" || system === "endurance";
   if (sport === "run") return environment === "outdoor"
     ? ["Venku řiď úseky tempem; v kopcích drž úsilí a tep, ne tempo.", "Rozklus a výklus zvol po rovině."]
     : ["Na páse nastav sklon 1 % – kompenzuje chybějící odpor vzduchu.", "Tempo na pásu je přesné, tep může být o pár úderů vyšší."];
+  if (easy) return environment === "outdoor"
+    ? ["Zvol rovinatou trasu; do kopců lehký převod, ať výkon nepřeleze horní hranici pásma.", "Rozsah výkonu je orientační – důležitější je nízké úsilí a klidný tep.", "Vyhni se skupinovým jízdám, kde se tempo snadno zvedne."]
+    : ["Na trenažéru stačí ERG nebo konstantní odpor; hlídej, aby výkon nepřesáhl pásmo.", "Zajisti chlazení a pití – i lehká jízda indoor hodně potí."];
   return environment === "outdoor"
     ? ["Venku drž rozsah výkonu místo přesné hodnoty; ERG není k dispozici.", "Intervaly nad prahem jeď do kopce nebo proti větru, regenerace po rovině.", "Krátké sprinty jeď naplno bez cílového výkonu."]
     : ["Na trenažéru použij ERG pro prahové a sweet-spot bloky; sprinty a 30/15 jeď v režimu odporu (level/slope).", "Kadence je součást předpisu; zajisti chlazení (ventilátor) a pití."];
@@ -172,7 +178,7 @@ export function renderForEnvironment(workout, environment = "indoor") {
   let structure = [];
   try { structure = JSON.parse(workout.structure_json || "[]"); } catch {}
   const env = environment === "outdoor" && !workout.indoor_only ? "outdoor" : "indoor";
-  const adapted = adaptStructure(structure, env, sport);
+  const adapted = adaptStructure(structure, env, sport, workout.primary_system);
   return {
     ...workout,
     environment: env,
@@ -180,6 +186,6 @@ export function renderForEnvironment(workout, environment = "indoor") {
     duration_minutes: Math.round(totalMinutes(adapted)),
     intervals_description: intervalsText(adapted, { sport, environment: env }),
     intervals_type: sport === "run" ? (env === "indoor" ? "VirtualRun" : "Run") : (env === "indoor" ? "VirtualRide" : "Ride"),
-    environment_notes: environmentNotes(env, sport)
+    environment_notes: environmentNotes(env, sport, workout.primary_system)
   };
 }

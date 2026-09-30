@@ -1,3 +1,5 @@
+import { classifyPlannedWorkout } from "./planned-workout.js";
+
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const txt=v=>String(v??"").toLowerCase();
@@ -7,6 +9,7 @@ const HARD_RE=/threshold|vo2|anaerob|sprint|interval|sweet.?spot|race|z[aá]vod/
 const LOWER_RE=/squat|dřep|dre(p|p)|leg press|leg extension|leg curl|deadlift|mrtv|pendulum|lunge|výpad|vypad|adduction|abduction|calf|lýt|lyt/i;
 
 function isoDate(v){return String(v||"").slice(0,10)}
+function shiftIso(date,days){const d=new Date(isoDate(date)+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10)}
 function diffDays(a,b){const x=Date.parse(isoDate(a)+"T12:00:00Z"),y=Date.parse(isoDate(b)+"T12:00:00Z");return Number.isFinite(x)&&Number.isFinite(y)?Math.round((x-y)/86400000):null}
 function isRide(a){return BIKE_RE.test(String(a?.type||"")+" "+String(a?.name||""))}
 function isHard(a){
@@ -126,19 +129,60 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const readiness=score<55?"red":score<75?"yellow":"green";
 
   const plannedToday=planned.find(a=>isoDate(a.date)===targetDate)||daily?.training?.planned?.find(isRide)||null;
-  const requestedMinutes=clamp(n(availabilityMinutes,n(preferences.availableMinutes,n(plannedToday?.durationHours)*60||90)),30,360);
-  const phase=txt(goal?.phase||preferences.phase||"auto");
+  const plannedInfo=plannedToday?classifyPlannedWorkout(plannedToday):null;
+  const requestedMinutes=clamp(n(availabilityMinutes,n(preferences.availableMinutes,n(plannedInfo?.minutes,n(plannedToday?.durationHours)*60||90))),30,360);
   const cadence=preferences.cadence||"85–95 rpm";
+  const rationale=[];
+  let returning=false;
+
+  // Recovery week: this week's load (done + planned) well below last week's,
+  // or a plan named that way.
+  const monday=shiftIso(targetDate,-((new Date(targetDate+"T12:00:00Z").getUTCDay()+6)%7));
+  const inWeek=(a,start)=>{const d=diffDays(a.date,start);return d!=null&&d>=0&&d<=6;};
+  const rides=weekActivities.filter(isRide);
+  const loadOf=a=>n(a.tss,n(a.durationHours,0)*50);
+  const thisWeekLoad=Math.round(rides.filter(a=>inWeek(a,monday)).reduce((s,a)=>s+loadOf(a),0));
+  const lastWeekLoad=Math.round(rides.filter(a=>a.completed&&inWeek(a,shiftIso(monday,-7))).reduce((s,a)=>s+loadOf(a),0));
+  const namedRecovery=rides.some(a=>inWeek(a,monday)&&/recovery week|deload|regenera[čc]n[íi] t[ýy]den|odpo[čc]inkov/i.test(String(a.name||"")+" "+String(a.description||"")));
+  const recoveryWeek=namedRecovery||(lastWeekLoad>=150&&thisWeekLoad<lastWeekLoad*.7);
+  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":"Tento týden je regenerační: plánovaná a odjetá zátěž "+thisWeekLoad+" TSS je "+Math.round(thisWeekLoad/Math.max(lastWeekLoad,1)*100)+" % minulého týdne ("+lastWeekLoad+" TSS).");
+  const phase=txt(goal?.phase||preferences.phase||(recoveryWeek?"recovery":"auto"));
 
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
-  if(/vo2|anaerob/.test(planText)) kind="vo2";
+  const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
+  if(plannedInfo?.system){
+    kind=KIND_OF[plannedInfo.system]||"endurance";
+    rationale.push("V Intervals.icu máš na tento den naplánováno „"+(plannedToday.name||"trénink")+"“"+(plannedInfo.minutes?" ("+plannedInfo.minutes+" min"+(plannedInfo.intensityFactor?", IF "+plannedInfo.intensityFactor.toFixed(2):"")+")":"")+" – doporučení se drží plánu.");
+  }
+  else if(/vo2|anaerob/.test(planText)) kind="vo2";
   else if(/threshold/.test(planText)) kind="threshold";
   else if(/sweet/.test(planText)) kind="sweet_spot";
   else if(/tempo/.test(planText)) kind="tempo";
   else if(requestedMinutes>=150) kind="long_endurance";
   else if(phase==="build"&&hard7<2) kind=domains.high<domains.moderate*0.35?"vo2":"threshold";
   else if(phase==="base"&&hard7<2&&domains.moderate<domains.low*0.45) kind="sweet_spot";
+  else if(!recoveryWeek){
+    // Nothing planned and no phase set: decide from the recent rides.
+    const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
+    const lastHard=completedAll.filter(isHard).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
+    if(lastRide==null||lastRide>=7){
+      kind="endurance";returning=true;
+      rationale.push(lastRide==null?"V datech nevidím žádnou nedávnou jízdu – začínám aerobní jízdou; kvalitu přidám, až bude trénink zase pravidelný.":"Posledních "+lastRide+" dní bez jízdy – návrat přes aerobní jízdu se sníženou obtížností, kvalita přijde v dalších dnech.");
+    } else if(readiness==="green"&&hard7===0){
+      // The quality system trained longest ago (by feedback), in phase order.
+      const order=phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
+      const lastTouched=sys=>Date.parse(capabilities?.[sys]?.updated_at||"")||0;
+      const pick=[...order].sort((a,b)=>lastTouched(a)-lastTouched(b))[0];
+      kind=pick==="vo2max"?"vo2":pick;
+      rationale.push("Tento týden zatím žádná kvalita a jsi odpočatý"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – je čas na kvalitní trénink. "+({sweet_spot:"Sweet spot",threshold:"Práh",vo2max:"VO₂max"}[pick])+" jsi z kvalitních systémů trénoval nejdéle.");
+    } else if(readiness==="green"&&hard7===1&&(lastHard==null||lastHard>=2)){
+      kind=domains.high<domains.moderate?"vo2":"threshold";
+      rationale.push("Jedna kvalita v týdnu už byla a od ní uběhlo "+(lastHard??"několik")+" dní – přidávám druhou, jiného typu.");
+    } else {
+      rationale.push(hard7>=2?"Dvě kvalitní jízdy v týdnu už byly – dnes aerobní objem.":lastHard!=null&&lastHard<2?"Kvalita byla před méně než 48 h – dnes aerobní jízda na zotavení.":"Připravenost není ideální pro kvalitu – aerobní jízda je bezpečná volba.");
+    }
+  }
 
   const adaptations=[];
   if(readiness==="red"){
@@ -154,6 +198,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(lowerGym.length&&["vo2","threshold"].includes(kind)){
     kind="endurance"; adaptations.push("chránit kvalitu kola po lower-body gymu");
   }
+  if(recoveryWeek&&["vo2","threshold","sweet_spot","tempo"].includes(kind)&&!plannedInfo?.system){kind=requestedMinutes<=75?"recovery":"endurance";adaptations.push("regenerační týden: bez intenzity");}
   if(requestedMinutes<55&&kind==="long_endurance"){kind="tempo";adaptations.push("trénink zhuštěn do dostupného času");}
   if(requestedMinutes<50&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push("krátké časové okno");}
 
@@ -162,7 +207,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const capability=capabilities?.[capabilitySystem]||null;
   const capabilityLevel=n(capability?.level,3);
   const progressionOffset=readiness==="green"?.45:readiness==="yellow"?-.25:-1;
-  const targetDifficulty=Math.round(clamp(capabilityLevel+progressionOffset+(phase==="build"?.2:phase==="recovery"?-.6:0),1,10)*10)/10;
+  const targetDifficulty=Math.round(clamp(capabilityLevel+progressionOffset+(phase==="build"?.2:phase==="recovery"?-.6:0)-(returning?1:0),1,10)*10)/10;
   const progressionAction=readiness==="red"?"deload":targetDifficulty>capabilityLevel+.1?"progress":targetDifficulty<capabilityLevel-.1?"regress":"maintain";
   const alternatives=[];
   if(kind!=="endurance") alternatives.push(workoutTemplate("endurance",Math.min(requestedMinutes,90),cadence));
@@ -182,7 +227,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     date:targetDate,
     readiness:{score,status:readiness,reasons:readinessReasons,sleepMinutes,ctl,atl,tsb,rampRate:ramp,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
-    constraints:{availableMinutes:requestedMinutes,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss}:null,cadence,phase:phase||"auto"},
+    rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
+    constraints:{availableMinutes:requestedMinutes,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
     recommendation:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
     alternatives,
     missingData:missing,

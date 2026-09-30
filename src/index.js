@@ -2143,6 +2143,8 @@ function plannedWorkoutInfo(
     tss: tss || null,
     type,
     name,
+    // Intervals.icu workout text (steps), used to classify the session.
+    description: typeof payload.description === "string" ? payload.description.slice(0, 4000) : null,
     cycling
   };
 }

@@ -4,10 +4,11 @@
 // Every query on personal tables filters by db.userId (see tenancy.js).
 import { renderForEnvironment, n, clamp } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
+import { explainWorkout, stepRows } from "./workout-explanation.js";
 
 export const SYSTEMS = ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"];
 const HARD_SYSTEMS = new Set(["sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"]);
-export { CYCLING_WORKOUTS };
+export { CYCLING_WORKOUTS, stepRows };
 const BUILT_IN = { ride: CYCLING_WORKOUTS };
 const BUILT_IN_BY_ID = new Map(Object.values(BUILT_IN).flat().map(w => [w.id, w]));
 const now = () => new Date().toISOString();
@@ -128,7 +129,7 @@ export async function searchWorkoutLibrary(db, filters = {}, context = {}) {
 // "Generate a workout": the coach decides the energy system, duration and the
 // right challenge for the day; the library picks the best match. `variant`
 // walks through the top candidates for a different but equally fitting option.
-export async function generateWorkout(db, { sport = "ride", environment = "indoor", date, coach = {}, availabilityMinutes = null, variant = 0 } = {}) {
+export async function generateWorkout(db, { sport = "ride", environment = "indoor", date, coach = {}, availabilityMinutes = null, variant = 0, thresholds = {} } = {}) {
   const rec = coach.recommendation?.session || {};
   const kind = rec.kind === "long_endurance" ? "endurance" : rec.kind === "vo2" ? "vo2max" : rec.kind || "endurance";
   const minutes = clamp(n(availabilityMinutes, n(rec.durationMinutes, 90)), 30, 360);
@@ -140,10 +141,13 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
   const seen = new Set(), distinct = [];
   for (const w of result.workouts) if (!seen.has(w.family || w.id)) { seen.add(w.family || w.id); distinct.push(w); }
   const pool = distinct.slice(0, 5), pick = pool[Math.abs(Math.trunc(n(variant, 0))) % pool.length];
+  const plannedToday = coach.constraints?.plannedToday;
+  const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
   return {
     status: "ok", sport, environment, date, system: kind, durationMinutes: minutes,
     readiness: coach.readiness || null, progression: coach.recommendation?.progression || null, adaptations: coach.recommendation?.adaptations || [],
-    workout: pick, alternatives: pool.filter(w => w.id !== pick.id).slice(0, 3), variantCount: pool.length
+    workout: pick, alternatives: pool.filter(w => w.id !== pick.id).slice(0, 3), variantCount: pool.length,
+    explanation: explainWorkout(pick, { coach, environment: pick.environment || environment, thresholds, planned })
   };
 }
 
