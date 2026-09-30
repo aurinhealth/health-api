@@ -2,6 +2,8 @@ const OIDC_ISSUER = "https://token.actions.githubusercontent.com";
 const JWKS_URL = `${OIDC_ISSUER}/.well-known/jwks`;
 const EXPECTED_AUDIENCE = "health-strength";
 const EXPECTED_REPOSITORY = "shaarkyn/health-api";
+const EXPECTED_REPOSITORY_ID = "1371310425";
+const EXPECTED_REPOSITORY_OWNER_ID = "329509326";
 const EXPECTED_WORKFLOWS = new Set([
   "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main",
   "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main",
@@ -30,7 +32,8 @@ export async function verifyGitHubActionsToken(request) {
   if (claims.iss !== OIDC_ISSUER) throw new Error("Invalid GitHub Actions issuer");
   if (claims.aud !== EXPECTED_AUDIENCE) throw new Error("Invalid GitHub Actions audience");
   if (claims.repository !== EXPECTED_REPOSITORY) throw new Error("Invalid GitHub Actions repository");
-  if (claims.repository_visibility !== "private") throw new Error("Invalid GitHub Actions repository visibility");
+  if (String(claims.repository_id) !== EXPECTED_REPOSITORY_ID) throw new Error("Invalid GitHub Actions repository id");
+  if (String(claims.repository_owner_id) !== EXPECTED_REPOSITORY_OWNER_ID) throw new Error("Invalid GitHub Actions repository owner");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
   if (!EXPECTED_WORKFLOWS.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
   const scheduledWorkflow = claims.workflow_ref === "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main"
