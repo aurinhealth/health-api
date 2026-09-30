@@ -93,7 +93,7 @@ jobs:
         run: |
           set -euo pipefail
           page="$(curl -fsS "https://petrfitnessdata.eu/app")"
-          python -c 'import sys; s=sys.stdin.read(); assert "Petr Fitness Data" in s; assert "Gym" in s; assert "Recovery & spánek" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
+          python -c 'import sys; s=sys.stdin.read(); assert "Petr Fitness Data" in s; assert "Gym" in s; assert "Recovery & Health" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
           curl -fsS "https://petrfitnessdata.eu/app/dashboard-client.js?deployment=$GITHUB_SHA" -o /tmp/dashboard-client.js
           node --check /tmp/dashboard-client.js
           daily="$(curl -fsS "https://petrfitnessdata.eu/app/api/daily")"
