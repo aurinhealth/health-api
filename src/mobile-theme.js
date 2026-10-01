@@ -50,7 +50,8 @@ export const mobileTheme = `
   .plan-grid .plan-day,#nutrition .daygrid .day{scroll-snap-align:start;min-height:140px}
   #nutrition .daygrid{grid-auto-columns:minmax(175px,70%)}
   #nutrition .daygrid .day{min-height:155px}
-  #nutrition{display:flex;flex-direction:column}
+  /* Only the active view is shown; the id selector must not override .view{display:none}. */
+  #nutrition.active{display:flex;flex-direction:column}
   #nutrition>.section-hero{order:0}
   #nutrition>.grid2{display:contents}
   #nutrition>.grid2>.card:last-child{order:1;margin:0 0 12px}
