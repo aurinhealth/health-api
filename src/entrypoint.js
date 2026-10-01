@@ -27,6 +27,7 @@ import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getSc
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { saveTrainingProfile } from "./training-profile.js";
+import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan } from "./gym-plan-store.js";
 import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, PACE_ZONE_MODELS, HR_ZONE_MODELS, powerZones, hrZones } from "./training-zones.js";
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
@@ -100,6 +101,7 @@ export default {
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, rawEnv);
+    if (url.pathname === "/automation/planned-calories") return handlePlannedCaloriesAutomation(request, rawEnv);
     const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
     if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcpCompat(request, env);
@@ -768,6 +770,24 @@ function logoResponse() {
 
 
 // Keeps each user's daily nutrition NOTE events in Intervals.icu up to date.
+// Calorie estimates in the descriptions of today's planned Intervals.icu
+// workouts, for every user with Intervals connected (their weight and FTP).
+async function handlePlannedCaloriesAutomation(request, rawEnv) {
+  if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
+  try { await verifyGitHubActionsToken(request); }
+  catch (error) { return Response.json({status:"error",step:"github_actions_auth",message:error.message},{status:401}); }
+  try {
+    const body=await request.json().catch(()=>({}));
+    const users=await forEachUser(rawEnv,["intervals"],async env=>{
+      const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE user_id=? AND LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).bind(env.USER_ID).first().catch(()=>null);
+      const thresholds=await athleteThresholds(env).catch(()=>({}));
+      const weightKg=Number(row?.value_numeric);
+      return syncPlannedEventCalories(env,{oldest:body?.oldest,newest:body?.newest,weightKg:Number.isFinite(weightKg)&&weightKg>30?weightKg:undefined,ftp:thresholds.ftp||undefined});
+    });
+    return Response.json({status:"ok",users});
+  } catch (error) { return Response.json({status:"error",step:"planned_calories",message:error.message},{status:500}); }
+}
+
 async function handleNutritionNotesAutomation(request, rawEnv) {
   if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
   try {
