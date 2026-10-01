@@ -241,6 +241,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(/threshold/.test(planText)) kind="threshold";
   else if(/sweet/.test(planText)) kind="sweet_spot";
   else if(/tempo/.test(planText)) kind="tempo";
+  // The weekly planner's role for the day (long / easy); quality stays automatic.
+  else if(/^long/.test(txt(goal?.focus))) kind="long_endurance";
+  else if(/^recovery/.test(txt(goal?.focus))) kind="recovery";
+  else if(/^endurance/.test(txt(goal?.focus))) kind="endurance";
   else if(!autoLength&&requestedMinutes>=longMinutes) kind="long_endurance";
   else if(phase==="build"&&hard7<2) kind=domains.high<domains.moderate*0.35?"vo2":"threshold";
   else if(phase==="base"&&hard7<2&&domains.moderate<domains.low*0.45) kind=sport==="run"?"threshold":"sweet_spot";
@@ -268,7 +272,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   const adaptations=[];
   if(readiness==="red"){
-    kind=score<40?"recovery":"endurance";
+    // A planned easy day stays easy; anything harder drops to endurance or recovery.
+    if(kind!=="recovery")kind=score<40?"recovery":"endurance";
     adaptations.push("vysoká únava: zrušit intenzitu");
   } else if(readiness==="yellow"&&["vo2","threshold","sweet_spot"].includes(kind)){
     kind=requestedMinutes<=75?"endurance":"tempo";

@@ -77,12 +77,16 @@ export function parseWorkoutSearchFilters(params) {
 // and phase), recent hard days and variety versus recently done families.
 export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capabilities = defaultCapabilities()) {
   const system = String(filters.system || "").toLowerCase(), duration = n(filters.durationMinutes), durationTolerance = n(filters.durationTolerance, 15);
+  // A soft length (the coach's suggestion) only ranks; nothing is filtered out by length.
+  const softDuration = filters.durationSoft === true && duration != null, durationScale = softDuration ? Math.max(30, duration * .6) : durationTolerance;
   const targetLoad = n(filters.targetLoad), loadTolerance = n(filters.loadTolerance, 35), maxDifficulty = n(filters.maxDifficulty);
   const readiness = String(context.readiness || "green").toLowerCase(), hardDays = n(context.hardBikeDaysRolling7d, 0), phase = String(context.phase || "").toLowerCase();
   const recentFamilies = new Set(context.recentFamilies || []);
   const source = filters.source ? String(filters.source) : null;
+  const preferred = !system && filters.preferredSystem ? String(filters.preferredSystem) : null;
+  const reachable = 25 + (system ? 25 : preferred ? 15 : 0) + (duration != null ? 20 : 0) + (targetLoad != null ? 12 : 0) + 18;
   return workouts.filter(w => (!system || w.primary_system === system || w.secondary_system === system)
-    && (duration == null || Math.abs(n(w.duration_minutes, 0) - duration) <= durationTolerance)
+    && (duration == null || softDuration || Math.abs(n(w.duration_minutes, 0) - duration) <= durationTolerance)
     && (maxDifficulty == null || n(w.difficulty, 99) <= maxDifficulty)
     && (filters.environment !== "outdoor" || !n(w.indoor_only, 0))
     && (!source || w.source_kind === source)).map(w => {
@@ -91,9 +95,10 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
       if (w.primary_system === system) { score += 25; reasons.push("přesný tréninkový systém"); }
       else { score += 4; reasons.push("sekundární zásah cílového systému"); }
     }
+    if (preferred && w.primary_system === preferred) { score += 15; reasons.push("typ, který trenér na dnešek doporučuje"); }
     if (duration != null) {
-      const diff = Math.abs(n(w.duration_minutes, 0) - duration), fit = clamp(1 - diff / Math.max(durationTolerance, 1), 0, 1);
-      score += 20 * fit; if (diff <= 5) reasons.push("téměř přesná délka"); else reasons.push("délka v toleranci");
+      const diff = Math.abs(n(w.duration_minutes, 0) - duration), fit = clamp(1 - diff / Math.max(durationScale, 1), 0, 1);
+      score += 20 * fit; if (diff <= 5) reasons.push(softDuration ? "délka, kterou trenér pro dnešek doporučuje" : "téměř přesná délka"); else if (!softDuration) reasons.push("délka v toleranci");
     }
     if (targetLoad != null) {
       const diff = Math.abs(n(w.target_load, 0) - targetLoad), fit = clamp(1 - diff / Math.max(loadTolerance, 1), 0, 1); score += 12 * fit; if (diff <= 10) reasons.push("zátěž blízko cíli");
@@ -112,7 +117,9 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
     if (w.source_kind === "research") { score += 2; reasons.push("ověřený vědecký protokol"); }
     if (n(w.verified, 0)) score += 2;
     score += Math.min(3, Math.log10(1 + n(w.popularity, 0)) * 1.5);
-    return { ...w, suitability: Math.round(clamp(score, 0, 100)), capability_level: n(capability.level, 3), challenge_gap: Math.round((n(w.difficulty, 5) - n(capability.level, 3)) * 10) / 10, reasons };
+    // The points available depend on the filters in use (no type or load
+    // filter = fewer points), so the score is a share of the reachable maximum.
+    return { ...w, suitability: Math.round(clamp(score / reachable * 100, 0, 100)), score_points: Math.round(score), capability_level: n(capability.level, 3), challenge_gap: Math.round((n(w.difficulty, 5) - n(capability.level, 3)) * 10) / 10, reasons };
   }).sort((a, b) => b.suitability - a.suitability || Math.abs((duration ?? a.duration_minutes) - a.duration_minutes) - Math.abs((duration ?? b.duration_minutes) - b.duration_minutes) || a.difficulty - b.difficulty || a.id.localeCompare(b.id));
 }
 
@@ -309,7 +316,9 @@ export async function recordWorkoutFeedback(db, { workoutId, scheduledDate = nul
 export async function getScheduledWorkouts(db, limit = 20) {
   await ensureTrainingTables(db);
   const rows = await db.prepare(`SELECT l.workout_id,l.sport,l.scheduled_date,l.environment,l.intervals_event_id,l.status,
-    (SELECT f.id FROM workout_feedback f WHERE f.user_id=l.user_id AND f.workout_id=l.workout_id AND f.scheduled_date=l.scheduled_date AND f.survey<>'auto_completed' ORDER BY f.id DESC LIMIT 1) AS feedback_id
+    (SELECT f.id FROM workout_feedback f WHERE f.user_id=l.user_id AND f.workout_id=l.workout_id AND f.scheduled_date=l.scheduled_date AND f.survey<>'auto_completed' ORDER BY f.id DESC LIMIT 1) AS feedback_id,
+    (SELECT f.rpe FROM workout_feedback f WHERE f.user_id=l.user_id AND f.workout_id=l.workout_id AND f.scheduled_date=l.scheduled_date AND f.survey<>'auto_completed' ORDER BY f.id DESC LIMIT 1) AS feedback_rpe,
+    (SELECT f.completed_percent FROM workout_feedback f WHERE f.user_id=l.user_id AND f.workout_id=l.workout_id AND f.scheduled_date=l.scheduled_date ORDER BY f.id DESC LIMIT 1) AS completed_percent
     FROM workout_schedule_links l WHERE l.user_id=? ORDER BY l.scheduled_date DESC LIMIT ?`).bind(db.userId, clamp(n(limit, 20), 1, 50)).all();
   const out = [];
   for (const row of rows.results || []) {
@@ -327,6 +336,13 @@ export async function pendingScheduledWorkouts(db, date) {
   const out = [];
   for (const row of rows.results || []) { const w = await getWorkout(db, row.workout_id); if (w) out.push({ ...row, name: w.name, duration_minutes: w.duration_minutes }); }
   return out;
+}
+// One scheduled workout with its library name and length.
+export async function scheduledLink(db, workoutId, date) {
+  await ensureTrainingTables(db);
+  const row = await db.prepare("SELECT id,workout_id,scheduled_date,intervals_event_id FROM workout_schedule_links WHERE user_id=? AND workout_id=? AND scheduled_date=? LIMIT 1").bind(db.userId, String(workoutId || ""), String(date || "")).first();
+  const w = row ? await getWorkout(db, row.workout_id) : null;
+  return row && w ? { ...row, name: w.name, duration_minutes: w.duration_minutes } : null;
 }
 export async function markScheduleCompleted(db, id) {
   await db.prepare("UPDATE workout_schedule_links SET status='completed' WHERE user_id=? AND id=?").bind(db.userId, id).run();

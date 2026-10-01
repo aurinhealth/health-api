@@ -27,7 +27,8 @@ export const PERSONAL_TABLES = {
   training_capabilities: { pk: ["user_id", "sport", "system"] },
   workout_feedback: {},
   workout_schedule_links: {},
-  training_profile: {}
+  training_profile: {},
+  week_plan_preferences: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

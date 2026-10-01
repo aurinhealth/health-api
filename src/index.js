@@ -2107,6 +2107,27 @@ function activityIsCycling(activity) {
   return ["ride", "bike", "cycling", "cycle", "gravel", "mountain bike", "mtb", "road cycling", "indoor cycling"].some(x => text.includes(x));
 }
 
+// Average heart rate from the exercise summary (also auto-detected walks).
+// Google names it averageHeartRateBeatsPerMinute; other spellings are accepted.
+export function googleExerciseHeartRate(metrics = {}) {
+  const valid = v => Number.isFinite(Number(v)) && Number(v) >= 30 && Number(v) <= 240 ? Math.round(Number(v)) : null;
+  for (const key of ["averageHeartRateBeatsPerMinute", "averageHeartRateBpm", "averageHeartRate", "heartRateAverageBpm"]) {
+    const v = metrics?.[key]; const value = valid(v && typeof v === "object" ? v.bpm ?? v.value : v);
+    if (value != null) return value;
+  }
+  const key = Object.keys(metrics || {}).find(k => /heart/i.test(k) && /av(era)?g/i.test(k) && !/variab/i.test(k));
+  return key ? valid(metrics[key]) : null;
+}
+
+// Mean of the stored heart-rate samples inside the activity, when the summary has none.
+export function heartRateFromSamples(activity, samples) {
+  const start = Date.parse(activity.start), end = Date.parse(activity.end);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const bpm = r => { if (r.value_numeric != null) return Number(r.value_numeric); try { const h = JSON.parse(r.payload_json || "{}").heartRate || {}; return Number(h.beatsPerMinute ?? h.bpm); } catch { return NaN; } };
+  const values = samples.filter(r => { const t = Date.parse(r.sample_time); return t >= start && t <= end; }).map(bpm).filter(v => v >= 30 && v <= 240);
+  return values.length >= 3 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
+}
+
 function googleExerciseActivity(row) {
   const payload = JSON.parse(row.payload_json || "{}");
   const exercise = payload.exercise || {};
@@ -2130,9 +2151,13 @@ function googleExerciseActivity(row) {
   const activeSeconds = String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
   const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
   const durationHours = activeHours || hoursBetween(row.start_time, row.end_time);
+  const averageHeartRate = googleExerciseHeartRate(metrics);
+  // The dashboard reads the Intervals field name for every activity.
+  if (averageHeartRate != null && payload.average_heartrate == null) payload.average_heartrate = averageHeartRate;
   return {
     id: row.external_id,
     source: "google-health",
+    averageHeartRate,
     type,
     calories: Number(metrics.caloriesKcal || 0),
     start: row.start_time,
@@ -2323,6 +2348,20 @@ async function energyForDate(env, date) {
   const googleCompleted = googleExercises.results
     .map(googleExerciseActivity)
     .filter(activity => !isDuplicateOfIntervalsActivity(activity, cyclingRows));
+  if (googleCompleted.some(a => a.averageHeartRate == null)) {
+    try {
+      const samples = (await env.DB.prepare(`
+        SELECT sample_time, value_numeric, payload_json FROM health_datapoints
+        WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
+          AND sample_time >= ? AND sample_time < ?
+        LIMIT 5000
+      `).bind(env.USER_ID, date, nextDate).all()).results || [];
+      for (const a of googleCompleted) if (a.averageHeartRate == null) {
+        const bpm = heartRateFromSamples(a, samples);
+        if (bpm != null) { a.averageHeartRate = bpm; a.payload.average_heartrate = bpm; a.heartRateSource = "samples"; }
+      }
+    } catch (error) { console.error("Heart-rate samples read failed", error.message); }
+  }
 
   const completed = [...intervalsCompleted, ...googleCompleted]
     .filter(a => {

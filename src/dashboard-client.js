@@ -314,7 +314,7 @@ function chooseGymExercise(index){const item=visibleGymExercises[index];if(!item
 function renderGym(){const values=state.gym?.values||[];const rows=values.slice(7).filter(r=>r.some(v=>String(v??"").trim()!==""));$("gymMeta").textContent=(values[2]?.[1]||"Dnešní silový trénink")+" · "+pragueToday();$("gymNotice").textContent=rows.length?rows.filter(r=>String(r[0]||"")==="WORK").length+" pracovních řádků · plán i výsledky jsou v interní databázi":"Dnešní plán je prázdný. Přidej cvik nebo vygeneruj plán.";const start=values.slice(7).findIndex(r=>r.some(v=>String(v??"").trim()!==""));const actualRows=start<0?[]:values.slice(7+start);$("gymRows").innerHTML=actualRows.map((r,i)=>{const idx=i+(start<0?0:start),type=r[0]||"",exercise=r[1]||"";const rawVideo=state.gym?.videoLinks?.[idx+7]||r[10]||"";const formula=String(rawVideo);const formulaUrl=formula.match(/HYPERLINK\(\s*"([^"]+)"/i)?.[1]||"";const video=/^https?:\/\//i.test(formula)?formula:formulaUrl||("https://www.youtube.com/results?search_query="+encodeURIComponent(String(exercise||"")+" exercise technique"));return '<tr data-row="'+idx+'"><td><span class="gym-type">'+esc(type)+'</span></td><td><strong>'+esc(exercise)+'</strong></td><td>'+esc(r[2]||"")+'</td><td>'+esc(r[3]||"")+'</td><td>'+esc(r[4]||"")+'</td><td><input data-col="5" value="'+esc(r[5]||"")+'" inputmode="decimal"></td><td><input data-col="6" value="'+esc(r[6]||"")+'" inputmode="numeric"></td><td><input data-col="7" value="'+esc(r[7]||"")+'" inputmode="decimal"></td><td><input data-col="8" type="checkbox" '+(String(r[8]).toUpperCase()==="TRUE"||r[8]===true?"checked":"")+'></td><td><a href="'+esc(video)+'" target="_blank" rel="noopener noreferrer">▶ Video</a></td><td><button class="btn gym-action" data-action="add-set" data-idx="'+idx+'">+ série</button> <button class="btn gym-action" data-action="remove-set" data-idx="'+idx+'">− série</button> <button class="btn gym-action" data-action="remove-exercise" data-idx="'+idx+'">🗑 cvik</button></td></tr>'}).join("")||'<tr><td colspan="11" class="muted">Žádný plán.</td></tr>'}
 async function loadGym(){state.gym=await jsonFetch("/app/api/gym");renderGym();renderGymHistory(state.gym.history||[])}
 async function saveGym(){const b=$("saveGym");b.disabled=true;b.textContent="Ukládám…";try{for(const tr of document.querySelectorAll("#gymRows tr[data-row]"))await persistGymRow(tr);await loadGym();toast("Trénink uložen a historie obnovena");}catch(e){toast("Uložení selhalo: "+e.message)}finally{b.disabled=false;b.textContent="Uložit trénink"}}
-async function generateGym(){const b=$("generateGym");b.disabled=true;b.textContent="Generuji…";try{await jsonFetch("/app/api/gym/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:pragueToday()})});toast("Dnešní plán vygenerován");await loadGym()}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="Vygenerovat dnešní plán"}}
+async function generateGym(){const b=$("generateGym");b.disabled=true;b.textContent="Generuji…";try{await jsonFetch("/app/api/gym/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:pragueToday()})});toast("Dnešní plán vygenerován");await loadGym()}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="Generovat"}}
 const selectedGymMuscles=new Set();
 function renderGymFocus(){
   document.querySelectorAll('#gym .gym-focus-builder [data-muscle]').forEach(el=>el.setAttribute('aria-pressed',String(selectedGymMuscles.has(el.dataset.muscle))));
@@ -339,23 +339,21 @@ async function generateFocusedGym(){
     $('gymFocusStatus').textContent=result.rationale||'Cílený plán je připraven.';
     toast('Cílený plán vygenerován');
   }catch(error){$('gymFocusStatus').textContent='Generování selhalo: '+error.message;toast(error.message)}
-  finally{button.disabled=false;button.textContent='Vygenerovat pro vybrané partie';}
+  finally{button.disabled=false;button.textContent='Generovat pro vybrané partie';}
 }
 window.addEventListener("error",e=>{try{toast("Chyba aplikace: "+(e.error?.message||e.message||"neznámá chyba"))}catch{}});
 window.addEventListener("unhandledrejection",e=>{try{toast("Chyba aplikace: "+(e.reason?.message||String(e.reason||"Promise rejected")))}catch{}});
 function workoutSport(){return state.workoutSport==='run'?'run':'ride'}
-function capabilityLabel(system,sport=workoutSport()){return (sport==='run'?{recovery:"Regenerace",endurance:"Lehký / dlouhý běh",tempo:"Tempo",threshold:"Práh",vo2max:"VO₂max",anaerobic:"Rychlost",sprint:"Sprinty do kopce"}:{recovery:"Recovery",endurance:"Endurance",tempo:"Tempo",sweet_spot:"Sweet Spot",threshold:"Threshold",vo2max:"VO₂max",anaerobic:"Anaerobic",sprint:"Sprint"})[system]||system}
+function capabilityLabel(system,sport=workoutSport()){return (sport==='run'?{recovery:"Regenerace",endurance:"Lehký / dlouhý běh",tempo:"Tempo",threshold:"Práh",vo2max:"VO₂max",anaerobic:"Rychlost",sprint:"Sprinty do kopce"}:{recovery:"Regenerace",endurance:"Vytrvalost",tempo:"Tempo",sweet_spot:"Sweet spot",threshold:"Práh",vo2max:"VO₂max",anaerobic:"Anaerobní",sprint:"Sprint"})[system]||system}
 // Kolo / Běh switch: one sport for the generator and the library.
+// Kolo / Běh / Gym: the endurance generator and library, or the gym builder.
 function setWorkoutSport(sport){
-  state.workoutSport=sport==='run'?'run':'ride';const run=state.workoutSport==='run';
+  state.workoutSport=['run','gym'].includes(sport)?sport:'ride';const run=state.workoutSport==='run',gym=state.workoutSport==='gym';
   document.querySelectorAll('.sport-switch [data-sport]').forEach(b=>{const on=b.dataset.sport===state.workoutSport;b.classList.toggle('primary',on);b.setAttribute('aria-pressed',String(on))});
-  const eyebrow=$('workoutsEyebrow');if(eyebrow)eyebrow.textContent='Adaptive library · '+(run?'running':'cycling');
-  document.querySelectorAll('[data-env-select]').forEach(sel=>{sel.options[0].textContent=run?'Pás · indoor':'Indoor · trenažér';sel.options[1].textContent=run?'Venku · outdoor':'Outdoor · venku'});
+  const eyebrow=$('workoutsEyebrow');if(eyebrow)eyebrow.textContent=gym?'Strength · posilovna':'Adaptive library · '+(run?'running':'cycling');
+  $('workoutsEndurance').hidden=gym;$('workoutsGym').hidden=!gym;
   document.querySelectorAll('#workoutSystem option').forEach(o=>{if(o.value)o.textContent=capabilityLabel(o.value);if(o.hasAttribute('data-ride-only')){o.hidden=run;if(run&&o.selected)$('workoutSystem').value=''}});
-  // Typical lengths differ: 60 min for a run, 90 min for a ride.
-  const duration=$('workoutDuration');if(duration&&run&&(duration.value==='90'||Number(duration.value)>150))duration.value='60';if(duration&&!run&&(duration.value==='60'||Number(duration.value)<45))duration.value='90';
   $('generatedWorkout').innerHTML='';
-  const btn=$('generateWorkoutBtn');if(btn)btn.textContent=run?'Vygenerovat běh':'Vygenerovat trénink';
   try{localStorage.setItem('pfdWorkoutSport',state.workoutSport)}catch{}
 }
 function workoutProfile(workout){
@@ -377,29 +375,38 @@ function workoutProfile(workout){
   }).join('');
   return '<div class="workout-profile"><div class="workout-profile-head"><span>'+(workout.sport==='run'?'Profil tempa':'Profil výkonu')+'</span><strong>'+hm(total)+'</strong></div><svg role="img" aria-label="Profil cílového výkonu v čase" viewBox="0 0 1000 84" preserveAspectRatio="none"><path d="M0 42H1000 M0 76H1000" stroke="#40505f" stroke-width="1"/>'+bars+'</svg><div class="workout-profile-foot"><span>0 min</span><span>'+Math.round(total)+' min</span></div></div>';
 }
+// Level 1–10 per training system, learned from rated library workouts.
 function renderWorkoutCapabilities(capabilities={}){
   const el=$("workoutCapabilities");if(!el)return;
   const order=workoutSport()==='run'?["endurance","tempo","threshold","vo2max","anaerobic","sprint","recovery"]:["endurance","tempo","sweet_spot","threshold","vo2max","anaerobic","sprint","recovery"];
-  el.innerHTML=order.map(k=>{const x=capabilities[k]||{level:3,confidence:.2,attempts:0};return '<div class="capability-card"><span class="label">'+esc(capabilityLabel(k))+'</span><strong>'+fmt(x.level,2)+'</strong><div class="small">confidence '+Math.round(num(x.confidence,.2)*100)+'% · '+num(x.attempts)+' pokusů</div></div>'}).join("");
+  const rows=order.map(k=>({k,...(capabilities[k]||{level:3,confidence:.2,attempts:0})}));
+  if(rows.every(x=>!num(x.attempts))){el.innerHTML='<div class="notice" style="grid-column:1/-1">Zatím nekalibrováno: všechny systémy začínají na úrovni 3 z 10. Úroveň se začne upravovat po prvních odjetých workoutech z knihovny, ke kterým doplníš RPE. Do té doby trenér vybírá obtížnost opatrně.</div>';return}
+  el.innerHTML=rows.map(x=>'<div class="capability-card"><span class="label">'+esc(capabilityLabel(x.k))+'</span><strong>'+fmt(x.level,1)+' <span class="small">/ 10</span></strong><div class="capability-bar"><i style="width:'+Math.min(100,num(x.level)*10)+'%"></i></div><div class="small">jistota '+Math.round(num(x.confidence,.2)*100)+' % · '+num(x.attempts)+' '+(num(x.attempts)===1?'hodnocení':num(x.attempts)>=2&&num(x.attempts)<=4?'hodnocení':'hodnocení')+'</div></div>').join("");
 }
 function renderWorkoutLibrary(result){
   renderWorkoutCapabilities(result.capabilities||{});
   const ctx=result.rankingContext||{},context=$("workoutRankingContext");
-  if(context)context.innerHTML='<strong>Kontext pořadí:</strong> readiness '+esc(ctx.readiness||"—")+(Number.isFinite(Number(ctx.tsb))?' · TSB '+fmt(ctx.tsb,1):'')+' · hard days 7d '+num(ctx.hardBikeDaysRolling7d)+' · nalezeno '+num(result.total)+' workoutů.';
+  const readinessWord={green:'dobrá',yellow:'střední',red:'nízká'}[ctx.readiness]||'—',pick=result.coachPick||{};
+  if(context)context.innerHTML='<strong>Podle čeho řadím:</strong> připravenost '+esc(readinessWord)+(Number.isFinite(Number(ctx.tsb))?' · forma (TSB) '+fmt(ctx.tsb,1):'')+' · kvalitní dny za 7 dní '+num(ctx.hardBikeDaysRolling7d)+(pick.system?' · trenér na dnešek doporučuje '+esc(capabilityLabel(pick.system))+(pick.durationMinutes?' kolem '+hm(pick.durationMinutes):''):'')+'.';
   const el=$("workoutResults"),rows=result.workouts||[];
   if(!rows.length){el.innerHTML='<div class="notice">Pro tuto kombinaci filtrů jsem nenašel vhodný workout. Zvětši toleranci délky nebo zruš limit obtížnosti.</div>';return}
-  el.innerHTML=rows.map((w,i)=>{
-    const source=w.source_url?'<a href="'+esc(w.source_url)+'" target="_blank" rel="noopener">'+esc(w.source_name||w.source_kind)+'</a>':esc(w.source_name||w.source_kind||"Zdroj");
+  // A short list first; the rest on request.
+  const shown=state.workoutShowAll?rows:rows.slice(0,5);
+  el.innerHTML=shown.map((w,i)=>{
     const reason=(w.reasons||[]).slice(0,4).join(" · ");
-    return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div><div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span><span class="pill">capability '+fmt(w.capability_level,1)+'</span>'+(w.sport==='run'?'':'<span class="pill">'+esc(w.cadence||"kadence dle bloku")+'</span>')+'</div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+(()=>{const a=result.athlete||{};if(w.sport==='run')return stepTableHtml(w.steps||[],null,{sport:'run',pace:a.runThresholdPace});const ftp=a[w.environment==='indoor'&&a.indoorFtp?'indoorFtp':'ftp']||null;return stepTableHtml(w.steps||[],ftp)})()+'</details><p>'+esc(w.description||"")+'</p><div class="reason">'+esc(reason||"Seřazeno podle cíle, capability a aktuálního kontextu.")+'</div><div class="workout-source">Zdroj: '+source+(w.attribution?' · '+esc(w.attribution):'')+'</div></div><div><details class="workout-details"><summary>Intervalový předpis</summary><div class="workout-structure">'+esc(w.intervals_description||"")+'</div></details><button class="btn primary schedule-workout" data-id="'+esc(w.id)+'" style="width:100%;margin-top:10px">Přidat na vybraný den</button></div></article>'
-  }).join("");
+    return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div><div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span><span class="pill">tvoje úroveň '+fmt(w.capability_level,1)+'</span>'+(w.sport==='run'?'':'<span class="pill">'+esc(w.cadence||"kadence dle bloku")+'</span>')+'</div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+(()=>{const a=result.athlete||{};if(w.sport==='run')return stepTableHtml(w.steps||[],null,{sport:'run',pace:a.runThresholdPace});const ftp=a[w.environment==='indoor'&&a.indoorFtp?'indoorFtp':'ftp']||null;return stepTableHtml(w.steps||[],ftp)})()+'</details><p>'+esc(w.description||"")+'</p><div class="reason">'+esc(reason||"Seřazeno podle cíle, tvé úrovně a aktuálního kontextu.")+'</div></div><div><details class="workout-details"><summary>Intervalový předpis</summary><div class="workout-structure">'+esc(w.intervals_description||"")+'</div></details><button class="btn primary schedule-workout" data-id="'+esc(w.id)+'" style="width:100%;margin-top:10px">Přidat na vybraný den</button></div></article>'
+  }).join("")+(rows.length>shown.length?'<button class="btn more-results" type="button" id="moreWorkouts">Zobrazit další ('+(rows.length-shown.length)+')</button>':'');
+  const more=$('moreWorkouts');if(more)more.onclick=()=>{state.workoutShowAll=true;renderWorkoutLibrary(result)};
 }
+// Completion comes from the activity paired in Intervals.icu; the athlete adds RPE and a note.
 function renderScheduledWorkouts(rows){
   const el=$("scheduledWorkouts"),today=pragueToday();
   el.innerHTML=rows.length?rows.map(w=>{
-    const reviewed=Boolean(w.feedback_id),due=w.scheduled_date<=today;
-    return '<article class="scheduled-workout" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><div><strong>'+esc(w.name)+'</strong><div class="small">'+esc(w.scheduled_date)+' · '+esc(capabilityLabel(w.primary_system))+' · '+num(w.duration_minutes)+' min · '+(reviewed?'Hodnoceno':w.status==='completed'?'Spárováno s aktivitou':'Naplánováno')+'</div></div>'+
-      (reviewed?'<span class="small">RPE uloženo</span>':due?'<form class="workout-feedback"><label><span class="small">Dokončeno %</span><input name="completedPercent" type="number" min="0" max="150" value="100" required></label><label><span class="small">RPE 1–10</span><input name="rpe" type="number" min="1" max="10" step="0.5" required></label><button class="btn primary" type="submit">Uložit hodnocení</button></form>':'<span class="small">'+(w.sport==='run'?'Čeká na běh':'Čeká na jízdu')+'</span>')+'</article>';
+    const reviewed=Boolean(w.feedback_id),paired=w.status==='completed'||w.completed_percent!=null,due=w.scheduled_date<=today;
+    const done=w.completed_percent!=null?' · dokončeno '+Math.round(num(w.completed_percent))+' %':'';
+    const status=reviewed?'Hodnoceno · RPE '+(w.feedback_rpe!=null?fmt(w.feedback_rpe,1):'—')+done:paired?'Spárováno s aktivitou v Intervals.icu'+done:due?'Čekám na aktivitu z Intervals.icu':'Naplánováno';
+    return '<article class="scheduled-workout" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><div><strong>'+esc(w.name)+'</strong><div class="small">'+esc(longDate(w.scheduled_date))+' · '+esc(capabilityLabel(w.primary_system,w.sport))+' · '+num(w.duration_minutes)+' min · '+status+'</div></div>'+
+      (reviewed?'<span class="small">✓ Uloženo</span>':due?'<form class="workout-feedback rpe-form"><label><span class="small">RPE 1–10 <button type="button" class="info-tip" data-info="rpe" aria-label="Vysvětlivka: RPE">i</button></span><input name="rpe" type="number" min="1" max="10" step="1" required></label><label><span class="small">Pocit / poznámka (volitelně)</span><input name="notes" type="text" maxlength="300" placeholder="např. těžké nohy, horko"></label><button class="btn primary" type="submit">Uložit RPE</button></form>':'<span class="small">'+(w.sport==='run'?'Čeká na běh':'Čeká na jízdu')+'</span>')+'</article>';
   }).join(''):'<div class="small">Zatím není naplánovaný žádný workout.</div>';
 }
 async function loadScheduledWorkouts(){
@@ -409,9 +416,9 @@ async function loadScheduledWorkouts(){
 async function loadWorkoutLibrary(){
   const date=$("workoutScheduleDate");if(date&&!date.value)date.value=pragueToday();if(date)date.min=pragueToday();
   const p=new URLSearchParams(),system=$("workoutSystem")?.value,duration=$("workoutDuration")?.value,tol=$("workoutDurationTolerance")?.value,load=$("workoutLoad")?.value,difficulty=$("workoutDifficulty")?.value,phase=$("workoutPhase")?.value;
-  p.set("sport",workoutSport());if(system)p.set("system",system);p.set("environment",$("workoutEnvironment")?.value||"outdoor");if($("workoutSource")?.value)p.set("source",$("workoutSource").value);if(duration)p.set("duration",duration);if(tol)p.set("durationTolerance",tol);if(load)p.set("load",load);if(difficulty)p.set("maxDifficulty",difficulty);if(phase)p.set("phase",phase);if(date?.value)p.set("date",date.value);p.set("limit","40");
-  $("workoutResults").innerHTML='<div class="small">Počítám vhodnost workoutů…</div>';
-  try{const r=await jsonFetch("/app/api/workouts/search?"+p.toString());state.workoutLibrary=r;renderWorkoutLibrary(r);$("workoutSourceNote").textContent=r.sourcePolicy||"Veřejné reference mají zdroj; proprietární knihovny se nekopírují.";await loadScheduledWorkouts()}
+  p.set("sport",workoutSport());if(system)p.set("system",system);p.set("environment",$("workoutEnvironment")?.value||"outdoor");if(duration){p.set("duration",duration);if(tol)p.set("durationTolerance",tol);}if(load)p.set("load",load);if(difficulty)p.set("maxDifficulty",difficulty);if(phase)p.set("phase",phase);if(date?.value)p.set("date",date.value);p.set("limit","15");
+  $("workoutResults").innerHTML='<div class="small">Počítám vhodnost workoutů…</div>';state.workoutShowAll=false;
+  try{const r=await jsonFetch("/app/api/workouts/search?"+p.toString());state.workoutLibrary=r;renderWorkoutLibrary(r);await loadScheduledWorkouts()}
   catch(e){$("workoutResults").innerHTML='<div class="notice status-error">'+esc(e.message)+'</div>'}
 }
 async function scheduleLibraryWorkout(id,dateOverride=null,environment=null){
@@ -425,14 +432,14 @@ async function saveWorkoutFeedback(form){
   const row=form.closest('.scheduled-workout'),button=form.querySelector('button[type=submit]');
   button.disabled=true;
   try{
-    const body={workoutId:row.dataset.id,scheduledDate:row.dataset.date,completedPercent:Number(form.elements.completedPercent.value),rpe:Number(form.elements.rpe.value),survey:'completed'};
-    await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    toast('Hodnocení workoutu je uložené.');await loadWorkoutLibrary();
+    const body={workoutId:row.dataset.id,scheduledDate:row.dataset.date,rpe:Number(form.elements.rpe.value),notes:form.elements.notes.value};
+    const r=await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    toast(r.intervals?.status==='ok'?'RPE je uložené i u aktivity v Intervals.icu.':r.intervals?.status==='error'?'RPE je uložené; zápis do Intervals.icu selhal: '+r.intervals.message:'RPE je uložené.');await loadWorkoutLibrary();
   }catch(error){toast('Hodnocení se neuložilo: '+error.message);button.disabled=false}
 }
 
-// "Vygenerovat trénink": one recommended workout for the chosen day.
-function environmentLabel(env,sport=workoutSport()){return sport==='run'?(env==="outdoor"?"Venku":"Pás"):env==="outdoor"?"Outdoor":"Indoor"}
+// "Generovat": one recommended workout for the chosen day.
+function environmentLabel(env){return env==="outdoor"?"Outdoor":"Indoor"}
 function fmtPace(sec){sec=Math.round(Number(sec));return sec>0?Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0'):''}
 function fmtStepTime(sec){sec=Math.round(sec);if(sec<60)return sec+' s';const m=Math.floor(sec/60),r=sec%60;return m>=60?Math.floor(m/60)+' h '+(m%60?m%60+' min':''):m+(r?' min '+r+' s':' min')}
 // Step table from server rows ({repeats, steps:[{durationSeconds, percentLow/High, wattsLow/High, free, ramp, cadence, note}]}).
@@ -458,8 +465,9 @@ function renderGeneratedWorkout(r){
   const source=w.citation?esc(w.citation):w.source_url?'<a href="'+esc(w.source_url)+'" target="_blank" rel="noopener">'+esc(w.source_name)+'</a>':esc(w.source_name||"");
   const run=r.sport==='run',stepOpts=run?{sport:'run',pace:x.thresholdPace}:{};
   const planned=x.planned?'<details class="explain-block" open><summary><strong>Tvůj plán v Intervals.icu:</strong> '+esc(x.planned.name||'trénink')+(x.planned.minutes?' · '+x.planned.minutes+' min':'')+(x.planned.intensityFactor?' · IF '+fmt(x.planned.intensityFactor,2):'')+'</summary>'+(x.planned.steps?.length?stepTableHtml(x.planned.steps,x.ftp,stepOpts):'<p class="small">Plán nemá strukturu kroků.</p>')+'<p class="small">Níže je odpovídající trénink z knihovny, pokud chceš strukturu podle PFD – jinak klidně jeď svůj plán.</p></details>':'';
-  el.innerHTML=planned+'<article class="workout-result generated"><div><div class="workout-result-head"><div><div class="eyebrow">'+esc(longDate(r.date))+' · '+esc(capabilityLabel(w.primary_system,r.sport))+' · '+environmentLabel(r.environment,r.sport)+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+
-    '<div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span>'+(x.ftp?'<span class="pill">FTP '+esc(x.ftp)+' W</span>':'')+(x.thresholdPace?'<span class="pill">práh '+esc(fmtPace(x.thresholdPace))+' /km</span>':'')+'</div>'+
+  const role=r.weekRole?'<div class="notice" style="margin-bottom:10px">Plán týdne: <strong>'+esc(r.weekRole.label)+'</strong> – podle toho trenér volil typ tréninku (únava a připravenost mají přednost).</div>':'';
+  el.innerHTML=role+planned+'<article class="workout-result generated"><div><div class="workout-result-head"><div><div class="eyebrow">'+esc(longDate(r.date))+' · '+esc(capabilityLabel(w.primary_system,r.sport))+' · '+environmentLabel(r.environment,r.sport)+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+
+    '<div class="workout-meta"><span class="pill">'+hm(num(w.duration_minutes))+'</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span>'+(x.ftp?'<span class="pill">FTP '+esc(x.ftp)+' W</span>':'')+(x.thresholdPace?'<span class="pill">práh '+esc(fmtPace(x.thresholdPace))+' /km</span>':'')+'</div>'+
     '<p>'+esc(w.description||"")+'</p>'+
     '<div class="explain-grid">'+explainList('Proč tento trénink',x.why)+explainList('Jak ho jet',x.how)+explainList(r.environment==='outdoor'?'Venku':run?'Na páse':'Na trenažéru',x.environment)+explainList('Jídlo a pití',x.fueling)+'</div>'+
     '<h4 style="margin:14px 0 6px">Rozpis</h4>'+stepTableHtml(x.steps||[],x.ftp,stepOpts)+workoutProfile(w)+
@@ -492,9 +500,9 @@ async function generateWorkoutForDay(variant=0){
   finally{b.disabled=false}
 }
 async function load(){ $("topStatus").textContent="Načítám…"; const end=dateShift(weekStart,6); const jobs=[["daily","/app/api/daily?date="+selectedHistoryDate],["coaches","/app/api/coaches"],["fitness","/app/api/fitness?days=90"],["week","/app/api/week?start="+weekStart],["weight","/app/api/weight"],["activities","/app/api/activities"],["nutrition","/app/api/nutrition?start=2026-01-01&end="+dateShift(pragueToday(),1)],["sleep","/app/api/sleep?start="+dateShift(pragueToday(),-365)+"&end="+dateShift(pragueToday(),1)],["gym","/app/api/gym"]]; const results=await Promise.allSettled(jobs.map(([,url])=>jsonFetch(url))); state={...state}; let failed=0; results.forEach((r,i)=>{const key=jobs[i][0]; if(r.status==="fulfilled") state[key]=r.value; else {failed++; state[key]={status:"error",message:r.reason?.message||"Načtení selhalo"};}}); try{renderOverview();}catch{} try{renderCoachCouncil();}catch{} try{renderTraining();}catch{} try{renderNutrition();}catch{} try{renderRecovery();}catch{} try{renderHealth();}catch{} try{renderGym();}catch{} loadInbox(); $("topStatus").textContent=failed===0?"Live · "+new Date().toLocaleTimeString("cs-CZ"):(failed<jobs.length?"Částečně načteno":"Data unavailable"); $("topStatus").className=failed===0?"status-label small":failed<jobs.length?"status-label small status-partial":"status-label small status-error"; if(failed) toast("Některá datová služba není dostupná.");}
-document.querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>{activate(b.dataset.view);if(b.dataset.view==="workouts")loadWorkoutLibrary();});
+document.querySelectorAll(".navbtn").forEach(b=>b.onclick=()=>{activate(b.dataset.view);if(b.dataset.view==="workouts")openWorkouts();});
 $("searchWorkouts").onclick=loadWorkoutLibrary;
-document.querySelectorAll('.sport-switch [data-sport]').forEach(b=>b.onclick=()=>{setWorkoutSport(b.dataset.sport);loadWorkoutLibrary()});
+document.querySelectorAll('.sport-switch [data-sport]').forEach(b=>b.onclick=()=>{setWorkoutSport(b.dataset.sport);if(state.workoutSport==='gym')loadGym().catch(e=>toast(e.message));else loadWorkoutLibrary()});
 {let saved='ride';try{saved=localStorage.getItem('pfdWorkoutSport')||'ride'}catch{}setWorkoutSport(saved);}
 $("generateWorkoutBtn").onclick=()=>generateWorkoutForDay(0);{const d=$("generateDate");if(d){d.value=pragueToday();d.min=pragueToday();}}
 $("workoutResults").addEventListener("click",e=>{const b=e.target.closest(".schedule-workout");if(b)scheduleLibraryWorkout(b.dataset.id);});
@@ -587,8 +595,9 @@ function installDetailViews(){
   $('recovery').insertAdjacentHTML('beforeend','<div class="section">Podrobnosti a osobní baseline</div><div class="card" id="sleepSummary"></div><div class="card" id="sleepBreakdown" style="margin-top:12px"></div><div class="card" id="detail-sleep" style="margin-top:12px"></div><div class="view-detail-grid"><div class="card" id="detail-hrv"></div><div class="card" id="detail-rhr"></div></div><div class="card" id="detail-weight" style="margin-top:12px"></div><div class="card" id="sourceCoverage" style="margin-top:12px"></div>');
   $('training').insertAdjacentHTML('beforeend','<div class="section">Zátěž proti vlastnímu normálu</div><div class="card" id="detail-load"></div>');
   $('nutrition').insertAdjacentHTML('afterbegin','<div class="card" id="nutritionInsights" style="margin-bottom:16px"></div>');
-  $('gymNotice').insertAdjacentHTML('beforebegin','<div class="card" id="gymInsights" style="margin-bottom:12px"></div>');
-  $('gym').insertAdjacentHTML('beforeend','<div class="section">Silový progres</div><div class="card"><div class="select-row"><label for="strengthExercise" class="small">Vyber cvik</label><select id="strengthExercise"></select></div><p class="small">Nejvyšší použitá váha z dokončených pracovních sérií každého dne. Vyšší váha sama o sobě neznamená progres, pokud se změnil počet opakování nebo technika.</p><div id="detail-strength"></div></div>');
+  // Gym statistics live in Trénink; the gym builder is part of Workouty.
+  $('gymHistory').closest('.card').insertAdjacentHTML('beforebegin','<div class="card" id="gymInsights" style="margin-bottom:12px"></div>');
+  $('gymHistory').closest('.card').insertAdjacentHTML('afterend','<div class="section">Silový progres</div><div class="card"><div class="select-row"><label for="strengthExercise" class="small">Vyber cvik</label><select id="strengthExercise"></select></div><p class="small">Nejvyšší použitá váha z dokončených pracovních sérií každého dne. Vyšší váha sama o sobě neznamená progres, pokud se změnil počet opakování nebo technika.</p><div id="detail-strength"></div></div>');
   document.querySelector('.content').insertAdjacentHTML('beforeend','<section class="view" id="settings"><div class="hero section-hero"><div><div class="eyebrow">Zdroje dat</div><h1>Nastavení a propojení</h1><p>Jedno místo pro trénink, spánek, regeneraci a výživu.</p></div></div><div class="grid2" id="connectionCards"><div class="notice">Načítám propojení…</div></div><div class="card" style="margin-top:12px"><h3>Jak pracujeme s více zdroji</h3><p class="small">Tréninkový plán a zátěž čerpáme z Intervals.icu. Spánek, hmotnost a výživa přicházejí z Google Health. HRV a klidový tep zobrazujeme, pokud jsou v Intervals wellness skutečně naměřené. Každý uživatel má vlastní připojení a vidí jen svoje data.</p><p class="small">Stav „Nakonfigurováno“ znamená, že jsou na serveru dostupné přihlašovací údaje. Dostupnost jednotlivých měření najdeš v Recovery & Health.</p><button class="btn" id="checkConnections">Zkontrolovat propojení</button></div></section>');
   $('checkConnections').onclick=loadConnections;
   $('connectionCards').insertAdjacentHTML('beforebegin','<div class="card" id="accountCard" style="margin-bottom:12px"><div class="small">Načítám účet…</div></div>');
@@ -863,11 +872,35 @@ function renderNutritionExperience(food,target,daily){
   $('mealDistribution').innerHTML='<div class="experience-heading"><h3>Energie během dne</h3><small>'+esc($('foodDate')?.value||pragueToday())+' · kcal</small></div>'+experienceBars(mealRows,{max,colors:['#83e9c3'],height:240})+'<p class="small">Pouze zapsaná jídla v deníku. Nezapsané jídlo neznamená, že jsi nejedl.</p>';
   renderFuelingBreakdown(daily);
 }
+// Completed activities of the week plus gym sessions from the strength history; every card opens a detail.
+function weekGymSessions(days){
+  const dates=new Set((days||[]).map(d=>d.date)),byDate=new Map();
+  for(const r of state.gym?.history||[]){const date=String(r.workout_date||r.date||'').slice(0,10);if(!dates.has(date))continue;if(!byDate.has(date))byDate.set(date,[]);byDate.get(date).push(r);}
+  return [...byDate].map(([date,sets])=>({date,sets}));
+}
+function isStrengthActivity(a){return /weight|strength|gym|posil/i.test(String(a?.type||'')+' '+String(a?.name||''))}
 function renderActivityGallery(){
-  const days=state.week?.days||[],activities=days.flatMap(d=>(d.daily?.training?.completed||[]).filter(a=>!isNutritionItem(a)).map(a=>({...a,date:d.date}))).slice().reverse().slice(0,8);
-  $('activityGallery').innerHTML=activities.length?activities.map((a,i)=>'<button class="activity-summary-card" data-activity-detail="'+i+'"><div class="eyebrow">'+esc(longDate(a.date))+' · '+esc(a.type||'Aktivita')+'</div><h3>'+esc(a.name||'Aktivita')+'</h3><div class="activity-numbers"><div><strong>'+hm(num(a.durationHours)*60)+'</strong><small>Doba pohybu</small></div><div><strong>'+(measured(a.tss)?fmt(a.tss):'—')+'</strong><small>TSS</small></div><div><strong>'+(measured(a.calories)?fmt(a.calories):'—')+'</strong><small>kcal</small></div></div><p class="small">Otevřít výkon, tep a soukromou GPS trasu ↗</p></button>').join(''):'<div class="data-gap">V tomto týdnu nejsou dostupné dokončené aktivity.</div>';
-  $('activityGallery').querySelectorAll('[data-activity-detail]').forEach(b=>b.onclick=()=>openActivityProfile(activities[Number(b.dataset.activityDetail)]));
-  $('activityGallery').querySelectorAll('[data-activity-detail]').forEach(b=>{const a=activities[Number(b.dataset.activityDetail)],metric=b.querySelectorAll('.activity-numbers>div')[1];metric.querySelector('strong').textContent=measured(a.payload?.average_heartrate)?fmt(a.payload.average_heartrate):'—';metric.querySelector('small').textContent='Průměrný tep · bpm';b.querySelector('p').textContent='Otevřít výkon, tep a GPS trasu ↗';});
+  const days=state.week?.days||[],gym=weekGymSessions(days);
+  const activities=days.flatMap(d=>(d.daily?.training?.completed||[]).filter(a=>!isNutritionItem(a)).map(a=>({...a,date:d.date})));
+  // A strength activity recorded by the watch carries that day's sets; otherwise the sets get their own card.
+  for(const g of gym){const a=activities.find(x=>x.date===g.date&&isStrengthActivity(x));if(a)a.gymSets=g.sets;else activities.push({date:g.date,name:'Posilovna',type:'Gym',gymSets:g.sets,gymOnly:true});}
+  activities.sort((x,y)=>String(y.start||y.date).localeCompare(String(x.start||x.date)));
+  const shown=activities.slice(0,8);
+  const card=(a,i)=>{
+    if(a.gymSets){const exercises=new Set(a.gymSets.map(r=>r.exercise)).size,volume=a.gymSets.reduce((s,r)=>s+num(r.actual_kg??r.actualKg)*num(r.actual_reps??r.actualReps),0),hr=a.payload?.average_heartrate;
+      return '<button class="activity-summary-card gym" data-activity-detail="'+i+'"><div class="eyebrow">'+esc(longDate(a.date))+' · Gym</div><h3>'+esc(a.gymOnly?'Posilovna':a.name||'Posilovna')+'</h3><div class="activity-numbers"><div><strong>'+exercises+'</strong><small>cviků</small></div><div><strong>'+a.gymSets.length+'</strong><small>sérií</small></div><div><strong>'+(measured(hr)?fmt(hr):fmt(volume))+'</strong><small>'+(measured(hr)?'Ø tep · bpm':'objem · kg')+'</small></div></div><p class="small">Otevřít cviky a série ↗</p></button>';}
+    const hr=a.payload?.average_heartrate??a.averageHeartRate;
+    return '<button class="activity-summary-card" data-activity-detail="'+i+'"><div class="eyebrow">'+esc(longDate(a.date))+' · '+esc(a.type||'Aktivita')+'</div><h3>'+esc(a.name||'Aktivita')+'</h3><div class="activity-numbers"><div><strong>'+hm(num(a.durationHours)*60)+'</strong><small>Doba pohybu</small></div><div><strong>'+(measured(hr)?fmt(hr):'—')+'</strong><small>Ø tep · bpm</small></div><div><strong>'+(measured(a.calories)?fmt(a.calories):'—')+'</strong><small>kcal</small></div></div><p class="small">'+(a.source==='google-health'?'Google Health · detail ↗':'Otevřít výkon, tep a GPS trasu ↗')+'</p></button>';
+  };
+  $('activityGallery').innerHTML=shown.length?shown.map(card).join(''):'<div class="data-gap">V tomto týdnu nejsou dostupné dokončené aktivity.</div>';
+  $('activityGallery').querySelectorAll('[data-activity-detail]').forEach(b=>b.onclick=()=>{const a=shown[Number(b.dataset.activityDetail)];if(a.gymSets)openGymSessionProfile(a);else openActivityProfile(a);});
+}
+function openGymSessionProfile(a){
+  const el=$('activityProfile');el.hidden=false;
+  const groups=new Map();for(const r of a.gymSets){if(!groups.has(r.exercise))groups.set(r.exercise,[]);groups.get(r.exercise).push(r);}
+  const volume=a.gymSets.reduce((s,r)=>s+num(r.actual_kg??r.actualKg)*num(r.actual_reps??r.actualReps),0);
+  el.innerHTML='<div class="experience-heading"><h3>'+esc(a.gymOnly?'Posilovna':a.name||'Posilovna')+' · '+esc(longDate(a.date))+'</h3><span class="pill">Gym · uložené série</span></div><div class="experience-stats">'+[['Cviky',groups.size],['Série',a.gymSets.length],['Objem',fmt(volume)+' kg'],['Ø tep',measured(a.payload?.average_heartrate)?fmt(a.payload.average_heartrate)+' bpm':'—']].map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div><div class="scroll"><table><thead><tr><th>Cvik</th><th>Série</th><th>Nejvyšší váha</th><th>Opakování</th></tr></thead><tbody>'+[...groups].map(([name,sets])=>'<tr><td>'+esc(name||'Cvik')+'</td><td>'+sets.length+'</td><td>'+fmt(Math.max(...sets.map(r=>num(r.actual_kg??r.actualKg))),1)+' kg</td><td class="small">'+sets.map(r=>esc(String(r.actual_kg??r.actualKg??'—'))+' × '+esc(String(r.actual_reps??r.actualReps??'—'))).join(' · ')+'</td></tr>').join('')+'</tbody></table></div>';
+  el.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function activityStreamChart(stream,color,label,unit){
   const pts=stream?.points||[];if(!pts.length)return '<div class="data-gap">'+esc(label)+' není v této aktivitě dostupný.</div>';const max=Math.max(1,...pts.map(p=>p.v))*1.1,tmax=Math.max(1,...pts.map(p=>p.t)),y=v=>220-v/max*190,x=t=>55+t/tmax*675;let out='';for(let j=0;j<4;j++){const v=max*j/3;out+='<line x1="55" x2="730" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#29323d"/><text x="47" y="'+(y(v)+5)+'" font-size="13" fill="#a0b1c5" text-anchor="end">'+fmt(v)+'</text>';}
@@ -879,7 +912,7 @@ function activityRouteSvg(stream){
 }
 async function openActivityProfile(activity){
   const el=$('activityProfile');el.hidden=false;el.innerHTML='<h3>'+esc(activity.name||'Detail aktivity')+'</h3><div class="notice">Načítám detail z Intervals.icu…</div>';el.scrollIntoView({behavior:'smooth',block:'start'});
-  if(activity.source&&activity.source!=='intervals'){el.innerHTML='<h3>'+esc(activity.name||'Detail aktivity')+'</h3><div class="data-gap">Tato aktivita pochází z '+esc(activity.source)+'. Zdroj poskytl souhrn, ale ne dostupný GPS nebo výkonový stream. Trasu ani průběh nevymýšlíme.</div>';return;}
+  if(activity.source&&activity.source!=='intervals'){const m=activity.payload?.exercise?.metricsSummary||{},hr=activity.payload?.average_heartrate??activity.averageHeartRate,dist=num(m.distanceMillimeters)/1e6;el.innerHTML='<div class="experience-heading"><h3>'+esc(activity.name||'Detail aktivity')+'</h3><span class="pill">'+esc(activity.source==='google-health'?'Google Health':activity.source)+' · souhrn</span></div><div class="experience-stats">'+[['Doba pohybu',hm(num(activity.durationHours)*60)],['Průměrný tep',measured(hr)?fmt(hr)+' bpm':'neměřeno'],['Energie',measured(activity.calories)?fmt(activity.calories)+' kcal':'—'],['Vzdálenost',dist>0?fmt(dist,2)+' km':'—'],['Kroky',measured(m.steps)?fmt(m.steps):'—']].map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div><p class="small">Zdroj poskytuje souhrn aktivity (i automaticky rozpoznané chůze), ne průběh výkonu ani GPS stopu. Trasu ani průběh nevymýšlíme.</p>';return;}
   const id=activity.payload?.id||activity.externalId||activity.sourceId||String(activity.id||'').replace(/^intervals[:_-]/,'');
   try{const result=await jsonFetch('/app/api/activity-detail?id='+encodeURIComponent(id)),a=result.activity||{},streams=result.streams||[],np=a.icu_normalized_watts??a.icu_weighted_average_watts;
     el.innerHTML='<div class="experience-heading"><h3>'+esc(a.name||activity.name)+'</h3><span class="pill">Intervals.icu · naměřené hodnoty</span></div><div class="experience-stats">'+[['Vzdálenost',measured(a.distance)?fmt(a.distance/1000,1)+' km':'—'],['Převýšení',measured(a.total_elevation_gain)?fmt(a.total_elevation_gain)+' m':'—'],['Normalizovaný výkon',measured(np)?fmt(np)+' W':'—']].map(([label,value])=>'<div><span>'+label+'</span><strong>'+value+'</strong></div>').join('')+'</div>'+activityRouteSvg(streams.find(s=>s.type==='latlng'))+'<div class="experience-grid"><div>'+activityStreamChart(streams.find(s=>s.type==='watts'),'#83e9c3','Výkon','W')+'</div><div>'+activityStreamChart(streams.find(s=>s.type==='heartrate'),'#ff9c97','Tep','bpm')+'</div></div><p class="small">Průběh je zmenšený na nejvýše přibližně 1200 bodů na signál. Nejde o automatické hodnocení jednotlivých intervalů.</p>';
@@ -976,6 +1009,13 @@ function installSimpleFoodEditor(){
   editor.addEventListener('input',()=>{updateSimple();});editor.addEventListener('change',e=>{if(!updating&&e.target.id!=='simpleFoodPortion')prepareSimple();});
   const style=document.createElement('style');style.textContent='#foodEditor{border:1px solid #33404a;border-radius:20px!important;padding:24px!important}.simple-food-hero h3{display:block!important;font-size:27px;margin:9px 0 22px;line-height:1.2}.simple-food-macros{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:18px 0;border-top:1px solid #2d3944;border-bottom:1px solid #2d3944;margin-bottom:20px}.simple-food-macros strong{display:block;font-size:21px;white-space:nowrap}.simple-food-macros strong small{font-size:12px;font-weight:500}.simple-food-macros span{display:block;font-size:12px;color:#a6b5c4;margin-top:6px}.simple-food-picker{display:grid;grid-template-columns:100px minmax(0,1fr);gap:10px}.simple-food-picker label{display:grid;gap:6px;color:#a6b5c4;font-size:12px}.simple-food-picker .food-input{font-size:16px;padding:13px}.simple-food-fractions{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}.simple-food-fractions .btn{padding:7px 12px;min-width:40px}#foodEditor #foodPortionPreview{border:0;background:none;padding:0;color:#a6b5c4;font-size:13px;margin:12px 0}.simple-food-add{width:100%;padding:14px!important;border-radius:14px!important;font-size:16px}#foodAdvanced{margin-top:18px;border-top:1px solid #2d3944;padding-top:15px}#foodAdvanced summary{cursor:pointer;color:#a6b5c4;font-size:13px}#foodAdvanced .food-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#foodAdvanced #savePersonalFood{margin-top:12px}.simple-food-context{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.simple-food-context label{display:grid;gap:5px;font-size:12px;color:#a6b5c4}.simple-food-context .food-input{min-height:42px}.food-selection-layout #foodResults{max-height:550px}.food-selection-layout{grid-template-columns:minmax(0,1fr) minmax(360px,1fr)}@media(max-width:900px){.food-selection-layout{grid-template-columns:minmax(0,1fr)}#foodEditor{padding:18px!important}.simple-food-macros{gap:6px}.simple-food-macros strong{font-size:19px}.simple-food-macros span{font-size:11px}}';document.head.append(style);
 }
+// Food editor: full width and low (portion on the left, values on the right),
+// without fibre, salt and the pasted-label text; photos are still read.
+function installCompactFoodEditor(){
+  for(const id of ['food-fiber_100g','food-salt_100g'])$(id).closest('label').hidden=true;
+  $('foodOcrDetails').hidden=true;
+  const style=document.createElement('style');style.textContent='.food-selection-layout{grid-template-columns:minmax(0,1fr)!important;gap:14px!important}.food-selection-layout #foodResults{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;max-height:280px}#foodEditor:not([hidden]){display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.5fr);column-gap:28px;align-items:start;padding:18px 22px!important}#foodEditor>*{grid-column:1;min-width:0}#foodEditor>#foodAdvanced{grid-column:2;grid-row:1/span 12;margin-top:0;border-top:0;padding-top:0}#foodAdvanced .food-editor-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 10px}#foodAdvanced .food-editor-grid label{font-size:11px}#foodAdvanced .food-input{padding:8px 9px;min-height:0}.simple-food-hero h3{font-size:21px!important;margin:4px 0 12px!important}.simple-food-macros{padding:10px 0!important;margin-bottom:12px!important}.simple-food-macros strong{font-size:18px!important}.simple-food-picker .food-input{padding:9px!important;font-size:15px!important}.simple-food-fractions{margin:8px 0!important}#foodEditor #foodPortionPreview{margin:6px 0!important}.simple-food-add{padding:10px!important}@media(max-width:1100px){#foodAdvanced .food-editor-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:900px){#foodEditor:not([hidden]){display:block}#foodEditor>#foodAdvanced{margin-top:14px;border-top:1px solid #2d3944;padding-top:12px}}';document.head.append(style);
+}
 function installFoodDatabaseSources(){
  const attribution='<a href="https://www.opennutrition.app" target="_blank" rel="noopener noreferrer">OpenNutrition</a> a <a href="https://world.openfoodfacts.org/" target="_blank" rel="noopener noreferrer">Open Food Facts</a> · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL</a> · <a href="/app/api/food/reference-data">Referenční data a licence</a>';
  $('foodEntryStatus').textContent='Běžné suroviny s českými názvy · značkové výrobky · tvoje uložené potraviny.';
@@ -1015,25 +1055,30 @@ function wirePowerBoundsEditor(ftp){
     w.oninput=()=>{if(w.value)p.value=Math.round(Number(w.value)/ftp*1000)/10};
     p.oninput=()=>{if(p.value)w.value=Math.round(ftp*Number(p.value)/100)}});
 }
+// Compact, Intervals-style panels: the key numbers on top, one dense zone table each.
+function zoneCode(name){const m=String(name||'').match(/^(\S+)\s+(.*)$/);return m?[m[1],m[2]]:[String(name||''),'']}
+function zoneRows(rows){return '<table class="zone-table"><tbody>'+rows.map(r=>'<tr>'+r.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
 function renderTrainingProfile(d){
   const p=d.profile||{},r=d.resolved||{},card=$('trainingProfileCard');
-  const src={manual:'nastaveno ručně','intervals-settings':'z nastavení Intervals.icu','latest-ride':'z poslední jízdy'}[r.ftpSource]||'nenastaveno';
+  const src={manual:'ručně','intervals-settings':'z Intervals.icu','latest-ride':'z poslední jízdy'}[r.ftpSource]||'nenastaveno';
   const powerModel=p.powerZoneModel||'coggan7',hrModel=p.hrZoneModel||'frielLthr';
   const powerBounds=powerModel==='custom'?(p.powerZoneBounds||[55,75,90,105,120,150]):(d.powerZoneModels.find(m=>m.id===powerModel)?.bounds||[]);
   const hrBounds=p.hrZoneBounds||d.hrZones.slice(0,-1).map(z=>z.bpmHigh).filter(Boolean);
-  card.innerHTML='<h3>FTP a zóny</h3>'+
-    '<p class="small">Aktuální FTP: <strong>'+(r.ftp?esc(r.ftp)+' W':'—')+'</strong> ('+esc(src)+')'+(r.intervalsFtp?' · Intervals.icu '+esc(r.intervalsFtp)+' W':'')+(r.indoorFtp?' · indoor '+esc(r.indoorFtp)+' W':'')+(r.latestRideFtp?' · poslední jízda '+esc(r.latestRideFtp)+' W':'')+'. Ruční FTP má přednost; watty v trénincích se počítají z něj.</p>'+
-    '<div class="select-row" style="gap:8px;flex-wrap:wrap"><label class="small">Ruční FTP <input id="tpFtp" type="number" min="50" max="600" value="'+esc(p.ftp||'')+'" placeholder="W" style="'+inputStyle+';width:90px"></label>'+(p.ftp?'<button class="btn" type="button" id="tpClearFtp">Použít FTP z Intervals</button>':'')+'</div>'+
-    '<details class="explain-block"><summary>Spočítat FTP z testu</summary><div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpMethod" style="'+inputStyle+'">'+d.ftpMethods.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('')+'</select><span id="tpMethodInputs"></span><button class="btn" type="button" id="tpEstimate">Spočítat</button></div><div class="small" id="tpEstimateResult" aria-live="polite"></div></details>'+
-    '<h4 style="margin:14px 0 6px">Výkonové zóny</h4><select id="tpPowerModel" style="'+inputStyle+'">'+d.powerZoneModels.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===powerModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(powerModel==='custom'?' selected':'')+'>Vlastní hranice</option></select>'+
-    (powerModel==='custom'?powerBoundsEditor(powerBounds,r.ftp):'<button class="btn" type="button" id="tpEditPower" style="margin-left:8px">Upravit hranice (% / W)</button>')+
-    '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>% FTP</th><th>Watty</th></tr></thead><tbody>'+d.powerZones.map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+Math.round(z.percentLow)+(z.percentHigh!=null?'–'+Math.round(z.percentHigh):'+')+' %</td><td>'+(z.wattsLow!=null?z.wattsLow+(z.wattsHigh!=null?'–'+z.wattsHigh:'+')+' W':'—')+'</td></tr>').join('')+'</tbody></table>'+
-    '<h4 style="margin:14px 0 6px">Tepové zóny</h4><div class="select-row" style="gap:8px;flex-wrap:wrap">'+[['tpLthr','LTHR',r.lthr],['tpMaxHr','Max. tep',r.maxHr],['tpRestHr','Klidový tep',r.restHr]].map(([id,l,v])=>'<label class="small">'+l+' <input id="'+id+'" type="number" value="'+esc(v||'')+'" placeholder="bpm" style="'+inputStyle+';width:80px"></label>').join('')+
-    '<select id="tpHrModel" style="'+inputStyle+'">'+d.hrZoneModels.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===hrModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(hrModel==='custom'?' selected':'')+'>Vlastní hranice (bpm)</option></select></div>'+
-    (hrModel==='custom'?zoneBoundsEditor('hr',hrBounds.length?hrBounds:[130,145,155,165],'bpm'):'<button class="btn" type="button" id="tpEditHr" style="margin-left:8px">Upravit hranice (bpm)</button>')+
-    '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>Tep</th></tr></thead><tbody>'+d.hrZones.map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+(z.bpmLow==null&&z.bpmHigh==null?'—':z.bpmLow==null?'do '+z.bpmHigh+' bpm':z.bpmLow+(z.bpmHigh!=null?'–'+z.bpmHigh:'+')+' bpm')+'</td></tr>').join('')+'</tbody></table>'+
-    (d.hrZones.every(z=>z.bpmHigh==null&&z.bpmLow==null)?'<p class="small">Pro výpočet tepových zón doplň LTHR, max. tep, nebo max. a klidový tep podle zvoleného modelu.</p>':'')+
-    runProfileHtml(d)+
+  const hrRef=(d.hrZoneModels.find(m=>m.id===hrModel)?.reference)||'lthr',refBpm=hrRef==='maxHr'?r.maxHr:r.lthr,pctOf=v=>refBpm&&v!=null?Math.round(v/refBpm*100):null;
+  const figure=(label,value)=>'<div><span>'+label+'</span><strong>'+value+'</strong></div>';
+  const field=(id,label,value,placeholder)=>'<div><span>'+label+'</span><input id="'+id+'" type="number" value="'+esc(value||'')+'" placeholder="'+esc(placeholder||'—')+'" aria-label="'+esc(label)+'"></div>';
+  const power='<section class="zone-panel"><h4>⚡ Výkon</h4><div class="zone-figures">'+field('tpFtp','FTP (ručně)',p.ftp,r.ftp?String(r.ftp):'W')+figure('Platné FTP',r.ftp?esc(r.ftp)+' W':'—')+figure('Indoor FTP',r.indoorFtp?esc(r.indoorFtp)+' W':'—')+figure('eFTP',r.latestRideFtp?esc(r.latestRideFtp)+' W':'—')+'</div>'+
+    '<p class="small" style="margin:0 0 8px">Zdroj FTP: '+esc(src)+(r.intervalsFtp?' · Intervals.icu '+esc(r.intervalsFtp)+' W':'')+'. Ruční FTP má přednost. '+(p.ftp?'<button class="btn" type="button" id="tpClearFtp">Použít FTP z Intervals</button>':'')+'</p>'+
+    '<select id="tpPowerModel" style="'+inputStyle+'">'+d.powerZoneModels.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===powerModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(powerModel==='custom'?' selected':'')+'>Vlastní hranice</option></select>'+
+    zoneRows(d.powerZones.map(z=>{const [code,label]=zoneCode(z.name);return [esc(code),esc(label),Math.round(z.percentLow)+(z.percentHigh!=null?'–'+Math.round(z.percentHigh):'+')+' %',z.wattsLow!=null?z.wattsLow+(z.wattsHigh!=null?'–'+z.wattsHigh:'+')+' W':'—']}))+
+    (powerModel==='custom'?powerBoundsEditor(powerBounds,r.ftp):'<button class="btn" type="button" id="tpEditPower" style="margin-top:8px">Upravit hranice</button>')+
+    '<details class="explain-block"><summary>Spočítat FTP z testu</summary><div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpMethod" style="'+inputStyle+'">'+d.ftpMethods.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('')+'</select><span id="tpMethodInputs"></span><button class="btn" type="button" id="tpEstimate">Spočítat</button></div><div class="small" id="tpEstimateResult" aria-live="polite"></div></details></section>';
+  const heart='<section class="zone-panel"><h4>❤ Tep</h4><div class="zone-figures">'+field('tpLthr','Prahový tep',r.lthr,'bpm')+field('tpMaxHr','Max. tep',r.maxHr,'bpm')+field('tpRestHr','Klidový tep',r.restHr,'bpm')+'</div>'+
+    '<select id="tpHrModel" style="'+inputStyle+'">'+d.hrZoneModels.map(m=>'<option value="'+esc(m.id)+'"'+(m.id===hrModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(hrModel==='custom'?' selected':'')+'>Vlastní hranice (bpm)</option></select>'+
+    zoneRows(d.hrZones.map(z=>{const [code,label]=zoneCode(z.name),lo=pctOf(z.bpmLow),hi=pctOf(z.bpmHigh);return [esc(code),esc(label),hrModel==='custom'||(lo==null&&hi==null)?'':(lo==null?'0':lo)+(hi!=null?'–'+hi:'+')+' %',z.bpmLow==null&&z.bpmHigh==null?'—':z.bpmLow==null?'do '+z.bpmHigh:z.bpmLow+(z.bpmHigh!=null?'–'+z.bpmHigh:'+')]}))+
+    (hrModel==='custom'?zoneBoundsEditor('hr',hrBounds.length?hrBounds:[130,145,155,165],'bpm'):'<button class="btn" type="button" id="tpEditHr" style="margin-top:8px">Upravit hranice</button>')+
+    (d.hrZones.every(z=>z.bpmHigh==null&&z.bpmLow==null)?'<p class="small">Doplň prahový tep (LTHR), max. tep, nebo max. a klidový tep podle zvoleného modelu.</p>':'')+'</section>';
+  card.innerHTML='<h3>FTP a zóny</h3><p class="small" style="margin:0">Watty a tempa v trénincích se počítají z těchto hodnot. Změna modelu se uloží hned.</p><div class="zone-columns">'+power+heart+runProfileHtml(d)+'</div>'+
     '<div class="workout-filter-actions" style="margin-top:12px"><button class="btn primary" type="button" id="tpSave">Uložit</button><span class="small" id="tpResult" aria-live="polite"></span></div>';
   const methodInputs=()=>{const m=d.ftpMethods.find(x=>x.id===$('tpMethod').value);$('tpMethodInputs').innerHTML=m.inputs.map(i=>'<label class="small">'+esc(i.label)+' <input data-ftp-input="'+esc(i.key)+'" type="number" step="0.1" style="'+inputStyle+';width:90px"></label>').join(' ')};
   $('tpMethod').onchange=methodInputs;methodInputs();
@@ -1068,16 +1113,15 @@ async function saveTrainingProfileForm(){
 // Running: threshold pace (manual, from a race or from Intervals) and pace zones.
 function runProfileHtml(d){
   const p=d.profile||{},r=d.resolved||{},paceModel=p.paceZoneModel||'friel',pace=r.runThresholdPace;
-  const src={manual:'nastaveno ručně','intervals-settings':'z nastavení Intervals.icu'}[r.runPaceSource]||'nenastaveno';
+  const src={manual:'ručně','intervals-settings':'z Intervals.icu'}[r.runPaceSource]||'nenastaveno';
   const bounds=paceModel==='custom'?(p.paceZoneBounds||[]):(d.paceZoneModels||[]).find(m=>m.id===paceModel)?.bounds||[];
-  const zoneRange=z=>!pace?'—':z.paceSlow==null?'pomaleji než '+fmtPace(z.paceFast):z.paceFast==null?'rychleji než '+fmtPace(z.paceSlow):fmtPace(z.paceSlow)+'–'+fmtPace(z.paceFast);
-  return '<h4 style="margin:18px 0 6px">🏃 Běh – prahové tempo a zóny</h4>'+
-    '<p class="small">Aktuální prahové tempo: <strong>'+(pace?esc(fmtPace(pace))+' /km':'—')+'</strong> ('+esc(src)+')'+(r.intervalsRunPace&&r.runPaceSource==='manual'?' · Intervals.icu '+esc(fmtPace(r.intervalsRunPace))+' /km':'')+'. Prahové tempo ≈ tempo, které udržíš zhruba hodinu.</p>'+
-    '<div class="select-row" style="gap:8px;flex-wrap:wrap"><label class="small">Ruční prahové tempo <input id="tpRunPace" type="text" inputmode="numeric" placeholder="m:ss" value="'+esc(p.runThresholdPace?fmtPace(p.runThresholdPace):'')+'" style="'+inputStyle+';width:80px"> /km</label>'+(p.runThresholdPace?'<button class="btn" type="button" id="tpClearPace">Použít tempo z Intervals</button>':'')+'<label class="small">LTHR běh <input id="tpRunLthr" type="number" value="'+esc(p.runLthr||'')+'" placeholder="'+esc(r.runLthr||'bpm')+'" style="'+inputStyle+';width:80px"></label></div>'+
-    '<details class="explain-block"><summary>Spočítat prahové tempo ze závodu nebo testu</summary><div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpPaceMethod" style="'+inputStyle+'">'+(d.paceMethods||[]).map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('')+'</select><span id="tpPaceInputs"></span><button class="btn" type="button" id="tpPaceEstimate">Spočítat</button></div><div class="small" id="tpPaceResult" aria-live="polite"></div><p class="small">Ze závodu přepočítávám na tempo na 60 min (Riegel). Test 30 min: průměrné tempo posledních 20 min (Friel).</p></details>'+
-    '<div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpPaceModel" style="'+inputStyle+'">'+(d.paceZoneModels||[]).map(m=>'<option value="'+esc(m.id)+'"'+(m.id===paceModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(paceModel==='custom'?' selected':'')+'>Vlastní hranice</option></select>'+(paceModel==='custom'?'':'<button class="btn" type="button" id="tpEditPace">Upravit hranice (% / tempo)</button>')+'</div>'+
-    (paceModel==='custom'?paceBoundsEditor(bounds,pace):'')+
-    '<table class="step-table" style="margin-top:8px"><thead><tr><th>Zóna</th><th>% prahu</th><th>Tempo /km</th></tr></thead><tbody>'+(d.paceZones||[]).map(z=>'<tr><td>'+esc(z.name)+'</td><td>'+(z.percentLow?Math.round(z.percentLow*10)/10:0)+(z.percentHigh!=null?'–'+Math.round(z.percentHigh*10)/10:'+')+' %</td><td>'+esc(zoneRange(z))+'</td></tr>').join('')+'</tbody></table>';
+  const zoneRange=z=>!pace?'—':z.paceSlow==null?'> '+fmtPace(z.paceFast):z.paceFast==null?'< '+fmtPace(z.paceSlow):fmtPace(z.paceSlow)+'–'+fmtPace(z.paceFast);
+  return '<section class="zone-panel"><h4>🏃 Běh</h4><div class="zone-figures"><div><span>Prahové tempo (ručně)</span><input id="tpRunPace" type="text" inputmode="numeric" placeholder="'+esc(pace?fmtPace(pace):'m:ss')+'" value="'+esc(p.runThresholdPace?fmtPace(p.runThresholdPace):'')+'" aria-label="Ruční prahové tempo"></div><div><span>Platné tempo</span><strong>'+(pace?esc(fmtPace(pace))+' /km':'—')+'</strong></div><div><span>Prahový tep běh</span><input id="tpRunLthr" type="number" value="'+esc(p.runLthr||'')+'" placeholder="'+esc(r.runLthr||'bpm')+'" aria-label="Běžecký prahový tep"></div></div>'+
+    '<p class="small" style="margin:0 0 8px">Zdroj: '+esc(src)+(r.intervalsRunPace&&r.runPaceSource==='manual'?' · Intervals.icu '+esc(fmtPace(r.intervalsRunPace))+' /km':'')+'. Prahové tempo ≈ tempo, které udržíš zhruba hodinu. '+(p.runThresholdPace?'<button class="btn" type="button" id="tpClearPace">Použít tempo z Intervals</button>':'')+'</p>'+
+    '<select id="tpPaceModel" style="'+inputStyle+'">'+(d.paceZoneModels||[]).map(m=>'<option value="'+esc(m.id)+'"'+(m.id===paceModel?' selected':'')+'>'+esc(m.label)+'</option>').join('')+'<option value="custom"'+(paceModel==='custom'?' selected':'')+'>Vlastní hranice</option></select>'+
+    zoneRows((d.paceZones||[]).map(z=>{const [code,label]=zoneCode(z.name);return [esc(code),esc(label),(z.percentLow?Math.round(z.percentLow*10)/10:0)+(z.percentHigh!=null?'–'+Math.round(z.percentHigh*10)/10:'+')+' %',esc(zoneRange(z))]}))+
+    (paceModel==='custom'?paceBoundsEditor(bounds,pace):'<button class="btn" type="button" id="tpEditPace" style="margin-top:8px">Upravit hranice</button>')+
+    '<details class="explain-block"><summary>Spočítat prahové tempo ze závodu nebo testu</summary><div class="select-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><select id="tpPaceMethod" style="'+inputStyle+'">'+(d.paceMethods||[]).map(m=>'<option value="'+esc(m.id)+'">'+esc(m.label)+'</option>').join('')+'</select><span id="tpPaceInputs"></span><button class="btn" type="button" id="tpPaceEstimate">Spočítat</button></div><div class="small" id="tpPaceResult" aria-live="polite"></div><p class="small">Ze závodu přepočítávám na tempo na 60 min (Riegel). Test 30 min: průměrné tempo posledních 20 min (Friel).</p></details></section>';
 }
 function wireRunProfile(d){
   if(!$('tpPaceModel'))return;
@@ -1093,4 +1137,126 @@ function wireRunProfile(d){
 async function loadAccount(){const me=await jsonFetch('/app/api/me');const card=$('accountCard');if(card){card.innerHTML='<div class="detail-heading"><h3>Účet</h3><button class="btn" type="button" id="logoutBtn">Odhlásit</button></div><p class="small" style="margin:0">Přihlášen jako <strong>'+esc(me.user?.email||'')+'</strong>'+(me.user?.isAdmin?' · správce':'')+'</p>';$('logoutBtn').onclick=logout;}if(me.missingProviders?.length)showOnboarding(me.missingProviders);if(!$('trainingProfileCard')&&$('settings')){$('connectionCards').insertAdjacentHTML('afterend','<article class="card" id="trainingProfileCard" style="margin-top:12px"><h3>FTP a zóny</h3><div class="small">Načítám…</div></article>');loadTrainingProfile();}if(me.user?.isAdmin)installAdmin();return me;}
 function installAdmin(){if($('adminCard'))return;$('settings').insertAdjacentHTML('beforeend','<article class="card" id="adminCard" style="margin-top:12px"><h3>Uživatelé</h3><p class="small">Přihlásit se přes Google mohou jen pozvaní. Pozvi e-mail Google účtu a pošli uživateli odkaz na aplikaci. Připojení Google Health a Intervals si každý nastaví sám.</p><form id="inviteForm" class="select-row"><input id="inviteEmail" type="email" required placeholder="email@gmail.com" aria-label="E-mail pozvaného uživatele" style="background:#0d1119;color:#fff;border:1px solid #393245;border-radius:9px;padding:10px;min-width:0;flex:1"><button class="btn primary" type="submit">Pozvat</button></form><p class="small">Google Health je v testovacím režimu Google Cloud: každý nový uživatel musí být přidaný i mezi Test users v OAuth consent screen, jinak připojení Google Health odmítne.</p><div id="adminUsers" class="small">Načítám…</div></article>');$('inviteForm').onsubmit=async e=>{e.preventDefault();try{const r=await jsonFetch('/app/api/admin/invites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('inviteEmail').value})});$('inviteEmail').value='';toast(r.message);loadAdmin();}catch(error){toast(error.message);}};loadAdmin();}
 async function loadAdmin(){try{const d=await jsonFetch('/app/api/admin/users');const users=d.users.map(u=>'<div class="metric-line"><span>'+esc(u.email)+(u.role==='admin'?' · správce':'')+(u.disabled?' · zablokovaný':'')+'<br><small>'+(u.last_login_at?'Naposledy '+esc(new Date(u.last_login_at+'Z').toLocaleString('cs-CZ')):'Zatím se nepřihlásil')+'</small></span>'+(u.role==='admin'?'':'<button class="btn" type="button" data-user="'+u.id+'" data-disabled="'+(u.disabled?0:1)+'">'+(u.disabled?'Obnovit přístup':'Zablokovat')+'</button>')+'</div>').join('');const invites=d.invites.map(i=>'<div class="metric-line"><span>'+esc(i.email)+' · pozvánka čeká</span><button class="btn" type="button" data-invite="'+esc(i.email)+'">Zrušit</button></div>').join('');$('adminUsers').innerHTML=users+(invites||'');document.querySelectorAll('[data-user]').forEach(b=>b.onclick=async()=>{try{const r=await jsonFetch('/app/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:Number(b.dataset.user),disabled:b.dataset.disabled==='1'})});toast(r.message);loadAdmin();}catch(error){toast(error.message);}});document.querySelectorAll('[data-invite]').forEach(b=>b.onclick=async()=>{try{const r=await jsonFetch('/app/api/admin/invites',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:b.dataset.invite})});toast(r.message);loadAdmin();}catch(error){toast(error.message);}});}catch(e){$('adminUsers').textContent=e.message;}}
-installDataCorrections();installSimpleFoodEditor();installFoodDatabaseSources();loadAccount().then(me=>{loadConnections();if(!me.missingProviders?.length)load();}).catch(()=>{});
+installDataCorrections();installSimpleFoodEditor();installFoodDatabaseSources();installCompactFoodEditor();loadAccount().then(me=>{loadConnections();if(!me.missingProviders?.length)load();}).catch(()=>{});
+
+// ---- Workouts hub: info tips, week overview with weather, weekly planner ----
+const INFO_TEXTS={
+  difficulty:['Obtížnost 1–10','Každý workout má obtížnost od 1 (velmi lehké, jen točení nohou) po 10 (maximum, co zvládneš). Počítá se z intenzity, délky a počtu tvrdých úseků.','Filtr „Max. obtížnost“ jen skryje těžší workouty. Bez limitu trenér sám cílí obtížnost kousek nad tvou aktuální úroveň, když jsi odpočatý, a pod ni, když jsi unavený.'],
+  phase:['Fáze přípravy','Auto: trenér fázi odvodí z plánu a zátěže týdne.','Základ (Base): hodně vytrvalosti a tempa, buduje se motor.','Rozvoj (Build): víc prahových a VO₂max intervalů, blok před cílem.','Regenerace: týden bez intenzity, tělo vstřebá trénink.','Ladění (Taper): méně objemu a krátká intenzita před závodem, abys byl svěží.'],
+  capability:['Moje úroveň','Trenérův odhad tvé úrovně 1–10 v každém typu tréninku (vytrvalost, tempo, práh…). Podle ní volí, jak těžký workout ti dát, aby tě posunul a nepřetížil.','Každý začíná na 3 z 10 s nízkou jistotou. Úroveň se mění po odjetých workoutech z knihovny: dokončení se převezme z Intervals.icu, ty doplníš RPE. Lehce zvládnutý trénink úroveň zvedne, nedokončený ji sníží. Jistota roste s počtem hodnocení.'],
+  suitability:['Vhodnost','Jak dobře workout sedí na vybraný den: typ, který trenér doporučuje, délka, obtížnost proti tvé úrovni, únava a počet kvalitních dnů v týdnu, plus pestrost oproti nedávným tréninkům.','100 % = nejlepší možná shoda s danými filtry. Bez vyplněné délky řadím podle délky, kterou trenér na den doporučuje, ale žádnou délku nevyřazuji.'],
+  duration:['Čas na trénink','Nech prázdné a trenér určí nejvhodnější délku sám – podle plánu v Intervals.icu, kondice (CTL), formy (TSB), spánku a plánu týdne. Může to být 50 minut i 4 hodiny.','Vyplň jen tehdy, když máš opravdu časový limit.'],
+  libraryDuration:['Délka','Prázdné = délku doporučí trenér a seznam se podle ní jen seřadí. Když vyplníš délku, ukážu workouty v toleranci kolem ní.'],
+  load:['Cílový load','Tréninková zátěž (TSS): kombinace délky a intenzity. Hodina na FTP ≈ 100. Vyplň, když chceš konkrétní zátěž – jinak ji neřeš.'],
+  rpe:['RPE 1–10','Jak těžký trénink subjektivně byl: 1–2 velmi lehce, 3–4 lehce, 5–6 středně, 7–8 těžce, 9 velmi těžce, 10 maximum.','Uložím ho k aktivitě i do Intervals.icu. Pro trenéra je to nejdůležitější signál, jestli byl trénink přiměřený.'],
+  feedback:['Naplánované workouty','Jak velkou část workoutu jsi odjel, spočítám sám z aktivity spárované v Intervals.icu (zátěž nebo čas proti plánu).','Ty doplníš jen RPE a případně pocit. RPE se zapíše i k aktivitě v Intervals.icu.'],
+  planner:['Plánovač týdne','Vyber, ve které dny chceš jezdit, běhat nebo jít do posilovny – klidně víc aktivit v jeden den.','Trenér z toho rozloží týden: jeden dlouhý trénink o víkendu, až dva kvalitní dny s odstupem, po nich lehčí den, a gym před intervaly jen na horní tělo. Generátor se podle toho řídí, ale únava a připravenost mají vždy přednost.']
+};
+function installInfoTips(){
+  if($('infoPop'))return;
+  document.body.insertAdjacentHTML('beforeend','<div id="infoPop" role="dialog" aria-live="polite" hidden></div>');
+  const pop=$('infoPop');let current=null;
+  const close=()=>{pop.hidden=true;if(current)current.setAttribute('aria-expanded','false');current=null;};
+  document.addEventListener('click',e=>{
+    const tip=e.target.closest('.info-tip');
+    if(!tip){if(!e.target.closest('#infoPop'))close();return;}
+    e.preventDefault();e.stopPropagation();
+    if(current===tip){close();return;}
+    const [title,...paragraphs]=INFO_TEXTS[tip.dataset.info]||['Nápověda','Bez popisu.'];
+    pop.innerHTML='<strong>'+esc(title)+'</strong>'+paragraphs.map(p=>'<p>'+esc(p)+'</p>').join('');
+    pop.hidden=false;if(current)current.setAttribute('aria-expanded','false');current=tip;tip.setAttribute('aria-expanded','true');
+    const r=tip.getBoundingClientRect(),w=pop.offsetWidth,h=pop.offsetHeight;
+    pop.style.left=Math.max(12,Math.min(window.innerWidth-w-12,r.left-w/2))+'px';
+    pop.style.top=(r.bottom+8+h>window.innerHeight?Math.max(12,r.top-h-8):r.bottom+8)+'px';
+  },true);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
+  window.addEventListener('scroll',close,{passive:true});
+}
+
+const HUB_SPORTS={ride:'🚴 Kolo',run:'🏃 Běh',gym:'🏋️ Gym'};
+function activitySport(a){const t=(String(a?.type||'')+' '+String(a?.name||'')+' '+String(a?.payload?.type||'')).toLowerCase();if(/weight|strength|gym|posil/.test(t))return 'gym';if(/ride|cycl|bike|kolo/.test(t))return 'ride';if(/\brun|běh|virtualrun/.test(t))return 'run';return null;}
+const WEATHER_ICONS=[[0,'☀️','jasno'],[2,'🌤️','polojasno'],[3,'☁️','zataženo'],[48,'🌫️','mlha'],[57,'🌦️','mrholení'],[67,'🌧️','déšť'],[77,'🌨️','sníh'],[82,'🌧️','přeháňky'],[86,'🌨️','sněhové přeháňky'],[99,'⛈️','bouřky']];
+function weatherIcon(code){const c=num(code,-1);return (WEATHER_ICONS.find(([max])=>c<=max)||[0,'·',''])}
+async function loadWeather(){
+  const loc=state.weekPlan?.prefs?.location;if(!loc)return;
+  const key=loc.latitude+','+loc.longitude+','+state.hubWeek;if(state.weatherKey===key)return;
+  try{
+    const url='https://api.open-meteo.com/v1/forecast?latitude='+loc.latitude+'&longitude='+loc.longitude+'&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max&timezone=Europe%2FPrague&past_days=14&forecast_days=16';
+    const r=await fetch(url),d=await r.json();if(!r.ok)throw new Error(d.reason||'HTTP '+r.status);
+    state.weather=Object.fromEntries((d.daily?.time||[]).map((t,i)=>[t,{code:d.daily.weather_code[i],max:d.daily.temperature_2m_max[i],min:d.daily.temperature_2m_min[i],rainProb:d.daily.precipitation_probability_max?.[i],rain:d.daily.precipitation_sum?.[i],wind:d.daily.wind_speed_10m_max?.[i]}]));state.weatherKey=key;
+  }catch(error){state.weather={};state.weatherError=error.message;}
+}
+async function loadWeekPlan(){if(state.weekPlan)return state.weekPlan;try{state.weekPlan=await jsonFetch('/app/api/week-plan');}catch{state.weekPlan={prefs:{days:[[],[],[],[],[],[],[]],location:{name:'Kutná Hora',latitude:49.9484,longitude:15.2682}},roles:Array.from({length:7},(_,i)=>({weekday:i,items:[]}))};}return state.weekPlan;}
+async function hubWeekData(){
+  if(state.hubWeek===weekStart&&state.week?.days)return state.week;
+  if(state.hubWeekData?.start===state.hubWeek)return state.hubWeekData;
+  state.hubWeekData=await jsonFetch('/app/api/week?start='+state.hubWeek);return state.hubWeekData;
+}
+function weeklyTarget(){
+  const w=(state.fitness?.wellness||[]).filter(r=>measured(r.ctl)).at(-1);
+  return w?{tss:Math.round(Number(w.ctl)*7),ctl:Number(w.ctl)}:null;
+}
+async function renderWeekHub(){
+  const el=$('hubWeek');if(!el)return;
+  if(!state.hubWeek)state.hubWeek=pragueMonday();
+  $('hubWeekTitle').textContent='Týden '+isoWeek(state.hubWeek)+' · '+dateLabel(state.hubWeek)+' – '+dateLabel(dateShift(state.hubWeek,6));
+  const plan=await loadWeekPlan();$('hubLocationName').textContent=plan.prefs?.location?.name||'Kutná Hora';
+  let week;try{[week]=await Promise.all([hubWeekData(),loadWeather()]);}catch(error){el.innerHTML='<div class="notice status-error">'+esc(error.message)+'</div>';return;}
+  const days=week.days||[],gym=weekGymSessions(days),today=pragueToday(),target=weeklyTarget();
+  const roles=plan.roles||[],shareSum=roles.reduce((s,d)=>s+d.items.reduce((a,x)=>a+num(x.share),0),0);
+  let doneTss=0,plannedTss=0;
+  el.innerHTML=days.map((d,i)=>{
+    const t=d.daily?.training||{},items=[];
+    const completed=(t.completed||[]).filter(a=>!isNutritionItem(a)),sports=new Set();
+    for(const a of completed){const sport=activitySport(a);if(!sport)continue;sports.add(sport);doneTss+=num(a.tss);items.push('<div class="hub-item done">✓ '+esc(HUB_SPORTS[sport])+' · '+esc(a.name||'')+'<span class="meta">'+hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss):'')+'</span></div>');}
+    if(gym.some(g=>g.date===d.date)&&!sports.has('gym')){sports.add('gym');const g=gym.find(x=>x.date===d.date);items.push('<div class="hub-item done">✓ '+HUB_SPORTS.gym+'<span class="meta">'+new Set(g.sets.map(r=>r.exercise)).size+' cviků · '+g.sets.length+' sérií</span></div>');}
+    const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
+    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);plannedTss+=num(p.tss);items.push('<div class="hub-item planned">'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+'<span class="meta">plán'+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss):'')+'</span></div>');}
+    if(d.date===today&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');items.push('<div class="hub-item planned">'+HUB_SPORTS.gym+' · plán na dnes</div>');}
+    // Planner suggestions for the days still ahead.
+    if(d.date>=today)for(const x of roles[i]?.items||[]){if(sports.has(x.sport))continue;const tss=target&&shareSum?Math.round(target.tss*x.share/shareSum):null;items.push('<div class="hub-item suggested">Návrh · '+esc(HUB_SPORTS[x.sport])+'<span class="meta">'+esc(x.label)+(tss&&x.sport!=='gym'?' · ~'+tss+' TSS':'')+'</span></div>');}
+    const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
+    const weather=w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>';
+    return '<div class="hub-day'+(d.date===today?' today':d.date<today?' past':'')+'"><div class="hub-day-head"><strong>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d.date+'T12:00:00Z')))+'</strong><span>'+esc(dateLabel(d.date))+'</span></div>'+weather+(items.join('')||'<div class="hub-empty">Volno</div>')+'</div>';
+  }).join('');
+  $('hubWeekLoad').textContent=(target?'Cíl týdne ≈ '+target.tss+' TSS (udržení kondice: CTL '+fmt(target.ctl)+' × 7) · ':'')+'odjeto '+fmt(doneTss)+' TSS'+(plannedTss?' · v plánu dalších '+fmt(plannedTss)+' TSS':'')+(state.weatherError?' · počasí nedostupné':'');
+}
+function renderPlanner(){
+  const grid=$('plannerGrid');if(!grid)return;const plan=state.weekPlan;if(!plan)return;
+  const days=plan.prefs.days,names=['pondělí','úterý','středa','čtvrtek','pátek','sobota','neděle'];
+  grid.innerHTML=names.map((name,i)=>'<div class="planner-day"><strong>'+name+'</strong>'+Object.entries(HUB_SPORTS).map(([sport,label])=>'<button type="button" data-plan-day="'+i+'" data-plan-sport="'+sport+'" aria-pressed="'+days[i].includes(sport)+'">'+label+'</button>').join('')+'<div class="planner-role">'+(plan.dirty?'':esc((plan.roles?.[i]?.items||[]).map(x=>x.label).join(' · ')))+'</div></div>').join('');
+}
+async function saveWeekPlanner(){
+  const b=$('plannerSave');b.disabled=true;$('plannerStatus').textContent='Ukládám…';
+  try{state.weekPlan=await jsonFetch('/app/api/week-plan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state.weekPlan.prefs)});$('plannerStatus').textContent='Uloženo. Generátor se podle plánu řídí.';renderPlanner();renderGymPlanHint();await renderWeekHub();}
+  catch(error){$('plannerStatus').textContent=error.message;}finally{b.disabled=false;}
+}
+// The gym panel suggests muscle groups from the day's planner role.
+const ROLE_MUSCLES={gym_upper:['chest','upper_back','lats','side_delts','abs'],gym_full:['quads','hamstrings','chest','upper_back','abs']};
+function renderGymPlanHint(){
+  const el=$('gymPlanHint');if(!el||!state.weekPlan)return;
+  const weekday=(new Date(pragueToday()+'T12:00:00Z').getUTCDay()+6)%7,role=(state.weekPlan.roles?.[weekday]?.items||[]).find(x=>x.sport==='gym');
+  el.innerHTML=role?'Plán týdne na dnes: <strong>'+esc(role.label)+'</strong>'+(role.role==='gym_upper'?' – nohy šetřím kvůli kvalitě na kole/běhu.':'.')+' <button class="btn" type="button" id="gymUsePlan">Vybrat partie podle plánu</button>':'Vyber partie, nebo nech trenéra sestavit trénink podle týdne a únavy. Dny pro gym si nastavíš v plánovači týdne.';
+  const use=$('gymUsePlan');if(use)use.onclick=()=>{selectedGymMuscles.clear();for(const id of ROLE_MUSCLES[role.role]||[])if($('gymFocusChoices').querySelector('[data-muscle="'+id+'"]'))selectedGymMuscles.add(id);renderGymFocus();};
+}
+async function openWorkouts(){
+  if(state.workoutSport==='gym')loadGym().catch(e=>toast(e.message));else loadWorkoutLibrary();
+  await loadWeekPlan();renderPlanner();renderGymPlanHint();renderWeekHub();
+}
+function installWorkoutsHub(){
+  installInfoTips();
+  $('hubPrevWeek').onclick=()=>{state.hubWeek=dateShift(state.hubWeek||pragueMonday(),-7);renderWeekHub();};
+  $('hubNextWeek').onclick=()=>{state.hubWeek=dateShift(state.hubWeek||pragueMonday(),7);renderWeekHub();};
+  $('hubThisWeek').onclick=()=>{state.hubWeek=pragueMonday();renderWeekHub();};
+  $('hubLocation').onclick=()=>{const f=$('hubLocationForm');f.hidden=!f.hidden;if(!f.hidden)$('hubLocationQuery').focus();};
+  $('hubLocationForm').onsubmit=async e=>{
+    e.preventDefault();const q=$('hubLocationQuery').value.trim(),out=$('hubLocationResults');if(!q)return;out.innerHTML='<span class="small">Hledám…</span>';
+    try{const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?count=5&language=cs&format=json&name='+encodeURIComponent(q)),d=await r.json(),rows=d.results||[];
+      out.innerHTML=rows.length?rows.map((x,i)=>'<button class="btn" type="button" data-loc="'+i+'">'+esc(x.name+(x.admin1?', '+x.admin1:'')+(x.country_code?' ('+x.country_code+')':''))+'</button>').join(''):'<span class="small">Nic nenalezeno.</span>';
+      out.querySelectorAll('[data-loc]').forEach(b=>b.onclick=async()=>{const x=rows[Number(b.dataset.loc)];state.weekPlan.prefs.location={name:x.name,latitude:x.latitude,longitude:x.longitude};$('hubLocationForm').hidden=true;out.innerHTML='';state.weatherKey=null;await saveWeekPlanner();});
+    }catch(error){out.innerHTML='<span class="small">'+esc(error.message)+'</span>';}
+  };
+  $('plannerGrid').addEventListener('click',e=>{const b=e.target.closest('[data-plan-sport]');if(!b)return;const day=state.weekPlan.prefs.days[Number(b.dataset.planDay)],sport=b.dataset.planSport,i=day.indexOf(sport);if(i>=0)day.splice(i,1);else day.push(sport);state.weekPlan.dirty=true;$('plannerStatus').textContent='Neuloženo';renderPlanner();});
+  $('plannerSave').onclick=saveWeekPlanner;
+}
+installWorkoutsHub();

@@ -23,9 +23,10 @@ import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
-import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, stepRows } from "./workout-library.js";
+import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
+import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor } from "./week-planner.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan } from "./gym-plan-store.js";
@@ -224,23 +225,39 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 
 // Marks scheduled library workouts as done once Intervals.icu shows the ride.
 // Capability only changes with the athlete's own feedback (see calculateCapabilityUpdate).
+// The completed activity paired with a scheduled library workout, and how
+// much of it was done (time, or training load when both are known).
+async function matchScheduledActivity(env,ctx,internalAuth,link){
+  const response=await app.fetch(new Request('https://internal/analysis/daily?date='+link.scheduled_date,{headers:internalAuth}),env,ctx);
+  if(!response.ok)return null;const daily=await response.json().catch(()=>({})),matched=daily.training?.matched||[],completed=daily.training?.completed||[];
+  const match=matched.find(m=>String(m.planned?.id||'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
+  if(!match)return null;
+  const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>String(a.pairedEventId||a.plannedEventId||'')===String(link.intervals_event_id||''));
+  if(!actual)return null;
+  const actualMinutes=Number(actual.durationHours)>0?Number(actual.durationHours)*60:null;
+  if(actualMinutes==null)return null;
+  const plannedTss=Number(match.planned?.tss),actualTss=Number(actual.tss);
+  const ratio=plannedTss>0&&actualTss>0?actualTss/plannedTss:actualMinutes/Math.max(1,Number(link.duration_minutes));
+  const rawRpe=actual.rpe??actual.payload?.icu_rpe??actual.payload?.rpe;
+  return {actual,activityId:actual.source==='intervals'?String(actual.payload?.id||actual.id||''):null,completedPercent:Math.round(Math.max(0,Math.min(120,ratio*100))),rpe:Number.isFinite(Number(rawRpe))&&Number(rawRpe)>=1&&Number(rawRpe)<=10?Number(rawRpe):null};
+}
 async function reconcileWorkoutLibraryCompletions(env,ctx,internalAuth){
   try{
     for(const link of await pendingScheduledWorkouts(env.DB,pragueToday())){
       if(await hasFeedback(env.DB,link.workout_id,link.scheduled_date)){await markScheduleCompleted(env.DB,link.id);continue}
-      const response=await app.fetch(new Request('https://internal/analysis/daily?date='+link.scheduled_date,{headers:internalAuth}),env,ctx);
-      if(!response.ok)continue;const daily=await response.json().catch(()=>({})),matched=daily.training?.matched||[],completed=daily.training?.completed||[];
-      const match=matched.find(m=>String(m.planned?.id||'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
-      if(!match)continue;
-      const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>String(a.pairedEventId||a.plannedEventId||'')===String(link.intervals_event_id||''));
-      if(!actual)continue;
-      const actualMinutes=Number(actual.durationHours)>0?Number(actual.durationHours)*60:null;
-      if(actualMinutes==null)continue;
-      const completedPercent=Math.max(0,Math.min(120,actualMinutes/Math.max(1,Number(link.duration_minutes))*100));
-      const rawRpe=actual.rpe??actual.payload?.rpe,rpe=Number.isFinite(Number(rawRpe))&&Number(rawRpe)>=1&&Number(rawRpe)<=10?Number(rawRpe):null;
-      await recordWorkoutFeedback(env.DB,{workoutId:link.workout_id,scheduledDate:link.scheduled_date,completedPercent,rpe,survey:"auto_completed",notes:"Automaticky spárováno s dokončenou aktivitou v Intervals.icu"});
+      const m=await matchScheduledActivity(env,ctx,internalAuth,link);
+      if(!m)continue;
+      await recordWorkoutFeedback(env.DB,{workoutId:link.workout_id,scheduledDate:link.scheduled_date,completedPercent:m.completedPercent,rpe:m.rpe,survey:"auto_completed",notes:"Automaticky spárováno s dokončenou aktivitou v Intervals.icu"});
     }
   }catch(error){console.error("Workout capability reconciliation failed",error)}
+}
+// RPE on the completed activity in Intervals.icu (whole numbers 1–10).
+async function writeIntervalsRpe(env,activityId,rpe){
+  if(!env.INTERVALS_API_KEY||!activityId)return {status:'skipped'};
+  try{
+    const r=await fetch('https://intervals.icu/api/v1/activity/'+encodeURIComponent(activityId),{method:'PUT',headers:{Authorization:'Basic '+btoa('API_KEY:'+String(env.INTERVALS_API_KEY)),Accept:'application/json','Content-Type':'application/json'},body:JSON.stringify({icu_rpe:Math.round(Number(rpe))}),signal:AbortSignal.timeout(10000)});
+    return r.ok?{status:'ok'}:{status:'error',message:'Intervals.icu odpovědělo HTTP '+r.status};
+  }catch(error){return {status:'error',message:error.message}}
 }
 
 // Everything the coaches look at for one day: the day, fitness, three weeks
@@ -280,6 +297,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const date=url.searchParams.get('date')||pragueToday();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
     return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/week-plan'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    try{
+      let prefs;
+      if(request.method==='POST'){if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});prefs=await saveWeekPlan(env.DB,await request.json().catch(()=>({})));}
+      else if(request.method==='GET')prefs=await getWeekPlan(env.DB);
+      else return Response.json({message:'Method not allowed'},{status:405});
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days)},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/training-profile'||url.pathname==='/app/api/training-profile/estimate'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
@@ -638,7 +665,14 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
       const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport),sport});
       const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
-      const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,parseWorkoutSearchFilters(url.searchParams),context),athleteThresholds(env)]);
+      // Without a length the list is ranked by the length the coach would pick
+      // for the day (50 min or 4 h alike); no length is filtered out.
+      const filters=parseWorkoutSearchFilters(url.searchParams),autoDuration=filters.durationMinutes==null&&Number(coach.constraints?.availableMinutes)>0?{durationMinutes:Number(coach.constraints.availableMinutes)}:null;
+      if(autoDuration)Object.assign(filters,{durationMinutes:autoDuration.durationMinutes,durationSoft:true});
+      // With no type chosen, the type the coach recommends for the day ranks first.
+      const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
+      const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),athleteThresholds(env)]);
+      result.autoDuration=autoDuration;result.coachPick={system:filters.preferredSystem||null,durationMinutes:autoDuration?.durationMinutes||null};
       // Step rows with watts or paces for each card.
       for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:w.environment==='indoor'&&thresholds.indoorFtp?thresholds.indoorFtp:thresholds.ftp,zones:thresholds.powerZones});}
       return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:thresholds.indoorFtp,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?'Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.':'Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.'},{headers:{'Cache-Control':'no-store'}});
@@ -649,12 +683,28 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(date<pragueToday())return Response.json({status:'error',message:'Vyber dnešní nebo budoucí datum.'},{status:400});
       const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))&&Number(body.availabilityMinutes)>0?Number(body.availabilityMinutes):null;
       const genSport=body.sport==='run'?'run':'ride';
-      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal:body.phase?{phase:String(body.phase)}:null,sport:genSport});
+      // The weekly planner's role for this day (long, easy, quality) steers the coach.
+      const weekRole=roleFor(await getWeekPlan(env.DB).catch(()=>null),date,genSport);
+      const goal=body.phase||weekRole?.focus?{...(body.phase?{phase:String(body.phase)}:{}),...(weekRole?.focus?{focus:weekRole.focus}:{})}:null;
+      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal,sport:genSport});
       const thresholds=await athleteThresholds(env);
       const resizeTo=Number.isFinite(Number(body.resizeTo))&&Number(body.resizeTo)>0?Number(body.resizeTo):null;
-      return Response.json(await generateWorkout(env.DB,{sport:genSport,environment:body.environment,date,coach,availabilityMinutes:resizeTo??availabilityMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo}),{headers:{'Cache-Control':'no-store'}});
+      const generated=await generateWorkout(env.DB,{sport:genSport,environment:body.environment,date,coach,availabilityMinutes:resizeTo??availabilityMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo});
+      return Response.json({...generated,weekRole},{headers:{'Cache-Control':'no-store'}});
     }
-    if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST')return Response.json(await recordWorkoutFeedback(env.DB,await request.json()),{headers:{'Cache-Control':'no-store'}});
+    if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST'){
+      // Completion comes from the activity paired in Intervals.icu; the athlete adds RPE (and a note).
+      const body=await request.json().catch(()=>({})),workoutId=String(body.workoutId||''),scheduledDate=String(body.scheduledDate||'');
+      let completedPercent=Number(body.completedPercent),activityId=null;
+      const link=validDate(scheduledDate)?await scheduledLink(env.DB,workoutId,scheduledDate):null;
+      const m=link?await matchScheduledActivity(env,ctx,internalAuth,link):null;
+      if(m){activityId=m.activityId;if(!Number.isFinite(completedPercent))completedPercent=m.completedPercent;}
+      if(!Number.isFinite(completedPercent))return Response.json({status:'error',message:'K tomuto workoutu jsem v Intervals.icu zatím nenašel dokončenou aktivitu. RPE zadáš, až bude aktivita nahraná a spárovaná s plánem.'},{status:409});
+      const notes=typeof body.notes==='string'&&body.notes.trim()?body.notes.trim().slice(0,1000):null,rpe=body.rpe==null||body.rpe===''?null:Number(body.rpe);
+      const result=await recordWorkoutFeedback(env.DB,{workoutId,scheduledDate,completedPercent,rpe,survey:'completed',notes});
+      const intervals=rpe!=null?await writeIntervalsRpe(env,activityId,rpe):{status:'skipped'};
+      return Response.json({...result,completedPercent,intervals},{headers:{'Cache-Control':'no-store'}});
+    }
     if(url.pathname==='/app/api/workouts/schedule'&&request.method==='POST'){
       const body=await request.json().catch(()=>({})),date=String(body.date||'');
       if(!validDate(date)||date<pragueToday())return Response.json({status:'error',message:'Vyber dnešní nebo budoucí datum.'},{status:400});
