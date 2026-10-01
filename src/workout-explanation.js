@@ -34,6 +34,86 @@ function runFueling(minutes, system) {
   return ["30–60 g sacharidů/h (gely, iontový nápoj) – začni po 30–40 min a pak pravidelně.", "Pití 400–800 ml/h podle tepla, se sodíkem.", "Dlouhý běh je i trénink trávení – zkoušej to, co chceš jíst v závodě."];
 }
 
+// ---- Advice built from the workout itself -----------------------------------
+const WORK_FROM = { ride: { recovery: 999, endurance: 999, tempo: 76, sweet_spot: 88, threshold: 95, vo2max: 106, anaerobic: 121, sprint: 151 }, run: { recovery: 999, endurance: 999, tempo: 89, threshold: 96, vo2max: 102, anaerobic: 111, sprint: 126 } };
+const minLabel = m => { const sec = Math.round(m * 60); return sec < 60 ? sec + " s" : sec % 60 ? Math.floor(sec / 60) + " min " + (sec % 60) + " s" : sec / 60 + " min"; };
+const join = parts => parts.length > 1 ? parts.slice(0, -1).join(", ") + " a " + parts.at(-1) : parts[0] || "";
+
+// "91 % FTP (≈ 237 W)" or "99 % prahu (4:37 /km)".
+function targetText(power, { sport, ftp, thresholdPace }) {
+  const p = Math.round(n(power, 0));
+  if (sport === "run") return p + " % prahu" + (thresholdPace ? " (" + formatPace(thresholdPace * 100 / p) + " /km)" : "");
+  return p + " % FTP" + (ftp ? " (≈ " + Math.round(ftp * p / 100) + " W)" : "");
+}
+
+// Concrete lines about the main set, the time in the target intensity and pacing.
+export function structureHow(structure = [], { system, sport = "ride", ftp = null, thresholdPace = null } = {}) {
+  const from = (WORK_FROM[sport] || WORK_FROM.ride)[system] ?? 999, opts = { sport, ftp, thresholdPace };
+  const isWork = s => n(s.power, 0) >= from || s.free;
+  const lines = [], sets = [];
+  let workMinutes = 0, total = 0, longestWork = 0, maxReps = 0;
+  for (const block of structure) {
+    const reps = Array.isArray(block.steps) ? Math.max(1, n(block.repeats, 1)) : 1, steps = block.steps || [block];
+    for (const st of steps) { total += n(st.durationMinutes, 0) * reps; if (isWork(st)) { workMinutes += n(st.durationMinutes, 0) * reps; longestWork = Math.max(longestWork, n(st.durationMinutes, 0)); } }
+    const work = steps.filter(isWork);
+    // Openers in the warm-up (under 3 min of work in total) are not the main set.
+    if (!work.length || (sets.length === 0 && workMinutes <= 3 && work.reduce((x, w) => x + n(w.durationMinutes, 0), 0) * reps < 3 && structure.length > 2)) continue;
+    maxReps = Math.max(maxReps, reps);
+    const rest = steps.filter(st => !isWork(st));
+    if (work.length === 1) {
+      const w = work[0];
+      const what = w.free ? minLabel(w.durationMinutes) + " naplno" : minLabel(w.durationMinutes) + " na " + targetText(w.ramp ? w.powerEnd : w.power, opts) + (w.ramp ? " (stupňuj od " + Math.round(w.powerStart) + " %)" : "");
+      const pause = rest.length ? ", mezi nimi " + minLabel(rest.reduce((x, r) => x + n(r.durationMinutes, 0), 0)) + " " + (sport === "run" ? "klus" : "lehce") : "";
+      const cadence = w.cadence && sport !== "run" ? " při " + String(w.cadence).replace(/rpm/i, "").trim().replace("-", "–") + " rpm" : "";
+      sets.push((reps > 1 ? reps + "× " : "") + what + cadence + (reps > 1 ? pause : ""));
+    } else {
+      // Micro-intervals: pair each effort with the easy step after it and
+      // group identical pairs ("13× 30 s na 120 % / 15 s lehce").
+      const pairs = [];
+      steps.forEach((st, i) => { if (!isWork(st)) return; const next = steps[i + 1] && !isWork(steps[i + 1]) && i + 2 < steps.length ? steps[i + 1] : null; pairs.push({ w: st, r: next }); });
+      const groups = [];
+      for (const pr of pairs) { const key = [pr.w.durationMinutes, pr.w.power, pr.w.free, pr.r?.durationMinutes].join("|"), last = groups.at(-1); if (last && last.key === key) last.count++; else groups.push({ key, count: 1, ...pr }); }
+      const parts = groups.map(g => (g.count > 1 ? g.count + "× " : "") + minLabel(g.w.durationMinutes) + (g.w.free ? " naplno" : " na " + targetText(g.w.power, opts)) + (g.r ? " / " + minLabel(g.r.durationMinutes) + " " + (sport === "run" ? "klus" : "lehce") : ""));
+      // Alternating patterns (over-unders): "4× (2 min na 88 % …, 1 min na 102 % …)".
+      let text = join(parts);
+      for (let k = 1; k <= parts.length / 2; k++) if (parts.length % k === 0 && parts.every((x, i) => x === parts[i % k])) { text = parts.length / k + "× (" + parts.slice(0, k).join(", ") + ")"; break; }
+      const seriesRest = rest.length && !isWork(steps.at(-1)) ? ", mezi sériemi " + minLabel(steps.at(-1).durationMinutes) + (sport === "run" ? " klus" : " lehce") : "";
+      sets.push((reps > 1 ? reps + " série: " : "") + text + (reps > 1 ? seriesRest : ""));
+    }
+  }
+  if (["recovery", "endurance"].includes(system)) {
+    const flat = structure.flatMap(b => b.steps ? b.steps.map(st => ({ ...st, durationMinutes: n(st.durationMinutes, 0) * Math.max(1, n(b.repeats, 1)) })) : [b]);
+    const main = flat.reduce((a, b) => n(b.durationMinutes, 0) > n(a?.durationMinutes, 0) ? b : a, null);
+    if (main) lines.push("Většinu času (" + Math.round(main.durationMinutes) + " min z " + Math.round(total) + ") drž " + targetText(main.power, opts) + ".");
+    const extras = structure.filter(b => b.steps && n(b.repeats, 1) > 1).map(b => { const x = b.steps.find(st => st.note && n(st.durationMinutes, 0) <= 5) || b.steps[0]; return b.repeats + "× " + minLabel(x.durationMinutes) + (x.note ? " " + x.note : "") + (x.cadence && sport !== "run" ? " (" + String(x.cadence).replace(/rpm/i, "").trim() + " rpm)" : ""); });
+    if (extras.length) lines.push("Navíc " + join(extras) + ".");
+    const finish = flat.filter(st => n(st.power, 0) >= (sport === "run" ? 89 : 76) && n(st.durationMinutes, 0) >= 5).at(-1);
+    if (finish) lines.push("Ke konci " + Math.round(finish.durationMinutes) + " min na " + targetText(finish.power, opts) + (finish.note ? " – " + finish.note : "") + ".");
+    return lines;
+  }
+  if (sets.length) lines.push("Hlavní část: " + join(sets) + ".");
+  if (workMinutes > 0) lines.push("Celkem " + Math.round(workMinutes) + " min práce v cílové intenzitě z " + Math.round(total) + " min tréninku.");
+  if (maxReps >= 4) lines.push("První " + (maxReps >= 8 ? "2–3" : "1–2") + " opakování jeď na spodní hranici; když poslední dáš s rezervou, příště se obtížnost zvedne.");
+  else if (longestWork >= 15) lines.push("Blok " + minLabel(longestWork) + " rozděl v hlavě na třetiny: první klidně, druhá stabilně, poslední je o vůli.");
+  return lines;
+}
+
+// Fuel for this length: grams of carbohydrate and fluid for the whole session.
+function fuelTotals(minutes, rate, fluid) {
+  const hours = minutes / 60;
+  const gels = Math.max(1, Math.round(rate * hours / 25));
+  return "Na " + Math.round(minutes) + " min počítej celkem s ~" + Math.round(rate * hours / 5) * 5 + " g sacharidů (≈ " + gels + (gels === 1 ? " gel" : gels <= 4 ? " gely" : " gelů") + " nebo ekvivalent v pití) a ~" + (Math.round(fluid * hours * 2) / 2).toFixed(1).replace(".", ",") + " l tekutin.";
+}
+
+// Where to ride/run it, from the longest uninterrupted effort.
+function terrainLine(structure, { sport, environment, system }) {
+  if (environment !== "outdoor" || ["recovery", "endurance"].includes(system)) return null;
+  const from = (WORK_FROM[sport] || WORK_FROM.ride)[system] ?? 999;
+  const longest = Math.max(0, ...structure.flatMap(b => b.steps || [b]).filter(st => n(st.power, 0) >= from).map(st => n(st.durationMinutes, 0)));
+  if (!longest) return null;
+  return sport === "run" ? "Najdi úsek na " + minLabel(longest) + " souvislého běhu bez přechodů a zastavení." : "Najdi silnici nebo stoupání na " + minLabel(longest) + " nerušené jízdy – bez semaforů a křižovatek.";
+}
+
 function fueling(minutes, system) {
   const hard = ["sweet_spot", "threshold", "vo2max", "anaerobic"].includes(system);
   if (minutes <= 75) return hard ? ["Před jízdou lehké sacharidové jídlo; během 30–40 g sacharidů/h je vhodné u intenzity.", "Pití 500–750 ml/h, po jízdě bílkoviny a sacharidy."] : ["Stačí voda nebo iontový nápoj; u jízdy nalačno drž opravdu nízkou intenzitu.", "Pití 500–750 ml/h."];
@@ -80,14 +160,14 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
   if (p && ["recovery", "endurance"].includes(system)) why.push(system === "recovery" ? "Regenerační jízda: cílem je zotavení, ne progres – intenzita zůstává v Z1." : "Aerobní jízda: staví základ a nezvyšuje únavu; obtížnost se řídí délkou, ne intenzitou.");
   else if (p) why.push(progressLine(p, workout, SYSTEM_LABEL));
   if (!coach.rationale?.length && !planned) why.push("V plánu na tento den nic nemáš, proto vybírám podle zátěže posledních dní a tvé úrovně.");
-  const how = [...(HOW[system] || HOW.endurance)];
+  const how = [...structureHow(structure, { system, sport: "ride", ftp }), ...(HOW[system] || HOW.endurance).slice(0, 2)];
   if (ftp) how.unshift("Watty počítám z tvého " + (environment === "indoor" && thresholds.indoorFtp ? "indoor " : "") + "FTP " + ftp + " W" + ({ manual: " (nastaveno v aplikaci)", "latest-ride": " (z poslední jízdy)" }[thresholds.source] || " (z Intervals.icu)") + ".");
   else how.unshift("FTP neznám – cíle jsou v % FTP. Zadej nebo spočítej FTP v Nastavení → FTP a zóny.");
   return {
     title: SYSTEM_LABEL[system] || system,
     why, how,
-    environment: workout.environment_notes || [],
-    fueling: fueling(minutes, system),
+    environment: [terrainLine(structure, { sport: "ride", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
+    fueling: [...fueling(minutes, system), ...(minutes > 75 ? [fuelTotals(minutes, minutes <= 150 ? 60 : 85, .65)] : [])],
     ftp: ftp || null, ftpSource: thresholds.source || null,
     steps: stepRows(structure, { ftp, environment, zones: thresholds.powerZones }),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ftp, environment: "indoor", zones: thresholds.powerZones }) } : null
@@ -115,7 +195,7 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
   if (p && ["recovery", "endurance"].includes(system)) why.push(system === "recovery" ? "Regenerační běh: cílem je zotavení, ne progres." : "Lehký běh staví aerobní základ a odolnost nohou; obtížnost se řídí délkou, ne tempem.");
   else if (p) why.push(progressLine(p, workout, RUN_LABEL));
   if (!coach.rationale?.length && !planned) why.push("V plánu na tento den žádný běh nemáš, proto vybírám podle běhů posledních dní a tvé úrovně.");
-  const how = [...(RUN_HOW[system] || RUN_HOW.endurance)];
+  const how = [...structureHow(structure, { system, sport: "run", thresholdPace: pace }), ...(RUN_HOW[system] || RUN_HOW.endurance).slice(0, 2)];
   if (pace) how.unshift("Tempa počítám z tvého prahového tempa " + formatPace(pace) + " /km" + ({ manual: " (nastaveno v aplikaci)" }[thresholds.runPaceSource] || " (z Intervals.icu)") + ".");
   else how.unshift("Prahové tempo neznám – cíle jsou v % prahového tempa. Zadej nebo spočítej ho v Nastavení → FTP a zóny → Běh.");
   const lthr = thresholds.runLthr;
@@ -125,8 +205,8 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
   return {
     title: RUN_LABEL[system] || system,
     why, how,
-    environment: workout.environment_notes || [],
-    fueling: runFueling(minutes, system),
+    environment: [terrainLine(structure, { sport: "run", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
+    fueling: [...runFueling(minutes, system), ...(minutes > 90 ? [fuelTotals(minutes, 45, .6)] : [])],
     ftp: null, thresholdPace: pace, thresholdPaceFormatted: formatPace(pace), paceSource: thresholds.runPaceSource || null,
     steps: stepRows(structure, opts),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ...opts, environment: "indoor" }) } : null

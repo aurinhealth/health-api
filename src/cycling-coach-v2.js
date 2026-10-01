@@ -114,6 +114,45 @@ export const CYCLING_COACH_V2_META={
   note:"Independent implementation. It does not reproduce TrainerRoad, JOIN, Xert, or any team\'s proprietary algorithms."
 };
 
+// How long the athlete can train today when no time was given: from fitness
+// (CTL ≈ average daily load), then sleep, form (TSB), readiness, a recovery
+// week and a comeback after a break.
+function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport}){
+  const run=sport==="run",reasons=[];
+  let m;
+  if(ctl==null){m=run?45:75;reasons.push("kondici (CTL) zatím neznám, beru "+m+" min");}
+  else{
+    // A training day carries about 7/5 of the daily average; easy riding is
+    // ~49 TSS/h, easy running ~69 rTSS/h (and running gets a little less).
+    const dayLoad=ctl*7/5;
+    m=run?dayLoad/69*60*.8:dayLoad/49*60;
+    reasons.push("kondice CTL "+Math.round(ctl)+" ≈ "+Math.round(dayLoad)+" TSS na tréninkový den → "+Math.round(m)+" min");
+  }
+  const apply=(factor,text)=>{m*=factor;reasons.push(text+" "+(factor>1?"+":"−")+Math.round(Math.abs(factor-1)*100)+" %");};
+  if(sleepMinutes!=null&&sleepMinutes<360)apply(.8,"spánek pod 6 h");
+  else if(sleepMinutes!=null&&sleepMinutes<420)apply(.9,"spánek pod 7 h");
+  if(tsb!=null&&tsb<=-25)apply(.75,"velká únava (TSB "+Math.round(tsb)+")");
+  else if(tsb!=null&&tsb<=-15)apply(.85,"únava (TSB "+Math.round(tsb)+")");
+  else if(tsb!=null&&tsb>=5)apply(1.15,"jsi odpočatý (TSB "+Math.round(tsb)+")");
+  if(readiness==="red")apply(.7,"nízká připravenost");
+  else if(readiness==="yellow")apply(.9,"střední připravenost");
+  if(recoveryWeek)apply(.7,"regenerační týden");
+  if(returning)apply(.7,"návrat po pauze");
+  return {minutes:clamp(m,run?20:30,run?150:300),reasons};
+}
+// The session length for the chosen kind.
+function sessionMinutesFor(kind,capacity,sport){
+  const run=sport==="run",step=run?5:15,round=m=>Math.max(step,Math.round(m/step)*step),reasons=[...capacity.reasons];
+  let m=capacity.minutes;
+  if(kind==="recovery"){m=clamp(m*.5,run?20:30,run?40:60);reasons.push("regenerace je krátká");}
+  else if(["tempo","sweet_spot","threshold","vo2"].includes(kind)){
+    const [lo,hi]=run?[40,80]:[60,120];
+    if(m<lo||m>hi)reasons.push("kvalitní trénink držím na "+lo+"–"+hi+" min");
+    m=clamp(m,lo,hi);
+  }
+  return {minutes:round(m),reasons};
+}
+
 // Words that differ between the bike and the run coach.
 const WORDS={
   ride:{hard3:"už byly nejméně 3 náročné cyklistické dny v aktuálním týdnu",hard2:"rozpočet kvalitních cyklistických dnů je už téměř vyčerpaný",today:"dnes už proběhla cyklistická jednotka",none:"V datech nevidím žádnou nedávnou jízdu – začínám aerobní jízdou; kvalitu přidám, až bude trénink zase pravidelný.",off:d=>"Posledních "+d+" dní bez jízdy – návrat přes aerobní jízdu se sníženou obtížností, kvalita přijde v dalších dnech.",two:"Dvě kvalitní jízdy v týdnu už byly – dnes aerobní objem.",recent:"Kvalita byla před méně než 48 h – dnes aerobní jízda na zotavení.",safe:"Připravenost není ideální pro kvalitu – aerobní jízda je bezpečná volba.",gym:"chránit kvalitu kola po lower-body gymu",labels:{sweet_spot:"Sweet spot",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}},
@@ -167,9 +206,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   const plannedToday=planned.find(a=>isoDate(a.date)===targetDate)||daily?.training?.planned?.find(isSport)||null;
   const plannedInfo=plannedToday?classifyPlannedWorkout(plannedToday,sport):null;
-  const requestedMinutes=sport==="run"
-    ?clamp(n(availabilityMinutes,n(preferences.availableMinutes,n(plannedInfo?.minutes,n(plannedToday?.durationHours)*60||60))),20,240)
-    :clamp(n(availabilityMinutes,n(preferences.availableMinutes,n(plannedInfo?.minutes,n(plannedToday?.durationHours)*60||90))),30,360);
+  const [minLen,maxLen]=sport==="run"?[20,240]:[30,360];
+  const explicitMinutes=n(availabilityMinutes,n(preferences.availableMinutes,n(plannedInfo?.minutes,n(plannedToday?.durationHours)*60||null)));
+  // No time given and nothing planned: the coach picks the length from the
+  // athlete's usual session over the last three weeks (or CTL), see below.
+  const autoLength=explicitMinutes==null;
+  let requestedMinutes=clamp(autoLength?capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek:false,returning:false,sport}).minutes:explicitMinutes,minLen,maxLen);
   const longMinutes=sport==="run"?90:150;
   const cadence=preferences.cadence||"85–95 rpm";
   const rationale=[];
@@ -199,7 +241,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(/threshold/.test(planText)) kind="threshold";
   else if(/sweet/.test(planText)) kind="sweet_spot";
   else if(/tempo/.test(planText)) kind="tempo";
-  else if(requestedMinutes>=longMinutes) kind="long_endurance";
+  else if(!autoLength&&requestedMinutes>=longMinutes) kind="long_endurance";
   else if(phase==="build"&&hard7<2) kind=domains.high<domains.moderate*0.35?"vo2":"threshold";
   else if(phase==="base"&&hard7<2&&domains.moderate<domains.low*0.45) kind=sport==="run"?"threshold":"sweet_spot";
   else if(!recoveryWeek){
@@ -242,6 +284,15 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind="tempo";adaptations.push("trénink zhuštěn do dostupného času");}
   if(requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push("krátké časové okno");}
 
+  let capacity=null;
+  if(autoLength){
+    capacity=capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport});
+    // An easy day with room for more becomes a long ride/run – any day of the week.
+    if(kind==="endurance"&&capacity.minutes>=longMinutes){kind="long_endurance";rationale.push(sport==="run"?"Máš kapacitu na dlouhý běh – staví vytrvalost bez intenzity.":"Máš kapacitu na dlouhou aerobní jízdu – staví vytrvalost bez intenzity.");}
+    const len=sessionMinutesFor(kind,capacity,sport);
+    requestedMinutes=clamp(len.minutes,minLen,maxLen);
+    rationale.push("Délka "+requestedMinutes+" min: "+len.reasons.join("; ")+". Když chceš jinou, zadej čas na trénink.");
+  }
   const session=workoutTemplate(kind,requestedMinutes,cadence,sport);
   const capabilitySystem=kind==="long_endurance"?"endurance":kind==="vo2"?"vo2max":kind;
   const capability=capabilities?.[capabilitySystem]||null;
@@ -269,7 +320,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     readiness:{score,status:readiness,reasons:readinessReasons,sleepMinutes,ctl,atl,tsb,rampRate:ramp,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
-    constraints:{availableMinutes:requestedMinutes,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
+    constraints:{availableMinutes:requestedMinutes,autoLength,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
     recommendation:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
     alternatives,
     missingData:missing,

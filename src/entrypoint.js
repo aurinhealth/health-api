@@ -662,7 +662,8 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const genSport=body.sport==='run'?'run':'ride';
       const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal:body.phase?{phase:String(body.phase)}:null,sport:genSport});
       const thresholds=await athleteThresholds(env);
-      return Response.json(await generateWorkout(env.DB,{sport:genSport,environment:body.environment,date,coach,availabilityMinutes,variant:body.variant,thresholds}),{headers:{'Cache-Control':'no-store'}});
+      const resizeTo=Number.isFinite(Number(body.resizeTo))&&Number(body.resizeTo)>0?Number(body.resizeTo):null;
+      return Response.json(await generateWorkout(env.DB,{sport:genSport,environment:body.environment,date,coach,availabilityMinutes:resizeTo??availabilityMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo}),{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST')return Response.json(await recordWorkoutFeedback(env.DB,await request.json()),{headers:{'Cache-Control':'no-store'}});
     if(url.pathname==='/app/api/workouts/schedule'&&request.method==='POST'){

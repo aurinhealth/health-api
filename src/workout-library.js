@@ -2,7 +2,7 @@
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
 // Every query on personal tables filters by db.userId (see tenancy.js).
-import { renderForEnvironment, n, clamp } from "./workout-model.js";
+import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
@@ -42,6 +42,9 @@ export async function catalog(db, sport = "ride") {
 }
 export async function getWorkout(db, id) {
   if (BUILT_IN_BY_ID.has(id)) return BUILT_IN_BY_ID.get(id);
+  // "<id>~<minutes>": a workout resized to another length (see resizeWorkout).
+  const resized = String(id).match(/^(.+)~(\d{2,3})$/);
+  if (resized) { const base = await getWorkout(db, resized[1]); return base ? resizeWorkout(base, Number(resized[2])) : null; }
   await ensureTrainingTables(db);
   return db.prepare("SELECT * FROM workout_library WHERE id=?").bind(String(id)).first();
 }
@@ -130,7 +133,8 @@ export async function searchWorkoutLibrary(db, filters = {}, context = {}) {
 // "Generate a workout": the coach decides the energy system, duration and the
 // right challenge for the day; the library picks the best match. `variant`
 // walks through the top candidates for a different but equally fitting option.
-export async function generateWorkout(db, { sport = "ride", environment = "indoor", date, coach = {}, availabilityMinutes = null, variant = 0, thresholds = {} } = {}) {
+export async function generateWorkout(db, { sport = "ride", environment = "indoor", date, coach = {}, availabilityMinutes = null, variant = 0, thresholds = {}, workoutId = null, resizeTo = null } = {}) {
+  if (workoutId && resizeTo) return resizeGenerated(db, { sport, environment, date, coach, thresholds, workoutId, resizeTo });
   sport = sportOf(sport);
   const rec = coach.recommendation?.session || {};
   let kind = rec.kind === "long_endurance" ? "endurance" : rec.kind === "vo2" ? "vo2max" : rec.kind || "endurance";
@@ -152,6 +156,111 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
     readiness: coach.readiness || null, progression: coach.recommendation?.progression || null, adaptations: coach.recommendation?.adaptations || [],
     workout: pick, alternatives: pool.filter(w => w.id !== pick.id).slice(0, 3), variantCount: pool.length,
     explanation: explainWorkout(pick, { coach, environment: pick.environment || environment, thresholds, planned, sport })
+  };
+}
+
+// ---- Changing the length of a workout --------------------------------------
+// The main set stays; the aerobic part around it grows or shrinks. Only when
+// that is not enough are repetitions removed, then warm-up and cool-down trimmed.
+const EASY_BELOW = { ride: 76, run: 89 };
+export function resizeStructure(structure = [], target, { sport = "ride", system = "endurance" } = {}) {
+  const run = sport === "run", s = JSON.parse(JSON.stringify(structure)), notes = [];
+  const easy = b => !b.steps && n(b.power, 0) < EASY_BELOW[run ? "run" : "ride"] && !b.free;
+  const aerobic = run ? 82 : 65, wholeEasy = ["recovery", "endurance"].includes(system);
+  const fillers = () => s.map((b, i) => i > 0 && i < s.length - 1 && easy(b) ? i : -1).filter(i => i >= 0);
+  const round1 = x => Math.round(x * 10) / 10;
+  let delta = target - totalMinutes(s);
+  if (delta > 0) {
+    const f = fillers();
+    if (f.length && (wholeEasy || delta < 30)) {
+      const sum = f.reduce((x, i) => x + n(s[i].durationMinutes, 0), 0) || 1;
+      f.forEach(i => { s[i].durationMinutes = round1(n(s[i].durationMinutes, 0) + delta * n(s[i].durationMinutes, 0) / sum); });
+      notes.push(wholeEasy ? "prodloužená aerobní část" : "delší aerobní část kolem hlavní série");
+    } else {
+      // Long sessions put the quality after a first aerobic block, like a real ride.
+      const firstSet = s.findIndex((b, i) => i > 0 && !easy(b));
+      const before = delta >= 30 && firstSet > 0 ? Math.round(delta / 2) : 0;
+      if (before) s.splice(firstSet, 0, step(before, aerobic, null, run ? "lehce" : "aerobní blok"));
+      s.splice(s.length - 1, 0, step(round1(delta - before), aerobic, null, run ? "volný klus" : "aerobní dojezd"));
+      notes.push(before ? "aerobní blok před hlavní sérií a dojezd po ní" : "aerobní dojezd po hlavní sérii");
+    }
+  } else if (delta < 0) {
+    let cut = -delta;
+    for (const i of fillers().sort((a, b) => n(s[b].durationMinutes, 0) - n(s[a].durationMinutes, 0))) {
+      const take = Math.min(cut, n(s[i].durationMinutes, 0));
+      s[i].durationMinutes = round1(n(s[i].durationMinutes, 0) - take); cut -= take;
+      if (cut <= 0) break;
+    }
+    if (-delta - cut > 0) notes.push("kratší aerobní část");
+    for (let i = s.length - 1; i >= 0; i--) if (!s[i].steps && n(s[i].durationMinutes, 0) < (wholeEasy ? 1 : 3) && i > 0 && i < s.length - 1 && easy(s[i])) s.splice(i, 1);
+    // Trim warm-up and cool-down down to a minimum, then the repetitions.
+    for (const [i, min] of [[0, run ? 8 : 10], [s.length - 1, 5]]) {
+      if (cut <= .5 || !s[i] || s[i].steps) continue;
+      const take = Math.min(cut, Math.max(0, n(s[i].durationMinutes, 0) - min));
+      if (take > 0) { s[i].durationMinutes = round1(n(s[i].durationMinutes, 0) - take); cut -= take; notes.push(i === 0 ? "kratší rozjetí" : "kratší vyjetí"); }
+    }
+    // Fewer repetitions of the biggest set, never below one.
+    let repsFrom = null, repsTo = null;
+    while (cut > .5) {
+      const blocks = s.filter(b => b.steps && n(b.repeats, 1) > 1);
+      if (!blocks.length) break;
+      const b = blocks.reduce((a, x) => n(x.repeats, 1) > n(a.repeats, 1) ? x : a);
+      const per = totalMinutes([{ ...b, repeats: 1 }]);
+      if (per > cut + per / 2 && n(b.repeats, 1) <= 2) break;
+      repsFrom ??= b.repeats; b.repeats -= 1; repsTo = b.repeats; cut -= per;
+    }
+    if (repsFrom != null) notes.push("méně opakování (" + repsFrom + " → " + repsTo + ")");
+    // Removing a repetition can overshoot: give the rest back as easy riding.
+    if (cut < -.5) s.splice(s.length - 1, 0, step(round1(-cut), aerobic, null, run ? "volný klus" : "aerobní dojezd"));
+  }
+  return { structure: s, notes: [...new Set(notes)] };
+}
+
+// The same workout at another length. A library sibling (same family and
+// main set) is used when it has the length already; otherwise the structure
+// is resized and the workout gets the id "<id>~<minutes>".
+export function resizeWorkout(base, minutes) {
+  const sport = sportOf(base.sport), run = sport === "run";
+  const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, run ? 240 : 360));
+  if (Math.abs(target - n(base.duration_minutes, 0)) <= 1) return base;
+  const prefix = String(base.id).replace(/-\d+$/, "");
+  const sibling = (BUILT_IN[sport] || []).find(w => w.family === base.family && w.id !== base.id && String(w.id).replace(/-\d+$/, "") === prefix && Math.abs(n(w.duration_minutes, 0) - target) <= 2);
+  if (sibling) return { ...sibling, resize_notes: [(["recovery", "endurance"].includes(base.primary_system) ? "stejný typ jízdy" : "stejná hlavní série") + " v délce " + sibling.duration_minutes + " min z knihovny"] };
+  let structure = [];
+  try { structure = JSON.parse(base.structure_json || "[]"); } catch {}
+  const resized = resizeStructure(structure, target, { sport, system: base.primary_system });
+  let tags = [];
+  try { tags = JSON.parse(base.tags_json || "[]"); } catch {}
+  const built = buildWorkout({
+    id: base.id + "~" + target, sport, name: String(base.name).replace(/ · \d+ min$/, "") + " · " + target + " min",
+    system: base.primary_system, secondarySystem: base.secondary_system, structure: resized.structure, family: base.family, level: base.level,
+    sourceName: base.source_name, sourceKind: base.source_kind, sourceUrl: base.source_url, licenseNote: base.license_note, attribution: base.attribution, citation: base.citation,
+    description: base.description, tags: tags.filter(t => !/^\d+min$/.test(t)).concat(target + "min"), cadence: base.cadence, indoorOnly: Boolean(n(base.indoor_only, 0))
+  });
+  return { ...built, verified: base.verified, resized_from: base.id, resize_notes: resized.notes };
+}
+
+// "Změnit délku": the proposal stays, only its length changes.
+async function resizeGenerated(db, { sport, environment, date, coach, thresholds, workoutId, resizeTo }) {
+  sport = sportOf(sport);
+  const base = await getWorkout(db, String(workoutId).replace(/~\d+$/, ""));
+  if (!base) return { status: "empty", message: "Původní trénink jsem nenašel – vygeneruj nový." };
+  let resized = resizeWorkout(base, resizeTo);
+  // Outdoor rendering can lengthen the warm-up; correct once so the ridden length matches.
+  const drift = renderForEnvironment(resized, environmentOf(environment)).duration_minutes - Math.round(resizeTo);
+  if (Math.abs(drift) >= 2) resized = resizeWorkout(base, Math.round(resizeTo) - drift);
+  const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
+  const capabilities = await getCapabilities(db, sport);
+  const [ranked] = rankWorkoutCandidates([resized], { environment: environmentOf(environment) }, context, capabilities);
+  const pick = renderForEnvironment({ ...resized, ...ranked, resize_notes: resized.resize_notes }, environmentOf(environment));
+  const plannedToday = coach.constraints?.plannedToday;
+  const planned = plannedToday?.system ? { name: plannedToday.name, minutes: plannedToday.minutes, system: plannedToday.system, intensityFactor: plannedToday.intensityFactor, structure: plannedToday.structure } : null;
+  const explanation = explainWorkout(pick, { coach, environment: pick.environment, thresholds, planned, sport });
+  if (resized.id !== base.id) explanation.why = ["Délku jsem změnil z " + base.duration_minutes + " na " + pick.duration_minutes + " min – princip tréninku zůstává" + (resized.resize_notes?.length ? ": " + resized.resize_notes.join(", ") : "") + ".", ...explanation.why.filter(x => !/^Délka \d+ min:/.test(x))];
+  return {
+    status: "ok", sport, environment: pick.environment, date, system: pick.primary_system, durationMinutes: pick.duration_minutes, resizedFrom: base.id,
+    readiness: coach.readiness || null, progression: coach.recommendation?.progression || null, adaptations: coach.recommendation?.adaptations || [],
+    workout: pick, alternatives: [], variantCount: 1, explanation
   };
 }
 
