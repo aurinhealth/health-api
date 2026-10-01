@@ -55,6 +55,17 @@ jobs:
           done
           echo "Database upgrade did not finish in time"; exit 1
 
+      # Live Worker events during the smoke tests, so a platform error (for
+      # example 1102, resource limits) shows its outcome and exceptions.
+      - name: Start Worker tail
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          nohup npx --yes wrangler@4 tail health-api --format json > "$RUNNER_TEMP/tail.jsonl" 2> "$RUNNER_TEMP/tail.err" &
+          sleep 15
+
       - name: Request GitHub OIDC token for strength smoke test
         id: oidc_strength
         shell: bash
@@ -85,6 +96,24 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "HTTP $code"
             printf '%s\n' "$body" | head -c 4000
+            sleep 5
+            # Outcome, timing, exceptions and logs only; headers are not printed.
+            python - "$RUNNER_TEMP/tail.jsonl" <<'PY' || true
+          import json, sys, re
+          text = open(sys.argv[1], encoding="utf-8", errors="ignore").read()
+          dec = json.JSONDecoder(); i = 0; events = []
+          while True:
+              m = re.compile(r"\{").search(text, i)
+              if not m: break
+              try:
+                  obj, end = dec.raw_decode(text, m.start()); events.append(obj); i = end
+              except ValueError:
+                  i = m.start() + 1
+          for e in events:
+              req = (e.get("event") or {}).get("request") or {}
+              print(json.dumps({"url": str(req.get("url", "")).split("?")[0], "outcome": e.get("outcome"), "cpuTime": e.get("cpuTime"), "wallTime": e.get("wallTime"), "exceptions": e.get("exceptions"), "logs": [l.get("message") for l in e.get("logs") or []][-20:]}, ensure_ascii=False)[:3000])
+          PY
+            head -c 2000 "$RUNNER_TEMP/tail.err" || true
             exit 1
           fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert d.get("preview") is True, d; p=d.get("plan") or {}; assert p.get("rows"), p; assert p.get("loadEstimates") is not None, p' <<< "$body"
