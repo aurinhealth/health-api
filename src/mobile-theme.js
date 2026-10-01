@@ -21,11 +21,14 @@ export const mobileTheme = `
   body{background:#0a0d12}
   .shell{display:block;min-height:100dvh}
   .sidebar{position:fixed;inset:auto 0 0;z-index:30;height:auto;padding:5px 6px calc(5px + env(safe-area-inset-bottom));background:#111820;border:0;border-top:1px solid #34414b;box-shadow:0 -8px 24px #0007}
-  .nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;overflow:visible}
+  /* One row for all seven sections; the last one (Nastavení) is labelled Více. */
+  .nav{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;overflow:visible}
   .nav button{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;min-width:0;min-height:56px;padding:4px 1px;border:0;border-radius:7px;background:transparent;color:#a9b9c5;font-size:22px;line-height:1.1;text-align:center}
-  .nav button span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:650}
+  .nav button span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px;font-weight:650;letter-spacing:-.1px}
   .nav button[data-view="settings"] span{font-size:0}
-  .nav button[data-view="settings"] span::after{content:"Více";font-size:10px}
+  .nav button[data-view="settings"] span::after{content:"Více";font-size:9.5px}
+  .nav button[data-view="workouts"] span{font-size:0}
+  .nav button[data-view="workouts"] span::after{content:"Workout";font-size:9.5px}
   .nav button.active{background:#1b322e;color:#8ce0ba;box-shadow:none}
   .nav button:focus-visible{outline:2px solid #8ce0ba;outline-offset:-2px}
   .topbar{position:sticky;top:0;height:60px;z-index:12;padding:0 14px;background:#0d131a;border-bottom:1px solid #26343e}
@@ -71,5 +74,18 @@ export const mobileTheme = `
   .gym-table{min-width:760px}
   .scroll:has(.gym-table){overflow-x:auto;-webkit-overflow-scrolling:touch}
   .toast{bottom:calc(78px + env(safe-area-inset-bottom));left:12px;right:12px}
+  /* Long words, links and form controls never push the page wider than the screen. */
+  .view{overflow-wrap:anywhere}
+  .view select,.view input,.view textarea{max-width:100%}
+  #trainingProfileCard .select-row{flex-wrap:wrap}
+  #trainingProfileCard select{width:100%}
+  /* Tables keep whole words and scroll sideways inside their card instead. */
+  .view table,.view th,.view td{overflow-wrap:normal;word-break:normal}
+  .workout-result,.workout-result>div,.explain-grid>*,#generatedWorkout,#workoutResults{min-width:0;max-width:100%}
+  .step-table-wrap,#trainingProfileCard .step-table{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .step-table th,.step-table td{padding:6px 6px}
+  .step-table td.small{white-space:nowrap}
+  .workout-result-head{flex-wrap:wrap}
+  .workout-filter-actions{flex-wrap:wrap}
 }
 `;
