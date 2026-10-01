@@ -73,9 +73,25 @@ async function intervalsGet(env, path) {
   if (!response.ok) throw new Error(`Intervals.icu HTTP ${response.status}: ${JSON.stringify(data)}`);
   return data;
 }
-async function d1Recovery(env, startDate, endDate) {
-  const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time < ? OR start_time < ?) ORDER BY COALESCE(sample_time, start_time)`).bind(env.USER_ID, `${startDate}T00:00:00`, `${startDate}T00:00:00`, `${endDate}T23:59:59`, `${endDate}T23:59:59`).all();
-  const out = {}; for (const r of rows.results || []) { let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {} (out[r.data_type] ||= []).push({ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }); } return out;
+// Latest sleep, HRV and heart-rate values from Google Health. Only the newest
+// row of each data type is read: the consumers (adaptive engine, strength
+// generator) use just that, and minute-level heart-rate samples over a week
+// are far too many to load and parse (it exceeded the Worker's limits).
+const RECOVERY_TYPES = ["sleep", "hrv", "heart_rate", "resting"];
+export async function d1Recovery(env, startDate, endDate) {
+  const from = `${startDate}T00:00:00`, to = `${endDate}T23:59:59`;
+  const typeFilter = RECOVERY_TYPES.map(() => "lower(data_type) LIKE ?").join(" OR ");
+  const typeBinds = RECOVERY_TYPES.map(t => `%${t}%`);
+  const latest = await env.DB.prepare(`SELECT data_type, MAX(COALESCE(sample_time, start_time)) AS t FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND COALESCE(sample_time, start_time) >= ? AND COALESCE(sample_time, start_time) <= ? AND (${typeFilter}) GROUP BY data_type`).bind(env.USER_ID, from, to, ...typeBinds).all();
+  const out = {};
+  for (const { data_type: type, t } of latest.results || []) {
+    if (!t) continue;
+    const r = await env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND data_type = ? AND COALESCE(sample_time, start_time) = ? LIMIT 1`).bind(env.USER_ID, type, t).first();
+    if (!r) continue;
+    let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {}
+    out[type] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
+  }
+  return out;
 }
 // The day's strength plan from D1 (gym_plans); Google Sheets is no longer used.
 async function readStrengthPlan(env, date) {
