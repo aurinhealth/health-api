@@ -132,7 +132,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [
   let remaining = Math.max(0, target - committed - open.filter(x => x.sport === "gym").reduce((s, x) => s + (GYM_TSS[x.role] || 30), 0));
   const endurance = open.filter(x => x.sport !== "gym"), shares = endurance.reduce((s, x) => s + (x.share || 1), 0);
   const items = open.map(x => {
-    if (x.sport === "gym") return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: x.role === "gym_upper" ? 50 : 60 };
+    if (x.sport === "gym") return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: (x.role === "gym_upper" ? 60 : 70) - (recovery ? 10 : 0) };
     const [lo, hi] = ROLE_RANGE[x.role] || [.8, 1.6], cap = recovery ? .85 : 1;
     const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
     const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = ROLE_IF[x.role] || .68;

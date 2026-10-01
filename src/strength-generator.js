@@ -157,12 +157,26 @@ function recentMuscleLoad(history, contextDate) {
   }
   return load;
 }
+// Completed sets plus the exercises of gym plans on the days around (one row
+// each), so a second session in the same week picks different exercises.
+function selectionHistory(context) {
+  const done = context?.strength?.recentCompletedSets || [];
+  const planned = (context?.strength?.plannedSessions || []).flatMap(s => (s.exercises || []).map(exercise => ({ exercise, workout_date: s.date, type: "WORK", rpe: null, set_no: 1, planned: true })));
+  return [...done, ...planned];
+}
+// Exercises per session from its length: about 10 minutes each with warm-ups.
+export function exerciseCountFor(minutes) {
+  const m = Number(minutes);
+  if (!Number.isFinite(m) || m <= 0) return 5;
+  return m <= 35 ? 3 : m <= 50 ? 4 : m <= 65 ? 5 : m <= 80 ? 6 : 7;
+}
+const LEG_MUSCLES = new Set(["quads", "hamstrings", "glutes", "adductors", "abductors", "calves"]);
 function choosePlan(context, options = {}) {
-  const history = context?.strength?.recentCompletedSets || [];
+  const history = selectionHistory(context);
   const legStress = cyclingLegStress(context);
   const muscleLoad = recentMuscleLoad(history, context.date);
   const muscleExposure = recentMuscleExposure(history, context.date);
-  const dates = completedWorkoutDates(history);
+  const dates = completedWorkoutDates(context?.strength?.recentCompletedSets || []);
   const recentWorkoutCount = dates.filter(d => daysBetween(d, context.date) <= 10).length;
   const recentTss = num(context?.cycling?.recentRideTss) || 0;
   const next = context?.cycling?.nextRide;
@@ -177,18 +191,19 @@ function choosePlan(context, options = {}) {
   for (const row of history) {
     const d = dateKey(row.workout_date);
     const exercise = normalizeExerciseName(row.exercise);
-    if (d && exercise && (!lastExerciseDate.has(exercise) || d > lastExerciseDate.get(exercise))) {
+    if (d && exercise && (!lastExerciseDate.has(exercise) || daysBetween(d, context.date) < daysBetween(lastExerciseDate.get(exercise), context.date))) {
       lastExerciseDate.set(exercise, d);
     }
   }
 
-  const notRecent = ex => {
-    const d = lastExerciseDate.get(ex);
-    return !d || daysBetween(d, context.date) >= 5;
-  };
-  const muscleNotRecentlyExposed = ex => {
-    const muscle = EXERCISES[ex]?.muscle;
-    return !muscle || !(muscleExposure.get(muscle) > 0);
+  // Preferences, not filters: an exercise done or planned within 4 days and a
+  // muscle trained this week count against it, but every movement pattern
+  // still gets its best available exercise. Ties go to the pattern's main
+  // exercise (listed first).
+  const score = (ex, rank = 0) => {
+    const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
+    const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
+    return recent + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05;
   };
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
@@ -199,130 +214,88 @@ function choosePlan(context, options = {}) {
     horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row"],
     verticalPush: ["DB shoulder press", "Shoulder press Prime"],
     verticalPull: ["Lat pulldown", "Cable pullover"],
+    lateralRaise: ["Cable lateral raise", "Standing multi flight"],
     biceps: ["DB curl", "Hammer curl", "Cable curl"],
     triceps: ["Cable triceps extension", "Cable overhead triceps extension"],
     rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull"],
     core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"],
-    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime"],
+    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat"],
     hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"],
     unilateral: ["DB Bulgarian split squat"],
-    posterior: ["Prone leg curl Prime"]
+    posterior: ["Prone leg curl Prime"],
+    calves: ["Standing calf raise"]
   };
 
-  function pick(pattern, used = new Set()) {
-    const candidates = (candidatesByPattern[pattern] || []).filter(ex => availableAt(ex));
-    const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
-    const fresh = eligible.filter(muscleNotRecentlyExposed);
-    const pool = fresh;
-    return pool.sort((a, b) => {
-      const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
-      const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
-      return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
-    })[0];
+  // An exercise actually done in the last two days is left out entirely.
+  const used = new Set((options.excludeExercises || []).map(normalizeExerciseName));
+  for (const row of context?.strength?.recentCompletedSets || []) {
+    const ex = normalizeExerciseName(row.exercise);
+    if (ex && daysBetween(row.workout_date, context.date) <= 2) used.add(ex);
   }
-
-  // Prevent redundant movement patterns in the same session. For example,
-  // DB bench press + Chest flat press Prime are both horizontal pressing;
-  // the generator should prefer one of them rather than duplicating the pattern.
-  function patternOf(exercise) {
-    return EXERCISES[exercise]?.pattern || null;
+  function pick(patterns) {
+    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && !used.has(ex));
+    const ex = pool.sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
+    if (ex) used.add(ex);
+    return ex;
   }
-
-  function pickDiverse(pattern, used = new Set()) {
-    const candidates = (candidatesByPattern[pattern] || []).filter(ex => availableAt(ex));
-    const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
-    const fresh = eligible.filter(muscleNotRecentlyExposed);
-    const pool = fresh.length ? fresh : [];
-    return pool.sort((a, b) => {
-      const loadA = muscleLoad.get(EXERCISES[a]?.muscle) || 0;
-      const loadB = muscleLoad.get(EXERCISES[b]?.muscle) || 0;
-      return loadA - loadB || Number(EXERCISES[a]?.fatigue || 0) - Number(EXERCISES[b]?.fatigue || 0);
-    })[0];
-  }
-
-  function addDiverse(exercises, used, preferredPatterns) {
-    for (const pattern of preferredPatterns) {
-      const ex = pickDiverse(pattern, used);
-      if (ex) {
-        exercises.push(ex);
-        used.add(ex);
-      }
-    }
-    return exercises;
-  }
-
-  function buildUpper() {
-    const used = new Set();
-    const exercises = [];
-    addDiverse(exercises, used, ["horizontalPush", "horizontalPull", "verticalPush", "biceps", "triceps"]);
-    return exercises;
-  }
+  // Ordered by priority; the session length decides how many are kept.
+  const build = groups => groups.map(pick).filter(Boolean);
+  const base = {
+    muscleExposure: Object.fromEntries(muscleExposure),
+    recentWorkoutCount,
+    muscleLoad,
+    plannedSessions: context?.strength?.plannedSessions || []
+  };
 
   if (forceUpper || (protectLegs && !forceLower)) {
-    const exercises = buildUpper();
     return {
+      ...base,
       name: "Upper Body",
-      exercises,
-      muscleExposure: Object.fromEntries(muscleExposure),
-      rationale: forceUpper
+      exercises: build(["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", "rearDelts", "biceps", "triceps", "lateralRaise", "core"]),
+      rationale: options.focusSource === "week"
+        ? "Podle týdenního plánu je kolem tohoto dne náročnější trénink na kole nebo běh, proto horní tělo a core; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
+        : forceUpper
         ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
         : (recentTss >= 700 || nextHard || nextLong
           ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a cviky horní části těla vybíráme podle čerstvosti a nedávné svalové zátěže."
           : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku; výběr cviků zohledňuje nedávnou svalovou zátěž a opakování cviků."),
-      protectedLegs: true,
-      recentWorkoutCount,
-      muscleLoad
+      protectedLegs: true
     };
   }
 
   if (forceLower) {
-    const used = new Set();
-    const exercises = [];
-    // Lower Body gets movement-pattern diversity first: one knee-dominant
-    // movement, one hip-hinge/posterior-chain movement, then an accessory.
-    for (const group of ["quad", "hinge", "unilateral", "posterior"]) {
-      const ex = pick(group, used);
-      if (ex) {
-        exercises.push(ex);
-        used.add(ex);
-      }
-      if (exercises.length >= 3) break;
-    }
+    // One knee-dominant movement, one hip hinge, then accessories.
+    const exercises = build(["quad", "hinge", "posterior", "unilateral", "core", "calves", "quad"]);
     return {
+      ...base,
       name: "Lower Body",
       exercises: exercises.length ? exercises : ["Pivot leg press", "Prone leg curl Prime"],
-      muscleExposure: Object.fromEntries(muscleExposure),
       rationale: "Požadavek uživatele soustředí trénink na dolní část těla; skladba nejprve zajišťuje různé pohybové vzory a teprve potom vybírá podle čerstvosti a nedávné svalové zátěže.",
-      protectedLegs: false,
-      recentWorkoutCount,
-      muscleLoad
+      protectedLegs: false
     };
   }
 
-  const used = new Set();
-  const legCandidates = ["Pivot leg press", "Pendulum squat", "DB Romanian deadlift", "Prone leg curl Prime", "Hip thrust", "Leg extension Prime", "DB Bulgarian split squat"];
-  const leg = legCandidates
-    .filter(ex => notRecent(ex))
-    .sort((a, b) => (muscleLoad.get(EXERCISES[a]?.muscle) || 0) - (muscleLoad.get(EXERCISES[b]?.muscle) || 0))[0];
-  if (leg) used.add(leg);
-  const upper = [];
-  addDiverse(upper, used, ["horizontalPush", "horizontalPull", "verticalPush", "core"]);
+  // Full body: the freshest leg movement, then the second leg pattern
+  // (knee after hip or hip after knee) among the upper-body patterns.
+  const leg = pick(["quad", "hinge", "posterior", "unilateral"]);
+  const kneeFirst = ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
+  const exercises = [leg, ...build(["horizontalPush", "horizontalPull", kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], "verticalPush", "verticalPull", "core", "biceps", "triceps"])].filter(Boolean);
   return {
+    ...base,
     name: "Full Body",
-    exercises: [leg, ...upper].filter(Boolean),
-    muscleExposure: Object.fromEntries(muscleExposure),
+    exercises,
     rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; výběr cviků zohledňuje nedávnou svalovou zátěž a čerstvost jednotlivých cviků.",
-    protectedLegs: false,
-    recentWorkoutCount,
-    muscleLoad
+    protectedLegs: false
   };
 }
-function warmupRows(exercise, workKg = null) {
+// Three ramp-up sets before the first main lift; later main lifts need one.
+function warmupRows(exercise, workKg = null, first = true) {
   const def = EXERCISES[exercise]; if (!def?.warmup) return [];
   const reference = workKg ?? def.baseKg; if (reference == null) return [];
   const rawKg = Math.max(2, reference * 0.4), rawKg2 = Math.max(2, reference * 0.65), rawKg3 = Math.max(2, reference * 0.8);
   const kg = resolveLoad(exercise, rawKg), kg2 = resolveLoad(exercise, rawKg2), kg3 = resolveLoad(exercise, rawKg3);
   const execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION, fmt = x => String(x).replace(".", ",");
+  if (!first) return [["WARMUP", exercise, "1", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution]];
   return [["WARMUP", exercise, "1", fmt(kg), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video", "", execution], ["WARMUP", exercise, "2", fmt(kg2), "5", "", "", "", "FALSE", "[WARMUP]", "", "", execution], ["WARMUP", exercise, "3", fmt(kg3), "3", "", "", "", "FALSE", "[WARMUP]", "", "", execution]];
 }
 function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModifier = 1) {
@@ -363,12 +336,13 @@ export function generateStrengthPlan(context, options = {}) {
   const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   if (options.focusMuscles != null && !focusMuscles) throw new Error('Vyber 1 až 5 známých partií.');
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
-  const weeklyExposure = recentMuscleExposure(history, context.date);
-  const weeklyLoad = recentMuscleLoad(history, context.date);
+  const selection = selectionHistory(context);
+  const weeklyExposure = recentMuscleExposure(selection, context.date);
+  const weeklyLoad = recentMuscleLoad(selection, context.date);
   const lastExerciseDate = new Map();
-  for (const row of history) {
+  for (const row of selection) {
     const exercise = normalizeExerciseName(row.exercise), date = dateKey(row.workout_date);
-    if (exercise && date && (!lastExerciseDate.has(exercise) || date > lastExerciseDate.get(exercise))) lastExerciseDate.set(exercise, date);
+    if (exercise && date && (!lastExerciseDate.has(exercise) || daysBetween(date, context.date) < daysBetween(lastExerciseDate.get(exercise), context.date))) lastExerciseDate.set(exercise, date);
   }
   const focusedExercise = group => {
     const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && !excluded.has(name));
@@ -382,19 +356,7 @@ export function generateStrengthPlan(context, options = {}) {
     return candidates.sort((a, b) => score(a) - score(b))[0];
   };
   let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex));
-  const candidates = ["Cable triceps extension", "Cable curl", "Hammer curl", "DB curl", "Chest flat press Prime", "Shoulder press Prime", "DB bench press", "Low row", "Standing rowing machine", "Lat pulldown", "DB shoulder press", "Pec deck", "Rear delt pec deck", "Cable lateral raise", "Prone leg curl Prime", "Leg extension Prime", "DB Romanian deadlift", "DB Bulgarian split squat", "Hip thrust", "Pivot leg press", "Pendulum squat", "Abs bench crunch", "Cable crunch", "Pallof press"];
-  const selectedPatterns = new Set(exercises.map(ex => EXERCISES[ex]?.pattern).filter(Boolean));
-  for (const candidate of focusMuscles ? [] : candidates) {
-    if (exercises.length >= (Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5))) break;
-    const candidatePattern = EXERCISES[candidate]?.pattern;
-    const candidateMuscle = EXERCISES[candidate]?.muscle;
-    const muscleFresh = !candidateMuscle || !(weeklyExposure.get(candidateMuscle) > 0);
-    if (!exercises.includes(candidate) && !excluded.has(candidate) && muscleFresh && (!candidatePattern || !selectedPatterns.has(candidatePattern))) {
-      exercises.push(candidate);
-      if (candidatePattern) selectedPatterns.add(candidatePattern);
-    }
-  }
-  const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || (Number(options.durationMinutes) <= 45 ? 3 : Number(options.durationMinutes) <= 60 ? 4 : 5);
+  const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
   exercises = exercises.slice(0, maxExercises);
 
   // Warm-up exercises must be the first exercises of the session. Keep the
@@ -407,14 +369,20 @@ export function generateStrengthPlan(context, options = {}) {
   const durationVolume = focusMuscles && Number(options.durationMinutes) <= 45 ? .75 : focusMuscles && Number(options.durationMinutes) <= 60 ? .9 : 1;
   const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume);
   const maxSets = focusMuscles && Number(options.durationMinutes) <= 45 ? 2 : focusMuscles && Number(options.durationMinutes) <= 60 ? 3 : 4;
+  let warmedUp = false;
   for (const exercise of exercises) {
     const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier, maxSets);
-    rows.push(...warmupRows(exercise, work.kg), ...work.rows);
+    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    if (warmup.length) warmedUp = true;
+    rows.push(...warmup, ...work.rows);
     loadEstimates.push({ exercise, sets: work.sets, ...work.estimate });
   }
   const focusLabels = focusMuscles?.map(id => FOCUS_GROUPS[id].label).join(', ');
   const legCaution = chosen.protectedLegs && focusMuscles?.some(id => ['quads', 'hamstrings', 'hips'].includes(id));
-  const rationale = focusMuscles ? 'Zvolené partie: ' + focusLabels + '. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ' + (legCaution ? 'Kvůli cyklistické zátěži je potřeba držet rezervu u nohou.' : '') : chosen.rationale;
+  const baseRationale = focusMuscles ? 'Zvolené partie: ' + focusLabels + '. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ' + (legCaution ? 'Kvůli cyklistické zátěži je potřeba držet rezervu u nohou.' : '') : chosen.rationale;
+  const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
+  const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
+  const rationale = baseRationale + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '');
   return { date: context.date, planName: focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name, rationale, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 

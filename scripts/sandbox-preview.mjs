@@ -8,7 +8,8 @@ import http from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { dashboardPage } from "../src/dashboard.js";
 import { gymExerciseCatalog } from "../src/gym-catalog.js";
-import { FOCUS_GROUPS } from "../src/strength-generator.js";
+import { FOCUS_GROUPS, generateStrengthPlan } from "../src/strength-generator.js";
+import { planValues } from "../src/gym-plan-store.js";
 import { searchWorkoutLibrary, generateWorkout, getCapabilities } from "../src/workout-library.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { planWeekRoles, sanitizeWeekPlan, weekTargets, ROLE_LABELS, ROLE_FOCUS } from "../src/week-planner.js";
@@ -60,7 +61,7 @@ const pastActivities = Array.from({ length: 6 }, (_, w) => {
   ];
 }).flat();
 let gymValues = [[], [], ["", "Silový trénink · horní tělo"], [], [], [], [], ["WORK", "Lat pulldown", "1", "45", "10", "", "", "", "FALSE", "", ""], ["WORK", "Lat pulldown", "2", "45", "10", "", "", "", "FALSE", "", ""], ["WORK", "DB bench press", "1", "22", "10", "", "", "", "FALSE", "", ""]];
-let weekPlan = sanitizeWeekPlan({ days: [["gym"], ["ride"], ["gym"], ["ride"], [], ["ride", "gym"], ["ride"]] });
+let weekPlan = sanitizeWeekPlan({ days: [["gym"], ["ride"], [], ["ride"], ["gym"], ["ride"], ["gym"]] });
 
 function dailyFor(date) {
   const w = weekActivities[date] || {}, kcal = date <= T ? 2200 + (date.charCodeAt(9) % 5) * 90 : 0;
@@ -113,6 +114,21 @@ function gymPlanFor(muscles = []) {
   gymValues = [[], [], ["", "Cílený trénink · " + ids.map(id => FOCUS_GROUPS[id].label).join(", ")], [], [], [], [], ...rows];
 }
 
+// Gym plans from the real generator, day by day in the week's order: each one
+// sees the plans already made for the days around it, as the live app does.
+function gymPlansForWeek() {
+  const out = {}, made = [];
+  const roles = targetsFor(MON).items.filter(x => x.sport === "gym");
+  for (const offset of [0, 1, 2, 3, 4, 5, 6]) {
+    const date = day(offset), chip = roles.find(x => x.date === date);
+    const near = made.filter(m => Math.abs(Date.parse(m.date) - Date.parse(date)) <= 4 * 86400000);
+    const plan = generateStrengthPlan({ status: "ok", date, recovery: {}, cycling: { recentRideHours: 4, recentRideTss: 260, recentActivities: [], plannedWorkouts: [], nextRide: null }, strength: { recentCompletedSets: gymHistory.map(r => ({ ...r, type: "WORK", completed: 1 })), plannedSessions: near } }, { durationMinutes: chip?.minutes ?? 60, focus: chip?.role === "gym_upper" ? "upper" : undefined, focusSource: chip?.role === "gym_upper" ? "week" : undefined });
+    out[date] = { values: planValues(plan), rationale: plan.rationale };
+    if (chip) made.push({ date, exercises: [...new Set(plan.rows.filter(r => r[0] === "WORK").map(r => r[1]))] });
+  }
+  return out;
+}
+
 // Every response the page needs: fixed ones are precomputed for the static build.
 async function staticResponses() {
   const searches = {};
@@ -157,7 +173,7 @@ function weatherSample(params) {
 function shim(data, planner) {
   return `<script>
 (()=>{const DATA=${JSON.stringify(data).replace(/</g, "\\u003c")};${planner}
-let prefs=${JSON.stringify(weekPlan)},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}};
+let prefs=${JSON.stringify(weekPlan)},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}},GYM_WEEK=${JSON.stringify(gymPlansForWeek())};
 const T=${JSON.stringify(T)},CTL=${JSON.stringify(CTL)},LAST=${JSON.stringify(LAST_WEEK)},WEEKDAYS=${JSON.stringify(Object.fromEntries([day(-7, MON), MON, day(7, MON)].map(w => [w, weekDays(w)])))};
 const FOCUS=${JSON.stringify(FOCUS_GROUPS)},weather=${JSON.stringify(weatherSample())};
 const ok=b=>new Response(JSON.stringify(b),{status:200,headers:{'Content-Type':'application/json'}});
@@ -175,6 +191,7 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
  if(p==='/app/api/workouts/feedback')return ok({status:'ok',completedPercent:96,intervals:{status:'ok'}});
  if(p==='/app/api/workouts/schedule')return ok({status:'ok',workout:{name:'Workout'},date:body.date});
  if(p==='/app/api/gym'){const d=(m==='POST'?body.date:url.searchParams.get('date'))||T;if(m==='POST'&&body.values)gymByDay[d]=body.fullValues||body.values;return ok({status:'ok',date:d,values:gymByDay[d]||[],history:gymHistory,videoLinks:[],stored:Boolean(gymByDay[d])});}
+ if(p==='/app/api/gym/generate'&&!body.focusMuscles?.length&&GYM_WEEK[body.date||T]){const d=body.date||T;gymByDay[d]=GYM_WEEK[d].values;return ok({status:'ok',rationale:GYM_WEEK[d].rationale});}
  if(p==='/app/api/gym/generate'){const d=body.date||T,ids=body.focusMuscles?.length?body.focusMuscles:['chest','upper_back','lats','side_delts','abs'];gymByDay[d]=[[],[],['','Cílený trénink · '+ids.map(i=>FOCUS[i].label).join(', ')],[],[],[],[],...ids.flatMap(i=>[1,2,3].map(n=>['WORK',FOCUS[i].exercises[0],String(n),'','10','','','','FALSE','','']))];return ok({status:'ok',rationale:'Sandbox: plán podle zvolených partií.'});}
  if(p==='/app/api/sync')return ok({status:'accepted'});
  if(DATA[p])return ok(DATA[p]);

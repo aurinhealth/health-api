@@ -122,6 +122,7 @@ async function generateStrengthPlanRoute(env, request, url) {
     if (context.status !== "ok") throw new Error("Strength context is not ready");
     const options = {
       focus: body?.focus ? String(body.focus) : undefined,
+      focusSource: body?.focusSource === "week" ? "week" : undefined,
       forceProtectLegs: body?.forceProtectLegs === true,
       durationMinutes: body?.durationMinutes == null ? undefined : Number(body.durationMinutes),
       maxExercises: body?.maxExercises == null ? undefined : Number(body.maxExercises),

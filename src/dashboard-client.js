@@ -1599,7 +1599,7 @@ async function proposeWeek(){
       try{
         if(x.sport==='gym'){
           let g=await jsonFetch('/app/api/gym?date='+x.date);
-          if(!(g.values||[]).slice(7).some(r=>r?.[1])){await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,durationMinutes:x.minutes})});g=await jsonFetch('/app/api/gym?date='+x.date);}
+          if(!(g.values||[]).slice(7).some(r=>r?.[1])){await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date})});g=await jsonFetch('/app/api/gym?date='+x.date);}
           state.proposals[key]={gym:new Set((g.values||[]).slice(7).map(r=>r?.[1]).filter(Boolean)).size};
         }else{
           const r=await jsonFetch('/app/api/workouts/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,sport:x.sport,environment:'outdoor'})});

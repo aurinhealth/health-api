@@ -633,6 +633,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));
+    // The week plan's gym chip for that day sets the length and upper/full body,
+    // unless the request chose them.
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.date||"")) ? body.date : pragueToday();
+    if (body?.durationMinutes == null && !body?.focus && !body?.focusMuscles && !body?.forceProtectLegs) {
+      const prefs = await getWeekPlan(env.DB).catch(() => null);
+      const chip = prefs ? targetFor(await computeWeekTargets(env, ctx, mondayOfDate(day), prefs).catch(() => null), day, "gym") : null;
+      if (chip) { body.durationMinutes = chip.minutes; if (chip.role === "gym_upper") { body.focus = "upper"; body.focusSource = "week"; } }
+    }
     const internal = new URL("/strength/generate-plan", request.url);
     const response = await app.fetch(new Request(internal,{
       method:"POST",
