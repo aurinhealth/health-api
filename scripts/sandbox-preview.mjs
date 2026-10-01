@@ -11,11 +11,12 @@ import { gymExerciseCatalog } from "../src/gym-catalog.js";
 import { FOCUS_GROUPS } from "../src/strength-generator.js";
 import { searchWorkoutLibrary, generateWorkout, getCapabilities } from "../src/workout-library.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
-import { planWeekRoles, sanitizeWeekPlan, ROLE_LABELS, ROLE_FOCUS } from "../src/week-planner.js";
+import { planWeekRoles, sanitizeWeekPlan, weekTargets, ROLE_LABELS, ROLE_FOCUS } from "../src/week-planner.js";
 import { powerZones, hrZones, paceZones, POWER_ZONE_MODELS, HR_ZONE_MODELS, PACE_ZONE_MODELS, FTP_METHODS, PACE_METHODS } from "../src/training-zones.js";
 import { fitnessInsights } from "../src/fitness-insights.js";
 import { sampleActivityStreams, activityIntervals, heartRateRecovery } from "../src/activity-detail.js";
 import { createD1 } from "../tests/helpers/d1.mjs";
+const plannerText = await readFile(new URL("../src/week-planner.js", import.meta.url), "utf8");
 import { scopedDb } from "../src/tenancy.js";
 
 const day = (offset, base = today()) => { const d = new Date(base + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
@@ -86,12 +87,17 @@ async function search(params) {
   const r = await searchWorkoutLibrary(db, filters, context);
   return { ...r, athlete: { ftp: 260, indoorFtp: 260, runThresholdPace: 285 }, rankingContext: { ...context, tsb: coach.readiness.tsb }, coachPick: { system: filters.preferredSystem || null, durationMinutes: duration ? null : coach.constraints.availableMinutes }, date: T };
 }
+const CTL = wellness.at(-1).ctl, LAST_WEEK = 420;
+const sportOf = t => /weight|strength|gym/i.test(t) ? "gym" : /ride/i.test(t) ? "ride" : /run/i.test(t) ? "run" : null;
+const weekDays = start => week(start).days.map(d => ({ date: d.date, done: (d.daily.training.completed || []).reduce((s, a) => s + (a.tss || 0), 0), planned: (d.daily.training.planned || []).reduce((s, a) => s + (a.tss || 0), 0), sports: [...(d.daily.training.completed || []), ...(d.daily.training.planned || [])].map(a => sportOf(a.type)).filter(Boolean).concat(gymHistory.some(r => r.workout_date === d.date) ? ["gym"] : []) }));
+const targetsFor = start => weekTargets({ roles: planWeekRoles(weekPlan.days), ctl: CTL, lastWeekLoad: LAST_WEEK, days: weekDays(start), today: T, weekStart: start });
 async function generate(body) {
   const sport = body.sport === "run" ? "run" : "ride", date = body.date || T, wd = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
   const weekRole = planWeekRoles(weekPlan.days)[wd].items.find(x => x.sport === sport) || null;
-  const coach = buildCyclingCoachV2({ date, week: week(MON), fitness: { wellness }, health: { sleep: sleep.map(s => ({ ...s, type: "sleep" })) }, gym: { history: gymHistory }, sport, availabilityMinutes: Number(body.availabilityMinutes) || null, goal: weekRole?.focus ? { focus: weekRole.focus } : null });
-  const r = await generateWorkout(db, { sport, environment: body.environment, date, coach, availabilityMinutes: Number(body.resizeTo || body.availabilityMinutes) || null, variant: body.variant, thresholds: { ftp: 260, indoorFtp: 260, runThresholdPace: 285, powerZones: powerZones({}, 260), paceZones: paceZones({}, 285) }, workoutId: body.workoutId || null, resizeTo: Number(body.resizeTo) || null });
-  return { ...r, weekRole };
+  const weekTarget = targetsFor(MON).items.find(x => x.date === date && x.sport === sport) || null, minutes = Number(body.availabilityMinutes) || weekTarget?.minutes || null;
+  const coach = buildCyclingCoachV2({ date, week: week(MON), fitness: { wellness }, health: { sleep: sleep.map(s => ({ ...s, type: "sleep" })) }, gym: { history: gymHistory }, sport, availabilityMinutes: minutes, goal: weekRole?.focus ? { focus: weekRole.focus } : null });
+  const r = await generateWorkout(db, { sport, environment: body.environment, date, coach, availabilityMinutes: Number(body.resizeTo) || minutes, variant: body.variant, thresholds: { ftp: 260, indoorFtp: 260, runThresholdPace: 285, powerZones: powerZones({}, 260), paceZones: paceZones({}, 285) }, workoutId: body.workoutId || null, resizeTo: Number(body.resizeTo) || null });
+  return { ...r, weekRole, weekTarget };
 }
 function trainingProfile() {
   const profile = { lthr: 175, maxHr: 192, restHr: 48 };
@@ -151,14 +157,15 @@ function weatherSample(params) {
 function shim(data, planner) {
   return `<script>
 (()=>{const DATA=${JSON.stringify(data).replace(/</g, "\\u003c")};${planner}
-let prefs=${JSON.stringify(weekPlan)},gym=${JSON.stringify({ values: gymValues, history: gymHistory })};
+let prefs=${JSON.stringify(weekPlan)},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}};
+const T=${JSON.stringify(T)},CTL=${JSON.stringify(CTL)},LAST=${JSON.stringify(LAST_WEEK)},WEEKDAYS=${JSON.stringify(Object.fromEntries([day(-7, MON), MON, day(7, MON)].map(w => [w, weekDays(w)])))};
 const FOCUS=${JSON.stringify(FOCUS_GROUPS)},weather=${JSON.stringify(weatherSample())};
 const ok=b=>new Response(JSON.stringify(b),{status:200,headers:{'Content-Type':'application/json'}});
 const realFetch=window.fetch.bind(window);window.confirm=()=>true;
 window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?input:input.url,location.href),m=(opts.method||'GET').toUpperCase(),body=opts.body?JSON.parse(opts.body):{};
  if(/open-meteo/.test(url.host)){if(/geocoding/.test(url.host))return ok({results:[{name:url.searchParams.get('name')||'Praha',admin1:'Ukázka',country_code:'CZ',latitude:50.08,longitude:14.43}]});return ok(weather);}
  const p=url.pathname;
- if(p==='/app/api/week-plan'){if(m==='POST')prefs={days:body.days,location:body.location||prefs.location};return ok({status:'ok',prefs,roles:planWeekRoles(prefs.days)});}
+ if(p==='/app/api/week-plan'){if(m==='POST')prefs={days:body.days,location:body.location||prefs.location};const start=url.searchParams.get('start')||Object.keys(WEEKDAYS)[1];return ok({status:'ok',prefs,roles:planWeekRoles(prefs.days),start,targets:weekTargets({roles:planWeekRoles(prefs.days),ctl:CTL,lastWeekLoad:LAST,days:WEEKDAYS[start]||[],today:T,weekStart:start})});}
  if(p==='/app/api/week')return ok(DATA.weeks[url.searchParams.get('start')]||DATA.weeks[Object.keys(DATA.weeks)[1]]);
  if(p==='/app/api/workouts/search')return ok(DATA.searches[url.searchParams.get('sport')==='run'?'run':'ride']);
  if(p==='/app/api/workouts/generate'){const g=DATA.generated[(body.sport==='run'?'run':'ride')+'|'+body.date]||Object.values(DATA.generated)[0];return ok(g);}
@@ -167,8 +174,8 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
   return ok({status:'ok',eventId:id,date:body.date});}
  if(p==='/app/api/workouts/feedback')return ok({status:'ok',completedPercent:96,intervals:{status:'ok'}});
  if(p==='/app/api/workouts/schedule')return ok({status:'ok',workout:{name:'Workout'},date:body.date});
- if(p==='/app/api/gym'){if(m==='POST'&&body.values)gym.values=body.fullValues||body.values;return ok({status:'ok',...gym,videoLinks:[]});}
- if(p==='/app/api/gym/generate'){const ids=body.focusMuscles?.length?body.focusMuscles:['chest','upper_back','lats','side_delts','abs'];gym.values=[[],[],['','Cílený trénink · '+ids.map(i=>FOCUS[i].label).join(', ')],[],[],[],[],...ids.flatMap(i=>[1,2,3].map(n=>['WORK',FOCUS[i].exercises[0],String(n),'','10','','','','FALSE','','']))];return ok({status:'ok',rationale:'Sandbox: plán podle zvolených partií.'});}
+ if(p==='/app/api/gym'){const d=(m==='POST'?body.date:url.searchParams.get('date'))||T;if(m==='POST'&&body.values)gymByDay[d]=body.fullValues||body.values;return ok({status:'ok',date:d,values:gymByDay[d]||[],history:gymHistory,videoLinks:[],stored:Boolean(gymByDay[d])});}
+ if(p==='/app/api/gym/generate'){const d=body.date||T,ids=body.focusMuscles?.length?body.focusMuscles:['chest','upper_back','lats','side_delts','abs'];gymByDay[d]=[[],[],['','Cílený trénink · '+ids.map(i=>FOCUS[i].label).join(', ')],[],[],[],[],...ids.flatMap(i=>[1,2,3].map(n=>['WORK',FOCUS[i].exercises[0],String(n),'','10','','','','FALSE','','']))];return ok({status:'ok',rationale:'Sandbox: plán podle zvolených partií.'});}
  if(p==='/app/api/sync')return ok({status:'accepted'});
  if(DATA[p])return ok(DATA[p]);
  if(p.startsWith('/app/'))return ok({status:'ok'});
@@ -176,9 +183,9 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
 })();
 </script>`;
 }
+// The planner module itself runs in the page, without its exports.
 function plannerSource() {
-  const share = { long: 1.5, quality: 1.2, endurance: 1, recovery: .5, gym_upper: .4, gym_full: .5 };
-  return `const SHARE=${JSON.stringify(share)},ROLE_LABELS=${JSON.stringify(ROLE_LABELS)},ROLE_FOCUS=${JSON.stringify(ROLE_FOCUS)};${planWeekRoles.toString()}`;
+  return plannerText.replace(/^export /gm, "");
 }
 const banner = '<div style="position:sticky;top:0;z-index:25;background:#4a2f00;color:#ffe2a8;padding:7px 14px;font:600 12px/1.4 system-ui;text-align:center">SANDBOX · ukázková data · nic se neukládá do živé aplikace ani do Intervals.icu</div>';
 

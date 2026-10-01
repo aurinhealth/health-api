@@ -234,4 +234,9 @@ body.gym-mode-open{overflow:hidden}
   .today-more{width:100%;margin-top:4px}
   #today #dayTimeline{margin:0 0 12px}
 }
+.planner-chip .proposal{color:#e9e2ff;font-weight:650}
+.chip-actions{display:flex;gap:4px;flex-basis:100%;flex-wrap:wrap;margin-top:2px}.chip-actions .btn{padding:3px 7px;font-size:10px;border-radius:6px}
+#proposeWeek{padding:7px 12px;font-size:12px}
+.gym-date{display:inline-flex;align-items:center;gap:6px;margin-top:4px}.gym-date input{background:#0d1119;color:#fff;border:1px solid #393245;border-radius:8px;padding:5px 8px}
+@media(max-width:700px){#proposeWeek{flex-basis:100%;order:3}}
 `;

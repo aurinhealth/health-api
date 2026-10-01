@@ -97,3 +97,49 @@ export function roleFor(prefs, date, sport, options = {}) {
   const weekday = (d.getUTCDay() + 6) % 7;
   return planWeekRoles(prefs?.days || [], options)[weekday].items.find(x => x.sport === sport) || null;
 }
+
+// ---- Load targets for the week --------------------------------------------
+// One calculation for the calendar chips and the generator, so both say the
+// same thing. Maintenance is CTL × 7; after a week well above it (≥ 125 %)
+// this one is a recovery week at 70 %. What is already done or planned in
+// Intervals.icu counts first; the rest is spread over the open plan chips,
+// within sensible limits per role, so one session never carries the week.
+const ROLE_IF = { recovery: .55, endurance: .68, long: .68, quality: .82 };
+const ROLE_RANGE = { recovery: [.35, .6], endurance: [.8, 1.6], long: [1.4, 2.6], quality: [1, 1.5] };
+const GYM_TSS = { gym_full: 35, gym_upper: 25 };
+const SPORT_MINUTES = { ride: [30, 300], run: [20, 150] };
+const round5 = v => Math.round(v / 5) * 5;
+
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [], today, weekStart } = {}) {
+  const fitness = Number(ctl) > 0 ? Number(ctl) : null;
+  if (!fitness) return { status: "no_fitness", items: [] };
+  const base = Math.round(fitness * 7);
+  const dateAt = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
+  const weekLoad = days.reduce((s, d) => s + (Number(d.done) || 0) + (d.date >= today ? Number(d.planned) || 0 : 0), 0);
+  const plannedAhead = days.some(d => d.date > today && Number(d.planned) > 0 && d.date <= dateAt(6));
+  const recovery = Number(lastWeekLoad) >= base * 1.25 || (plannedAhead && Number(lastWeekLoad) >= 150 && weekLoad < Number(lastWeekLoad) * .7);
+  const target = Math.round(base * (recovery ? .7 : 1.05));
+  const dateOf = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
+  const info = date => days.find(d => d.date === date) || { done: 0, planned: 0, sports: [] };
+  let committed = 0;
+  for (let i = 0; i < 7; i++) { const d = info(dateOf(i)); committed += Number(d.done) || 0; if (dateOf(i) >= today) committed += Number(d.planned) || 0; }
+  // Open chips: today or later, and that sport is not already done or planned that day.
+  const open = [];
+  roles.forEach((day, i) => {
+    const date = dateOf(i); if (date < today) return;
+    for (const x of day.items || []) if (!(info(date).sports || []).includes(x.sport)) open.push({ date, ...x });
+  });
+  let remaining = Math.max(0, target - committed - open.filter(x => x.sport === "gym").reduce((s, x) => s + (GYM_TSS[x.role] || 30), 0));
+  const endurance = open.filter(x => x.sport !== "gym"), shares = endurance.reduce((s, x) => s + (x.share || 1), 0);
+  const items = open.map(x => {
+    if (x.sport === "gym") return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: x.role === "gym_upper" ? 50 : 60 };
+    const [lo, hi] = ROLE_RANGE[x.role] || [.8, 1.6], cap = recovery ? .85 : 1;
+    const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
+    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = ROLE_IF[x.role] || .68;
+    const minutes = Math.max(min, Math.min(max, round5(tss / (intensity * intensity * 100) * 60)));
+    return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes };
+  });
+  const assigned = items.reduce((s, x) => s + x.tss, 0), shortfall = Math.max(0, target - committed - assigned);
+  return { status: "ok", ctl: Math.round(fitness), base, target, recovery, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
+}
+export function targetFor(targets, date, sport) { return (targets?.items || []).find(x => x.date === date && x.sport === sport) || null; }

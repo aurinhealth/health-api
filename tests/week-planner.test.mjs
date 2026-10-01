@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planWeekRoles, roleFor, sanitizeWeekPlan, saveWeekPlan, getWeekPlan, DEFAULT_LOCATION } from "../src/week-planner.js";
+import { planWeekRoles, roleFor, sanitizeWeekPlan, saveWeekPlan, getWeekPlan, DEFAULT_LOCATION, weekTargets, targetFor } from "../src/week-planner.js";
 import { rankWorkoutCandidates, CYCLING_WORKOUTS, defaultCapabilities } from "../src/workout-library.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { googleExerciseHeartRate, heartRateFromSamples } from "../src/index.js";
@@ -80,4 +80,27 @@ test("Google exercise heart rate comes from the summary or from samples", () => 
   const samples = [["08:05", 98], ["08:10", 102], ["08:20", 100], ["09:00", 150]].map(([t, v]) => ({ sample_time: "2026-10-01T" + t + ":00Z", value_numeric: v }));
   assert.equal(heartRateFromSamples(walk, samples), 100);
   assert.equal(heartRateFromSamples(walk, samples.slice(0, 2)), null);
+});
+
+test("week targets: after a heavy week the rest is a recovery week with a sensible ride", () => {
+  // Pá gym, So kolo, Ne gym; Po–St hotovo 128 TSS; minulý týden 715 TSS při CTL 69.
+  const days = [["2026-09-28", 30, ["gym"]], ["2026-09-29", 47, ["ride"]], ["2026-09-30", 51, ["ride"]]].map(([date, done, sports]) => ({ date, done, planned: 0, sports }));
+  const t = weekTargets({ roles: planWeekRoles([[], [], [], [], ["gym"], ["ride"], ["gym"]]), ctl: 69, lastWeekLoad: 715, days, today: "2026-10-01", weekStart: "2026-09-28" });
+  assert.equal(t.recovery, true);
+  assert.equal(t.target, Math.round(483 * .7));
+  const ride = targetFor(t, "2026-10-03", "ride");
+  assert.ok(ride.tss < 120 && ride.minutes >= 90 && ride.minutes <= 150, JSON.stringify(ride));
+  assert.equal(t.shortfall, 0);
+});
+
+test("week targets: done or planned sessions count first and one ride never carries the week", () => {
+  const roles = planWeekRoles([[], [], [], [], [], ["ride"], []]);
+  const t = weekTargets({ roles, ctl: 70, lastWeekLoad: 450, days: [], today: "2026-09-28", weekStart: "2026-09-28" });
+  const ride = targetFor(t, "2026-10-03", "ride");
+  assert.ok(ride.tss <= 70 * 1.6 + 1, String(ride.tss));
+  assert.ok(t.shortfall > 0, "a missing day is reported instead");
+  // A ride already planned in Intervals.icu on that day is not a second target.
+  const planned = weekTargets({ roles, ctl: 70, lastWeekLoad: 450, days: [{ date: "2026-10-03", done: 0, planned: 120, sports: ["ride"] }], today: "2026-09-28", weekStart: "2026-09-28" });
+  assert.equal(targetFor(planned, "2026-10-03", "ride"), null);
+  assert.equal(weekTargets({ roles, ctl: null }).status, "no_fitness");
 });

@@ -226,8 +226,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const thisWeekLoad=Math.round(rides.filter(a=>inWeek(a,monday)).reduce((s,a)=>s+loadOf(a),0));
   const lastWeekLoad=Math.round(rides.filter(a=>a.completed&&inWeek(a,shiftIso(monday,-7))).reduce((s,a)=>s+loadOf(a),0));
   const namedRecovery=rides.some(a=>inWeek(a,monday)&&/recovery week|deload|regenera[čc]n[íi] t[ýy]den|odpo[čc]inkov/i.test(String(a.name||"")+" "+String(a.description||"")));
-  const recoveryWeek=namedRecovery||(lastWeekLoad>=(sport==="run"?100:150)&&thisWeekLoad<lastWeekLoad*.7);
-  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":"Tento týden je regenerační: plánovaná a odjetá zátěž "+thisWeekLoad+" TSS je "+Math.round(thisWeekLoad/Math.max(lastWeekLoad,1)*100)+" % minulého týdne ("+lastWeekLoad+" TSS).");
+  // Same rule as the calendar's week targets: after a week ≥ 125 % of maintenance (CTL × 7).
+  // A half-finished week is not a recovery week just because little is done yet.
+  // Or a light week that is actually planned: sessions planned after this day and the whole week under 70 % of the last.
+  const plannedAhead=planned.some(a=>diffDays(a.date,targetDate)>0&&inWeek(a,monday));
+  const recoveryWeek=namedRecovery||(ctl!=null&&ctl>0&&lastWeekLoad>=ctl*7*1.25)||(plannedAhead&&lastWeekLoad>=(sport==="run"?100:150)&&thisWeekLoad<lastWeekLoad*.7);
+  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":ctl>0&&lastWeekLoad>=ctl*7*1.25?"Regenerační týden: minulý týden "+lastWeekLoad+" TSS je "+Math.round(lastWeekLoad/(ctl*7)*100)+" % udržovací zátěže (CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.":"Tento týden je regenerační: plánovaná a odjetá zátěž "+thisWeekLoad+" TSS je "+Math.round(thisWeekLoad/Math.max(lastWeekLoad,1)*100)+" % minulého týdne ("+lastWeekLoad+" TSS).");
   const phase=txt(goal?.phase||preferences.phase||(recoveryWeek?"recovery":"auto"));
 
   let kind="endurance";

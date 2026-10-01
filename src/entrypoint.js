@@ -26,7 +26,7 @@ import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
-import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor } from "./week-planner.js";
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
@@ -262,6 +262,27 @@ async function writeIntervalsRpe(env,activityId,rpe){
   }catch(error){return {status:'error',message:error.message}}
 }
 
+// Load targets of a week: CTL and daily load from Intervals.icu wellness, what
+// is done or planned per day from D1, then the shared calculation.
+const sportOfType=t=>{t=String(t||'').toLowerCase();return /weight|strength/.test(t)?'gym':/ride|cycl|bike/.test(t)?'ride':/run/.test(t)?'run':null;};
+async function computeWeekTargets(env,ctx,start,prefs){
+  const end=shiftDate(start,7),today=pragueToday();
+  const fitness=await handleDashboardApi(new Request('https://internal/app/api/fitness?days=42'),env,ctx,new URL('https://internal/app/api/fitness?days=42')).then(r=>r.json()).catch(()=>({}));
+  const wellness=(fitness.wellness||[]).filter(r=>r.id<=today),ctl=[...wellness].reverse().find(r=>Number(r.ctl)>0)?.ctl;
+  const loadOn=date=>{const r=wellness.find(x=>x.id===date);return Number(r?.ctlLoad??r?.atlLoad)||0;};
+  let lastWeekLoad=0;for(let i=-7;i<0;i++)lastWeekLoad+=loadOn(shiftDate(start,i));
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family='intervals' AND data_type IN ('planned-workout','activity')) OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,start,end).all().catch(()=>({results:[]}))).results||[];
+  const gymDays=new Set(((await env.DB.prepare("SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<?").bind(env.USER_ID,start,end).all().catch(()=>({results:[]}))).results||[]).map(r=>r.workout_date));
+  const days=Array.from({length:7},(_,i)=>({date:shiftDate(start,i),done:loadOn(shiftDate(start,i)),planned:0,sports:[]}));
+  for(const r of rows){let p={};try{p=JSON.parse(r.payload_json||'{}');}catch{}const d=days.find(x=>x.date===String(r.start_time||'').slice(0,10));if(!d)continue;
+    const sport=sportOfType(r.source_family==='google-wearables'?{WEIGHTLIFTING:'weight',STRENGTH_TRAINING:'weight',RUNNING:'run',BIKING:'ride'}[p.exercise?.exerciseType]:p.type);
+    if(r.data_type==='planned-workout'&&!/nutrition/i.test(String(p.name||'')+' '+String(p.category||''))){d.planned+=Number(p.icu_training_load)||0;}
+    if(sport&&!/nutrition/i.test(String(p.name||'')))d.sports.push(sport);}
+  for(const d of days)if(gymDays.has(d.date))d.sports.push('gym');
+  return weekTargets({roles:planWeekRoles(prefs.days),ctl,lastWeekLoad,days,today,weekStart:start});
+}
+const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
+
 // Everything the coaches look at for one day: the day, fitness, three weeks
 // around it, gym history, sleep and Google Health.
 async function loadCoachInputs(env,ctx,internalAuth,date){
@@ -323,7 +344,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.method==='POST'){if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});prefs=await saveWeekPlan(env.DB,await request.json().catch(()=>({})));}
       else if(request.method==='GET')prefs=await getWeekPlan(env.DB);
       else return Response.json({message:'Method not allowed'},{status:405});
-      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days)},{headers:{'Cache-Control':'no-store'}});
+      const start=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('start')||''))?mondayOfDate(url.searchParams.get('start')):mondayOfDate(pragueToday());
+      const targets=await computeWeekTargets(env,ctx,start,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days),start,targets},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/training-profile'||url.pathname==='/app/api/training-profile/estimate'){
@@ -699,16 +722,19 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const body=await request.json().catch(()=>({}));
       const date=validDate(body.date)?body.date:pragueToday();
       if(date<pragueToday())return Response.json({status:'error',message:'Vyber dnešní nebo budoucí datum.'},{status:400});
-      const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))&&Number(body.availabilityMinutes)>0?Number(body.availabilityMinutes):null;
+      let availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))&&Number(body.availabilityMinutes)>0?Number(body.availabilityMinutes):null;
       const genSport=body.sport==='run'?'run':'ride';
       // The weekly planner's role for this day (long, easy, quality) steers the coach.
-      const weekRole=roleFor(await getWeekPlan(env.DB).catch(()=>null),date,genSport);
+      const prefs=await getWeekPlan(env.DB).catch(()=>null),weekRole=roleFor(prefs,date,genSport);
+      // The calendar chip's length is the default, so the proposal matches what the week plan shows.
+      const weekTarget=prefs&&!availabilityMinutes&&!body.resizeTo?targetFor(await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null),date,genSport):null;
+      if(weekTarget?.minutes)availabilityMinutes=weekTarget.minutes;
       const goal=body.phase||weekRole?.focus?{...(body.phase?{phase:String(body.phase)}:{}),...(weekRole?.focus?{focus:weekRole.focus}:{})}:null;
       const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal,sport:genSport});
       const thresholds=await athleteThresholds(env);
       const resizeTo=Number.isFinite(Number(body.resizeTo))&&Number(body.resizeTo)>0?Number(body.resizeTo):null;
       const generated=await generateWorkout(env.DB,{sport:genSport,environment:body.environment,date,coach,availabilityMinutes:resizeTo??availabilityMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo});
-      return Response.json({...generated,weekRole},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({...generated,weekRole,weekTarget},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST'){
       // Completion comes from the activity paired in Intervals.icu; the athlete adds RPE (and a note).
