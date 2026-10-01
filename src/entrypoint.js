@@ -831,7 +831,7 @@ function logoResponse() {
 }
 
 
-// Keeps each user's daily nutrition NOTE events in Intervals.icu up to date.
+// Daily nutrition NOTE events in Intervals.icu: removed by default; written only on an explicit "sync".
 // Calorie estimates in the descriptions of today's planned Intervals.icu
 // workouts, for every user with Intervals connected (their weight and FTP).
 async function handlePlannedCaloriesAutomation(request, rawEnv) {
@@ -856,7 +856,8 @@ async function handleNutritionNotesAutomation(request, rawEnv) {
     await verifyGitHubActionsToken(request);
     const body=await request.json().catch(()=>({}));
     const today=new Date(), oldest=String(body?.oldest||today.toISOString().slice(0,10)), newest=String(body?.newest||new Date(today.getTime()+14*86400000).toISOString().slice(0,10));
-    const remove=String(body?.action || "").toLowerCase() === "delete";
+    // Writing daily nutrition notes is opt-in ("sync"); anything else removes them.
+    const remove=String(body?.action || "").toLowerCase() !== "sync";
     const users=await forEachUser(rawEnv,["intervals"],async env=>{
       if (remove) return deleteDailyNutritionNotes(env,{oldest,newest});
       let weightKg=Number(body?.weightKg);

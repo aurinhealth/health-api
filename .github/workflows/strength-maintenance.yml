@@ -73,13 +73,16 @@ jobs:
           printf '%s\n' "$body"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d' <<< "$body"
 
-      - name: Sync daily nutrition notes
+      # The daily "Nutrition — date" notes are no longer written to Intervals.icu;
+      # this removes any that are left from today on.
+      - name: Remove daily nutrition notes
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://petrfitnessdata.eu/automation/nutrition-notes" || true)"
+          body="{\"action\":\"delete\",\"oldest\":\"$(TZ=Europe/Prague date +%F)\",\"newest\":\"$(TZ=Europe/Prague date -d '+60 days' +%F)\"}"
+          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/automation/nutrition-notes" || true)"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
           if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then

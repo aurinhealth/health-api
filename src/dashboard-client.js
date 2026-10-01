@@ -1262,21 +1262,29 @@ function installWorkoutsHub(){
 }
 // Planned workouts from Intervals.icu: drag between days (desktop) or the
 // item's menu (any device); deleting removes them in Intervals.icu too.
+// The change shows at once; Intervals.icu is updated in the background and a
+// refused change is rolled back.
+function hubDays(){return state.hubWeek===weekStart&&state.week?.days?state.week.days:state.hubWeekData?.days||null}
+function takePlanned(days,eventId){for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===String(eventId));if(i>=0)return list.splice(i,1)[0];}return null}
 async function refreshAfterPlanChange(){
-  state.hubWeekData=null;
-  try{state.week=await jsonFetch('/app/api/week?start='+weekStart);try{renderTraining();renderOverview();}catch{}}catch{}
+  try{const fresh=await jsonFetch('/app/api/week?start='+weekStart);state.week=fresh;try{renderTraining();renderOverview();}catch{}}catch{}
+  if(state.hubWeek!==weekStart)state.hubWeekData=null;
   await renderWeekHub();loadScheduledWorkouts();
 }
-async function movePlanned(eventId,date,name){
+async function changePlanned(path,body,apply,done){
+  const days=hubDays(),snapshot=days?JSON.stringify(days):null;
+  if(days){apply(days);renderWeekHub();}
+  try{await jsonFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast(done);refreshAfterPlanChange();}
+  catch(error){if(days)days.splice(0,days.length,...JSON.parse(snapshot));renderWeekHub();toast('Změna se neuložila, vracím ji zpět: '+error.message);}
+}
+function movePlanned(eventId,date,name){
   if(!eventId||!date)return;
   if(date<pragueToday()){toast('Trénink jde přesunout jen na dnešek nebo pozdější den.');return}
-  try{await jsonFetch('/app/api/planned/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId,date})});toast('„'+(name||'Trénink')+'“ přesunut na '+longDate(date)+' i v Intervals.icu.');await refreshAfterPlanChange();}
-  catch(error){toast('Přesun selhal: '+error.message);}
+  changePlanned('/app/api/planned/move',{eventId,date},days=>{const item=takePlanned(days,eventId),target=days.find(d=>d.date===date);if(item&&target)(target.daily.training.planned||=[]).push({...item,start:date});},'„'+(name||'Trénink')+'“ je na '+longDate(date)+' i v Intervals.icu.');
 }
-async function deletePlanned(eventId,name){
+function deletePlanned(eventId,name){
   if(!eventId||!window.confirm('Smazat „'+(name||'trénink')+'“ z plánu i z Intervals.icu?'))return;
-  try{await jsonFetch('/app/api/planned/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId})});toast('„'+(name||'Trénink')+'“ smazán i z Intervals.icu.');await refreshAfterPlanChange();}
-  catch(error){toast('Smazání selhalo: '+error.message);}
+  changePlanned('/app/api/planned/delete',{eventId},days=>takePlanned(days,eventId),'„'+(name||'Trénink')+'“ je smazaný i z Intervals.icu.');
 }
 function installPlannedEditing(){
   const week=$('hubWeek');let dragged=null;
