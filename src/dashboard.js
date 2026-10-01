@@ -1,6 +1,6 @@
 import {experienceTheme} from './experience-theme.js';
 import {mobileTheme} from './mobile-theme.js';
-import {gymFocusView,gymFocusTheme} from './gym-focus-view.js';
+import {gymFocusView,gymFocusTheme,muscleMapView} from './gym-focus-view.js';
 import {workoutsHubTheme} from './workouts-hub-theme.js';
 export function dashboardPage() {
   const html = `<!doctype html>
@@ -44,6 +44,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 <aside class="sidebar">
   <div class="brand"><strong>Petr Fitness Data</strong><span>Performance Command Center</span></div>
   <nav class="nav">
+    <button class="navbtn phone-only" data-view="today">◎ <span>Dnes</span></button>
     <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
     <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
     <button class="navbtn" data-view="workouts">⌁ <span>Workouty</span></button>
@@ -59,6 +60,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><button class="btn" id="openAssistant">✦ Asistent</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
 </header>
 <div class="content">
+<section id="today" class="view" aria-label="Dnes"></section>
 <section id="overview" class="view active">
   <div class="readiness-hero"><div><div class="readiness-kicker">Performance readiness · <span id="overviewDate">—</span></div><h1 id="readinessTitle">Dnešní připravenost</h1><p id="readinessInsight">Načítám dnešní signály.</p><div id="readinessFocus" class="focus-chip">Dnešní priorita</div></div><div class="readiness-score"><div id="readinessOrb" class="score-orb"><div><strong id="readinessScore">—</strong><span>recovery</span></div></div><div id="readinessCaption" class="score-caption">čekám na spánek</div></div><div class="readiness-metrics"><div id="readinessDials" class="dial-row"></div></div></div>
   <div class="section">Denní signály</div><div class="quick-grid">
@@ -68,7 +70,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
     <div class="card"><div class="label">Form</div><div id="oForm" class="value">—</div><div class="small">TSB · dnes</div></div>
   </div>
   <div class="section">Dnešní poradci a hodnocení</div><div class="card coach-council"><div id="coachPriorities"></div><div id="coachCards" class="grid2" style="margin-top:12px"></div></div>
-  <div class="grid2 overview-nutrition" style="margin-top:12px">
+  <div class="grid2 overview-nutrition" style="margin-top:12px" hidden>
     <div class="card"><div class="label">Dnešní výživa</div><div id="oFood" class="value">—</div><div id="oFoodNote" class="small"></div><div id="oMacros" class="macro-lines"></div></div>
     <div class="card"><h3>Kalorie · cíl vs. příjem</h3><svg id="calChart" class="stack-chart" style="height:300px" viewBox="0 0 1000 440"></svg></div>
   </div>
@@ -103,9 +105,9 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   </div>
   <div class="card week-hub">
     <div class="week-hub-head"><div><div class="eyebrow">Tento týden</div><h3 id="hubWeekTitle" style="margin:3px 0 0">Týdenní přehled</h3><div class="small" id="hubWeekLoad"></div></div><div class="week-hub-tools"><button class="btn" type="button" id="hubLocation" title="Změnit místo pro počasí">📍 <span id="hubLocationName">Kutná Hora</span></button><div class="weeknav"><button class="btn" type="button" id="hubPrevWeek" aria-label="Předchozí týden">←</button><button class="btn" type="button" id="hubThisWeek">Tento týden</button><button class="btn" type="button" id="hubNextWeek" aria-label="Další týden">→</button></div></div></div>
+    <div class="planner-bar" id="weekPlanner"><div id="plannerPalette" class="planner-palette" aria-label="Sporty k přetažení do týdne"></div><span class="small">Přetáhni sport na den, kdy chceš trénovat</span> <button type="button" class="info-tip" data-info="planner" aria-label="Vysvětlivka: plán týdne">i</button><span class="small" id="plannerStatus" aria-live="polite"></span></div>
     <form id="hubLocationForm" class="select-row" hidden><input id="hubLocationQuery" type="search" placeholder="Město nebo obec" aria-label="Místo pro počasí" autocomplete="off"><button class="btn primary" type="submit">Hledat</button><div id="hubLocationResults" class="select-row"></div></form>
     <div id="hubWeek" class="hub-week"><div class="small">Načítám týden…</div></div>
-    <details class="week-planner" id="weekPlanner"><summary><strong>Plánovač týdne</strong> <span class="small">– vyber dny a sporty, podle nich rozložím zátěž</span> <button type="button" class="info-tip" data-info="planner" aria-label="Vysvětlivka: plánovač">i</button></summary><div id="plannerGrid" class="planner-grid"></div><div class="workout-filter-actions" style="margin-top:10px"><button class="btn primary" type="button" id="plannerSave">Uložit plán týdne</button><span class="small" id="plannerStatus" aria-live="polite"></span></div></details>
   </div>
   <div id="workoutsEndurance">
   <div class="card generate-card">
@@ -170,6 +172,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 </section>
 
 </div></main></div>
+<template id="muscleMapTemplate">${muscleMapView()}</template>
 <div id="toast" class="toast"></div>
 <style>${experienceTheme}${mobileTheme}${gymFocusTheme}${workoutsHubTheme}</style>
 <script src="/app/dashboard-client.js?v=20261001-hub" defer></script>

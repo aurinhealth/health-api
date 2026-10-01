@@ -28,6 +28,7 @@ import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor } from "./week-planner.js";
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
+import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan } from "./gym-plan-store.js";
@@ -309,6 +310,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(url.pathname.endsWith('/move')&&String(body.date||'')<pragueToday())return Response.json({status:'error',message:'Trénink jde přesunout jen na dnešek nebo pozdější den.'},{status:400});
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  if(url.pathname==='/app/api/fitness-insights'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    try{return Response.json(await loadFitnessInsights(env.DB,pragueToday()),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
   if(url.pathname==='/app/api/week-plan'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});

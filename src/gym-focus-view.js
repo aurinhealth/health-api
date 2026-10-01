@@ -38,6 +38,11 @@ const back = [
   region('calves', 'M70 277 Q77 280 85 275 L84 306 L72 308 Q70 295 70 277 Z M110 277 Q103 280 95 275 L96 306 L108 308 Q110 295 110 277 Z')
 ].join('');
 
+// Display-only copy of both figures for the muscle map (freshness / load colours).
+export function muscleMapView() {
+  return `<div class="muscle-map">${figure('front', front)}${figure('back', back)}</div>`.replace(/ role="button" tabindex="0" aria-pressed="false"/g, '');
+}
+
 export function gymFocusView() {
   const buttons = Object.entries(FOCUS_GROUPS).map(([id, group]) => `<button type="button" data-muscle="${id}" aria-pressed="false">${group.label}</button>`).join('');
   return `<section class="gym-focus-builder" aria-labelledby="gymFocusTitle">
@@ -57,7 +62,7 @@ export const gymFocusTheme = `
 .gym-figure{text-align:center;color:#aab9c4;font-size:12px}
 .gym-figure svg{display:block;width:100%;max-height:330px;margin:auto}
 .gym-body{fill:#62737b;stroke:#b0c0c2;stroke-width:1.4;stroke-linejoin:round}
-.gym-muscle{fill:#96a7a8;stroke:#334449;stroke-width:1.3;stroke-linejoin:round;cursor:pointer;transition:fill .15s ease,stroke .15s ease,filter .15s ease}
+.gym-muscle{fill:var(--fresh-fill,#96a7a8);stroke:#334449;stroke-width:1.3;stroke-linejoin:round;cursor:pointer;transition:fill .15s ease,stroke .15s ease,filter .15s ease}
 .gym-anatomy{fill:none;stroke:#30454b;stroke-width:1;stroke-linecap:round;opacity:.72;pointer-events:none}
 .gym-muscle:hover,.gym-muscle:focus-visible{fill:#8be0af;stroke:#d6f7df;outline:none}
 .gym-muscle[aria-pressed="true"]{fill:#72dda4;stroke:#e0ffe9;filter:drop-shadow(0 0 4px #54c99cbb)}

@@ -13,6 +13,8 @@ import { searchWorkoutLibrary, generateWorkout, getCapabilities } from "../src/w
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { planWeekRoles, sanitizeWeekPlan, ROLE_LABELS, ROLE_FOCUS } from "../src/week-planner.js";
 import { powerZones, hrZones, paceZones, POWER_ZONE_MODELS, HR_ZONE_MODELS, PACE_ZONE_MODELS, FTP_METHODS, PACE_METHODS } from "../src/training-zones.js";
+import { fitnessInsights } from "../src/fitness-insights.js";
+import { sampleActivityStreams, activityIntervals, heartRateRecovery } from "../src/activity-detail.js";
 import { createD1 } from "../tests/helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 
@@ -32,16 +34,30 @@ const sleep = Array.from({ length: 60 }, (_, i) => {
 });
 const ride = (date, name, hours, tss, hr) => ({ id: "i" + date.replace(/-/g, "") + name.length, source: "intervals", type: "Ride", name, durationHours: hours, tss, calories: Math.round(hours * 640), start: date + "T15:00:00Z", payload: { id: "i" + date.replace(/-/g, ""), average_heartrate: hr } });
 const walk = (date, minutes, hr) => ({ id: "g" + date, source: "google-health", type: "Walk", name: "Chůze", durationHours: minutes / 60, calories: Math.round(minutes * 4.2), start: date + "T12:10:00Z", averageHeartRate: hr, payload: { average_heartrate: hr, exercise: { exerciseType: "WALKING", metricsSummary: { caloriesKcal: Math.round(minutes * 4.2), steps: minutes * 105, distanceMillimeters: minutes * 83000, averageHeartRateBeatsPerMinute: hr } } } });
+const meal = (id, time, title, kcal, p, c, f, mealType) => ({ id, consumed_date: T, consumed_at: T + "T" + time + ":00", recipe_title: title, kcal, protein_g: p, carbs_g: c, fat_g: f, note: JSON.stringify({ mealType }) });
+const demoFoods = [meal(1, "07:20", "Ovesná kaše s banánem", 430, 18, 70, 9, "breakfast"), meal(2, "07:20", "Řecký jogurt", 150, 15, 6, 6, "breakfast"), meal(3, "12:30", "Rýže s kuřecím masem", 640, 47, 78, 15, "lunch"), meal(4, "16:10", "Tyčinka a banán", 310, 9, 55, 7, "snack_pm")];
 const weekActivities = {
   [day(1, MON)]: { completed: [ride(day(1, MON), "Sweet Spot 3×12", 1.25, 82, 141)] },
   [day(2, MON)]: { completed: [walk(day(2, MON), 38, 97)] },
   [day(3, MON)]: { planned: [{ id: "planned:e1", name: "Threshold 4×8", type: "Ride", durationHours: 1.33, tss: 95, start: day(3, MON) }] },
   [day(6, MON)]: { planned: [{ id: "planned:e2", name: "Long Endurance", type: "Ride", durationHours: 3.5, tss: 190, start: day(6, MON) }] }
 };
-const gymHistory = [
-  ...["Lat pulldown", "DB bench press", "Low row"].flatMap((exercise, k) => [1, 2, 3].map(n => ({ workout_date: MON, exercise, set_no: n, actual_kg: 40 + k * 8, actual_reps: 10 }))),
-  ...["Pivot leg press", "Prone leg curl Prime", "Abs bench crunch"].flatMap((exercise, k) => [1, 2, 3].map(n => ({ workout_date: day(-5, MON), exercise, set_no: n, actual_kg: 80 - k * 25, actual_reps: 12 })))
-].filter(r => r.workout_date <= T);
+// Six weeks of gym (upper on Monday, lower on Thursday) with slowly rising weights.
+const gymSession = (date, list, w) => list.flatMap(([exercise, kg, reps]) => [1, 2, 3].map(n => ({ workout_date: date, exercise, set_no: n, actual_kg: Math.round((kg + w * (kg > 60 ? 5 : 1.5)) * 2) / 2, actual_reps: reps + (n === 3 && w === 5 ? 2 : 0), rpe: 7 + (n === 3 ? 1 : 0) })));
+const UPPER = [["DB bench press", 18, 10], ["Lat pulldown", 40, 10], ["Low row", 45, 10], ["Cable lateral raise", 6, 12], ["Cable triceps extension", 20, 12]];
+const LOWER = [["Pivot leg press", 120, 10], ["Prone leg curl Prime", 30, 12], ["Hip thrust", 60, 10], ["Standing calf raise", 50, 12], ["Abs bench crunch", 20, 15]];
+const gymHistory = Array.from({ length: 6 }, (_, w) => [gymSession(day(-7 * (5 - w), MON), UPPER, w), gymSession(day(-7 * (5 - w) + 3, MON), LOWER, w)]).flat(2).filter(r => r.workout_date <= T && r.workout_date !== day(3, MON));
+// Six weeks of rides and one run a week, with heart-rate zone times (Intervals.icu fields).
+const zones = (z1, z2, z3, z4, z5) => [z1, z2, z3, z4, z5].map(m => m * 60);
+const pastActivities = Array.from({ length: 6 }, (_, w) => {
+  const base = day(-7 * (6 - w), MON);
+  return [
+    { type: "Ride", name: "Sweet Spot 3×12", date: day(1, base), tss: 82, moving_time: 4500, distance: 38000, total_elevation_gain: 320, icu_weighted_avg_watts: 228 + w * 2, payload: { icu_hr_zone_times: zones(12, 25, 20, 16, 2) } },
+    { type: "Ride", name: "VO₂ 5×4", date: day(3, base), tss: 88, moving_time: 4200, distance: 34000, total_elevation_gain: 280, icu_weighted_avg_watts: 236, payload: { icu_hr_zone_times: zones(18, 22, 8, 10, 12) } },
+    { type: "Run", name: "Lehký běh", date: day(4, base), tss: 45, moving_time: 2900, distance: 9000 + w * 300, total_elevation_gain: 60, payload: { icu_hr_zone_times: zones(10, 34, 4, 0, 0) } },
+    { type: "Ride", name: "Long Endurance", date: day(6, base), tss: 170 + w * 8, moving_time: 11400 + w * 600, distance: 92000 + w * 4000, total_elevation_gain: 1100 + w * 90, icu_weighted_avg_watts: 196, payload: { icu_hr_zone_times: zones(70, 95, 18, 4, 0) } }
+  ];
+}).flat();
 let gymValues = [[], [], ["", "Silový trénink · horní tělo"], [], [], [], [], ["WORK", "Lat pulldown", "1", "45", "10", "", "", "", "FALSE", "", ""], ["WORK", "Lat pulldown", "2", "45", "10", "", "", "", "FALSE", "", ""], ["WORK", "DB bench press", "1", "22", "10", "", "", "", "FALSE", "", ""]];
 let weekPlan = sanitizeWeekPlan({ days: [["gym"], ["ride"], ["gym"], ["ride"], [], ["ride", "gym"], ["ride"]] });
 
@@ -102,12 +118,29 @@ async function staticResponses() {
     "/app/api/connections": { status: "ok", providers: [{ id: "google", name: "Google Health", connected: true, configured: true, metrics: ["Spánek", "Aktivity"], note: "Sandbox" }, { id: "intervals", name: "Intervals.icu", connected: true, configured: true, metrics: ["Aktivity", "Plán"], note: "Sandbox", connectUrl: "#" }] },
     "/app/api/daily": dailyFor(T).daily, "/app/api/coaches": { status: "ok", coaches: [], reviews: [], priorities: ["Sandbox: ukázková data, nic se neukládá do živé aplikace."] },
     "/app/api/fitness": { status: "ok", wellness }, "/app/api/weight": { status: "ok", current: 82.4, records: Array.from({ length: 30 }, (_, i) => ({ sample_time: day(i - 29) + "T06:30:00Z", value_numeric: 83.6 - i * .04 })) },
+    "/app/api/fitness-insights": fitnessInsights({ sets: gymHistory, activities: [...pastActivities, ...Object.entries(weekActivities).flatMap(([date, w]) => (w.completed || []).map(a => ({ ...a, date, moving_time: a.durationHours * 3600, payload: { ...(a.payload || {}), icu_hr_zone_times: a.type === "Ride" ? zones(14, 24, 22, 14, 1) : null } })))], today: T }),
+    "/app/api/activity-detail": activitySample(),
     "/app/api/activities": { status: "ok", count: 3, activities: [] }, "/app/api/nutrition": { status: "ok", records: [] }, "/app/api/sleep": { status: "ok", sessions: sleep },
-    "/app/api/google-health": { status: "ok", wellness: [] }, "/app/api/inbox": { status: "ok", items: [] }, "/app/api/food/day": { status: "ok", preview: true, entries: [], totals: {} },
+    "/app/api/google-health": { status: "ok", wellness: [] }, "/app/api/inbox": { status: "ok", items: [] }, "/app/api/food/day": { status: "ok", preview: true, entries: demoFoods, totals: {} },
     "/app/api/gym/exercises": { status: "ok", exercises: gymExerciseCatalog() }, "/app/api/training-profile": trainingProfile(), "/app/api/profile": { status: "ok" },
     "/app/api/workouts/scheduled": { status: "ok", workouts: [{ workout_id: searches.ride.workouts[0].id, name: searches.ride.workouts[0].name, sport: "ride", scheduled_date: day(1, MON) <= T ? day(1, MON) : T, status: "completed", completed_percent: 96, primary_system: searches.ride.workouts[0].primary_system, duration_minutes: searches.ride.workouts[0].duration_minutes }] },
     searches, generated, weeks: { [MON]: week(MON), [day(-7, MON)]: week(day(-7, MON)), [day(7, MON)]: week(day(7, MON)) }
   };
+}
+// A 75 min Sweet Spot ride: streams, detected intervals and the recovery at the end.
+function activitySample() {
+  const time = [], watts = [], hr = [], cadence = [], latlng = [];
+  for (let t = 0; t < 4500; t += 5) {
+    const block = t < 900 ? "warm" : t > 4140 ? "cool" : ((t - 900) % 1020) < 720 ? "work" : "rest";
+    const target = block === "work" ? 235 : block === "warm" ? 150 + t / 900 * 40 : block === "cool" ? 120 : 140;
+    time.push(t); watts.push(Math.round(target + Math.sin(t / 37) * 12)); cadence.push(block === "work" ? 90 : 84);
+    const last = hr.at(-1) || 105, goal = block === "work" ? 158 : block === "cool" ? 104 : 128;
+    hr.push(Math.round(last + (goal - last) * (block === "cool" ? .09 : .14)));
+    latlng.push([49.948 + Math.sin(t / 700) * .03, 15.268 + Math.cos(t / 900) * .05 + t / 4500 * .02]);
+  }
+  const streams = [["time", time], ["watts", watts], ["heartrate", hr], ["cadence", cadence], ["latlng", latlng]].map(([type, data]) => ({ type, data }));
+  const intervals = [0, 1, 2].map(i => ({ type: "WORK", label: "Sweet Spot " + (i + 1), start_time: 900 + i * 1020, moving_time: 720, average_watts: 233 + i * 2, weighted_average_watts: 236 + i * 2, average_heartrate: 151 + i * 3, max_heartrate: 158 + i * 3, average_cadence: 90 }));
+  return { status: "ok", source: "intervals.icu", activity: { id: "i20260929", name: "Sweet Spot 3×12", type: "Ride", distance: 38200, moving_time: 4500, total_elevation_gain: 320, icu_normalized_watts: 214, average_heartrate: 138 }, streams: sampleActivityStreams(streams), intervals: activityIntervals({ icu_intervals: intervals }), hrr: heartRateRecovery(time, hr, 150) };
 }
 function weatherSample(params) {
   const days = Array.from({ length: 30 }, (_, i) => day(i - 14));
@@ -147,7 +180,7 @@ function plannerSource() {
   const share = { long: 1.5, quality: 1.2, endurance: 1, recovery: .5, gym_upper: .4, gym_full: .5 };
   return `const SHARE=${JSON.stringify(share)},ROLE_LABELS=${JSON.stringify(ROLE_LABELS)},ROLE_FOCUS=${JSON.stringify(ROLE_FOCUS)};${planWeekRoles.toString()}`;
 }
-const banner = '<div style="position:sticky;top:0;z-index:999;background:#4a2f00;color:#ffe2a8;padding:7px 14px;font:600 12px/1.4 system-ui;text-align:center">SANDBOX · ukázková data · nic se neukládá do živé aplikace ani do Intervals.icu</div>';
+const banner = '<div style="position:sticky;top:0;z-index:25;background:#4a2f00;color:#ffe2a8;padding:7px 14px;font:600 12px/1.4 system-ui;text-align:center">SANDBOX · ukázková data · nic se neukládá do živé aplikace ani do Intervals.icu</div>';
 
 async function page({ inline }) {
   let html = await dashboardPage().text();
