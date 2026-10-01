@@ -35,8 +35,8 @@ const walk = (date, minutes, hr) => ({ id: "g" + date, source: "google-health", 
 const weekActivities = {
   [day(1, MON)]: { completed: [ride(day(1, MON), "Sweet Spot 3×12", 1.25, 82, 141)] },
   [day(2, MON)]: { completed: [walk(day(2, MON), 38, 97)] },
-  [day(3, MON)]: { planned: [{ id: "e1", name: "Threshold 4×8", type: "Ride", durationHours: 1.33, tss: 95, start: day(3, MON) }] },
-  [day(6, MON)]: { planned: [{ id: "e2", name: "Long Endurance", type: "Ride", durationHours: 3.5, tss: 190, start: day(6, MON) }] }
+  [day(3, MON)]: { planned: [{ id: "planned:e1", name: "Threshold 4×8", type: "Ride", durationHours: 1.33, tss: 95, start: day(3, MON) }] },
+  [day(6, MON)]: { planned: [{ id: "planned:e2", name: "Long Endurance", type: "Ride", durationHours: 3.5, tss: 190, start: day(6, MON) }] }
 };
 const gymHistory = [
   ...["Lat pulldown", "DB bench press", "Low row"].flatMap((exercise, k) => [1, 2, 3].map(n => ({ workout_date: MON, exercise, set_no: n, actual_kg: 40 + k * 8, actual_reps: 10 }))),
@@ -129,6 +129,9 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
  if(p==='/app/api/week')return ok(DATA.weeks[url.searchParams.get('start')]||DATA.weeks[Object.keys(DATA.weeks)[1]]);
  if(p==='/app/api/workouts/search')return ok(DATA.searches[url.searchParams.get('sport')==='run'?'run':'ride']);
  if(p==='/app/api/workouts/generate'){const g=DATA.generated[(body.sport==='run'?'run':'ride')+'|'+body.date]||Object.values(DATA.generated)[0];return ok(g);}
+ if(p==='/app/api/planned/move'||p==='/app/api/planned/delete'){const id=String(body.eventId).replace(/^planned:/,'');let item=null;for(const w of Object.values(DATA.weeks))for(const d of w.days){const t=d.daily.training,i=t.planned.findIndex(x=>String(x.id).replace(/^planned:/,'')===id);if(i>=0)item=t.planned.splice(i,1)[0];}
+  if(p.endsWith('/move')&&item){for(const w of Object.values(DATA.weeks))for(const d of w.days)if(d.date===body.date)d.daily.training.planned.push({...item,start:body.date});}
+  return ok({status:'ok',eventId:id,date:body.date});}
  if(p==='/app/api/workouts/feedback')return ok({status:'ok',completedPercent:96,intervals:{status:'ok'}});
  if(p==='/app/api/workouts/schedule')return ok({status:'ok',workout:{name:'Workout'},date:body.date});
  if(p==='/app/api/gym'){if(m==='POST'&&body.values)gym.values=body.fullValues||body.values;return ok({status:'ok',...gym,videoLinks:[]});}

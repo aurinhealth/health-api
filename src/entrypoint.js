@@ -27,6 +27,7 @@ import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getSc
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor } from "./week-planner.js";
+import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan } from "./gym-plan-store.js";
@@ -297,6 +298,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const date=url.searchParams.get('date')||pragueToday();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
     return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
+  }
+  // Planned workouts: move (drag between days) or delete, in Intervals.icu and locally.
+  if(url.pathname==='/app/api/planned/move'||url.pathname==='/app/api/planned/delete'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    try{
+      const body=await request.json().catch(()=>({}));
+      if(url.pathname.endsWith('/move')&&String(body.date||'')<pragueToday())return Response.json({status:'error',message:'Trénink jde přesunout jen na dnešek nebo pozdější den.'},{status:400});
+      return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/week-plan'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});

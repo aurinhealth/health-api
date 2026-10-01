@@ -21,6 +21,14 @@ export const workoutsHubTheme = `
 .hub-item{border-left:3px solid #4b5568;background:#151b26;border-radius:6px;padding:5px 7px;font-size:11px;line-height:1.35;overflow-wrap:anywhere}
 .hub-item.done{border-left-color:#3fda9c}.hub-item.planned{border-left-color:#9b6bff}.hub-item.suggested{border-left-style:dashed;border-left-color:#6b7385;background:transparent;color:#aab3c1}
 .hub-item .meta{display:block;color:#9ca6b5;font-size:10px}
+.hub-item.editable{cursor:grab;position:relative}.hub-item.editable:hover,.hub-item.editable:focus-visible{background:#1b2232;outline:none}
+.hub-item.dragging{opacity:.45;cursor:grabbing}
+.hub-day.drop-target{border-color:#9b6bff;background:#171428;box-shadow:inset 0 0 0 1px rgba(155,107,255,.45)}
+.hub-actions{display:none;margin-top:6px;gap:5px;flex-direction:column}
+.hub-item.open .hub-actions{display:flex}
+.hub-actions .btn{padding:4px 6px;font-size:11px}.hub-actions label{display:grid;gap:3px;font-size:10px}
+.hub-actions input{width:100%;min-width:0;background:#0d1119;color:#fff;border:1px solid #393245;border-radius:6px;padding:4px;font-size:11px}
+.hub-actions [data-hub-delete]{border-color:#5a2a33;color:#ffb3bd}
 .hub-empty{font-size:11px;color:#6f7888}
 .week-planner{margin-top:12px;border-top:1px solid #262d39;padding-top:10px}
 .week-planner summary{cursor:pointer}

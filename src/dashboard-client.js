@@ -406,7 +406,7 @@ function renderScheduledWorkouts(rows){
     const done=w.completed_percent!=null?' · dokončeno '+Math.round(num(w.completed_percent))+' %':'';
     const status=reviewed?'Hodnoceno · RPE '+(w.feedback_rpe!=null?fmt(w.feedback_rpe,1):'—')+done:paired?'Spárováno s aktivitou v Intervals.icu'+done:due?'Čekám na aktivitu z Intervals.icu':'Naplánováno';
     return '<article class="scheduled-workout" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><div><strong>'+esc(w.name)+'</strong><div class="small">'+esc(longDate(w.scheduled_date))+' · '+esc(capabilityLabel(w.primary_system,w.sport))+' · '+num(w.duration_minutes)+' min · '+status+'</div></div>'+
-      (reviewed?'<span class="small">✓ Uloženo</span>':due?'<form class="workout-feedback rpe-form"><label><span class="small">RPE 1–10 <button type="button" class="info-tip" data-info="rpe" aria-label="Vysvětlivka: RPE">i</button></span><input name="rpe" type="number" min="1" max="10" step="1" required></label><label><span class="small">Pocit / poznámka (volitelně)</span><input name="notes" type="text" maxlength="300" placeholder="např. těžké nohy, horko"></label><button class="btn primary" type="submit">Uložit RPE</button></form>':'<span class="small">'+(w.sport==='run'?'Čeká na běh':'Čeká na jízdu')+'</span>')+'</article>';
+      (reviewed?'<span class="small">✓ Uloženo</span>':due?'<form class="workout-feedback rpe-form"><label><span class="small">RPE 1–10 <button type="button" class="info-tip" data-info="rpe" aria-label="Vysvětlivka: RPE">i</button></span><input name="rpe" type="number" min="1" max="10" step="1" required></label><label><span class="small">Pocit / poznámka (volitelně)</span><input name="notes" type="text" maxlength="300" placeholder="např. těžké nohy, horko"></label><button class="btn primary" type="submit">Uložit RPE</button></form>':'<span class="small">'+(w.sport==='run'?'Čeká na běh':'Čeká na jízdu')+'</span>')+(!paired&&!reviewed&&w.intervals_event_id?'<button type="button" class="btn" data-delete-event="'+esc(w.intervals_event_id)+'" data-name="'+esc(w.name)+'">Smazat</button>':'')+'</article>';
   }).join(''):'<div class="small">Zatím není naplánovaný žádný workout.</div>';
 }
 async function loadScheduledWorkouts(){
@@ -1211,13 +1211,13 @@ async function renderWeekHub(){
     for(const a of completed){const sport=activitySport(a);if(!sport)continue;sports.add(sport);doneTss+=num(a.tss);items.push('<div class="hub-item done">✓ '+esc(HUB_SPORTS[sport])+' · '+esc(a.name||'')+'<span class="meta">'+hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss):'')+'</span></div>');}
     if(gym.some(g=>g.date===d.date)&&!sports.has('gym')){sports.add('gym');const g=gym.find(x=>x.date===d.date);items.push('<div class="hub-item done">✓ '+HUB_SPORTS.gym+'<span class="meta">'+new Set(g.sets.map(r=>r.exercise)).size+' cviků · '+g.sets.length+' sérií</span></div>');}
     const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
-    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);plannedTss+=num(p.tss);items.push('<div class="hub-item planned">'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+'<span class="meta">plán'+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss):'')+'</span></div>');}
+    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''));items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+(editable?' draggable="true" tabindex="0" data-event-id="'+esc(p.id)+'" data-name="'+esc(p.name||'Plán')+'" title="Přetáhni na jiný den, nebo klikni pro možnosti"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+'<span class="meta">plán'+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss):'')+'</span>'+(editable?'<span class="hub-actions"><label class="small">Přesunout na <input type="date" data-hub-date min="'+today+'" value="'+esc(d.date<today?today:d.date)+'"></label><button type="button" class="btn" data-hub-move>Přesunout</button><button type="button" class="btn" data-hub-delete>Smazat</button></span>':'')+'</div>');}
     if(d.date===today&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');items.push('<div class="hub-item planned">'+HUB_SPORTS.gym+' · plán na dnes</div>');}
     // Planner suggestions for the days still ahead.
     if(d.date>=today)for(const x of roles[i]?.items||[]){if(sports.has(x.sport))continue;const tss=target&&shareSum?Math.round(target.tss*x.share/shareSum):null;items.push('<div class="hub-item suggested">Návrh · '+esc(HUB_SPORTS[x.sport])+'<span class="meta">'+esc(x.label)+(tss&&x.sport!=='gym'?' · ~'+tss+' TSS':'')+'</span></div>');}
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
     const weather=w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>';
-    return '<div class="hub-day'+(d.date===today?' today':d.date<today?' past':'')+'"><div class="hub-day-head"><strong>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d.date+'T12:00:00Z')))+'</strong><span>'+esc(dateLabel(d.date))+'</span></div>'+weather+(items.join('')||'<div class="hub-empty">Volno</div>')+'</div>';
+    return '<div class="hub-day'+(d.date===today?' today':d.date<today?' past':'')+'" data-hub-day="'+esc(d.date)+'"><div class="hub-day-head"><strong>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d.date+'T12:00:00Z')))+'</strong><span>'+esc(dateLabel(d.date))+'</span></div>'+weather+(items.join('')||'<div class="hub-empty">Volno</div>')+'</div>';
   }).join('');
   $('hubWeekLoad').textContent=(target?'Cíl týdne ≈ '+target.tss+' TSS (udržení kondice: CTL '+fmt(target.ctl)+' × 7) · ':'')+'odjeto '+fmt(doneTss)+' TSS'+(plannedTss?' · v plánu dalších '+fmt(plannedTss)+' TSS':'')+(state.weatherError?' · počasí nedostupné':'');
 }
@@ -1258,5 +1258,41 @@ function installWorkoutsHub(){
   };
   $('plannerGrid').addEventListener('click',e=>{const b=e.target.closest('[data-plan-sport]');if(!b)return;const day=state.weekPlan.prefs.days[Number(b.dataset.planDay)],sport=b.dataset.planSport,i=day.indexOf(sport);if(i>=0)day.splice(i,1);else day.push(sport);state.weekPlan.dirty=true;$('plannerStatus').textContent='Neuloženo';renderPlanner();});
   $('plannerSave').onclick=saveWeekPlanner;
+  installPlannedEditing();
+}
+// Planned workouts from Intervals.icu: drag between days (desktop) or the
+// item's menu (any device); deleting removes them in Intervals.icu too.
+async function refreshAfterPlanChange(){
+  state.hubWeekData=null;
+  try{state.week=await jsonFetch('/app/api/week?start='+weekStart);try{renderTraining();renderOverview();}catch{}}catch{}
+  await renderWeekHub();loadScheduledWorkouts();
+}
+async function movePlanned(eventId,date,name){
+  if(!eventId||!date)return;
+  if(date<pragueToday()){toast('Trénink jde přesunout jen na dnešek nebo pozdější den.');return}
+  try{await jsonFetch('/app/api/planned/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId,date})});toast('„'+(name||'Trénink')+'“ přesunut na '+longDate(date)+' i v Intervals.icu.');await refreshAfterPlanChange();}
+  catch(error){toast('Přesun selhal: '+error.message);}
+}
+async function deletePlanned(eventId,name){
+  if(!eventId||!window.confirm('Smazat „'+(name||'trénink')+'“ z plánu i z Intervals.icu?'))return;
+  try{await jsonFetch('/app/api/planned/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventId})});toast('„'+(name||'Trénink')+'“ smazán i z Intervals.icu.');await refreshAfterPlanChange();}
+  catch(error){toast('Smazání selhalo: '+error.message);}
+}
+function installPlannedEditing(){
+  const week=$('hubWeek');let dragged=null;
+  week.addEventListener('dragstart',e=>{const item=e.target.closest('.hub-item.editable');if(!item)return;dragged=item;item.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',item.dataset.eventId);});
+  week.addEventListener('dragend',()=>{dragged?.classList.remove('dragging');dragged=null;week.querySelectorAll('.drop-target').forEach(d=>d.classList.remove('drop-target'));});
+  week.addEventListener('dragover',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day||day.dataset.hubDay<pragueToday())return;e.preventDefault();e.dataTransfer.dropEffect='move';week.querySelectorAll('.drop-target').forEach(d=>{if(d!==day)d.classList.remove('drop-target')});day.classList.add('drop-target');});
+  week.addEventListener('dragleave',e=>{const day=e.target.closest('[data-hub-day]');if(day&&!day.contains(e.relatedTarget))day.classList.remove('drop-target');});
+  week.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day)return;e.preventDefault();day.classList.remove('drop-target');const item=dragged;if(item.closest('[data-hub-day]')===day)return;movePlanned(item.dataset.eventId,day.dataset.hubDay,item.dataset.name);});
+  week.addEventListener('click',e=>{
+    const item=e.target.closest('.hub-item.editable');if(!item)return;
+    if(e.target.closest('[data-hub-move]')){movePlanned(item.dataset.eventId,item.querySelector('[data-hub-date]').value,item.dataset.name);return}
+    if(e.target.closest('[data-hub-delete]')){deletePlanned(item.dataset.eventId,item.dataset.name);return}
+    if(e.target.closest('.hub-actions'))return;
+    week.querySelectorAll('.hub-item.open').forEach(x=>{if(x!==item)x.classList.remove('open')});item.classList.toggle('open');
+  });
+  week.addEventListener('keydown',e=>{const item=e.target.closest('.hub-item.editable');if(item&&e.target===item&&(e.key==='Enter'||e.key===' ')){e.preventDefault();item.classList.toggle('open');}});
+  $('scheduledWorkouts').addEventListener('click',e=>{const b=e.target.closest('[data-delete-event]');if(b)deletePlanned(b.dataset.deleteEvent,b.dataset.name);});
 }
 installWorkoutsHub();
