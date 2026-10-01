@@ -1,5 +1,6 @@
 import {EXERCISES} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE} from './strength-intelligence.js';
+import {availableAt,stationLabel} from './gym-equipment.js';
 
 const muscleLabels={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka'};
 const searchTerms={
@@ -34,11 +35,19 @@ const searchTerms={
   'Cable woodchop':'rotace břicho kladka',
   'Roman chair':'hyperextenze záda',
   'Standing calf raise':'výpony lýtka',
-  'Cable crunch':'břicho zkracovačky kladka'
+  'Cable crunch':'břicho zkracovačky kladka',
+  'Barbell bench press':'benchpress osa tlaky prsa',
+  'DB incline press':'šikmá lavice tlaky jednoručky prsa',
+  'One-arm DB row':'přítah jednoručky jednoruč záda',
+  'Standing multi flight':'upažování boční ramena stroj',
+  'Face pull':'face pull zadní ramena lano kladka',
+  'Cable overhead triceps extension':'triceps za hlavou lano kladka',
+  'Goblet squat':'dřep jednoručka goblet'
 };
 
 export function gymExerciseCatalog(){
-  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]).map(([name,def])=>({name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,search:searchTerms[name]||'',note:def.note||''}));
+  // Only exercises that can be done in the gym (METAGYM Kutná Hora), with the station.
+  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name)).map(([name,def])=>({name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
 }
 
 export function findGymExercises(query,items=gymExerciseCatalog()){

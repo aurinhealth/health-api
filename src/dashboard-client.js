@@ -301,8 +301,8 @@ function renderGymExerciseChoices(){
   const recent=new Set((state.gym?.history||[]).slice(0,100).map(row=>String(row.exercise||'')));
   visibleGymExercises=gymExerciseCatalog.filter(item=>!existing.has(item.name)&&words.every(word=>[item.name,item.muscle,item.search].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('cs').includes(word))).sort((a,b)=>Number(recent.has(b.name))-Number(recent.has(a.name))||a.name.localeCompare(b.name,'cs')).slice(0,40);
   gymExerciseIndex=Math.min(gymExerciseIndex,Math.max(0,visibleGymExercises.length-1));
-  $('gymExerciseResults').innerHTML=visibleGymExercises.map((item,i)=>'<button type="button" role="option" id="gymExerciseOption'+i+'" aria-selected="'+(i===gymExerciseIndex)+'" data-index="'+i+'" title="'+esc(item.note)+'"><strong>'+esc(item.name)+'</strong><small>'+esc(item.muscle)+' · '+esc(item.sets)+' × '+esc(item.reps)+'</small></button>').join('');
-  $('gymExerciseHint').textContent=visibleGymExercises.length?visibleGymExercises.length+' cviků k výběru.':'Žádný další cvik v katalogu neodpovídá hledání.';
+  $('gymExerciseResults').innerHTML=visibleGymExercises.map((item,i)=>'<button type="button" role="option" id="gymExerciseOption'+i+'" aria-selected="'+(i===gymExerciseIndex)+'" data-index="'+i+'" title="'+esc(item.note)+'"><strong>'+esc(item.name)+'</strong><small>'+esc(item.muscle)+' · '+esc(item.sets)+' × '+esc(item.reps)+(item.station?' · '+esc(item.station):'')+'</small></button>').join('');
+  $('gymExerciseHint').textContent=visibleGymExercises.length?visibleGymExercises.length+' cviků k výběru · vybavení METAGYM Kutná Hora.':'Žádný další cvik v katalogu neodpovídá hledání.';
   $('gymExerciseSearch').setAttribute('aria-activedescendant',visibleGymExercises.length?'gymExerciseOption'+gymExerciseIndex:'');
 }
 async function openGymExercisePicker(){

@@ -1,6 +1,7 @@
 import { estimateStartingLoad, resolveLoad } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
+import { availableAt } from "./gym-equipment.js";
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -36,21 +37,28 @@ const EXERCISES = {
   "Cable woodchop": { pattern: "rotation", muscle: "core", unilateral: true, sets: 2, reps: "8–12", baseKg: 25, warmup: false, note: "Rotace; jednostranně", fatigue: 0.3 },
   "Roman chair": { pattern: "trunk_extension", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Core/hyperextenze; stroj", fatigue: 0.4 },
   "Standing calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "10–20", baseKg: 50, warmup: false, note: "Lýtka; stroj", fatigue: 0.45 },
-  "Cable crunch": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–20", baseKg: 30, warmup: false, note: "Core; kladka", fatigue: 0.35 }
+  "Cable crunch": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–20", baseKg: 30, warmup: false, note: "Core; kladka", fatigue: 0.35 },
+  "Barbell bench press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "5–8", baseKg: 50, warmup: true, note: "Hlavní tlak; benchpress s osou, kg = celá osa", fatigue: 1.05 },
+  "DB incline press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 14, warmup: true, note: "Horní hrudník; polohovací lavice 30°, kg = 1 jednoručka", fatigue: 0.95 },
+  "One-arm DB row": { pattern: "pull", muscle: "back", unilateral: true, sets: 3, reps: "8–12", baseKg: 22, warmup: false, note: "Záda; opora o lavici, kg = 1 jednoručka", fatigue: 0.8 },
+  "Standing multi flight": { pattern: "lateral_raise", muscle: "side_delts", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Boční ramena; stroj na roztahování ve stoje", fatigue: 0.4 },
+  "Face pull": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 20, warmup: false, note: "Zadní ramena a lopatky; lano na kladce", fatigue: 0.35 },
+  "Cable overhead triceps extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 15, warmup: false, note: "Triceps (dlouhá hlava); lano na kladce za hlavou", fatigue: 0.45 },
+  "Goblet squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Dřep s jednoručkou na hrudi", fatigue: 0.9 }
 };
 
 export const FOCUS_GROUPS = {
-  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Pec deck']},
-  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine']},
+  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck']},
+  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row']},
   lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover']},
   front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime']},
-  side_delts: {label:'Boční ramena', exercises:['Cable lateral raise']},
-  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly']},
+  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise']},
+  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull']},
   biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl']},
-  triceps: {label:'Triceps', exercises:['Cable triceps extension']},
+  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension']},
   abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch']},
   obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop']},
-  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat']},
+  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat']},
   hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift']},
   hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine']},
   calves: {label:'Lýtka', exercises:['Standing calf raise']}
@@ -187,13 +195,13 @@ function choosePlan(context, options = {}) {
   const forceLower = options.focus === "lower";
 
   const candidatesByPattern = {
-    horizontalPush: ["DB bench press", "Chest flat press Prime", "Pec deck"],
-    horizontalPull: ["Low row", "Standing rowing machine"],
+    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck"],
+    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row"],
     verticalPush: ["DB shoulder press", "Shoulder press Prime"],
     verticalPull: ["Lat pulldown", "Cable pullover"],
     biceps: ["DB curl", "Hammer curl", "Cable curl"],
-    triceps: ["Cable triceps extension"],
-    rearDelts: ["Rear delt pec deck", "Cable rear delt fly"],
+    triceps: ["Cable triceps extension", "Cable overhead triceps extension"],
+    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull"],
     core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"],
     quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime"],
     hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"],
@@ -202,7 +210,7 @@ function choosePlan(context, options = {}) {
   };
 
   function pick(pattern, used = new Set()) {
-    const candidates = candidatesByPattern[pattern] || [];
+    const candidates = (candidatesByPattern[pattern] || []).filter(ex => availableAt(ex));
     const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
     const fresh = eligible.filter(muscleNotRecentlyExposed);
     const pool = fresh;
@@ -221,7 +229,7 @@ function choosePlan(context, options = {}) {
   }
 
   function pickDiverse(pattern, used = new Set()) {
-    const candidates = candidatesByPattern[pattern] || [];
+    const candidates = (candidatesByPattern[pattern] || []).filter(ex => availableAt(ex));
     const eligible = candidates.filter(ex => !used.has(ex) && notRecent(ex));
     const fresh = eligible.filter(muscleNotRecentlyExposed);
     const pool = fresh.length ? fresh : [];
@@ -363,7 +371,7 @@ export function generateStrengthPlan(context, options = {}) {
     if (exercise && date && (!lastExerciseDate.has(exercise) || date > lastExerciseDate.get(exercise))) lastExerciseDate.set(exercise, date);
   }
   const focusedExercise = group => {
-    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && !excluded.has(name));
+    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && !excluded.has(name));
     if (!candidates.length) throw new Error('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.');
     const score = name => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);

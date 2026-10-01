@@ -1,37 +1,31 @@
 import app from "./v400.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { getStrengthHistory, syncStrengthSheet, parseStrengthSheet, importStrengthHistory, ensureStrengthTable } from "./strength-history.js";
-import { writeStrengthPlan } from "./strength-plan-writer.js";
+import { getStrengthHistory, parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
-import { maintainStrengthSheets, mirrorStrengthHistoryToAllSets } from "./strength-sheet-maintenance.js";
+import { readGymPlan, writeStrengthPlanToDb, syncGymPlanHistory } from "./gym-plan-store.js";
 import { buildNutritionPlan } from "./nutrition-intelligence.js";
 import { buildAdaptiveDecision } from "./adaptive-engine.js";
 import { buildWeeklyReview } from "./weekly-review.js";
 import { buildDailyPlan } from "./daily-plan.js";
 import { getCyclingContext } from "./cycling-context.js";
-import { completedRowsAreSynced } from "./strength-sync-guard.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveAndCacheFood, lookupCachedFood, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
 
-const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
-const SHEET_GID = "585189491";
-const SHEET_NAME = "Dnešní trénink";
-const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 
 export default {
   async scheduled(controller, env, ctx) { return app.scheduled(controller, env, ctx); },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/test/google-sheets-auth") return testGoogleSheetsAuth(env);
+    if (url.pathname === "/test/google-sheets-auth") return SHEETS_RETIRED();
     if (url.pathname.startsWith("/strength/")) {
       const auth = authorizeStrength(request, env);
       if (auth) return auth;
     }
-    if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env);
-    if (url.pathname === "/strength/sheet/write" && request.method === "POST") return writeSheet(env, request);
+    if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env, url);
+    if (url.pathname === "/strength/sheet/write" && request.method === "POST") return SHEETS_RETIRED();
     if (url.pathname === "/strength/sheet/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
-    if (url.pathname === "/strength/sheet/simplify" && request.method === "POST") return simplifyStrengthSheet(env);
+    if (url.pathname === "/strength/sheet/simplify" && request.method === "POST") return SHEETS_RETIRED();
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
@@ -85,175 +79,38 @@ function authorizeStrength(request, env) {
   return null;
 }
 
-async function getGoogleAccessToken(env) {
-  if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) throw new Error("Missing Google OAuth environment variables");
-  const response = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, refresh_token: env.GOOGLE_REFRESH_TOKEN, grant_type: "refresh_token" }) });
-  const data = await response.json();
-  if (!response.ok || !data.access_token) throw new Error(`Google OAuth token error: ${data.error || response.status}`);
-  return data.access_token;
+
+// The strength plan of a day from D1 (gym_plans). The name stays from the
+// Google Sheets era; Sheets are no longer read or written.
+function pragueDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
+async function fetchTodayValues(env, date = null) {
+  const plan = await readGymPlan(env.DB, date || pragueDate());
+  return { range: "d1:gym_plans/" + plan.date, values: plan.values, videoLinks: [], stored: plan.stored };
 }
+const SHEETS_RETIRED = () => Response.json({ status: "gone", message: "Google Sheets se už nepoužívá – silový plán je v databázi aplikace." }, { status: 410 });
 
-async function fetchTodayValues(env) {
-  const accessToken = await getGoogleAccessToken(env);
-  const range = `'${SHEET_NAME.replace(/'/g, "''")}'!A1:Z1000`;
-  const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}`;
-  const response = await fetch(apiUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-  const data = await response.json();
-  if (!response.ok) throw new Error(`Google Sheets read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
-
-  // The values API returns HYPERLINK formulas as text. The dashboard needs the
-  // actual destination URL, so read rich-link metadata for column K as well.
-  const linkUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}?includeGridData=true&ranges=${encodeURIComponent(`'${SHEET_NAME.replace(/'/g, "''")}'!K8:K1000`)}`;
-  const linkResponse = await fetch(linkUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-  const linkData = await linkResponse.json();
-  if (!linkResponse.ok) throw new Error(`Google Sheets link metadata HTTP ${linkResponse.status}: ${JSON.stringify(linkData.error || linkData)}`);
-  const rows = linkData.sheets?.[0]?.data?.[0]?.rowData || [];
-  const videoLinks = rows.map(row => {
-    const cell = row?.values?.[0] || {};
-    return cell.hyperlink || cell.userEnteredFormat?.textFormat?.link?.uri || null;
-  });
-
-  return { range: data.range || range, values: data.values || [], videoLinks };
-}
-
-async function testGoogleSheetsAuth(env) {
+async function readTodaySheet(env, url) {
   try {
-    const accessToken = await getGoogleAccessToken(env);
-    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
-    const info = await response.json();
-    if (!response.ok) return Response.json({ status: "error", step: "tokeninfo", google_status: response.status, error: info.error || null }, { status: 502 });
-    const scopes = String(info.scope || "").split(" ").filter(Boolean);
-    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, scopes, sheets_scope: scopes.includes(SHEETS_SCOPE), drive_file_scope: scopes.includes("https://www.googleapis.com/auth/drive.file") });
-  } catch (error) { return Response.json({ status: "error", message: error.message }, { status: 500 }); }
+    const date = url.searchParams.get("date");
+    const data = await fetchTodayValues(env, /^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) ? date : null);
+    return Response.json({ status: "ok", storage: "d1", range: data.range, values: data.values, videoLinks: data.videoLinks, stored: data.stored });
+  } catch (error) { return Response.json({ status: "error", step: "strength_plan_read", message: error.message }, { status: 500 }); }
 }
 
-async function readTodaySheet(env) {
-  try {
-    const data = await fetchTodayValues(env);
-    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, range: data.range, values: data.values, videoLinks: data.videoLinks || [] });
-  } catch (error) { return Response.json({ status: "error", step: "sheets_read", message: error.message }, { status: 500 }); }
-}
-
-function isAllowedStrengthWriteRange(range) {
-  const normalized = String(range || "").replace(/\s+/g, "");
-  return normalized === "'Dnešní trénink'!A3:M5"
-    || normalized === "'Dnešní trénink'!A7:K7"
-    || /^'Dnešní trénink'!A8:(?:K|M)[0-9]+$/.test(normalized);
-}
-
-async function writeSheet(env, request) {
-  try {
-    const body = await request.json();
-    const range = String(body?.range || "").trim();
-    const values = body?.values;
-    if (!range) return Response.json({ status: "error", message: "Missing required field: range" }, { status: 400 });
-    if (!Array.isArray(values)) return Response.json({ status: "error", message: "Missing required field: values (2D array)" }, { status: 400 });
-    if (!isAllowedStrengthWriteRange(range)) return Response.json({ status: "error", message: "Write range is not allowed for the strength sheet" }, { status: 403 });
-    const accessToken = await getGoogleAccessToken(env);
-    const apiUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
-    const response = await fetch(apiUrl, { method: "PUT", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ values }) });
-    const data = await response.json();
-    if (!response.ok) return Response.json({ status: "error", step: "sheets_write", google_status: response.status, error: data.error || null }, { status: 502 });
-    return Response.json({ status: "ok", spreadsheet_id: SPREADSHEET_ID, gid: SHEET_GID, sheet: SHEET_NAME, updated_range: data.updatedRange || range, updated_rows: data.updatedRows || 0, updated_columns: data.updatedColumns || 0, updated_cells: data.updatedCells || 0 });
-  } catch (error) { return Response.json({ status: "error", message: error.message }, { status: 500 }); }
-}
-
-async function simplifyStrengthSheet(env) {
-  try {
-    const data = await fetchTodayValues(env);
-    const parsed = parseStrengthSheet(data.values);
-    if (!parsed.date) return Response.json({ status: "error", message: "Workout date not found in sheet" }, { status: 400 });
-
-    // Sync before structural changes so no completed set is lost.
-    const sync = await syncStrengthSheet(env.DB, data.values);
-    if (sync.status !== "ok") return Response.json(sync, { status: 500 });
-
-    const accessToken = await getGoogleAccessToken(env);
-    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}:batchUpdate`;
-    const response = await fetch(batchUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [
-        {
-          deleteDimension: {
-            range: { sheetId: Number(SHEET_GID), dimension: "COLUMNS", startIndex: 11, endIndex: 13 }
-          }
-        }
-      ] })
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(`Google Sheets structural update HTTP ${response.status}: ${JSON.stringify(result.error || result)}`);
-
-    const headerRange = sheetRange("A7:K7");
-    await sheetsRequest(accessToken, headerRange, "PUT", { values: [["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"]] }, "?valueInputOption=USER_ENTERED");
-
-    return Response.json({ status: "ok", sheet: SHEET_NAME, workoutDate: parsed.date, syncedCompletedRows: sync.completedRows, removedColumns: ["Náhrada cviku", "Provedení"], visibleColumns: ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"] });
-  } catch (error) { return Response.json({ status: "error", step: "strength_sheet_simplify", message: error.message }, { status: 500 }); }
-}
-
-function sheetRange(a1) { return `'${SHEET_NAME.replace(/'/g, "''")}'!${a1}`; }
-
-async function sheetsRequest(accessToken, range, method = "GET", body = null, query = "") {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}${query}`;
-  const response = await fetch(url, { method, headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, ...(body == null ? {} : { body: JSON.stringify(body) }) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(`Google Sheets HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
-  return data;
-}
-
-async function ensureCurrentWorkoutSafeToReplace(env) {
-  const data = await fetchTodayValues(env);
-  const parsed = parseStrengthSheet(data.values);
-  const completed = parsed.completedRows || [];
-
-  if (!completed.length) {
-    return { status: "ok", workoutDate: parsed.date, completedRows: 0, synced: true };
-  }
-
-  if (!parsed.date) {
-    return {
-      status: "error",
-      step: "strength_generate_plan",
-      code: "CURRENT_WORKOUT_NOT_SYNCED",
-      message: "Current workout contains completed sets. Save/sync the current workout explicitly before generating a new workout.",
-      workoutDate: null,
-      completedRows: completed.length
-    };
-  }
-
-  await ensureStrengthTable(env.DB);
-  const dbRows = await env.DB.prepare(
-    `SELECT sheet_row, type, exercise, set_no, planned_kg, planned_reps,
-            actual_kg, actual_reps, rpe, completed
-     FROM strength_sets
-     WHERE user_id = ? AND workout_date = ? AND source = 'google-sheet' AND completed = 1`
-  ).bind(env.USER_ID, parsed.date).all();
-
-  const unsynced = completed.filter(row => !completedRowsAreSynced([row], dbRows.results || []));
-  if (unsynced.length) {
-    return {
-      status: "error",
-      step: "strength_generate_plan",
-      code: "CURRENT_WORKOUT_NOT_SYNCED",
-      message: "Current workout contains completed sets. Save/sync the current workout explicitly before generating a new workout.",
-      workoutDate: parsed.date,
-      completedRows: completed.length,
-      unsyncedRows: unsynced.length,
-      unsyncedSheetRows: unsynced.map(row => row.sheetRow)
-    };
-  }
-
-  return { status: "ok", workoutDate: parsed.date, completedRows: completed.length, synced: true };
+// Before a plan for a day is replaced, its completed sets are saved to the
+// history, so nothing that was trained is lost.
+async function ensureCurrentWorkoutSafeToReplace(env, date = null) {
+  const data = await fetchTodayValues(env, date);
+  const sync = await syncGymPlanHistory(env.DB, data.values);
+  return { status: "ok", workoutDate: sync.parsed?.date || date, completedRows: sync.completedRows, synced: true };
 }
 
 async function writeStrengthPlanRoute(env, request) {
   try {
     const body = await request.json();
-    const guard = await ensureCurrentWorkoutSafeToReplace(env);
+    const guard = await ensureCurrentWorkoutSafeToReplace(env, body?.date);
     if (guard.status !== "ok") return Response.json(guard, { status: 409 });
-    const accessToken = await getGoogleAccessToken(env);
-    const result = await writeStrengthPlan(accessToken, body);
-    return Response.json(result);
+    return Response.json(await writeStrengthPlanToDb(env.DB, body));
   } catch (error) { return Response.json({ status: "error", step: "strength_write_plan", message: error.message }, { status: 500 }); }
 }
 
@@ -277,7 +134,7 @@ async function generateStrengthPlanRoute(env, request, url) {
     // its exercises from the regenerated candidate pool.
     if (String(body?.action || "").toLowerCase() === "regenerate") {
       try {
-        const today = await fetchTodayValues(env);
+        const today = await fetchTodayValues(env, context.date);
         const parsedToday = parseStrengthSheet(today.values);
         const currentExercises = [...new Set((parsedToday.rows || [])
           .filter(r => r.type === "WORK" && r.exercise)
@@ -291,10 +148,9 @@ async function generateStrengthPlanRoute(env, request, url) {
 
     const plan = generateStrengthPlan(context, options);
     if (body?.preview === true) return Response.json({ status: "ok", preview: true, context, plan });
-    const guard = await ensureCurrentWorkoutSafeToReplace(env);
+    const guard = await ensureCurrentWorkoutSafeToReplace(env, plan.date);
     if (guard.status !== "ok") return Response.json(guard, { status: 409 });
-    const accessToken = await getGoogleAccessToken(env);
-    const result = await writeStrengthPlan(accessToken, {
+    const result = await writeStrengthPlanToDb(env.DB, {
       date: plan.date,
       rows: plan.rows,
       planName: plan.planName,
@@ -329,10 +185,8 @@ async function generateStrengthPlanRoute(env, request, url) {
 async function syncStrength(env) {
   try {
     const data = await fetchTodayValues(env);
-    const result = await syncStrengthSheet(env.DB, data.values);
-    const accessToken = await getGoogleAccessToken(env);
-    const mirror = await mirrorStrengthHistoryToAllSets(accessToken, env.DB);
-    return Response.json({ ...result, historySheet: mirror, sourceRange: data.range });
+    const { parsed, ...result } = await syncGymPlanHistory(env.DB, data.values);
+    return Response.json({ ...result, workoutDate: parsed?.date || null, sourceRange: data.range });
   } catch (error) { return Response.json({ status: "error", step: "strength_sync", message: error.message }, { status: 500 }); }
 }
 
@@ -340,11 +194,6 @@ async function importStrengthHistoryRoute(env, request) {
   try {
     const body = await request.json().catch(() => ({}));
     const result = await importStrengthHistory(env.DB, body);
-    if (result.status === "ok") {
-      const accessToken = await getGoogleAccessToken(env);
-      const mirror = await mirrorStrengthHistoryToAllSets(accessToken, env.DB);
-      return Response.json({ ...result, historySheet: mirror });
-    }
     return Response.json(result);
   } catch (error) {
     return Response.json({ status: "error", step: "strength_history_import", message: error.message }, { status: 500 });
@@ -355,8 +204,8 @@ async function maintainStrengthSheetsRoute(env, request) {
   try {
     const body = await request.json().catch(() => ({}));
     if (body?.historyImport?.date && Array.isArray(body.historyImport.sets)) await importStrengthHistory(env.DB, body.historyImport);
-    const accessToken = await getGoogleAccessToken(env);
-    return Response.json(await maintainStrengthSheets(accessToken, env.DB));
+    // Nothing to maintain any more: plans and history are in D1.
+    return Response.json({ status: "ok", storage: "d1", skipped: "Google Sheets se už nepoužívá." });
   } catch (error) {
     return Response.json({ status: "error", step: "strength_sheet_maintenance", message: error.message }, { status: 500 });
   }
@@ -382,13 +231,10 @@ async function analyzeStrengthRoute(env, request) {
     const body = await request.json().catch(() => ({}));
     const data = await fetchTodayValues(env);
     const parsed = parseStrengthSheet(data.values);
-    const sync = await syncStrengthSheet(env.DB, data.values);
-    if (sync.status !== "ok") return Response.json(sync, { status: 500 });
-    const accessToken = await getGoogleAccessToken(env);
-    const mirror = await mirrorStrengthHistoryToAllSets(accessToken, env.DB);
+    const { parsed: _p, ...sync } = await syncGymPlanHistory(env.DB, data.values);
     const history = await getStrengthHistory(env.DB, 300);
     const analysis = analyzeCompletedWorkout(parsed, history);
-    return Response.json({ status: "ok", command: body?.command || "analyze", sync, historySheet: mirror, analysis });
+    return Response.json({ status: "ok", command: body?.command || "analyze", sync, analysis });
   } catch (error) { return Response.json({ status: "error", step: "strength_analyze", message: error.message }, { status: 500 }); }
 }
 
@@ -415,7 +261,7 @@ async function nutritionPlanRoute(env, request) {
     let strengthPlan = body?.strengthPlan || null;
     if (!strengthPlan) {
       try {
-        const sheet = await fetchTodayValues(env);
+        const sheet = await fetchTodayValues(env, date);
         const parsed = parseStrengthSheet(sheet.values);
         if (!date || parsed.date === date) {
           const rows = (parsed.rows || []).map(r => [
@@ -586,8 +432,8 @@ async function substituteRoute(env, request) {
     for (let i = 0; i < workCount; i++) replacementRows.push(["WORK", target, String(i + 1), estimate.kg == null ? "" : fmt(estimate.kg), def.reps, "", "", "", "FALSE", "", ""]);
 
     const replacementPlan = [...before.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : fmt(r.plannedKg), r.plannedReps, "", "", "", "FALSE", r.note, r.video]), ...replacementRows, ...after.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : fmt(r.plannedKg), r.plannedReps, "", "", "", "FALSE", r.note, r.video])];
-    const accessToken = await getGoogleAccessToken(env);
-    const result = await writeStrengthPlan(accessToken, { date: parsed.date, rows: replacementPlan }, async () => syncStrengthSheet(env.DB, data.values));
+    await syncGymPlanHistory(env.DB, data.values);
+    const result = await writeStrengthPlanToDb(env.DB, { date: parsed.date, rows: replacementPlan });
     return Response.json({ ...result, replaced: from, replacement: target, estimate });
   } catch (error) { return Response.json({ status: "error", step: "strength_substitute", message: error.message }, { status: 500 }); }
 }

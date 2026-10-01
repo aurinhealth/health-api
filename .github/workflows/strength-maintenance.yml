@@ -1,5 +1,6 @@
 name: Strength sheet maintenance
-# Maintenance verification after scheduled OIDC authorization
+# Periodic Intervals and nutrition sync. The strength plan lives in D1, so
+# there is no Google Sheet to maintain any more.
 
 on:
   workflow_dispatch:
@@ -33,28 +34,6 @@ jobs:
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")"
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
-
-      - name: Refresh strength sheets
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{"action":"sheet_maintenance","date":null,"preview":false}' "https://petrfitnessdata.eu/automation/strength")"
-            code="${response##*$'\n'}"
-            body="${response%$'\n'*}"
-            if [ "$code" -lt 500 ] && [ "$code" != "429" ]; then
-              printf '%s\n' "$body"
-              python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d' <<< "$body"
-              break
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              printf '%s\n' "$body"
-              exit 1
-            fi
-            sleep $((attempt * 30))
-          done
 
       - name: Sync Intervals
         env:

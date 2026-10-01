@@ -165,7 +165,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 </div></main></div>
 <div id="toast" class="toast"></div>
 <style>${experienceTheme}${mobileTheme}${gymFocusTheme}</style>
-<script src="/app/dashboard-client.js?v=20261001-resize" defer></script>
+<script src="/app/dashboard-client.js?v=20261001-gym" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

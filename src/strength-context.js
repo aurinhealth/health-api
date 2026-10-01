@@ -1,8 +1,6 @@
 const TZ = "Europe/Prague";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
-const SPREADSHEET_ID = "1lpCB_YfpVI4LdbvjKxDL7M6PDO_yXRtPvzPpwZyo4vw";
-const SHEET_NAME = "Dnešní trénink";
 
 function localDate(offsetDays = 0) {
   const now = new Date();
@@ -79,27 +77,18 @@ async function d1Recovery(env, startDate, endDate) {
   const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time < ? OR start_time < ?) ORDER BY COALESCE(sample_time, start_time)`).bind(env.USER_ID, `${startDate}T00:00:00`, `${startDate}T00:00:00`, `${endDate}T23:59:59`, `${endDate}T23:59:59`).all();
   const out = {}; for (const r of rows.results || []) { let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {} (out[r.data_type] ||= []).push({ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }); } return out;
 }
-async function syncCurrentStrengthSheet(env) {
-  try {
-    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_REFRESH_TOKEN) throw new Error("Google OAuth environment variables are missing");
-    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, refresh_token: env.GOOGLE_REFRESH_TOKEN, grant_type: "refresh_token" }) });
-    const tokenText = await tokenResponse.text(); let tokenData; try { tokenData = JSON.parse(tokenText); } catch { tokenData = {}; }
-    if (!tokenResponse.ok || !tokenData.access_token) throw new Error(`Google OAuth token error: HTTP ${tokenResponse.status}: ${tokenData.error || tokenText.slice(0, 300)}`);
-    const range = `'${SHEET_NAME.replace(/'/g, "''")}'!A1:Z1000`;
-    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(SPREADSHEET_ID)}/values/${encodeURIComponent(range)}`, { headers: { Authorization: `Bearer ${tokenData.access_token}`, Accept: "application/json" } });
-    const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = {}; }
-    if (!response.ok) throw new Error(`Google Sheets read HTTP ${response.status}: ${JSON.stringify(data.error || data)}`);
-    const { syncStrengthSheet, parseStrengthSheet } = await import("./strength-history.js");
-    const parsed = parseStrengthSheet(data.values || []);
-    const sync = await syncStrengthSheet(env.DB, data.values || []);
-    return { ...sync, parsed };
-  } catch (error) { throw new Error(`strength sheet sync failed: ${error instanceof Error ? error.message : String(error)}`); }
+// The day's strength plan from D1 (gym_plans); Google Sheets is no longer used.
+async function readStrengthPlan(env, date) {
+  const { readGymPlan } = await import("./gym-plan-store.js");
+  const { parseStrengthSheet } = await import("./strength-history.js");
+  const plan = await readGymPlan(env.DB, date);
+  return { status: "ok", source: "d1", stored: plan.stored, parsed: parseStrengthSheet(plan.values) };
 }
 export async function buildStrengthContext(env, requestedDate = null) {
   const date = requestedDate || localDate();
   const oldest = localDate(-DEFAULT_ACTIVITY_DAYS + 1), newest = localDate(DEFAULT_PLANNED_DAYS);
   let sheetSync;
-  try { sheetSync = await syncCurrentStrengthSheet(env); } catch (e) { throw new Error(`strength_context.sheet_sync: ${e.message}`); }
+  try { sheetSync = await readStrengthPlan(env, date); } catch (e) { throw new Error(`strength_context.plan_d1: ${e.message}`); }
   let activitiesRaw, eventsRaw;
   try { [activitiesRaw, eventsRaw] = await Promise.all([intervalsGet(env, `/athlete/0/activities?oldest=${oldest}&newest=${newest}`), intervalsGet(env, `/athlete/0/events?oldest=${date}&newest=${newest}`)]); }
   catch (e) { throw new Error(`strength_context.intervals: ${e.message}`); }
@@ -117,7 +106,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   const plannedStrengthWorkout = plannedStrengthRows.length
     ? { date, rows: plannedStrengthRows.map(row => [row.type, row.exercise, row.setNo, row.plannedKg, row.plannedReps]) }
     : null;
-  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "google-sheet/d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } , weightTrend: await d1WeightTrend(env,date) };
+  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } , weightTrend: await d1WeightTrend(env,date) };
   context.nutrition = buildNutritionPlan(context, { weightTrend: context.weightTrend });
   const { buildAdaptiveDecision } = await import("./adaptive-engine.js");
   context.adaptive = buildAdaptiveDecision(context, null);

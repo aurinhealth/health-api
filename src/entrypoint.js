@@ -27,6 +27,7 @@ import { searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getSc
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { saveTrainingProfile } from "./training-profile.js";
+import { readGymPlan } from "./gym-plan-store.js";
 import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, PACE_ZONE_MODELS, HR_ZONE_MODELS, powerZones, hrZones } from "./training-zones.js";
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
 import legacyHealthApi from "./index.js";
@@ -173,7 +174,6 @@ async function createCoachDraft(env, ctx, internalAuth, body) {
   const channel=coachChannel(body?.channel,message), date=String(body?.date||pragueToday()).slice(0,10);
   let reply="", action={type:"advice",date};
   if(channel==="gym") {
-    if(!env.USER_IS_OWNER) throw new Error("Generování silového plánu bude pro další uživatele dostupné po přechodu plánů do databáze.");
     const r=await app.fetch(new Request("https://internal/strength/generate-plan",{method:"POST",headers:{...internalAuth,"Content-Type":"application/json"},body:JSON.stringify({date,preview:true})}),env,ctx);
     const d=await r.json().catch(()=>({}));
     if(!r.ok||d.status!=="ok") throw new Error(d.message||"Gym plán se nepodařilo připravit.");
@@ -516,26 +516,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   if (url.pathname === "/app/api/gym") {
     if (request.method === "GET") {
-      let data={status:"ok",values:[],videoLinks:{}};
-      let responseStatus=200;
-      // Until the strength plan moves to D1 only the owner's plan lives in Google Sheets.
-      if (env.USER_IS_OWNER) try {
-        const internal = new URL("/strength/sheet/today", request.url);
-        const response = await app.fetch(new Request(internal, { method:"GET", headers: internalAuth }), env, ctx);
-        data = await response.json().catch(() => ({status:"error",message:"Invalid response"}));
-        responseStatus = response.status;
-      } catch(error) {
-        console.error("Gym sheet plan read failed",error);
-        data={status:"partial",values:[],videoLinks:{},message:"Dnešní plán ze Sheets není dostupný."};
-      }
-      try {
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))`).run();
-        const saved=await env.DB.prepare(`SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?`).bind(env.USER_ID,pragueToday()).first();
-        if(saved?.values_json) data.values=JSON.parse(saved.values_json);
-      } catch(error) { console.error("Gym plan read failed",error); }
+      // The day's plan and the history both live in D1.
+      const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):pragueToday();
+      let data={status:"ok",values:[],videoLinks:[]};
+      try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored}; }
+      catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:"Plán se nepodařilo načíst."}; }
       let history=[];
       try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
-      return Response.json({...data,history,storage:"d1"},{status:responseStatus,headers:{"Cache-Control":"no-store"}});
+      return Response.json({...data,history,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
       try {
@@ -574,7 +562,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
 
   if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
-    if (!env.USER_IS_OWNER) return Response.json({status:"error",message:"Generování silového plánu bude pro další uživatele dostupné po přechodu plánů do databáze."},{status:409});
     const body = await request.json().catch(() => ({}));
     const internal = new URL("/strength/generate-plan", request.url);
     const response = await app.fetch(new Request(internal,{

@@ -21,9 +21,12 @@ Secret `ALLOWED_GOOGLE_EMAILS` už potřeba není.
 
 Dokud uživatel nepřipojí obě služby, dashboard zobrazuje jen průvodce připojením.
 
+Silový plán (Gym) má každý uživatel vlastní. Plán dne je v databázi (tabulka `gym_plans`) a odcvičené série se ukládají do historie (`strength_sets`). Google Sheets se už nepoužívá.
+
+Katalog cviků odpovídá vybavení pobočky **METAGYM Kutná Hora** (`src/gym-equipment.js`, podle https://metagym.cz/kutnahora; ostatní pobočky mají jiné vybavení). Každý cvik má přiřazené stanoviště. Generátor nabídne jen cviky, pro které pobočka má vybavení. Kutná Hora nemá stojan na dřepy, proto se dřepy dělají na Pendulum squat nebo Pivot leg press.
+
 ## Co zatím zůstává jen pro správce
 
-- Silový plán v Google Sheetu a jeho generování. Po přechodu plánů do databáze bude dostupné všem.
 - Přístup přes MCP / ChatGPT (sdílený klíč `STRENGTH_API_KEY` pracuje s daty správce).
 - GitHub automatizace silového plánu. Synchronizace Intervals a denní výživové poznámky už běží pro každého uživatele zvlášť.
 

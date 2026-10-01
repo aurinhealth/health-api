@@ -3,7 +3,7 @@
 ## Listing
 
 - Plugin name: Health & Strength
-- Short description: Adaptive strength training connected to cycling load, recovery, workout history, and a Google Sheet.
+- Short description: Adaptive strength training connected to cycling load, recovery and workout history.
 - Long description: Health & Strength provides adaptive strength-training workflows backed by the user's health-api service. It reads integrated cycling and recovery context, completed strength history, and the current workout sheet; it can generate an adaptive workout, sync completed sets to D1, analyze a completed workout, find exercise alternatives, and substitute exercises in today's workout.
 - Category: Health & Fitness
 - Website: https://health-api.chelseafc-czsk.workers.dev/
@@ -25,7 +25,7 @@
 
 1. Prompt: "Vygeneruj mi dnešní trénink."
    - Expected tool: generateStrengthPlan
-   - Expected result: An adaptive plan is generated from current context and written to the Google Sheet.
+   - Expected result: An adaptive plan is generated from current context and saved as the day's plan.
 
 2. Prompt: "Jaký je můj aktuální tréninkový kontext?"
    - Expected tool: getStrengthContext
