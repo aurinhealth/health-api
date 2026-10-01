@@ -9,10 +9,15 @@
     }
   ],
   "compatibility_date": "2026-09-15",
+  // Same as Workers Logs in the Cloudflare dashboard, so a deploy keeps it.
   "observability": {
     "enabled": true,
     "logs": {
+      "enabled": true,
       "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false
     }
   },
   "triggers": {
