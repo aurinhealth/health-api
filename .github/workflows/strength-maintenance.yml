@@ -4,7 +4,10 @@ name: Strength sheet maintenance
 
 on:
   workflow_dispatch:
+  # Only main: the Worker accepts GitHub OIDC tokens from main only, so a run
+  # on another branch can never authenticate.
   push:
+    branches: [main]
     paths:
       - ".github/workflows/strength-maintenance.yml"
   schedule:

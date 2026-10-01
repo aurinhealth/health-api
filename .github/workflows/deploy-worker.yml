@@ -78,7 +78,15 @@ jobs:
         run: |
           set -euo pipefail
           date_value="$(TZ=Europe/Prague date +%F)"
-          body="$(curl -fsS -X POST             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             --data "{\"action\":\"generate\",\"date\":\"$date_value\",\"preview\":true}"             "https://petrfitnessdata.eu/automation/strength")"
+          # Keep the response body on failure so the cause is visible in the log.
+          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "{\"action\":\"generate\",\"date\":\"$date_value\",\"preview\":true}" "https://petrfitnessdata.eu/automation/strength")"
+          code="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+          if [ "$code" != "200" ]; then
+            echo "HTTP $code"
+            printf '%s\n' "$body" | head -c 4000
+            exit 1
+          fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert d.get("preview") is True, d; p=d.get("plan") or {}; assert p.get("rows"), p; assert p.get("loadEstimates") is not None, p' <<< "$body"
 
       - name: Smoke test food resolution
