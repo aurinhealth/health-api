@@ -19,18 +19,23 @@ https://www.nutridatabaze.cz/licencni-podminky-a-zpracovani-osobnich-udaju/.
   this text in `attribution`; the food editor shows it.
 
 Loading or updating (the table comes from `migrations/0003_nutridatabaze.sql`):
+in the app, Settings → "Databáze potravin NutriDatabaze" (admins only), choose
+the downloaded export and press "Nahrát". `POST /app/api/admin/nutridatabaze`
+takes the raw file, parses it in the Worker (`src/nutridatabaze-import.js`) and
+stores only the values; the file itself is not kept. The same import from the
+command line:
 
 ```sh
 node scripts/import-nutridatabaze.mjs ~/Downloads/<export>.xlsx   # or .csv
 npx --yes wrangler@4 d1 execute health-data --remote --file=data/private/nutridatabaze-<verze>.sql
 ```
 
-The script reads XLSX or CSV (also Czech Excel CSV: semicolons, decimal commas,
+The parser reads XLSX or CSV (also Czech Excel CSV: semicolons, decimal commas,
 windows-1250), finds columns by EuroFIR code ([ENERC], [PROT], [FAT], [CHO],
 [FIBT], [NACL]) or Czech name, tells kJ from kcal by the values, and takes the
-version from the file title (or `--version 11.26`). The SQL goes to
-`data/private/`, which git ignores. A new version replaces the old rows without
-emptying the table. Workers pick up the new data within 10 minutes.
+version from the file title. The import is one D1 transaction: a new version
+replaces the old rows, a bad file changes nothing. The command-line SQL goes to
+`data/private/`, which git ignores. Workers pick up new data within 10 minutes.
 
 ## Free reference subset
 
