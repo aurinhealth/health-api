@@ -36,6 +36,9 @@ jobs:
       - name: Check syntax
         run: npm run check
 
+      - name: Lint (undefined variables)
+        run: npm run lint:install && npm run lint
+
       - name: Run tests
         run: npm test
 
