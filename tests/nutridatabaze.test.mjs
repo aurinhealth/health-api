@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createD1} from './helpers/d1.mjs';
-import {parseCsv,parseNutridatabaze,readTable,toSql} from '../scripts/import-nutridatabaze.mjs';
+import {parseCsv,parseNutridatabaze,readTable,nutridatabazeSql,importNutridatabaze,nutridatabazeStatus} from '../src/nutridatabaze-import.js';
 import {resolveFood,nutridatabazeReference} from '../src/food-sources.js';
 import {resetNutridatabazeCache,searchNutridatabaze} from '../src/nutridatabaze.js';
 
@@ -18,11 +18,11 @@ const windows1250=text=>Buffer.from([...text].map(c=>({'ý':0xfd,'ě':0xec,'č':
 
 async function loadedDb(){
  const db=createD1();db.sqlite.exec(readFileSync(new URL('../migrations/0003_nutridatabaze.sql',import.meta.url),'utf8'));
- const {foods,version}=parseNutridatabaze(parseCsv(csv));db.sqlite.exec(toSql(foods,version));resetNutridatabazeCache();return db;
+ await importNutridatabaze(db,new TextEncoder().encode(csv),{fileName:'export.csv'});resetNutridatabazeCache();return db;
 }
 
-test('a Czech Excel export (semicolons, decimal commas, windows-1250) is read column by EuroFIR code',()=>{
- const r=parseNutridatabaze(readTable(windows1250(csv),'export.csv'));
+test('a Czech Excel export (semicolons, decimal commas, windows-1250) is read column by EuroFIR code',async()=>{
+ const r=parseNutridatabaze(await readTable(windows1250(csv),'export.csv'));
  assert.equal(r.version,'11.26');assert.equal(r.energyUnit,'kcal');
  assert.deepEqual(r.foods.map(f=>f.name),['Banány','Jablka','Nektarinky']);
  const banana=r.foods[0];
@@ -35,7 +35,7 @@ test('an export with energy only in kJ is converted, and the version can be pass
  const rows=parseCsv(csv).slice(1).map(r=>r.filter((_,i)=>i!==6));
  const r=parseNutridatabaze(rows,{version:'11.26'});
  assert.equal(r.energyUnit,'kJ');assert.equal(r.foods[0].calories_100g,99.19);
- assert.throws(()=>parseNutridatabaze(rows),/version/);
+ assert.throws(()=>parseNutridatabaze(rows),/verze/);
 });
 
 test('NutriDatabaze is the first source for a food searched by name, with its licence citation',async()=>{
@@ -53,7 +53,7 @@ test('NutriDatabaze is the first source for a food searched by name, with its li
 
 test('a newer import replaces the older version without emptying the table first',async()=>{
  const db=await loadedDb(),{foods}=parseNutridatabaze(parseCsv(csv));
- db.sqlite.exec(toSql(foods.slice(0,1).map(f=>({...f,version:'12.27',calories_100g:97})),'12.27'));resetNutridatabazeCache();
+ await db.batch(nutridatabazeSql(foods.slice(0,1).map(f=>({...f,calories_100g:97})),'12.27').map(sql=>db.prepare(sql)));resetNutridatabazeCache();
  const rows=(await db.prepare('SELECT code,version,calories_100g FROM nutridatabaze_foods').all()).results;
  assert.deepEqual(rows,[{code:'0032',version:'12.27',calories_100g:97}]);
 });
@@ -65,4 +65,26 @@ test('without the table the other sources still answer',async()=>{
 
 test('the NutriDatabaze search link opens their search form, which ignores a query string',()=>{
  assert.equal(nutridatabazeReference('banán').url,'https://www.nutridatabaze.cz/vyhledavani-potravin/podle-nazvu/');
+});
+
+test('an XLSX export with merged two-row headers is read, and the upload reports what it stored',async()=>{
+ const db=createD1();db.sqlite.exec(readFileSync(new URL('../migrations/0003_nutridatabaze.sql',import.meta.url),'utf8'));
+ assert.deepEqual(await nutridatabazeStatus(db),{count:0,version:null,updated_at:null});
+ const r=await importNutridatabaze(db,readFileSync(new URL('./fixtures/nutridatabaze-sample.xlsx',import.meta.url)),{fileName:'export.xlsx'});
+ assert.deepEqual([r.version,r.energyUnit,r.imported,r.skipped],['11.26','kcal',3,0]);
+ const rows=(await db.prepare('SELECT code,calories_100g,carbs_100g,salt_100g FROM nutridatabaze_foods ORDER BY code').all()).results;
+ assert.deepEqual(rows,[{code:'0032',calories_100g:98,carbs_100g:21.6,salt_100g:0},{code:'0360',calories_100g:48,carbs_100g:9.3,salt_100g:0},{code:'37',calories_100g:52,carbs_100g:10.5,salt_100g:null}]);
+ assert.equal((await nutridatabazeStatus(db)).count,3);
+});
+
+test('a file that is not the export is refused and leaves the stored data alone',async()=>{
+ const db=await loadedDb();
+ await assert.rejects(importNutridatabaze(db,new TextEncoder().encode('jméno;věk\nPetr;40\n'),{fileName:'jine.csv'}),/názvy sloupců/);
+ assert.equal((await nutridatabazeStatus(db)).count,3);
+});
+
+test('names with quotes cannot break the generated SQL',async()=>{
+ const db=createD1();db.sqlite.exec(readFileSync(new URL('../migrations/0003_nutridatabaze.sql',import.meta.url),'utf8'));
+ await db.batch(nutridatabazeSql([{code:"1');DROP TABLE nutridatabaze_foods;--",name:"Rock 'n' roll",calories_100g:1,protein_100g:0,carbs_100g:0,fat_100g:0}],'11.26').map(sql=>db.prepare(sql)));
+ assert.equal((await db.prepare('SELECT name FROM nutridatabaze_foods').first()).name,"Rock 'n' roll");
 });

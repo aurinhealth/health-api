@@ -23,6 +23,8 @@ import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
+import {importNutridatabaze,nutridatabazeStatus} from './nutridatabaze-import.js';
+import {resetNutridatabazeCache} from './nutridatabaze.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -799,6 +801,15 @@ async function handleAdminApi(request, env, url, session) {
   const db = env.RAW_DB;
   try {
     if (url.pathname === "/app/api/admin/users" && request.method === "GET") return Response.json({status:"ok",...await listUsersAndInvites(db)},{headers:{"Cache-Control":"no-store"}});
+    if (url.pathname === "/app/api/admin/nutridatabaze" && request.method === "GET") return Response.json({status:"ok",...await nutridatabazeStatus(db)},{headers:{"Cache-Control":"no-store"}});
+    // The export arrives as the raw file. Only the parsed values are stored, never the file.
+    if (url.pathname === "/app/api/admin/nutridatabaze" && request.method === "POST") {
+      const bytes = new Uint8Array(await request.arrayBuffer());
+      if (!bytes.length || bytes.length > 20 * 1024 * 1024) return Response.json({status:"error",message:"Vyber export z NutriDatabaze (XLSX nebo CSV, nejvýš 20 MB)."},{status:400});
+      const result = await importNutridatabaze(db, bytes, {fileName:decodeURIComponent(request.headers.get("X-File-Name") || ""), version:url.searchParams.get("version") || undefined});
+      resetNutridatabazeCache();
+      return Response.json({status:"ok",...result,message:`Nahráno ${result.imported} potravin z NutriDatabaze verze ${result.version}.`});
+    }
     const body = await request.json().catch(() => ({}));
     if (url.pathname === "/app/api/admin/invites" && request.method === "POST") return Response.json({status:"ok",email:await inviteUser(db, body.email, user.id),message:"Pozvánka je uložená. Uživatel se může přihlásit přes Google."});
     if (url.pathname === "/app/api/admin/invites" && request.method === "DELETE") { await removeInvite(db, body.email); return Response.json({status:"ok",message:"Pozvánka je zrušená."}); }
