@@ -1,6 +1,7 @@
 const OFF_BASE = "https://world.openfoodfacts.org";
 import {foodPackageSize} from './food-portions.js';
 import {searchReferenceFoods} from './food-reference.js';
+import {searchNutridatabaze,nutridatabazeAttribution,NUTRIDATABAZE_URL} from './nutridatabaze.js';
 const USER_AGENT = "health-api-food/1.0 (health-api)";
 
 const num = (v) => v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)) ? Number(v) : null;
@@ -116,11 +117,10 @@ export function productFromLabel(input = {}) {
 }
 
 /*
- * NutriDatabaze.cz is the Czech reference layer. Its public site is searchable,
- * but the downloadable export is license-gated. We therefore expose a deterministic
- * reference target instead of scraping around the access controls. The ChatGPT/web
- * layer can resolve the food and pass the verified per-100g values back with
- * source="nutridatabaze".
+ * NutriDatabaze.cz is the Czech reference layer, searched first from its export
+ * in D1 (nutridatabaze.js). When it has no match, point to its public search
+ * instead of scraping it. The ChatGPT/web layer can resolve the food and pass
+ * the verified per-100g values back with source="nutridatabaze".
  */
 export function nutridatabazeReference(name) {
   const q = str(name);
@@ -128,12 +128,13 @@ export function nutridatabazeReference(name) {
     source: "nutridatabaze",
     status: q ? "reference_required" : "not_found",
     query: q || null,
-    url: q ? `https://www.nutridatabaze.cz/vyhledavani-potravin/podle-nazvu/?q=${encodeURIComponent(q)}` : null,
+    // The search form is a POST: a query string would open an empty search.
+    url: q ? `${NUTRIDATABAZE_URL}vyhledavani-potravin/podle-nazvu/` : null,
     note: "Use verified NutriDatabaze values per 100 g when available; respect its licence conditions."
   };
 }
 
-export async function resolveFood(input = {}) {
+export async function resolveFood(input = {}, {db} = {}) {
   const label = productFromLabel(input);
   if (label) return { status: "ok", match: "package_label", product: label, candidates: [] };
 
@@ -146,11 +147,14 @@ export async function resolveFood(input = {}) {
   const name = str(input.name);
   if (name) {
     const basics=searchReferenceFoods(name,input.limit||12);
+    // NutriDatabaze first, the OpenNutrition foods fill the rest of the list.
+    const czech=await searchNutridatabaze(db,name,input.limit||12);
+    if(czech.length&&!barcode)return {status:'ok',match:'generic_food',product:czech[0],candidates:[...czech,...basics].slice(0,Math.max(1,Math.min(20,Number(input.limit)||12)))};
     const plain=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
     const reference=/^banan(?:y|u)?$/.test(plain)?['Banán · bez slupky',32,98,1.1,21.6,.3,2.3]:/^jablk[oa]$/.test(plain)?['Jablko · jedlý podíl',37,52,.4,10.5,.4,2.3]:null;
-    if(reference){const [name,id,calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g]=reference,product={name,brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id='+id,confidence:'reference'};return{status:'ok',match:'generic_food',product,candidates:[product]};}
+    if(reference){const [name,id,calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g]=reference,product={name,brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id='+id,confidence:'reference',attribution:nutridatabazeAttribution('11.26')};return{status:'ok',match:'generic_food',product,candidates:[product]};}
     if(/^nektarink[ayu]?$|^nektarinky$|^nectarines?$/.test(plain)){
-      const product={name:'Nektarinka · čerstvá, bez pecky',brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g:48,protein_100g:1.1,carbs_100g:9.3,fat_100g:.3,fiber_100g:1.7,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id=360',confidence:'reference'};
+      const product={name:'Nektarinka · čerstvá, bez pecky',brand:'Běžná potravina',quantity:'',nutrition_basis:'g',calories_100g:48,protein_100g:1.1,carbs_100g:9.3,fat_100g:.3,fiber_100g:1.7,salt_100g:0,source:'nutridatabaze',source_url:'https://www.nutridatabaze.cz/potraviny/?id=360',confidence:'reference',attribution:nutridatabazeAttribution('11.26')};
       return {status:'ok',match:'generic_food',product,candidates:[product]};
     }
     // Generic reference foods work without an external service or a country tag.
