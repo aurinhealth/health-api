@@ -844,7 +844,7 @@ function installRequestedExperience(){
   $('basketSave').onclick=async()=>{const button=$('basketSave');button.disabled=true;try{if(!ingredients.length)return;const totals=ingredients.reduce((s,a)=>{for(const k of ['calories','protein_g','carbs_g','fat_g'])s[k]+=num(a[k]);return s;},{calories:0,protein_g:0,carbs_g:0,fat_g:0}),meal=$('foodMeal').selectedOptions[0].textContent,name=$('basketName').value.trim()||meal;await jsonFetch('/app/api/food/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product:{name,calories_100g:totals.calories,protein_100g:totals.protein_g,carbs_100g:totals.carbs_g,fat_100g:totals.fat_g,nutrition_basis:'portion',source:'package_label'},quantity:1,unit:'portion',date:$('foodDate').value,mealType:$('foodMeal').value,ingredients:ingredients.map(a=>({name:a.name,amount:a.amount,unit:a.unit}))})});ingredients=[];drawBasket();foodMessage('Celé jídlo je uložené jednou, včetně seznamu surovin.');await load();await loadEnteredFood();}catch(e){foodMessage(e.message);}finally{button.disabled=false;}};
   $('settings').insertAdjacentHTML('beforeend','<article class="card" style="margin-top:16px"><h3>Profil pro vlastní výpočty</h3><p class="small">Pouze v tomto prohlížeči. Cardio strain je vlastní logaritmický odhad z délky a průměrného tepu vůči tepové rezervě, nikoli převod TSS ani WHOOP algoritmus.</p><form id="fitnessProfileForm" class="food-editor-grid"><label>Referenční pohlaví<select class="food-input" id="profileSex"><option value="">Vyber</option><option value="male">Muž</option><option value="female">Žena</option></select></label><label>Věk<input id="profileAge" class="food-input" type="number" min="18" max="100"></label><label>Výška · cm<input id="profileHeight" class="food-input" type="number" min="100" max="230"></label><label>Maximální tep · bpm<input id="profileHrmax" class="food-input" type="number" min="100" max="230"></label><button class="btn primary">Uložit profil</button></form></article>');
   const profile=appProfile();for(const [id,key]of [['profileSex','sex'],['profileAge','age'],['profileHeight','height'],['profileHrmax','hrmax']])$(id).value=profile[key]||'';
-  $('fitnessProfileForm').onsubmit=e=>{e.preventDefault();localStorage.setItem('fitnessProfile',JSON.stringify({sex:$('profileSex').value,age:$('profileAge').value,height:$('profileHeight').value,hrmax:$('profileHrmax').value}));renderExperience();toast('Profil uložen.');};
+  $('fitnessProfileForm').onsubmit=e=>{e.preventDefault();localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),sex:$('profileSex').value,age:$('profileAge').value,height:$('profileHeight').value,hrmax:$('profileHrmax').value}));renderExperience();toast('Profil uložen.');};
   $('foodEntry').insertAdjacentHTML('beforeend','<div style="margin-top:18px"><h3>Z kuchařky podle stránky</h3><div class="food-controls"><input id="recipeRequest" class="food-input" placeholder="Měl jsem 1 porci ze stránky 70"><button class="btn" id="recipeLookup" type="button">Načíst recept</button></div><p class="small">Také k fotce můžeš zadat „strana 65“. Načtení receptu nahradí návrh z fotografie; nezapisuje ho podruhé.</p></div>');
   $('recipeLookup').onclick=async()=>{try{const text=$('recipeRequest').value,match=text.match(/(?:str[aá]n(?:ka|ky|ce|u|a)?|page)\s*(\d{1,3})/i)||text.match(/^\s*(\d{1,3})\s*$/);if(!match)throw new Error('Zadej například strana 70.');const r=await jsonFetch('/app/api/food/recipe?page='+match[1]),recipe=r.recipe;selectFoodProduct({name:recipe.title||recipe.name,calories_100g:recipe.kcal??recipe.calories,protein_100g:recipe.protein_g,carbs_100g:recipe.carbs_g,fat_100g:recipe.fat_g,nutrition_basis:'portion',source:'package_label'});const portion=text.match(/(\d+(?:[.,]\d+)?(?:\/\d+)?)\s*porc/i);$('foodGrams').value=portion?portion[1]:'1';updateFoodPreview();foodMessage('Recept ze stránky '+match[1]+' je připravený. Ulož ho jako jedno jídlo.');}catch(e){foodMessage(e.message);}};
 }
@@ -1647,4 +1647,34 @@ async function openGymDay(date,show=true){
   renderGymPlanHint();
 }
 installProposals();
-
+// Personal calorie target: everyday activity, sport (only without a connected
+// source), weekly goal and target weight, stored with the rest of the profile.
+// Without weight or a complete profile the server returns no target; say what
+// is missing instead of showing 0 kcal.
+const ENERGY_MISSING={weight:'váha',sex:'pohlaví',age:'věk',height:'výška',activity:'denní aktivita',sportHours:'sport za týden'};
+function installEnergyProfile(){
+  const form=$('fitnessProfileForm');if(!form)return;
+  const select=(id,label,options)=>'<label>'+label+'<select class="food-input" id="'+id+'"><option value="">Vyber</option>'+options.map(([v,t])=>'<option value="'+v+'">'+esc(t)+'</option>').join('')+'</select></label>';
+  form.querySelector('button.primary').insertAdjacentHTML('beforebegin',
+    select('profileActivity','Pohyb přes den (mimo sport)',[['sedentary','Sedavá práce, málo chůze'],['light','Lehce aktivní: hodně chůze, práce vestoje'],['active','Aktivní: většinu dne v pohybu'],['heavy','Fyzicky náročná práce']])+
+    select('profileSportHours','Sport za týden (jen bez propojení Google/Intervals)',[['0','Žádný'],['1-3','1–3 hodiny'],['3-6','3–6 hodin'],['6-10','6–10 hodin'],['10+','Víc než 10 hodin']])+
+    select('profileGoal','Cíl',[['lose','Hubnout 0,5 kg týdně'],['lose_slow','Hubnout 0,25 kg týdně'],['maintain','Udržovat váhu'],['gain','Přibírat 0,25 kg týdně']])+
+    '<label>Cílová váha · kg<input id="profileTargetWeight" class="food-input" type="number" min="35" max="250" step="0.1"></label>');
+  form.previousElementSibling.textContent='Profil se ukládá na server. Z pohlaví, věku, výšky, váhy a denní aktivity počítáme klidový výdej a z cíle denní kalorický cíl; trénink přidávají propojené zdroje. Váhu zapisuješ v přehledu váhy.';
+  const fields=[['profileSex','sex'],['profileAge','age'],['profileHeight','height'],['profileHrmax','hrmax'],['profileRhr','rhr'],['profileActivity','activity'],['profileSportHours','sportHours'],['profileGoal','goal'],['profileTargetWeight','targetWeight']];
+  const fill=()=>{const p=appProfile();for(const [id,key] of fields)if($(id))$(id).value=p[key]??'';};
+  fill();
+  // The server profile wins, so the form is the same on every device.
+  jsonFetch('/app/api/profile').then(r=>{if(!r?.profile)return;const server=Object.fromEntries(Object.entries(r.profile).filter(([,v])=>v!==null&&v!==''));localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),...server}));fill();}).catch(()=>{});
+  const previous=form.onsubmit;form.onsubmit=e=>{e.preventDefault();localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),activity:$('profileActivity').value,sportHours:$('profileSportHours').value,goal:$('profileGoal').value,targetWeight:$('profileTargetWeight').value}));return previous(e);};
+}
+function renderEnergyProfileNotice(){
+  const n=state.daily?.nutrition||{},missing=n.calorieTarget==null&&state.daily?.status==='ok'?(n.missing||[]):[];
+  for(const view of ['overview','nutrition']){const host=$(view);if(!host)continue;let box=host.querySelector('.energy-profile-notice');
+    if(!missing.length){box?.remove();continue;}
+    if(!box){box=document.createElement('article');box.className='card energy-profile-notice';box.style.margin='0 0 16px';host.prepend(box);}
+    box.innerHTML='<h3>Kalorický cíl zatím nepočítám</h3><p class="small">Chybí: '+esc(missing.map(k=>ENERGY_MISSING[k]||k).join(', '))+'. '+(missing.includes('weight')?'Váhu zapiš v přehledu váhy. ':'')+'Ostatní doplň v profilu.</p><button class="btn primary" type="button">Otevřít profil</button>';
+    box.querySelector('button').onclick=()=>{activate('settings');$('fitnessProfileForm')?.scrollIntoView({behavior:'smooth'});};}
+}
+installEnergyProfile();
+const renderNutritionWithoutNotice=renderNutrition;renderNutrition=function(){renderNutritionWithoutNotice();renderEnergyProfileNotice();};

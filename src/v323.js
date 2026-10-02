@@ -3,10 +3,6 @@ import { getCookbook } from "./cookbook.js";
 import { completedMealTypes, nextUnloggedMeals } from "./nutrition-next.js";
 
 const V323 = "final-5-cookbook-v3.2.3";
-const BASELINE_REST_TDEE = 2450;
-const DEFICIT = 550;
-const MIN_TARGET = 2000;
-const MAX_TARGET = 3200;
 const PROTEIN_PER_KG = 2.0;
 const FAT_PER_KG = 0.8;
 const ENDURANCE_CARB_PER_KG = 5.0;
@@ -130,7 +126,8 @@ async function loadTrainingContext(env, date) {
 }
 
 function macroTargets(weightKg, calorieTarget, context) {
-  const kg = Number(weightKg) || 85.8;
+  const kg = Number(weightKg);
+  if (!(kg > 0)) return { protein_g: 0, carbs_g: 0, fat_g: 0 };
   const protein = Math.round(kg * PROTEIN_PER_KG);
   const fat = Math.round(kg * FAT_PER_KG);
   const carbPerKg = context.endurance ? ENDURANCE_CARB_PER_KG : context.training ? TRAINING_CARB_PER_KG : REST_CARB_PER_KG;
@@ -209,16 +206,15 @@ async function foodRecommendV323(env, url) {
   ]);
   const energy = await energyResponse.json();
   const food = await foodResponse.json();
+  // Without a personal calorie target (weight or profile missing) there is nothing to fit meals to.
+  if (energy.final?.calorieTarget == null) return Response.json({ status: "ok", date, calorieTarget: null, missing: energy.energyProfile?.missing || [], foodTotals: food.totals || null, macroTargets: null, remaining: null, mealRecommendations: [], recommendations: [], storeAlternatives: [] });
   const context = await loadTrainingContext(env, date);
   context.endurance = context.cycling || context.totalEnduranceHours >= 1;
   context.training = context.actual.length > 0 || context.unmatched.length > 0;
 
-  // The legacy engine assumes 600 kcal/h for every planned ride. V3.2.3
-  // corrects only unmatched planned Endurance rides to 500 kcal/h. Actual
-  // activities continue to use their actual calories and suppress the plan.
-  const enduranceHours = context.plannedEnduranceRideHours;
-  const adjustedTDEE = Math.round(Number(energy.final?.estimatedTDEE || BASELINE_REST_TDEE) - enduranceHours * (INTENSE_RIDE_KCAL_H - ENDURANCE_RIDE_KCAL_H));
-  const calorieTarget = Math.max(MIN_TARGET, Math.min(MAX_TARGET, Math.round(adjustedTDEE - DEFICIT)));
+  // Meals are fitted to the same personal target the dashboard shows
+  // (/analysis/energy in index.js), not a second formula.
+  const calorieTarget = Number(energy.final.calorieTarget);
 
   const weightRow = await env.DB.prepare(`
     SELECT value_numeric FROM health_datapoints
@@ -337,15 +333,13 @@ async function analysisEnergyV323(env, url) {
   const response = await legacy.fetch(new Request(new URL(`/analysis/energy?date=${encodeURIComponent(date)}`, url).toString()), env);
   const data = await response.json();
   const context = await loadTrainingContext(env, date);
-  const adjustedTDEE = Math.round(Number(data.final?.estimatedTDEE || BASELINE_REST_TDEE) - context.plannedEnduranceRideHours * 100);
-  const calorieTarget = Math.max(MIN_TARGET, Math.min(MAX_TARGET, Math.round(adjustedTDEE - DEFICIT)));
+  // TDEE and the target come from index.js, which already prices planned
+  // rides by intensity and uses the personal baseline.
   return Response.json({
     ...data,
     version: V323,
     final: {
       ...data.final,
-      estimatedTDEE: adjustedTDEE,
-      calorieTarget,
       estimatedPlannedRideCalories: context.plannedRideCalories,
       plannedRideHours: context.plannedRideHours,
       plannedEnduranceRideHours: context.plannedEnduranceRideHours
