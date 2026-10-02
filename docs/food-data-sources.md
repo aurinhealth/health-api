@@ -1,5 +1,37 @@
 # Food data sources
 
+Search by name: personal foods, then NutriDatabaze.cz, then the OpenNutrition
+reference subset, then Open Food Facts. A barcode goes to Open Food Facts first.
+
+## NutriDatabaze.cz (primary for generic foods)
+
+Czech Food Composition Database, ÚZEI (Institute of Agricultural Economics and
+Information), https://www.nutridatabaze.cz/. Values per 100 g of the edible
+portion; carbohydrates are available carbohydrates [CHO]. Licence terms:
+https://www.nutridatabaze.cz/licencni-podminky-a-zpracovani-osobnich-udaju/.
+
+- The export ("Výběr z NutriDatabaze.cz") is free but only for registered users.
+- The data file must not be passed on to anyone, in whole or in part. It is
+  therefore not in this public repository, not in `/app/api/food/reference-data`,
+  and lives only in the D1 table `nutridatabaze_foods`.
+- Wherever the data is shown, cite „Na základě dat z NutriDatabaze.cz, verze X.X,
+  ÚZEI, Praha“ with a link to http://www.nutridatabaze.cz/. Every product carries
+  this text in `attribution`; the food editor shows it.
+
+Loading or updating (the table comes from `migrations/0003_nutridatabaze.sql`):
+
+```sh
+node scripts/import-nutridatabaze.mjs ~/Downloads/<export>.xlsx   # or .csv
+npx --yes wrangler@4 d1 execute health-data --remote --file=data/private/nutridatabaze-<verze>.sql
+```
+
+The script reads XLSX or CSV (also Czech Excel CSV: semicolons, decimal commas,
+windows-1250), finds columns by EuroFIR code ([ENERC], [PROT], [FAT], [CHO],
+[FIBT], [NACL]) or Czech name, tells kJ from kcal by the values, and takes the
+version from the file title (or `--version 11.26`). The SQL goes to
+`data/private/`, which git ignores. A new version replaces the old rows without
+emptying the table. Workers pick up the new data within 10 minutes.
+
 ## Free reference subset
 
 130 everyday foods selected from OpenNutrition dataset 2025.1, downloaded from
@@ -34,7 +66,8 @@ of the public reference download. These are not silently shared with any provide
 
 ## Deferred sources
 
-NutriDatabaze export requires registration and clarification of redistribution
-rights before importing it into this public app. Kalorické Tabulky and YAZIO do
+FÉR potravina (ferpotravina.cz) sells its branded-product database as CSV/API
+by agreement; copying its site is forbidden. NutriData.cz (NutriPro) and
+STOBklub publish no data licence. Kalorické Tabulky and YAZIO do
 not publish a database-licensing price/API offer we could verify. Their app
 subscriptions do not constitute permission to copy their food catalogs.

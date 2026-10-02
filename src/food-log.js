@@ -68,7 +68,7 @@ export async function getCookbookRecipe({ page, name, recipeId: wantedId } = {})
 function normalizeStatus(status) { const s=text(status).toLowerCase(); return ["planned","eaten","cancelled"].includes(s) ? s : "eaten"; }
 export async function resolveAndCacheFood(db, input = {}) {
   await ensureFoodLogTable(db);
-  const result = await resolveFood(input);
+  const result = await resolveFood(input, { db });
   if (result.product?.barcode) {
     const p = result.product;
     await db.prepare("INSERT INTO food_products (barcode,name,brand,quantity,serving_size,calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g,salt_100g,source,source_url,confidence,raw_json,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(barcode) DO UPDATE SET name=excluded.name,brand=excluded.brand,quantity=excluded.quantity,serving_size=excluded.serving_size,calories_100g=excluded.calories_100g,protein_100g=excluded.protein_100g,carbs_100g=excluded.carbs_100g,fat_100g=excluded.fat_100g,fiber_100g=excluded.fiber_100g,salt_100g=excluded.salt_100g,source=excluded.source,source_url=excluded.source_url,confidence=excluded.confidence,raw_json=excluded.raw_json,updated_at=CURRENT_TIMESTAMP").bind(
