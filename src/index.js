@@ -2,6 +2,7 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { nextUnloggedMeals } from "./nutrition-next.js";
 import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
+import { writeIntervalsWeight } from "./weight-sync.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -189,7 +190,13 @@ async function appWeight(env, request) {
     if (!response.ok) return Response.json({status:"error",message:"Google Health weight write failed",google},{status:response.status});
   }
   await savePoint(env,"manual","weight",{value_kg:value,source:"manual",google_operation:google},value,"kg",at,at,at,"manual-weight:"+date);
-  return Response.json({status:"ok",date,kg:value,google});
+  // Intervals.icu gets it right away too; the hourly weight sync retries a failure.
+  let intervals = null;
+  if (env.INTERVALS_API_KEY) {
+    try { await writeIntervalsWeight(env, date, value); intervals = "ok"; }
+    catch (error) { console.error("Intervals weight write failed", error.message); intervals = "error"; }
+  }
+  return Response.json({status:"ok",date,kg:value,google,intervals});
 }
 
 // ======================================================

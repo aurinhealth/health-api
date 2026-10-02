@@ -18,6 +18,7 @@ import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {normalizeProfile} from './energy-profile.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
+import {syncWeights} from './weight-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
@@ -65,6 +66,9 @@ export default {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
+    // Hourly, half an hour after the Google Health sync: weight in the app,
+    // Google Health and Intervals.icu the same.
+    if (controller.cron === "* * * * *" && new Date().getUTCMinutes() === 30) await forEachUser(env, ["intervals"], scoped => syncWeights(scoped, { googleToken }));
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);

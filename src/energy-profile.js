@@ -32,12 +32,24 @@ export const OWNER_CALIBRATION = { baselineRestTDEE: 2550, deficit: 550, floor: 
 
 const num = v => (v === null || v === undefined || v === "" ? NaN : Number(v));
 
+// Age in whole years on a day; with a birth date the age keeps itself current.
+export function ageFrom(birthDate, now = new Date()) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(birthDate || ""));
+  if (!m) return null;
+  const today = new Date(now);
+  let age = today.getUTCFullYear() - Number(m[1]);
+  if (today.getUTCMonth() + 1 < Number(m[2]) || (today.getUTCMonth() + 1 === Number(m[2]) && today.getUTCDate() < Number(m[3]))) age--;
+  return age >= 18 && age <= 100 ? age : null;
+}
+
 // Cleans a profile posted from the dashboard; unknown values become null.
 export function normalizeProfile(p = {}) {
   const inRange = (v, lo, hi) => { const x = num(v); return Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
+  const birthDate = ageFrom(p.birthDate) != null ? p.birthDate : "";
   return {
     sex: ["male", "female"].includes(p.sex) ? p.sex : "",
-    age: inRange(p.age, 18, 100),
+    birthDate,
+    age: birthDate ? ageFrom(birthDate) : inRange(p.age, 18, 100),
     height: inRange(p.height, 100, 230),
     hrmax: inRange(p.hrmax, 100, 230),
     rhr: inRange(p.rhr, 25, 120),
@@ -86,13 +98,14 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   };
 }
 
-export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "věk", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" };
+export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "datum narození", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" };
 
 // The user's own values, with what the app worked out itself (height,
 // activity, resting and maximum heart rate) filling only the empty fields.
 export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax"];
 export function effectiveProfile(saved, suggested) {
   const profile = { ...(saved || {}) };
+  if (ageFrom(profile.birthDate) != null) profile.age = ageFrom(profile.birthDate);
   for (const key of SUGGESTED_FIELDS) if ((profile[key] == null || profile[key] === "") && suggested?.[key]) profile[key] = suggested[key];
   return profile;
 }

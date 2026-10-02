@@ -58,7 +58,7 @@ test("without a connected source, weekly sport is part of the estimate", () => {
 
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
-    { sex: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5 });
+    { sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5 });
 });
 
 async function dailyFor({ profile, weight, isOwner = false, providers = ["google", "intervals"] }) {

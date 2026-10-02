@@ -743,7 +743,9 @@ function renderExperience(){
 // resting and maximum heart rate.
 function savedProfile(){try{return JSON.parse(localStorage.getItem('fitnessProfile')||'{}');}catch{return {};}}
 function suggestedProfile(){try{return JSON.parse(localStorage.getItem('fitnessProfileSuggested')||'{}');}catch{return {};}}
-function appProfile(){const p=savedProfile(),s=suggestedProfile();for(const k of ['height','activity','rhr','hrmax'])if((p[k]==null||p[k]==='')&&s[k])p[k]=s[k];return p;}
+function appProfile(){const p=savedProfile(),s=suggestedProfile();for(const k of ['height','activity','rhr','hrmax'])if((p[k]==null||p[k]==='')&&s[k])p[k]=s[k];const age=ageFromBirthDate(p.birthDate);if(age!=null)p.age=age;return p;}
+// Age from a birth date, so it stays current without editing the profile.
+function ageFromBirthDate(value){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value||''));if(!m)return null;const t=new Date();let age=t.getFullYear()-Number(m[1]);if(t.getMonth()+1<Number(m[2])||(t.getMonth()+1===Number(m[2])&&t.getDate()<Number(m[3])))age--;return age>=18&&age<=100?age:null;}
 function googleWellness(){return state.googleHealth?.wellness||[];}
 function latestGoogleMetric(key){return googleWellness().filter(r=>measured(r[key])).at(-1);}
 function latestVo2(){const google=latestGoogleMetric('vo2max'),intervals=(state.fitness?.wellness||[]).filter(r=>r.id<=selectedHistoryDate&&measured(r.vo2max??r.vo2Max)).at(-1);if(google&&(!intervals||google.id>=intervals.id))return {value:Number(google.vo2max),date:google.id,source:'Google Health'};if(intervals)return {value:Number(intervals.vo2max??intervals.vo2Max),date:intervals.id,source:'Intervals.icu'};return null;}
@@ -1660,7 +1662,7 @@ installProposals();
 // source), weekly goal and target weight, stored with the rest of the profile.
 // Without weight or a complete profile the server returns no target; say what
 // is missing instead of showing 0 kcal.
-const ENERGY_MISSING={weight:'váha',sex:'pohlaví',age:'věk',height:'výška',activity:'denní aktivita',goal:'cíl',sportHours:'sport za týden'};
+const ENERGY_MISSING={weight:'váha',sex:'pohlaví',age:'datum narození',height:'výška',activity:'denní aktivita',goal:'cíl',sportHours:'sport za týden'};
 function installEnergyProfile(){
   const form=$('fitnessProfileForm');if(!form)return;
   const select=(id,label,options)=>'<label>'+label+'<select class="food-input" id="'+id+'"><option value="">Vyber</option>'+options.map(([v,t])=>'<option value="'+v+'">'+esc(t)+'</option>').join('')+'</select></label>';
@@ -1669,9 +1671,13 @@ function installEnergyProfile(){
     select('profileSportHours','Sport za týden (jen bez propojení Google/Intervals)',[['0','Žádný'],['1-3','1–3 hodiny'],['3-6','3–6 hodin'],['6-10','6–10 hodin'],['10+','Víc než 10 hodin']])+
     select('profileGoal','Cíl',[['lose_0.25','Hubnout 0,25 kg týdně'],['lose_0.5','Hubnout 0,5 kg týdně'],['lose_0.75','Hubnout 0,75 kg týdně'],['lose_1','Hubnout 1 kg týdně'],['maintain','Udržovat váhu']])+
     '<label>Cílová váha · kg<input id="profileTargetWeight" class="food-input" type="number" min="35" max="250" step="0.1"></label>');
+  $('profileAge').parentElement.insertAdjacentHTML('beforebegin','<label>Datum narození<input id="profileBirthDate" class="food-input" type="date"></label>');
+  // With a birth date the age is computed (and stays current); the age field shows it.
+  const syncAge=()=>{const age=ageFromBirthDate($('profileBirthDate').value);$('profileAge').readOnly=age!=null;if(age!=null)$('profileAge').value=age;};
+  $('profileBirthDate').addEventListener('input',syncAge);
   form.previousElementSibling.textContent='Profil se ukládá na server. Z pohlaví, věku, výšky, váhy a denní aktivity počítáme klidový výdej a z cíle denní kalorický cíl; trénink přidávají propojené zdroje. Váhu zapisuješ v přehledu váhy.';
-  const fields=[['profileSex','sex'],['profileAge','age'],['profileHeight','height'],['profileHrmax','hrmax'],['profileRhr','rhr'],['profileActivity','activity'],['profileSportHours','sportHours'],['profileGoal','goal'],['profileTargetWeight','targetWeight']];
-  const fill=()=>{const p=savedProfile();for(const [id,key] of fields)if($(id))$(id).value=p[key]??'';};
+  const fields=[['profileSex','sex'],['profileBirthDate','birthDate'],['profileAge','age'],['profileHeight','height'],['profileHrmax','hrmax'],['profileRhr','rhr'],['profileActivity','activity'],['profileSportHours','sportHours'],['profileGoal','goal'],['profileTargetWeight','targetWeight']];
+  const fill=()=>{const p=savedProfile();for(const [id,key] of fields)if($(id))$(id).value=p[key]??'';syncAge();};
   fill();
   // The server profile wins, so the form is the same on every device.
   jsonFetch('/app/api/profile').then(r=>{
@@ -1685,10 +1691,10 @@ function installEnergyProfile(){
     auto('profileActivity',s.activity,({sedentary:'sedavý',light:'lehce aktivní',active:'aktivní',heavy:'velmi aktivní'}[s.activity]||s.activity)+' · '+Number(s.averageSteps).toLocaleString('cs-CZ')+' kroků/den');
     auto('profileRhr',s.rhr,s.rhr+' (průměr 30 dní)');
     auto('profileHrmax',s.hrmax,s.hrmax+' (max. z aktivit, 6 měs.)');
-    if(!$('profileSuggestionNote'))form.insertAdjacentHTML('afterend','<p class="small" id="profileSuggestionNote">Prázdná pole s „Automaticky“ doplňujeme z Google Health a Intervals.icu a denně aktualizujeme. Vlastní hodnota je přepíše; smazáním se vrátíš k automatické. Pohlaví, věk a cíl je potřeba vyplnit.</p>');
+    if(!$('profileSuggestionNote'))form.insertAdjacentHTML('afterend','<p class="small" id="profileSuggestionNote">Prázdná pole s „Automaticky“ doplňujeme z Google Health a Intervals.icu a denně aktualizujeme. Vlastní hodnota je přepíše; smazáním se vrátíš k automatické. Pohlaví, datum narození a cíl je potřeba vyplnit; věk se z data narození počítá sám.</p>');
     try{renderExperience();}catch{}
   }).catch(()=>{});
-  const previous=form.onsubmit;form.onsubmit=e=>{e.preventDefault();localStorage.setItem('fitnessProfile',JSON.stringify({...savedProfile(),activity:$('profileActivity').value,sportHours:$('profileSportHours').value,goal:$('profileGoal').value,targetWeight:$('profileTargetWeight').value}));return previous(e);};
+  const previous=form.onsubmit;form.onsubmit=e=>{e.preventDefault();localStorage.setItem('fitnessProfile',JSON.stringify({...savedProfile(),birthDate:$('profileBirthDate').value,activity:$('profileActivity').value,sportHours:$('profileSportHours').value,goal:$('profileGoal').value,targetWeight:$('profileTargetWeight').value}));return previous(e);};
 }
 function renderEnergyProfileNotice(){
   const n=state.daily?.nutrition||{},missing=n.calorieTarget==null&&state.daily?.status==='ok'?(n.missing||[]):[];
