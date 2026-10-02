@@ -1669,7 +1669,15 @@ function installEnergyProfile(){
   const fill=()=>{const p=appProfile();for(const [id,key] of fields)if($(id))$(id).value=p[key]??'';};
   fill();
   // The server profile wins, so the form is the same on every device.
-  jsonFetch('/app/api/profile').then(r=>{if(!r?.profile)return;const server=Object.fromEntries(Object.entries(r.profile).filter(([,v])=>v!==null&&v!==''));localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),...server}));fill();}).catch(()=>{});
+  jsonFetch('/app/api/profile').then(r=>{
+    if(r?.profile){const server=Object.fromEntries(Object.entries(r.profile).filter(([,v])=>v!==null&&v!==''));localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),...server}));fill();}
+    // Height from Google Health and activity from steps fill the empty fields;
+    // the calculations already use them, saving the form keeps them.
+    const s=r?.suggestions||{},notes=[];
+    if(s.height&&!$('profileHeight').value){$('profileHeight').value=s.height;notes.push('výška '+s.height+' cm z Google Health');}
+    if(s.activity&&!$('profileActivity').value){$('profileActivity').value=s.activity;notes.push('denní aktivita podle průměru '+Number(s.averageSteps).toLocaleString('cs-CZ')+' kroků za den');}
+    if(notes.length)form.insertAdjacentHTML('afterend','<p class="small" id="profileSuggestionNote">Předvyplněno: '+esc(notes.join(', '))+'. Zkontroluj a ulož. Pohlaví, věk a cíl Google Health neposkytuje.</p>');
+  }).catch(()=>{});
   const previous=form.onsubmit;form.onsubmit=e=>{e.preventDefault();localStorage.setItem('fitnessProfile',JSON.stringify({...appProfile(),activity:$('profileActivity').value,sportHours:$('profileSportHours').value,goal:$('profileGoal').value,targetWeight:$('profileTargetWeight').value}));return previous(e);};
 }
 function renderEnergyProfileNotice(){

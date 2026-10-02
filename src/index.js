@@ -1,6 +1,7 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { nextUnloggedMeals } from "./nutrition-next.js";
 import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
+import { loadEffectiveProfile } from "./profile-suggestions.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -352,7 +353,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
-async function googleToken(env) {
+export async function googleToken(env) {
   const response = await fetchWithTimeout(
     "https://oauth2.googleapis.com/token",
 
@@ -2307,8 +2308,7 @@ async function energyForDate(env, date) {
     WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
     ORDER BY sample_time DESC, id DESC LIMIT 1
   `).bind(env.USER_ID).first();
-  const profile = await env.DB.prepare(`SELECT profile_json FROM dashboard_profile WHERE user_id = ? AND id = 1`)
-    .bind(env.USER_ID).first().then(r => r ? JSON.parse(r.profile_json) : null).catch(() => null);
+  const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
   // Sport is estimated from the profile only when no source tracks activities.
   const providers = env.CONNECTED_PROVIDERS;
   const baseline = energyBaseline(profile, weight ? Number(weight.value_numeric) : null, {
