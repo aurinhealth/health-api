@@ -125,7 +125,11 @@ export function parseNutridatabaze(rows,{version,fileName=''}={}){
  if(col.carbs==null&&col.carbs_total==null)throw new Error('V souboru chybí sloupec: sacharidy.');
  const data=rows.slice(dataStart).filter(r=>String(r[col.code]??'').trim()&&String(r[col.name]??'').trim());
  const value=(r,key)=>col[key]==null?null:nutrientValue(r[col[key]]);
- const carbsOf=r=>value(r,'carbs')??(value(r,'carbs_total')!=null&&value(r,'fiber')!=null?Math.max(0,value(r,'carbs_total')-value(r,'fiber')):null);
+ // Without available carbohydrates [CHO]: total minus fibre. Some ready meals list
+ // only the total, and their energy is computed from it (hamburger: 4·13 + 9·7.4
+ // + 4·32.4 = 248 kcal), so the total is used as is and counted in the report.
+ const carbsOf=r=>value(r,'carbs')??(value(r,'carbs_total')==null?null:Math.max(0,value(r,'carbs_total')-(value(r,'fiber')??0)));
+ const totalOnly=r=>value(r,'carbs')==null&&value(r,'carbs_total')!=null&&value(r,'fiber')==null;
  // kJ or kcal is told by the values: kcal is close to 4·P + 4·C + 9·F + 2·fibre.
  // An empty label right after the energy column is its merged kJ/kcal twin.
  const energy=folded.map((l,c)=>({l,c})).filter(({l,c})=>!used.has(c)&&(isEnergy(l)||!l&&c>0&&isEnergy(folded[c-1]))).map(({l,c})=>{
@@ -134,7 +138,7 @@ export function parseNutridatabaze(rows,{version,fileName=''}={}){
   return {c,unit:median>=.7&&median<=1.4?'kcal':median>=3&&median<=5.5?'kJ':/kcal/.test(l)&&!/kj/.test(l)?'kcal':null};
  }).filter(e=>e.unit).sort((a,b)=>(a.unit==='kcal'?0:1)-(b.unit==='kcal'?0:1))[0];
  if(!energy)throw new Error('V souboru chybí sloupec energie v kcal nebo kJ.');
- const foods=[],skipped=[],seen=new Set();let mismatched=0;
+ const foods=[],skipped=[],seen=new Set();let mismatched=0,totalCarbs=0;
  for(const r of data){
   const code=String(r[col.code]).trim(),name=String(r[col.name]).trim(),raw=nutrientValue(r[energy.c]);
   const food={code,name,name_en:col.name_en==null?null:String(r[col.name_en]||'').trim()||null,edible_portion:value(r,'edible'),
@@ -145,9 +149,10 @@ export function parseNutridatabaze(rows,{version,fileName=''}={}){
   seen.add(code);
   const est=4*food.protein_100g+4*food.carbs_100g+9*food.fat_100g+2*(food.fiber_100g??0);
   if(Math.abs(food.calories_100g-est)>Math.max(35,food.calories_100g*.35))mismatched++;
+  if(totalOnly(r))totalCarbs++;
   foods.push(food);
  }
- return {version,energyUnit:energy.unit,foods,skipped,mismatched};
+ return {version,energyUnit:energy.unit,foods,skipped,mismatched,totalCarbs};
 }
 
 // Values are inlined (strings quoted, numbers from the parser) so a few
@@ -168,7 +173,7 @@ export async function importNutridatabaze(db,bytes,{fileName='',version}={}){
  const result=parseNutridatabaze(await readTable(bytes,fileName),{version,fileName});
  if(!result.foods.length)throw new Error('V souboru nejsou žádné potraviny s úplnými hodnotami.');
  await db.batch(nutridatabazeSql(result.foods,result.version).map(sql=>db.prepare(sql)));
- return {version:result.version,energyUnit:result.energyUnit,imported:result.foods.length,skipped:result.skipped.length,energyMismatch:result.mismatched,firstSkipped:result.skipped.slice(0,10)};
+ return {version:result.version,energyUnit:result.energyUnit,imported:result.foods.length,skipped:result.skipped.length,energyMismatch:result.mismatched,totalCarbs:result.totalCarbs,firstSkipped:result.skipped.slice(0,10)};
 }
 
 export async function nutridatabazeStatus(db){

@@ -7,7 +7,10 @@ reference subset, then Open Food Facts. A barcode goes to Open Food Facts first.
 
 Czech Food Composition Database, ÚZEI (Institute of Agricultural Economics and
 Information), https://www.nutridatabaze.cz/. Values per 100 g of the edible
-portion; carbohydrates are available carbohydrates [CHO]. Licence terms:
+portion; carbohydrates are available carbohydrates [CHO]. Where only total
+carbohydrates [CHOT] are listed (some ready meals, e.g. McDonald's), total minus
+fibre is used, or the total when fibre is missing too: their stated energy is
+computed from the total. Licence terms:
 https://www.nutridatabaze.cz/licencni-podminky-a-zpracovani-osobnich-udaju/.
 
 - The export ("Výběr z NutriDatabaze.cz") is free but only for registered users.
