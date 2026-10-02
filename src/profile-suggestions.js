@@ -1,11 +1,13 @@
 // Profile values the app can work out itself, so the user fills in only the
 // rest: height from Google Health, everyday activity from average steps,
 // resting heart rate (30-day average) and the highest heart rate in
-// Intervals.icu and Google Health activities over six months.
+// Intervals.icu and Google Health activities over six months, and the birth
+// date from the Google account when the user allowed it.
 // Stored as dashboard_profile row id=2 and refreshed at most once a day; the
 // user's own values (row id=1) always win.
 
-import { effectiveProfile } from "./energy-profile.js";
+import { effectiveProfile, ageFrom } from "./energy-profile.js";
+import { grantedExtras, birthdayScopes } from "./google-scopes.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -79,6 +81,17 @@ export async function googleHeightCm(token, fetchImpl = fetch) {
   return latest ? Math.round(latest.mm / 10) : null;
 }
 
+// Birth date from the Google account (People API); null without a full date.
+export async function googleBirthDate(token, fetchImpl = fetch) {
+  const response = await fetchImpl("https://people.googleapis.com/v1/people/me?personFields=birthdays", { headers: { Authorization: "Bearer " + token, Accept: "application/json" } });
+  if (!response.ok) return null;
+  const birthdays = (await response.json().catch(() => ({}))).birthdays || [];
+  const date = (birthdays.find(b => b?.metadata?.primary && b?.date?.year) || birthdays.find(b => b?.date?.year))?.date;
+  if (!date?.month || !date?.day) return null;
+  const value = `${date.year}-${String(date.month).padStart(2, "0")}-${String(date.day).padStart(2, "0")}`;
+  return ageFrom(value) != null ? value : null;
+}
+
 export async function readSuggestions(db, userId) {
   const row = await db.prepare("SELECT profile_json FROM dashboard_profile WHERE user_id = ? AND id = 2").bind(userId).first().catch(() => null);
   try { return row ? JSON.parse(row.profile_json) : null; } catch { return null; }
@@ -87,7 +100,9 @@ export async function readSuggestions(db, userId) {
 // Recomputes the suggestions when they are missing or older than a day.
 export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, now = Date.now() } = {}) {
   const current = await readSuggestions(env.DB, env.USER_ID);
-  if (current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS) return current;
+  // A newly granted permission refreshes right away instead of the next day.
+  const permissions = JSON.stringify(grantedExtras(env));
+  if (current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return current;
   const averageSteps = await averageDailySteps(env.DB, env.USER_ID, now).catch(() => null);
   const rhr = await averageRestingHeartRate(env.DB, env.USER_ID, now).catch(() => null);
   const hrmax = await observedMaxHeartRate(env.DB, env.USER_ID, now).catch(() => null);
@@ -96,13 +111,20 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
     try { height = (await googleHeightCm(await googleToken(env), fetchImpl)) ?? height; }
     catch (error) { console.error("Google height read failed", error.message); }
   }
+  let birthDate = null;
+  if (env.GOOGLE_REFRESH_TOKEN && googleToken && grantedExtras(env).birthday) {
+    try { birthDate = await googleBirthDate(await googleToken(env, birthdayScopes), fetchImpl); }
+    catch (error) { console.error("Google birth date read failed", error.message); }
+  }
   const next = {
     height,
     activity: activityFromSteps(averageSteps),
     averageSteps,
     rhr,
     hrmax,
-    sources: { height: height ? "google-health" : null, activity: averageSteps ? "steps" : null, rhr: rhr ? "google-health-30d" : null, hrmax: hrmax ? "activities-6m" : null },
+    birthDate,
+    permissions,
+    sources: { birthDate: birthDate ? "google-account" : null, height: height ? "google-health" : null, activity: averageSteps ? "steps" : null, rhr: rhr ? "google-health-30d" : null, hrmax: hrmax ? "activities-6m" : null },
     fetchedAt: new Date(now).toISOString()
   };
   await env.DB.prepare("INSERT INTO dashboard_profile (user_id, id, profile_json) VALUES (?, 2, ?) ON CONFLICT(user_id, id) DO UPDATE SET profile_json = excluded.profile_json")

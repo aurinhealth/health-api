@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { planWeightSync, syncWeights } from "../src/weight-sync.js";
+import { EXTRA_SCOPES } from "../src/google-scopes.js";
 import { ageFrom, normalizeProfile, effectiveProfile } from "../src/energy-profile.js";
 
 const both = { googleConnected: true, intervalsConnected: true };
@@ -13,6 +14,8 @@ test("a Google Health weight goes to Intervals.icu", () => {
 test("an Intervals.icu weight goes to Google Health, or to the app without Google", () => {
   assert.deepEqual(planWeightSync({ intervals: { "2026-10-01": 79.9 } }, both), [{ target: "google", date: "2026-10-01", kg: 79.9 }]);
   assert.deepEqual(planWeightSync({ intervals: { "2026-10-01": 79.9 } }, { googleConnected: false, intervalsConnected: true }), [{ target: "app", date: "2026-10-01", kg: 79.9 }]);
+  // Google connected but no permission to write weight: the app keeps its own copy.
+  assert.deepEqual(planWeightSync({ intervals: { "2026-10-01": 79.9 } }, { ...both, googleWritable: false }), [{ target: "app", date: "2026-10-01", kg: 79.9 }]);
 });
 
 test("a manual app weight goes to Intervals.icu (Google got it when it was saved)", () => {
@@ -36,7 +39,7 @@ test("one sync pass writes, remembers, and does not repeat", async () => {
     if (url.includes("/wellness?")) return Response.json([{ id: "2026-09-30", weight: 80.9 }]);
     return Response.json({});
   };
-  const env = { DB: db, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
+  const env = { DB: db, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"], GOOGLE_SCOPES: [EXTRA_SCOPES.weightWrite] };
   const deps = { googleToken: async () => "t", fetchImpl, now: Date.parse("2026-10-02T10:00:00Z") };
   const first = await syncWeights(env, deps);
   assert.deepEqual(first.written.map(a => `${a.target} ${a.date}`).sort(), ["google 2026-09-30", "intervals 2026-10-01"]);

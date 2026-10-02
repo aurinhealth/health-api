@@ -453,6 +453,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if (request.method === 'DELETE') {
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:'Neznámé připojení.'},{status:400});
       await deleteConnectionSecret(env,body.provider);
+      if(body.provider==='google') await deleteConnectionSecret(env,'google_scopes');
       return Response.json({status:'ok',message:'Připojení je odebrané.'},{headers:{'Cache-Control':'no-store'}});
     }
     if(body.provider!=='intervals'||typeof body.key!=='string'||body.key.trim().length<8||body.key.length>512) return Response.json({message:'Zadej platný API klíč Intervals.icu.'},{status:400});

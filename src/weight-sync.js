@@ -8,6 +8,8 @@
 // through Google, or directly when Google Health is not connected. A ledger
 // of what was written keeps a slow Google sync from causing a second write.
 
+import { grantedExtras } from "./google-scopes.js";
+
 const TOLERANCE_KG = 0.05;
 export const WEIGHT_SYNC_DAYS = 14;
 const pragueDay = iso => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
@@ -15,7 +17,7 @@ const kg = v => { const x = Number(v); return x >= 30 && x <= 300 ? Math.round(x
 const same = (a, b) => a != null && b != null && Math.abs(a - b) < TOLERANCE_KG;
 
 // What to write where, from the latest weight per day in each place.
-export function planWeightSync({ google = {}, manual = {}, intervals = {}, written = {} }, { googleConnected, intervalsConnected }) {
+export function planWeightSync({ google = {}, manual = {}, intervals = {}, written = {} }, { googleConnected, intervalsConnected, googleWritable = googleConnected }) {
   const actions = [];
   const days = new Set([...Object.keys(google), ...Object.keys(manual), ...Object.keys(intervals)]);
   for (const date of [...days].sort()) {
@@ -24,8 +26,9 @@ export function planWeightSync({ google = {}, manual = {}, intervals = {}, writt
     const already = target => same(written[`${target}:${date}`], value);
     if (intervalsConnected && !same(intervals[date], value) && !already("intervals")) actions.push({ target: "intervals", date, kg: value });
     // Manual entries go to Google Health when they are saved (appWeight).
-    if (origin === "intervals" && googleConnected && !already("google")) actions.push({ target: "google", date, kg: value });
-    if (origin === "intervals" && !googleConnected && !already("app")) actions.push({ target: "app", date, kg: value });
+    // Without permission to write to Google Health the app keeps its own copy.
+    if (origin === "intervals" && googleWritable && !already("google")) actions.push({ target: "google", date, kg: value });
+    if (origin === "intervals" && !googleWritable && !already("app")) actions.push({ target: "app", date, kg: value });
   }
   return actions;
 }
@@ -97,7 +100,8 @@ export async function syncWeights(env, { googleToken, fetchImpl = fetch, now = D
   const stored = await storedWeights(env.DB, env.USER_ID, oldest);
   const written = await writtenLedger(env.DB, env.USER_ID, oldest);
   const intervals = await intervalsWeights(env, oldest, newest, fetchImpl);
-  const actions = planWeightSync({ ...stored, intervals, written }, { googleConnected, intervalsConnected });
+  const googleWritable = googleConnected && grantedExtras(env).weightWrite;
+  const actions = planWeightSync({ ...stored, intervals, written }, { googleConnected, intervalsConnected, googleWritable });
   let token = null;
   const done = [];
   for (const action of actions) {
