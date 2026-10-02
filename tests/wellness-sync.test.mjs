@@ -16,13 +16,15 @@ function db() {
   add("google-wearables", "steps", null, 5000, "primary", "2026-10-01T15:00:00Z");
   add("google-wearables", "steps", null, 99999, "duplicate", "2026-10-01T15:00:00Z");
   add("google-wearables", "daily-resting-heart-rate", "2026-09-01", 70);
+  // Heart rate during the night (and one sample after waking up, left out).
+  for (const [t, bpm] of [["2026-09-30T22:30:00Z", 58], ["2026-10-01T01:00:00Z", 50], ["2026-10-01T04:00:00Z", 48], ["2026-10-01T06:30:00Z", 95]]) add("google-wearables", "heart-rate", t, bpm);
   return d;
 }
-const sleep = [{ date: "2026-10-01", durationMin: 412 }, { date: "2026-10-01", durationMin: 25 }];
+const sleep = [{ date: "2026-10-01", durationMin: 412, startTime: "2026-09-30T22:00:00Z", endTime: "2026-10-01T05:30:00Z" }, { date: "2026-10-01", durationMin: 25 }];
 
-test("Google wellness per day: daily values, summed steps, the night's main sleep", async () => {
+test("Google wellness per day: daily values, summed steps, the night's main sleep and its heart rate", async () => {
   const days = await googleWellness(db(), 7, "2026-09-25", sleep);
-  assert.deepEqual(days["2026-10-01"], { restingHR: 51, hrv: 64.4, spO2: 96.2, respiration: 14.4, vo2max: 52.3, steps: 8000, sleepSecs: 412 * 60 });
+  assert.deepEqual(days["2026-10-01"], { restingHR: 51, hrv: 64.4, spO2: 96.2, respiration: 14.4, vo2max: 52.3, steps: 8000, sleepSecs: 412 * 60, avgSleepingHR: 52 });
   assert.equal(days["2026-09-01"], undefined);
 });
 
@@ -46,7 +48,7 @@ test("one pass writes to Intervals.icu, remembers, and does not repeat", async (
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
   const deps = { fetchImpl, sleepSessions: async () => sleep, now: Date.parse("2026-10-02T10:00:00Z") };
   await syncWellnessToIntervals(env, deps);
-  assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, spO2: 96.2, respiration: 14.4, vo2max: 52.3, steps: 8000, sleepSecs: 24720 }]);
+  assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, spO2: 96.2, respiration: 14.4, vo2max: 52.3, steps: 8000, sleepSecs: 24720, avgSleepingHR: 52 }]);
   puts.length = 0;
   await syncWellnessToIntervals(env, deps);
   assert.deepEqual(puts, []);

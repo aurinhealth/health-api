@@ -1,10 +1,13 @@
-// Copies Google Health wellness into Intervals.icu: sleep, steps, resting
-// heart rate, HRV, SpO2, respiration, VO2max and body fat, per day.
+// Copies Google Health wellness into Intervals.icu: sleep, average sleeping
+// heart rate, steps, resting heart rate, HRV, SpO2, respiration, VO2max and
+// body fat, per day.
 //
 // A field is written only when Intervals.icu has no value for that day or the
 // value there is one this sync wrote before (a ledger remembers what it
 // wrote). So data Intervals.icu gets from elsewhere (a Garmin, a manual entry)
 // is never overwritten, while today's steps can grow through the day.
+
+import { heartRateFromSamples } from "./index.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -17,10 +20,12 @@ const DAILY = {
   "daily-vo2-max": "vo2max",
   "body-fat": "bodyFat"
 };
-const ROUND = { restingHR: 0, hrv: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0 };
+const ROUND = { restingHR: 0, hrv: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0, avgSleepingHR: 0 };
 const TOLERANCE = { steps: 1, sleepSecs: 60 };
 
 const pragueDay = iso => /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? String(iso) : new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
+// Google sample times are stored as RFC 3339 UTC without milliseconds.
+const utc = iso => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "Z");
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };
 const same = (field, a, b) => a != null && b != null && Math.abs(Number(a) - Number(b)) <= (TOLERANCE[field] ?? 0.05);
 
@@ -38,10 +43,17 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   const stepsPerDay = {};
   for (const r of steps) { const d = pragueDay(r.start_time); stepsPerDay[d] = (stepsPerDay[d] || 0) + Number(r.value_numeric || 0); }
   for (const [d, v] of Object.entries(stepsPerDay)) put(d, "steps", v);
-  // The night's main sleep: the longest session ending that day.
+  // The night's main sleep: the longest session ending that day. Its average
+  // heart rate comes from Google Health's heart-rate samples in that window.
   const longest = {};
-  for (const s of sleepSessions) if (s.date >= oldest && Number(s.durationMin) > 0) longest[s.date] = Math.max(longest[s.date] || 0, Number(s.durationMin));
-  for (const [d, min] of Object.entries(longest)) put(d, "sleepSecs", min * 60);
+  for (const s of sleepSessions) if (s.date >= oldest && Number(s.durationMin) > 0 && Number(s.durationMin) > Number(longest[s.date]?.durationMin || 0)) longest[s.date] = s;
+  for (const [d, s] of Object.entries(longest)) {
+    put(d, "sleepSecs", Number(s.durationMin) * 60);
+    if (!s.startTime || !s.endTime) continue;
+    const samples = (await db.prepare(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
+      AND sample_time >= ? AND sample_time <= ? LIMIT 5000`).bind(userId, utc(s.startTime), utc(s.endTime)).all()).results || [];
+    put(d, "avgSleepingHR", heartRateFromSamples({ start: s.startTime, end: s.endTime }, samples));
+  }
   return days;
 }
 
