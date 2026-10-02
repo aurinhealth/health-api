@@ -26,7 +26,7 @@ entrypoint.js → sheets-gateway.js → v400.js → v323fix.js → v323.js → i
 - `sheets-gateway.js`: síla, výživa, denní plán, rozhodnutí dne (`/strength/*`, `/nutrition/*`, `/daily/plan`, …).
 - `v400.js`: `/analysis/energy`, `/analysis/day-plan`, `/food/day-plan`.
 - `v323fix.js`: opravuje klasifikaci plánovaných tréninků z Intervals.icu pro všechny cesty pod sebou.
-- `v323.js`: `/food/recommend` a základ `/analysis/energy`.
+- `v323.js`: `/food/recommend` (doporučení jídel k osobnímu cíli) a kontext tréninku k `/analysis/energy`.
 - `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, deník jídla, cron.
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `sheets-gateway.js`, ne do vrstev `v*.js`. Ty se postupně ruší.
@@ -48,7 +48,7 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 
 | Název | K čemu |
 | --- | --- |
-| `STRENGTH_API_KEY` | API klíč správce (MCP, OAuth, interní volání, automatizace). Odvozuje se z něj i šifrovací klíč připojení uživatelů, proto ho neměň bez migrace uložených připojení. |
+| `STRENGTH_API_KEY` | API klíč správce (MCP, interní volání, automatizace); zadává se při autorizaci OAuth. Klienti OAuth (ChatGPT) dostanou místo něj podepsaný token jen pro `/mcp` s platností 1 hodina. Odvozuje se z něj i šifrovací klíč připojení uživatelů, proto ho neměň bez migrace uložených připojení. |
 | `SESSION_SECRET` | Podpis přihlášení do dashboardu. Když chybí, použije se `STRENGTH_API_KEY`. Nastavení nebo změna jednou odhlásí všechny uživatele. |
 | `MCP_API_KEY` | Volitelně samostatný klíč pro `/mcp`; jinak platí `STRENGTH_API_KEY`. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Přihlášení přes Google a připojení Google Health. |

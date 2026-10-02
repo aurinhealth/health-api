@@ -87,15 +87,28 @@ async function handleToken(request, env) {
     if (!payload || payload.typ !== "code" || payload.client_id !== clientId || payload.redirect_uri !== redirectUri || payload.exp < Math.floor(Date.now() / 1000)) return json({ error: "invalid_grant" }, 400);
     const digest = await sha256(verifier);
     if (base64url(digest) !== payload.challenge) return json({ error: "invalid_grant" }, 400);
-    return json({ access_token: secret, token_type: "Bearer", expires_in: ACCESS_TTL, refresh_token: await sign({ typ: "refresh", client_id: clientId, exp: Math.floor(Date.now() / 1000) + REFRESH_TTL, iat: Math.floor(Date.now() / 1000) }, secret), scope: "strength:read strength:write" });
+    return json({ access_token: await accessToken(clientId, secret), token_type: "Bearer", expires_in: ACCESS_TTL, refresh_token: await sign({ typ: "refresh", client_id: clientId, exp: Math.floor(Date.now() / 1000) + REFRESH_TTL, iat: Math.floor(Date.now() / 1000) }, secret), scope: "strength:read strength:write" });
   }
   if (grantType === "refresh_token") {
     const refresh = String(form.get("refresh_token") || "");
     const payload = await verify(refresh, secret);
     if (!payload || payload.typ !== "refresh" || payload.exp < Math.floor(Date.now() / 1000)) return json({ error: "invalid_grant" }, 400);
-    return json({ access_token: secret, token_type: "Bearer", expires_in: ACCESS_TTL, scope: "strength:read strength:write" });
+    return json({ access_token: await accessToken(payload.client_id, secret), token_type: "Bearer", expires_in: ACCESS_TTL, scope: "strength:read strength:write" });
   }
   return json({ error: "unsupported_grant_type" }, 400);
+}
+
+// OAuth clients get a signed access token that is valid for /mcp only and
+// expires after ACCESS_TTL, never the owner API key itself.
+async function accessToken(clientId, secret) {
+  const now = Math.floor(Date.now() / 1000);
+  return sign({ typ: "access", client_id: clientId, scope: "strength:read strength:write", exp: now + ACCESS_TTL, iat: now }, secret);
+}
+
+export async function verifyAccessToken(token, env) {
+  if (!env.STRENGTH_API_KEY || !token) return null;
+  const payload = await verify(token, env.STRENGTH_API_KEY);
+  return payload && payload.typ === "access" && payload.exp >= Math.floor(Date.now() / 1000) ? payload : null;
 }
 
 async function sign(payload, secret) {
