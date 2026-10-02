@@ -17,5 +17,5 @@ const result=parseNutridatabaze(await readTable(readFileSync(file),file),{versio
 if(!result.foods.length){console.error('No foods were read from the file.');process.exit(1);}
 const out=resolve(outArg||fileURLToPath(new URL(`../data/private/nutridatabaze-${result.version}.sql`,import.meta.url)));
 mkdirSync(dirname(out),{recursive:true});writeFileSync(out,nutridatabazeSql(result.foods,result.version).join('\n')+'\n');
-console.log(JSON.stringify({version:result.version,energy:result.energyUnit,imported:result.foods.length,skipped:result.skipped.length,energyMismatch:result.mismatched,firstSkipped:result.skipped.slice(0,10),sql:out},null,1));
+console.log(JSON.stringify({version:result.version,energy:result.energyUnit,imported:result.foods.length,skipped:result.skipped.length,energyMismatch:result.mismatched,totalCarbs:result.totalCarbs,firstSkipped:result.skipped.slice(0,10),sql:out},null,1));
 console.log(`\nNahrání do produkce:\n  npx --yes wrangler@4 d1 execute health-data --remote --file="${out}"`);
