@@ -144,7 +144,7 @@ async function staticResponses() {
     "/app/api/activity-detail": activitySample(),
     "/app/api/activities": { status: "ok", count: 3, activities: [] }, "/app/api/nutrition": { status: "ok", records: [] }, "/app/api/sleep": { status: "ok", sessions: sleep },
     "/app/api/google-health": { status: "ok", wellness: [] }, "/app/api/inbox": { status: "ok", items: [] }, "/app/api/food/day": { status: "ok", preview: true, entries: demoFoods, totals: {} },
-    "/app/api/gym/exercises": { status: "ok", exercises: gymExerciseCatalog() }, "/app/api/training-profile": trainingProfile(), "/app/api/profile": { status: "ok" },
+    "/app/api/gym/exercises": { status: "ok", exercises: gymExerciseCatalog() }, "/app/api/training-profile": trainingProfile(), "/app/api/profile": { status: "ok", profile: null, suggestions: { height: 182, activity: "light", averageSteps: 6400, rhr: 52, hrmax: 187 } },
     "/app/api/workouts/scheduled": { status: "ok", workouts: [{ workout_id: searches.ride.workouts[0].id, name: searches.ride.workouts[0].name, sport: "ride", scheduled_date: day(1, MON) <= T ? day(1, MON) : T, status: "completed", completed_percent: 96, primary_system: searches.ride.workouts[0].primary_system, duration_minutes: searches.ride.workouts[0].duration_minutes }] },
     searches, generated, weeks: { [MON]: week(MON), [day(-7, MON)]: week(day(-7, MON)), [day(7, MON)]: week(day(7, MON)) }
   };

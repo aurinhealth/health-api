@@ -105,7 +105,7 @@ test("the dashboard collects activity, sport, goal and target weight", () => {
   for (const id of ["profileActivity", "profileSportHours", "profileGoal", "profileTargetWeight"]) assert.ok(client.includes(`['${id}',`), id);
   assert.match(client, /Kalorický cíl zatím nepočítám/);
   // Saving the base fields must not drop the new ones.
-  assert.match(client, /JSON\.stringify\(\{\.\.\.appProfile\(\),sex:\$\('profileSex'\)\.value,/);
+  assert.match(client, /JSON\.stringify\(\{\.\.\.savedProfile\(\),sex:\$\('profileSex'\)\.value,/);
 });
 
 test("without Google Health a manual weight is stored here and feeds the target", async () => {

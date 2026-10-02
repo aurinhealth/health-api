@@ -88,9 +88,9 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
 
 export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "věk", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" };
 
-// The user's own values, with what the app worked out itself (height from
-// Google Health, activity from steps) filling only the empty fields.
-export const SUGGESTED_FIELDS = ["height", "activity"];
+// The user's own values, with what the app worked out itself (height,
+// activity, resting and maximum heart rate) filling only the empty fields.
+export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax"];
 export function effectiveProfile(saved, suggested) {
   const profile = { ...(saved || {}) };
   for (const key of SUGGESTED_FIELDS) if ((profile[key] == null || profile[key] === "") && suggested?.[key]) profile[key] = suggested[key];

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { activityFromSteps, averageDailySteps, googleHeightCm, refreshSuggestions, loadEffectiveProfile } from "../src/profile-suggestions.js";
+import { activityFromSteps, averageDailySteps, googleHeightCm, refreshSuggestions, loadEffectiveProfile, averageRestingHeartRate, observedMaxHeartRate, activityMaxHeartRate } from "../src/profile-suggestions.js";
 import { effectiveProfile } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
 
@@ -74,4 +74,27 @@ test("with height and activity from Google, only sex, age and goal are asked", a
   assert.deepEqual((await daily()).nutrition.missing, ["sex", "age", "goal"]);
   d.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify({ sex: "female", age: 30, goal: "maintain" }));
   assert.equal((await daily()).nutrition.calorieTarget, Math.round(1320.25 * 1.3));
+});
+
+test("resting heart rate is the 30-day Google Health average", async () => {
+  const d = db();
+  const add = (daysAgo, bpm, json = false) => d.sqlite.prepare("INSERT INTO health_datapoints (user_id, data_type, sample_time, value_numeric, payload_json) VALUES (7, 'daily-resting-heart-rate', ?, ?, ?)")
+    .run(new Date(NOW - daysAgo * 86400000).toISOString(), json ? null : bpm, json ? JSON.stringify({ dailyRestingHeartRate: { beatsPerMinute: bpm } }) : "{}");
+  add(1, 50); add(2, 52); add(3, 54, true); add(40, 90);
+  assert.equal(await averageRestingHeartRate(d, 7, NOW), 52);
+});
+
+test("maximum heart rate is the highest in Intervals and Google activities over six months", async () => {
+  const d = db();
+  const add = (source, type, daysAgo, payload) => d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, start_time, payload_json) VALUES (7, ?, ?, ?, ?)")
+    .run(source, type, new Date(NOW - daysAgo * 86400000).toISOString(), JSON.stringify(payload));
+  add("intervals", "activity", 10, { max_heartrate: 183 });
+  add("intervals", "activity", 20, { max_heartrate: 176 });
+  add("google-wearables", "exercise", 30, { exercise: { metricsSummary: { maxHeartRateBeatsPerMinute: 187 } } });
+  add("intervals", "activity", 300, { max_heartrate: 199 });
+  assert.equal(await observedMaxHeartRate(d, 7, NOW), 187);
+  // A lone spike far above every other activity is a sensor artefact.
+  add("intervals", "activity", 5, { max_heartrate: 214 });
+  assert.equal(await observedMaxHeartRate(d, 7, NOW), 187);
+  assert.equal(activityMaxHeartRate({ average_heartrate: 150 }), null);
 });
