@@ -81,33 +81,38 @@ export async function readTable(bytes,fileName=''){
  return /\.xlsx$/i.test(fileName)||zip?parseXlsx(bytes):parseCsv(decodeText(bytes));
 }
 
-// Columns are found by EuroFIR code first ([CHO] = available carbohydrates,
-// [CHOT] = total), then by the Czech name. Conversion factors are never nutrients.
+// Columns are found by EuroFIR code first, bare ("PROT [g]", as in the export)
+// or in brackets ("Bílkoviny [PROT]"); CHO = available carbohydrates, CHOT =
+// total. Then by the Czech name. Conversion factors (NCF, FACF) are never nutrients.
+const code=(l,...codes)=>{const words=l.split(/[^a-z0-9]+/);return codes.some(c=>words.includes(c));};
 const COLUMNS={
- code:l=>/\bkod potraviny\b|\bfcdb\b|\bfood code\b|^kod$/.test(l)&&!/eurofir/.test(l),
- name:l=>/^nazev potraviny$|^nazev$|nazev.*(cesk|cest|cz\b)/.test(l)&&!/angl|engl|latin/.test(l),
- name_en:l=>/nazev.*(angl|engl)|english/.test(l),
- edible:l=>/jedl[yi] podil|edible/.test(l),
- protein:l=>/\[prot\]|\bbilkovin/.test(l),
- fat:l=>/\[fat\]|^tuky\b|\btuky celk/.test(l)&&!/mastn/.test(l),
- carbs:l=>/\[cho\]|vyuziteln/.test(l),
- carbs_total:l=>/\[chot\]|sacharidy celk|^celkove$/.test(l),
- fiber:l=>/\[fibt\]|vlaknin/.test(l),
- salt:l=>/\[nacl\]|\bsul\b/.test(l),
- sodium:l=>/\[na\]|\bsodik/.test(l),
+ code:l=>code(l,'origfdcd','fdcd')||/\bkod potraviny\b|\bfcdb\b|\bfood code\b|^kod$/.test(l)&&!/eurofir/.test(l),
+ name:l=>code(l,'origfdnm','fdnm')||/^nazev potraviny$|^nazev$|nazev.*(cesk|cest|cz\b)/.test(l)&&!/angl|engl|latin/.test(l),
+ name_en:l=>code(l,'engfdnam')||/nazev.*(angl|engl)|english/.test(l),
+ edible:l=>code(l,'edible')||/jedl[yi] podil/.test(l),
+ protein:l=>code(l,'prot')||/\bbilkovin/.test(l),
+ fat:l=>code(l,'fat')||/^tuky\b|\btuky celk/.test(l)&&!/mastn/.test(l),
+ carbs:l=>code(l,'cho')||/vyuziteln/.test(l),
+ carbs_total:l=>code(l,'chot')||/sacharidy celk|^celkove$/.test(l),
+ fiber:l=>code(l,'fibt')||/vlaknin/.test(l),
+ salt:l=>code(l,'nacl')||/\bsul\b/.test(l),
+ // "na" is also a Czech word, so a bare code counts only at the start.
+ sodium:l=>/^na\b|\[na\]|\bsodik/.test(l),
 };
 const LABELS={code:'kód potraviny',name:'název potraviny',protein:'bílkoviny',fat:'tuky'};
 const isFactor=l=>/faktor|factor|koeficient/.test(l);
 const isEnergy=l=>/\benerc\b|energ/.test(l);
 
-export function parseNutridatabaze(rows,{version}={}){
+export function parseNutridatabaze(rows,{version,fileName=''}={}){
  rows=rows.map(r=>r.map(c=>typeof c==='string'?c.trim():c));
  const score=row=>row.filter(c=>{const l=fold(c);return Object.entries(COLUMNS).some(([k,m])=>k!=='code'&&k!=='edible'&&m(l)&&!isFactor(l))||isEnergy(l);}).length;
  const headerRow=rows.findIndex(r=>score(r)>=3);
  if(headerRow<0)throw new Error('V souboru chybí řádek s názvy sloupců (energie, bílkoviny, tuky, sacharidy).');
  let dataStart=headerRow+1;while(dataStart<rows.length&&rows[dataStart].filter(c=>nutrientValue(c)!=null).length<3)dataStart++;
- version=version||rows.slice(0,dataStart).flat().map(c=>String(c).match(/\bv(?:erze|ersion)?\s*(\d+\.\d+)\b/i)?.[1]).find(Boolean);
+ // The export has no title row: then the version given in the form, or a "v11.26" in the file name.
+ version=rows.slice(0,dataStart).flat().map(c=>String(c).match(/\bv(?:erze|ersion)?\s*(\d+\.\d+)\b/i)?.[1]).find(Boolean)||version||String(fileName).match(/v(?:erze)?[ _.-]?(\d{1,2})[._](\d{2})(?!\d)/i)?.slice(1).join('.');
  if(!version)throw new Error('V souboru není verze databáze: zadej ji, např. 11.26.');
+ if(!/^\d{1,3}\.\d{1,3}$/.test(String(version)))throw new Error('Verze databáze má tvar číslo.číslo, např. 11.26.');
  // Multi-row headers: merged cells are empty after their first column.
  const width=Math.max(...rows.slice(headerRow,dataStart+1).map(r=>r.length));
  const labels=Array.from({length:width},()=>[]);
@@ -160,7 +165,7 @@ export function nutridatabazeSql(foods,version,rowsPerStatement=200){
 
 // One D1 batch is one transaction: a failed import leaves the previous data intact.
 export async function importNutridatabaze(db,bytes,{fileName='',version}={}){
- const result=parseNutridatabaze(await readTable(bytes,fileName),{version});
+ const result=parseNutridatabaze(await readTable(bytes,fileName),{version,fileName});
  if(!result.foods.length)throw new Error('V souboru nejsou žádné potraviny s úplnými hodnotami.');
  await db.batch(nutridatabazeSql(result.foods,result.version).map(sql=>db.prepare(sql)));
  return {version:result.version,energyUnit:result.energyUnit,imported:result.foods.length,skipped:result.skipped.length,energyMismatch:result.mismatched,firstSkipped:result.skipped.slice(0,10)};
