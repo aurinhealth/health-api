@@ -31,9 +31,10 @@ npx --yes wrangler@4 d1 execute health-data --remote --file=data/private/nutrida
 ```
 
 The parser reads XLSX or CSV (also Czech Excel CSV: semicolons, decimal commas,
-windows-1250), finds columns by EuroFIR code ([ENERC], [PROT], [FAT], [CHO],
-[FIBT], [NACL]) or Czech name, tells kJ from kcal by the values, and takes the
-version from the file title. The import is one D1 transaction: a new version
+windows-1250), finds columns by EuroFIR code (`OrigFdCd`, `OrigFdNm`, `ENERC [kcal]`,
+`PROT [g]`, `FAT [g]`, `CHO [g]`, `FIBT [g]`, `NACL [g]`, as in the export, or in
+brackets) or Czech name, and tells kJ from kcal by the values. The export has no
+version inside, so the form asks for it (default 11.26; the CLI takes `--version`). The import is one D1 transaction: a new version
 replaces the old rows, a bad file changes nothing. The command-line SQL goes to
 `data/private/`, which git ignores. Workers pick up new data within 10 minutes.
 

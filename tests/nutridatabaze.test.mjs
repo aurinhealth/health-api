@@ -88,3 +88,20 @@ test('names with quotes cannot break the generated SQL',async()=>{
  await db.batch(nutridatabazeSql([{code:"1');DROP TABLE nutridatabaze_foods;--",name:"Rock 'n' roll",calories_100g:1,protein_100g:0,carbs_100g:0,fat_100g:0}],'11.26').map(sql=>db.prepare(sql)));
  assert.equal((await db.prepare('SELECT name FROM nutridatabaze_foods').first()).name,"Rock 'n' roll");
 });
+
+// Header row exactly as in the downloaded export (v11.26): bare EuroFIR codes, no title row.
+const exportHeader='OrigFdCd;OrigFdNm;EngFdNam;SciNam;EDIBLE;NCF;FACF;ENERC [kJ];ENERC [kcal];FAT [g];FASAT [g];FAMS [g];FAPU [g];FATRN [g];CHOT [g];CHO [g];SUGAR [g];FIBT [g];PROT [g];ASH [g];NA [mg];NACL [g];WATER [g]';
+const exportCsv=exportHeader+`
+0032;Banány;Bananas, raw;Musa paradisiaca L.;0,63;6,25;0,8;415;98;0,3;0,1;0;0,1;0;23,9;21,6;17;2,3;1,1;0,8;1;tr;73,9
+0360;Nektarinky;Nectarines, raw;Prunus persica;0,9;6,25;0,7;200;48;0,3;0;0,1;0,1;0;11;9,3;8;1,7;1,1;0,5;;;87,6
+`;
+test('the real export header (bare EuroFIR codes, no title row) is read with the version from the form',async()=>{
+ const rows=await readTable(new TextEncoder().encode(exportCsv),'NutriDatabaze.csv');
+ assert.throws(()=>parseNutridatabaze(rows,{fileName:'NutriDatabaze.csv'}),/verze/);
+ assert.throws(()=>parseNutridatabaze(rows,{version:'11.26; DROP'}),/tvar/);
+ const r=parseNutridatabaze(rows,{version:'11.26'});
+ assert.equal(r.energyUnit,'kcal');
+ assert.deepEqual(r.foods[0],{code:'0032',name:'Banány',name_en:'Bananas, raw',edible_portion:0.63,calories_100g:98,protein_100g:1.1,carbs_100g:21.6,fat_100g:0.3,fiber_100g:2.3,salt_100g:0,version:'11.26'});
+ assert.equal(r.foods[1].salt_100g,null);
+ assert.equal(parseNutridatabaze(rows,{fileName:'vyber_NutriDatabaze_v11.26.xlsx'}).version,'11.26');
+});
