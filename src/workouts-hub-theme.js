@@ -172,6 +172,12 @@ export const workoutsHubTheme = `
   .gym-table td:nth-child(10){grid-column:1;align-self:center;font-size:12px}
   .gym-table td:nth-child(11){grid-column:2/5;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.gym-table td:nth-child(11) .btn{padding:5px 7px;font-size:11px}
   .gym-table td[colspan]{grid-column:1/-1}
+  /* One block per exercise: its name, video and actions once; warm-up sets
+     marked so they do not read as a second round of work sets. */
+  .gym-table tr:not(.gym-first) td:nth-child(2),.gym-table tr:not(.gym-first) td:nth-child(10),.gym-table tr:not(.gym-last) td:nth-child(11){display:none}
+  .gym-table tr:not(.gym-last){border-bottom:1px dashed #20262f}.gym-table tr.gym-first:not(:first-child){margin-top:12px;border-top:1px solid #3a4352;padding-top:14px}
+  .gym-table tr[data-type=WARMUP] td:nth-child(3){color:#f5c26b}.gym-table tr[data-type=WARMUP] td:nth-child(3):before{content:"rozcvička "}
+  .gym-table tr[data-type=WARMUP] td:nth-child(4),.gym-table tr[data-type=WARMUP] td:nth-child(5){color:#9ca6b5}
   #workoutsGym .generate-card .detail-heading .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%}#workoutsGym .generate-card .detail-heading .actions .btn{padding:7px 4px;font-size:12px}
 }
 /* Phone layer: Dnes, quick add, bottom sheets, gym workout mode */
