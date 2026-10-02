@@ -7,8 +7,6 @@ import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders } from "./connection-secrets.js";
-import { resolveFood, calculateAmount } from './food-sources.js';
-import {foodReferenceDataset} from './food-reference.js';
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
 import {activityDetail} from './activity-detail.js';
@@ -22,9 +20,7 @@ import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
-import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
-import {importNutridatabaze,nutridatabazeStatus} from './nutridatabaze-import.js';
-import {resetNutridatabazeCache} from './nutridatabaze.js';
+import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -47,7 +43,7 @@ import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, 
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
-const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/app/api/food/reference-data','/mcp/health']);
+const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/mcp/health']);
 
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
@@ -79,8 +75,6 @@ export default {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    // Public, licensed reference subset only. This never exports personal foods or journals.
-    if(url.pathname==='/app/api/food/reference-data'&&request.method==='GET')return Response.json(foodReferenceDataset,{headers:{'Cache-Control':'public, max-age=3600','Content-Disposition':'attachment; filename="food-reference-cs.json"'}});
     // Static pages stay independent of storage availability.
     if (STATIC_PATHS.has(url.pathname) && request.method === 'GET') return staticRoute(url);
     try { await ensureTenancy(env.DB, env, { request }); }
@@ -428,8 +422,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
-    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),personal=await searchPersonalFoods(env.DB,name,barcode);let result;try{const brands=['monster','redbull','snickers','hollandia'],word=name.toLowerCase().replace(/\s/g,''),suggestion=brands.filter(b=>foodSimilarity(word,b)>=.7).sort((a,b)=>foodSimilarity(word,b)-foodSimilarity(word,a))[0];result=await resolveFood({name:suggestion||name,barcode,limit:12},{db:env.DB});if(suggestion&&suggestion!==word)result.suggestion=suggestion;}catch(e){if(!personal.length)throw e;result={status:'ok',candidates:[],providerUnavailable:true};}const seen=new Set();result.candidates=[...personal,...(result.candidates?.length?result.candidates:result.product?[result.product]:[])].filter(p=>{const key=JSON.stringify([String(p.product_name||p.name||'').toLocaleLowerCase('cs'),p.brand||p.brands||'',p.quantity||'',p.nutrition_basis||'',p.nutriments||{}]);if(seen.has(key))return false;seen.add(key);return true;});return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
-    catch(error){return Response.json({message:'Databáze potravin právě neodpovídá. Zkus to znovu nebo načti etiketu.',detail:String(error.message).slice(0,160)},{status:502});}
+    // Only the user's saved foods: everything else comes from a label or the cookbook.
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),candidates=await searchPersonalFoods(env.DB,name,barcode);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:'Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.',detail:String(error.message).slice(0,160)},{status:500});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});
@@ -444,7 +439,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:'Doplň energii i všechna tři makra pro zvolený základ tabulky.'},{status:400});
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
       const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:p.source==='openfoodfacts'?'openfoodfacts':'package_label',note:JSON.stringify({amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error('Uložení selhalo.');
       return Response.json({...result,message:'Jídlo je uložené do denního příjmu.'},{headers:{'Cache-Control':'no-store'}});
     }catch{return Response.json({message:'Jídlo se nepodařilo uložit. Zkontroluj hodnoty a zkus to znovu.'},{status:500});}
@@ -801,15 +796,6 @@ async function handleAdminApi(request, env, url, session) {
   const db = env.RAW_DB;
   try {
     if (url.pathname === "/app/api/admin/users" && request.method === "GET") return Response.json({status:"ok",...await listUsersAndInvites(db)},{headers:{"Cache-Control":"no-store"}});
-    if (url.pathname === "/app/api/admin/nutridatabaze" && request.method === "GET") return Response.json({status:"ok",...await nutridatabazeStatus(db)},{headers:{"Cache-Control":"no-store"}});
-    // The export arrives as the raw file. Only the parsed values are stored, never the file.
-    if (url.pathname === "/app/api/admin/nutridatabaze" && request.method === "POST") {
-      const bytes = new Uint8Array(await request.arrayBuffer());
-      if (!bytes.length || bytes.length > 20 * 1024 * 1024) return Response.json({status:"error",message:"Vyber export z NutriDatabaze (XLSX nebo CSV, nejvýš 20 MB)."},{status:400});
-      const result = await importNutridatabaze(db, bytes, {fileName:decodeURIComponent(request.headers.get("X-File-Name") || ""), version:url.searchParams.get("version") || undefined});
-      resetNutridatabazeCache();
-      return Response.json({status:"ok",...result,message:`Nahráno ${result.imported} potravin z NutriDatabaze verze ${result.version}.`});
-    }
     const body = await request.json().catch(() => ({}));
     if (url.pathname === "/app/api/admin/invites" && request.method === "POST") return Response.json({status:"ok",email:await inviteUser(db, body.email, user.id),message:"Pozvánka je uložená. Uživatel se může přihlásit přes Google."});
     if (url.pathname === "/app/api/admin/invites" && request.method === "DELETE") { await removeInvite(db, body.email); return Response.json({status:"ok",message:"Pozvánka je zrušená."}); }
