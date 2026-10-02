@@ -107,3 +107,28 @@ test("the dashboard collects activity, sport, goal and target weight", () => {
   // Saving the base fields must not drop the new ones.
   assert.match(client, /JSON\.stringify\(\{\.\.\.appProfile\(\),sex:\$\('profileSex'\)\.value,/);
 });
+
+test("without Google Health a manual weight is stored here and feeds the target", async () => {
+  const db = createD1();
+  db.sqlite.exec(`CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY, user_id INTEGER, source_family TEXT, data_type TEXT, external_id TEXT, start_time TEXT, end_time TEXT, sample_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT, record_role TEXT, updated_at TEXT, UNIQUE (user_id, source_family, data_type, external_id));
+    CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, kcal REAL, protein_g REAL, carbs_g REAL, fat_g REAL, status TEXT);
+    CREATE TABLE dashboard_profile (user_id INTEGER NOT NULL, id INTEGER NOT NULL, profile_json TEXT NOT NULL, PRIMARY KEY (user_id, id));`);
+  db.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify({ sex: "female", age: 30, height: 165, activity: "light", sportHours: "3-6", goal: "lose_0.25" }));
+  const env = { DB: db, USER_ID: 7, CONNECTED_PROVIDERS: [] };
+  const saved = await legacy.fetch(new Request("https://internal/app/api/weight", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kg: 60 }) }), env, { waitUntil() {} });
+  assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).google, null);
+  const daily = await (await legacy.fetch(new Request("https://internal/analysis/daily?date=2099-01-05"), env, { waitUntil() {} })).json();
+  // Rest baseline × light activity, plus 4.5 h of sport a week, minus 0.25 kg a week.
+  const rest = Math.round(1320.25 * 1.3), sport = Math.round(4.5 * 60 * 6 / 7);
+  assert.equal(daily.nutrition.calorieTarget, rest + sport - 275);
+});
+
+test("the dashboard works without connections", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  assert.doesNotMatch(entry, /status:"onboarding"/);
+  assert.match(entry, /source:"none",connected:false/);
+  assert.match(client, /id="onboardingSkip"/);
+  assert.match(client, /if\(!me\.missingProviders\?\.length\|\|onboardingSkipped\(\)\)load\(\)/);
+});

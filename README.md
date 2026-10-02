@@ -33,7 +33,7 @@ Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.j
 
 Kalorický cíl, který vidí uživatel, je `nutrition.calorieTarget` z `/analysis/daily` upravený energetickým rozpočtem z Google Health (`applyEnergyBudget` v `energy-budget.js`), pokud má uživatel vyplněný profil.
 
-Základ cíle je osobní (`energy-profile.js`): klidový metabolismus podle Mifflin-St Jeor (pohlaví, věk, výška, váha) × denní aktivita mimo sport, minus týdenní cíl (hubnutí, udržování, přibírání). Trénink přidávají propojené zdroje; bez nich odhad sportu z profilu. Bez váhy nebo úplného profilu se cíl nepočítá a dashboard řekne, co chybí. Správce si do vyplnění profilu ponechává dřívější kalibraci (2550 kcal klidový výdej, −550 kcal).
+Základ cíle je osobní (`energy-profile.js`): klidový metabolismus podle Mifflin-St Jeor (pohlaví, věk, výška, váha) × denní aktivita mimo sport, minus týdenní cíl (hubnutí, udržování, přibírání). Trénink přidávají propojené zdroje; bez nich odhad sportu z profilu. Propojení Google Health a Intervals.icu je volitelné: bez něj dashboard běží z ručních záznamů. Bez váhy nebo úplného profilu se cíl nepočítá a dashboard řekne, co chybí. Správce si do vyplnění profilu ponechává dřívější kalibraci (2550 kcal klidový výdej, −550 kcal).
 
 ## Cron
 

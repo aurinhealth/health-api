@@ -311,8 +311,6 @@ async function loadCoachInputs(env,ctx,internalAuth,date){
   return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])}};
 }
 
-// Available before the required providers are connected.
-const SETUP_API_PATHS = new Set(["/app/api/me", "/app/api/connections", "/app/api/profile", "/app/api/gym/exercises", "/app/api/training-profile", "/app/api/training-profile/estimate"]);
 
 async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
@@ -320,9 +318,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env)},{headers:{"Cache-Control":"no-store"}});
   }
   if (url.pathname.startsWith("/app/api/admin/")) return handleAdminApi(request, env, url, session);
-  if (!SETUP_API_PATHS.has(url.pathname) && missingProviders(env).length) {
-    return Response.json({status:"onboarding",message:"Nejdřív připoj Google Health a Intervals.icu.",missingProviders:missingProviders(env)},{status:409,headers:{"Cache-Control":"no-store"}});
-  }
+  // Connections are optional: without them the dashboard works from manual
+  // entries (weight, food) and the profile; missingProviders drives the
+  // connection prompt in the client.
   if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
@@ -570,7 +568,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const oldest = new Date(newest.getTime() - days * 86400000);
       const isoDate = d => d.toISOString().slice(0,10);
       const apiKey = String(env.INTERVALS_API_KEY || "");
-      if (!apiKey) return Response.json({status:"error",message:"INTERVALS_API_KEY is not configured"},{status:503});
+      if (!apiKey) return Response.json({status:"ok",source:"none",connected:false,days,wellness:[]},{headers:{"Cache-Control":"no-store"}});
       const auth = "Basic " + btoa("API_KEY:" + apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(isoDate(oldest))+"&newest="+encodeURIComponent(isoDate(newest));
       const response = await fetch(target,{headers:{Authorization:auth,Accept:"application/json"}});
@@ -584,6 +582,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
 
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
+    if (missingProviders(env).length === 2) return Response.json({status:"ok",message:"Žádná služba není propojená, není co synchronizovat."},{headers:{"Cache-Control":"no-store"}});
     ctx.waitUntil(legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx).then(async r=>{if(!r.ok)console.error('Recent Google sync failed',r.status);}).catch(e=>console.error('Recent Google sync failed',e.message)));
     const internal = new URL("/sync/all", request.url);
     ctx.waitUntil(

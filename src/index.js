@@ -175,14 +175,18 @@ async function appWeight(env, request) {
   const value = Number(body?.kg);
   if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:"Neplatná hmotnost."},{status:400});
   const date = body?.date || pragueDate(), at = date+"T12:00:00+02:00";
-  const token = await googleToken(env);
-  const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
-    method:"POST",
-    headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
-    body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
-  });
-  const google = await response.json().catch(()=>({}));
-  if (!response.ok) return Response.json({status:"error",message:"Google Health weight write failed",google},{status:response.status});
+  // With Google Health connected the weight goes there too; without it, only here.
+  let google = null;
+  if (env.GOOGLE_REFRESH_TOKEN) {
+    const token = await googleToken(env);
+    const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
+      method:"POST",
+      headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
+      body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
+    });
+    google = await response.json().catch(()=>({}));
+    if (!response.ok) return Response.json({status:"error",message:"Google Health weight write failed",google},{status:response.status});
+  }
   await savePoint(env,"manual","weight",{value_kg:value,source:"manual",google_operation:google},value,"kg",at,at,at,"manual-weight:"+date);
   return Response.json({status:"ok",date,kg:value,google});
 }
