@@ -16,6 +16,17 @@ function numberOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+// A blank entry on a completed set means the prescribed performance.
+// Rep ranges and timed/AMRAP targets cannot tell us how many reps were done.
+export function resolveStrengthPerformance(set) {
+  const fixedReps = text(set.plannedReps);
+  return {
+    actualKg: numberOrNull(set.actualKg) ?? numberOrNull(set.plannedKg),
+    actualReps: numberOrNull(set.actualReps) ??
+      (/^[0-9]+$/.test(fixedReps) && Number(fixedReps) > 0 ? Number(fixedReps) : null)
+  };
+}
+
 function bool(v) {
   const s = text(v).toLowerCase();
   return s === "true" || s === "1" || s === "ano" || s === "yes" || s === "✓" || s === "☑";
@@ -150,6 +161,7 @@ export async function syncStrengthSheet(db, values) {
 
   for (const row of parsed.rows) {
     const sourceKey = `${parsed.date}:${row.sheetRow}`;
+    const performance = row.completed ? resolveStrengthPerformance(row) : row;
     await db.prepare(`
       INSERT INTO strength_sets (user_id, 
         workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
@@ -181,8 +193,8 @@ export async function syncStrengthSheet(db, values) {
       row.setNo,
       row.plannedKg,
       row.plannedReps,
-      row.actualKg,
-      row.actualReps,
+      performance.actualKg,
+      performance.actualReps,
       row.rpe,
       row.completed ? 1 : 0,
       row.note,
@@ -220,10 +232,9 @@ export async function importStrengthHistory(db, workout) {
     const type = text(s.type || "WORK").toUpperCase();
     const exercise = normalizeExerciseName(text(s.exercise));
     if (!exercise || !/^(WARMUP|WORK)$/.test(type)) continue;
-    const actualKg = numberOrNull(s.actualKg);
-    const actualReps = numberOrNull(s.actualReps);
     const plannedKg = numberOrNull(s.plannedKg ?? s.actualKg);
     const plannedReps = text(s.plannedReps ?? s.actualReps);
+    const { actualKg, actualReps } = resolveStrengthPerformance({ ...s, plannedKg, plannedReps });
     const setNo = numberOrNull(s.setNo);
     const rpe = numberOrNull(s.rpe);
     const note = text(s.note);

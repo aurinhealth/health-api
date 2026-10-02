@@ -166,7 +166,7 @@ test("generator treats aliased recent leg curl as the same exercise", () => {
   assert.ok(!plan.rows.some(row => row[0] === "WORK" && row[1] === "Prone leg curl Prime"));
 });
 
-test("sync guard accepts matching null values", () => {
+test("sync guard accepts blank actuals stored with planned weight", () => {
   const completed = [{
     sheetRow: 10,
     type: "WORK",
@@ -185,7 +185,7 @@ test("sync guard accepts matching null values", () => {
     set_no: 1,
     planned_kg: 10,
     planned_reps: "8–15",
-    actual_kg: null,
+    actual_kg: 10,
     actual_reps: null,
     rpe: null,
     completed: 1
