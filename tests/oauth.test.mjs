@@ -33,7 +33,11 @@ test("the access token opens /mcp; refresh, forged and other tokens do not", asy
   assert.equal((await toolsList(response.access_token)).status, 200);
   assert.equal((await toolsList(env.STRENGTH_API_KEY)).status, 200);
   assert.equal((await toolsList(response.refresh_token)).status, 401);
-  assert.equal((await toolsList(response.access_token.slice(0, -2) + "xx")).status, 401);
+  // Change a character in the middle of the signature: the last base64
+  // character carries padding bits, so changing it can leave the bytes as they were.
+  const sig = response.access_token.indexOf(".") + 10;
+  const forged = response.access_token.slice(0, sig) + (response.access_token[sig] === "A" ? "B" : "A") + response.access_token.slice(sig + 1);
+  assert.equal((await toolsList(forged)).status, 401);
   assert.equal(await verifyAccessToken(response.access_token, { STRENGTH_API_KEY: "rotated" }), null);
 });
 
