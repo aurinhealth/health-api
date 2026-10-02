@@ -363,9 +363,16 @@ test("strength plan is converted to an Intervals WeightTraining event with set d
   assert.equal(event.type, "WeightTraining");
   assert.equal(event.category, "WORKOUT");
   assert.equal(event.start_date_local, "2026-09-24T00:00:00");
-  assert.match(event.description, /Chest flat press Prime — 1×8–12 @ 42.5 kg/);
-  assert.match(event.description, /Chest flat press Prime — 2×8–12 @ 42.5 kg/);
-  assert.match(event.description, /Hammer curl — 1×8–15 @ 10 kg/);
+  // One line per exercise; paragraphs and lists separated by blank lines so
+  // Intervals.icu does not run them together.
+  assert.match(event.description, /^Proč tenhle trénink: Protect legs for cycling\n\nRozcvička:\n\n- Chest flat press Prime: 17,5 kg × 8\n\nPracovní série:\n\n/);
+  assert.match(event.description, /1\. Chest flat press Prime: 2 × 8–12 @ 42,5 kg\n2\. Hammer curl: 1 × 8–15 @ 10 kg/);
+  assert.doesNotMatch(event.description, /kcal/);
+  assert.equal(event.calories, undefined);
+  // With the athlete's weight the estimate is included.
+  const withWeight = strengthPlanToIntervalsEvent({ date: "2026-09-24", rows: [] }, { weightKg: 80, durationMinutes: 60 });
+  assert.match(withWeight.description, /Odhad výdeje: \d+ kcal · 60 min/);
+  assert.ok(withWeight.calories > 0);
 });
 
 test("nutrition plan increases daily target when a strength plan is present", () => {
@@ -429,4 +436,16 @@ test("adaptive strength volume reduces sets under low readiness", async () => {
   const work=plan.rows.filter(r=>r[0]==="WORK");
   assert.ok(work.length<=9);
   assert.equal(plan.adaptive.volumeModifier,0.75);
+});
+
+test("on a phone, warm-up sets are labelled and each exercise is one block", async () => {
+  const { readFileSync } = await import("node:fs");
+  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  const theme = readFileSync(new URL("../src/workouts-hub-theme.js", import.meta.url), "utf8");
+  // Rows carry their type and where an exercise starts and ends.
+  assert.match(client, /data-type="'\+kind\+'" class="'\+\(prev\[1\]===exercise\?'':'gym-first '\)\+\(next\[1\]===exercise\?'':'gym-last'\)/);
+  assert.match(theme, /tr\[data-type=WARMUP\] td:nth-child\(3\):before\{content:"rozcvička "\}/);
+  assert.match(theme, /tr:not\(\.gym-first\) td:nth-child\(2\)/);
+  // Workout mode counts warm-up and work sets separately.
+  assert.match(client, /\(warm\(cur\)\?'Rozcvička ':'Série '\)\+k\+' z '\+same\.length/);
 });

@@ -165,7 +165,8 @@ async function generateStrengthPlanRoute(env, request, url) {
     try {
       intervals = await writeStrengthPlanToIntervals(env, plan, {
         startTime: body?.startTime || "00:00",
-        durationMinutes: body?.durationMinutes || 60
+        durationMinutes: body?.durationMinutes || 60,
+        weightKg: context?.weightTrend?.latestKg
       });
     } catch (error) {
       intervals = { status: "error", message: error.message };
