@@ -1,3 +1,4 @@
+import { timingSafeEqualString } from "./dashboard-auth.js";
 const CLIENT_ID_PREFIX = "health-strength-";
 const ACCESS_TTL = 3600;
 const REFRESH_TTL = 30 * 24 * 3600;
@@ -63,7 +64,7 @@ async function handleAuthorizePost(request, env) {
   const method = String(form.get("code_challenge_method") || "");
   const key = String(form.get("authorization_key") || "");
   if (!clientId || !isAllowedRedirect(redirectUri) || method !== "S256" || !challenge) return new Response("Invalid OAuth authorization request", { status: 400 });
-  if (!env.STRENGTH_API_KEY || key !== env.STRENGTH_API_KEY) return html("<h1>Authorization failed</h1><p>The authorization key is incorrect.</p>", 403);
+  if (!env.STRENGTH_API_KEY || !timingSafeEqualString(key, env.STRENGTH_API_KEY)) return html("<h1>Authorization failed</h1><p>The authorization key is incorrect.</p>", 403);
   const payload = { typ: "code", client_id: clientId, redirect_uri: redirectUri, challenge, exp: Math.floor(Date.now() / 1000) + 300, iat: Math.floor(Date.now() / 1000) };
   const code = await sign(payload, env.STRENGTH_API_KEY);
   const target = new URL(redirectUri);

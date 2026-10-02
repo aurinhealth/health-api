@@ -1,4 +1,5 @@
 import healthApp from "./sheets-gateway.js";
+import { timingSafeEqualString } from "./dashboard-auth.js";
 import { searchWorkoutLibrary, getCapabilities, scheduleWorkoutInIntervals, recordWorkoutFeedback } from "./workout-library.js";
 
 const MCP_PROTOCOL_VERSION = "2026-07-28";
@@ -47,8 +48,8 @@ export async function handleMcp(request,env){
  if(request.method!=="POST")return new Response("Method Not Allowed",{status:405,headers:{...cors,Allow:"POST, GET"}});
  const expectedKey=env.MCP_API_KEY||env.STRENGTH_API_KEY;
  if(!expectedKey)return json({jsonrpc:"2.0",error:{code:-32603,message:"MCP authentication is not configured"}},500,cors);
- const authorization=request.headers.get("Authorization")||"",demoMode=authorization===`Bearer ${DEMO_API_KEY}`;
- if(!demoMode&&authorization!==`Bearer ${expectedKey}`)return new Response("Unauthorized",{status:401,headers:{...cors,"WWW-Authenticate":'Bearer realm="health-api-mcp"'}});
+ const authorization=request.headers.get("Authorization")||"",demoMode=timingSafeEqualString(authorization,`Bearer ${DEMO_API_KEY}`);
+ if(!demoMode&&!timingSafeEqualString(authorization,`Bearer ${expectedKey}`))return new Response("Unauthorized",{status:401,headers:{...cors,"WWW-Authenticate":'Bearer realm="health-api-mcp"'}});
  let message;try{message=await request.json()}catch{return json({jsonrpc:"2.0",error:{code:-32700,message:"Parse error"}},400,cors)}
  if(!message||message.jsonrpc!=="2.0"||typeof message.method!=="string")return json({jsonrpc:"2.0",id:message?.id??null,error:{code:-32600,message:"Invalid Request"}},400,cors);
  const protocolHeader=request.headers.get("MCP-Protocol-Version");

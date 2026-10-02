@@ -1,4 +1,4 @@
-import { sessionCookie, SESSION_SECONDS } from "./dashboard-auth.js";
+import { sessionCookie, sessionSecret, SESSION_SECONDS } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 
 // "Sign in with Google" for the dashboard. Only identity scopes are requested;
@@ -71,7 +71,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
 
   const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
   const headers = new Headers({ Location: "/app", "Cache-Control": "no-store" });
-  headers.append("Set-Cookie", await sessionCookie(user.id, exp, String(env.STRENGTH_API_KEY)));
+  headers.append("Set-Cookie", await sessionCookie(user.id, exp, sessionSecret(env)));
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
   return new Response(null, { status: 302, headers });
 }
