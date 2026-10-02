@@ -15,7 +15,7 @@ import {activityDetail} from './activity-detail.js';
 import {rideReviewSections} from './ride-analysis.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
-import {energyBudget} from './energy-budget.js';
+import {applyEnergyBudget} from './energy-budget.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
@@ -148,6 +148,14 @@ function staticRoute(url) {
 function pragueToday() {
   const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
   return parts.find(x=>x.type==="year").value+"-"+parts.find(x=>x.type==="month").value+"-"+parts.find(x=>x.type==="day").value;
+}
+
+// The dashboard profile (age, height, sex) or null when none is saved yet.
+async function dashboardProfile(env) {
+  try {
+    const row = await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();
+    return row ? JSON.parse(row.profile_json) : null;
+  } catch { return null; }
 }
 
 async function ensureCoachInboxTable(db) {
@@ -297,7 +305,8 @@ async function loadCoachInputs(env,ctx,internalAuth,date){
     ...weeks.map(w=>internal('/app/api/week?start='+w))
   ]);
   const json=r=>r.json().catch(()=>({}));
-  const [daily,fitness,gym,sleep,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),...weekResponses.map(json)]);
+  const [daily,fitness,gym,sleep,profile,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env),...weekResponses.map(json)]);
+  applyEnergyBudget(daily,profile,health);
   return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])}};
 }
 
@@ -659,6 +668,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ? requestedStart
       : pragueWeekStart();
     const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
+    // Same calorie target as the day view: one Google Health read covers the week.
+    const profile = await dashboardProfile(env);
+    const health = profile ? await googleDashboard(env.DB, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
     const days = await Promise.all(dates.map(async date => {
       const dailyUrl = new URL("/analysis/daily", request.url);
       dailyUrl.searchParams.set("date", date);
@@ -673,7 +685,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       return {
         date,
-        daily: await dailyResponse.json(),
+        daily: applyEnergyBudget(await dailyResponse.json(), profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
         food: await foodResponse.json(),
         recommendations: await recommendResponse.json()
       };
@@ -695,7 +707,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
   const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
-  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first(),health=await googleDashboard(env.DB,date),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
+  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),profile=await dashboardProfile(env);if(profile)applyEnergyBudget(daily,profile,await googleDashboard(env.DB,date));}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });
