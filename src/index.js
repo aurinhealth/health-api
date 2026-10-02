@@ -1,6 +1,9 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { nextUnloggedMeals } from "./nutrition-next.js";
 import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
+import { loadEffectiveProfile } from "./profile-suggestions.js";
+import { writeIntervalsWeight } from "./weight-sync.js";
+import { healthScopes } from "./google-scopes.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -175,20 +178,29 @@ async function appWeight(env, request) {
   const value = Number(body?.kg);
   if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:"Neplatná hmotnost."},{status:400});
   const date = body?.date || pragueDate(), at = date+"T12:00:00+02:00";
-  // With Google Health connected the weight goes there too; without it, only here.
+  // With Google Health connected the weight goes there too; without it, only
+  // here. A refused Google write (no write permission) does not lose the entry.
   let google = null;
   if (env.GOOGLE_REFRESH_TOKEN) {
-    const token = await googleToken(env);
-    const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
-      method:"POST",
-      headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
-      body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
-    });
-    google = await response.json().catch(()=>({}));
-    if (!response.ok) return Response.json({status:"error",message:"Google Health weight write failed",google},{status:response.status});
+    try {
+      const token = await googleToken(env);
+      const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
+        method:"POST",
+        headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
+        body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
+      });
+      google = await response.json().catch(()=>({}));
+      if (!response.ok) { console.error("Google Health weight write failed", response.status); google = { error: response.status }; }
+    } catch (error) { console.error("Google Health weight write failed", error.message); google = { error: error.message }; }
   }
   await savePoint(env,"manual","weight",{value_kg:value,source:"manual",google_operation:google},value,"kg",at,at,at,"manual-weight:"+date);
-  return Response.json({status:"ok",date,kg:value,google});
+  // Intervals.icu gets it right away too; the hourly weight sync retries a failure.
+  let intervals = null;
+  if (env.INTERVALS_API_KEY) {
+    try { await writeIntervalsWeight(env, date, value); intervals = "ok"; }
+    catch (error) { console.error("Intervals weight write failed", error.message); intervals = "error"; }
+  }
+  return Response.json({status:"ok",date,kg:value,google,intervals});
 }
 
 // ======================================================
@@ -352,7 +364,9 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
   }
 }
 
-async function googleToken(env) {
+// An access token for the given scopes (Google Health by default, with weight
+// writing when the user granted it).
+export async function googleToken(env, scopes = healthScopes(env)) {
   const response = await fetchWithTimeout(
     "https://oauth2.googleapis.com/token",
 
@@ -367,14 +381,8 @@ async function googleToken(env) {
         refresh_token: env.GOOGLE_REFRESH_TOKEN,
         grant_type: "refresh_token",
         // Health rejects the Sheets ("wise") scope on a shared refresh token.
-        // Request only the previously consented, supported Health scopes.
-        scope: [
-          "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
-          "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
-          "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
-          "https://www.googleapis.com/auth/googlehealth.nutrition.readonly",
-          "https://www.googleapis.com/auth/googlehealth.nutrition.writeonly"
-        ].join(" ")
+        // Request only previously consented scopes for one API at a time.
+        scope: scopes.join(" ")
       })
     }
   );
@@ -2307,8 +2315,7 @@ async function energyForDate(env, date) {
     WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
     ORDER BY sample_time DESC, id DESC LIMIT 1
   `).bind(env.USER_ID).first();
-  const profile = await env.DB.prepare(`SELECT profile_json FROM dashboard_profile WHERE user_id = ? AND id = 1`)
-    .bind(env.USER_ID).first().then(r => r ? JSON.parse(r.profile_json) : null).catch(() => null);
+  const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
   // Sport is estimated from the profile only when no source tracks activities.
   const providers = env.CONNECTED_PROVIDERS;
   const baseline = energyBaseline(profile, weight ? Number(weight.value_numeric) : null, {

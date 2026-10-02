@@ -8,12 +8,14 @@ on:
       - "src/**"
       - "tests/**"
       - "package.json"
+      - "eslint.config.mjs"
       - ".github/workflows/health-strength-tests.yml"
   pull_request:
     paths:
       - "src/**"
       - "tests/**"
       - "package.json"
+      - "eslint.config.mjs"
       - ".github/workflows/health-strength-tests.yml"
 
 permissions:
@@ -35,6 +37,9 @@ jobs:
 
       - name: Check syntax
         run: npm run check
+
+      - name: Lint (undefined variables)
+        run: npm run lint:install && npm run lint
 
       - name: Run tests
         run: npm test

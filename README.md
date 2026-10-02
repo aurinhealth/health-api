@@ -33,7 +33,13 @@ Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.j
 
 Kalorický cíl, který vidí uživatel, je `nutrition.calorieTarget` z `/analysis/daily` upravený energetickým rozpočtem z Google Health (`applyEnergyBudget` v `energy-budget.js`), pokud má uživatel vyplněný profil.
 
-Základ cíle je osobní (`energy-profile.js`): klidový metabolismus podle Mifflin-St Jeor (pohlaví, věk, výška, váha) × denní aktivita mimo sport, minus týdenní cíl (hubnutí, udržování, přibírání). Trénink přidávají propojené zdroje; bez nich odhad sportu z profilu. Propojení Google Health a Intervals.icu je volitelné: bez něj dashboard běží z ručních záznamů. Bez váhy nebo úplného profilu se cíl nepočítá a dashboard řekne, co chybí. Správce si do vyplnění profilu ponechává dřívější kalibraci (2550 kcal klidový výdej, −550 kcal).
+Základ cíle je osobní (`energy-profile.js`): klidový metabolismus podle Mifflin-St Jeor (pohlaví, věk, výška, váha) × denní aktivita mimo sport, minus týdenní cíl (hubnutí, udržování, přibírání). Trénink přidávají propojené zdroje; bez nich odhad sportu z profilu. Propojení Google Health a Intervals.icu je volitelné: bez něj dashboard běží z ručních záznamů. S Google Health se výška, denní aktivita (z průměru kroků za 28 dní), klidový tep (průměr 30 dní) a maximální tep (nejvyšší z aktivit Intervals.icu a Google Health za 6 měsíců) doplní samy (`profile-suggestions.js`, řádek `dashboard_profile` id=2); vlastní hodnoty z profilu mají vždy přednost. Pohlaví Google Health API neposkytuje a věk jen s oprávněním profilu, které aplikace nežádá. Bez váhy nebo úplného profilu se cíl nepočítá a dashboard řekne, co chybí. Správce si do vyplnění profilu ponechává dřívější kalibraci (2550 kcal klidový výdej, −550 kcal).
+
+Věk se počítá z data narození v profilu, takže se aktualizuje sám.
+
+**Váha** je stejná v aplikaci, Google Health a Intervals.icu (`weight-sync.js`). Ručně zapsaná váha jde hned do Google Health i Intervals.icu. Jednou za hodinu (v :30) se porovná posledních 14 dní: váha z Google Health (chytrá váha) jde do Intervals.icu, váha zapsaná v Intervals.icu do Google Health (a odtud do aplikace), bez Google Health rovnou do aplikace. Když se hodnoty za stejný den liší, platí Google Health. Zapsané hodnoty si sync pamatuje, aby nezapisoval dvakrát.
+
+**Wellness do Intervals.icu** (`wellness-sync.js`): spánek, kroky, klidový tep, HRV, SpO2, dech, VO2max a tělesný tuk z Google Health se každou hodinu (v :30) a po tlačítku synchronizace zapíšou do wellness v Intervals.icu za posledních 14 dní. Pole se zapíše jen tehdy, když je v Intervals prázdné, nebo když ho tam zapsala tahle synchronizace. Data z jiných zdrojů (Garmin, ruční zápis) se nepřepisují.
 
 ## Cron
 
@@ -55,6 +61,8 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 | `INTERVALS_API_KEY` | Intervals.icu správce (ostatní uživatelé si klíč ukládají v aplikaci). |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Asistent trenéra. |
 | `OWNER_EMAIL` | Správce aplikace (ve `wrangler.jsonc`). |
+
+Google OAuth: připojení žádá jen scopes Google Health (`google-scopes.js`). Tlačítko „Rozšířit oprávnění Google“ v Nastavení si zvlášť vyžádá zápis váhy (`googlehealth.health_metrics_and_measurements.writeonly`) a datum narození (`user.birthday.read`, People API); obojí musí být povolené na OAuth consent screen a People API zapnuté v Google Cloud. Udělená oprávnění se ukládají k připojení uživatele.
 
 GitHub Actions potřebují `CLOUDFLARE_API_TOKEN` a `CLOUDFLARE_ACCOUNT_ID`; automatizace se k API přihlašují tokenem GitHub OIDC.
 

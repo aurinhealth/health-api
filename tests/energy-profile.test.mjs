@@ -58,7 +58,7 @@ test("without a connected source, weekly sport is part of the estimate", () => {
 
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
-    { sex: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5 });
+    { sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5 });
 });
 
 async function dailyFor({ profile, weight, isOwner = false, providers = ["google", "intervals"] }) {
@@ -105,7 +105,7 @@ test("the dashboard collects activity, sport, goal and target weight", () => {
   for (const id of ["profileActivity", "profileSportHours", "profileGoal", "profileTargetWeight"]) assert.ok(client.includes(`['${id}',`), id);
   assert.match(client, /Kalorický cíl zatím nepočítám/);
   // Saving the base fields must not drop the new ones.
-  assert.match(client, /JSON\.stringify\(\{\.\.\.appProfile\(\),sex:\$\('profileSex'\)\.value,/);
+  assert.match(client, /JSON\.stringify\(\{\.\.\.savedProfile\(\),sex:\$\('profileSex'\)\.value,/);
 });
 
 test("without Google Health a manual weight is stored here and feeds the target", async () => {

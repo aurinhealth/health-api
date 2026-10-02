@@ -17,6 +17,9 @@ import {getCookbookRecipeByPage} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {normalizeProfile} from './energy-profile.js';
+import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
+import {syncWeights} from './weight-sync.js';
+import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
@@ -35,7 +38,7 @@ import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan } from "./gym-plan-store.js";
 import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, PACE_ZONE_MODELS, HR_ZONE_MODELS, powerZones, hrZones } from "./training-zones.js";
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
-import legacyHealthApi from "./index.js";
+import legacyHealthApi, { googleToken } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout } from "./dashboard-auth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
@@ -64,6 +67,13 @@ export default {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
+    // Hourly, half an hour after the Google Health sync: weight the same in the
+    // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
+    // heart rate, HRV, …) copied into Intervals.icu.
+    if (controller.cron === "* * * * *" && new Date().getUTCMinutes() === 30) await forEachUser(env, ["intervals"], async scoped => ({
+      weight: await syncWeights(scoped, { googleToken }).catch(error => ({ error: error.message })),
+      wellness: await syncWellnessToIntervals(scoped, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), scoped, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => ({ error: error.message }))
+    }));
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -151,12 +161,10 @@ function pragueToday() {
   return parts.find(x=>x.type==="year").value+"-"+parts.find(x=>x.type==="month").value+"-"+parts.find(x=>x.type==="day").value;
 }
 
-// The dashboard profile (age, height, sex) or null when none is saved yet.
+// The dashboard profile (age, height, sex, …) with height and activity from
+// Google Health and steps filling the gaps; null when there is nothing yet.
 async function dashboardProfile(env) {
-  try {
-    const row = await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();
-    return row ? JSON.parse(row.profile_json) : null;
-  } catch { return null; }
+  return loadEffectiveProfile(env.DB, env.USER_ID);
 }
 
 async function ensureCoachInboxTable(db) {
@@ -323,7 +331,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // connection prompt in the client.
   if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
   if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
     const date=url.searchParams.get('date')||pragueToday();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
@@ -450,6 +458,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if (request.method === 'DELETE') {
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:'Neznámé připojení.'},{status:400});
       await deleteConnectionSecret(env,body.provider);
+      if(body.provider==='google') await deleteConnectionSecret(env,'google_scopes');
       return Response.json({status:'ok',message:'Připojení je odebrané.'},{headers:{'Cache-Control':'no-store'}});
     }
     if(body.provider!=='intervals'||typeof body.key!=='string'||body.key.trim().length<8||body.key.length>512) return Response.json({message:'Zadej platný API klíč Intervals.icu.'},{status:400});
@@ -583,6 +592,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
     if (missingProviders(env).length === 2) return Response.json({status:"ok",message:"Žádná služba není propojená, není co synchronizovat."},{headers:{"Cache-Control":"no-store"}});
+    // The sync button also pushes weight and wellness to Intervals.icu now, not at :30.
+    if ((env.CONNECTED_PROVIDERS || []).includes("intervals")) ctx.waitUntil((async () => {
+      await syncWeights(env, { googleToken }).catch(error => console.error("Weight sync failed", error.message));
+      await syncWellnessToIntervals(env, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), env, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => console.error("Wellness sync failed", error.message));
+    })());
     ctx.waitUntil(legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx).then(async r=>{if(!r.ok)console.error('Recent Google sync failed',r.status);}).catch(e=>console.error('Recent Google sync failed',e.message)));
     const internal = new URL("/sync/all", request.url);
     ctx.waitUntil(

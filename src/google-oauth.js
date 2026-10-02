@@ -1,12 +1,14 @@
 import { saveConnectionSecret } from './connection-secrets.js';
+import { HEALTH_SCOPES, EXTRA_SCOPES } from './google-scopes.js';
 const GOOGLE_OAUTH_ORIGIN = "https://petrfitnessdata.eu";
-const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly","https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly","https://www.googleapis.com/auth/googlehealth.sleep.readonly","https://www.googleapis.com/auth/googlehealth.nutrition.readonly","https://www.googleapis.com/auth/googlehealth.nutrition.writeonly"];
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
     const origin = GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code"); // Google Sheets access is only needed for the owner's legacy strength sheet.
-    u.searchParams.set("scope", GOOGLE_SCOPES.join(" ")); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
+    // ?extra=1 adds the optional scopes on top of what was already granted.
+    const extra = new URL(request.url).searchParams.get("extra") === "1";
+    u.searchParams.set("scope", [...HEALTH_SCOPES, ...(extra ? Object.values(EXTRA_SCOPES) : [])].join(" ")); if (extra) u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
     return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+encodeURIComponent(state)+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});
   }
   if (pathname !== "/oauth/google/callback" || request.method !== "GET") return null;
@@ -18,6 +20,8 @@ export async function handleGoogleOAuth(request, env, pathname) {
   const data=await response.json();
   if (!response.ok || !data.refresh_token) return html("Google OAuth token exchange failed","Google nevrátil oprávnění pro automatickou synchronizaci. Zkus obnovit souhlas v Nastavení.",502);
   await saveConnectionSecret(env,'google',data.refresh_token);
+  // What the user actually granted; optional scopes may have been declined.
+  await saveConnectionSecret(env,'google_scopes',String(data.scope||HEALTH_SCOPES.join(' ')));
   return new Response(null,{status:302,headers:{Location:'/app#settings','Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
 }
 function html(title,body,status){return new Response("<!doctype html><html><head><meta charset=\"utf-8\"><title>Petr Fitness Data</title></head><body style=\"font-family:system-ui;max-width:760px;margin:50px auto;padding:24px;line-height:1.5\"><h1>"+esc(title)+"</h1>"+body+"</body></html>",{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","Referrer-Policy":"no-referrer"}});}

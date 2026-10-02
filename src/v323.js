@@ -314,7 +314,7 @@ async function foodRecommendV323(env, url) {
     foodTotals: food.totals,
     calorieTarget,
     calorieDelta,
-    estimatedTDEE: adjustedTDEE,
+    estimatedTDEE: Number(energy.final.estimatedTDEE) || null,
     macroTargets: targets,
     remaining,
     nutritionContext: context,
