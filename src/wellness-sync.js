@@ -6,7 +6,7 @@
 // wrote). So data Intervals.icu gets from elsewhere (a Garmin, a manual entry)
 // is never overwritten, while today's steps can grow through the day.
 
-export const WELLNESS_SYNC_DAYS = 7;
+export const WELLNESS_SYNC_DAYS = 14;
 
 // Google Health data type → Intervals.icu wellness field.
 const DAILY = {
