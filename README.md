@@ -31,7 +31,7 @@ entrypoint.js → sheets-gateway.js → v400.js → v323fix.js → v323.js → i
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `sheets-gateway.js`, ne do vrstev `v*.js`. Ty se postupně ruší.
 
-Kalorický cíl, který vidí uživatel, je `nutrition.calorieTarget` z `/analysis/daily` upravený energetickým rozpočtem z Google Health (`applyEnergyBudget` v `energy-budget.js`), pokud má uživatel vyplněný profil.
+Kalorický cíl, který vidí uživatel, je vyšší ze dvou hodnot (`applyEnergyBudget` v `energy-budget.js`): očekávaný den z profilu (`nutrition.calorieTarget` z `/analysis/daily`) a průběžný rozpočet z aktivní energie naměřené Google Health. Ráno tak cíl neleží na minimu a během aktivního dne roste.
 
 Základ cíle je osobní (`energy-profile.js`): klidový metabolismus podle Mifflin-St Jeor (pohlaví, věk, výška, váha) × denní aktivita mimo sport, minus týdenní cíl (hubnutí, udržování, přibírání). Trénink přidávají propojené zdroje; bez nich odhad sportu z profilu. Propojení Google Health a Intervals.icu je volitelné: bez něj dashboard běží z ručních záznamů. S Google Health se výška, denní aktivita (z průměru kroků za 28 dní), klidový tep (průměr 30 dní) a maximální tep (nejvyšší z aktivit Intervals.icu a Google Health za 6 měsíců) doplní samy (`profile-suggestions.js`, řádek `dashboard_profile` id=2); vlastní hodnoty z profilu mají vždy přednost. Pohlaví Google Health API neposkytuje a věk jen s oprávněním profilu, které aplikace nežádá. Bez váhy nebo úplného profilu se cíl nepočítá a dashboard řekne, co chybí. Správce si do vyplnění profilu ponechává dřívější kalibraci (2550 kcal klidový výdej, −550 kcal).
 

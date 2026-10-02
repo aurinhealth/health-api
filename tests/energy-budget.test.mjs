@@ -31,3 +31,16 @@ test("day view, week view and coaches all apply the same energy budget", () => {
   assert.equal(source.match(/applyEnergyBudget\(/g).length, 3);
   assert.match(source, /daily: applyEnergyBudget\(await dailyResponse\.json\(\), profile,/);
 });
+
+test("early in the day the expected day from the profile is the floor of the target", () => {
+  // Morning: 150 kcal of active energy so far gives a running budget far below
+  // a normal day; the profile's expected day (2600 here) holds.
+  const morning = applyEnergyBudget(day(), profile, { today: { activeCalories: 150 } });
+  assert.equal(morning.nutrition.calorieTarget, 2600);
+  assert.equal(morning.nutrition.energyBudget.basis, "profile");
+  assert.equal(morning.nutrition.energyBudget.expectedTarget, 2600);
+  // A very active day: the measured energy takes over.
+  const busy = applyEnergyBudget(day(), profile, { today: { activeCalories: 2000 } });
+  assert.equal(busy.nutrition.calorieTarget, 4000);
+  assert.equal(busy.nutrition.energyBudget.basis, "google-health");
+});
