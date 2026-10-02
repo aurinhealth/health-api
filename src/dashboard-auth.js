@@ -20,7 +20,6 @@ const PUBLIC_PATHS = new Set([
   "/app/logout",
   "/auth/google",
   "/auth/google/callback",
-  "/app/api/food/reference-data",
   "/mcp",
   "/mcp/health",
   "/register",

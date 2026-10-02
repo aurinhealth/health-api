@@ -70,5 +70,5 @@ GitHub Actions potřebují `CLOUDFLARE_API_TOKEN` a `CLOUDFLARE_ACCOUNT_ID`; aut
 
 - `docs/multi-user-setup.md`: více uživatelů, pozvánky, připojení.
 - `docs/workout-library.md`, `docs/cycling-coach-v2.md`: knihovna tréninků a trenér cyklistiky.
-- `docs/food-data-sources.md`: zdroje dat o potravinách a licence, nahrání exportu NutriDatabaze.
+- `docs/food-data-sources.md`: odkud jsou hodnoty potravin (etiketa, moje potraviny, kuchařka).
 - `docs/chatgpt-plugin-submission.md`: MCP / ChatGPT.

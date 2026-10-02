@@ -11,7 +11,7 @@ import { buildWeeklyReview } from "./weekly-review.js";
 import { buildDailyPlan } from "./daily-plan.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
-import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveAndCacheFood, lookupCachedFood, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
+import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveFoodProduct, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
 
 
 export default {
@@ -355,9 +355,7 @@ async function weeklyReviewRoute(env,url) {
 async function foodResolveRoute(env, request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const cached = await lookupCachedFood(env.DB, body);
-    if (cached) return Response.json({ ...cached, cached: true });
-    const result = await resolveAndCacheFood(env.DB, body);
+    const result = await resolveFoodProduct(env.DB, body);
     return Response.json(result, { status: result.status === "not_found" ? 404 : 200 });
   } catch (error) { return Response.json({ status:"error", step:"food_resolve", message:error.message }, { status:502 }); }
 }
@@ -365,9 +363,7 @@ async function foodProductRoute(env, url) {
   try {
     const barcode = url.searchParams.get("barcode");
     const name = url.searchParams.get("name");
-    const cached = await lookupCachedFood(env.DB, { barcode, name });
-    if (cached) return Response.json(cached);
-    const result = await resolveAndCacheFood(env.DB, { barcode, name });
+    const result = await resolveFoodProduct(env.DB, { barcode, name });
     return Response.json(result, { status: result.status === "not_found" ? 404 : 200 });
   } catch (error) { return Response.json({ status:"error", step:"food_product", message:error.message }, { status:502 }); }
 }

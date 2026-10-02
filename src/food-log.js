@@ -1,5 +1,6 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
-import { resolveFood, calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
+import { calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
+import { searchPersonalFoods } from "./personal-foods.js";
 
 const n = (v, fallback = null) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 const text = v => v == null ? "" : String(v).trim();
@@ -16,8 +17,6 @@ export async function ensureFoodLogTable(db) {
     try { await db.prepare(`ALTER TABLE food_log ADD COLUMN ${column[0]} ${column[1]}`).run(); } catch (_) {}
   }
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_food_log_user_0 ON food_log(user_id, date)").run();
-  await db.prepare("CREATE TABLE IF NOT EXISTS food_products (id INTEGER PRIMARY KEY AUTOINCREMENT, barcode TEXT UNIQUE, name TEXT, brand TEXT, quantity TEXT, serving_size TEXT, calories_100g REAL, protein_100g REAL, carbs_100g REAL, fat_100g REAL, fiber_100g REAL, salt_100g REAL, source TEXT NOT NULL, source_url TEXT, confidence TEXT, raw_json TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_food_products_name ON food_products(name)").run();
 }
 
 function recipeId(recipe) {
@@ -66,36 +65,19 @@ export async function getCookbookRecipe({ page, name, recipeId: wantedId } = {})
   return wantedId ? result.recipes.find(r => r.id === wantedId) || null : result.recipes[0] || null;
 }
 function normalizeStatus(status) { const s=text(status).toLowerCase(); return ["planned","eaten","cancelled"].includes(s) ? s : "eaten"; }
-export async function resolveAndCacheFood(db, input = {}) {
-  await ensureFoodLogTable(db);
-  const result = await resolveFood(input, { db });
-  if (result.product?.barcode) {
-    const p = result.product;
-    await db.prepare("INSERT INTO food_products (barcode,name,brand,quantity,serving_size,calories_100g,protein_100g,carbs_100g,fat_100g,fiber_100g,salt_100g,source,source_url,confidence,raw_json,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(barcode) DO UPDATE SET name=excluded.name,brand=excluded.brand,quantity=excluded.quantity,serving_size=excluded.serving_size,calories_100g=excluded.calories_100g,protein_100g=excluded.protein_100g,carbs_100g=excluded.carbs_100g,fat_100g=excluded.fat_100g,fiber_100g=excluded.fiber_100g,salt_100g=excluded.salt_100g,source=excluded.source,source_url=excluded.source_url,confidence=excluded.confidence,raw_json=excluded.raw_json,updated_at=CURRENT_TIMESTAMP").bind(
-      p.barcode,p.name||null,p.brand||null,p.quantity||null,p.serving_size||null,p.calories_100g,p.protein_100g,p.carbs_100g,p.fat_100g,p.fiber_100g,p.salt_100g,p.source,p.source_url||null,p.confidence||null,JSON.stringify(p)
-    ).run();
-  }
-  return result;
-}
-
-export async function lookupCachedFood(db, input = {}) {
-  await ensureFoodLogTable(db);
-  const barcode = normalizeBarcode(input.barcode);
-  if (barcode) {
-    const row = await db.prepare("SELECT * FROM food_products WHERE barcode=?").bind(barcode).first();
-    if (row) return { status:"ok", match:"cache", product:row };
-  }
-  const name = text(input.name);
-  if (name) {
-    const rows = await db.prepare("SELECT * FROM food_products WHERE lower(name) LIKE lower(?) ORDER BY updated_at DESC LIMIT 8").bind("%"+name+"%").all();
-    if (rows.results?.length) return { status:"ok", match:"cache_name", products:rows.results };
-  }
-  return null;
+// Label values first, then the user's saved foods by barcode or name.
+export async function resolveFoodProduct(db, input = {}) {
+  const label = productFromLabel(input);
+  if (label) return { status:"ok", match:"package_label", product:label, candidates:[] };
+  const name = text(input.name), barcode = normalizeBarcode(input.barcode);
+  const personal = (name || barcode) && db?.userId ? await searchPersonalFoods(db, name, barcode) : [];
+  if (personal.length) return { status:"ok", match:"personal", product:personal[0], candidates:personal };
+  return { status:"not_found", match:"none", product:null, candidates:[], message:"Food not found among saved foods. Send the package label values (per 100 g)." };
 }
 
 export async function logResolvedFood(db, input = {}) {
-  const product = productFromLabel(input) || (await resolveAndCacheFood(db, input)).product;
-  if (!product) throw new Error("Food product could not be resolved. Send the package label values or a barcode.");
+  const product = (await resolveFoodProduct(db, input)).product;
+  if (!product) throw new Error("Food product could not be resolved. Send the package label values per 100 g.");
   const grams = n(input.grams ?? input.amount_g ?? input.amountGrams);
   const amount = grams != null ? calculateAmount(product, grams) : null;
   const values = amount || {
