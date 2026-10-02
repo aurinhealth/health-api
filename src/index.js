@@ -2447,7 +2447,6 @@ async function energyForDate(env, date) {
       uncappedTarget: Math.round(estimatedTDEE - deficit),
       maxTarget: 4000
     },
-    unmatchedPlannedWorkouts: unmatchedPlanned,
     estimatedTDEE,
     calorieTarget: target,
     macroTargets,
