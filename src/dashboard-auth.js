@@ -42,7 +42,7 @@ export function isPublicPath(pathname) {
 export async function resolvePrincipal(request, env, verifyOidc = verifyGitHubActionsToken) {
   const secret = String(env.STRENGTH_API_KEY || "");
   if (!secret) return null;
-  const session = await verifyDashboardSession(request, secret);
+  const session = await verifyDashboardSession(request, sessionSecret(env));
   if (session) return { kind: "user", userId: session.uid };
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return null;
@@ -88,6 +88,13 @@ export async function verifyDashboardSession(request, secret) {
   } catch { return null; }
 }
 
+// Signs dashboard sessions. SESSION_SECRET keeps sessions independent of the
+// owner API key (which OAuth hands to API clients); without it the API key is
+// used, as before. Setting or rotating SESSION_SECRET signs everyone out once.
+export function sessionSecret(env) {
+  return String(env.SESSION_SECRET || env.STRENGTH_API_KEY || "");
+}
+
 export async function sessionCookie(uid, exp, secret) {
   const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp})));
   const signature = await dashboardHmac(payload, secret);
@@ -99,7 +106,8 @@ async function dashboardHmac(value, secret) {
   const sig = await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value));
   return base64url(new Uint8Array(sig));
 }
-function timingSafeEqualString(a,b) {
+export function timingSafeEqualString(a,b) {
+  a=String(a); b=String(b);
   if (a.length !== b.length) return false;
   let x=0; for(let i=0;i<a.length;i++) x |= a.charCodeAt(i)^b.charCodeAt(i); return x===0;
 }

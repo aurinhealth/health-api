@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isPublicPath, resolvePrincipal, sessionCookie, verifyDashboardSession } from "../src/dashboard-auth.js";
+import { isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession } from "../src/dashboard-auth.js";
 
 const env = { STRENGTH_API_KEY: "test-secret-key" };
 const rejectOidc = async () => { throw new Error("invalid"); };
@@ -45,4 +45,23 @@ test("expired, forged or user-less sessions are rejected", async () => {
 
 test("session cookies are HttpOnly, Secure and SameSite", async () => {
   assert.match(await sessionCookie(1, future(), env.STRENGTH_API_KEY), /^pfd_session=.+HttpOnly; Secure; SameSite=Lax$/);
+});
+
+test("SESSION_SECRET signs sessions instead of the owner API key", async () => {
+  const separate = { ...env, SESSION_SECRET: "session-only-secret" };
+  assert.equal(sessionSecret(separate), "session-only-secret");
+  assert.equal(sessionSecret(env), env.STRENGTH_API_KEY);
+  const signed = (await sessionCookie(7, future(), separate.SESSION_SECRET)).split(";")[0];
+  assert.deepEqual(await resolvePrincipal(req({ Cookie: signed }), separate, rejectOidc), { kind: "user", userId: 7 });
+  // Whoever holds the API key can no longer mint a session for another user.
+  const minted = (await sessionCookie(7, future(), env.STRENGTH_API_KEY)).split(";")[0];
+  assert.equal(await resolvePrincipal(req({ Cookie: minted }), separate, rejectOidc), null);
+  assert.deepEqual(await resolvePrincipal(req({ Authorization: "Bearer test-secret-key" }), separate, rejectOidc), { kind: "owner" });
+});
+
+test("bearer comparison is exact", () => {
+  assert.equal(timingSafeEqualString("Bearer abc", "Bearer abc"), true);
+  assert.equal(timingSafeEqualString("Bearer abd", "Bearer abc"), false);
+  assert.equal(timingSafeEqualString("Bearer ab", "Bearer abc"), false);
+  assert.equal(timingSafeEqualString("", "Bearer abc"), false);
 });

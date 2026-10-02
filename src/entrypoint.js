@@ -15,7 +15,8 @@ import {activityDetail} from './activity-detail.js';
 import {rideReviewSections} from './ride-analysis.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
-import {energyBudget} from './energy-budget.js';
+import {applyEnergyBudget} from './energy-budget.js';
+import {normalizeProfile} from './energy-profile.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
@@ -148,6 +149,14 @@ function staticRoute(url) {
 function pragueToday() {
   const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
   return parts.find(x=>x.type==="year").value+"-"+parts.find(x=>x.type==="month").value+"-"+parts.find(x=>x.type==="day").value;
+}
+
+// The dashboard profile (age, height, sex) or null when none is saved yet.
+async function dashboardProfile(env) {
+  try {
+    const row = await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();
+    return row ? JSON.parse(row.profile_json) : null;
+  } catch { return null; }
 }
 
 async function ensureCoachInboxTable(db) {
@@ -297,12 +306,11 @@ async function loadCoachInputs(env,ctx,internalAuth,date){
     ...weeks.map(w=>internal('/app/api/week?start='+w))
   ]);
   const json=r=>r.json().catch(()=>({}));
-  const [daily,fitness,gym,sleep,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),...weekResponses.map(json)]);
+  const [daily,fitness,gym,sleep,profile,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env),...weekResponses.map(json)]);
+  applyEnergyBudget(daily,profile,health);
   return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])}};
 }
 
-// Available before the required providers are connected.
-const SETUP_API_PATHS = new Set(["/app/api/me", "/app/api/connections", "/app/api/profile", "/app/api/gym/exercises", "/app/api/training-profile", "/app/api/training-profile/estimate"]);
 
 async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
@@ -310,12 +318,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env)},{headers:{"Cache-Control":"no-store"}});
   }
   if (url.pathname.startsWith("/app/api/admin/")) return handleAdminApi(request, env, url, session);
-  if (!SETUP_API_PATHS.has(url.pathname) && missingProviders(env).length) {
-    return Response.json({status:"onboarding",message:"Nejdřív připoj Google Health a Intervals.icu.",missingProviders:missingProviders(env)},{status:409,headers:{"Cache-Control":"no-store"}});
-  }
+  // Connections are optional: without them the dashboard works from manual
+  // entries (weight, food) and the profile; missingProviders drives the
+  // connection prompt in the client.
   if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const p=await request.json(),profile={sex:['male','female'].includes(p.sex)?p.sex:'',age:Number(p.age)||null,height:Number(p.height)||null,hrmax:Number(p.hrmax)||null,rhr:Number(p.rhr)||null};await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();return Response.json({profile:r?JSON.parse(r.profile_json):null});}
   if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
     const date=url.searchParams.get('date')||pragueToday();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
@@ -560,7 +568,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const oldest = new Date(newest.getTime() - days * 86400000);
       const isoDate = d => d.toISOString().slice(0,10);
       const apiKey = String(env.INTERVALS_API_KEY || "");
-      if (!apiKey) return Response.json({status:"error",message:"INTERVALS_API_KEY is not configured"},{status:503});
+      if (!apiKey) return Response.json({status:"ok",source:"none",connected:false,days,wellness:[]},{headers:{"Cache-Control":"no-store"}});
       const auth = "Basic " + btoa("API_KEY:" + apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(isoDate(oldest))+"&newest="+encodeURIComponent(isoDate(newest));
       const response = await fetch(target,{headers:{Authorization:auth,Accept:"application/json"}});
@@ -574,6 +582,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
 
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
+    if (missingProviders(env).length === 2) return Response.json({status:"ok",message:"Žádná služba není propojená, není co synchronizovat."},{headers:{"Cache-Control":"no-store"}});
     ctx.waitUntil(legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx).then(async r=>{if(!r.ok)console.error('Recent Google sync failed',r.status);}).catch(e=>console.error('Recent Google sync failed',e.message)));
     const internal = new URL("/sync/all", request.url);
     ctx.waitUntil(
@@ -659,6 +668,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ? requestedStart
       : pragueWeekStart();
     const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
+    // Same calorie target as the day view: one Google Health read covers the week.
+    const profile = await dashboardProfile(env);
+    const health = profile ? await googleDashboard(env.DB, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
     const days = await Promise.all(dates.map(async date => {
       const dailyUrl = new URL("/analysis/daily", request.url);
       dailyUrl.searchParams.set("date", date);
@@ -673,7 +685,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       return {
         date,
-        daily: await dailyResponse.json(),
+        daily: applyEnergyBudget(await dailyResponse.json(), profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
         food: await foodResponse.json(),
         recommendations: await recommendResponse.json()
       };
@@ -695,7 +707,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
   const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
-  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),p=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first(),health=await googleDashboard(env.DB,date),budget=p?energyBudget(daily,JSON.parse(p.profile_json),health):null;if(budget){daily.nutrition.energyBudget=budget;daily.nutrition.calorieTarget=budget.target;daily.calories={...daily.calories,target:budget.target};const m=daily.nutrition.macros||{};m.carbs_g=Math.max(0,Math.round((budget.target-Number(m.protein_g??m.proteinGrams??0)*4-Number(m.fat_g??m.fatGrams??0)*9)/4));daily.nutrition.macros=m;}}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
+  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),profile=await dashboardProfile(env);if(profile)applyEnergyBudget(daily,profile,await googleDashboard(env.DB,date));}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });

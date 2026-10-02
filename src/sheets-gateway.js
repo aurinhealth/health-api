@@ -1,4 +1,5 @@
 import app from "./v400.js";
+import { timingSafeEqualString } from "./dashboard-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { getStrengthHistory, parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
@@ -75,7 +76,7 @@ async function cyclingContextRoute(env, url) {
 function authorizeStrength(request, env) {
   if (!env.STRENGTH_API_KEY) return Response.json({ status: "error", step: "strength_auth", message: "STRENGTH_API_KEY is not configured" }, { status: 503 });
   const authorization = request.headers.get("Authorization") || "";
-  if (authorization !== `Bearer ${env.STRENGTH_API_KEY}`) return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
+  if (!timingSafeEqualString(authorization, `Bearer ${env.STRENGTH_API_KEY}`)) return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
   return null;
 }
 

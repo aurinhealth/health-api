@@ -19,7 +19,7 @@ Secret `ALLOWED_GOOGLE_EMAILS` už potřeba není.
    - **Google Health**: souhlas na stránce Google.
    - **Intervals.icu**: API klíč z *Settings → Developer Settings*. Athlete ID není potřeba, aplikace ho zjistí z klíče.
 
-Dokud uživatel nepřipojí obě služby, dashboard zobrazuje jen průvodce připojením.
+Propojení není povinné. Průvodce lze přeskočit tlačítkem *Pokračovat bez propojení*; uživatel pak zapisuje váhu a jídlo ručně a kalorický cíl se počítá z profilu (pohlaví, věk, výška, váha, denní aktivita, sport za týden a cíl). Propojit služby jde kdykoli v Nastavení.
 
 Silový plán (Gym) má každý uživatel vlastní. Plán dne je v databázi (tabulka `gym_plans`) a odcvičené série se ukládají do historie (`strength_sets`). Google Sheets se už nepoužívá.
 

@@ -1,5 +1,6 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { nextUnloggedMeals } from "./nutrition-next.js";
+import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -174,14 +175,18 @@ async function appWeight(env, request) {
   const value = Number(body?.kg);
   if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:"Neplatná hmotnost."},{status:400});
   const date = body?.date || pragueDate(), at = date+"T12:00:00+02:00";
-  const token = await googleToken(env);
-  const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
-    method:"POST",
-    headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
-    body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
-  });
-  const google = await response.json().catch(()=>({}));
-  if (!response.ok) return Response.json({status:"error",message:"Google Health weight write failed",google},{status:response.status});
+  // With Google Health connected the weight goes there too; without it, only here.
+  let google = null;
+  if (env.GOOGLE_REFRESH_TOKEN) {
+    const token = await googleToken(env);
+    const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
+      method:"POST",
+      headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
+      body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
+    });
+    google = await response.json().catch(()=>({}));
+    if (!response.ok) return Response.json({status:"error",message:"Google Health weight write failed",google},{status:response.status});
+  }
   await savePoint(env,"manual","weight",{value_kg:value,source:"manual",google_operation:google},value,"kg",at,at,at,"manual-weight:"+date);
   return Response.json({status:"ok",date,kg:value,google});
 }
@@ -195,12 +200,8 @@ const CONFIG = {
   activityDays: 365,
   plannedDaysAhead: 7,
 
-  // Rest-day energy baseline. This is intentionally conservative and
-  // will later be calibrated against actual intake + weight trend.
-  baselineRestTDEE: 2550,
-
-  weightLossTargetKgPerWeek: 0.5,
-  targetWeightKg: 80,
+  // The rest-day baseline, weekly goal and target weight are personal: see
+  // energyBaseline in energy-profile.js.
   proteinGramsPerKg: 2.0,
 
   defaultRideCarbsPerHour: 90,
@@ -216,7 +217,6 @@ const CONFIG = {
     Workout: 450
   },
 
-  minCalorieTarget: 2000,
   maxCalorieTarget: 3800,
 
   // Daily macro targets are derived from the calorie target rather than
@@ -2190,8 +2190,10 @@ function activityIsStrength(activity) {
 }
 
 function dailyMacroTargets(weightKg, calorieTarget, context = {}) {
-  const kg = Number(weightKg) || 85.8;
-  const kcal = Number(calorieTarget) || 0;
+  // Macros are per kg of body weight: without a weight or a target there are none.
+  const kg = Number(weightKg);
+  const kcal = Number(calorieTarget);
+  if (!(kg > 0) || !(kcal > 0)) return null;
   const protein = Math.round(kg * CONFIG.proteinGramsPerKg);
   // The calories and macros must describe the same plan.  Protein stays
   // stable for recovery; fat moves slightly with the training sequence and
@@ -2305,6 +2307,14 @@ async function energyForDate(env, date) {
     WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
     ORDER BY sample_time DESC, id DESC LIMIT 1
   `).bind(env.USER_ID).first();
+  const profile = await env.DB.prepare(`SELECT profile_json FROM dashboard_profile WHERE user_id = ? AND id = 1`)
+    .bind(env.USER_ID).first().then(r => r ? JSON.parse(r.profile_json) : null).catch(() => null);
+  // Sport is estimated from the profile only when no source tracks activities.
+  const providers = env.CONNECTED_PROVIDERS;
+  const baseline = energyBaseline(profile, weight ? Number(weight.value_numeric) : null, {
+    isOwner: env.USER_IS_OWNER === true,
+    activityTracked: !Array.isArray(providers) || providers.length > 0
+  });
 
   const plannedRaw = planned.results.map(r => ({
     id: r.external_id,
@@ -2392,10 +2402,10 @@ async function energyForDate(env, date) {
   const isCompleteDay = date < nowDate;
   const observed = google?.value_numeric != null ? Number(google.value_numeric) : null;
 
-  let estimatedTDEE;
+  let estimatedTDEE = null;
   if (isCompleteDay && observed != null && observed > 1000) {
     estimatedTDEE = Math.round(observed);
-  } else {
+  } else if (baseline.ready) {
     let activityAdjustment = 0;
     for (const a of completed) {
       const rate = CONFIG.activityKcalPerHour[a.type] || (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
@@ -2409,14 +2419,16 @@ async function energyForDate(env, date) {
         activityAdjustment += w.durationHours * rate;
       }
     }
-    estimatedTDEE = Math.round(CONFIG.baselineRestTDEE + activityAdjustment);
+    estimatedTDEE = Math.round(baseline.baselineRestTDEE + baseline.sportDaily + activityAdjustment);
   }
 
-  const deficit = CONFIG.weightLossTargetKgPerWeek * 7700 / 7;
-  const restIntakeTarget = 2000;
-  const plannedTrainingCalories = Math.max(0, estimatedTDEE - CONFIG.baselineRestTDEE);
+  // Rest-day intake is the personal resting expenditure minus the weekly goal;
+  // tracked training adds 70 % of its cost, untracked sport its daily average.
+  const deficit = baseline.ready ? baseline.deficit : 0;
+  const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit : null;
+  const plannedTrainingCalories = baseline.ready && estimatedTDEE != null ? Math.max(0, estimatedTDEE - baseline.baselineRestTDEE - baseline.sportDaily) : 0;
   const trainingCoverage = 0.70;
-  const target = Math.max(CONFIG.minCalorieTarget, Math.min(4000, Math.round(restIntakeTarget + plannedTrainingCalories * trainingCoverage)));
+  const target = baseline.ready ? Math.max(baseline.floor, Math.min(4000, Math.round(restIntakeTarget + baseline.sportDaily + plannedTrainingCalories * trainingCoverage))) : null;
   const context = {
     ...nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned }),
     ...(await nearbyRideContext(env, date))
@@ -2439,15 +2451,19 @@ async function energyForDate(env, date) {
     actualActivityCalories: Math.round(completed.reduce((sum, a) => sum + Number(a.calories || 0), 0)),
     suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
     calorieBreakdown: {
-      baselineRestTDEE: CONFIG.baselineRestTDEE,
+      source: baseline.source,
+      restingMetabolicRate: baseline.bmr ?? null,
+      baselineRestTDEE: baseline.baselineRestTDEE ?? null,
+      sportDailyAverage: baseline.sportDaily ?? 0,
       activityAdjustment: Math.max(0, plannedTrainingCalories),
       trainingCoverage: 0.70,
-      restIntakeTarget: 2000,
+      restIntakeTarget,
       weightLossDeficit: Math.round(deficit),
-      uncappedTarget: Math.round(estimatedTDEE - deficit),
+      uncappedTarget: estimatedTDEE != null && baseline.ready ? Math.round(estimatedTDEE - deficit) : null,
+      minTarget: baseline.floor ?? null,
       maxTarget: 4000
     },
-    unmatchedPlannedWorkouts: unmatchedPlanned,
+    energyProfile: { ready: baseline.ready, source: baseline.source, missing: baseline.missing, targetWeightKg: baseline.targetWeightKg ?? null, floor: baseline.floor ?? null },
     estimatedTDEE,
     calorieTarget: target,
     macroTargets,
@@ -2458,6 +2474,14 @@ async function energyForDate(env, date) {
 // ======================================================
 // DAILY ANALYSIS
 // ======================================================
+
+// How the day's target relates to the weekly weight goal, in Czech.
+function goalPhrase(energy) {
+  const deficit = Number(energy.calorieBreakdown?.weightLossDeficit) || 0;
+  const target = energy.energyProfile?.targetWeightKg;
+  if (deficit > 0) return target ? `cílové tempo úbytku hmotnosti směrem k ${target} kg` : "cílové tempo úbytku hmotnosti";
+  return "udržení hmotnosti";
+}
 
 async function analysisDaily(
   env,
@@ -2558,14 +2582,18 @@ async function analysisDaily(
       calorieBreakdown: energy.calorieBreakdown,
       macros: energy.macroTargets,
       calorieTarget: energy.calorieTarget,
-      targetWeightKg: CONFIG.targetWeightKg,
-      reason: energy.nutritionContext?.endurance
-        ? "Dnešní cíl zohledňuje vytrvalostní zátěž a cílové tempo úbytku hmotnosti směrem k 80 kg."
+      targetWeightKg: energy.energyProfile.targetWeightKg,
+      missing: energy.energyProfile.missing,
+      energySource: energy.energyProfile.source,
+      reason: !energy.energyProfile.ready
+        ? "Kalorický cíl zatím nepočítám, chybí: " + energy.energyProfile.missing.map(k => MISSING_LABELS[k] || k).join(", ") + "."
+        : energy.nutritionContext?.endurance
+        ? "Dnešní cíl zohledňuje vytrvalostní zátěž a " + goalPhrase(energy) + "."
         : energy.nutritionContext?.preRide
           ? "Zítřejší kolo je zohledněné už dnes: mírně více sacharidů pro doplnění glykogenu, méně tuku, protein zůstává stabilní."
         : energy.nutritionContext?.training
-          ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a cílové tempo úbytku hmotnosti směrem k 80 kg."
-          : "Dnešní cíl vychází z klidového energetického základu a cílového tempa úbytku hmotnosti směrem k cílové hmotnosti 80 kg.",
+          ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a " + goalPhrase(energy) + "."
+          : "Dnešní cíl vychází z klidového energetického základu a " + goalPhrase(energy) + ".",
       foodLog:
         await foodLogForDate(env, date)
     },
@@ -2630,6 +2658,9 @@ async function analysisEnergy(
         energy.suppressedPlannedWorkouts
     },
 
+    energyProfile:
+      energy.energyProfile,
+
     completedActivities:
       energy.completedActivities,
 
@@ -2648,7 +2679,7 @@ function calculateFueling(
   workout
 ) {
   const kg =
-    Number(weight) || 85.8;
+    Number(weight) || null;
 
   const duration =
     workout.durationHours ||
@@ -2663,11 +2694,10 @@ function calculateFueling(
       rideCarbsPerHour
     );
 
-  const preRideCarbs =
-    Math.round(
-      kg *
-      CONFIG.preRideCarbsPerKg
-    );
+  // Pre-ride carbohydrate is per kg; without a weight it is not estimated.
+  const preRideCarbs = kg
+    ? Math.round(kg * CONFIG.preRideCarbsPerKg)
+    : null;
 
   const fluid =
     Math.round(
@@ -2694,7 +2724,7 @@ function calculateFueling(
       fluid,
 
     recommendation:
-      `Before the ride: approximately ${preRideCarbs} g carbohydrate. ` +
+      (preRideCarbs != null ? `Before the ride: approximately ${preRideCarbs} g carbohydrate. ` : "") +
       `During the ride: approximately ${rideCarbsPerHour} g carbohydrate/hour ` +
       `(${rideCarbs} g total). ` +
       `Estimated fluid need: approximately ${fluid} ml.`
@@ -3002,6 +3032,7 @@ async function foodRecommend(env, url) {
   const date=url.searchParams.get('date')||pragueDate();
   const log=await foodLogForDate(env,date);
   const energy=await energyForDate(env,date);
+  if(!energy.energyProfile.ready)return Response.json({status:"ok",date,calorieTarget:null,missing:energy.energyProfile.missing,foodTotals:log.totals,macroTargets:null,remaining:null,coaching:"Doporučení jídel potřebuje kalorický cíl. Doplň v profilu: "+energy.energyProfile.missing.map(k=>MISSING_LABELS[k]||k).join(", ")+".",mealRecommendations:[],recommendations:[],storeAlternatives:[]});
   const targetKcal=Number(energy.calorieTarget||0);
   const targets=energy.macroTargets||dailyMacroTargets(energy.currentWeight,targetKcal,energy.nutritionContext||{});
   const eaten=log.entries.filter(r=>r.status==="eaten");
