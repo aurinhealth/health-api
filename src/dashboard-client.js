@@ -1651,14 +1651,14 @@ installProposals();
 // source), weekly goal and target weight, stored with the rest of the profile.
 // Without weight or a complete profile the server returns no target; say what
 // is missing instead of showing 0 kcal.
-const ENERGY_MISSING={weight:'váha',sex:'pohlaví',age:'věk',height:'výška',activity:'denní aktivita',sportHours:'sport za týden'};
+const ENERGY_MISSING={weight:'váha',sex:'pohlaví',age:'věk',height:'výška',activity:'denní aktivita',goal:'cíl',sportHours:'sport za týden'};
 function installEnergyProfile(){
   const form=$('fitnessProfileForm');if(!form)return;
   const select=(id,label,options)=>'<label>'+label+'<select class="food-input" id="'+id+'"><option value="">Vyber</option>'+options.map(([v,t])=>'<option value="'+v+'">'+esc(t)+'</option>').join('')+'</select></label>';
   form.querySelector('button.primary').insertAdjacentHTML('beforebegin',
     select('profileActivity','Pohyb přes den (mimo sport)',[['sedentary','Sedavá práce, málo chůze'],['light','Lehce aktivní: hodně chůze, práce vestoje'],['active','Aktivní: většinu dne v pohybu'],['heavy','Fyzicky náročná práce']])+
     select('profileSportHours','Sport za týden (jen bez propojení Google/Intervals)',[['0','Žádný'],['1-3','1–3 hodiny'],['3-6','3–6 hodin'],['6-10','6–10 hodin'],['10+','Víc než 10 hodin']])+
-    select('profileGoal','Cíl',[['lose','Hubnout 0,5 kg týdně'],['lose_slow','Hubnout 0,25 kg týdně'],['maintain','Udržovat váhu'],['gain','Přibírat 0,25 kg týdně']])+
+    select('profileGoal','Cíl',[['lose_0.25','Hubnout 0,25 kg týdně'],['lose_0.5','Hubnout 0,5 kg týdně'],['lose_0.75','Hubnout 0,75 kg týdně'],['lose_1','Hubnout 1 kg týdně'],['maintain','Udržovat váhu']])+
     '<label>Cílová váha · kg<input id="profileTargetWeight" class="food-input" type="number" min="35" max="250" step="0.1"></label>');
   form.previousElementSibling.textContent='Profil se ukládá na server. Z pohlaví, věku, výšky, váhy a denní aktivity počítáme klidový výdej a z cíle denní kalorický cíl; trénink přidávají propojené zdroje. Váhu zapisuješ v přehledu váhy.';
   const fields=[['profileSex','sex'],['profileAge','age'],['profileHeight','height'],['profileHrmax','hrmax'],['profileRhr','rhr'],['profileActivity','activity'],['profileSportHours','sportHours'],['profileGoal','goal'],['profileTargetWeight','targetWeight']];

@@ -2476,7 +2476,6 @@ function goalPhrase(energy) {
   const deficit = Number(energy.calorieBreakdown?.weightLossDeficit) || 0;
   const target = energy.energyProfile?.targetWeightKg;
   if (deficit > 0) return target ? `cílové tempo úbytku hmotnosti směrem k ${target} kg` : "cílové tempo úbytku hmotnosti";
-  if (deficit < 0) return "cílový mírný nárůst hmotnosti";
   return "udržení hmotnosti";
 }
 

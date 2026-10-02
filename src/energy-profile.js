@@ -16,10 +16,11 @@ export const SPORT_HOURS = { "0": 0, "1-3": 2, "3-6": 4.5, "6-10": 8, "10+": 12 
 
 // Weekly weight change; 7700 kcal per kg.
 export const GOALS = {
-  lose: { kgPerWeek: -0.5, label: "Hubnout 0,5 kg týdně" },
-  lose_slow: { kgPerWeek: -0.25, label: "Hubnout 0,25 kg týdně" },
-  maintain: { kgPerWeek: 0, label: "Udržovat váhu" },
-  gain: { kgPerWeek: 0.25, label: "Přibírat 0,25 kg týdně" }
+  "lose_0.25": { kgPerWeek: -0.25, label: "Hubnout 0,25 kg týdně" },
+  "lose_0.5": { kgPerWeek: -0.5, label: "Hubnout 0,5 kg týdně" },
+  "lose_0.75": { kgPerWeek: -0.75, label: "Hubnout 0,75 kg týdně" },
+  "lose_1": { kgPerWeek: -1, label: "Hubnout 1 kg týdně" },
+  maintain: { kgPerWeek: 0, label: "Udržovat váhu" }
 };
 
 // Extra energy of an hour of sport above rest, per kg of body weight.
@@ -58,9 +59,9 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const weight = num(weightKg);
   const missing = [];
   if (!(weight > 0)) missing.push("weight");
-  for (const key of ["sex", "age", "height", "activity"]) if (!p[key]) missing.push(key);
+  for (const key of ["sex", "age", "height", "activity", "goal"]) if (!p[key]) missing.push(key);
   if (!activityTracked && !p.sportHours) missing.push("sportHours");
-  const goal = GOALS[p.goal] || GOALS.lose;
+  const goal = GOALS[p.goal] || GOALS["lose_0.5"];
   if (missing.length) {
     // The owner keeps the calibrated baseline until the profile is complete;
     // weight stays required for everyone.
@@ -77,7 +78,7 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     bmr: Math.round(bmr),
     baselineRestTDEE: Math.round(bmr * ACTIVITY_LEVELS[p.activity].factor),
     sportDaily: Math.round(sportDaily),
-    // Positive = deficit (losing), negative = surplus (gaining).
+    // Calories below expenditure per day; 0 when maintaining.
     deficit: Math.round(-goal.kgPerWeek * 7700 / 7) || 0,
     // Never plan below resting metabolism, nor below common safe minimums.
     floor: Math.round(Math.max(bmr, p.sex === "male" ? 1500 : 1200)),
@@ -85,4 +86,4 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   };
 }
 
-export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "věk", height: "výška", activity: "denní aktivita", sportHours: "sport za týden" };
+export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "věk", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" };

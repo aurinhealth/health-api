@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { energyBaseline, normalizeProfile, restingMetabolicRate, OWNER_CALIBRATION } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
 
-const woman = { sex: "female", age: 30, height: 165, activity: "sedentary", goal: "lose" };
+const woman = { sex: "female", age: 30, height: 165, activity: "sedentary", goal: "lose_0.5" };
 
 test("resting metabolism follows Mifflin-St Jeor", () => {
   assert.equal(restingMetabolicRate({ sex: "male", age: 30, height: 180 }, 80), 1780);
@@ -25,7 +25,9 @@ test("the baseline comes from sex, age, height, weight and everyday activity", (
   const active = energyBaseline({ ...woman, activity: "heavy", goal: "maintain" }, 60);
   assert.equal(active.baselineRestTDEE, Math.round(1320.25 * 1.6));
   assert.equal(active.deficit, 0);
-  assert.equal(energyBaseline({ ...woman, goal: "gain" }, 60).deficit, -275);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_0.25" }, 60).deficit, 275);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_0.75" }, 60).deficit, 825);
+  assert.equal(energyBaseline({ ...woman, goal: "lose_1" }, 60).deficit, 1100);
 });
 
 test("weight is required for a calorie target, for everyone", () => {
@@ -37,7 +39,7 @@ test("weight is required for a calorie target, for everyone", () => {
 test("an incomplete profile lists what is missing; the owner keeps the calibration", () => {
   const b = energyBaseline({ sex: "male" }, 85);
   assert.equal(b.ready, false);
-  assert.deepEqual(b.missing, ["age", "height", "activity"]);
+  assert.deepEqual(b.missing, ["age", "height", "activity", "goal"]);
   const owner = energyBaseline({}, 85, { isOwner: true });
   assert.equal(owner.ready, true);
   assert.equal(owner.source, "owner-calibration");
@@ -55,8 +57,8 @@ test("without a connected source, weekly sport is part of the estimate", () => {
 });
 
 test("the profile endpoint keeps only known values", () => {
-  assert.deepEqual(normalizeProfile({ sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose", targetWeight: "72.5", extra: 1 }),
-    { sex: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose", targetWeight: 72.5 });
+  assert.deepEqual(normalizeProfile({ sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
+    { sex: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5 });
 });
 
 async function dailyFor({ profile, weight, isOwner = false, providers = ["google", "intervals"] }) {
@@ -72,19 +74,19 @@ async function dailyFor({ profile, weight, isOwner = false, providers = ["google
 }
 
 test("the daily analysis uses the personal baseline on a rest day", async () => {
-  const daily = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "active", goal: "lose" }, weight: 80 });
+  const daily = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "active", goal: "lose_0.5" }, weight: 80 });
   const rest = Math.round(1780 * 1.45);
   assert.equal(daily.nutrition.calorieBreakdown.baselineRestTDEE, rest);
   assert.equal(daily.nutrition.calorieTarget, rest - 550);
   assert.equal(daily.nutrition.macros.protein_g, 160);
   assert.deepEqual(daily.nutrition.missing, []);
   // A deficit never takes the target below resting metabolism.
-  const sedentary = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "sedentary", goal: "lose" }, weight: 80 });
+  const sedentary = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "sedentary", goal: "lose_0.5" }, weight: 80 });
   assert.equal(sedentary.nutrition.calorieTarget, 1780);
 });
 
 test("without weight the daily analysis has no target and says why", async () => {
-  const daily = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "light" } });
+  const daily = await dailyFor({ profile: { sex: "male", age: 30, height: 180, activity: "light", goal: "maintain" } });
   assert.equal(daily.status, "ok");
   assert.equal(daily.nutrition.calorieTarget, null);
   assert.equal(daily.nutrition.macros, null);
