@@ -19,6 +19,7 @@ import {applyEnergyBudget} from './energy-budget.js';
 import {normalizeProfile} from './energy-profile.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
+import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import {savePersonalFood,searchPersonalFoods,foodSimilarity} from './personal-foods.js';
@@ -66,9 +67,13 @@ export default {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
-    // Hourly, half an hour after the Google Health sync: weight in the app,
-    // Google Health and Intervals.icu the same.
-    if (controller.cron === "* * * * *" && new Date().getUTCMinutes() === 30) await forEachUser(env, ["intervals"], scoped => syncWeights(scoped, { googleToken }));
+    // Hourly, half an hour after the Google Health sync: weight the same in the
+    // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
+    // heart rate, HRV, …) copied into Intervals.icu.
+    if (controller.cron === "* * * * *" && new Date().getUTCMinutes() === 30) await forEachUser(env, ["intervals"], async scoped => ({
+      weight: await syncWeights(scoped, { googleToken }).catch(error => ({ error: error.message })),
+      wellness: await syncWellnessToIntervals(scoped, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), scoped, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => ({ error: error.message }))
+    }));
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -587,6 +592,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   if (url.pathname === "/app/api/sync" && request.method === "POST") {
     if (missingProviders(env).length === 2) return Response.json({status:"ok",message:"Žádná služba není propojená, není co synchronizovat."},{headers:{"Cache-Control":"no-store"}});
+    // The sync button also pushes weight and wellness to Intervals.icu now, not at :30.
+    if ((env.CONNECTED_PROVIDERS || []).includes("intervals")) ctx.waitUntil((async () => {
+      await syncWeights(env, { googleToken }).catch(error => console.error("Weight sync failed", error.message));
+      await syncWellnessToIntervals(env, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), env, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => console.error("Wellness sync failed", error.message));
+    })());
     ctx.waitUntil(legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx).then(async r=>{if(!r.ok)console.error('Recent Google sync failed',r.status);}).catch(e=>console.error('Recent Google sync failed',e.message)));
     const internal = new URL("/sync/all", request.url);
     ctx.waitUntil(

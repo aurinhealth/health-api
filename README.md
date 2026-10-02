@@ -39,6 +39,8 @@ Věk se počítá z data narození v profilu, takže se aktualizuje sám.
 
 **Váha** je stejná v aplikaci, Google Health a Intervals.icu (`weight-sync.js`). Ručně zapsaná váha jde hned do Google Health i Intervals.icu. Jednou za hodinu (v :30) se porovná posledních 14 dní: váha z Google Health (chytrá váha) jde do Intervals.icu, váha zapsaná v Intervals.icu do Google Health (a odtud do aplikace), bez Google Health rovnou do aplikace. Když se hodnoty za stejný den liší, platí Google Health. Zapsané hodnoty si sync pamatuje, aby nezapisoval dvakrát.
 
+**Wellness do Intervals.icu** (`wellness-sync.js`): spánek, kroky, klidový tep, HRV, SpO2, dech, VO2max a tělesný tuk z Google Health se každou hodinu (v :30) a po tlačítku synchronizace zapíšou do wellness v Intervals.icu za posledních 7 dní. Pole se zapíše jen tehdy, když je v Intervals prázdné, nebo když ho tam zapsala tahle synchronizace. Data z jiných zdrojů (Garmin, ruční zápis) se nepřepisují.
+
 ## Cron
 
 - `* * * * *`: zpracuje frontu synchronizace Google Health, jednou za hodinu stáhne nedávná data.
