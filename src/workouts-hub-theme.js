@@ -116,6 +116,8 @@ export const workoutsHubTheme = `
 .coach-note{padding:10px 12px;margin-bottom:10px;border-radius:12px;background:#1a1f2c;border:1px solid #2e3546}.coach-note p{margin:4px 0 0}.coach-note small{color:#a99bff;font-size:11px}
 .coach-ask{display:grid;gap:6px;margin:6px 0 10px}.coach-ask textarea{width:100%;background:#0d1119;color:#eef1f7;border:1px solid #333b49;border-radius:10px;padding:9px;font:inherit;resize:vertical}
 #coachRpe button.active{background:#7e50e5;border-color:#a16fff;color:#fff}
+.food-draft-row{display:grid;grid-template-columns:minmax(0,1fr) auto 80px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3140}.food-draft-row small{display:block;color:#9ca6b5;font-size:11px}.food-draft-row input{width:76px;background:#0d1119;color:#fff;border:1px solid #333b49;border-radius:8px;padding:5px 7px}.food-draft-row>span{text-align:right;font-variant-numeric:tabular-nums}
+.food-draft-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:10px}.food-draft-foot input,.food-draft-foot select{display:block;background:#0d1119;color:#fff;border:1px solid #333b49;border-radius:8px;padding:6px 8px}
 .coach-note-inline{margin:6px 0 0;font-size:12px;line-height:1.55;color:#c9d2de;max-width:780px}
 .tl-weight .tl-icon{background:#16303a}.tl-sleep .tl-icon{background:#241f45}.tl-food .tl-icon{background:#2b2342}.tl-activity .tl-icon{background:#173a30}.tl-planned .tl-icon{border-style:dashed}
 .copy-days{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.copy-days label{display:inline-flex!important;align-items:center;gap:5px;padding:5px 8px;border:1px solid #333b49;border-radius:8px;font-size:12px;min-width:0!important}

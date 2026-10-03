@@ -23,6 +23,7 @@ import {askCoach,coachContext} from './coach-assistant.js';
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
 import { lookupFoodWithAI } from "./food-ai.js";
+import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -434,6 +435,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena. Nastav serverový secret OPENAI_API_KEY; předplatné ChatGPT není API klíč.'},{status:503});
     const body=await request.json().catch(()=>({})),message=String(body.message||'').trim();
     if(!message||message.length>4000)return Response.json({message:'Zadej požadavek do 4000 znaků.'},{status:400});
+    // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
+    if(body.mode!=='coach'&&isFoodLogMessage(message)){
+      try{const draft=await buildFoodDraft(env,message,pragueToday());if(draft.items.length)return Response.json({status:'ok',kind:'food_draft',draft,answer:foodDraftSummary(draft)},{headers:{'Cache-Control':'no-store'}});}
+      catch(error){console.error('Food sentence failed',error.message);}
+    }
     const date=pragueToday(),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
     const manualReadiness=Number.isFinite(Number(body.manualReadiness))?Number(body.manualReadiness):null;

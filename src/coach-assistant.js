@@ -74,15 +74,21 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
 }
 
 // One text answer from the OpenAI Responses API.
+// Models: the assistant (weekly plans, reviews) uses OPENAI_MODEL; short,
+// focused tasks (coach's notes, food lookups and food sentences) use the
+// cheaper OPENAI_LIGHT_MODEL. Both are server secrets/vars and can be changed
+// without a code change.
+export const lightModel = env => env.OPENAI_LIGHT_MODEL || 'gpt-6-luna';
+
 // `tools` and `format` (text.format, e.g. a JSON schema) are optional; cited
 // web sources come back in `citations`.
-export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null }) {
+export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null }) {
   if (!env.OPENAI_API_KEY) throw new Error('AI není připojena.');
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',
     headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`, 'Content-Type':'application/json'},
     body:JSON.stringify({
-      model:env.OPENAI_MODEL || 'gpt-6-sol',
+      model:model || env.OPENAI_MODEL || 'gpt-6.1-sol',
       reasoning:{effort:'low'},
       instructions,
       input,

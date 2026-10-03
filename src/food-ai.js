@@ -2,7 +2,7 @@
 // (and, after a scan, its barcode). The result is a proposal: the user checks
 // it in the food editor, and the confirmed values are saved as their own food
 // with the barcode, so the next scan finds it without AI.
-import { callOpenAI } from "./coach-assistant.js";
+import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { normalizeBarcode } from "./food-sources.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -62,7 +62,8 @@ export async function lookupFoodWithAI(env, { name = "", barcode = "" } = {}) {
     input: "Potravina: " + JSON.stringify({ name: product || null, barcode: code || null }),
     tools: [{ type: "web_search" }],
     format: FOOD_LOOKUP_SCHEMA,
-    maxOutputTokens: 2000
+    maxOutputTokens: 2000,
+    model: lightModel(env)
   });
   return { product: productFromLookup(r.text, { barcode: code, citations: r.citations }), model: r.model };
 }
