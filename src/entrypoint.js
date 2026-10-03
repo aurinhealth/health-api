@@ -19,7 +19,8 @@ import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js'
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
-import {askCoach,coachContext} from './coach-assistant.js';
+import {askCoach,coachContext,lightModel} from './coach-assistant.js';
+import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
 import { lookupFoodWithAI } from "./food-ai.js";
@@ -27,7 +28,7 @@ import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, f
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
-import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
+import { importStrengthHistory, getStrengthHistory, parseStrengthSheet } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -380,6 +381,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
+  // "Revize dne": the coach checks one planned day in the context of the week.
+  if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena (chybí OPENAI_API_KEY).'},{status:503});
+    try{
+      const body=await request.json().catch(()=>({})),date=/^\d{4}-\d{2}-\d{2}$/.test(String(body.date||''))?body.date:pragueToday();
+      const [inputs,gym,prefs,feedback,notes]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),readGymPlan(env.DB,date).catch(()=>null),getWeekPlan(env.DB).catch(()=>null),recentWorkoutFeedback(env.DB,shiftDate(date,-21)).catch(()=>[]),listReflections(env.DB,{limit:3}).catch(()=>[])]);
+      const gymRows=gym?.stored?parseStrengthSheet(gym.values).rows||[]:[];
+      const input=buildReviewInput({date,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text}))});
+      const models=body.compare===true?[...new Set([lightModel(env),env.OPENAI_MODEL||'gpt-6.1-sol'])]:[lightModel(env)];
+      const reviews=await Promise.all(models.map(model=>reviewDay(env,input,model).catch(error=>({model,error:error.message}))));
+      return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
   // The coach's notes: listed per day; a POST asks for a note on a day now.
   if(url.pathname==='/app/api/coach/reflections'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
@@ -458,7 +474,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         phase:coachCtx.cyclingCoachV2?.constraints?.phase
       });
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
-      return Response.json(await askCoach(env,message,coachCtx),{headers:{'Cache-Control':'no-store'}});
+      // "Porovnat modely": the same request to the light and the main model, side by side.
+      if(body.compare===true){
+        const models=[...new Set([lightModel(env),env.OPENAI_MODEL||'gpt-6.1-sol'])];
+        const answers=await Promise.all(models.map(model=>askCoach(env,message,coachCtx,{model}).then(r=>({...r,costUsd:usageCost(r.model,r.usage)})).catch(error=>({status:'error',model,message:error.message}))));
+        return Response.json({status:'ok',kind:'compare',answers},{headers:{'Cache-Control':'no-store'}});
+      }
+      const answer=await askCoach(env,message,coachCtx);
+      return Response.json({...answer,costUsd:usageCost(answer.model,answer.usage)},{headers:{'Cache-Control':'no-store'}});
     }
     catch(error){console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
   }

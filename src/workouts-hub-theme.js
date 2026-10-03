@@ -285,6 +285,10 @@ body.gym-mode-open{overflow:hidden}
 .fluid-kinds,.fluid-amounts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.fluid-kinds .btn.active{background:#16303a;border-color:#64d2ff}
 .fluid-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #262d39}.fluid-row .btn{padding:4px 9px}.fluid-row small{display:block;color:#9ca6b5;font-size:11px}
 .tl-water .tl-icon{background:#16303a}
+.today-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.review-btn{padding:5px 10px!important;font-size:12px!important;min-height:0!important}
+.review-card{padding:12px 14px;border-radius:14px;background:#151b26;border:1px solid #2a3140;margin-bottom:10px}.review-card ul{margin:6px 0;padding-left:18px;display:grid;gap:4px;font-size:13px}.review-card h4{margin:10px 0 2px;font-size:13px}
+.review-verdict{font-weight:700;font-size:15px}.verdict-ok .review-verdict{color:#83e9c3}.verdict-adjust .review-verdict{color:#ffc274}.verdict-swap .review-verdict{color:#9fc6ff}.verdict-rest .review-verdict{color:#ff9c97}.review-headline{margin:6px 0;font-size:14px}
+.model-meta{font-size:11px;color:#9ca6b5;margin-top:8px}.model-compare{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}.compare-toggle{display:flex;align-items:center;gap:6px;margin:6px 0}
 .mini-rings{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 @media(max-width:900px){.nutrition-home{grid-template-columns:1fr}}
 @media(max-width:700px){#nutrition.active>.nutrition-home{order:-3}#nutrition.active>#foodEntry{order:-2}.mini-ring-dial{width:54px!important;height:54px!important}.mini-ring-dial b{font-size:13px!important}.do-ring{width:132px;height:132px}.do-ring b{font-size:26px}#foodEntry .food-quick{font-size:16px}}
