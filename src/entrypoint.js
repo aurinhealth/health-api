@@ -22,6 +22,7 @@ import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext} from './coach-assistant.js';
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
+import { lookupFoodWithAI } from "./food-ai.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
@@ -474,6 +475,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // Only the user's saved foods: everything else comes from a label or the cookbook.
     try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),candidates=await searchPersonalFoods(env.DB,name,barcode);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:'Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.',detail:String(error.message).slice(0,160)},{status:500});}
+  }
+  // A food not saved yet: AI looks up its label values on the web. Only a
+  // proposal; the user confirms it and the app saves it with the barcode.
+  if(url.pathname==='/app/api/food/ai-lookup'&&request.method==='POST'){
+    if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena (chybí OPENAI_API_KEY). Zadej hodnoty z etikety.'},{status:503});
+    try{
+      const body=await request.json().catch(()=>({})),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24);
+      const r=await lookupFoodWithAI(env,{name,barcode});
+      if(!r.product)return Response.json({status:'not_found',message:'AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).'},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',product:{...r.product,name:r.product.name||name},model:r.model},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:'Dohledání přes AI selhalo: '+String(error.message).slice(0,160)},{status:502});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});

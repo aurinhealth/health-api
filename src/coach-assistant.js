@@ -74,7 +74,9 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
 }
 
 // One text answer from the OpenAI Responses API.
-export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000 }) {
+// `tools` and `format` (text.format, e.g. a JSON schema) are optional; cited
+// web sources come back in `citations`.
+export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null }) {
   if (!env.OPENAI_API_KEY) throw new Error('AI není připojena.');
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',
@@ -84,14 +86,17 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
       reasoning:{effort:'low'},
       instructions,
       input,
-      max_output_tokens:maxOutputTokens
+      max_output_tokens:maxOutputTokens,
+      ...(tools ? {tools} : {}),
+      ...(format ? {text:{format}} : {})
     })
   });
   const data = await response.json();
   if (!response.ok) throw new Error(data.error?.message || 'AI služba není dostupná.');
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text;
   if (!text) throw new Error('AI nevrátila odpověď.');
-  return {text, model:data.model, usage:data.usage};
+  const citations = (data.output || []).flatMap(item => item.content || []).flatMap(item => item.annotations || []).filter(a => a.type === 'url_citation' && a.url).map(a => ({url:a.url, title:a.title || a.url}));
+  return {text, model:data.model, usage:data.usage, citations};
 }
 
 export async function askCoach(env, message, context) {
