@@ -1,5 +1,6 @@
 // Equipment of the gym the plans are built for. METAGYM Kutná Hora
-// (https://metagym.cz/kutnahora, checked 2026-10-01): every exercise in the
+// (https://metagym.cz/kutnahora, checked 2026-10-01; the squat rack and the
+// Smith machine confirmed by the athlete 2026-10-03): every exercise in the
 // strength catalog must be possible on one of these stations.
 export const METAGYM_KUTNA_HORA = {
   id: "metagym-kutna-hora",
@@ -10,6 +11,8 @@ export const METAGYM_KUTNA_HORA = {
     adjustable_bench: { label: "Polohovací lavice (5×)", zone: "Volné váhy a lavice" },
     bench_press: { label: "Benchpress flat", zone: "Volné váhy a lavice" },
     barbells: { label: "Stojan na rovné osy + trny na kotouče", zone: "Volné váhy a lavice" },
+    squat_rack: { label: "Klec na dřepy (power rack)", zone: "Volné váhy a lavice" },
+    smith_machine: { label: "Smith stroj", zone: "Volné váhy a lavice" },
     floor_mats: { label: "Podložky na zem", zone: "Volné váhy a lavice" },
     pendulum_squat: { label: "Pendulum squat", zone: "Nohy a hýždě" },
     hip_thrust: { label: "Hip thrust", zone: "Nohy a hýždě" },
@@ -97,7 +100,15 @@ export const EXERCISE_STATIONS = {
   "Cable rope hammer curl": ["cables"],
   "Cable triceps kickback": ["cables"],
   "DB overhead triceps extension": ["dumbbells", "adjustable_bench"],
-  "Single-leg calf raise": ["dumbbells"]
+  "Single-leg calf raise": ["dumbbells"],
+  "Barbell back squat": ["squat_rack", "barbells"],
+  "Barbell front squat": ["squat_rack", "barbells"],
+  "Smith machine squat": ["smith_machine"],
+  "Smith machine split squat": ["smith_machine", "adjustable_bench"],
+  "Smith machine hip thrust": ["smith_machine", "adjustable_bench"],
+  "Smith machine incline press": ["smith_machine", "adjustable_bench"],
+  "Barbell overhead press": ["squat_rack", "barbells"]
+
 };
 
 export function stationLabel(exercise, gym = METAGYM_KUTNA_HORA) {

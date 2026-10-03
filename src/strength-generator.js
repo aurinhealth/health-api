@@ -70,23 +70,31 @@ const EXERCISES = {
   "Cable rope hammer curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 15, warmup: false, note: "Biceps a brachialis; lano na kladce", fatigue: 0.45 },
   "Cable triceps kickback": { pattern: "triceps", muscle: "triceps", unilateral: true, sets: 3, reps: "12–15", baseKg: 5, warmup: false, note: "Triceps; jednoruč v předklonu na kladce", fatigue: 0.35 },
   "DB overhead triceps extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–12", baseKg: 15, warmup: false, note: "Triceps (dlouhá hlava); jedna jednoručka oběma rukama za hlavou", fatigue: 0.45 },
-  "Single-leg calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: true, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Lýtka; jednonož s jednoručkou, opora rukou", fatigue: 0.35 }
+  "Single-leg calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: true, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Lýtka; jednonož s jednoručkou, opora rukou", fatigue: 0.35 },
+  "Barbell back squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "5–8", baseKg: 60, warmup: true, note: "Dřep s osou v kleci; kg = celá osa", fatigue: 1.4 },
+  "Barbell front squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "6–8", baseKg: 45, warmup: true, note: "Čelní dřep s osou v kleci; kg = celá osa", fatigue: 1.3 },
+  "Smith machine squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "8–12", baseKg: 50, warmup: true, note: "Dřep na Smith stroji; kg = kotouče + osa Smithu", fatigue: 1.2 },
+  "Smith machine split squat": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 30, warmup: false, note: "Hýždě a stehna; bulharský dřep na Smithu, zadní noha na lavici, kg = kotouče + osa", fatigue: 0.95 },
+  "Smith machine hip thrust": { pattern: "hip_extension", muscle: "glutes", unilateral: false, sets: 3, reps: "8–12", baseKg: 60, warmup: true, note: "Hýždě; hip thrust pod osou Smithu, záda o lavici, kg = kotouče + osa", fatigue: 1.0 },
+  "Smith machine incline press": { pattern: "horizontal_push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Horní hrudník; šikmá lavice pod Smithem, kg = kotouče + osa", fatigue: 0.95 },
+  "Barbell overhead press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "5–8", baseKg: 35, warmup: true, note: "Ramena; tlak osy nad hlavu ve stoje z klece, kg = celá osa", fatigue: 1.0 }
+
 };
 
 export const FOCUS_GROUPS = {
-  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly']},
+  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press']},
   upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row']},
   lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown']},
-  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press']},
+  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press']},
   side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise']},
   rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly']},
   biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl']},
   triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension']},
   abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch']},
   obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop']},
-  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat']},
+  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat']},
   hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift']},
-  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat']},
+  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat']},
   calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise']}
 };
 
@@ -255,21 +263,21 @@ function choosePlan(context, options = {}) {
   const forceLower = options.focus === "lower";
 
   const candidatesByPattern = {
-    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly"],
+    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"],
     horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row", "Single-arm cable row", "Wide-grip low row", "Barbell row"],
-    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press"],
+    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press", "Barbell overhead press"],
     verticalPull: ["Lat pulldown", "Cable pullover", "Close-grip lat pulldown"],
     lateralRaise: ["Cable lateral raise", "Standing multi flight", "DB lateral raise"],
     biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl"],
     triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension"],
     rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly"],
     core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"],
-    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat"],
+    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat", "Barbell back squat", "Smith machine squat", "Barbell front squat"],
     hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift"],
-    unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up"],
+    unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat"],
     posterior: ["Prone leg curl Prime"],
     calves: ["Standing calf raise", "Single-leg calf raise"],
-    glutes: ["Hip thrust", "Barbell hip thrust", "Leg press high feet", "Cable glute kickback", "Glute hyperextension", "Cable pull-through"],
+    glutes: ["Hip thrust", "Barbell hip thrust", "Leg press high feet", "Cable glute kickback", "Glute hyperextension", "Cable pull-through", "Smith machine hip thrust"],
     // Low-fatigue glute work that fits even a day that protects the legs.
     glutesLight: ["Cable glute kickback", "Abduction machine forward lean", "Cable hip abduction", "Glute hyperextension"]
   };

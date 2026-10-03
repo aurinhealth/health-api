@@ -123,7 +123,32 @@ const ALIASES = new Map([
   ["db overhead triceps extension", "DB overhead triceps extension"],
   ["francouzský tlak", "DB overhead triceps extension"],
   ["single-leg calf raise", "Single-leg calf raise"],
-  ["single leg calf raise", "Single-leg calf raise"]
+  ["single leg calf raise", "Single-leg calf raise"],
+  ["barbell back squat", "Barbell back squat"],
+  ["back squat", "Barbell back squat"],
+  ["barbell squat", "Barbell back squat"],
+  ["dřep s osou", "Barbell back squat"],
+  ["barbell front squat", "Barbell front squat"],
+  ["front squat", "Barbell front squat"],
+  ["čelní dřep", "Barbell front squat"],
+  ["smith machine squat", "Smith machine squat"],
+  ["smith squat", "Smith machine squat"],
+  ["smith machine squat", "Smith machine squat"],
+  ["dřep na smithu", "Smith machine squat"],
+  ["smith machine split squat", "Smith machine split squat"],
+  ["smith split squat", "Smith machine split squat"],
+  ["smith bulgarian split squat", "Smith machine split squat"],
+  ["smith machine hip thrust", "Smith machine hip thrust"],
+  ["smith hip thrust", "Smith machine hip thrust"],
+  ["smith machine hip thrust", "Smith machine hip thrust"],
+  ["smith machine incline press", "Smith machine incline press"],
+  ["smith incline press", "Smith machine incline press"],
+  ["smith machine incline press", "Smith machine incline press"],
+  ["barbell overhead press", "Barbell overhead press"],
+  ["overhead press", "Barbell overhead press"],
+  ["military press", "Barbell overhead press"],
+  ["ohp", "Barbell overhead press"]
+
 ]);
 
 function key(value) {

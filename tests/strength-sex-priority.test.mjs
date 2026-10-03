@@ -16,7 +16,7 @@ test("METAGYM variations: glute work on cables, dumbbells and machines", () => {
   assert.ok(FOCUS_GROUPS.hips.exercises.length >= 10);
   assert.ok(findGymExercises("kickback").some(x => x.name === "Cable glute kickback"));
   assert.equal(normalizeExerciseName("cable kickback"), "Cable glute kickback");
-  assert.equal(availableAt("Back squat"), false);
+  assert.equal(normalizeExerciseName("back squat"), "Barbell back squat");
 });
 
 test("a woman's sessions put glutes first and chest later, without dropping it", () => {

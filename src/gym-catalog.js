@@ -67,7 +67,15 @@ const searchTerms={
   'Cable rope hammer curl':'kladivo biceps lano kladka',
   'Cable triceps kickback':'triceps kickback zapažování kladka',
   'DB overhead triceps extension':'triceps za hlavou jednoručka',
-  'Single-leg calf raise':'výpony jednonož lýtka jednoručka'
+  'Single-leg calf raise':'výpony jednonož lýtka jednoručka',
+  'Barbell back squat':'dřep s osou klec stehna hýždě',
+  'Barbell front squat':'čelní dřep osa klec stehna',
+  'Smith machine squat':'dřep smith stroj stehna',
+  'Smith machine split squat':'bulharský dřep smith hýždě výpad',
+  'Smith machine hip thrust':'hip thrust smith hýždě zdvih pánve',
+  'Smith machine incline press':'tlaky šikmá lavice smith horní prsa',
+  'Barbell overhead press':'tlak osy nad hlavu ramena military press'
+
 };
 
 export function gymExerciseCatalog(){

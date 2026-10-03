@@ -75,7 +75,15 @@ export const EXERCISE_INTELLIGENCE = {
   "Cable rope hammer curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable curl", "Hammer curl"] },
   "Cable triceps kickback": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable triceps extension"] },
   "DB overhead triceps extension": { muscle: "triceps", pattern: "elbow_extension", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.45, variants: ["Cable overhead triceps extension"] },
-  "Single-leg calf raise": { muscle: "calves", pattern: "plantar_flexion", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Standing calf raise"] }
+  "Single-leg calf raise": { muscle: "calves", pattern: "plantar_flexion", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Standing calf raise"] },
+  "Barbell back squat": { muscle: "quads", pattern: "knee_dominant", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.4, variants: ["Smith machine squat", "Pendulum squat"] },
+  "Barbell front squat": { muscle: "quads", pattern: "knee_dominant", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.3, variants: ["Barbell back squat", "Goblet squat"] },
+  "Smith machine squat": { muscle: "quads", pattern: "knee_dominant", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.2, variants: ["Barbell back squat", "Pendulum squat"] },
+  "Smith machine split squat": { muscle: "glutes", pattern: "lunge", equipment: "smith", unilateral: true, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB Bulgarian split squat", "DB reverse lunge"] },
+  "Smith machine hip thrust": { muscle: "glutes", pattern: "hip_extension", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["Barbell hip thrust", "Hip thrust"] },
+  "Smith machine incline press": { muscle: "chest", pattern: "incline_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB incline press"] },
+  "Barbell overhead press": { muscle: "shoulders", pattern: "vertical_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["DB shoulder press", "Shoulder press Prime"] }
+
 };
 
 function n(v) { const x = Number(v); return Number.isFinite(x) ? x : null; }
