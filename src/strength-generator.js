@@ -423,9 +423,9 @@ export function generateStrengthPlan(context, options = {}) {
 
   const rows = [], loadEstimates = [];
   const muscleLoad = recentMuscleLoad(history, context.date);
-  const durationVolume = focusMuscles && Number(options.durationMinutes) <= 45 ? .75 : focusMuscles && Number(options.durationMinutes) <= 60 ? .9 : 1;
+  const durationVolume = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? .75 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? .9 : 1;
   const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume);
-  const maxSets = focusMuscles && Number(options.durationMinutes) <= 45 ? 2 : focusMuscles && Number(options.durationMinutes) <= 60 ? 3 : 4;
+  const maxSets = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4;
   let warmedUp = false;
   for (const exercise of exercises) {
     const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier, maxSets, athleteSex(context, options));
