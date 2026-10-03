@@ -205,9 +205,10 @@ export function exerciseCountFor(minutes) {
   return m <= 35 ? 3 : m <= 50 ? 4 : m <= 65 ? 5 : m <= 80 ? 6 : 7;
 }
 const LEG_MUSCLES = new Set(["quads", "hamstrings", "glutes", "adductors", "abductors", "calves"]);
-// Training emphasis by sex: an order of priority, not a filter. Women usually
-// want more glutes and legs and less chest, men the other way round; every
-// pattern stays available and the session length decides how many are kept.
+// Sex is taken into account, not used to rank muscle groups: the session's
+// structure is the same for everyone. It sets the starting loads without
+// history and, in a close call between variants of one movement, leans a
+// woman's choice towards the glute-biased one.
 export function athleteSex(context, options = {}) {
   const sex = options.sex ?? context?.profile?.sex;
   return sex === "female" || sex === "male" ? sex : "";
@@ -254,10 +255,10 @@ function choosePlan(context, options = {}) {
     return recent + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0);
   };
 
-  // Within a pattern, the variant for the emphasised muscle wins a close call.
-  const sex = athleteSex(context, options), female = sex === "female";
-  const emphasis = female ? { glutes: -0.6, abductors: -0.3 } : {};
-  const sexNote = female ? " Pořadí cviků upřednostňuje hýždě a nohy, hrudník má nižší prioritu (profil: žena)." : "";
+  // Only a close call between variants: recency and muscle load still decide.
+  const female = athleteSex(context, options) === "female";
+  const emphasis = female ? { glutes: -0.2, abductors: -0.1 } : {};
+  const sexNote = female ? " Výchozí váhy bez historie a výběr variant cviků zohledňují profil (žena)." : "";
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
   const forceLower = options.focus === "lower";
@@ -276,10 +277,7 @@ function choosePlan(context, options = {}) {
     hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift"],
     unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat"],
     posterior: ["Prone leg curl Prime"],
-    calves: ["Standing calf raise", "Single-leg calf raise"],
-    glutes: ["Hip thrust", "Barbell hip thrust", "Leg press high feet", "Cable glute kickback", "Glute hyperextension", "Cable pull-through", "Smith machine hip thrust"],
-    // Low-fatigue glute work that fits even a day that protects the legs.
-    glutesLight: ["Cable glute kickback", "Abduction machine forward lean", "Cable hip abduction", "Glute hyperextension"]
+    calves: ["Standing calf raise", "Single-leg calf raise"]
   };
 
   // An exercise actually done in the last two days is left out entirely.
@@ -309,9 +307,7 @@ function choosePlan(context, options = {}) {
     return {
       ...base,
       name: "Upper Body",
-      exercises: build(female
-        ? ["horizontalPull", "verticalPull", "verticalPush", "glutesLight", "rearDelts", "lateralRaise", "horizontalPush", "triceps", "core", "biceps"]
-        : ["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", "rearDelts", "biceps", "triceps", "lateralRaise", "core"]),
+      exercises: build(["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", "rearDelts", "biceps", "triceps", "lateralRaise", "core"]),
       rationale: (options.focusSource === "week"
         ? "Podle týdenního plánu je kolem tohoto dne náročnější trénink na kole nebo běh, proto horní tělo a core; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
         : forceUpper
@@ -325,9 +321,7 @@ function choosePlan(context, options = {}) {
 
   if (forceLower) {
     // One knee-dominant movement, one hip hinge, then accessories.
-    const exercises = build(female
-      ? ["glutes", "quad", "hinge", "unilateral", "glutesLight", "posterior", "core", "calves"]
-      : ["quad", "hinge", "posterior", "unilateral", "core", "calves", "quad"]);
+    const exercises = build(["quad", "hinge", "posterior", "unilateral", "core", "calves", "quad"]);
     return {
       ...base,
       name: "Lower Body",
@@ -339,11 +333,9 @@ function choosePlan(context, options = {}) {
 
   // Full body: the freshest leg movement, then the second leg pattern
   // (knee after hip or hip after knee) among the upper-body patterns.
-  const leg = pick(female ? ["glutes"] : ["quad", "hinge", "posterior", "unilateral"]);
-  const kneeFirst = female || ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
-  const exercises = [leg, ...build(female
-    ? ["horizontalPull", ["quad", "unilateral"], "verticalPull", "verticalPush", "horizontalPush", "glutesLight", "core", "triceps"]
-    : ["horizontalPush", "horizontalPull", kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], "verticalPush", "verticalPull", "core", "biceps", "triceps"])].filter(Boolean);
+  const leg = pick(["quad", "hinge", "posterior", "unilateral"]);
+  const kneeFirst = ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
+  const exercises = [leg, ...build(["horizontalPush", "horizontalPull", kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], "verticalPush", "verticalPull", "core", "biceps", "triceps"])].filter(Boolean);
   return {
     ...base,
     name: "Full Body",

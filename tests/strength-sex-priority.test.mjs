@@ -19,27 +19,29 @@ test("METAGYM variations: glute work on cables, dumbbells and machines", () => {
   assert.equal(normalizeExerciseName("back squat"), "Barbell back squat");
 });
 
-test("a woman's sessions put glutes first and chest later, without dropping it", () => {
-  const full = generateStrengthPlan(context("female"), { durationMinutes: 60 });
-  assert.equal(EXERCISES[work(full)[0]].muscle, "glutes");
-  assert.ok(!muscles(full).includes("chest"));
-  assert.match(full.rationale, /hýždě/);
-  const long = generateStrengthPlan(context("female"), { durationMinutes: 90 });
-  assert.ok(muscles(long).includes("chest"));
-  const lower = generateStrengthPlan(context("female"), { focus: "lower", durationMinutes: 75 });
-  assert.ok(muscles(lower).filter(m => m === "glutes").length >= 2);
+test("sex does not reorder muscle groups: the same session structure for everyone", () => {
+  for (const focus of [undefined, "upper", "lower"]) {
+    const male = generateStrengthPlan(context("male"), { focus, durationMinutes: 75 });
+    const female = generateStrengthPlan(context("female"), { focus, durationMinutes: 75 });
+    assert.equal(work(female).length, work(male).length, String(focus));
+    assert.ok(muscles(female).includes(focus === "lower" ? "quads" : "chest"), String(focus));
+  }
+  assert.ok(muscles(generateStrengthPlan(context("female"), { durationMinutes: 75 })).includes("chest"));
 });
 
-test("a man's sessions keep the chest-first order", () => {
-  const upper = generateStrengthPlan(context("male"), { focus: "upper", durationMinutes: 60 });
-  assert.equal(EXERCISES[work(upper)[0]].muscle, "chest");
-  assert.doesNotMatch(upper.rationale, /profil: žena/);
+test("for a woman a close call between variants leans to the glute-biased one", () => {
+  const male = work(generateStrengthPlan(context("male"), { durationMinutes: 75 }));
+  const female = work(generateStrengthPlan(context("female"), { durationMinutes: 75 }));
+  assert.ok(male.includes("DB Romanian deadlift") && female.includes("Hip thrust"));
+  assert.match(generateStrengthPlan(context("female"), {}).rationale, /zohledňují profil \(žena\)/);
+  assert.doesNotMatch(generateStrengthPlan(context("male"), {}).rationale, /profil/);
 });
 
 test("one session does not repeat the same movement on two stations", () => {
-  const lower = generateStrengthPlan(context("female"), { focus: "lower", durationMinutes: 90 });
-  const thrusts = work(lower).filter(ex => EXERCISES[ex].pattern === "hip_extension");
-  assert.equal(thrusts.length, 1);
+  for (const sex of ["male", "female"]) {
+    const lower = generateStrengthPlan(context(sex), { focus: "lower", durationMinutes: 90 });
+    assert.ok(work(lower).filter(ex => EXERCISES[ex].pattern === "hip_extension").length <= 1, sex);
+  }
 });
 
 test("without history a woman starts lighter than the catalogue default", () => {
