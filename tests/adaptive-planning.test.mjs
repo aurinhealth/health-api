@@ -5,12 +5,12 @@ import { scopedDb } from '../src/tenancy.js';
 import { parseTimeWindow, normalizeAvailability, trainingBudget, validDay } from '../src/training-availability.js';
 import { getWeekPlan, saveWeekPlan, resetWeekPlan, sanitizeWeekPlan, nightlyGymSkip } from '../src/week-planner.js';
 import { getAthleteState, updateAthleteState, proactiveAdvice, explicitPreference } from '../src/athlete-state.js';
-import { capWeekTargets, weekProposal, environmentFor } from '../src/adaptive-week.js';
+import { capWeekTargets, weekProposal, environmentFor, activityHistoryEstimate } from '../src/adaptive-week.js';
 import { askCoach, assistantTask } from '../src/coach-assistant.js';
 import { scheduleWorkoutInIntervals, CYCLING_WORKOUTS } from '../src/workout-library.js';
 import { validateCoachActions } from '../src/coach-actions.js';
 
-test('clock windows support shorthand and cap a separate activity budget',()=>{
+test('availability means duration and retires legacy clock positions and sport preferences',()=>{
   assert.deepEqual(parseTimeWindow('10-15'),{start:'10:00',end:'15:00',minutes:300});
   assert.equal(parseTimeWindow('10:30–15:00').minutes,270);
   assert.throws(()=>parseTimeWindow('15-10'));
@@ -20,7 +20,8 @@ test('clock windows support shorthand and cap a separate activity budget',()=>{
   const p=sanitizeWeekPlan({availability:[{window:'10–15',minutes:180},{minutes:0}]});
   assert.equal(trainingBudget(p,'2026-10-05',240),180);
   assert.equal(trainingBudget(p,'2026-10-06',60),0);
-  assert.equal(normalizeAvailability([{window:'10-11',minutes:180}])[0].minutes,60);
+  assert.deepEqual(normalizeAvailability([{window:'10-11',minutes:180,preferredSports:['ride']}])[0],{window:'',minutes:180,preferredSports:[]});
+  assert.equal(normalizeAvailability([{window:'10-15'}])[0].minutes,300);
 });
 test('a week override expires by week and preserves defaults and other users',async()=>{
   const raw=createD1(),a=scopedDb(raw,1),b=scopedDb(raw,2);
@@ -47,6 +48,23 @@ test('an empty week uses availability and activity count without requiring CTL',
   assert.ok(p.items.every(x=>['2026-10-05','2026-10-07','2026-10-10'].includes(x.date)));
   assert.equal(p.targets.status,'estimated');
   assert.equal(weekProposal({prefs,start:'2026-10-05',today:'2026-10-05',state:{status:'sick'}}).items.length,0);
+});
+test('missing or short history uses a clear, bounded fallback instead of extrapolating a burst of activity',()=>{
+  assert.equal(activityHistoryEstimate([],'2026-10-05').status,'empty');
+  const short=[{date:'2026-10-04',daily:{training:{completed:Array(9).fill({type:'Ride'})}}}];
+  const estimate=activityHistoryEstimate(short,'2026-10-05');
+  assert.equal(estimate.status,'short');assert.equal(estimate.count,3);assert.match(estimate.message,/2 týdny a 4 aktivity/);
+  const prefs=sanitizeWeekPlan({availability:Array(7).fill({minutes:60})});
+  const proposal=weekProposal({prefs,start:'2026-10-05',today:'2026-10-05',history:short});
+  assert.equal(proposal.items.length,3);assert.ok(proposal.warnings.some(w=>w.text.includes('Historie je zatím krátká')));
+  const manual=weekProposal({prefs:{...prefs,weeklyActivities:2},start:'2026-10-05',today:'2026-10-05',history:short});
+  assert.equal(manual.items.length,2);assert.ok(!manual.warnings.some(w=>w.text.includes('Historie je zatím krátká')));
+});
+test('enough recent history estimates frequency for future weeks from the same recent sample',()=>{
+  const history=['2026-09-15','2026-09-19','2026-09-22','2026-09-25','2026-09-29','2026-10-02'].map(date=>({date,daily:{training:{completed:[{type:'Ride'}]}}}));
+  const estimate=activityHistoryEstimate(history,'2026-10-05');assert.equal(estimate.status,'ready');assert.equal(estimate.count,2);
+  const prefs=sanitizeWeekPlan({availability:Array(7).fill({minutes:60})});
+  assert.equal(weekProposal({prefs,start:'2026-10-12',today:'2026-10-05',history}).items.length,2);
 });
 test('winter and bad weather choose shorter indoor cycling with explicit fallback',()=>{
   assert.equal(environmentFor('2026-12-14','ride').environment,'indoor');
@@ -100,14 +118,14 @@ test('assistant actions cannot invent events, dates or illness from sensor data'
   assert.equal(validateCoachActions([{type:'status',status:'injured',reason:'Bolest kolene'}],{userMessage:'Bolí mě koleno'},'2026-10-05')[0].status,'injured');
 });
 
-test('calendar writes honor both the day budget and the clock-window start',async()=>{
+test('calendar writes honor the day budget without treating availability as a clock position',async()=>{
   const db=scopedDb(createD1(),1),original=globalThis.fetch,events=[];
   const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');assert.ok(workout);
   await saveWeekPlan(db,{availability:[{window:'10-15',minutes:65}]});
   globalThis.fetch=async(_,opts)=>{const event=JSON.parse(opts.body)[0];events.push(event);return Response.json([{id:123,category:'WORKOUT'}]);};
   try{
     await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',environment:'indoor',confirm:true});
-    assert.equal(events[0].start_date_local,'2026-10-05T10:00:00');
+    assert.equal(events[0].start_date_local,'2026-10-05T00:00:00');
     const other=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.id!==workout.id);
     await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',environment:'indoor',confirm:true}),/Součet/);
     assert.equal(events.length,1);

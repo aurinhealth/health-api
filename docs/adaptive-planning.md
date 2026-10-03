@@ -2,11 +2,13 @@
 
 ## Dostupnost
 
-V Nastavení → Časové možnosti a preference se ukládá běžný týden. Každý den má časové okno (například `10–15` nebo `10:30–15:00`), samostatný časový rozpočet v hodinách a preferované sporty. Okno `10–15` s rozpočtem 3 h tedy neznamená pětihodinový trénink. Prázdný rozpočet je neurčený, nula znamená den bez času. Okno omezuje horní hranici rozpočtu.
+V Nastavení → Časové možnosti se ukládá běžný týden. Časová dostupnost znamená celkovou délku, kterou lze daný den věnovat sportu, například 1 h 30 min. Upravuje se posuvníkem nebo přesným zadáním hodin a minut. Nejde o konkrétní hodiny dne. Neurčený den zůstává neurčený, nula znamená den bez sportu. Původní časová okna se převedou na uložený časový rozpočet (nebo délku okna, pokud rozpočet chybí); jejich začátek už neurčuje čas zápisu do kalendáře. Preference sportu z dostupnosti byly odstraněny.
 
-Ve Workoutech → Časové možnosti týdne lze nastavit výjimku pro vybraný týden. Výjimka má přednost před základem, nepřenáší se do dalších týdnů a lze ji odstranit tlačítkem Vrátit běžný týden. Změny sportovních kartiček v kalendáři nyní platí pro vybraný týden. Dřívější opakovaný rozvrh zůstává jako výchozí nastavení.
+Ve Workoutech → Časové možnosti lze nastavit výjimku pro vybraný týden. Výjimka má přednost před základem, nepřenáší se do dalších týdnů a lze ji odstranit tlačítkem Vrátit běžný týden. Změny sportovních kartiček v kalendáři platí pro vybraný týden. Dřívější opakovaný rozvrh zůstává jako výchozí nastavení.
 
-Počet aktivit za týden je volitelný. Bez něj se používá historie dokončených aktivit za poslední tři týdny a dostupný čas. Bez historie je konzervativním výchozím počtem 3. Nedostupné dny a již naplánované aktivity se respektují; prázdný kalendář bez dostupnosti vyzve k jejímu nastavení.
+Počet aktivit se zadává číslem, vedle je zaškrtávací volba Podle historie. Pro odhad se používá historie dokončených aktivit za poslední tři týdny; musí zahrnovat alespoň dva týdny a čtyři dokončené aktivity. Při chybějící či krátké historii editor i návrh týdne vysvětlí, že dočasným základem jsou nejvýše tři aktivity týdně podle dostupného času. Ruční počet má přednost. Nedostupné dny a již naplánované aktivity se respektují; prázdný kalendář bez dostupnosti vyzve k jejímu nastavení.
+
+Denní přehled výživy umožňuje přímo vybrat nápoj, zapsat šest obvyklých množství nebo vlastní množství a zobrazit či odstranit poslední zápisy. Celá historie pití zůstává dostupná přes odkaz Všechny zápisy.
 
 ## Návrhy a revize
 
