@@ -44,7 +44,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 <aside class="sidebar">
   <div class="brand"><strong>Petr Fitness Data</strong><span>Performance Command Center</span></div>
   <nav class="nav">
-    <button class="navbtn phone-only" data-view="today">◎ <span>Dnes</span></button>
+    <button class="navbtn" data-view="today">◎ <span>Dnes</span></button>
     <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
     <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
     <button class="navbtn" data-view="workouts">⌁ <span>Workouty</span></button>

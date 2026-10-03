@@ -1402,10 +1402,17 @@ function renderDayTimeline(){
   // Foods logged for the same meal are one group with summed macros.
   const groups=new Map();for(const e of (mealEntries||[]).filter(e=>(e.consumed_date||date)===date)){const slot=foodMealSlot(e),key=slot+'|'+(slot==='unassigned'?String(e.consumed_at||'').slice(11,16):'');if(!groups.has(key))groups.set(key,{slot,entries:[]});groups.get(key).entries.push(e);}
   for(const g of groups.values()){const s=mealSlots.find(x=>x.id===g.slot),sum=k=>g.entries.reduce((a,e)=>a+num(e[k]),0),first=g.entries.map(e=>e.consumed_at).filter(Boolean).sort()[0];items.push({t:first||(date+'T'+(s?.time||'12:00')+':00'),icon:'🍽',cls:'food',title:(s?.name||'Jídlo')+' · '+fmt(sum('kcal'))+' kcal',meta:g.entries.map(e=>esc(e.recipe_title||'Jídlo')).join(', ')+' · B '+fmt(sum('protein_g'))+' g · S '+fmt(sum('carbs_g'))+' g · T '+fmt(sum('fat_g'))+' g',raw:true});}
+  // Weigh-ins of the day with the change against the last earlier one. A weight
+  // written to Google Health comes back from it as the same point: shown once.
+  const weights=(state.weight?.records||[]).filter(r=>measured(r.value_numeric)).map(r=>({...r,day:pragueDay(r.sample_time)})).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time))),before=weights.filter(r=>r.day<date).at(-1),seen=new Set();
+  for(const w of weights.filter(r=>r.day===date)){const at=clock(w.sample_time),kg=num(w.value_numeric),key=at+'|'+fmt(kg,1);if(seen.has(key))continue;seen.add(key);const delta=before?kg-num(before.value_numeric):null;items.push({t:date+'T'+(at||'12:00')+':00',icon:'⚖',cls:'weight',title:'Váha · '+fmt(kg,1)+' kg',meta:delta==null?'první záznam':(delta>0?'+':delta<0?'−':'±')+fmt(Math.abs(delta),1)+' kg od '+dateLabel(before.day)});}
   items.sort((a,b)=>String(a.t||'').localeCompare(String(b.t||'')));
-  el.innerHTML='<div class="detail-heading"><div><div class="label">Timeline</div><h3>'+(date===pragueToday()?'Tvůj den':'Den '+esc(longDate(date)))+'</h3></div><button class="btn" type="button" id="timelineFood">＋ Zapsat jídlo</button></div>'+(items.length?'<ol class="timeline">'+items.map(x=>'<li class="tl-'+x.cls+'"><span class="tl-icon">'+x.icon+'</span><div><strong>'+esc(x.title)+'</strong><small>'+(x.raw?x.meta:esc(x.meta))+'</small></div><time>'+esc(x.cls==='planned'&&/T23:59/.test(x.t)?'plán':clock(x.t))+'</time></li>').join('')+'</ol>':'<div class="data-gap">Pro tento den zatím nic nemám.</div>');
+  el.innerHTML='<div class="detail-heading"><div><div class="label">Timeline</div><h3>'+(date===pragueToday()?'Tvůj den':'Den '+esc(longDate(date)))+'</h3></div><div class="actions"><button class="btn" type="button" id="timelineWeight">⚖ <span class="tl-verb">Zapsat </span>váhu</button><button class="btn" type="button" id="timelineFood">＋ <span class="tl-verb">Zapsat </span>jídlo</button></div></div>'+(items.length?'<ol class="timeline">'+items.map(x=>'<li class="tl-'+x.cls+'"><span class="tl-icon">'+x.icon+'</span><div><strong>'+esc(x.title)+'</strong><small>'+(x.raw?x.meta:esc(x.meta))+'</small></div><time>'+esc(x.cls==='planned'&&/T23:59/.test(x.t)?'plán':clock(x.t))+'</time></li>').join('')+'</ol>':'<div class="data-gap">Pro tento den zatím nic nemám.</div>');
   $('timelineFood').onclick=()=>{activate('nutrition');$('foodQuery')?.focus();};
+  $('timelineWeight').disabled=date>pragueToday();$('timelineWeight').onclick=()=>openWeightSheet(date);
 }
+// The Prague calendar day of a timestamp; one without a zone is already local.
+function pragueDay(v){const s=String(v||'');if(!/(Z|[+-]\d{2}:?\d{2})$/.test(s))return s.slice(0,10);const d=new Date(s);if(Number.isNaN(d.getTime()))return s.slice(0,10);const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d),g=t=>p.find(x=>x.type===t).value;return g('year')+'-'+g('month')+'-'+g('day');}
 
 // Copy a food entry to several days at once (also ahead, as a meal plan).
 function installMultiCopy(){
@@ -1483,11 +1490,13 @@ function renderToday(){
   const days=(hubDays()||state.week?.days||[]).map(d=>d.date);if(!state.todayPick||!days.includes(state.todayPick))state.todayPick=days.includes(date)?date:days[0];
   const strip=days.map(d=>{const items=todayItems(d),icons=[...new Set(items.map(x=>x.sport).filter(Boolean))].slice(0,3).map(s=>SPORT_ICON[s]).join('');return '<button type="button" class="strip-day'+(d===state.todayPick?' active':'')+(d===pragueToday()?' today':'')+'" data-strip="'+d+'"><span>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d+'T12:00:00Z')))+'</span><b>'+Number(d.slice(8))+'</b><i>'+(icons||'·')+'</i></button>';}).join('');
   const pick=state.todayPick,pickItems=todayItems(pick);
-  el.innerHTML='<div class="today-head"><div class="eyebrow">'+esc(longDate(date))+'</div><h1>'+(date!==pragueToday()?'Den':hour<10?'Dobré ráno':hour<18?'Dnes':'Dobrý večer')+'</h1></div>'+
+  el.innerHTML='<div class="today-layout"><div class="today-main"><div class="today-head"><div class="eyebrow">'+esc(longDate(date))+'</div><h1>'+(date!==pragueToday()?'Den':hour<10?'Dobré ráno':hour<18?'Dnes':'Dobrý večer')+'</h1></div>'+
     '<div class="mini-rings">'+miniRing('Spánek',sleep==null?'—':sleep+'%',sleep||0,'#a99bff',night?hm(night.durationMin):'bez záznamu','recovery')+miniRing('Zátěž',done?fmt(done):'—',plan?done/plan*100:done?100:0,'#83e9c3',plan?'plán '+fmt(plan)+' TSS':'TSS dnes','training')+miniRing('Kalorie',target?fmt(num(food.kcal)/target*100)+'%':'—',target?num(food.kcal)/target*100:0,'#ffc274',fmt(food.kcal)+' / '+fmt(target)+' kcal','nutrition')+'</div>'+
     '<article class="card today-card"><div class="label">Trénink · '+esc(pick===pragueToday()?'dnes':longDate(pick))+'</div>'+(pickItems.length?pickItems.map(todayItemHtml).join(''):'<p class="small">Volno. Sport na tento den přidáš ve Workoutech v plánu týdne.</p>')+'<div class="week-strip" role="group" aria-label="Dny týdne">'+strip+'</div></article>'+
-    '<div id="todayTimelineSlot"></div><button type="button" class="btn today-more" data-go="overview">Celý přehled dne →</button>';
-  const tl=$('dayTimeline');if(tl)$('todayTimelineSlot').appendChild(tl);
+    '</div><div id="todayTimelineSlot"></div></div><button type="button" class="btn today-more" data-go="overview">Celý přehled dne →</button>';
+  // One timeline for both screens: it moves here only while Dnes is shown,
+  // otherwise a data reload would take it out of the visible Přehled.
+  const tl=$('dayTimeline');if(tl&&el.classList.contains('active'))$('todayTimelineSlot').appendChild(tl);
 }
 async function todayAction(b){
   const a=b.dataset.today;
@@ -1504,13 +1513,14 @@ async function openRpeSheet(){
   $('sheetBody').innerHTML=due.length?due.map(w=>'<div class="rpe-pick" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><strong>'+esc(w.name)+'</strong><small>'+esc(longDate(w.scheduled_date))+(w.completed_percent!=null?' · dokončeno '+Math.round(w.completed_percent)+' %':'')+'</small><div class="rpe-scale">'+[1,2,3,4,5,6,7,8,9,10].map(n=>'<button type="button" data-rpe="'+n+'">'+n+'</button>').join('')+'</div></div>').join('')+'<p class="small">1–2 velmi lehce · 5–6 středně · 9–10 maximum. Uloží se i do Intervals.icu.</p>':'<p class="small">Žádný odjetý workout z knihovny nečeká na RPE.</p>';
   $('sheetBody').onclick=async e=>{const b=e.target.closest('[data-rpe]');if(!b)return;const row=b.closest('.rpe-pick');b.disabled=true;try{const r=await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:row.dataset.id,scheduledDate:row.dataset.date,rpe:Number(b.dataset.rpe)})});row.innerHTML='<strong>✓ RPE '+b.dataset.rpe+' uloženo</strong><small>'+(r.intervals?.status==='ok'?'i v Intervals.icu':'v aplikaci')+'</small>';}catch(error){toast(error.message);b.disabled=false;}};
 }
-function openWeightSheet(){
+function openWeightSheet(date=pragueToday()){
   // The last weight, or an empty field to type the first one.
+  if(typeof date!=='string'||date>pragueToday())date=pragueToday();
   const last=Number((state.weight?.records||[]).filter(r=>measured(r.value_numeric)).at(-1)?.value_numeric)||null;
-  openSheet('Zapsat váhu','<div class="stepper big"><button type="button" data-step="-0.1">−</button><input id="weightValue" class="food-input" type="text" inputmode="decimal" autocomplete="off" placeholder="kg" aria-label="Váha v kg" style="width:7ch;text-align:center;font-size:inherit" value="'+(last?last.toFixed(1):'')+'"><button type="button" data-step="0.1">+</button></div><p class="small" style="text-align:center">kg · dnes</p><button type="button" class="btn primary sheet-wide" id="weightSave">Uložit</button>',body=>{
+  openSheet('Zapsat váhu','<div class="stepper big"><button type="button" data-step="-0.1">−</button><input id="weightValue" class="food-input" type="text" inputmode="decimal" autocomplete="off" placeholder="kg" aria-label="Váha v kg" style="width:7ch;text-align:center;font-size:inherit" value="'+(last?last.toFixed(1):'')+'"><button type="button" data-step="0.1">+</button></div><p class="small" style="text-align:center">kg · '+esc(date===pragueToday()?'dnes':longDate(date))+'</p><button type="button" class="btn primary sheet-wide" id="weightSave">Uložit</button>',body=>{
     const read=()=>Number(String($('weightValue').value).replace(',','.'));
     body.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>{const v=read();if(v>0)$('weightValue').value=(Math.round((v+Number(b.dataset.step))*10)/10).toFixed(1);});
-    $('weightSave').onclick=async()=>{const v=Math.round(read()*10)/10;if(!(v>=30&&v<=300))return toast('Zadej váhu v kg.');try{await jsonFetch('/app/api/weight',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kg:v})});closeSheet();toast('Váha '+fmt(v,1)+' kg je uložená.');load();}catch(error){toast(error.message);}};
+    $('weightSave').onclick=async()=>{const v=Math.round(read()*10)/10;if(!(v>=30&&v<=300))return toast('Zadej váhu v kg.');try{await jsonFetch('/app/api/weight',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kg:v,date})});closeSheet();toast('Váha '+fmt(v,1)+' kg je uložená.');load();}catch(error){toast(error.message);}};
   });
 }
 function openQuickAdd(){

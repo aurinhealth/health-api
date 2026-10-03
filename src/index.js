@@ -177,7 +177,10 @@ async function appWeight(env, request) {
   const body = await request.json();
   const value = Number(body?.kg);
   if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:"Neplatná hmotnost."},{status:400});
-  const date = body?.date || pragueDate(), at = date+"T12:00:00+02:00";
+  const today = pragueDate(), date = body?.date || today;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) return Response.json({status:"error",message:"Neplatné datum vážení."},{status:400});
+  // Today's weigh-in keeps its real time (for the day timeline); an earlier day gets noon.
+  const now = date === today ? pragueNow() : null, at = now ? now.at : date+"T12:00:00+02:00";
   // With Google Health connected the weight goes there too; without it, only
   // here. A refused Google write (no write permission) does not lose the entry.
   let google = null;
@@ -187,7 +190,7 @@ async function appWeight(env, request) {
       const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
         method:"POST",
         headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
-        body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:"7200s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
+        body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:(now?now.offsetSeconds:7200)+"s"},weightGrams:value*1000,notes:"Petr Fitness Data"}})
       });
       google = await response.json().catch(()=>({}));
       if (!response.ok) { console.error("Google Health weight write failed", response.status); google = { error: response.status }; }
@@ -247,6 +250,13 @@ const CONFIG = {
 // ======================================================
 // DATE HELPERS
 // ======================================================
+
+// The current Prague wall-clock time with its UTC offset (CET or CEST).
+function pragueNow() {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZoneName: "longOffset" }).formatToParts(new Date()).map(x => [x.type, x.value]));
+  const offset = String(p.timeZoneName || "").replace("GMT", "") || "+00:00", [, sign, h, m] = offset.match(/([+-])(\d{2}):(\d{2})/) || [, "+", "00", "00"];
+  return { at: `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${offset}`, offsetSeconds: (sign === "-" ? -1 : 1) * (Number(h) * 3600 + Number(m) * 60) };
+}
 
 function pragueDate() {
   const parts = new Intl.DateTimeFormat(
