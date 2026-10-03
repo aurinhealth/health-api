@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { hydrationTarget, addFluid, listFluids, deleteFluid, dayActivityHours } from "../src/fluids.js";
+import { hydrationTarget, addFluid, listFluids, deleteFluid, dayActivityHours, drinkFromFoodEntry, foodDrinks } from "../src/fluids.js";
 
 test("drink target: 30 ml/kg plus 0.5 l per training hour, rounded and bounded", () => {
   assert.deepEqual(hydrationTarget({ weightKg: 81.4, trainingHours: 2 }), { ml: 3400, baseMl: 2400, exerciseMl: 1000, weightKg: 81.4, trainingHours: 2, walkHours: 0 });
@@ -51,4 +51,22 @@ test("the dashboard has the day overview with drinks, compact meals and quick lo
   // The meal select knows both snacks, so "+" on a snack selects it.
   assert.match(client, /meal\.innerHTML=mealSlots\.map\(s=>'<option value="'\+s\.id\+'">'/);
   assert.match(client, /\$\('foodAddDirect'\)\.onclick=\(\)=>\$\('basketSave'\)\.click\(\);/);
+});
+
+test("drinks logged as food count automatically; alcohol and foods in grams do not", async () => {
+  const note = o => JSON.stringify(o);
+  assert.equal(drinkFromFoodEntry({ id: 1, consumed_at: "2026-10-03T15:00:00", recipe_title: "Monster Energy", note: note({ amount: 500, unit: "ml" }) }).ml, 500);
+  // "Přidat" logs a meal of one or more ingredients; the ml ones are drinks.
+  const meal = drinkFromFoodEntry({ id: 2, recipe_title: "Snídaně", note: note({ amount: 1, unit: "portion", ingredients: [{ name: "Káva s mlékem", amount: 250, unit: "ml" }, { name: "Rohlík", amount: 43, unit: "g" }] }) });
+  assert.equal(meal.ml, 250);
+  const beer = drinkFromFoodEntry({ id: 3, recipe_title: "Pivo Plzeň", note: note({ amount: 500, unit: "ml" }) });
+  assert.deepEqual([beer.ml, beer.alcohol, beer.totalMl], [0, true, 500]);
+  assert.equal(drinkFromFoodEntry({ id: 4, recipe_title: "Jogurt", note: note({ amount: 150, unit: "g" }) }), null);
+
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, recipe_title TEXT, note TEXT)");
+  raw.sqlite.prepare("INSERT INTO food_logs (user_id, consumed_date, consumed_at, recipe_title, note) VALUES (7, '2026-10-03', '2026-10-03T15:00:00', 'Monster Energy', ?)").run(note({ amount: 500, unit: "ml" }));
+  raw.sqlite.prepare("INSERT INTO food_logs (user_id, consumed_date, consumed_at, recipe_title, note) VALUES (8, '2026-10-03', '2026-10-03T15:00:00', 'Cola', ?)").run(note({ amount: 330, unit: "ml" }));
+  const drinks = await foodDrinks(scopedDb(raw, 7), 7, "2026-10-03");
+  assert.deepEqual(drinks.map(d => [d.name, d.ml, d.kind]), [["Monster Energy", 500, "food"]]);
 });

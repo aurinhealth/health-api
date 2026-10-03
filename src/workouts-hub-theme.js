@@ -283,7 +283,7 @@ body.gym-mode-open{overflow:hidden}
 .scan-box{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}.scan-box video{width:100%;height:100%;object-fit:cover;display:block}
 .scan-frame{position:absolute;left:12%;right:12%;top:33%;bottom:33%;border:3px solid #83e9c3;border-radius:12px;box-shadow:0 0 0 999px #0008}.scan-photo{margin-top:10px;display:block;text-align:center}
 .fluid-kinds,.fluid-amounts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.fluid-kinds .btn.active{background:#16303a;border-color:#64d2ff}
-.fluid-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #262d39}.fluid-row .btn{padding:4px 9px}
+.fluid-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #262d39}.fluid-row .btn{padding:4px 9px}.fluid-row small{display:block;color:#9ca6b5;font-size:11px}
 .tl-water .tl-icon{background:#16303a}
 .mini-rings{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 @media(max-width:900px){.nutrition-home{grid-template-columns:1fr}}

@@ -23,7 +23,7 @@ import {askCoach,coachContext} from './coach-assistant.js';
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
 import { lookupFoodWithAI } from "./food-ai.js";
-import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours } from "./fluids.js";
+import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
@@ -509,10 +509,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       if(request.method==='GET'){
         const date=validDay(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
-        const [entries,weight,profile,hours]=await Promise.all([listFluids(env.DB,date),
+        const [logged,fromFood,weight,profile,hours]=await Promise.all([listFluids(env.DB,date),foodDrinks(env.DB,env.USER_ID,date),
           env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='weight' AND value_numeric IS NOT NULL AND COALESCE(sample_time,start_time,end_time)<=? ORDER BY COALESCE(sample_time,start_time,end_time) DESC LIMIT 1").bind(env.USER_ID,date+'T23:59:59').first().catch(()=>null),
           dashboardProfile(env).catch(()=>null),dayActivityHours(env.DB,env.USER_ID,date)]);
         const target=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
+        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt)));
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),target},{headers:{'Cache-Control':'no-store'}});
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});

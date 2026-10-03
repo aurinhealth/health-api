@@ -56,6 +56,26 @@ export async function listFluids(db, date) {
   return rows.map(r => ({ id: r.id, date: r.date, consumedAt: r.consumed_at, ml: Number(r.ml), kind: r.kind }));
 }
 
+// Drinks logged in the food diary count too: an entry measured in ml, or the
+// ml ingredients of a composed meal. Alcohol is not counted as fluid.
+const ALCOHOL = /(pivo|piva|beer|ležák|lezak|radler|víno|vína|vino|wine|prosecco|šampaň|sekt|vodka|rum\b|whisk|slivovic|gin\b|likér|liker|panák|alkohol)/i;
+export function drinkFromFoodEntry(row) {
+  let note = {};
+  try { note = typeof row.note === "string" ? JSON.parse(row.note || "{}") : row.note || {}; } catch { note = {}; }
+  const name = String(row.recipe_title || "Nápoj");
+  const parts = note.unit === "ml" ? [{ name, ml: Number(note.amount) }]
+    : (Array.isArray(note.ingredients) ? note.ingredients : []).filter(i => i?.unit === "ml").map(i => ({ name: String(i.name || name), ml: Number(i.amount) }));
+  const valid = parts.filter(p => p.ml > 0 && p.ml <= 5000);
+  if (!valid.length) return null;
+  const counted = valid.filter(p => !ALCOHOL.test(p.name)).reduce((s, p) => s + p.ml, 0);
+  return { id: "food:" + row.id, foodId: row.id, consumedAt: String(row.consumed_at || "").slice(0, 16), ml: Math.round(counted), name, kind: "food", alcohol: counted === 0, totalMl: Math.round(valid.reduce((s, p) => s + p.ml, 0)) };
+}
+
+export async function foodDrinks(db, userId, date) {
+  const rows = (await db.prepare("SELECT id,consumed_at,recipe_title,note FROM food_logs WHERE user_id=? AND consumed_date=? ORDER BY consumed_at").bind(userId, date).all().catch(() => ({ results: [] }))).results || [];
+  return rows.map(drinkFromFoodEntry).filter(Boolean);
+}
+
 // Training and walking hours of a day: done sessions, or the planned ones when
 // more is planned than done yet.
 export async function dayActivityHours(db, userId, date) {
