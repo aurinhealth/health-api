@@ -1904,24 +1904,26 @@ async function weightHistory(env, days = null) {
   if (Number.isFinite(Number(days)) && Number(days) > 0) {
     const cutoff = dateDaysAgo(Number(days));
     const rows = await env.DB.prepare(`
-      SELECT sample_time, value_numeric
+      SELECT COALESCE(sample_time, start_time, end_time) AS sample_time, value_numeric
       FROM health_datapoints
       WHERE user_id = ?
         AND data_type = 'weight'
         AND value_numeric IS NOT NULL
-        AND sample_time >= ?
-      ORDER BY sample_time ASC
+        AND COALESCE(sample_time, start_time, end_time) >= ?
+      ORDER BY 1 ASC
     `).bind(env.USER_ID, cutoff).all();
     return rows.results;
   }
 
+  // Some imports keep the time in start_time only; a weight without any time is left out.
   const rows = await env.DB.prepare(`
-    SELECT sample_time, value_numeric
+    SELECT COALESCE(sample_time, start_time, end_time) AS sample_time, value_numeric
     FROM health_datapoints
     WHERE user_id = ?
       AND data_type = 'weight'
       AND value_numeric IS NOT NULL
-    ORDER BY sample_time ASC
+      AND COALESCE(sample_time, start_time, end_time) IS NOT NULL
+    ORDER BY 1 ASC
   `).bind(env.USER_ID).all();
 
   return rows.results;

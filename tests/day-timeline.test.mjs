@@ -47,3 +47,21 @@ test("a weight for a future or malformed day is refused", async () => {
   assert.equal((await post(env, { kg: 80, date: "2999-01-01" })).status, 400);
   assert.equal((await post(env, { kg: 80, date: "zítra" })).status, 400);
 });
+
+test("one bad record does not empty the timeline: each source is drawn on its own", () => {
+  for (const source of ["sleep", "activities", "other activities", "planned", "food", "weight", "coach"]) assert.ok(client.includes("add('" + source + "',()=>{"), source);
+  assert.match(client, /add=\(source,fn\)=>\{try\{fn\(\);\}catch\(error\)\{console\.error\('Timeline: '\+source,error\);\}\}/);
+  // A weight without a valid day (null sample_time) is skipped before dateLabel can throw.
+  assert.match(client, /\.filter\(r=>\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(r\.day\)/);
+  assert.match(client, /items\.sort\(\(a,b\)=>\(clock\(a\.t\)\|\|''\)\.localeCompare\(clock\(b\.t\)\|\|''\)\)/);
+});
+
+test("weights without sample_time use start_time; ones without any time are left out", async () => {
+  const env = weightEnv();
+  env.DB.sqlite.exec(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, sample_time, value_numeric) VALUES
+    (7, 'google', 'weight', 'a', '2026-10-03T05:12:00Z', NULL, 81.4),
+    (7, 'google', 'weight', 'b', NULL, NULL, 90),
+    (7, 'manual', 'weight', 'c', NULL, '2026-10-02T12:00:00+02:00', 81.9)`);
+  const r = await (await legacy.fetch(new Request("https://internal/health/weight"), env, { waitUntil() {} })).json();
+  assert.deepEqual(r.records.map(x => [x.sample_time, x.value_numeric]), [["2026-10-02T12:00:00+02:00", 81.9], ["2026-10-03T05:12:00Z", 81.4]]);
+});
