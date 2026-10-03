@@ -50,7 +50,13 @@ test("the dashboard has the day overview with drinks, compact meals and quick lo
   assert.match(client, /searchFood=async function\(\)\{await search\(\);if\(\$\('foodBarcode'\)\.value\.trim\(\)&&!foodCandidates\.length&&\$\('foodAiLookup'\)\)await lookupFoodAi\(\);\}/);
   // The meal select knows both snacks, so "+" on a snack selects it.
   assert.match(client, /meal\.innerHTML=mealSlots\.map\(s=>'<option value="'\+s\.id\+'">'/);
-  assert.match(client, /\$\('foodAddDirect'\)\.onclick=\(\)=>\$\('basketSave'\)\.click\(\);/);
+  assert.match(client, /\$\('foodAddDirect'\)\.onclick=\(\)=>\$\('basketSave'\)\.onclick\(\);/);
+  // Logging lives in a panel that "+" on a meal opens; a saved meal closes it.
+  assert.match(client, /function startMealLog\(slot\)\{openFoodLogger\(slot\);\}/);
+  assert.match(client, /\$\('foodPanelBody'\)\.append\(entry\);/);
+  assert.match(client, /if\(\(mealEntries\|\|\[\]\)\.length>before\)\{closeFoodLogger\(\);/);
+  // "Co dál dnes?" replaces the energy-by-meal chart.
+  assert.match(client, /chart\.classList\.add\('replaced'\);chart\.after\(next\);/);
 });
 
 test("drinks logged as food count automatically; alcohol and foods in grams do not", async () => {

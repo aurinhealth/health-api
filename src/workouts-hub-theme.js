@@ -285,6 +285,13 @@ body.gym-mode-open{overflow:hidden}
 .fluid-kinds,.fluid-amounts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.fluid-kinds .btn.active{background:#16303a;border-color:#64d2ff}
 .fluid-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #262d39}.fluid-row .btn{padding:4px 9px}.fluid-row small{display:block;color:#9ca6b5;font-size:11px}
 .tl-water .tl-icon{background:#16303a}
+#todayMore{margin-top:16px}#todayMore .section{margin-top:20px}#todayMore .quick-grid .card{padding:13px}#todayMore .quick-grid .value{font-size:25px}
+.food-panel{position:fixed;inset:0;z-index:70}.food-panel-backdrop{position:absolute;inset:0;background:#000a}
+.food-panel-sheet{position:absolute;top:4vh;max-height:92vh;left:50%;transform:translateX(-50%);width:min(920px,calc(100% - 32px));overflow:auto;background:#121820;border:1px solid #2d3644;border-radius:20px;padding:6px 18px 18px;box-shadow:0 24px 60px #000c}
+.food-panel-head{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;background:#121820;border-bottom:1px solid #262e3a;margin-bottom:8px}.food-panel-head h3{margin:0}
+.food-panel #foodEntry{margin:0!important;border:0!important;background:none!important;padding:0!important;box-shadow:none!important}
+body.food-panel-open{overflow:hidden}#nutrition>.grid2:has(>.card:only-child){grid-template-columns:1fr}#mealDistribution.replaced{display:none!important}
+@media(max-width:700px){.food-panel-sheet{top:0;bottom:0;max-height:none;left:0;transform:none;width:100%;border-radius:0;border:0;padding:calc(6px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom))}}
 .today-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.review-btn{padding:5px 10px!important;font-size:12px!important;min-height:0!important}
 .review-card{padding:12px 14px;border-radius:14px;background:#151b26;border:1px solid #2a3140;margin-bottom:10px}.review-card ul{margin:6px 0;padding-left:18px;display:grid;gap:4px;font-size:13px}.review-card h4{margin:10px 0 2px;font-size:13px}
 .review-verdict{font-weight:700;font-size:15px}.verdict-ok .review-verdict{color:#83e9c3}.verdict-adjust .review-verdict{color:#ffc274}.verdict-swap .review-verdict{color:#9fc6ff}.verdict-rest .review-verdict{color:#ff9c97}.review-headline{margin:6px 0;font-size:14px}

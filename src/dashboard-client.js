@@ -785,7 +785,7 @@ function latestVo2(){const google=latestGoogleMetric('vo2max'),intervals=(state.
 function labelSelectedDay(){
   // Headings are matched by their text: their order changes as sections are added.
   const past=selectedHistoryDate!==pragueToday(),rename={'Denní signály':'Signály dne','Dnešní poradci a hodnocení':'Poradci a hodnocení dne'};
-  for(const el of document.querySelectorAll('#overview>.section')){const t=el.textContent;for(const [today,day] of Object.entries(rename))if(t===today||t===day)el.textContent=past?day:today;}
+  for(const el of document.querySelectorAll('#overview>.section,#todayMore>.section')){const t=el.textContent;for(const [today,day] of Object.entries(rename))if(t===today||t===day)el.textContent=past?day:today;}
   const heading=document.querySelector('#nutritionBalance h3');if(heading)heading.textContent='Energie dne';
   for(const node of document.querySelectorAll('#nutritionBalance .experience-stats span')){
     if(node.textContent==='Dnešní cíl'||node.textContent==='Cíl dne')node.textContent=past?'Cíl dne':'Dnešní cíl';
@@ -1451,7 +1451,7 @@ function renderDayTimeline(){
   // Intervals.icu times are local, Google Health ones UTC: order by Prague time.
   items.sort((a,b)=>(clock(a.t)||'').localeCompare(clock(b.t)||''));
   el.innerHTML='<div class="detail-heading"><div><div class="label">Timeline</div><h3>'+(date===pragueToday()?'Tvůj den':'Den '+esc(longDate(date)))+'</h3></div><div class="actions"><button class="btn" type="button" id="timelineWeight">⚖ <span class="tl-verb">Zapsat </span>váhu</button><button class="btn" type="button" id="timelineFood">＋ <span class="tl-verb">Zapsat </span>jídlo</button><button class="btn" type="button" id="timelineCoach">💬 Kouč</button></div></div>'+(items.length?'<ol class="timeline">'+items.map(x=>'<li class="tl-'+x.cls+'"><span class="tl-icon">'+x.icon+'</span><div><strong>'+esc(x.title)+'</strong><small>'+(x.raw?x.meta:esc(x.meta))+'</small></div><time>'+esc(x.label||(x.cls==='planned'&&/T23:59/.test(x.t)?'plán':clock(x.t)))+'</time></li>').join('')+'</ol>':'<div class="data-gap">Pro tento den zatím nic nemám.</div>');
-  $('timelineFood').onclick=()=>{activate('nutrition');$('foodQuery')?.focus();};
+  $('timelineFood').onclick=()=>openFoodLogger();
   $('timelineWeight').disabled=date>pragueToday();$('timelineWeight').onclick=()=>openWeightSheet(date);
   $('timelineCoach').disabled=date>pragueToday();$('timelineCoach').onclick=()=>openCoachSheet(date);
 }
@@ -1558,10 +1558,10 @@ function renderToday(){
   // The timeline may sit in this screen: park it back in Přehled before the
   // screen is rebuilt, or the rebuild would delete it.
   const parked=$('dayTimeline');if(parked&&el.contains(parked))$('dailyPulse')?.after(parked);
-  el.innerHTML='<div class="today-layout"><div class="today-main"><div class="today-head"><div class="eyebrow">'+esc(longDate(date))+'</div><h1>'+(date!==pragueToday()?'Den':hour<10?'Dobré ráno':hour<18?'Dnes':'Dobrý večer')+'</h1></div>'+
+  ($('todayTop')||el).innerHTML='<div class="today-layout"><div class="today-main"><div class="today-head"><div class="eyebrow">'+esc(longDate(date))+'</div><h1>'+(date!==pragueToday()?'Den':hour<10?'Dobré ráno':hour<18?'Dnes':'Dobrý večer')+'</h1></div>'+
     '<div class="mini-rings">'+miniRing('Spánek',sleep==null?'—':sleep+'%',sleep||0,'#a99bff',night?hm(night.durationMin):'bez záznamu','recovery')+miniRing('Zátěž',done?fmt(done):'—',plan?done/plan*100:done?100:0,'#83e9c3',plan?'plán '+fmt(plan)+' TSS':'TSS dnes','training')+miniRing('Kalorie',target?fmt(num(food.kcal)/target*100)+'%':'—',target?num(food.kcal)/target*100:0,'#ffc274',fmt(food.kcal)+' / '+fmt(target)+' kcal','nutrition')+(()=>{const f=state.fluids?.[date];return miniRing('Pití',f?fluidLabel(f.totalMl):'—',f?f.totalMl/Math.max(1,f.target.ml)*100:0,'#64d2ff',f?'cíl '+fluidLabel(f.target.ml):'načítám','water');})()+'</div>'+
     '<article class="card today-card"><div class="today-card-head"><div class="label">Trénink · '+esc(pick===pragueToday()?'dnes':longDate(pick))+'</div><button type="button" class="btn review-btn" data-review="'+esc(pick)+'">🔍 Revize dne</button></div>'+(pickItems.length?pickItems.map(todayItemHtml).join(''):'<p class="small">Volno. Sport na tento den přidáš ve Workoutech v plánu týdne.</p>')+'<div class="week-strip" role="group" aria-label="Dny týdne">'+strip+'</div></article>'+
-    '</div><div id="todayTimelineSlot"></div></div><button type="button" class="btn today-more" data-go="overview">Celý přehled dne →</button>';
+    '</div><div id="todayTimelineSlot"></div></div>';
   // One timeline for both screens: it moves here only while Dnes is shown,
   // otherwise a data reload would take it out of the visible Přehled.
   const tl=$('dayTimeline');if(tl&&el.classList.contains('active'))$('todayTimelineSlot').appendChild(tl);
@@ -1595,7 +1595,7 @@ function openQuickAdd(){
   openSheet('Rychle zapsat','<div class="quick-actions">'+[['food','🍽','Jídlo'],['barcode','▥','Čárový kód'],['label','📷','Fotka etikety'],['water','💧','Pití'],['weight','⚖','Váha'],['rpe','💬','RPE tréninku'],['gym','🏋️','Gym trénink']].map(([k,i,l])=>'<button type="button" data-quick="'+k+'"><span>'+i+'</span>'+l+'</button>').join('')+'</div>',body=>body.onclick=e=>{const b=e.target.closest('[data-quick]');if(!b)return;const k=b.dataset.quick;
     if(k==='water')return openFluidSheet(selectedHistoryDate);if(k==='weight')return openWeightSheet();if(k==='rpe')return openRpeSheet();closeSheet();
     if(k==='gym')return openGymMode();
-    activate('nutrition');if(k==='barcode')$('foodBarcodePhoto')?.click();else if(k==='label')$('foodLabelPhoto')?.click();else setTimeout(()=>{$('foodQuery')?.focus();$('foodEntry')?.scrollIntoView({behavior:'smooth',block:'start'});},50);});
+    if(k==='barcode')return openBarcodeScanner();openFoodLogger();if(k==='label')$('foodLabelPhoto')?.click();});
 }
 
 // Gym workout mode: one set at a time, steppers for weight and reps, RPE, rest timer.
@@ -1665,7 +1665,7 @@ function installPhoneLayer(){
   $('startGymMode').onclick=openGymMode;
   const previous=load;load=async()=>{await previous();await loadWeekPlan().catch(()=>{});renderToday();};
   const wasActivate=activate;activate=function(id){wasActivate(id);$('quickAdd').hidden=id==='settings';if(id!=='today'){const tl=$('dayTimeline'),pulse=$('dailyPulse');if(id==='overview'&&tl&&pulse)pulse.after(tl);}else renderToday();};
-  if(isPhone())activate('today');
+  activate('today');
 }
 installPhoneLayer();
 
@@ -1843,7 +1843,7 @@ function renderMealList(){
   el.querySelectorAll('[data-meal-pref]').forEach(input=>input.onchange=()=>{const selected=[...el.querySelectorAll('[data-meal-pref]:checked')].map(i=>i.dataset.mealPref);if(!selected.length){input.checked=true;return toast('Nech vybrané alespoň jedno jídlo.');}mealEnabled=selected;try{localStorage.setItem('pfd-meals-v1',JSON.stringify(selected));}catch{}renderMealDiary();});
 }
 // "+" on a meal: log into it.
-function startMealLog(slot){setFoodMeal(slot);activate('nutrition');$('foodEntry').scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>$('foodQuery').focus({preventScroll:true}),350);foodMessage('Zapisuješ do: '+(mealSlots.find(s=>s.id===slot)?.name||'jídla'));}
+function startMealLog(slot){openFoodLogger(slot);}
 function setFoodMeal(slot){if(!$('foodMeal'))return;$('foodMeal').value=slot;document.querySelectorAll('[data-meal-chip]').forEach(b=>b.classList.toggle('active',b.dataset.mealChip===slot));const add=$('foodAddDirect');if(add)add.textContent='Přidat · '+(mealSlots.find(s=>s.id===slot)?.name||'jídlo');}
 function mealByTime(){const h=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));return h<10?'breakfast':h<12?'snack_am':h<15?'lunch':h<18?'snack_pm':'dinner';}
 
@@ -1888,7 +1888,7 @@ let scanStop=null;
 async function openBarcodeScanner(){
   openSheet('Skenovat čárový kód','<div class="scan-box"><video id="scanVideo" playsinline muted autoplay></video><div class="scan-frame"></div></div><p class="small" id="scanStatus">Spouštím kameru…</p><div class="food-controls"><input id="scanManual" class="food-input" inputmode="numeric" placeholder="Nebo opiš číslo EAN"><button type="button" class="btn" id="scanManualOk">OK</button></div><label class="btn sheet-wide scan-photo">📷 Vyfotit místo skenování<input hidden id="scanPhoto" type="file" accept="image/*" capture="environment"></label>',body=>{
     $('scanManualOk').onclick=()=>{const code=$('scanManual').value.replace(/\D/g,'');if(!/^\d{8,14}$/.test(code))return toast('EAN má 8–14 číslic.');barcodeFound(code);};
-    $('scanPhoto').onchange=e=>{const file=e.target.files[0];closeSheet();activate('nutrition');readFoodPhoto(file,'barcode');};
+    $('scanPhoto').onchange=e=>{const file=e.target.files[0];closeSheet();openFoodLogger();readFoodPhoto(file,'barcode');};
   });
   const video=$('scanVideo'),status=$('scanStatus');
   try{
@@ -1909,8 +1909,8 @@ async function openBarcodeScanner(){
 }
 function stopScanner(){try{scanStop?.();}catch{}scanStop=null;}
 async function barcodeFound(code){
-  stopScanner();navigator.vibrate?.(60);closeSheet();activate('nutrition');
-  $('foodBarcode').value=code;$('foodQuery').value='';$('foodEntry').scrollIntoView({behavior:'smooth',block:'start'});
+  stopScanner();navigator.vibrate?.(60);closeSheet();openFoodLogger();
+  $('foodBarcode').value=code;$('foodQuery').value='';
   await searchFood();
 }
 
@@ -1932,7 +1932,7 @@ function installNutritionHome(){
   if(add){add.insertAdjacentHTML('beforebegin','<div class="meal-chips" role="group" aria-label="Do kterého jídla">'+mealSlots.map(s=>'<button type="button" class="btn" data-meal-chip="'+s.id+'">'+(MEAL_ICON[s.id]||'')+' '+s.name.replace('Dopolední svačina','Svačina dop.').replace('Odpolední svačina','Svačina odp.')+'</button>').join('')+'</div><button type="button" class="btn primary simple-food-add" id="foodAddDirect">Přidat</button>');
     add.textContent='+ Složit jídlo z více potravin';add.classList.remove('primary','simple-food-add');add.classList.add('food-compose');
     $('foodEntry').addEventListener('click',e=>{const chip=e.target.closest('[data-meal-chip]');if(chip)setFoodMeal(chip.dataset.mealChip);});
-    $('foodAddDirect').onclick=()=>$('basketSave').click();
+    $('foodAddDirect').onclick=()=>$('basketSave').onclick();
     setFoodMeal($('foodMeal').value);}
   // Cookbook by name or page.
   const recipeInput=$('recipeRequest');if(recipeInput){recipeInput.placeholder='Název receptu nebo strana, např. rizoto, strana 70';recipeInput.closest('div').previousElementSibling.textContent='Z kuchařky';const tip=recipeInput.closest('div').nextElementSibling;if(tip?.classList.contains('small'))tip.textContent='Hledej podle názvu nebo čísla strany. Porce napiš třeba „1,5 porce rizota“.';
@@ -1969,3 +1969,39 @@ async function openReviewSheet(date,compare=false){
     if($('reviewCompare'))$('reviewCompare').onclick=()=>openReviewSheet(date,true);
   }catch(error){$('sheetBody').innerHTML='<p class="small">'+esc(error.message)+'</p>';}
 }
+
+// ---- One "Dnes" screen: the day at a glance, then the rest of the former Přehled ----
+function installOneDayScreen(){
+  const today=$('today'),overview=$('overview');if(!today||!overview||$('todayTop'))return;
+  today.insertAdjacentHTML('afterbegin','<div id="todayTop"></div><div id="todayMore"></div>');
+  const keep=el=>el.id==='dailyPulse'||el.id==='dayTimeline'||el.classList.contains('readiness-hero')||el.classList.contains('overview-nutrition');
+  for(const el of [...overview.children])if(!keep(el))$('todayMore').append(el);
+  document.querySelector('.nav button[data-view="overview"]')?.remove();
+  const act=activate;activate=function(id){act(id==='overview'?'today':id);};
+}
+installOneDayScreen();
+
+// ---- Food logging in a panel: "+" on a meal (or quick add, timeline, scan) opens it ----
+function openFoodLogger(slot){
+  const panel=$('foodPanel');if(!panel)return;
+  if(slot)setFoodMeal(slot);
+  $('foodPanelTitle').textContent='Přidat · '+(mealSlots.find(s=>s.id===$('foodMeal').value)?.name||'jídlo');
+  panel.hidden=false;document.body.classList.add('food-panel-open');
+  if(!isPhone())setTimeout(()=>$('foodQuery')?.focus({preventScroll:true}),60);
+}
+function closeFoodLogger(){const panel=$('foodPanel');if(!panel||panel.hidden)return;panel.hidden=true;document.body.classList.remove('food-panel-open');}
+function installFoodPanel(){
+  const entry=$('foodEntry');if(!entry||$('foodPanel'))return;
+  document.body.insertAdjacentHTML('beforeend','<div id="foodPanel" class="food-panel" hidden><div class="food-panel-backdrop" data-food-close></div><section class="food-panel-sheet" role="dialog" aria-modal="true" aria-labelledby="foodPanelTitle"><div class="food-panel-head"><h3 id="foodPanelTitle">Přidat jídlo</h3><button type="button" class="btn" data-food-close aria-label="Zavřít">✕</button></div><div id="foodPanelBody"></div></section></div>');
+  $('foodPanelBody').append(entry);
+  // The panel has its own title: the card's heading and intro go.
+  for(const el of [...entry.children].slice(0,4))if(/Potraviny a výrobky|Co jsi snědl|Vyhledej běžnou potravinu/i.test(el.textContent)&&!el.querySelector('input,button'))el.hidden=true;
+  $('foodPanel').addEventListener('click',e=>{if(e.target.closest('[data-food-close]'))closeFoodLogger();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('sheet')?.hidden!==false)closeFoodLogger();});
+  $('foodMeal').addEventListener('change',()=>{$('foodPanelTitle').textContent='Přidat · '+(mealSlots.find(s=>s.id===$('foodMeal').value)?.name||'jídlo');});
+  // A saved meal closes the panel (the basket empties on success).
+  const save=$('basketSave').onclick;$('basketSave').onclick=async()=>{const before=(mealEntries||[]).length,meal=mealSlots.find(s=>s.id===$('foodMeal').value)?.name||'jídla';await save();if((mealEntries||[]).length>before){closeFoodLogger();toast('Zapsáno do: '+meal);}};
+  // "Co dál dnes?" takes the place of the energy-by-meal chart.
+  const next=$('foodPlan')?.closest('.card'),chart=$('mealDistribution');if(next&&chart){chart.classList.add('replaced');chart.after(next);}
+}
+installFoodPanel();
