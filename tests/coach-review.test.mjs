@@ -42,7 +42,7 @@ test("the dashboard offers Revize dne on the light model, without a model compar
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/review'&&request\.method==='POST'/);
-  assert.match(entry, /const reviews=\[await reviewDay\(env,input\)/);
+  assert.match(entry, /const reviews=\[await reviewDay\(env,input,null,inputs\.focus\)/);
   assert.doesNotMatch(entry, /body\.compare/);
   assert.match(client, /data-review="'\+esc\(pick\)\+'">🔍 Revize dne/);
   assert.match(client, /async function openReviewSheet\(date\)\{/);

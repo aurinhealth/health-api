@@ -292,7 +292,7 @@ body.gym-mode-open{overflow:hidden}
 .food-panel #foodEntry{margin:0!important;border:0!important;background:none!important;padding:0!important;box-shadow:none!important}
 body.food-panel-open{overflow:hidden}#nutrition>.grid2:has(>.card:only-child){grid-template-columns:1fr}#mealDistribution.replaced{display:none!important}
 @media(max-width:700px){.food-panel-sheet{top:0;bottom:0;max-height:none;left:0;transform:none;width:100%;border-radius:0;border:0;padding:calc(6px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom))}}
-.today-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.review-btn{padding:5px 10px!important;font-size:12px!important;min-height:0!important}
+.today-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.today-card-head{flex-wrap:wrap}.today-card-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}.today-week-nav{display:inline-flex;align-items:center;gap:4px}.today-week-nav .small{white-space:nowrap;margin:0 2px}.today-card.loading{opacity:.55;pointer-events:none}.review-btn{padding:5px 10px!important;font-size:12px!important;min-height:0!important}
 .review-card{padding:12px 14px;border-radius:14px;background:#151b26;border:1px solid #2a3140;margin-bottom:10px}.review-card ul{margin:6px 0;padding-left:18px;display:grid;gap:4px;font-size:13px}.review-card h4{margin:10px 0 2px;font-size:13px}
 .review-verdict{font-weight:700;font-size:15px}.verdict-ok .review-verdict{color:#83e9c3}.verdict-adjust .review-verdict{color:#ffc274}.verdict-swap .review-verdict{color:#9fc6ff}.verdict-rest .review-verdict{color:#ff9c97}.review-headline{margin:6px 0;font-size:14px}
 
