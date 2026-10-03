@@ -253,6 +253,41 @@ body.gym-mode-open{overflow:hidden}
   .fab[hidden]{display:none}
   .today-head h1{font-size:30px}.today-layout{display:block}.tl-verb{display:none}
 }
+/* Výživa: day overview, meals, quick logging, amount wheel, scanner, drinks */
+.nutrition-home{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;margin-bottom:14px;align-items:start}
+#enteredFood{display:none!important}
+.do-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px}.do-head h3{margin:0}.do-head small{color:#9ca6b5}
+.do-ring-row{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;text-align:center;gap:8px;margin:8px 0 16px}
+.do-ring-row b{display:block;font-size:22px;font-variant-numeric:tabular-nums}.do-ring-row span{display:block;font-size:12px;color:#9ca6b5}
+.do-ring{width:150px;height:150px;border-radius:50%;display:grid;place-content:center;background:radial-gradient(circle at center,#151a20 66%,transparent 67%),conic-gradient(#83e9c3 calc(var(--p)*1%),#2a313e 0)}.do-ring b{font-size:30px}
+.do-macros{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.do-macro{display:grid;gap:5px;text-align:center}.do-macro span{font-size:12px;color:#c9d2de}.do-macro i{display:block;height:6px;border-radius:9px;background:#2a313e;overflow:hidden}.do-macro i b{display:block;height:100%;border-radius:9px}.do-macro small{font-size:12px;font-variant-numeric:tabular-nums}
+.do-water{border-top:1px solid #2a323d;padding-top:12px}.do-water-head{display:flex;justify-content:space-between;gap:8px;font-size:14px}.do-water-head span{font-variant-numeric:tabular-nums}
+.do-water-bar{display:block;height:8px;border-radius:9px;background:#1d2a36;margin:8px 0;overflow:hidden}.do-water-bar b{display:block;height:100%;background:#64d2ff;border-radius:9px}
+.do-water-actions{display:flex;gap:6px;flex-wrap:wrap}.do-water-actions .btn{padding:8px 12px;font-size:13px}.do-water-note{display:block;color:#9ca6b5;font-size:11px;margin-top:8px;line-height:1.5}
+.ml-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #262d39}.ml-row:last-of-type{border-bottom:0}
+.ml-main{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:center;background:none;border:0;color:inherit;text-align:left;padding:0;min-width:0;font:inherit;cursor:pointer}
+.ml-icon{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#1d2430;border:3px solid #2a313e;font-size:20px}
+.ml-text{min-width:0}.ml-text strong{display:block;font-size:15px}.ml-text small{display:block;color:#9ca6b5;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ml-add{width:40px;height:40px;border-radius:50%;border:0;background:#eef1f7;color:#10141c;font-size:24px;font-weight:600;line-height:1;cursor:pointer}
+.ml-entries{grid-column:1/-1;padding:2px 0 2px 56px;display:grid;gap:8px}.ml-entry{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px}.ml-entry small{display:block;color:#9ca6b5;font-size:11px}.ml-entry .btn{padding:5px 10px;font-size:12px}
+.ml-settings{padding:5px 10px;font-size:12px}#mealSettingsBox{margin-top:10px}#mealSettingsBox .meal-preferences{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px}
+#foodEntry .food-actions{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+#foodEntry .food-quick{display:grid!important;justify-items:center;align-content:center;gap:4px;padding:10px 4px!important;font-size:18px;text-align:center;min-height:0!important;line-height:1}#foodEntry .food-quick span{font-size:12px;font-weight:600;line-height:1.2}
+.meal-chips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}.meal-chips .btn{padding:6px 10px;font-size:12px;border-radius:999px}.meal-chips .btn.active{background:#203b31;border-color:#83e9c3;color:#c9f5e3}
+.food-compose{width:100%;margin-top:8px;font-size:13px}#foodQuickAmounts[hidden],#foodEditor .simple-food-fractions[hidden]{display:none!important}
+.amount-wheel{position:relative;display:grid;grid-template-columns:1fr 1fr 2fr;gap:4px;height:180px;margin:12px 0;background:#10151d;border-radius:14px;overflow:hidden}.amount-wheel.two{grid-template-columns:1fr 2fr}
+.amount-wheel:before{content:'';position:absolute;left:6px;right:6px;top:72px;height:36px;border-radius:10px;background:#232a36;pointer-events:none}
+.wheel-col{position:relative;height:180px;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}.wheel-col::-webkit-scrollbar{display:none}
+.wheel-pad{height:72px}.wheel-item{height:36px;line-height:36px;text-align:center;scroll-snap-align:center;font-size:18px;color:#7d8796;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 6px;cursor:pointer;position:relative}.wheel-item.on{color:#fff;font-weight:600}
+.scan-box{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3}.scan-box video{width:100%;height:100%;object-fit:cover;display:block}
+.scan-frame{position:absolute;left:12%;right:12%;top:33%;bottom:33%;border:3px solid #83e9c3;border-radius:12px;box-shadow:0 0 0 999px #0008}.scan-photo{margin-top:10px;display:block;text-align:center}
+.fluid-kinds,.fluid-amounts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.fluid-kinds .btn.active{background:#16303a;border-color:#64d2ff}
+.fluid-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #262d39}.fluid-row .btn{padding:4px 9px}
+.tl-water .tl-icon{background:#16303a}
+.mini-rings{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+@media(max-width:900px){.nutrition-home{grid-template-columns:1fr}}
+@media(max-width:700px){#nutrition.active>.nutrition-home{order:-3}#nutrition.active>#foodEntry{order:-2}.mini-ring-dial{width:54px!important;height:54px!important}.mini-ring-dial b{font-size:13px!important}.do-ring{width:132px;height:132px}.do-ring b{font-size:26px}#foodEntry .food-quick{font-size:16px}}
 .planner-chip .proposal{color:#e9e2ff;font-weight:650}
 .chip-actions{display:flex;gap:4px;flex-basis:100%;flex-wrap:wrap;margin-top:2px}.chip-actions .btn{padding:3px 7px;font-size:10px;border-radius:6px}
 #proposeWeek{padding:7px 12px;font-size:12px}

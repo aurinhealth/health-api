@@ -785,7 +785,7 @@ function labelSelectedDay(){
   // Headings are matched by their text: their order changes as sections are added.
   const past=selectedHistoryDate!==pragueToday(),rename={'Denní signály':'Signály dne','Dnešní poradci a hodnocení':'Poradci a hodnocení dne'};
   for(const el of document.querySelectorAll('#overview>.section')){const t=el.textContent;for(const [today,day] of Object.entries(rename))if(t===today||t===day)el.textContent=past?day:today;}
-  const heading=document.querySelector('#nutritionBalance h3');if(heading)heading.textContent=past?'Palivo dne':'Dnešní palivo';
+  const heading=document.querySelector('#nutritionBalance h3');if(heading)heading.textContent='Energie dne';
   for(const node of document.querySelectorAll('#nutritionBalance .experience-stats span')){
     if(node.textContent==='Dnešní cíl'||node.textContent==='Cíl dne')node.textContent=past?'Cíl dne':'Dnešní cíl';
     if(node.textContent==='Kroky dnes'||node.textContent==='Kroky dne')node.textContent=past?'Kroky dne':'Kroky dnes';
@@ -912,7 +912,7 @@ function installPortionControls(){
 function renderNutritionExperience(food,target,daily){
   const macros=daily.nutrition?.macros||{},p=num(food.protein_g)*4,c=num(food.carbs_g)*4,f=num(food.fat_g)*9,energy=p+c+f,ps=energy?p/energy*100:0,cs=energy?c/energy*100:0,donut=energy?'conic-gradient(#83c7ff 0 '+ps+'%,#ffc274 '+ps+'% '+(ps+cs)+'%,#b3a1ff '+(ps+cs)+'% 100%)':'#2a343e';
   const rows=[['Bílkoviny','protein_g',macros.protein_g??macros.proteinGrams,'#83c7ff'],['Sacharidy','carbs_g',macros.carbs_g??macros.carbsGrams,'#ffc274'],['Tuky','fat_g',macros.fat_g??macros.fatGrams,'#b3a1ff']];
-  $('nutritionBalance').innerHTML='<div class="experience-heading"><h3>Dnešní palivo</h3><small>'+fmt(food.kcal)+' / '+(target?fmt(target):'—')+' kcal</small></div><div class="nutrition-layout"><div class="nutrition-donut" style="--donut:'+donut+'"><strong>'+fmt(food.kcal)+'</strong></div><div>'+rows.map(([name,key,tone,color])=>{const goal=num(tone),value=num(food[key]),share=energy?(key==='fat_g'?f:key==='carbs_g'?c:p)/energy*100:0;return '<div class="nutrient-row"><span>'+name+'<small class="small" style="display:block">'+fmt(share)+' % energie z maker</small></span><div class="nutrient-track"><i style="width:'+Math.min(100,goal?value/goal*100:0)+'%;background:'+color+'"></i></div><strong>'+fmt(value)+' / '+(goal?fmt(goal):'—')+' g</strong></div>';}).join('')+'</div></div><p class="small">Poměr vychází z 4 kcal/g bílkovin a sacharidů, 9 kcal/g tuku. Energie z obalu se může lišit.</p>';
+  $('nutritionBalance').innerHTML='<div class="experience-heading"><h3>Energie dne</h3><small>'+fmt(food.kcal)+' / '+(target?fmt(target):'—')+' kcal</small></div><div class="nutrition-layout"><div class="nutrition-donut" style="--donut:'+donut+'"><strong>'+fmt(food.kcal)+'</strong></div><div>'+rows.map(([name,key,tone,color])=>{const goal=num(tone),value=num(food[key]),share=energy?(key==='fat_g'?f:key==='carbs_g'?c:p)/energy*100:0;return '<div class="nutrient-row"><span>'+name+'<small class="small" style="display:block">'+fmt(share)+' % energie z maker</small></span><div class="nutrient-track"><i style="width:'+Math.min(100,goal?value/goal*100:0)+'%;background:'+color+'"></i></div><strong>'+fmt(value)+' / '+(goal?fmt(goal):'—')+' g</strong></div>';}).join('')+'</div></div><p class="small">Poměr vychází z 4 kcal/g bílkovin a sacharidů, 9 kcal/g tuku. Energie z obalu se může lišit.</p>';
   const entries=mealEntries||[],enabled=mealSlots.filter(s=>mealEnabled.includes(s.id)),mealRows=enabled.map(s=>({label:s.name.replace('Dopolední svačina','Sv. dopo.').replace('Odpolední svačina','Sv. odpo.'),values:[entries.filter(e=>foodMealSlot(e)===s.id).reduce((sum,e)=>sum+num(e.kcal),0)]})),max=Math.max(400,...mealRows.map(r=>r.values[0]))*1.15;
   $('mealDistribution').innerHTML='<div class="experience-heading"><h3>Energie během dne</h3><small>'+esc($('foodDate')?.value||pragueToday())+' · kcal</small></div>'+experienceBars(mealRows,{max,colors:['#83e9c3'],height:240})+'<p class="small">Pouze zapsaná jídla v deníku. Nezapsané jídlo neznamená, že jsi nejedl.</p>';
   renderFuelingBreakdown(daily);
@@ -1445,6 +1445,7 @@ function renderDayTimeline(){
   // A record without a valid time is skipped.
   add('weight',()=>{const weights=(state.weight?.records||[]).filter(r=>measured(r.value_numeric)).map(r=>({...r,day:pragueDay(r.sample_time),at:clock(r.sample_time)})).filter(r=>/^\d{4}-\d{2}-\d{2}$/.test(r.day)&&!Number.isNaN(Date.parse(r.day+'T12:00:00Z'))).sort((a,b)=>(a.day+(a.at||'12:00')).localeCompare(b.day+(b.at||'12:00'))),before=weights.filter(r=>r.day<date).at(-1),seen=new Set();
   for(const w of weights.filter(r=>r.day===date)){const kg=num(w.value_numeric),key=w.at+'|'+fmt(kg,1);if(seen.has(key))continue;seen.add(key);const delta=before?kg-num(before.value_numeric):null;items.push({t:date+'T'+(w.at||'12:00')+':00',icon:'⚖',cls:'weight',title:'Váha · '+fmt(kg,1)+' kg',meta:delta==null?'první záznam':(delta>0?'+':delta<0?'−':'±')+fmt(Math.abs(delta),1)+' kg od '+dateLabel(before.day)});}});
+  add('drinks',()=>{const f=state.fluids?.[date];if(f?.entries?.length)items.push({t:f.entries.at(-1).consumedAt,icon:'💧',cls:'water',title:'Pití · '+fluidLabel(f.totalMl),meta:f.entries.length+'× · cíl '+fluidLabel(f.target.ml)+' · naposledy'});});
   add('coach',()=>{for(const r of (state.reflections?.[date]||[]))items.push({t:date+'T23:58',icon:'💬',cls:'coach',title:'Kouč'+(r.rpe!=null?' · RPE '+fmt(r.rpe):'')+(r.notes?' · „'+r.notes+'“':''),meta:r.text,label:r.source==='ai'?'AI':'kouč'});});
   // Intervals.icu times are local, Google Health ones UTC: order by Prague time.
   items.sort((a,b)=>(clock(a.t)||'').localeCompare(clock(b.t)||''));
@@ -1532,7 +1533,7 @@ function todayItems(date){
   const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
   for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||''))))out.push({kind:'planned',sport:activitySport(p),name:p.name||'Plán',meta:(p.durationHours?hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss):''),p});
   const sports=new Set(out.map(x=>x.sport));
-  if(date===pragueToday()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){out.push({kind:'gymplan',sport:'gym',name:state.gym.values[2]?.[1]||'Silový trénink',meta:(state.gym.values.slice(7).filter(r=>r?.[1]).length)+' sérií v plánu'});sports.add('gym');}
+  if(date===pragueToday()&&(state.gym?.date||pragueToday())===date&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){out.push({kind:'gymplan',sport:'gym',name:state.gym.values[2]?.[1]||'Silový trénink',meta:(state.gym.values.slice(7).filter(r=>r?.[1]).length)+' sérií v plánu'});sports.add('gym');}
   const role=(state.weekPlan?.roles?.[weekdayOf(date)]?.items||[]);
   for(const x of role)if(!sports.has(x.sport))out.push({kind:'role',sport:x.sport,name:x.label,meta:'podle plánu týdne'});
   return out;
@@ -1557,7 +1558,7 @@ function renderToday(){
   // screen is rebuilt, or the rebuild would delete it.
   const parked=$('dayTimeline');if(parked&&el.contains(parked))$('dailyPulse')?.after(parked);
   el.innerHTML='<div class="today-layout"><div class="today-main"><div class="today-head"><div class="eyebrow">'+esc(longDate(date))+'</div><h1>'+(date!==pragueToday()?'Den':hour<10?'Dobré ráno':hour<18?'Dnes':'Dobrý večer')+'</h1></div>'+
-    '<div class="mini-rings">'+miniRing('Spánek',sleep==null?'—':sleep+'%',sleep||0,'#a99bff',night?hm(night.durationMin):'bez záznamu','recovery')+miniRing('Zátěž',done?fmt(done):'—',plan?done/plan*100:done?100:0,'#83e9c3',plan?'plán '+fmt(plan)+' TSS':'TSS dnes','training')+miniRing('Kalorie',target?fmt(num(food.kcal)/target*100)+'%':'—',target?num(food.kcal)/target*100:0,'#ffc274',fmt(food.kcal)+' / '+fmt(target)+' kcal','nutrition')+'</div>'+
+    '<div class="mini-rings">'+miniRing('Spánek',sleep==null?'—':sleep+'%',sleep||0,'#a99bff',night?hm(night.durationMin):'bez záznamu','recovery')+miniRing('Zátěž',done?fmt(done):'—',plan?done/plan*100:done?100:0,'#83e9c3',plan?'plán '+fmt(plan)+' TSS':'TSS dnes','training')+miniRing('Kalorie',target?fmt(num(food.kcal)/target*100)+'%':'—',target?num(food.kcal)/target*100:0,'#ffc274',fmt(food.kcal)+' / '+fmt(target)+' kcal','nutrition')+(()=>{const f=state.fluids?.[date];return miniRing('Pití',f?fluidLabel(f.totalMl):'—',f?f.totalMl/Math.max(1,f.target.ml)*100:0,'#64d2ff',f?'cíl '+fluidLabel(f.target.ml):'načítám','water');})()+'</div>'+
     '<article class="card today-card"><div class="label">Trénink · '+esc(pick===pragueToday()?'dnes':longDate(pick))+'</div>'+(pickItems.length?pickItems.map(todayItemHtml).join(''):'<p class="small">Volno. Sport na tento den přidáš ve Workoutech v plánu týdne.</p>')+'<div class="week-strip" role="group" aria-label="Dny týdne">'+strip+'</div></article>'+
     '</div><div id="todayTimelineSlot"></div></div><button type="button" class="btn today-more" data-go="overview">Celý přehled dne →</button>';
   // One timeline for both screens: it moves here only while Dnes is shown,
@@ -1590,8 +1591,8 @@ function openWeightSheet(date=pragueToday()){
   });
 }
 function openQuickAdd(){
-  openSheet('Rychle zapsat','<div class="quick-actions">'+[['food','🍽','Jídlo'],['barcode','▥','Čárový kód'],['label','📷','Fotka etikety'],['weight','⚖','Váha'],['rpe','💬','RPE tréninku'],['gym','🏋️','Gym trénink']].map(([k,i,l])=>'<button type="button" data-quick="'+k+'"><span>'+i+'</span>'+l+'</button>').join('')+'</div>',body=>body.onclick=e=>{const b=e.target.closest('[data-quick]');if(!b)return;const k=b.dataset.quick;
-    if(k==='weight')return openWeightSheet();if(k==='rpe')return openRpeSheet();closeSheet();
+  openSheet('Rychle zapsat','<div class="quick-actions">'+[['food','🍽','Jídlo'],['barcode','▥','Čárový kód'],['label','📷','Fotka etikety'],['water','💧','Pití'],['weight','⚖','Váha'],['rpe','💬','RPE tréninku'],['gym','🏋️','Gym trénink']].map(([k,i,l])=>'<button type="button" data-quick="'+k+'"><span>'+i+'</span>'+l+'</button>').join('')+'</div>',body=>body.onclick=e=>{const b=e.target.closest('[data-quick]');if(!b)return;const k=b.dataset.quick;
+    if(k==='water')return openFluidSheet(selectedHistoryDate);if(k==='weight')return openWeightSheet();if(k==='rpe')return openRpeSheet();closeSheet();
     if(k==='gym')return openGymMode();
     activate('nutrition');if(k==='barcode')$('foodBarcodePhoto')?.click();else if(k==='label')$('foodLabelPhoto')?.click();else setTimeout(()=>{$('foodQuery')?.focus();$('foodEntry')?.scrollIntoView({behavior:'smooth',block:'start'});},50);});
 }
@@ -1649,7 +1650,7 @@ function wireGymMode(){
 function installPhoneLayer(){
   document.body.insertAdjacentHTML('beforeend','<button type="button" class="fab" id="quickAdd" aria-label="Rychle zapsat">+</button>');
   $('quickAdd').onclick=openQuickAdd;
-  $('today').addEventListener('click',e=>{const go=e.target.closest('[data-go]');if(go){activate(go.dataset.go);return}const s=e.target.closest('[data-strip]');if(s){state.todayPick=s.dataset.strip;renderToday();return}const b=e.target.closest('[data-today]');if(b)todayAction(b);});
+  $('today').addEventListener('click',e=>{const go=e.target.closest('[data-go]');if(go){if(go.dataset.go==='water')openFluidSheet(selectedHistoryDate);else activate(go.dataset.go);return}const s=e.target.closest('[data-strip]');if(s){state.todayPick=s.dataset.strip;renderToday();return}const b=e.target.closest('[data-today]');if(b)todayAction(b);});
   // On a phone the small menus become bottom sheets.
   window.addEventListener('click',e=>{
     if(!isPhone())return;
@@ -1780,3 +1781,177 @@ function renderEnergyProfileNotice(){
 }
 installEnergyProfile();
 const renderNutritionWithoutNotice=renderNutrition;renderNutrition=function(){renderNutritionWithoutNotice();renderEnergyProfileNotice();};
+
+// ---- Výživa like a food diary app: day overview with drinks, meals, quick logging ----
+// Drinks of the shown day and the day's target, from /app/api/fluids.
+const FLUID_KINDS=[['water','💧','Voda'],['coffee','☕','Káva'],['tea','🍵','Čaj'],['sport','🥤','Ionťák'],['other','🧃','Jiné']];
+function fluidLabel(ml){return ml>=1000?fmt(ml/1000,2).toString().replace('.',',')+' l':fmt(ml)+' ml';}
+async function loadFluids(date=nutritionDay()){try{const r=await jsonFetch('/app/api/fluids?date='+date);state.fluids={...(state.fluids||{}),[date]:r};}catch{}renderDayOverview();if(date===selectedHistoryDate){renderDayTimeline();if($('today')?.classList.contains('active'))renderToday();}return state.fluids?.[date];}
+async function addFluidDrink(date,ml,kind='water'){
+  const now=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',hour:'2-digit',minute:'2-digit'}).format(new Date());
+  try{await jsonFetch('/app/api/fluids',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,ml,kind,at:date+'T'+(date===pragueToday()?now:'12:00')})});toast('💧 +'+fluidLabel(ml));await loadFluids(date);}catch(error){toast(error.message);}
+}
+function openFluidSheet(date=nutritionDay()){
+  const f=state.fluids?.[date],entries=f?.entries||[];let kind='water';
+  openSheet('Pití · '+(date===pragueToday()?'dnes':longDate(date)),'<p class="small">'+(f?fluidLabel(f.totalMl)+' z '+fluidLabel(f.target.ml):'Načítám…')+'</p><div class="fluid-kinds" role="group" aria-label="Nápoj">'+FLUID_KINDS.map(([k,i,l])=>'<button type="button" class="btn'+(k==='water'?' active':'')+'" data-kind="'+k+'">'+i+' '+l+'</button>').join('')+'</div><div class="fluid-amounts">'+[150,250,330,500,750].map(ml=>'<button type="button" class="btn" data-ml="'+ml+'">+'+ml+' ml</button>').join('')+'</div><div class="food-controls"><input id="fluidCustom" class="food-input" inputmode="numeric" placeholder="Jiné množství v ml"><button type="button" class="btn primary" id="fluidCustomAdd">Přidat</button></div>'+(entries.length?'<h3 style="margin:14px 0 6px">Zapsáno</h3>'+entries.slice().reverse().map(e=>'<div class="fluid-row"><span>'+(FLUID_KINDS.find(x=>x[0]===e.kind)?.[1]||'💧')+' '+esc(String(e.consumedAt).slice(11,16))+'</span><strong>'+fluidLabel(e.ml)+'</strong><button type="button" class="btn" data-delete-fluid="'+e.id+'" aria-label="Smazat">✕</button></div>').join(''):''),body=>{
+    body.onclick=async e=>{const k=e.target.closest('[data-kind]');if(k){kind=k.dataset.kind;body.querySelectorAll('[data-kind]').forEach(b=>b.classList.toggle('active',b===k));return}
+      const a=e.target.closest('[data-ml]');if(a){await addFluidDrink(date,Number(a.dataset.ml),kind);openFluidSheet(date);return}
+      if(e.target.id==='fluidCustomAdd'){const ml=Number(String($('fluidCustom').value).replace(',','.'));if(!(ml>=10&&ml<=3000))return toast('Zadej 10–3000 ml.');await addFluidDrink(date,ml,kind);openFluidSheet(date);return}
+      const d=e.target.closest('[data-delete-fluid]');if(d){try{await jsonFetch('/app/api/fluids?id='+d.dataset.deleteFluid,{method:'DELETE'});await loadFluids(date);openFluidSheet(date);}catch(error){toast(error.message);}}};
+  });
+}
+// The day the food diary shows.
+function nutritionDay(){return $('foodDate')?.value||selectedHistoryDate||pragueToday();}
+function dayNutrition(date){return date===selectedHistoryDate?state.daily?.nutrition:state.week?.days?.find(d=>d.date===date)?.daily?.nutrition||null;}
+function mealTotals(entries){return entries.reduce((s,e)=>{for(const k of ['kcal','protein_g','carbs_g','fat_g'])s[k]+=num(e[k]);return s},{kcal:0,protein_g:0,carbs_g:0,fat_g:0});}
+
+// Denní přehled: eaten / remaining / burned, macros and drinks.
+function renderDayOverview(){
+  const el=$('dayOverview');if(!el)return;
+  const date=nutritionDay(),n=dayNutrition(date)||{},target=num(n.calorieTarget),m=n.macros||{},eaten=mealTotals((mealEntries||[]).filter(e=>(e.consumed_date||date)===date));
+  const training=date===selectedHistoryDate?state.daily?.training?.completed||[]:[],burned=measured(n.energyBudget?.active)?num(n.energyBudget.active):training.filter(a=>!isNutritionItem(a)).reduce((s,a)=>s+num(a.calories),0);
+  const left=target-eaten.kcal,p=target?Math.min(100,eaten.kcal/target*100):0;
+  const macro=(label,v,t,c)=>'<div class="do-macro"><span>'+label+'</span><i><b style="width:'+(t?Math.min(100,v/t*100):0)+'%;background:'+c+'"></b></i><small>'+fmt(v)+' / '+(t?fmt(t):'—')+' g</small></div>';
+  const f=state.fluids?.[date],water=f?Math.min(100,f.totalMl/Math.max(1,f.target.ml)*100):0;
+  if(!f&&!(state.fluidRequests||=new Set()).has(date)){state.fluidRequests.add(date);loadFluids(date);}
+  el.innerHTML='<div class="do-head"><h3>Denní přehled</h3><small>'+esc(date===pragueToday()?'dnes':longDate(date))+'</small></div>'+
+    '<div class="do-ring-row"><div><b>'+fmt(eaten.kcal)+'</b><span>Snědeno</span></div><div class="do-ring" style="--p:'+p+'"><b>'+(target?fmt(Math.abs(left)):'—')+'</b><span>'+(target?left>=0?'Zbývá kcal':'Nad cílem':'Cíl chybí')+'</span></div><div><b>'+(burned?fmt(burned):'—')+'</b><span>Spáleno</span></div></div>'+
+    '<div class="do-macros">'+macro('Sacharidy',eaten.carbs_g,num(m.carbs_g??m.carbsGrams),'#ffb347')+macro('Bílkoviny',eaten.protein_g,num(m.protein_g??m.proteinGrams),'#6fb7ff')+macro('Tuky',eaten.fat_g,num(m.fat_g??m.fatGrams),'#b48cff')+'</div>'+
+    '<div class="do-water"><div class="do-water-head"><strong>💧 Pití</strong><span>'+(f?fluidLabel(f.totalMl)+' / '+fluidLabel(f.target.ml):'…')+'</span></div><i class="do-water-bar"><b style="width:'+water+'%"></b></i><div class="do-water-actions"><button type="button" class="btn" data-water="250">+250 ml</button><button type="button" class="btn" data-water="500">+500 ml</button><button type="button" class="btn" data-water-more>Další…</button></div>'+
+    (f?'<small class="do-water-note">Cíl: '+(f.target.weightKg?'30 ml/kg ('+fmt(f.target.weightKg,1)+' kg)':'základ podle pohlaví')+(f.target.exerciseMl?' + '+fluidLabel(f.target.exerciseMl)+' za trénink ('+String(f.target.trainingHours).replace('.',',')+' h'+(f.target.walkHours?' + chůze '+String(f.target.walkHours).replace('.',',')+' h':'')+')':'')+'. Orientační, v horku a při velkém pocení pij víc.</small>':'')+'</div>';
+  el.querySelectorAll('[data-water]').forEach(b=>b.onclick=()=>addFluidDrink(date,Number(b.dataset.water)));
+  el.querySelector('[data-water-more]').onclick=()=>openFluidSheet(date);
+}
+
+// Meals as compact rows: eaten / target, the foods, + to log into that meal.
+const MEAL_ICON={breakfast:'☕',snack_am:'🍎',lunch:'🍝',snack_pm:'🥨',dinner:'🥗',unassigned:'🍽'};
+function renderMealList(){
+  const el=$('mealList');if(!el)return;
+  const date=nutritionDay(),n=dayNutrition(date)||{},target=num(n.calorieTarget),active=mealSlots.filter(s=>mealEnabled.includes(s.id)),weight=active.reduce((s,x)=>s+x.share,0)||1,entries=(mealEntries||[]).filter(e=>(e.consumed_date||date)===date),open=new Set(state.openMeals||[]);
+  const rows=active.map(s=>({id:s.id,name:s.name,share:s.share/weight,entries:entries.filter(e=>foodMealSlot(e)===s.id)}));
+  const other=entries.filter(e=>!mealEnabled.includes(foodMealSlot(e)));if(other.length)rows.push({id:'other',name:'Ostatní',share:0,entries:other});
+  el.innerHTML='<div class="do-head"><h3>Jídla</h3><button type="button" class="btn ml-settings" id="mealSettings">Upravit jídla</button></div>'+rows.map(r=>{const t=mealTotals(r.entries),isOpen=open.has(r.id);return '<div class="ml-row'+(isOpen?' open':'')+'" data-meal-row="'+r.id+'"><button type="button" class="ml-main" data-meal-toggle-row="'+r.id+'" aria-expanded="'+isOpen+'"><span class="ml-icon">'+(MEAL_ICON[r.id]||'🍽')+'</span><span class="ml-text"><strong>'+esc(r.name)+'</strong><small>'+fmt(t.kcal)+(r.share&&target?' / '+fmt(target*r.share):'')+' kcal'+(r.entries.length?' · '+esc(r.entries.map(e=>e.recipe_title||'Jídlo').join(', ')):'')+'</small></span></button>'+(r.id==='other'?'':'<button type="button" class="ml-add" data-meal-add="'+r.id+'" aria-label="Zapsat do: '+esc(r.name)+'">+</button>')+
+    (isOpen?'<div class="ml-entries">'+(r.entries.length?r.entries.map(e=>'<div class="ml-entry"><span>'+esc(e.recipe_title||'Jídlo')+'<small>'+fmt(e.kcal)+' kcal · B '+fmt(e.protein_g)+' · S '+fmt(e.carbs_g)+' · T '+fmt(e.fat_g)+' g</small></span>'+(e.id?'<button type="button" class="btn" data-meal-edit="'+esc(e.id)+'">Upravit</button>':'')+'</div>').join(''):'<p class="small">Zatím nic. Přidej jídlo tlačítkem +.</p>')+'</div>':'')+'</div>';}).join('')+
+    '<div id="mealSettingsBox" hidden><p class="small">Která jídla během dne sleduješ:</p><div class="meal-preferences">'+mealSlots.map(s=>'<label><input type="checkbox" data-meal-pref="'+s.id+'" '+(mealEnabled.includes(s.id)?'checked':'')+'> '+s.name+'</label>').join('')+'</div></div>';
+  el.onclick=e=>{
+    const add=e.target.closest('[data-meal-add]');if(add){startMealLog(add.dataset.mealAdd);return}
+    const edit=e.target.closest('[data-meal-edit]');if(edit){openFoodManage(edit.dataset.mealEdit);return}
+    const row=e.target.closest('[data-meal-toggle-row]');if(row){const id=row.dataset.mealToggleRow,s=new Set(state.openMeals||[]);s.has(id)?s.delete(id):s.add(id);state.openMeals=[...s];renderMealList();return}
+    if(e.target.id==='mealSettings'){$('mealSettingsBox').hidden=!$('mealSettingsBox').hidden;}
+  };
+  el.querySelectorAll('[data-meal-pref]').forEach(input=>input.onchange=()=>{const selected=[...el.querySelectorAll('[data-meal-pref]:checked')].map(i=>i.dataset.mealPref);if(!selected.length){input.checked=true;return toast('Nech vybrané alespoň jedno jídlo.');}mealEnabled=selected;try{localStorage.setItem('pfd-meals-v1',JSON.stringify(selected));}catch{}renderMealDiary();});
+}
+// "+" on a meal: log into it.
+function startMealLog(slot){setFoodMeal(slot);activate('nutrition');$('foodEntry').scrollIntoView({behavior:'smooth',block:'start'});setTimeout(()=>$('foodQuery').focus({preventScroll:true}),350);foodMessage('Zapisuješ do: '+(mealSlots.find(s=>s.id===slot)?.name||'jídla'));}
+function setFoodMeal(slot){if(!$('foodMeal'))return;$('foodMeal').value=slot;document.querySelectorAll('[data-meal-chip]').forEach(b=>b.classList.toggle('active',b.dataset.mealChip===slot));const add=$('foodAddDirect');if(add)add.textContent='Přidat · '+(mealSlots.find(s=>s.id===slot)?.name||'jídlo');}
+function mealByTime(){const h=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));return h<10?'breakfast':h<12?'snack_am':h<15?'lunch':h<18?'snack_pm':'dinner';}
+
+// Rolling amount picker: whole number, fraction and portion, like a phone's date wheel.
+const WHEEL_FRACTIONS=[[0,'–'],[1/8,'⅛'],[1/4,'¼'],[1/3,'⅓'],[1/2,'½'],[2/3,'⅔'],[3/4,'¾']];
+function wheelColumn(items,index,onPick){
+  const col=document.createElement('div');col.className='wheel-col';col.innerHTML='<div class="wheel-pad"></div>'+items.map((x,i)=>'<div class="wheel-item" data-i="'+i+'">'+esc(x.label)+'</div>').join('')+'<div class="wheel-pad"></div>';
+  let timer=null,silent=false;const H=36;
+  col.set=i=>{silent=true;col.scrollTop=Math.max(0,i)*H;col.querySelectorAll('.wheel-item').forEach(el=>el.classList.toggle('on',Number(el.dataset.i)===i));setTimeout(()=>{silent=false;},80);};
+  col.addEventListener('scroll',()=>{clearTimeout(timer);timer=setTimeout(()=>{const i=Math.max(0,Math.min(items.length-1,Math.round(col.scrollTop/H)));col.querySelectorAll('.wheel-item').forEach(el=>el.classList.toggle('on',Number(el.dataset.i)===i));if(!silent)onPick(items[i],i);},90);});
+  col.addEventListener('click',e=>{const it=e.target.closest('.wheel-item');if(it)col.scrollTo({top:Number(it.dataset.i)*H,behavior:'smooth'});});
+  requestAnimationFrame(()=>col.set(index));return col;
+}
+function installAmountWheel(){
+  const picker=document.querySelector('#foodEditor .simple-food-picker');if(!picker||$('amountWheel'))return;
+  const box=document.createElement('div');box.id='amountWheel';box.className='amount-wheel';picker.after(box);
+  document.querySelector('#foodEditor .simple-food-fractions')?.setAttribute('hidden','');
+  const amountInput=$('simpleFoodAmount'),portionSelect=$('simpleFoodPortion');let building=false;
+  const grams=()=>{const o=portionSelect.selectedOptions[0];return o&&/^\s*1\s*(g|ml)\b/i.test(o.textContent);};
+  function build(){
+    if(building)return;building=true;try{
+    box.innerHTML='';const amount=Math.max(0,parseFoodQuantity(amountInput.value)||0),fine=grams();
+    const wholes=fine?Array.from({length:401},(_,i)=>({value:i*5,label:String(i*5)})):Array.from({length:31},(_,i)=>({value:i,label:String(i)}));
+    const whole=fine?Math.round(amount/5):Math.floor(amount+1e-6),rest=amount-Math.floor(amount+1e-6),fi=WHEEL_FRACTIONS.reduce((b,f,i)=>Math.abs(f[0]-rest)<Math.abs(WHEEL_FRACTIONS[b][0]-rest)?i:b,0);
+    let w=Math.min(wholes.length-1,whole),fr=fine?0:fi;
+    const apply=()=>{const v=wholes[w].value+(fine?0:WHEEL_FRACTIONS[fr][0]);amountInput.value=fine||!WHEEL_FRACTIONS[fr][0]?String(v):v<1?(['','1/8','1/4','1/3','1/2','2/3','3/4'][fr]):String(Math.round(v*1000)/1000).replace('.',',');amountInput.dispatchEvent(new Event('input',{bubbles:true}));};
+    box.append(wheelColumn(wholes,w,(x,i)=>{w=i;apply();}));
+    if(!fine)box.append(wheelColumn(WHEEL_FRACTIONS.map(([v,l])=>({value:v,label:l})),fr,(x,i)=>{fr=i;apply();}));
+    const options=[...portionSelect.options].map(o=>({value:o.value,label:o.textContent}));
+    box.append(wheelColumn(options,Math.max(0,portionSelect.selectedIndex),x=>{if(portionSelect.value===x.value)return;portionSelect.value=x.value;portionSelect.dispatchEvent(new Event('change',{bubbles:true}));setTimeout(build,0);}));
+    box.classList.toggle('two',fine);
+    }finally{building=false;}
+  }
+  amountInput.addEventListener('change',build);portionSelect.addEventListener('change',()=>setTimeout(build,0));
+  const select=selectFoodProduct;selectFoodProduct=function(p){select(p);setTimeout(build,0);};
+}
+
+// Live barcode scanning with the camera: the native detector where the browser
+// has one, ZXing elsewhere (iPhone). A code fills the EAN and searches; an
+// unknown product is looked up with AI right away.
+let scanStop=null;
+async function openBarcodeScanner(){
+  openSheet('Skenovat čárový kód','<div class="scan-box"><video id="scanVideo" playsinline muted autoplay></video><div class="scan-frame"></div></div><p class="small" id="scanStatus">Spouštím kameru…</p><div class="food-controls"><input id="scanManual" class="food-input" inputmode="numeric" placeholder="Nebo opiš číslo EAN"><button type="button" class="btn" id="scanManualOk">OK</button></div><label class="btn sheet-wide scan-photo">📷 Vyfotit místo skenování<input hidden id="scanPhoto" type="file" accept="image/*" capture="environment"></label>',body=>{
+    $('scanManualOk').onclick=()=>{const code=$('scanManual').value.replace(/\D/g,'');if(!/^\d{8,14}$/.test(code))return toast('EAN má 8–14 číslic.');barcodeFound(code);};
+    $('scanPhoto').onchange=e=>{const file=e.target.files[0];closeSheet();activate('nutrition');readFoodPhoto(file,'barcode');};
+  });
+  const video=$('scanVideo'),status=$('scanStatus');
+  try{
+    if(!navigator.mediaDevices?.getUserMedia)throw new Error('Prohlížeč nemá přístup ke kameře.');
+    if('BarcodeDetector'in window&&(await BarcodeDetector.getSupportedFormats?.().catch(()=>[]))?.includes?.('ean_13')){
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});if(!$('scanVideo')){stream.getTracks().forEach(t=>t.stop());return}video.srcObject=stream;await video.play().catch(()=>{});
+      const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});let live=true;scanStop=()=>{live=false;stream.getTracks().forEach(t=>t.stop());};
+      status.textContent='Namiř kameru na čárový kód.';
+      const tick=async()=>{if(!live)return;try{const codes=await detector.detect(video);const code=codes.find(c=>/^\d{8,14}$/.test(c.rawValue))?.rawValue;if(code){barcodeFound(code);return}}catch{}setTimeout(tick,200);};tick();
+    }else{
+      status.textContent='Načítám čtečku…';
+      const ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser'),reader=new ZX.BrowserMultiFormatReader();
+      if(!$('scanVideo'))return;
+      const controls=await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},video,result=>{const code=result?.getText?.();if(code&&/^\d{8,14}$/.test(code))barcodeFound(code);});
+      scanStop=()=>controls.stop();if(!$('scanVideo')){stopScanner();return}status.textContent='Namiř kameru na čárový kód.';
+    }
+  }catch(error){status.textContent=(error?.name==='NotAllowedError'?'Přístup ke kameře je zakázaný. Povol ho v nastavení prohlížeče, nebo kód vyfoť či opiš.':'Kameru se nepodařilo spustit: '+(error?.message||error))+'';}
+}
+function stopScanner(){try{scanStop?.();}catch{}scanStop=null;}
+async function barcodeFound(code){
+  stopScanner();navigator.vibrate?.(60);closeSheet();activate('nutrition');
+  $('foodBarcode').value=code;$('foodQuery').value='';$('foodEntry').scrollIntoView({behavior:'smooth',block:'start'});
+  await searchFood();
+}
+
+function installNutritionHome(){
+  const nutrition=$('nutrition');if(!nutrition||$('dayOverview'))return;
+  nutrition.insertAdjacentHTML('afterbegin','<div class="nutrition-home"><article class="card day-overview" id="dayOverview"></article><article class="card meal-list" id="mealList"></article></div>');
+  $('mealList').closest('.nutrition-home').after($('foodEntry'));
+  // Meals: breakfast, two snacks, lunch, dinner (the diary's five slots).
+  const meal=$('foodMeal');if(meal){meal.innerHTML=mealSlots.map(s=>'<option value="'+s.id+'">'+s.name+'</option>').join('');meal.value=mealByTime();}
+  // Short labels that fit a phone; the barcode button opens the live scanner.
+  const barcodeLabel=$('foodBarcodePhoto')?.closest('label');
+  if(barcodeLabel){barcodeLabel.insertAdjacentHTML('beforebegin','<button type="button" class="btn food-quick" id="foodScan">▥<span>Skenovat</span></button>');barcodeLabel.hidden=true;$('foodScan').onclick=openBarcodeScanner;}
+  const relabel=(el,icon,text)=>{if(!el)return;const input=el.querySelector('input');el.textContent='';el.classList.add('food-quick');el.insertAdjacentHTML('afterbegin',icon+'<span>'+text+'</span>');if(input)el.append(input);};
+  relabel($('foodLabelPhoto')?.closest('label'),'📷','Etiketa');relabel($('foodPortionPhoto')?.closest('label'),'🍽','Moje porce');relabel($('foodManual'),'✎','Ručně');
+  const hint=[...$('foodEntry').querySelectorAll('.small')].find(x=>/Hledá v tvých uložených/.test(x.textContent));if(hint)hint.textContent='Nejdřív hledám v tvých uložených potravinách; co neznám, dohledám přes AI.';
+  $('foodBarcode').placeholder='EAN';
+  // Meal chips in the food editor and a button that logs straight into that meal.
+  const add=$('ingredientAdd');
+  if(add){add.insertAdjacentHTML('beforebegin','<div class="meal-chips" role="group" aria-label="Do kterého jídla">'+mealSlots.map(s=>'<button type="button" class="btn" data-meal-chip="'+s.id+'">'+(MEAL_ICON[s.id]||'')+' '+s.name.replace('Dopolední svačina','Svačina dop.').replace('Odpolední svačina','Svačina odp.')+'</button>').join('')+'</div><button type="button" class="btn primary simple-food-add" id="foodAddDirect">Přidat</button>');
+    add.textContent='+ Složit jídlo z více potravin';add.classList.remove('primary','simple-food-add');add.classList.add('food-compose');
+    $('foodEntry').addEventListener('click',e=>{const chip=e.target.closest('[data-meal-chip]');if(chip)setFoodMeal(chip.dataset.mealChip);});
+    $('foodAddDirect').onclick=()=>$('basketSave').click();
+    setFoodMeal($('foodMeal').value);}
+  // Cookbook by name or page.
+  const recipeInput=$('recipeRequest');if(recipeInput){recipeInput.placeholder='Název receptu nebo strana, např. rizoto, strana 70';recipeInput.closest('div').previousElementSibling.textContent='Z kuchařky';const tip=recipeInput.closest('div').nextElementSibling;if(tip?.classList.contains('small'))tip.textContent='Hledej podle názvu nebo čísla strany. Porce napiš třeba „1,5 porce rizota“.';
+    const byPage=$('recipeLookup').onclick;$('recipeLookup').textContent='Najít recept';
+    // The amount goes through the editor's amount field, so the wheel follows.
+    const setPortions=text=>{const q=text.match(/(\d+(?:[.,]\d+)?(?:\/\d+)?)\s*porc/i)?.[1];if(q&&$('simpleFoodAmount')){$('simpleFoodAmount').value=q;$('simpleFoodAmount').dispatchEvent(new Event('input',{bubbles:true}));$('simpleFoodAmount').dispatchEvent(new Event('change',{bubbles:true}));}};
+    $('recipeLookup').onclick=async()=>{const text=recipeInput.value.trim();if(/(?:str[aá]n(?:ka|ky|ce|u|a)?|page)\s*\d{1,3}|^\s*\d{1,3}\s*$/i.test(text)){await byPage();setPortions(text);return}
+      const name=text.replace(/\d+(?:[.,]\d+)?(?:\/\d+)?\s*porc\w*/i,'').replace(/^(měl|mela|měla|snědl|snědla)\s+jsem\s+/i,'').trim();if(name.length<2)return foodMessage('Napiš název receptu nebo číslo strany.');
+      try{const r=await jsonFetch('/app/api/food/recipes?q='+encodeURIComponent(name)),list=r.recipes||[];if(!list.length)return foodMessage('V kuchařce jsem „'+name+'“ nenašel. Zkus jiné slovo nebo číslo strany.');
+        const pick=x=>{selectFoodProduct({name:x.name,calories_100g:x.calories,protein_100g:x.protein_g,carbs_100g:x.carbs_g,fat_100g:x.fat_g,nutrition_basis:'portion',source:'package_label'});setPortions(text);foodMessage('Recept „'+x.name+'“'+(x.page?' (str. '+x.page+')':'')+' je připravený.');};
+        $('foodResults').innerHTML=list.map((x,i)=>'<button type="button" class="food-result" data-recipe="'+i+'"><strong>'+esc(x.name)+'</strong><span class="small">'+(x.page?'str. '+x.page+' · ':'')+(x.calories==null?'energie neuvedena':fmt(x.calories)+' kcal / porce')+'</span></button>').join('');
+        $('foodResults').querySelectorAll('[data-recipe]').forEach(b=>b.onclick=()=>pick(list[Number(b.dataset.recipe)]));if(list.length===1)pick(list[0]);else foodMessage('Vyber recept.');
+      }catch(error){foodMessage(error.message);}};}
+  installAmountWheel();
+  // An unknown barcode is looked up with AI straight away.
+  const search=searchFood;searchFood=async function(){await search();if($('foodBarcode').value.trim()&&!foodCandidates.length&&$('foodAiLookup'))await lookupFoodAi();};
+  const close=closeSheet;closeSheet=function(){stopScanner();close();};
+  // Redraw with the day's data.
+  const diary=renderMealDiary;renderMealDiary=function(){diary();renderMealList();renderDayOverview();};
+  const previous=load;load=async()=>{await previous();renderMealList();renderDayOverview();loadFluids();};
+  renderMealList();renderDayOverview();
+}
+installNutritionHome();

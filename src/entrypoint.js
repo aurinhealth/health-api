@@ -23,6 +23,7 @@ import {askCoach,coachContext} from './coach-assistant.js';
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
 import { lookupFoodWithAI } from "./food-ai.js";
+import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
@@ -31,7 +32,7 @@ import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
-import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
@@ -496,6 +497,30 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});
   }
+  // Cookbook by recipe name (the page lookup is below).
+  if(url.pathname==='/app/api/food/recipes'&&request.method==='GET'){
+    const q=String(url.searchParams.get('q')||'').trim().slice(0,120);
+    if(q.length<2)return Response.json({status:'ok',recipes:[]},{headers:{'Cache-Control':'no-store'}});
+    return Response.json(await searchCookbookRecipes({name:q,limit:8}),{headers:{'Cache-Control':'no-store'}});
+  }
+  // Drinks of a day with the day's target (body weight and training).
+  if(url.pathname==='/app/api/fluids'){
+    const validDay=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+    try{
+      if(request.method==='GET'){
+        const date=validDay(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
+        const [entries,weight,profile,hours]=await Promise.all([listFluids(env.DB,date),
+          env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='weight' AND value_numeric IS NOT NULL AND COALESCE(sample_time,start_time,end_time)<=? ORDER BY COALESCE(sample_time,start_time,end_time) DESC LIMIT 1").bind(env.USER_ID,date+'T23:59:59').first().catch(()=>null),
+          dashboardProfile(env).catch(()=>null),dayActivityHours(env.DB,env.USER_ID,date)]);
+        const target=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),target},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+      if(request.method==='POST'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await addFluid(env.DB,{date:validDay(body.date)?body.date:pragueToday(),ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
+      return Response.json({message:'Method not allowed'},{status:405});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400});}
+  }
   if(url.pathname==='/app/api/food/recipe'&&request.method==='GET'){
     const recipe=await getCookbookRecipeByPage(url.searchParams.get('page'));
     return Response.json(recipe?{recipe}:{message:'Na této stránce není známý recept.'},{status:recipe?200:404,headers:{'Cache-Control':'no-store'}});
@@ -899,6 +924,12 @@ async function handleStrengthAutomation(request, env, ctx) {
     const route = routes[action];
     if (!route) return Response.json({ status: "error", message: `Unknown strength action: ${action}` }, { status: 400 });
 
+    // The nightly run follows the week plan: no gym that day, no plan; a plan
+    // already there (made or edited by the athlete) is kept.
+    if (body?.nightly === true && action === "generate") {
+      const day = date || pragueToday(), skip = await nightlyGymSkip(env.DB, day);
+      if (skip) return Response.json({ status: "skipped", action, date: day, reason: skip });
+    }
     const internalUrl = new URL(route, request.url);
     const payload = { ...body, date, preview, action };
     if (action === "protect_legs" || action === "focus_upper") payload.forceProtectLegs = true;

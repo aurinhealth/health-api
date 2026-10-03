@@ -27,6 +27,7 @@ export const PERSONAL_TABLES = {
   training_capabilities: { pk: ["user_id", "sport", "system"] },
   workout_feedback: {},
   coach_reflections: {},
+  fluid_log: {},
   workout_schedule_links: {},
   training_profile: {},
   week_plan_preferences: {}

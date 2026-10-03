@@ -104,3 +104,17 @@ test("week targets: done or planned sessions count first and one ride never carr
   assert.equal(targetFor(planned, "2026-10-03", "ride"), null);
   assert.equal(weekTargets({ roles, ctl: null }).status, "no_fitness");
 });
+
+test("the nightly gym plan follows the week plan and keeps an existing plan", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { saveWeekPlan, nightlyGymSkip } = await import("../src/week-planner.js");
+  const { saveGymPlan } = await import("../src/gym-plan-store.js");
+  const db = scopedDb(createD1(), 7);
+  assert.equal(await nightlyGymSkip(db, "2026-10-03"), null); // no week plan yet: old behaviour
+  await saveWeekPlan(db, { days: [["gym"], ["ride"], [], ["gym"], ["ride"], ["ride"], ["ride"]] });
+  assert.match(await nightlyGymSkip(db, "2026-10-03"), /není tento den gym/); // Saturday: ride
+  assert.equal(await nightlyGymSkip(db, "2026-10-05"), null); // Monday: gym
+  await saveGymPlan(db, "2026-10-05", [["x"]]);
+  assert.match(await nightlyGymSkip(db, "2026-10-05"), /už gym plán je/);
+});
