@@ -391,8 +391,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [inputs,gym,prefs,feedback,notes]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),readGymPlan(env.DB,date).catch(()=>null),getWeekPlan(env.DB).catch(()=>null),recentWorkoutFeedback(env.DB,shiftDate(date,-21)).catch(()=>[]),listReflections(env.DB,{limit:3}).catch(()=>[])]);
       const gymRows=gym?.stored?parseStrengthSheet(gym.values).rows||[]:[];
       const input=buildReviewInput({date,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text}))});
-      const models=body.compare===true?[...new Set([lightModel(env),env.OPENAI_MODEL||'gpt-6.1-sol'])]:[lightModel(env)];
-      const reviews=await Promise.all(models.map(model=>reviewDay(env,input,model).catch(error=>({model,error:error.message}))));
+      const reviews=[await reviewDay(env,input).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
@@ -474,12 +473,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         phase:coachCtx.cyclingCoachV2?.constraints?.phase
       });
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
-      // "Porovnat modely": the same request to the light and the main model, side by side.
-      if(body.compare===true){
-        const models=[...new Set([lightModel(env),env.OPENAI_MODEL||'gpt-6.1-sol'])];
-        const answers=await Promise.all(models.map(model=>askCoach(env,message,coachCtx,{model}).then(r=>({...r,costUsd:usageCost(r.model,r.usage)})).catch(error=>({status:'error',model,message:error.message}))));
-        return Response.json({status:'ok',kind:'compare',answers},{headers:{'Cache-Control':'no-store'}});
-      }
       const answer=await askCoach(env,message,coachCtx);
       return Response.json({...answer,costUsd:usageCost(answer.model,answer.usage)},{headers:{'Cache-Control':'no-store'}});
     }

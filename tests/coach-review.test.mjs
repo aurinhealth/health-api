@@ -38,14 +38,15 @@ test("each model is asked with the same schema; time, tokens and cost are report
   assert.equal(usageCost("unknown-model", { input_tokens: 1 }), null);
 });
 
-test("the dashboard offers Revize dne and the model comparison", () => {
+test("the dashboard offers Revize dne on the light model, without a model comparison", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/review'&&request\.method==='POST'/);
-  assert.match(entry, /if\(body\.compare===true\)\{/);
+  assert.match(entry, /const reviews=\[await reviewDay\(env,input\)/);
+  assert.doesNotMatch(entry, /body\.compare/);
   assert.match(client, /data-review="'\+esc\(pick\)\+'">🔍 Revize dne/);
-  assert.match(client, /id="assistantCompare"/);
-  assert.match(client, /async function openReviewSheet\(date,compare=false\)/);
+  assert.match(client, /async function openReviewSheet\(date\)\{/);
+  assert.doesNotMatch(client, /Luna × Sol|assistantCompare/);
 });
 
 test("Hodnocení replaces the bare RPE button: RPE and a note for any finished session", () => {
