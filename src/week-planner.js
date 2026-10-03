@@ -1,4 +1,6 @@
 import { readGymPlan } from "./gym-plan-store.js";
+import { normalizeAvailability, ensureWeekOverrides, weekStartOf } from './training-availability.js';
+import { getAthleteState } from './athlete-state.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
@@ -33,31 +35,50 @@ export function sanitizeWeekPlan(input = {}) {
   const location = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
     ? { name: String(loc.name || "").trim().slice(0, 80) || DEFAULT_LOCATION.name, latitude: Math.round(lat * 1e4) / 1e4, longitude: Math.round(lon * 1e4) / 1e4 }
     : DEFAULT_LOCATION;
-  return { days, location };
+  const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
+  if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error('Počet aktivit musí být 0 až 14.');
+  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count };
 }
 
-export async function getWeekPlan(db) {
+export async function getWeekPlan(db, date = null) {
   await ensure(db);
   const row = await db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first();
-  try { return sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { return sanitizeWeekPlan({}); }
+  let defaults; try { defaults = sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { defaults = sanitizeWeekPlan({}); }
+  if (!date) return defaults;
+  await ensureWeekOverrides(db);
+  const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
+  return override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week' } : { ...defaults, source: 'default' };
 }
 
 // Why the nightly gym plan is not made for `date`, or null to make it: the
 // week plan has no gym that day (an empty week plan does not decide), or a
 // plan made or edited by the athlete is already stored.
 export async function nightlyGymSkip(db, date) {
-  const prefs = await getWeekPlan(db);
+  if ((await getAthleteState(db)).status !== 'active') return 'Aktuální stav pozastavuje tréninky.';
+  const prefs = await getWeekPlan(db, date);
   const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
+  if (prefs.availability[weekday].minutes === 0) return 'Tento den nemáš čas na aktivitu.';
   if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return "Podle týdenního plánu není tento den gym.";
   if ((await readGymPlan(db, date)).stored) return "Na tento den už gym plán je.";
   return null;
 }
 
-export async function saveWeekPlan(db, input) {
+export async function saveWeekPlan(db, input, date = null) {
   const prefs = sanitizeWeekPlan(input);
   await ensure(db);
+  if (date) {
+    await ensureWeekOverrides(db);
+    await db.prepare('INSERT INTO week_plan_overrides(user_id,week_start,prefs_json) VALUES(?,?,?) ON CONFLICT(user_id,week_start) DO UPDATE SET prefs_json=excluded.prefs_json').bind(db.userId, weekStartOf(date), JSON.stringify(prefs)).run();
+    return { ...prefs, source: 'week' };
+  }
   await db.prepare("INSERT INTO week_plan_preferences(user_id,prefs_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET prefs_json=excluded.prefs_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(prefs)).run();
   return prefs;
+}
+
+export async function resetWeekPlan(db, date) {
+  await ensureWeekOverrides(db);
+  await db.prepare('DELETE FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).run();
+  return getWeekPlan(db, date);
 }
 
 // Roles for the selected weekdays (0 = Monday). Rules:

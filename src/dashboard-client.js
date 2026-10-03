@@ -477,9 +477,10 @@ function renderGeneratedWorkout(r){
     '<div class="explain-grid">'+explainList('Proč tento trénink',x.why)+explainList('Jak ho jet',x.how)+explainList(r.environment==='outdoor'?'Venku':run?'Na páse':'Na trenažéru',x.environment)+explainList('Jídlo a pití',x.fueling)+'</div>'+
     '<h4 style="margin:14px 0 6px">Rozpis</h4>'+stepTableHtml(x.steps||[],x.ftp,stepOpts)+workoutProfile(w)+
     '<p class="small">Zdroj: '+source+'</p>'+
-    '<div class="workout-filter-actions" style="margin-top:10px;flex-wrap:wrap"><button class="btn primary" id="scheduleGenerated">Přidat do Intervals.icu</button>'+(r.variantCount>1?'<button class="btn" id="anotherGenerated">Jiný návrh</button>':'')+'<label class="small" style="display:flex;gap:6px;align-items:center">Délka <input id="resizeMinutes" type="number" min="'+(run?20:30)+'" max="'+(run?240:360)+'" step="5" value="'+num(w.duration_minutes)+'" style="width:80px;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px"> min</label><button class="btn" id="resizeGenerated" title="Stejný trénink, jen jiná délka – hlavní série zůstává">Změnit délku</button></div></div></article>'+
+    (r.existing?'<p class="notice">Alternativa k naplánovanému tréninku. Změnu prober s asistentem nebo uprav původní událost v kalendáři.</p>':'')+
+    '<div class="workout-filter-actions" style="margin-top:10px;flex-wrap:wrap">'+(!r.existing?'<button class="btn primary" id="scheduleGenerated">Přidat do Intervals.icu</button>':'')+(r.variantCount>1?'<button class="btn" id="anotherGenerated">Jiný návrh</button>':'')+'<label class="small" style="display:flex;gap:6px;align-items:center">Délka <input id="resizeMinutes" type="number" min="'+(run?20:30)+'" max="'+(run?240:360)+'" step="5" value="'+num(w.duration_minutes)+'" style="width:80px;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px"> min</label><button class="btn" id="resizeGenerated" title="Stejný trénink, jen jiná délka – hlavní série zůstává">Změnit délku</button></div></div></article>'+
     (r.alternatives?.length?'<div class="small" style="margin-top:8px">Další možnosti: '+r.alternatives.map(a=>esc(a.name)).join(' · ')+'</div>':'');
-  $("scheduleGenerated").onclick=()=>scheduleLibraryWorkout(w.id,r.date,r.environment);
+  const schedule=$("scheduleGenerated");if(schedule)schedule.onclick=()=>scheduleLibraryWorkout(w.id,r.date,r.environment);
   const again=$("anotherGenerated");if(again)again.onclick=()=>generateWorkoutForDay((state.generatedVariant||0)+1);
   $("resizeGenerated").onclick=()=>resizeGeneratedWorkout(w.id,Number($("resizeMinutes").value));
 }
@@ -490,7 +491,7 @@ async function resizeGeneratedWorkout(id,minutes){
   try{
     const body={date:state.generated?.date||$("generateDate")?.value||pragueToday(),environment:$("generateEnvironment").value,sport:workoutSport(),workoutId:id,resizeTo:minutes};
     const r=await jsonFetch("/app/api/workouts/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    state.generated=r;renderGeneratedWorkout(r);
+    r.existing=state.generated?.existing;state.generated=r;renderGeneratedWorkout(r);
   }catch(e){toast(e.message);b.disabled=false;b.textContent='Změnit délku'}
 }
 async function generateWorkoutForDay(variant=0){
@@ -500,7 +501,7 @@ async function generateWorkoutForDay(variant=0){
     const body={date:date?.value||pragueToday(),environment:$("generateEnvironment").value,variant,sport:workoutSport()};
     const minutes=Number($("generateMinutes").value);if(minutes>0)body.availabilityMinutes=minutes;
     const r=await jsonFetch("/app/api/workouts/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    state.generated=r;state.generatedVariant=variant;renderGeneratedWorkout(r);
+    r.existing=state.generated?.existing&&state.generated.date===r.date&&state.generated.sport===r.sport;state.generated=r;state.generatedVariant=variant;renderGeneratedWorkout(r);
   }catch(e){$("generatedWorkout").innerHTML='<div class="notice status-error">'+esc(e.message)+'</div>'}
   finally{b.disabled=false}
 }
@@ -1262,14 +1263,15 @@ async function renderWeekHub(){
     if(d.date===gymDay()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');items.push('<div class="hub-item planned">'+HUB_SPORTS.gym+' · '+(d.date===today?'plán na dnes':'plán připraven')+'</div>');}
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
-    const plan=(state.weekPlan?.prefs?.days?.[i]||[]).map(sport=>{const x=state.weekPlan.dirty?null:(roles[i]?.items||[]).find(r=>r.sport===sport),tg=state.weekPlan.dirty?null:chipTarget(d.date,sport),pr=state.proposals?.[d.date+'|'+sport];
-      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open" data-date="'+d.date+'" data-sport="'+sport+'">Detail</button>'+(pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add" data-date="'+d.date+'" data-sport="'+sport+'">Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Plán připraven · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym" data-date="'+d.date+'">Otevřít</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
+    const plan=[...new Set([...(state.weekPlan?.prefs?.days?.[i]||[]),...Object.keys(state.proposals||{}).filter(k=>k.startsWith(d.date+'|')).map(k=>k.split('|')[1])])].map(sport=>{const x=state.weekPlan.dirty?null:(roles[i]?.items||[]).find(r=>r.sport===sport),tg=state.weekPlan.dirty?null:chipTarget(d.date,sport),pr=state.proposals?.[d.date+'|'+sport];
+      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open" data-date="'+d.date+'" data-sport="'+sport+'">Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add" data-date="'+d.date+'" data-sport="'+sport+'">Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym" data-date="'+d.date+'">Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
       return '<span class="planner-chip" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'" title="Plán týdne · přetáhni na jiný den">'+HUB_SPORTS[sport]+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(x?'<small>'+esc(x.label.replace(/^Gym · /,''))+(tg&&sport!=='gym'?' · '+hm(tg.minutes)+' · ~'+tg.tss+' TSS':'')+'</small>':'')+(!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
-    const weather=w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>';
+    const av=state.weekPlan?.prefs?.availability?.[i],avText=av?.minutes===0?'Nemám čas':av?.minutes!=null?hm(av.minutes)+(av.window?' · '+av.window:''):av?.window||'';
+    const weather=(w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>')+(avText?'<div class="hub-availability">'+esc(avText)+'</div>':'');
     return '<div class="hub-day'+(d.date===today?' today':d.date<today?' past':'')+(state.plannerPick?' pickable':'')+'" data-hub-day="'+esc(d.date)+'"><div class="hub-day-head"><strong>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d.date+'T12:00:00Z')))+'</strong><span>'+esc(dateLabel(d.date))+'</span></div>'+weather+(items.join('')||(plan?'':'<div class="hub-empty">Volno</div>'))+(plan?'<div class="hub-plan">'+plan+'</div>':'')+'</div>';
   }).join('');
-  $('hubWeekLoad').textContent=(weekTargetText()||'odjeto '+fmt(doneTss)+' TSS'+(plannedTss?' · v plánu dalších '+fmt(plannedTss)+' TSS':''))+(state.weatherError?' · počasí nedostupné':'');
+  $('hubWeekLoad').textContent=(state.weekPlan?.prefs?.source==='week'?'Vlastní nastavení týdne · ':'Běžný týden · ')+(weekTargetText()||'odjeto '+fmt(doneTss)+' TSS'+(plannedTss?' · v plánu dalších '+fmt(plannedTss)+' TSS':''))+(state.weatherError?' · počasí nedostupné':'');
 }
 // Planner: three sport chips dragged onto days (several per day), moved
 // between days or removed; on a phone a tap picks the chip and a tap places it.
@@ -1292,10 +1294,10 @@ function plannerPlace(sport,day,fromDay=null){
 }
 async function saveWeekPlanner(){
   $('plannerStatus').textContent='Ukládám…';
-  const sent=JSON.stringify(state.weekPlan.prefs);
-  try{const saved=await jsonFetch('/app/api/week-plan?start='+(state.hubWeek||pragueMonday()),{method:'POST',headers:{'Content-Type':'application/json'},body:sent});
+  const sent=JSON.stringify(state.weekPlan.prefs),start=state.weekPlan.start||state.hubWeek||pragueMonday();
+  try{const saved=await jsonFetch('/app/api/week-plan?start='+start,{method:'POST',headers:{'Content-Type':'application/json'},body:sent});
     // A newer edit made meanwhile has its own save queued; keep it.
-    if(JSON.stringify(state.weekPlan.prefs)!==sent)return;
+    if(state.weekPlan.start!==start||JSON.stringify(state.weekPlan.prefs)!==sent)return;
     state.weekPlan=saved;$('plannerStatus').textContent='✓ Uloženo · generátor se podle plánu řídí';renderPlanner();renderGymPlanHint();await renderWeekHub();}
   catch(error){$('plannerStatus').textContent='Neuloženo: '+error.message;}
 }
@@ -1310,7 +1312,7 @@ function installPlannerDrag(){
   box.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!drag||!day)return;e.preventDefault();const d=drag;drag=null;plannerPlace(d.sport,weekdayOf(day.dataset.hubDay),d.from);});
   box.addEventListener('click',e=>{
     const remove=e.target.closest('[data-chip-remove]');
-    if(remove){const chip=remove.closest('.planner-chip'),i=Number(chip.dataset.chipDay);state.weekPlan.prefs.days[i]=state.weekPlan.prefs.days[i].filter(x=>x!==chip.dataset.chipSport);plannerChanged();return}
+    if(remove){const chip=remove.closest('.planner-chip'),i=Number(chip.dataset.chipDay),date=chip.closest('[data-hub-day]').dataset.hubDay;delete state.proposals?.[date+'|'+chip.dataset.chipSport];state.weekPlan.prefs.days[i]=state.weekPlan.prefs.days[i].filter(x=>x!==chip.dataset.chipSport);plannerChanged();return}
     const palette=e.target.closest('.planner-chip.palette');
     if(palette){state.plannerPick=state.plannerPick===palette.dataset.chipSport?null:palette.dataset.chipSport;$('plannerStatus').textContent=state.plannerPick?'Ťukni na den, kam '+HUB_SPORTS[state.plannerPick]+' patří':'';renderPlanner();renderWeekHub();return}
     const day=e.target.closest('[data-hub-day]');
@@ -1331,9 +1333,10 @@ async function openWorkouts(){
 }
 function installWorkoutsHub(){
   installInfoTips();
-  $('hubPrevWeek').onclick=()=>{state.hubWeek=dateShift(state.hubWeek||pragueMonday(),-7);renderWeekHub();};
-  $('hubNextWeek').onclick=()=>{state.hubWeek=dateShift(state.hubWeek||pragueMonday(),7);renderWeekHub();};
-  $('hubThisWeek').onclick=()=>{state.hubWeek=pragueMonday();renderWeekHub();};
+  const goWeek=async next=>{clearTimeout(plannerSaveTimer);if(state.weekPlan?.dirty)await saveWeekPlanner();if(state.weekPlan?.dirty)return;state.hubWeek=next;await renderWeekHub();renderPlanner();};
+  $('hubPrevWeek').onclick=()=>goWeek(dateShift(state.hubWeek||pragueMonday(),-7));
+  $('hubNextWeek').onclick=()=>goWeek(dateShift(state.hubWeek||pragueMonday(),7));
+  $('hubThisWeek').onclick=()=>goWeek(pragueMonday());
   $('hubLocation').onclick=()=>{const f=$('hubLocationForm');f.hidden=!f.hidden;if(!f.hidden)$('hubLocationQuery').focus();};
   $('hubLocationForm').onsubmit=async e=>{
     e.preventDefault();const q=$('hubLocationQuery').value.trim(),out=$('hubLocationResults');if(!q)return;out.innerHTML='<span class="small">Hledám…</span>';
@@ -1573,6 +1576,7 @@ function renderToday(){
   // One timeline for both screens: it moves here only while Dnes is shown,
   // otherwise a data reload would take it out of the visible Přehled.
   const tl=$('dayTimeline');if(tl&&el.classList.contains('active'))$('todayTimelineSlot').appendChild(tl);
+  renderAthleteStatus();
 }
 // Dnes → Trénink browses whole weeks: the same weekday a week back or ahead,
 // or back to today. The week is shared with the plan in Workouty.
@@ -1692,38 +1696,36 @@ installPhoneLayer();
 // concrete session: rides and runs from the generator (with the chip's length),
 // gym days as a plan for that day. Nothing goes to Intervals.icu until asked.
 async function proposeWeek(){
-  const b=$('proposeWeek'),today=pragueToday();await loadWeekPlan(true);
-  const items=(state.weekPlan?.targets?.items||[]).filter(x=>x.date>=today);
-  if(!items.length){
-    const start=state.weekPlan?.start||state.hubWeek||pragueMonday(),chips=(state.weekPlan?.prefs?.days||[]).flatMap((d,i)=>(d||[]).map(()=>dateShift(start,i))).filter(d=>d>=today);
-    toast(state.weekPlan?.targets?.status==='no_fitness'?'Chybí kondice (CTL) z Intervals.icu.':chips.length?'Všechny dny z plánu už mají naplánovaný trénink. Pro nový návrh ho smaž, u gymu vyber den a dej Generovat.':'Na zbytek týdne nemáš v plánu žádný sport. Přetáhni kartičku na den.');return}
+  return showAdaptiveWeekProposal();
+}
+async function generateWeekProposals(items){
+  const b=$('proposeWeek');
   b.disabled=true;state.proposals=state.proposals||{};
   try{
     let n=0;for(const x of items){n++;$('plannerStatus').textContent='Navrhuji '+n+' / '+items.length+'…';const key=x.date+'|'+x.sport;state.proposals[key]={status:'busy'};renderWeekHub();
       try{
         if(x.sport==='gym'){
-          let g=await jsonFetch('/app/api/gym?date='+x.date);
-          if(!(g.values||[]).slice(7).some(r=>r?.[1])){await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date})});g=await jsonFetch('/app/api/gym?date='+x.date);}
-          state.proposals[key]={gym:new Set((g.values||[]).slice(7).map(r=>r?.[1]).filter(Boolean)).size};
+          const g=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,preview:true,durationMinutes:x.minutes,startTime:x.startTime,focus:x.role==='gym_upper'?'upper':undefined,focusSource:'week'})});
+          state.proposals[key]={gym:new Set((g.plan?.rows||[]).map(r=>r?.[1]).filter(Boolean)).size,gymPreview:g,existing:x.existing};
         }else{
-          const r=await jsonFetch('/app/api/workouts/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,sport:x.sport,environment:'outdoor'})});
-          state.proposals[key]=r.status==='ok'?{workout:r.workout,result:r}:{error:r.message||'Bez návrhu'};
+          const r=await jsonFetch('/app/api/workouts/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,sport:x.sport,environment:x.environment||'auto',availabilityMinutes:x.minutes})});
+          state.proposals[key]=r.status==='ok'?{workout:r.workout,result:r,existing:x.existing}:{error:r.message||'Bez návrhu'};
         }
       }catch(error){state.proposals[key]={error:error.message};}
       renderWeekHub();
     }
-    const open=Object.values(state.proposals).filter(p=>p.workout&&!p.scheduled).length;
+    const open=Object.values(state.proposals).filter(p=>p.workout&&!p.scheduled&&!p.existing).length;
     $('plannerStatus').innerHTML=open?'Hotovo · <button type="button" class="btn" id="proposeAddAll">Přidat vše do Intervals.icu ('+open+')</button>':'Hotovo';
     const all=$('proposeAddAll');if(all)all.onclick=addAllProposals;
   }finally{b.disabled=false;}
 }
 async function scheduleProposal(key){
-  const pr=state.proposals?.[key];if(!pr?.workout)return false;const [date]=key.split('|');
+  const pr=state.proposals?.[key];if(!pr?.workout||pr.existing)return false;const [date]=key.split('|');
   await jsonFetch('/app/api/workouts/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:pr.workout.id,date,confirm:true,environment:pr.result?.environment||'outdoor'})});
   pr.scheduled=true;return true;
 }
 async function addAllProposals(){
-  const keys=Object.keys(state.proposals||{}).filter(k=>state.proposals[k].workout&&!state.proposals[k].scheduled);
+  const keys=Object.keys(state.proposals||{}).filter(k=>state.proposals[k].workout&&!state.proposals[k].scheduled&&!state.proposals[k].existing);
   if(!keys.length||!window.confirm('Přidat '+keys.length+' navržené tréninky do Intervals.icu?'))return;
   let ok=0;for(const k of keys){try{if(await scheduleProposal(k))ok++;}catch(error){toast('Zápis selhal: '+error.message);}}
   toast(ok+' tréninků je v Intervals.icu.');$('plannerStatus').textContent='✓ '+ok+' v Intervals.icu';state.hubWeekData=null;await refreshAfterPlanChange();
@@ -1734,8 +1736,8 @@ function installProposals(){
     const b=e.target.closest('[data-proposal]');if(!b)return;e.stopPropagation();
     const key=b.dataset.date+'|'+(b.dataset.sport||'gym'),pr=state.proposals?.[key];
     if(b.dataset.proposal==='add'){if(!window.confirm('Přidat „'+pr.workout.name+'“ na '+longDate(b.dataset.date)+' do Intervals.icu?'))return;b.disabled=true;try{await scheduleProposal(key);toast(pr.workout.name+' je v Intervals.icu.');state.hubWeekData=null;await refreshAfterPlanChange();}catch(error){toast('Zápis selhal: '+error.message);b.disabled=false;}}
-    if(b.dataset.proposal==='open'){activate('workouts');setWorkoutSport(b.dataset.sport);state.generated=pr.result;state.generatedVariant=0;$('generateDate').value=b.dataset.date;renderGeneratedWorkout(pr.result);$('generatedWorkout').scrollIntoView({behavior:'smooth',block:'start'});}
-    if(b.dataset.proposal==='gym'){openGymDay(b.dataset.date);}
+    if(b.dataset.proposal==='open'){activate('workouts');setWorkoutSport(b.dataset.sport);state.generated={...pr.result,existing:pr.existing};state.generatedVariant=0;$('generateDate').value=b.dataset.date;renderGeneratedWorkout(state.generated);$('generatedWorkout').scrollIntoView({behavior:'smooth',block:'start'});}
+    if(b.dataset.proposal==='gym'){if(pr?.gymPreview)openGymPreview(b.dataset.date,pr);else openGymDay(b.dataset.date);}
   },true);
   // Gym: any day, not only today.
   const input=$('gymDate');input.value=gymDay();input.min=dateShift(pragueToday(),-30);
@@ -2123,3 +2125,114 @@ function focusSummary(p){
   return [sport,p.weeklyHours?p.weeklyHours+' h/týden':'',p.eventDate&&days>=0?(p.eventName||'Závod')+' za '+days+' dní':''].filter(Boolean).join(' · ');
 }
 installSportFocus();
+
+// Availability, week exceptions and the persistent personal coach.
+const STATUS_LABELS={active:'Active',sick:'Sick',injured:'Injured',on_break:'On break'};
+function renderAthleteStatus(){
+  const head=document.querySelector('#today .today-head');if(!head)return;
+  $('athleteStatusBox')?.remove();
+  const s=state.athleteState||{status:'active'},a=state.coachAdvice;
+  head.insertAdjacentHTML('beforeend','<div id="athleteStatusBox"><button type="button" class="btn athlete-status" id="changeAthleteStatus">● '+esc(STATUS_LABELS[s.status]||'Active')+'</button>'+(s.note?'<span class="small">'+esc(s.note)+'</span>':'')+'</div>');
+  $('changeAthleteStatus').onclick=openAthleteStatus;
+  $('coachAdviceCard')?.remove();
+  if(a){head.insertAdjacentHTML('afterend','<div class="notice coach-advice" id="coachAdviceCard"><strong>'+esc(a.headline)+'</strong><p>'+esc(a.message)+'</p><div class="select-row"><button class="btn primary" type="button" id="adviceAccept">Změnit na On break</button><button class="btn" type="button" id="adviceDiscuss">Probrat kompromis</button><button class="btn" type="button" id="adviceDecline">Teď ne</button></div></div>');
+    $('adviceAccept').onclick=()=>saveAthleteStatus('on_break','Pauza podle doporučení regenerace');
+    $('adviceDiscuss').onclick=()=>openFloatingAssistant('Vidíš slabší regeneraci: '+a.reasons.join(' ')+' '+a.message+' Najdeme kompromis místo úplné pauzy?');
+    $('adviceDecline').onclick=async()=>{await athleteStatePost({dismiss:a.id});state.coachAdvice=null;renderAthleteStatus();};
+  }
+  const fab=$('floatingAssistant');if(fab){fab.textContent=a?'✦ Asistent · návrh':'✦ Asistent';fab.classList.toggle('has-advice',!!a);}
+}
+async function athleteStatePost(body){const r=await jsonFetch('/app/api/athlete-state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});state.athleteState=r.state;return r.state;}
+async function saveAthleteStatus(status,note=''){
+  try{await athleteStatePost({status,note});state.coachAdvice=null;closeSheet();renderAthleteStatus();toast('Stav: '+STATUS_LABELS[status]);}catch(error){toast(error.message);}
+}
+function openAthleteStatus(){
+  const s=state.athleteState||{status:'active',note:''};
+  openSheet('Tvůj aktuální stav','<form id="athleteStatusForm"><div class="status-choices">'+Object.entries(STATUS_LABELS).map(([value,label])=>'<label><input type="radio" name="status" value="'+value+'"'+(s.status===value?' checked':'')+'> '+label+'</label>').join('')+'</div><p class="small">Sick · nemoc, Injured · zranění, On break · pauza. Tréninky zůstanou v kalendáři; nové návrhy se při pauze pozastaví.</p><label>Poznámka nebo omezení<textarea id="athleteStatusNote" maxlength="500">'+esc(s.note||'')+'</textarea></label><button class="btn primary" type="submit">Uložit stav</button></form>',body=>{body.querySelector('form').onsubmit=e=>{e.preventDefault();saveAthleteStatus(body.querySelector('[name=status]:checked').value,$('athleteStatusNote').value)};});
+}
+async function openFloatingAssistant(message=''){
+  if(!$('assistantDialog').open)$('assistantDialog').showModal();
+  if(message)$('assistantMessage').value=message;
+  const turns=state.athleteState?.conversation||[];
+  if(turns.length)$('assistantConversation').innerHTML=turns.map(t=>'<div class="coach-turn '+(t.role==='user'?'user':'assistant')+'"><strong>'+esc(t.role==='user'?'Ty':'Asistent')+'</strong><p>'+esc(t.content)+'</p></div>').join('');
+  $('assistantMessage').focus();
+  try{await loadInbox();renderCoachActionCards((state.inbox||[]).filter(x=>x.status==='draft'&&x.draft?.kind==='coach_action').map(x=>({...x.draft.action,draftId:x.id})));}catch{}
+}
+function renderCoachActionCards(actions=[]){
+  let el=$('coachActionCards');if(!el){$('assistantConversation').insertAdjacentHTML('afterend','<div id="coachActionCards"></div>');el=$('coachActionCards');}
+  const label=a=>a.type==='status'?'Změnit stav na '+STATUS_LABELS[a.status]:a.type==='move'?'Přesunout '+(a.eventSnapshot?.name||'trénink')+' na '+longDate(a.date):a.type==='rest'?'Odstranit '+(a.eventSnapshot?.name||'trénink')+' · '+longDate(a.date):'Připravit '+HUB_SPORTS[a.sport]+' · '+longDate(a.date)+' · '+hm(a.minutes);
+  el.innerHTML=actions.map((a,i)=>'<div class="notice coach-action"><strong>'+esc(label(a))+'</strong><p>'+esc(a.reason)+'</p><div class="select-row"><button class="btn primary" data-coach-action="'+i+'" data-decision="confirm">'+(a.type==='rest'?'Potvrdit odstranění':'Potvrdit')+'</button><button class="btn" data-coach-action="'+i+'" data-decision="reject">Odmítnout</button><button class="btn" data-coach-feedback="'+i+'">Navrhnout kompromis</button></div></div>').join('');
+  el.querySelectorAll('[data-coach-feedback]').forEach(b=>b.onclick=()=>{$('assistantMessage').value='K návrhu „'+label(actions[Number(b.dataset.coachFeedback)])+'“ mám zpětnou vazbu: ';$('assistantMessage').focus();});
+  el.querySelectorAll('[data-coach-action]').forEach(b=>b.onclick=async()=>{const a=actions[Number(b.dataset.coachAction)];b.disabled=true;try{const r=await jsonFetch('/app/api/assistant/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:a.draftId,decision:b.dataset.decision})});b.closest('.coach-action').innerHTML='<p>'+esc(r.message)+'</p>';if(b.dataset.decision==='confirm'){
+      if(a.type==='status'){state.athleteState=r.result;state.coachAdvice=null;renderAthleteStatus();}
+      else if(a.type==='workout'&&r.result){$('assistantDialog').close();if(a.sport==='gym')openGymPreview(a.date,{gymPreview:r.result});else{activate('workouts');setWorkoutSport(a.sport);state.generated=r.result;$('generateDate').value=a.date;renderGeneratedWorkout(r.result);$('generatedWorkout').scrollIntoView({behavior:'smooth'});}}
+      else{state.hubWeekData=null;await refreshAfterPlanChange();}
+    }}catch(error){$('assistantStatus').textContent=error.message;b.disabled=false;}});
+}
+function availabilityEditorHtml(prefs){
+  return '<p class="small">Časové okno např. 10–15 nebo 10:30–15:00. Maximální čas je celkový rozpočet pro aktivity za den. Prázdný čas = neurčeno, 0 = nemám čas.</p><div class="availability-grid">'+['Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota','Neděle'].map((label,i)=>{const a=prefs.availability?.[i]||{};return '<div class="availability-row" data-availability-day="'+i+'"><strong>'+label+'</strong><label>Časové okno<input data-window placeholder="10–15" value="'+esc(a.window||'')+'"></label><label>Max. hodin<input data-hours type="number" min="0" max="24" step="0.25" placeholder="neurčeno" value="'+(a.minutes==null?'':a.minutes/60)+'"></label><div class="availability-sports"><span class="small">Preferuji</span>'+Object.entries(HUB_SPORTS).map(([sport,name])=>'<label><input data-preferred="'+sport+'" type="checkbox"'+(a.preferredSports?.includes(sport)?' checked':'')+'> '+name+'</label>').join('')+'</div></div>';}).join('')+'</div><label class="small">Aktivit za týden <input id="availabilityCount" type="number" min="0" max="14" placeholder="podle historie" value="'+(prefs.weeklyActivities??'')+'"></label>';
+}
+function readAvailabilityEditor(root,prefs){
+  return {...prefs,weeklyActivities:$('availabilityCount').value===''?null:Number($('availabilityCount').value),availability:[...root.querySelectorAll('[data-availability-day]')].map(row=>({window:row.querySelector('[data-window]').value,minutes:row.querySelector('[data-hours]').value===''?null:Number(row.querySelector('[data-hours]').value)*60,preferredSports:[...row.querySelectorAll('[data-preferred]:checked')].map(x=>x.dataset.preferred)}))};
+}
+async function openAvailabilityEditor(scope){
+  try{
+    const weekly=scope==='week',start=state.hubWeek||pragueMonday(),data=weekly?await loadWeekPlan(true):await jsonFetch('/app/api/week-plan');
+    openSheet(weekly?'Časové možnosti · '+dateLabel(start)+' – '+dateLabel(dateShift(start,6)):'Běžný týden · časové možnosti','<form id="availabilityForm">'+availabilityEditorHtml(data.prefs)+'<p class="small">'+(weekly?'Změna platí pouze pro tento týden.':'Tento základ se použije v týdnech bez vlastní výjimky.')+'</p><div id="availabilityError" class="small" role="status"></div><button class="btn primary" type="submit">Uložit '+(weekly?'pro tento týden':'běžný týden')+'</button>'+(weekly&&data.prefs.source==='week'?' <button class="btn" type="button" id="resetAvailabilityWeek">Vrátit běžný týden</button>':'')+'</form>',body=>{
+      body.querySelector('form').onsubmit=async e=>{e.preventDefault();const b=body.querySelector('[type=submit]');b.disabled=true;try{await jsonFetch('/app/api/week-plan'+(weekly?'?start='+start:''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(readAvailabilityEditor(body,data.prefs))});closeSheet();await loadWeekPlan(true);renderWeekHub();renderAvailabilitySummary();toast('Časové možnosti uloženy.');}catch(error){$('availabilityError').textContent=error.message;b.disabled=false;}};
+      if($('resetAvailabilityWeek'))$('resetAvailabilityWeek').onclick=async()=>{try{await jsonFetch('/app/api/week-plan?start='+start,{method:'DELETE'});closeSheet();await loadWeekPlan(true);renderWeekHub();toast('Používám běžný týden.');}catch(error){$('availabilityError').textContent=error.message}};
+    });
+  }catch(error){toast(error.message);}
+}
+async function renderAvailabilitySummary(){
+  const el=$('availabilitySummary');if(!el)return;
+  try{const {prefs}=await jsonFetch('/app/api/week-plan');const specified=prefs.availability?.filter(a=>a.minutes!=null)||[];el.textContent=specified.length?specified.length+' dní s nastavenou dostupností · '+fmt(specified.reduce((s,a)=>s+a.minutes,0)/60,1)+' h/týden'+(prefs.weeklyActivities!=null?' · '+prefs.weeklyActivities+' aktivit':' · počet podle historie'):'Nastav běžný týden, aby asistent věděl, kdy máš čas.';}catch(error){el.textContent=error.message;}
+}
+async function showAdaptiveWeekProposal(){
+  const b=$('proposeWeek');b.disabled=true;$('plannerStatus').textContent='Reviduji týden a dostupnost…';
+  try{
+    const start=state.hubWeek||pragueMonday(),r=await jsonFetch('/app/api/coach/week',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({start})}),p=r.proposal;
+    const items=p.items||[];
+    openSheet('Navrhnout tréninky · '+dateLabel(start),'<div class="notice" style="white-space:pre-wrap">'+esc(r.review?.answer||'Návrh vychází z dostupného času a historie.')+'</div>'+(r.aiError?'<p class="small">AI revize není dostupná; pravidla plánovače fungují dál.</p>':'')+(p.warnings||[]).map(w=>'<p class="small">'+esc((w.date?dateLabel(w.date)+' · ':'')+w.text)+'</p>').join('')+(p.missingAvailability?'<p>Nastav časové možnosti běžného týdne nebo tohoto týdne.</p><button class="btn" id="proposalAvailability">Nastavit dostupnost</button>':'')+'<div class="week-proposal-list">'+items.map(x=>'<div><strong>'+esc(longDate(x.date))+'</strong><span>'+esc(HUB_SPORTS[x.sport])+' · '+hm(x.minutes)+' · '+(x.environment==='indoor'?'indoor':'outdoor')+'</span><small>'+esc(x.reason||x.label||'')+'</small></div>').join('')+'</div><div class="select-row">'+(items.length?'<button class="btn primary" id="confirmWeekProposal">Připravit konkrétní tréninky</button>':'')+'<button class="btn" id="detailExistingWeek">Rozpracovat plánované</button><button class="btn" id="discussWeekProposal">Zpětná vazba / kompromis</button><button class="btn" id="declineWeekProposal">Zavřít bez změn</button></div>',body=>{
+      if($('proposalAvailability'))$('proposalAvailability').onclick=()=>openAvailabilityEditor('week');
+      if($('confirmWeekProposal'))$('confirmWeekProposal').onclick=async()=>{const button=$('confirmWeekProposal');button.disabled=true;try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+start,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p.prefs)});closeSheet();await generateWeekProposals(items);}catch(error){toast(error.message);button.disabled=false;}};
+      $('declineWeekProposal').onclick=closeSheet;
+      $('discussWeekProposal').onclick=()=>{closeSheet();openFloatingAssistant('Chci upravit návrh pro týden '+start+'. Tvoje revize: '+(r.review?.answer||JSON.stringify(items))+'. Moje zpětná vazba: ');};
+      $('detailExistingWeek').onclick=async()=>{closeSheet();const week=await hubWeekData(),detail=[];for(const d of week.days||[]){if(d.date<pragueToday())continue;for(const a of d.daily?.training?.planned||[]){const sport=activitySport(a);if(!['ride','run','gym'].includes(sport))continue;const env=state.weather?.[d.date];detail.push({date:d.date,sport,minutes:Math.round((a.durationHours||1)*60),environment:sport==='gym'?'indoor':Number(d.date.slice(5,7))>=11||Number(d.date.slice(5,7))<=2||env?.rainProb>=70?'indoor':'auto',existing:a.id});}}if(detail.length)await generateWeekProposals(detail);else toast('V tomto týdnu nejsou plánované tréninky.');};
+    });
+    $('plannerStatus').textContent='Revize hotová · návrhy čekají na tvé rozhodnutí';
+  }catch(error){$('plannerStatus').textContent=error.message;}finally{b.disabled=false;}
+}
+function openGymPreview(date,pr){
+  const g=pr.gymPreview,plan=g.plan;
+  openSheet('Návrh gymu · '+longDate(date),'<h3>'+esc(plan.planName)+'</h3><p>'+esc(plan.rationale)+'</p><div class="gym-preview-rows">'+(plan.rows||[]).map(row=>'<div><b>'+esc(row[1])+'</b><span>'+esc(row[0])+' · '+esc(row[3]||'podle RPE')+' kg × '+esc(row[4])+'</span></div>').join('')+'</div>'+(pr.existing?'<p class="small">Jde o rozpracování existujícího tréninku. Změny můžeš provést v gymu.</p><button class="btn" id="openPreviewGym">Otevřít gym</button>':pr.scheduled?'<p>✓ Plán je uložený.</p>':'<button class="btn primary" id="confirmGymPreview">Uložit tento gym plán</button>'),body=>{
+    if($('openPreviewGym'))$('openPreviewGym').onclick=()=>{closeSheet();openGymDay(date)};
+    if($('confirmGymPreview'))$('confirmGymPreview').onclick=async()=>{const b=$('confirmGymPreview');b.disabled=true;try{const r=await jsonFetch('/app/api/gym/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:g.draftId})});pr.scheduled=true;closeSheet();toast(r.intervals?.status==='error'?'Gym je uložený, zápis do Intervals selhal: '+r.intervals.message:'Gym plán uložený.');await renderWeekHub();}catch(error){toast(error.message);b.disabled=false;}};
+  });
+}
+function installAdaptivePlanning(){
+  $('settings').insertAdjacentHTML('beforeend','<article class="card" id="availabilitySettings" style="margin-top:12px"><h3>Časové možnosti a preference</h3><p class="small" id="availabilitySummary">Načítám…</p><button class="btn primary" id="editDefaultAvailability" type="button">Nastavit běžný týden</button><div id="coachMemories"></div></article>');
+  $('editDefaultAvailability').onclick=()=>openAvailabilityEditor('default');
+  $('proposeWeek').insertAdjacentHTML('beforebegin','<button class="btn" id="editWeekAvailability" type="button">Časové možnosti týdne</button>');
+  $('editWeekAvailability').onclick=()=>openAvailabilityEditor('week');
+  document.body.insertAdjacentHTML('beforeend','<button class="assistant-fab" id="floatingAssistant" type="button" aria-label="Otevřít osobního AI asistenta">✦ Asistent</button>');
+  $('floatingAssistant').onclick=()=>openFloatingAssistant();$('openAssistant').onclick=()=>openFloatingAssistant();
+  const auto=$('generateEnvironment');if(auto){auto.insertAdjacentHTML('afterbegin','<option value="auto">Podle počasí a sezóny</option>');auto.value='auto';}
+  $('assistantForm').onsubmit=async e=>{
+    e.preventDefault();const message=$('assistantMessage').value.trim();if(!message)return;const b=$('assistantForm').querySelector('[type=submit]');b.disabled=true;$('assistantStatus').textContent='Přemýšlím nad tvým návrhem…';
+    try{const r=await jsonFetch('/app/api/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});if(r.kind==='food_draft'){renderFoodDraft(message,r);return}
+      $('assistantConversation').insertAdjacentHTML('beforeend','<div class="coach-turn user"><strong>Ty</strong><p>'+esc(message)+'</p></div><div class="coach-turn assistant"><strong>Asistent</strong><p>'+esc(r.answer)+'</p></div>');
+      if(r.actions?.length)renderCoachActionCards(r.actions);
+      $('assistantMessage').value='';$('assistantStatus').textContent=r.memorySaved?'Preference uložena. Najdeš ji v Nastavení.':'Návrh můžeš odmítnout nebo doplnit zpětnou vazbu.';
+      state.athleteState=(await jsonFetch('/app/api/athlete-state')).state;renderCoachMemories();
+    }catch(error){$('assistantStatus').textContent=error.message;}finally{b.disabled=false;}
+  };
+  const previous=load;load=async()=>{await previous();try{const r=await jsonFetch('/app/api/athlete-state');state.athleteState=r.state;renderCoachMemories();renderAthleteStatus();const signature=JSON.stringify([pragueToday(),state.athleteState.status,(state.fitness?.wellness||[]).at(-1),(state.sleep?.sessions||[]).filter(s=>s.date===pragueToday())]);if(state.checkInSignature!==signature){const check=await jsonFetch('/app/api/coach/check-in');state.coachAdvice=check.advice;state.checkInSignature=signature;renderAthleteStatus();}}catch{};};
+  const priorActivate=activate;activate=function(id){priorActivate(id);if(id==='settings'){renderAvailabilitySummary();renderCoachMemories();}if(id==='today')renderAthleteStatus();};
+}
+function renderCoachMemories(){
+  const el=$('coachMemories');if(!el)return;const memories=state.athleteState?.memories||[];
+  el.innerHTML='<h4>Asistent si pamatuje</h4>'+(memories.length?memories.map((m,i)=>'<div class="memory-row"><span>'+esc(m)+'</span><button class="btn" type="button" data-forget-memory="'+i+'">Zapomenout</button></div>').join(''):'<p class="small">Výslovné preference sdělené asistentovi se uloží sem.</p>');
+  el.querySelectorAll('[data-forget-memory]').forEach(b=>b.onclick=async()=>{try{await athleteStatePost({forget:memories[Number(b.dataset.forgetMemory)]});renderCoachMemories();}catch(error){toast(error.message)}});
+}
+installAdaptivePlanning();

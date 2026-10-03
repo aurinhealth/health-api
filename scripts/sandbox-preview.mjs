@@ -18,6 +18,8 @@ import { fitnessInsights } from "../src/fitness-insights.js";
 import { sampleActivityStreams, activityIntervals, heartRateRecovery } from "../src/activity-detail.js";
 import { createD1 } from "../tests/helpers/d1.mjs";
 const plannerText = await readFile(new URL("../src/week-planner.js", import.meta.url), "utf8");
+const availabilityText = await readFile(new URL('../src/training-availability.js',import.meta.url),'utf8');
+const adaptiveWeekText = await readFile(new URL('../src/adaptive-week.js',import.meta.url),'utf8');
 import { scopedDb } from "../src/tenancy.js";
 
 const day = (offset, base = today()) => { const d = new Date(base + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
@@ -142,6 +144,7 @@ async function staticResponses() {
     "/app/api/fitness": { status: "ok", wellness }, "/app/api/weight": { status: "ok", current: 82.4, records: Array.from({ length: 30 }, (_, i) => ({ sample_time: day(i - 29) + "T06:30:00Z", value_numeric: 83.6 - i * .04 })) },
     "/app/api/fitness-insights": fitnessInsights({ sets: gymHistory, activities: [...pastActivities, ...Object.entries(weekActivities).flatMap(([date, w]) => (w.completed || []).map(a => ({ ...a, date, moving_time: a.durationHours * 3600, payload: { ...(a.payload || {}), icu_hr_zone_times: a.type === "Ride" ? zones(14, 24, 22, 14, 1) : null } })))], today: T }),
     "/app/api/activity-detail": activitySample(),
+    "/app/api/fluids":{status:'ok',totalMl:1800,target:{ml:2500},entries:[]},
     "/app/api/activities": { status: "ok", count: 3, activities: [] }, "/app/api/nutrition": { status: "ok", records: [] }, "/app/api/sleep": { status: "ok", sessions: sleep },
     "/app/api/google-health": { status: "ok", wellness: [] }, "/app/api/inbox": { status: "ok", items: [] }, "/app/api/food/day": { status: "ok", preview: true, entries: demoFoods, totals: {} },
     "/app/api/gym/exercises": { status: "ok", exercises: gymExerciseCatalog() }, "/app/api/training-profile": trainingProfile(), "/app/api/profile": { status: "ok", profile: null, suggestions: { height: 182, activity: "light", averageSteps: 6400, rhr: 52, hrmax: 187, birthDate: "1990-05-14" } },
@@ -173,7 +176,7 @@ function weatherSample(params) {
 function shim(data, planner) {
   return `<script>
 (()=>{const DATA=${JSON.stringify(data).replace(/</g, "\\u003c")};${planner}
-let prefs=${JSON.stringify(weekPlan)},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}},GYM_WEEK=${JSON.stringify(gymPlansForWeek())};
+let prefs=${JSON.stringify(weekPlan)},overrides={},inboxItems=[],athleteState={status:'active',note:'',memories:[],conversation:[],dismissed:[]},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}},GYM_WEEK=${JSON.stringify(gymPlansForWeek())};
 const T=${JSON.stringify(T)},CTL=${JSON.stringify(CTL)},LAST=${JSON.stringify(LAST_WEEK)},WEEKDAYS=${JSON.stringify(Object.fromEntries([day(-7, MON), MON, day(7, MON)].map(w => [w, weekDays(w)])))};
 const FOCUS=${JSON.stringify(FOCUS_GROUPS)},weather=${JSON.stringify(weatherSample())};
 const ok=b=>new Response(JSON.stringify(b),{status:200,headers:{'Content-Type':'application/json'}});
@@ -181,7 +184,14 @@ const realFetch=window.fetch.bind(window);window.confirm=()=>true;
 window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?input:input.url,location.href),m=(opts.method||'GET').toUpperCase(),body=opts.body?JSON.parse(opts.body):{};
  if(/open-meteo/.test(url.host)){if(/geocoding/.test(url.host))return ok({results:[{name:url.searchParams.get('name')||'Praha',admin1:'Ukázka',country_code:'CZ',latitude:50.08,longitude:14.43}]});return ok(weather);}
  const p=url.pathname;
- if(p==='/app/api/week-plan'){if(m==='POST')prefs={days:body.days,location:body.location||prefs.location};const start=url.searchParams.get('start')||Object.keys(WEEKDAYS)[1];return ok({status:'ok',prefs,roles:planWeekRoles(prefs.days),start,targets:weekTargets({roles:planWeekRoles(prefs.days),ctl:CTL,lastWeekLoad:LAST,days:WEEKDAYS[start]||[],today:T,weekStart:start})});}
+ if(p==='/app/api/week-plan'){const key=url.searchParams.get('start'),start=key||Object.keys(WEEKDAYS)[1];if(m==='POST'){if(key)overrides[key]=sanitizeWeekPlan(body);else prefs=sanitizeWeekPlan(body);}if(m==='DELETE')delete overrides[key];const effective=key?{...(overrides[key]||prefs),source:overrides[key]?'week':'default'}:prefs;return ok({status:'ok',prefs:effective,roles:planWeekRoles(effective.days),start,targets:capWeekTargets(weekTargets({roles:planWeekRoles(effective.days),ctl:CTL,lastWeekLoad:LAST,days:WEEKDAYS[start]||[],today:T,weekStart:start}),effective)});}
+ if(p==='/app/api/athlete-state'){if(m==='POST'){if(body.status){athleteState.status=body.status;athleteState.note=body.note||'';}if(body.forget)athleteState.memories=athleteState.memories.filter(x=>x!==body.forget);}return ok({status:'ok',state:athleteState});}
+ if(p==='/app/api/coach/check-in')return ok({status:'ok',state:athleteState,advice:null});
+ if(p==='/app/api/coach/week'){const start=body.start,effective=overrides[start]||prefs;return ok({status:'ok',start,proposal:weekProposal({prefs:effective,start,today:T,week:DATA.weeks[start]||{days:[]},fitness:DATA['/app/api/fitness'],state:athleteState}),review:{answer:'Sandbox: revize dostupného času a plánovaných aktivit. Návrhy nejprve zkontroluj.'}});}
+ if(p==='/app/api/inbox')return ok({status:'ok',items:inboxItems});
+ if(p==='/app/api/assistant'){if(/nemám rád/i.test(body.message))athleteState.memories.push(body.message);const answer='Sandbox: zvažme kratší trénink nebo pauzu podle tvých možností.',actions=/pauzu/i.test(body.message)?[{draftId:inboxItems.length+1,type:'status',status:'on_break',reason:'Sandbox: pauza podle přání.'}]:[];for(const a of actions)inboxItems.push({id:a.draftId,status:'draft',draft:{kind:'coach_action',action:a}});athleteState.conversation.push({role:'user',content:body.message},{role:'assistant',content:answer});return ok({status:'ok',answer,memorySaved:/nemám rád/i.test(body.message)?body.message:null,actions});}
+ if(p==='/app/api/assistant/action'){const row=inboxItems.find(x=>x.id===body.draftId);if(row){row.status=body.decision==='confirm'?'confirmed':'rejected';if(body.decision==='confirm'&&row.draft.action.type==='status')athleteState.status=row.draft.action.status;}return ok({status:'ok',message:body.decision==='confirm'?'Návrh potvrzen.':'Návrh odmítnut.',result:athleteState});}
+ if(p==='/app/api/gym/confirm')return ok({status:'ok',intervals:{status:'ok'}});
  if(p==='/app/api/week')return ok(DATA.weeks[url.searchParams.get('start')]||DATA.weeks[Object.keys(DATA.weeks)[1]]);
  if(p==='/app/api/workouts/search')return ok(DATA.searches[url.searchParams.get('sport')==='run'?'run':'ride']);
  if(p==='/app/api/workouts/generate'){const g=DATA.generated[(body.sport==='run'?'run':'ride')+'|'+body.date]||Object.values(DATA.generated)[0];return ok(g);}
@@ -191,6 +201,7 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
  if(p==='/app/api/workouts/feedback')return ok({status:'ok',completedPercent:96,intervals:{status:'ok'}});
  if(p==='/app/api/workouts/schedule')return ok({status:'ok',workout:{name:'Workout'},date:body.date});
  if(p==='/app/api/gym'){const d=(m==='POST'?body.date:url.searchParams.get('date'))||T;if(m==='POST'&&body.values)gymByDay[d]=body.fullValues||body.values;return ok({status:'ok',date:d,values:gymByDay[d]||[],history:gymHistory,videoLinks:[],stored:Boolean(gymByDay[d])});}
+ if(p==='/app/api/gym/generate'&&body.preview){const d=body.date||T,rows=GYM_WEEK[d]?.values?.slice(7)||[['WORK','Lat pulldown','1','40','10','','','','FALSE','','']];return ok({status:'ok',preview:true,draftId:1,plan:{date:d,planName:'Sandbox gym',rationale:'Náhled bez zápisu.',rows}});}
  if(p==='/app/api/gym/generate'&&!body.focusMuscles?.length&&GYM_WEEK[body.date||T]){const d=body.date||T;gymByDay[d]=GYM_WEEK[d].values;return ok({status:'ok',rationale:GYM_WEEK[d].rationale});}
  if(p==='/app/api/gym/generate'){const d=body.date||T,ids=body.focusMuscles?.length?body.focusMuscles:['chest','upper_back','lats','side_delts','abs'];gymByDay[d]=[[],[],['','Cílený trénink · '+ids.map(i=>FOCUS[i].label).join(', ')],[],[],[],[],...ids.flatMap(i=>[1,2,3].map(n=>['WORK',FOCUS[i].exercises[0],String(n),'','10','','','','FALSE','','']))];return ok({status:'ok',rationale:'Sandbox: plán podle zvolených partií.'});}
  if(p==='/app/api/sync')return ok({status:'accepted'});
@@ -202,7 +213,7 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
 }
 // The planner module itself runs in the page, without its exports.
 function plannerSource() {
-  return plannerText.replace(/^export /gm, "");
+  return [availabilityText,plannerText,adaptiveWeekText].map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n');
 }
 const banner = '<div style="position:sticky;top:0;z-index:25;background:#4a2f00;color:#ffe2a8;padding:7px 14px;font:600 12px/1.4 system-ui;text-align:center">SANDBOX · ukázková data · nic se neukládá do živé aplikace ani do Intervals.icu</div>';
 

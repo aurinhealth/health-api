@@ -1,0 +1,134 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createD1 } from './helpers/d1.mjs';
+import { scopedDb } from '../src/tenancy.js';
+import { parseTimeWindow, normalizeAvailability, trainingBudget, validDay } from '../src/training-availability.js';
+import { getWeekPlan, saveWeekPlan, resetWeekPlan, sanitizeWeekPlan, nightlyGymSkip } from '../src/week-planner.js';
+import { getAthleteState, updateAthleteState, proactiveAdvice, explicitPreference } from '../src/athlete-state.js';
+import { capWeekTargets, weekProposal, environmentFor } from '../src/adaptive-week.js';
+import { askCoach, assistantTask } from '../src/coach-assistant.js';
+import { scheduleWorkoutInIntervals, CYCLING_WORKOUTS } from '../src/workout-library.js';
+import { validateCoachActions } from '../src/coach-actions.js';
+
+test('clock windows support shorthand and cap a separate activity budget',()=>{
+  assert.deepEqual(parseTimeWindow('10-15'),{start:'10:00',end:'15:00',minutes:300});
+  assert.equal(parseTimeWindow('10:30–15:00').minutes,270);
+  assert.throws(()=>parseTimeWindow('15-10'));
+  assert.throws(()=>parseTimeWindow('24-25'));
+  assert.equal(validDay('2026-02-30'),false);
+  assert.equal(validDay('2026-99-99'),false);
+  const p=sanitizeWeekPlan({availability:[{window:'10–15',minutes:180},{minutes:0}]});
+  assert.equal(trainingBudget(p,'2026-10-05',240),180);
+  assert.equal(trainingBudget(p,'2026-10-06',60),0);
+  assert.equal(normalizeAvailability([{window:'10-11',minutes:180}])[0].minutes,60);
+});
+test('a week override expires by week and preserves defaults and other users',async()=>{
+  const raw=createD1(),a=scopedDb(raw,1),b=scopedDb(raw,2);
+  await saveWeekPlan(a,{availability:[{minutes:180}],days:[['ride']],weeklyActivities:3});
+  await saveWeekPlan(a,{availability:[{minutes:30}],days:[['gym']],weeklyActivities:1},'2026-10-06');
+  assert.equal((await getWeekPlan(a,'2026-10-05')).availability[0].minutes,30);
+  assert.equal((await getWeekPlan(a,'2026-10-12')).availability[0].minutes,180);
+  assert.equal((await getWeekPlan(a)).weeklyActivities,3);
+  assert.equal((await getWeekPlan(b,'2026-10-05')).availability[0].minutes,null);
+  await resetWeekPlan(a,'2026-10-05');
+  assert.equal((await getWeekPlan(a,'2026-10-05')).availability[0].minutes,180);
+});
+test('the total budget includes existing sessions and never assigns a no-time day',()=>{
+  const prefs=sanitizeWeekPlan({availability:[{minutes:90},{minutes:0}]});
+  const targets={items:[{date:'2026-10-05',sport:'ride',minutes:90,tss:60},{date:'2026-10-05',sport:'gym',minutes:60,tss:30},{date:'2026-10-06',sport:'ride',minutes:60,tss:40}]};
+  const r=capWeekTargets(targets,prefs,[{date:'2026-10-05',daily:{training:{completed:[{type:'Run',durationHours:.5}]}}}]);
+  assert.ok(r.items.reduce((n,x)=>n+x.minutes,0)<=60);
+  assert.equal(r.items.filter(x=>x.date==='2026-10-06').length,0);
+});
+test('an empty week uses availability and activity count without requiring CTL',()=>{
+  const prefs=sanitizeWeekPlan({weeklyActivities:2,availability:[{minutes:180},{minutes:0},{minutes:60},{minutes:0},{minutes:0},{minutes:90},{minutes:0}]});
+  const p=weekProposal({prefs,start:'2026-10-05',today:'2026-10-05',state:{status:'active'},focus:{sport:'cycling'}});
+  assert.equal(p.items.length,2);
+  assert.ok(p.items.every(x=>['2026-10-05','2026-10-07','2026-10-10'].includes(x.date)));
+  assert.equal(p.targets.status,'estimated');
+  assert.equal(weekProposal({prefs,start:'2026-10-05',today:'2026-10-05',state:{status:'sick'}}).items.length,0);
+});
+test('winter and bad weather choose shorter indoor cycling with explicit fallback',()=>{
+  assert.equal(environmentFor('2026-12-14','ride').environment,'indoor');
+  assert.equal(environmentFor('2026-07-13','ride',{max:22,rain:5}).environment,'indoor');
+  assert.match(environmentFor('2026-07-13','run').reason,/není dostupná/);
+  const p=sanitizeWeekPlan({availability:[{minutes:180}]});
+  assert.equal(capWeekTargets({items:[{date:'2026-12-14',sport:'ride',minutes:180,tss:120}]},p).items[0].minutes,90);
+});
+test('state, preference memory and conversations belong to one user',async()=>{
+  const raw=createD1(),a=scopedDb(raw,1),b=scopedDb(raw,2);
+  const m=explicitPreference('Nemám rád masáže');assert.ok(m);
+  await updateAthleteState(a,{status:'injured',note:'koleno',memory:m,turn:[{role:'user',content:'Kompromis?'}]});
+  assert.equal((await getAthleteState(a)).status,'injured');
+  assert.equal((await getAthleteState(b)).status,'active');
+  assert.deepEqual((await getAthleteState(b)).memories,[]);
+  assert.match(await nightlyGymSkip(a,'2026-10-05'),/pozastavuje/);
+  await updateAthleteState(a,{forget:m});assert.deepEqual((await getAthleteState(a)).memories,[]);
+});
+test('multiple recent recovery signals suggest a break, never diagnose sickness',()=>{
+  const input={date:'2026-10-05',fitness:{wellness:[{id:'2026-10-05',tsb:-30}]},health:{sleep:[{date:'2026-10-05',durationMin:280}]},state:{status:'active'}};
+  const a=proactiveAdvice(input);assert.equal(a.status,'on_break');
+  assert.equal(proactiveAdvice({...input,health:{sleep:[]}}),null);
+  assert.equal(proactiveAdvice({...input,state:{status:'active',dismissed:[a.id]}}),null);
+  assert.equal(proactiveAdvice({...input,state:{status:'sick'}}),null);
+});
+test('scheduling respects a pause and a clock window before external writes',async()=>{
+  const raw=createD1(),db=scopedDb(raw,1);
+  await updateAthleteState(db,{status:'sick'});
+  await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:CYCLING_WORKOUTS[0].id,date:'2026-10-05',confirm:true}),/Sick/);
+});
+test('simple, planning and block requests route to configurable Luna and Sol',async()=>{
+  const original=globalThis.fetch,calls=[];
+  globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);calls.push(body);return Response.json({model:body.model,output_text:'Odpověď'});};
+  try{
+    const env={OPENAI_API_KEY:'test',OPENAI_LIGHT_MODEL:'gpt-6-luna',OPENAI_MODEL:'gpt-6-sol'};
+    await askCoach(env,'Převeď 80 kg na libry',{fitness:Array(30).fill({ctl:40})});
+    await askCoach(env,'Naplánuj zítřejší posilovnu',{});
+    await askCoach(env,'Analyzuj 12týdenní blok',{});
+    assert.deepEqual(calls.map(c=>c.model),['gpt-6-luna','gpt-6-sol','gpt-6-sol']);
+    assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','medium','high']);
+    assert.ok(calls.every(c=>c.store===false));
+    assert.equal(assistantTask('Poslední tři týdny a nový plán'),'planning');
+  }finally{globalThis.fetch=original;}
+});
+
+test('assistant actions cannot invent events, dates or illness from sensor data',()=>{
+  const context={userMessage:'Mám málo spánku. Změníme plán?',week:[{date:'2026-10-10',planned:[{id:'planned:12',name:'Long ride',durationHours:3}]}]};
+  const raw=[{type:'rest',eventId:'planned:99',reason:'Odpočinek'},{type:'move',eventId:'planned:12',date:'2026-10-11',reason:'Více času'},{type:'status',status:'sick',reason:'Málo spánku'},{type:'workout',sport:'ride',date:'2026-02-30',minutes:60,reason:'Alternativa'}];
+  const accepted=validateCoachActions(raw,context,'2026-10-05');
+  assert.equal(accepted.length,1);assert.equal(accepted[0].type,'move');assert.equal(accepted[0].eventSnapshot.date,'2026-10-10');
+  assert.equal(validateCoachActions([{type:'status',status:'injured',reason:'Bolest kolene'}],{userMessage:'Bolí mě koleno'},'2026-10-05')[0].status,'injured');
+});
+
+test('calendar writes honor both the day budget and the clock-window start',async()=>{
+  const db=scopedDb(createD1(),1),original=globalThis.fetch,events=[];
+  const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');assert.ok(workout);
+  await saveWeekPlan(db,{availability:[{window:'10-15',minutes:65}]});
+  globalThis.fetch=async(_,opts)=>{const event=JSON.parse(opts.body)[0];events.push(event);return Response.json([{id:123,category:'WORKOUT'}]);};
+  try{
+    await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',environment:'indoor',confirm:true});
+    assert.equal(events[0].start_date_local,'2026-10-05T10:00:00');
+    const other=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.id!==workout.id);
+    await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',environment:'indoor',confirm:true}),/Součet/);
+    assert.equal(events.length,1);
+  }finally{globalThis.fetch=original;}
+});
+
+test('calendar writes count workouts created outside the library without counting linked events twice',async()=>{
+  const db=scopedDb(createD1(),1),original=globalThis.fetch;
+  await db.prepare('CREATE TABLE health_datapoints (user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,external_id TEXT,payload_json TEXT)').run();
+  await saveWeekPlan(db,{availability:[{minutes:90}]});
+  await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,external_id,payload_json) VALUES(1,'intervals','planned-workout','2026-10-05T09:00:00','planned:99',?)").bind(JSON.stringify({id:99,type:'Run',duration:3600})).run();
+  const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');
+  await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',confirm:true}),/Součet/);
+  await saveWeekPlan(db,{availability:[{minutes:125}]});
+  globalThis.fetch=async()=>Response.json([{id:123,category:'WORKOUT'}]);
+  try{
+    await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',confirm:true});
+    await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,external_id,payload_json) VALUES(1,'intervals','planned-workout','2026-10-05T00:00:00','planned:123',?)").bind(JSON.stringify({id:123,type:'Ride',duration:3600})).run();
+    const other=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.id!==workout.id);
+    await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',confirm:true}),/Součet/);
+    await saveWeekPlan(db,{availability:[{minutes:185}]});
+    assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',confirm:true})).status,'ok');
+  }finally{globalThis.fetch=original;}
+});

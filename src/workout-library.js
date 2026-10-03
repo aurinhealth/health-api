@@ -6,6 +6,9 @@ import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp } from
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
+import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
+import { getWeekPlan } from './week-planner.js';
+import { availabilityOn, parseTimeWindow } from './training-availability.js';
 
 export const SYSTEMS = ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"];
 const HARD_SYSTEMS = new Set(["sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"]);
@@ -368,11 +371,30 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   if (confirm !== true) throw new Error("Zápis do Intervals.icu vyžaduje potvrzení.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date) throw new Error("Neplatné datum.");
   const workout = await getWorkout(db, workoutId); if (!workout) throw new Error("Workout nebyl nalezen.");
+  assertTrainingAllowed(await getAthleteState(db));
+  const available=availabilityOn(await getWeekPlan(db,date),date);
+  if(available.minutes!=null&&renderForEnvironment(workout,environmentOf(environment)).duration_minutes>available.minutes)throw new Error('Trénink přesahuje dostupný čas pro tento den.');
   if (!env.INTERVALS_API_KEY) throw new Error("Intervals.icu není připojeno.");
   await ensureTrainingTables(db);
   const event = buildIntervalsEvent(workout, date, environmentOf(environment)), auth = "Basic " + btoa("API_KEY:" + String(env.INTERVALS_API_KEY));
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) return { status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null };
+  const links=await db.prepare("SELECT workout_id,environment,intervals_event_id FROM workout_schedule_links WHERE user_id=? AND scheduled_date=? AND status='scheduled'").bind(db.userId,date).all();
+  let usedMinutes=0;
+  for(const link of links.results||[]){const w=await getWorkout(db,link.workout_id);if(w)usedMinutes+=renderForEnvironment(w,link.environment).duration_minutes;}
+  // Include calendar workouts created outside the library, without counting
+  // the cached copy of a linked workout twice.
+  const linkedIds=new Set((links.results||[]).map(l=>String(l.intervals_event_id)));
+  const planned=await db.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId,date,date+'T23:59:59').all().catch(()=>({results:[]}));
+  for(const row of planned.results||[]){
+    let p;try{p=JSON.parse(row.payload_json);}catch{continue;}
+    if(linkedIds.has(String(p.id??String(row.external_id||'').replace(/^planned:/,'')))||/nutrition|food|meal/i.test(String(p.name||'')+' '+String(p.category||'')))continue;
+    const seconds=Number(p.moving_time??p.duration_seconds??p.duration),start=p.start_date_local,end=p.end_date_local;
+    usedMinutes+=Number.isFinite(seconds)&&seconds>0?seconds/60:start&&end?Math.max(0,(Date.parse(end)-Date.parse(start))/60000):0;
+  }
+  if(available.minutes!=null&&usedMinutes+renderForEnvironment(workout,environmentOf(environment)).duration_minutes>available.minutes)throw new Error('Součet tréninků přesahuje dostupný čas pro tento den.');
+  const window=parseTimeWindow(available.window);
+  if(window){const start=Number(window.start.slice(0,2))*60+Number(window.start.slice(3))+Math.ceil(usedMinutes);event.start_date_local=date+'T'+String(Math.floor(start/60)).padStart(2,'0')+':'+String(start%60).padStart(2,'0')+':00';}
   const response = await fetch("https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true", { method: "POST", headers: { Authorization: auth, Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify([event]) });
   const data = await response.json().catch(() => null);
   if (!response.ok) throw new Error("Intervals.icu HTTP " + response.status);

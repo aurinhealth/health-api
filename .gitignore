@@ -1,3 +1,7 @@
 .wrangler/
 node_modules/
 .dev.vars
+.qa-tools/
+adaptive-test-results.txt
+adaptive-ui*.png
+adaptive-ui-results.json

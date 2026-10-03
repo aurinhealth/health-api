@@ -11,6 +11,9 @@ import { buildWeeklyReview } from "./weekly-review.js";
 import { buildDailyPlan } from "./daily-plan.js";
 import { getCyclingContext } from "./cycling-context.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
+import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
+import { getWeekPlan } from './week-planner.js';
+import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
 import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveFoodProduct, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
 
 
@@ -121,11 +124,17 @@ async function generateStrengthPlanRoute(env, request, url) {
     const date = String(body?.date || url.searchParams.get("date") || "").trim() || null;
     const context = await buildStrengthContext(env, date);
     if (context.status !== "ok") throw new Error("Strength context is not ready");
+    // Diagnostic previews remain available to deployment checks; actual
+    // generation through MCP/automation observes the same personal limits.
+    const prefs = await getWeekPlan(env.DB, context.date);
+    if (body?.preview !== true) assertTrainingAllowed(await getAthleteState(env.DB));
+    const duration = body?.preview === true ? body?.durationMinutes : trainingBudget(prefs, context.date, body?.durationMinutes == null ? 60 : Number(body.durationMinutes));
+    if (body?.preview !== true && duration < 30) throw new Error('Na posilovnu nezbývá alespoň 30 minut.');
     const options = {
       focus: body?.focus ? String(body.focus) : undefined,
       focusSource: body?.focusSource === "week" ? "week" : undefined,
       forceProtectLegs: body?.forceProtectLegs === true,
-      durationMinutes: body?.durationMinutes == null ? undefined : Number(body.durationMinutes),
+      durationMinutes: duration == null ? undefined : Number(duration),
       maxExercises: body?.maxExercises == null ? undefined : Number(body.maxExercises),
       focusMuscles: body?.focusMuscles,
       excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
@@ -164,8 +173,8 @@ async function generateStrengthPlanRoute(env, request, url) {
     let intervals = { status: "skipped", reason: "INTERVALS_API_KEY is not configured" };
     try {
       intervals = await writeStrengthPlanToIntervals(env, plan, {
-        startTime: body?.startTime || "00:00",
-        durationMinutes: body?.durationMinutes || 60,
+        startTime: parseTimeWindow(availabilityOn(prefs, context.date).window)?.start || body?.startTime || "00:00",
+        durationMinutes: options.durationMinutes || 60,
         weightKg: context?.weightTrend?.latestKg
       });
     } catch (error) {
