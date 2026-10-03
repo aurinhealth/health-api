@@ -95,6 +95,8 @@ jobs:
           # and is idle ("none") between them.
           if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
               data["action"] = "generate"
+              # Only on a gym day of the week plan, never over an existing plan.
+              data["nightly"] = True
           print(json.dumps(data))
           PY
           )"

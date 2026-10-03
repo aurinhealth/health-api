@@ -44,8 +44,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 <aside class="sidebar">
   <div class="brand"><strong>Petr Fitness Data</strong><span>Performance Command Center</span></div>
   <nav class="nav">
-    <button class="navbtn" data-view="today">◎ <span>Dnes</span></button>
-    <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
+    <button class="navbtn active" data-view="today">◎ <span>Dnes</span></button>
     <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
     <button class="navbtn" data-view="workouts">⌁ <span>Workouty</span></button>
     <button class="navbtn" data-view="recovery">◒ <span>Zdraví</span></button>
@@ -60,8 +59,8 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><button class="btn" id="openAssistant">✦ Asistent</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
 </header>
 <div class="content">
-<section id="today" class="view" aria-label="Dnes"></section>
-<section id="overview" class="view active">
+<section id="today" class="view active" aria-label="Dnes"></section>
+<section id="overview" class="view">
   <div class="readiness-hero"><div><div class="readiness-kicker">Performance readiness · <span id="overviewDate">—</span></div><h1 id="readinessTitle">Dnešní připravenost</h1><p id="readinessInsight">Načítám dnešní signály.</p><div id="readinessFocus" class="focus-chip">Dnešní priorita</div></div><div class="readiness-score"><div id="readinessOrb" class="score-orb"><div><strong id="readinessScore">—</strong><span>recovery</span></div></div><div id="readinessCaption" class="score-caption">čekám na spánek</div></div><div class="readiness-metrics"><div id="readinessDials" class="dial-row"></div></div></div>
   <div class="section">Denní signály</div><div class="quick-grid">
     <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div id="oWeightMeta" class="small">aktuálně · cíl 80 kg</div></div>

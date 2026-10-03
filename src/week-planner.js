@@ -1,3 +1,4 @@
+import { readGymPlan } from "./gym-plan-store.js";
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
@@ -39,6 +40,17 @@ export async function getWeekPlan(db) {
   await ensure(db);
   const row = await db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first();
   try { return sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { return sanitizeWeekPlan({}); }
+}
+
+// Why the nightly gym plan is not made for `date`, or null to make it: the
+// week plan has no gym that day (an empty week plan does not decide), or a
+// plan made or edited by the athlete is already stored.
+export async function nightlyGymSkip(db, date) {
+  const prefs = await getWeekPlan(db);
+  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
+  if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return "Podle týdenního plánu není tento den gym.";
+  if ((await readGymPlan(db, date)).stored) return "Na tento den už gym plán je.";
+  return null;
 }
 
 export async function saveWeekPlan(db, input) {

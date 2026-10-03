@@ -12,12 +12,17 @@ test("a data reload does not take the timeline out of the visible Přehled", () 
 });
 
 test("rebuilding Dnes parks the timeline first instead of deleting it", () => {
-  assert.match(client, /const parked=\$\('dayTimeline'\);if\(parked&&el\.contains\(parked\)\)\$\('dailyPulse'\)\?\.after\(parked\);\s*el\.innerHTML='<div class="today-layout">/);
+  assert.match(client, /const parked=\$\('dayTimeline'\);if\(parked&&el\.contains\(parked\)\)\$\('dailyPulse'\)\?\.after\(parked\);\s*\(\$\('todayTop'\)\|\|el\)\.innerHTML='<div class="today-layout">/);
 });
 
-test("Dnes is a screen on the web too", () => {
-  assert.match(page, /<button class="navbtn" data-view="today">/);
+test("Dnes is the one day screen: no separate Přehled tab, the rest of Přehled moves under it", () => {
+  assert.match(page, /<button class="navbtn active" data-view="today">/);
+  assert.doesNotMatch(page, /data-view="overview"/);
+  assert.match(page, /<section id="today" class="view active"/);
   assert.doesNotMatch(page, /phone-only/);
+  assert.match(client, /for\(const el of \[\.\.\.overview\.children\]\)if\(!keep\(el\)\)\$\('todayMore'\)\.append\(el\);/);
+  assert.match(client, /activate=function\(id\)\{act\(id==='overview'\?'today':id\);\}/);
+  assert.doesNotMatch(client, /Celý přehled dne/);
 });
 
 test("the timeline shows the day's weigh-ins and logs a weight for the shown day", () => {

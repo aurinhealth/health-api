@@ -19,19 +19,21 @@ import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js'
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
-import {askCoach,coachContext} from './coach-assistant.js';
+import {askCoach,coachContext,lightModel} from './coach-assistant.js';
+import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
 import { lookupFoodWithAI } from "./food-ai.js";
+import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
-import { importStrengthHistory, getStrengthHistory } from "./strength-history.js";
+import { importStrengthHistory, getStrengthHistory, parseStrengthSheet } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
-import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
@@ -379,6 +381,20 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
+  // "Revize dne": the coach checks one planned day in the context of the week.
+  if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena (chybí OPENAI_API_KEY).'},{status:503});
+    try{
+      const body=await request.json().catch(()=>({})),date=/^\d{4}-\d{2}-\d{2}$/.test(String(body.date||''))?body.date:pragueToday();
+      const [inputs,gym,prefs,feedback,notes]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),readGymPlan(env.DB,date).catch(()=>null),getWeekPlan(env.DB).catch(()=>null),recentWorkoutFeedback(env.DB,shiftDate(date,-21)).catch(()=>[]),listReflections(env.DB,{limit:3}).catch(()=>[])]);
+      const gymRows=gym?.stored?parseStrengthSheet(gym.values).rows||[]:[];
+      const input=buildReviewInput({date,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text}))});
+      const reviews=[await reviewDay(env,input).catch(error=>({model:lightModel(env),error:error.message}))];
+      return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
   // The coach's notes: listed per day; a POST asks for a note on a day now.
   if(url.pathname==='/app/api/coach/reflections'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
@@ -457,7 +473,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         phase:coachCtx.cyclingCoachV2?.constraints?.phase
       });
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
-      return Response.json(await askCoach(env,message,coachCtx),{headers:{'Cache-Control':'no-store'}});
+      const answer=await askCoach(env,message,coachCtx);
+      return Response.json({...answer,costUsd:usageCost(answer.model,answer.usage)},{headers:{'Cache-Control':'no-store'}});
     }
     catch(error){console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
   }
@@ -495,6 +512,32 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});
+  }
+  // Cookbook by recipe name (the page lookup is below).
+  if(url.pathname==='/app/api/food/recipes'&&request.method==='GET'){
+    const q=String(url.searchParams.get('q')||'').trim().slice(0,120);
+    if(q.length<2)return Response.json({status:'ok',recipes:[]},{headers:{'Cache-Control':'no-store'}});
+    return Response.json(await searchCookbookRecipes({name:q,limit:8}),{headers:{'Cache-Control':'no-store'}});
+  }
+  // Drinks of a day with the day's target (body weight and training).
+  if(url.pathname==='/app/api/fluids'){
+    const validDay=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+    try{
+      if(request.method==='GET'){
+        const date=validDay(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
+        const [logged,fromFood,weight,profile,hours]=await Promise.all([listFluids(env.DB,date),foodDrinks(env.DB,env.USER_ID,date),
+          env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='weight' AND value_numeric IS NOT NULL AND COALESCE(sample_time,start_time,end_time)<=? ORDER BY COALESCE(sample_time,start_time,end_time) DESC LIMIT 1").bind(env.USER_ID,date+'T23:59:59').first().catch(()=>null),
+          dashboardProfile(env).catch(()=>null),dayActivityHours(env.DB,env.USER_ID,date)]);
+        const target=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
+        // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
+        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt)));
+        return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),target},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+      if(request.method==='POST'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await addFluid(env.DB,{date:validDay(body.date)?body.date:pragueToday(),ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
+      return Response.json({message:'Method not allowed'},{status:405});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400});}
   }
   if(url.pathname==='/app/api/food/recipe'&&request.method==='GET'){
     const recipe=await getCookbookRecipeByPage(url.searchParams.get('page'));
@@ -899,6 +942,12 @@ async function handleStrengthAutomation(request, env, ctx) {
     const route = routes[action];
     if (!route) return Response.json({ status: "error", message: `Unknown strength action: ${action}` }, { status: 400 });
 
+    // The nightly run follows the week plan: no gym that day, no plan; a plan
+    // already there (made or edited by the athlete) is kept.
+    if (body?.nightly === true && action === "generate") {
+      const day = date || pragueToday(), skip = await nightlyGymSkip(env.DB, day);
+      if (skip) return Response.json({ status: "skipped", action, date: day, reason: skip });
+    }
     const internalUrl = new URL(route, request.url);
     const payload = { ...body, date, preview, action };
     if (action === "protect_legs" || action === "focus_upper") payload.forceProtectLegs = true;
