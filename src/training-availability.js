@@ -1,4 +1,4 @@
-// Availability is a local clock window plus a training budget, not a workout duration.
+// Availability is the total time available for sport on a day.
 export const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || '')) && Number.isFinite(Date.parse(value + 'T12:00:00Z')) && new Date(value + 'T12:00:00Z').toISOString().slice(0, 10) === value;
 export const weekStartOf = date => {
   if (!validDay(date)) throw new Error('Neplatné datum týdne.');
@@ -17,10 +17,13 @@ export function parseTimeWindow(value) {
 }
 export function normalizeAvailability(days = []) {
   return Array.from({ length: 7 }, (_, i) => {
-    const raw = days[i] || {}, window = parseTimeWindow(raw.window);
+    const raw = days[i] || {};
     const minutes = raw.minutes == null || raw.minutes === '' ? null : Number(raw.minutes);
     if (minutes != null && (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440)) throw new Error('Dostupný čas musí být mezi 0 a 24 hodinami.');
-    return { window: window ? window.start + '–' + window.end : '', minutes: minutes == null ? (window?.minutes ?? null) : Math.min(Math.round(minutes), window?.minutes ?? 1440), preferredSports: ['ride', 'run', 'gym'].filter(s => raw.preferredSports?.includes(s)) };
+    // Preserve a legacy clock window's duration when no budget was saved,
+    // then retire clock positions and sport preferences from availability.
+    const legacyMinutes = minutes == null && raw.window ? parseTimeWindow(raw.window)?.minutes : null;
+    return { window: '', minutes: minutes == null ? legacyMinutes : Math.round(minutes), preferredSports: [] };
   });
 }
 export const availabilityOn = (prefs, date) => prefs?.availability?.[(new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7] || { minutes: null, window: '', preferredSports: [] };

@@ -38,7 +38,7 @@ import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, saveWeekPlan, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
-import { capWeekTargets, weekProposal, weekWeather, environmentFor } from './adaptive-week.js';
+import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
@@ -398,7 +398,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const body=await request.json(),start=validTrainingDay(body.start)?mondayOfDate(body.start):mondayOfDate(pragueToday());
       const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,start)]);
-      const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start,21)]),proposal=weekProposal({prefs,state,start,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,focus:inputs.focus,weather,history});
+      const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<pragueToday()?start:pragueToday(),21)]),proposal=weekProposal({prefs,state,start,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,focus:inputs.focus,weather,history});
       let review=null,aiError=null;
       if(env.OPENAI_API_KEY){try{
         const context=coachContext({...inputs,preferences:prefs});
@@ -481,7 +481,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       else return Response.json({message:'Method not allowed'},{status:405});
       const monday=start?mondayOfDate(start):mondayOfDate(pragueToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
-      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days),start:monday,targets},{headers:{'Cache-Control':'no-store'}});
+      const historyEstimate=activityHistoryEstimate(await planningHistory(env,pragueToday(),21),pragueToday());
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days),start:monday,targets,historyEstimate},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/training-profile'||url.pathname==='/app/api/training-profile/estimate'){

@@ -530,7 +530,7 @@ document.querySelector('.gym-view-switch').addEventListener('click',e=>{
 });
 $('generateFocusedGym').onclick=generateFocusedGym;
 $("closeGymExercise").onclick=()=>$("gymExerciseDialog").close();$("gymExerciseSearch").oninput=()=>{gymExerciseIndex=0;renderGymExerciseChoices();};$("gymExerciseResults").onclick=e=>{const option=e.target.closest('[data-index]');if(option)chooseGymExercise(Number(option.dataset.index));};$("gymExerciseSearch").onkeydown=e=>{if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!visibleGymExercises.length)return;gymExerciseIndex=(gymExerciseIndex+(e.key==='ArrowDown'?1:-1)+visibleGymExercises.length)%visibleGymExercises.length;renderGymExerciseChoices();$('gymExerciseResults').querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});}else if(e.key==='Enter'){e.preventDefault();chooseGymExercise(gymExerciseIndex);}};
-$('openAssistant').onclick=()=>$('assistantDialog').showModal();$('closeAssistant').onclick=()=>$('assistantDialog').close();
+$('closeAssistant').onclick=()=>$('assistantDialog').close();
 // "Měl jsem snickers": the assistant's draft of food entries, logged only on confirmation.
 function renderFoodDraft(message,result){
   const d=result.draft,items=d.items,mealOptions=v=>mealSlots.map(m=>'<option value="'+m.id+'"'+(m.id===v?' selected':'')+'>'+esc(m.name)+'</option>').join('');
@@ -1527,10 +1527,11 @@ installFitnessInsights();
 
 // ---- Phone layer: "Dnes" home, quick-add button, bottom sheets, gym workout mode ----
 const isPhone=()=>window.matchMedia('(max-width:700px)').matches;
-function closeSheet(){const s=$('sheet');if(!s||s.hidden)return;s.classList.remove('open');setTimeout(()=>{s.hidden=true;$('sheetBody').innerHTML='';},180);}
-function openSheet(title,body,onMount){
+let sheetCloseTimer;
+function closeSheet(){const s=$('sheet');if(!s||s.hidden)return;s.classList.remove('open');document.body.classList.remove('sheet-open');sheetCloseTimer=setTimeout(()=>{s.hidden=true;$('sheetBody').innerHTML='';},180);}
+function openSheet(title,body,onMount,panelClass=''){
   if(!$('sheet'))document.body.insertAdjacentHTML('beforeend','<div id="sheet" class="sheet" hidden><div class="sheet-backdrop" data-sheet-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"><div class="sheet-handle" data-sheet-close></div><div class="sheet-head"><h3 id="sheetTitle"></h3><button type="button" class="btn" data-sheet-close aria-label="Zavřít">✕</button></div><div id="sheetBody"></div></section></div>');
-  const s=$('sheet');$('sheetTitle').textContent=title;$('sheetBody').innerHTML=body;s.hidden=false;requestAnimationFrame(()=>s.classList.add('open'));
+  clearTimeout(sheetCloseTimer);const s=$('sheet');s.className='sheet '+panelClass;$('sheetTitle').textContent=title;$('sheetBody').innerHTML=body;s.hidden=false;s.querySelector('.sheet-panel').scrollTop=0;document.body.classList.add('sheet-open');requestAnimationFrame(()=>s.classList.add('open'));
   s.onclick=e=>{if(e.target.closest('[data-sheet-close]'))closeSheet();};
   if(onMount)onMount($('sheetBody'));
 }
@@ -1838,10 +1839,22 @@ function renderDayOverview(){
   el.innerHTML='<div class="do-head"><h3>Denní přehled</h3><small>'+esc(date===pragueToday()?'dnes':longDate(date))+'</small></div>'+
     '<div class="do-ring-row"><div><b>'+fmt(eaten.kcal)+'</b><span>Snědeno</span></div><div class="do-ring" style="--p:'+p+'"><b>'+(target?fmt(Math.abs(left)):'—')+'</b><span>'+(target?left>=0?'Zbývá kcal':'Nad cílem':'Cíl chybí')+'</span></div><div><b>'+(burned?fmt(burned):'—')+'</b><span>Spáleno</span></div></div>'+
     '<div class="do-macros">'+macro('Sacharidy',eaten.carbs_g,num(m.carbs_g??m.carbsGrams),'#ffb347')+macro('Bílkoviny',eaten.protein_g,num(m.protein_g??m.proteinGrams),'#6fb7ff')+macro('Tuky',eaten.fat_g,num(m.fat_g??m.fatGrams),'#b48cff')+'</div>'+
-    '<div class="do-water"><div class="do-water-head"><strong>💧 Pití</strong><span>'+(f?fluidLabel(f.totalMl)+' / '+fluidLabel(f.target.ml):'…')+'</span></div><i class="do-water-bar"><b style="width:'+water+'%"></b></i><div class="do-water-actions"><button type="button" class="btn" data-water="250">+250 ml</button><button type="button" class="btn" data-water="500">+500 ml</button><button type="button" class="btn" data-water-more>Další…</button></div>'+
-    (f?'<small class="do-water-note">Cíl: '+(f.target.weightKg?'30 ml/kg ('+fmt(f.target.weightKg,1)+' kg)':'základ podle pohlaví')+(f.target.exerciseMl?' + '+fluidLabel(f.target.exerciseMl)+' za trénink ('+String(f.target.trainingHours).replace('.',',')+' h'+(f.target.walkHours?' + chůze '+String(f.target.walkHours).replace('.',',')+' h':'')+')':'')+'. Počítají se i nápoje z jídelníčku zapsané v ml (káva, energy drink, mléko…), alkohol ne. Orientační, v horku a při velkém pocení pij víc.</small>':'')+'</div>';
-  el.querySelectorAll('[data-water]').forEach(b=>b.onclick=()=>addFluidDrink(date,Number(b.dataset.water)));
+    hydrationOverviewHtml(date,f,water);
+  installHydrationOverview(el,date);
+}
+function hydrationOverviewHtml(date,f,progress){
+  const draft=(state.fluidDrafts||={})[date]||={kind:'water',custom:''},entries=(f?.entries||[]).slice().reverse().slice(0,3);
+  return '<section class="do-water"><div class="do-water-head"><div><span class="hydration-eyebrow">Hydratace</span><h4>Pití</h4></div><div class="hydration-total"><strong>'+(f?fluidLabel(f.totalMl):'…')+'</strong><span>z '+(f?fluidLabel(f.target.ml):'…')+'</span></div></div><i class="do-water-bar"><b style="width:'+progress+'%"></b></i><div class="hydration-kinds" role="group" aria-label="Druh nápoje">'+FLUID_KINDS.map(([kind,icon,label])=>'<button type="button" data-water-kind="'+kind+'" class="hydration-kind'+(draft.kind===kind?' active':'')+'" aria-pressed="'+(draft.kind===kind)+'"><span aria-hidden="true">'+icon+'</span>'+label+'</button>').join('')+'</div><div class="do-water-actions">'+[150,250,330,500,750,1000].map(ml=>'<button type="button" class="btn" data-water="'+ml+'">+ '+(ml===1000?'1 l':ml+' ml')+'</button>').join('')+'</div><form class="hydration-custom" id="inlineFluidForm"><label class="sr-only" for="inlineFluidAmount">Vlastní množství nápoje v ml</label><div><input id="inlineFluidAmount" inputmode="decimal" type="text" placeholder="Vlastní množství" value="'+esc(draft.custom)+'"><span>ml</span></div><button type="submit" class="btn primary">Přidat</button></form>'+(entries.length?'<div class="hydration-recent"><div class="hydration-recent-head"><span>Poslední zápisy</span><button type="button" data-water-more>Všechny zápisy ↗</button></div>'+entries.map(entry=>{const kind=FLUID_KINDS.find(k=>k[0]===entry.kind)||['food','🍽',entry.name||'Nápoj'];return '<div class="hydration-entry"><span>'+kind[1]+'</span><div><strong>'+esc(entry.name||kind[2])+'</strong><small>'+esc(String(entry.consumedAt||'').slice(11,16))+(entry.kind==='food'?' · z jídelníčku':'')+'</small></div><b>'+fluidLabel(entry.ml)+'</b>'+(entry.kind!=='food'?'<button type="button" data-inline-delete-fluid="'+entry.id+'" aria-label="Smazat '+esc(kind[2])+' '+entry.ml+' ml">×</button>':'<span></span>')+'</div>';}).join('')+'</div>':'<button class="hydration-history-link" type="button" data-water-more>Historie pití ↗</button>')+'<p class="do-water-note">Zahrnuje i nealkoholické nápoje z jídelníčku zapsané v ml.</p></section>';
+}
+function installHydrationOverview(el,date){
+  const draft=state.fluidDrafts[date];
+  el.querySelectorAll('[data-water-kind]').forEach(b=>b.onclick=()=>{draft.kind=b.dataset.waterKind;renderDayOverview();});
+  const amount=$('inlineFluidAmount');amount.oninput=()=>{draft.custom=amount.value;};
+  const add=async(button,ml)=>{button.disabled=true;try{await addFluidDrink(date,ml,draft.kind);}finally{if(button.isConnected)button.disabled=false;}};
+  el.querySelectorAll('[data-water]').forEach(b=>b.onclick=()=>add(b,Number(b.dataset.water)));
+  $('inlineFluidForm').onsubmit=async e=>{e.preventDefault();const ml=Number(amount.value.trim().replace(',','.'));if(!(ml>=10&&ml<=3000))return toast('Zadej 10–3000 ml.');draft.custom='';await add(e.target.querySelector('[type=submit]'),ml);};
   el.querySelector('[data-water-more]').onclick=()=>openFluidSheet(date);
+  el.querySelectorAll('[data-inline-delete-fluid]').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await jsonFetch('/app/api/fluids?id='+b.dataset.inlineDeleteFluid,{method:'DELETE'});await loadFluids(date);}catch(error){toast(error.message);b.disabled=false;}});
 }
 
 // Meals as compact rows: eaten / target, the foods, + to log into that meal.
@@ -2128,11 +2141,16 @@ installSportFocus();
 
 // Availability, week exceptions and the persistent personal coach.
 const STATUS_LABELS={active:'Active',sick:'Sick',injured:'Injured',on_break:'On break'};
+const STATUS_DESCRIPTIONS={active:'Připravený na pohyb a trénink',sick:'Odpočinek během nemoci',injured:'Prostor pro zotavení ze zranění',on_break:'Čas na pauzu a regeneraci'};
+function statusIcon(status){
+  const paths={active:'<circle cx="15" cy="5.5" r="2.5" fill="currentColor" stroke="none"/><path d="m10 11 4-3 4 4 4 1M14 9l-3 8-5 3m5-3 5 3-1 5M9 11l-4 5"/>',sick:'<path d="M4 7v17m0-5h22v5m0-5v-5a3 3 0 0 0-3-3H13v8M4 11h5v5H4"/><path d="M17 5h6m-3-3v6"/>',injured:'<g transform="rotate(-42 15 15)"><rect x="8" y="3" width="14" height="24" rx="6"/><rect x="10.5" y="10" width="9" height="10" rx="2"/><path d="M12 6h.01M18 6h.01M12 24h.01M18 24h.01M13 13h.01M17 17h.01"/></g>',on_break:'<path d="M15 10c-5-5-10-3-11 0 5-1 8 0 11 3m0-3c4-5 9-3 11 0-5-1-8 0-11 3m0-3c0-5 3-7 6-6-2 2-3 4-6 6m0 3-2 12m-6 1h15"/>'};
+  return '<svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(paths[status]||paths.active)+'</svg>';
+}
 function renderAthleteStatus(){
   const head=document.querySelector('#today .today-head');if(!head)return;
   $('athleteStatusBox')?.remove();
   const s=state.athleteState||{status:'active'},a=state.coachAdvice;
-  head.insertAdjacentHTML('beforeend','<div id="athleteStatusBox"><button type="button" class="btn athlete-status" id="changeAthleteStatus">● '+esc(STATUS_LABELS[s.status]||'Active')+'</button>'+(s.note?'<span class="small">'+esc(s.note)+'</span>':'')+'</div>');
+  head.insertAdjacentHTML('beforeend','<div id="athleteStatusBox"><button type="button" class="athlete-status status-'+esc(s.status)+'" id="changeAthleteStatus"><span class="status-orb">'+statusIcon(s.status)+'</span><span class="status-current-copy"><strong>'+esc(STATUS_LABELS[s.status]||'Active')+'</strong><small>'+esc(s.note||'Platí do další změny')+'</small></span><svg class="status-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m5 8 5 5 5-5"/></svg></button></div>');
   $('changeAthleteStatus').onclick=openAthleteStatus;
   $('coachAdviceCard')?.remove();
   if(a){head.insertAdjacentHTML('afterend','<div class="notice coach-advice" id="coachAdviceCard"><strong>'+esc(a.headline)+'</strong><p>'+esc(a.message)+'</p><div class="select-row"><button class="btn primary" type="button" id="adviceAccept">Změnit na On break</button><button class="btn" type="button" id="adviceDiscuss">Probrat kompromis</button><button class="btn" type="button" id="adviceDecline">Teď ne</button></div></div>');
@@ -2148,7 +2166,7 @@ async function saveAthleteStatus(status,note=''){
 }
 function openAthleteStatus(){
   const s=state.athleteState||{status:'active',note:''};
-  openSheet('Tvůj aktuální stav','<form id="athleteStatusForm"><div class="status-choices">'+Object.entries(STATUS_LABELS).map(([value,label])=>'<label><input type="radio" name="status" value="'+value+'"'+(s.status===value?' checked':'')+'> '+label+'</label>').join('')+'</div><p class="small">Sick · nemoc, Injured · zranění, On break · pauza. Tréninky zůstanou v kalendáři; nové návrhy se při pauze pozastaví.</p><label>Poznámka nebo omezení<textarea id="athleteStatusNote" maxlength="500">'+esc(s.note||'')+'</textarea></label><button class="btn primary" type="submit">Uložit stav</button></form>',body=>{body.querySelector('form').onsubmit=e=>{e.preventDefault();saveAthleteStatus(body.querySelector('[name=status]:checked').value,$('athleteStatusNote').value)};});
+  openSheet('Aktuální stav','<form id="athleteStatusForm"><p class="status-intro">Jak se právě cítíš? Přizpůsobíme tomu nové návrhy tréninků.</p><div class="status-choices">'+Object.entries(STATUS_LABELS).map(([value,label])=>'<label class="status-choice status-'+value+'"><input type="radio" name="status" value="'+value+'"'+(s.status===value?' checked':'')+'><span class="status-orb">'+statusIcon(value)+'</span><span class="status-choice-copy"><strong>'+label+'</strong><small>'+STATUS_DESCRIPTIONS[value]+'</small></span><span class="status-radio" aria-hidden="true"></span></label>').join('')+'</div><div class="status-duration"><span>◷ Platnost stavu</span><strong>Dokud ho nezměníš</strong></div><details class="status-note"><summary>Přidat poznámku nebo omezení</summary><label class="sr-only" for="athleteStatusNote">Poznámka nebo omezení</label><textarea id="athleteStatusNote" maxlength="500" placeholder="Například: citlivé koleno, vynechat běh…">'+esc(s.note||'')+'</textarea></details><div class="control-sheet-footer"><button class="btn primary status-save" type="submit">Uložit stav</button></div></form>',body=>{if(s.note)body.querySelector('details').open=true;body.querySelector('form').onsubmit=e=>{e.preventDefault();saveAthleteStatus(body.querySelector('[name=status]:checked').value,$('athleteStatusNote').value)};},'status-sheet');
 }
 async function openFloatingAssistant(message=''){
   if(!$('assistantDialog').open)$('assistantDialog').showModal();
@@ -2169,19 +2187,33 @@ function renderCoachActionCards(actions=[]){
       else{state.hubWeekData=null;await refreshAfterPlanChange();}
     }}catch(error){$('assistantStatus').textContent=error.message;b.disabled=false;}});
 }
-function availabilityEditorHtml(prefs){
-  return '<p class="small">Časové okno např. 10–15 nebo 10:30–15:00. Maximální čas je celkový rozpočet pro aktivity za den. Prázdný čas = neurčeno, 0 = nemám čas.</p><div class="availability-grid">'+['Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota','Neděle'].map((label,i)=>{const a=prefs.availability?.[i]||{};return '<div class="availability-row" data-availability-day="'+i+'"><strong>'+label+'</strong><label>Časové okno<input data-window placeholder="10–15" value="'+esc(a.window||'')+'"></label><label>Max. hodin<input data-hours type="number" min="0" max="24" step="0.25" placeholder="neurčeno" value="'+(a.minutes==null?'':a.minutes/60)+'"></label><div class="availability-sports"><span class="small">Preferuji</span>'+Object.entries(HUB_SPORTS).map(([sport,name])=>'<label><input data-preferred="'+sport+'" type="checkbox"'+(a.preferredSports?.includes(sport)?' checked':'')+'> '+name+'</label>').join('')+'</div></div>';}).join('')+'</div><label class="small">Aktivit za týden <input id="availabilityCount" type="number" min="0" max="14" placeholder="podle historie" value="'+(prefs.weeklyActivities??'')+'"></label>';
+function availabilityTime(minutes){return minutes==null?'Neurčeno':minutes===0?'Bez sportu':(Math.floor(minutes/60)?Math.floor(minutes/60)+' h':'')+(minutes%60?' '+minutes%60+' min':'');}
+function availabilityEditorHtml(prefs,historyEstimate){
+  return '<div class="availability-intro"><span class="availability-eyebrow">Časová dostupnost</span><p>Kolik času můžeš každý den věnovat sportu?</p><div class="availability-total"><strong id="availabilityTotal"></strong><span>za týden</span></div></div><div class="availability-grid">'+['Pondělí','Úterý','Středa','Čtvrtek','Pátek','Sobota','Neděle'].map((label,i)=>{const a=prefs.availability?.[i]||{},m=a.minutes;return '<div class="availability-row" data-availability-day="'+i+'" data-specified="'+(m==null?'false':'true')+'"><div class="availability-day-head"><label for="availabilitySlider'+i+'">'+label+'</label><button class="availability-duration" type="button" data-edit-duration aria-expanded="false"><span data-time-label>'+availabilityTime(m)+'</span><span aria-hidden="true">⌄</span></button></div><input id="availabilitySlider'+i+'" data-minutes type="range" min="0" max="'+Math.max(360,Math.ceil((m||0)/60)*60)+'" step="'+(m!=null&&m%15?'1':'15')+'" value="'+(m||0)+'" aria-label="Čas pro sport · '+label+'"><div class="availability-exact" hidden><label>Hodiny<input data-hours type="number" min="0" max="24" step="1" value="'+Math.floor((m||0)/60)+'"></label><label>Minuty<input data-edit-minutes type="number" min="0" max="59" step="1" value="'+((m||0)%60)+'"></label><button type="button" class="btn" data-set-duration>Nastavit</button></div></div>';}).join('')+'</div><section class="availability-frequency"><div class="availability-frequency-head"><label for="availabilityCount">Aktivit za týden</label><div class="availability-frequency-controls"><input id="availabilityCount" type="number" min="0" max="14" step="1" aria-label="Počet aktivit za týden" value="'+(prefs.weeklyActivities??historyEstimate?.count??3)+'"'+(prefs.weeklyActivities==null?' disabled':' required')+'><label class="history-toggle"><input id="availabilityByHistory" type="checkbox"'+(prefs.weeklyActivities==null?' checked':'')+'> <span>Podle historie</span></label></div></div><p id="availabilityHistoryNote" class="availability-history-note" data-history-message="'+esc(historyEstimate?.message||'Historie zatím není dostupná. Do jejího načtení použijeme nejvýše 3 aktivity týdně podle dostupného času.')+'"></p></section>';
+}
+function installAvailabilityControls(root){
+  const updateRow=row=>{const input=row.querySelector('[data-minutes]'),m=Number(input.value);input.style.setProperty('--fill',(m/Number(input.max)*100)+'%');input.setAttribute('aria-valuetext',row.dataset.specified==='true'?availabilityTime(m):'Neurčeno');row.querySelector('[data-time-label]').textContent=row.dataset.specified==='true'?availabilityTime(m):'Neurčeno';row.classList.toggle('no-time',m===0);row.classList.toggle('unspecified',row.dataset.specified!=='true');};
+  const updateTotal=()=>{const rows=[...root.querySelectorAll('[data-availability-day]')],known=rows.filter(r=>r.dataset.specified==='true'),total=known.reduce((n,r)=>n+Number(r.querySelector('[data-minutes]').value),0);$('availabilityTotal').textContent=known.length?total?availabilityTime(total):'0 h':'Nastav svůj rytmus';};
+  root.querySelectorAll('[data-availability-day]').forEach(row=>{
+    const slider=row.querySelector('[data-minutes]');updateRow(row);
+    slider.oninput=()=>{row.dataset.specified='true';row.querySelector('[data-hours]').value=Math.floor(Number(slider.value)/60);row.querySelector('[data-edit-minutes]').value=Number(slider.value)%60;updateRow(row);updateTotal();};
+    row.querySelector('[data-edit-duration]').onclick=()=>{const panel=row.querySelector('.availability-exact');panel.hidden=!panel.hidden;row.querySelector('[data-edit-duration]').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)row.querySelector('[data-hours]').focus();};
+    row.querySelector('[data-set-duration]').onclick=()=>{const hours=Number(row.querySelector('[data-hours]').value),minutes=Number(row.querySelector('[data-edit-minutes]').value),total=hours*60+minutes;if(!Number.isInteger(hours)||hours<0||hours>24||!Number.isInteger(minutes)||minutes<0||minutes>59||total>1440)return toast('Zadej délku od 0 do 24 hodin.');slider.max=Math.max(360,Math.ceil(total/60)*60);slider.step='1';slider.value=total;row.dataset.specified='true';row.querySelector('.availability-exact').hidden=true;row.querySelector('[data-edit-duration]').setAttribute('aria-expanded','false');updateRow(row);updateTotal();};
+  });updateTotal();
+  const mode=$('availabilityByHistory'),count=$('availabilityCount'),note=$('availabilityHistoryNote');
+  const updateMode=()=>{count.disabled=mode.checked;count.required=!mode.checked;if(!mode.checked&&count.value==='')count.value='3';note.textContent=mode.checked?note.dataset.historyMessage:'Plánovač zohlední tento počet i čas dostupný v jednotlivých dnech.';note.classList.toggle('from-history',mode.checked);};mode.onchange=updateMode;updateMode();
 }
 function readAvailabilityEditor(root,prefs){
-  return {...prefs,weeklyActivities:$('availabilityCount').value===''?null:Number($('availabilityCount').value),availability:[...root.querySelectorAll('[data-availability-day]')].map(row=>({window:row.querySelector('[data-window]').value,minutes:row.querySelector('[data-hours]').value===''?null:Number(row.querySelector('[data-hours]').value)*60,preferredSports:[...row.querySelectorAll('[data-preferred]:checked')].map(x=>x.dataset.preferred)}))};
+  return {...prefs,weeklyActivities:$('availabilityByHistory').checked?null:Number($('availabilityCount').value),availability:[...root.querySelectorAll('[data-availability-day]')].map(row=>({window:'',minutes:row.dataset.specified==='true'?Number(row.querySelector('[data-minutes]').value):null,preferredSports:[]}))};
 }
 async function openAvailabilityEditor(scope){
   try{
     const weekly=scope==='week',start=state.hubWeek||pragueMonday(),data=weekly?await loadWeekPlan(true):await jsonFetch('/app/api/week-plan');
-    openSheet(weekly?'Časové možnosti · '+dateLabel(start)+' – '+dateLabel(dateShift(start,6)):'Běžný týden · časové možnosti','<form id="availabilityForm">'+availabilityEditorHtml(data.prefs)+'<p class="small">'+(weekly?'Změna platí pouze pro tento týden.':'Tento základ se použije v týdnech bez vlastní výjimky.')+'</p><div id="availabilityError" class="small" role="status"></div><button class="btn primary" type="submit">Uložit '+(weekly?'pro tento týden':'běžný týden')+'</button>'+(weekly&&data.prefs.source==='week'?' <button class="btn" type="button" id="resetAvailabilityWeek">Vrátit běžný týden</button>':'')+'</form>',body=>{
+    openSheet('Časové možnosti','<form id="availabilityForm"><div class="availability-scope">'+(weekly?dateLabel(start)+' – '+dateLabel(dateShift(start,6)):'Běžný týden')+'</div>'+availabilityEditorHtml(data.prefs,data.historyEstimate)+'<div class="control-sheet-footer"><p class="small">'+(weekly?'Platí jen pro vybraný týden.':'Základ pro týdny bez vlastní výjimky.')+'</p><div id="availabilityError" class="small" role="status"></div><button class="btn primary availability-save" type="submit">Uložit</button>'+(weekly&&data.prefs.source==='week'?' <button class="btn availability-reset" type="button" id="resetAvailabilityWeek">Vrátit běžný týden</button>':'')+'</div></form>',body=>{
+      installAvailabilityControls(body);
       body.querySelector('form').onsubmit=async e=>{e.preventDefault();const b=body.querySelector('[type=submit]');b.disabled=true;try{await jsonFetch('/app/api/week-plan'+(weekly?'?start='+start:''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(readAvailabilityEditor(body,data.prefs))});closeSheet();await loadWeekPlan(true);renderWeekHub();renderAvailabilitySummary();toast('Časové možnosti uloženy.');}catch(error){$('availabilityError').textContent=error.message;b.disabled=false;}};
       if($('resetAvailabilityWeek'))$('resetAvailabilityWeek').onclick=async()=>{try{await jsonFetch('/app/api/week-plan?start='+start,{method:'DELETE'});closeSheet();await loadWeekPlan(true);renderWeekHub();toast('Používám běžný týden.');}catch(error){$('availabilityError').textContent=error.message}};
-    });
+    },'availability-sheet');
   }catch(error){toast(error.message);}
 }
 async function renderAvailabilitySummary(){
@@ -2211,12 +2243,12 @@ function openGymPreview(date,pr){
   });
 }
 function installAdaptivePlanning(){
-  $('settings').insertAdjacentHTML('beforeend','<article class="card" id="availabilitySettings" style="margin-top:12px"><h3>Časové možnosti a preference</h3><p class="small" id="availabilitySummary">Načítám…</p><button class="btn primary" id="editDefaultAvailability" type="button">Nastavit běžný týden</button><div id="coachMemories"></div></article>');
+  $('settings').insertAdjacentHTML('beforeend','<article class="card" id="availabilitySettings" style="margin-top:12px"><h3>Časové možnosti</h3><p class="small" id="availabilitySummary">Načítám…</p><button class="btn primary" id="editDefaultAvailability" type="button">Nastavit běžný týden</button><div id="coachMemories"></div></article>');
   $('editDefaultAvailability').onclick=()=>openAvailabilityEditor('default');
-  $('proposeWeek').insertAdjacentHTML('beforebegin','<button class="btn" id="editWeekAvailability" type="button">Časové možnosti týdne</button>');
+  $('proposeWeek').insertAdjacentHTML('beforebegin','<button class="btn" id="editWeekAvailability" type="button">Časové možnosti</button>');
   $('editWeekAvailability').onclick=()=>openAvailabilityEditor('week');
   document.body.insertAdjacentHTML('beforeend','<button class="assistant-fab" id="floatingAssistant" type="button" aria-label="Otevřít osobního AI asistenta">✦ Asistent</button>');
-  $('floatingAssistant').onclick=()=>openFloatingAssistant();$('openAssistant').onclick=()=>openFloatingAssistant();
+  $('floatingAssistant').onclick=()=>openFloatingAssistant();
   const auto=$('generateEnvironment');if(auto){auto.insertAdjacentHTML('afterbegin','<option value="auto">Podle počasí a sezóny</option>');auto.value='auto';}
   $('assistantForm').onsubmit=async e=>{
     e.preventDefault();const message=$('assistantMessage').value.trim();if(!message)return;const b=$('assistantForm').querySelector('[type=submit]');b.disabled=true;$('assistantStatus').textContent='Přemýšlím nad tvým návrhem…';

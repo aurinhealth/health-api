@@ -56,7 +56,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 <main class="main">
 <header class="topbar">
   <div><div class="top-title">Petr Fitness Data</div><div class="top-sub">Training intelligence · Health · Nutrition</div></div>
-  <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><button class="btn" id="openAssistant">✦ Asistent</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
+  <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
 </header>
 <div class="content">
 <section id="today" class="view active" aria-label="Dnes"></section>

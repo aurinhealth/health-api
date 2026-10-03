@@ -4,6 +4,17 @@ import { planWeekRoles, weekTargets } from './week-planner.js';
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
 export const sessionsOn = d => [...(d?.daily?.training?.completed || []), ...(d?.daily?.training?.planned || [])].filter(a => sportOf(a));
+export function activityHistoryEstimate(history = [], reference) {
+  const recent = history.filter(d => d.date < reference && d.date >= shift(reference, -21));
+  const activities = recent.reduce((n,d)=>n+(d.daily?.training?.completed||[]).filter(sportOf).length,0);
+  const dates = recent.filter(d=>(d.daily?.training?.completed||[]).some(sportOf)).map(d=>d.date).sort();
+  const days = dates.length ? Math.min(21,Math.max(1,(Date.parse(reference+'T12:00:00Z')-Date.parse(dates[0]+'T12:00:00Z'))/86400000)) : 0;
+  const enough = days >= 14 && activities >= 4;
+  const count = enough ? Math.min(14,Math.max(1,Math.round(activities/(days/7)))) : 3;
+  const message = enough ? 'Odhad '+count+' aktivit týdně z '+activities+' dokončených aktivit za '+days+' dní.'
+    : (activities ? 'Historie je zatím krátká ('+activities+' aktivit, '+days+' dní).' : 'Zatím tu není historie dokončených aktivit.')+' Pro odhad potřebujeme alespoň 2 týdny a 4 aktivity. Do té doby navrhneme nejvýše 3 aktivity týdně podle dostupného času. Počet můžeš nastavit ručně.';
+  return { status: enough ? 'ready' : activities ? 'short' : 'empty', activities, days, count, message };
+}
 export function environmentFor(date, sport, weather = null) {
   if (sport === 'gym') return { environment: 'indoor', reason: '' };
   const month = Number(date.slice(5, 7));
@@ -48,11 +59,11 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
 export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null, history: suppliedHistory = null }) {
   const days = prefs.days.map(d => [...d]);
   if (days.some(d => d.length)) return { ...prefs, days };
-  const history = (suppliedHistory || week.days || []).filter(d => d.date < start && d.date >= shift(start, -21));
+  const reference = today < start ? today : start;
+  const history = (suppliedHistory || week.days || []).filter(d => d.date < reference && d.date >= shift(reference, -21));
   const frequency = { ride: 0, run: 0, gym: 0 };
   for (const d of history) for (const a of d.daily?.training?.completed || []) if(sportOf(a))frequency[sportOf(a)]++;
-  const historySpan=history.length?Math.min(21,Math.max(7,(Date.parse(start+'T12:00:00Z')-Date.parse(history.map(d=>d.date).sort()[0]+'T12:00:00Z'))/86400000)):0;
-  const count = prefs.weeklyActivities ?? (history.length ? Math.round(Object.values(frequency).reduce((a, b) => a + b, 0) / Math.max(1, historySpan / 7)) : 3);
+  const count = prefs.weeklyActivities ?? activityHistoryEstimate(history,reference).count;
   const existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6)).reduce((n, d) => n + sessionsOn(d).length, 0);
   const primary = focus?.sport === 'running' ? 'run' : focus?.sport === 'strength' ? 'gym' : 'ride';
   const sports = Object.keys(frequency).filter(s=>frequency[s]>0).sort((a, b) => frequency[b] - frequency[a]);
@@ -75,6 +86,8 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
 export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null }) {
   const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history });
   const warnings = [], existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6));
+  const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
+  if(prefs.weeklyActivities==null&&historyEstimate.status!=='ready')warnings.push({text:historyEstimate.message});
   for (const d of existing.filter(d => d.date >= today)) {
     const sessions = sessionsOn(d), minutes = sessions.reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0), available = availabilityOn(prefs, d.date);
     if (available.minutes != null && minutes > available.minutes) warnings.push({ date: d.date, text: 'Plán má ' + Math.round(minutes) + ' min, dostupných je ' + available.minutes + ' min.' });
