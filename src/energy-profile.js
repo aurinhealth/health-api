@@ -1,6 +1,7 @@
 // Personal energy baseline: resting expenditure from sex, age, height and
 // weight (Mifflin-St Jeor) times everyday activity, the weekly goal, and a
 // sport estimate for users whose training is not tracked by a connected source.
+import { normalizeFocus } from "./athlete-focus.js";
 
 // Everyday movement outside sport. Sport itself comes from tracked activities
 // (Intervals.icu, Google Health) or, without them, from SPORT_HOURS.
@@ -56,7 +57,8 @@ export function normalizeProfile(p = {}) {
     activity: Object.hasOwn(ACTIVITY_LEVELS, p.activity) ? p.activity : "",
     sportHours: Object.hasOwn(SPORT_HOURS, p.sportHours) ? p.sportHours : "",
     goal: Object.hasOwn(GOALS, p.goal) ? p.goal : "",
-    targetWeight: inRange(p.targetWeight, 35, 250)
+    targetWeight: inRange(p.targetWeight, 35, 250),
+    ...normalizeFocus(p)
   };
 }
 
