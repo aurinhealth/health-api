@@ -19,7 +19,9 @@ test("an exercise needing equipment the gym lacks is not offered", () => {
   const smallGym = { stations: { dumbbells: { label: "Jednoručky" } } };
   assert.equal(availableAt("DB curl", smallGym), true);
   assert.equal(availableAt("Pendulum squat", smallGym), false);
-  assert.equal(availableAt("Back squat"), false); // no squat rack in Kutná Hora
+  assert.equal(availableAt("Barbell back squat", smallGym), false);
+  assert.equal(availableAt("Barbell back squat"), true); // squat rack and Smith machine in Kutná Hora
+  assert.equal(availableAt("Smith machine hip thrust"), true);
   assert.equal(stationLabel("Barbell bench press"), "Benchpress flat + Stojan na rovné osy + trny na kotouče");
   const catalog = gymExerciseCatalog();
   assert.equal(catalog.length, Object.keys(EXERCISES).length);

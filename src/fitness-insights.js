@@ -17,7 +17,7 @@ const RECOVERY_DAYS = { quads: 1.7, hamstrings: 1.7, hips: 1.6, chest: 1.5, uppe
 // Primary muscle of the exercise catalog → body-map groups.
 const PRIMARY = { chest: ["chest"], back: ["upper_back", "lats"], shoulders: ["front_delts", "side_delts"], quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["hips"], biceps: ["biceps"], triceps: ["triceps"], core: ["abs", "obliques"], adductors: ["hips"], abductors: ["hips"], calves: ["calves"] };
 // Secondary muscles by movement pattern (share of the set's load).
-const SECONDARY = { push: { triceps: .5, front_delts: .4 }, horizontal_push: { front_delts: .3 }, push_vertical: { triceps: .4, side_delts: .3 }, pull: { biceps: .45, rear_delts: .4 }, pull_vertical: { biceps: .4 }, quad: { hips: .5 }, unilateral_quad: { hips: .6, hamstrings: .2 }, hinge: { hips: .6, upper_back: .2 }, hip_extension: { hamstrings: .3 } };
+const SECONDARY = { push: { triceps: .5, front_delts: .4 }, horizontal_push: { front_delts: .3 }, push_vertical: { triceps: .4, side_delts: .3 }, pull: { biceps: .45, rear_delts: .4 }, pull_vertical: { biceps: .4 }, quad: { hips: .5 }, unilateral_quad: { hips: .6, hamstrings: .2 }, hinge: { hips: .6, upper_back: .2 }, hip_extension: { hamstrings: .3 }, lunge: { quads: .6, hamstrings: .2 }, glute_press: { quads: .5, hamstrings: .3 }, glute_kickback: { hamstrings: .2 } };
 // Cardio: share of the activity's training load per muscle group.
 const CARDIO = {
   ride: { quads: 1, hips: .6, hamstrings: .4, calves: .35 },

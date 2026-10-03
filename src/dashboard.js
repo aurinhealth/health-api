@@ -44,7 +44,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 <aside class="sidebar">
   <div class="brand"><strong>Petr Fitness Data</strong><span>Performance Command Center</span></div>
   <nav class="nav">
-    <button class="navbtn phone-only" data-view="today">◎ <span>Dnes</span></button>
+    <button class="navbtn" data-view="today">◎ <span>Dnes</span></button>
     <button class="navbtn active" data-view="overview">▦ <span>Přehled</span></button>
     <button class="navbtn" data-view="training">◈ <span>Trénink</span></button>
     <button class="navbtn" data-view="workouts">⌁ <span>Workouty</span></button>
@@ -154,7 +154,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   </div>
 </section>
 
-<dialog id="assistantDialog" class="assistant-dialog"><div class="detail-heading"><h3>Osobní asistent</h3><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></div><p class="small">Jedno místo pro kolo, gym, výživu a zdravotní data.</p><div class="notice" id="assistantStatus">Návrhy se tvoří z dostupných dat; žádné změny se neukládají automaticky.</div><div id="assistantConversation" aria-live="polite"></div><form id="assistantForm"><label class="small" for="assistantMessage">Co potřebuješ?</label><textarea id="assistantMessage" placeholder="Vygeneruj mi kolo na týden. Zhodnoť dnešní jízdu. Připrav gym na úterý." required maxlength="4000"></textarea><button class="btn primary" type="submit">Odeslat</button></form></dialog>
+<dialog id="assistantDialog" class="assistant-dialog"><div class="detail-heading"><h3>Osobní asistent</h3><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></div><p class="small">Jedno místo pro kolo, gym, výživu a zdravotní data.</p><div class="notice" id="assistantStatus">Návrhy se tvoří z dostupných dat; žádné změny se neukládají automaticky.</div><div id="assistantConversation" aria-live="polite"></div><form id="assistantForm"><label class="small" for="assistantMessage">Co potřebuješ?</label><textarea id="assistantMessage" placeholder="Vygeneruj mi kolo na týden. Zhodnoť dnešní jízdu. Měl jsem snickers a kafe s mlékem." required maxlength="4000"></textarea><button class="btn primary" type="submit">Odeslat</button></form></dialog>
 
 <section id="recovery" class="view">
   <div class="recovery-command"><div><div class="eyebrow">Daily readiness</div><h1 id="recoveryTitle">Recovery & Health</h1><p id="recoveryInsight">Spánek, regenerace a tělesný trend v jednom rozhodovacím přehledu.</p><div id="recoverySignal" class="focus-chip">Načítám signály</div></div><div class="recovery-score"><div id="recoveryOrb" class="score-orb"><div><strong id="recoveryScore">—</strong><span>recovery</span></div></div><div id="recoveryVsBaseline" class="score-caption">vs. osobní baseline</div></div><div class="recovery-guide"><div class="label">Dnešní doporučení</div><strong id="recoveryGuide">Načítám…</strong><span id="recoveryGuideMeta" class="small"></span></div></div>

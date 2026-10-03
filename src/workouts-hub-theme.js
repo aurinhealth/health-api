@@ -111,7 +111,15 @@ export const workoutsHubTheme = `
 .timeline .tl-icon{position:absolute;left:-17px;top:6px;display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#1a2030;border:1px solid #333b49;font-size:15px}
 .timeline li>div{grid-column:2;min-width:0}.timeline strong{display:block;font-size:13px}.timeline small{display:block;color:#9ca6b5;font-size:11px;overflow-wrap:anywhere}
 .timeline time{grid-column:3;font-size:12px;color:#c9d2de;font-variant-numeric:tabular-nums}
-.tl-sleep .tl-icon{background:#241f45}.tl-food .tl-icon{background:#2b2342}.tl-activity .tl-icon{background:#173a30}.tl-planned .tl-icon{border-style:dashed}
+#dayTimeline .actions{display:flex;gap:6px;flex-wrap:wrap}#dayTimeline .actions .btn{white-space:nowrap}
+.tl-coach .tl-icon{background:#2a2440}.tl-coach small{color:#d5dbe6;font-size:12px;line-height:1.55}
+.coach-note{padding:10px 12px;margin-bottom:10px;border-radius:12px;background:#1a1f2c;border:1px solid #2e3546}.coach-note p{margin:4px 0 0}.coach-note small{color:#a99bff;font-size:11px}
+.coach-ask{display:grid;gap:6px;margin:6px 0 10px}.coach-ask textarea{width:100%;background:#0d1119;color:#eef1f7;border:1px solid #333b49;border-radius:10px;padding:9px;font:inherit;resize:vertical}
+#coachRpe button.active{background:#7e50e5;border-color:#a16fff;color:#fff}
+.food-draft-row{display:grid;grid-template-columns:minmax(0,1fr) auto 80px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3140}.food-draft-row small{display:block;color:#9ca6b5;font-size:11px}.food-draft-row input{width:76px;background:#0d1119;color:#fff;border:1px solid #333b49;border-radius:8px;padding:5px 7px}.food-draft-row>span{text-align:right;font-variant-numeric:tabular-nums}
+.food-draft-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:10px}.food-draft-foot input,.food-draft-foot select{display:block;background:#0d1119;color:#fff;border:1px solid #333b49;border-radius:8px;padding:6px 8px}
+.coach-note-inline{margin:6px 0 0;font-size:12px;line-height:1.55;color:#c9d2de;max-width:780px}
+.tl-weight .tl-icon{background:#16303a}.tl-sleep .tl-icon{background:#241f45}.tl-food .tl-icon{background:#2b2342}.tl-activity .tl-icon{background:#173a30}.tl-planned .tl-icon{border-style:dashed}
 .copy-days{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.copy-days label{display:inline-flex!important;align-items:center;gap:5px;padding:5px 8px;border:1px solid #333b49;border-radius:8px;font-size:12px;min-width:0!important}
 .hrr-card{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:14px 0;padding:12px 14px;border-radius:12px;background:#151b26;border:1px solid #2a3140}.hrr-card strong{display:block;font-size:24px;color:#ff9c97}.hrr-card small{color:#9ca6b5;font-size:11px}.hrr-card p{margin:0;max-width:340px}
 .activity-extras h3{margin:14px 0 8px}
@@ -180,8 +188,27 @@ export const workoutsHubTheme = `
   .gym-table tr[data-type=WARMUP] td:nth-child(4),.gym-table tr[data-type=WARMUP] td:nth-child(5){color:#9ca6b5}
   #workoutsGym .generate-card .detail-heading .actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:100%}#workoutsGym .generate-card .detail-heading .actions .btn{padding:7px 4px;font-size:12px}
 }
-/* Phone layer: Dnes, quick add, bottom sheets, gym workout mode */
-.phone-only{display:none!important}
+/* Dnes (all screens), quick add, bottom sheets, gym workout mode */
+.today-head h1{font-size:34px;margin:2px 0 12px}
+.mini-rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.mini-ring{display:grid;justify-items:center;gap:3px;padding:12px 4px 10px;border-radius:16px;border:1px solid #262d39;background:#121722;color:#eef1f7;text-align:center}
+.mini-ring-dial{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#121722 63%,transparent 64%),conic-gradient(var(--c) calc(var(--p)*1%),#2a313e 0)}
+.mini-ring-dial b{font-size:15px}.mini-ring-label{font-size:12px;font-weight:700}.mini-ring small{font-size:10px;color:#9ca6b5;line-height:1.2}
+.today-card{padding:14px!important;margin-bottom:12px}
+.today-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #222936}
+.today-item:last-of-type{border-bottom:0}.today-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#1b2130;font-size:16px}
+.today-item strong{display:block;font-size:14px}.today-item small{display:block;font-size:11px;color:#9ca6b5}
+.today-item.role .today-icon{border:1px dashed #6b5a99;background:transparent}.today-item.done .today-icon{background:#173a30}
+.today-item .btn{padding:8px 12px;font-size:13px;min-height:38px}
+.week-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px;padding-top:12px;border-top:1px solid #222936}
+.strip-day{display:grid;justify-items:center;gap:1px;padding:6px 0;border-radius:12px;border:1px solid transparent;background:transparent;color:#c9d2de}
+.strip-day span{font-size:10px;text-transform:uppercase;color:#9ca6b5}.strip-day b{font-size:16px}.strip-day i{font-style:normal;font-size:11px;min-height:15px;letter-spacing:-2px}
+.strip-day.today b{color:#c6acff}.strip-day.active{background:#231c38;border-color:#9b6bff}
+.today-more{width:100%;margin-top:4px}
+#today #dayTimeline{margin:0 0 12px}
+.today-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px;align-items:start}
+.today-main{min-width:0}#todayTimelineSlot{min-width:0}#todayTimelineSlot:empty{display:none}
+.mini-ring:hover{border-color:#3a4354}
 .fab{display:none}
 .sheet{position:fixed;inset:0;z-index:80}
 .sheet-backdrop{position:absolute;inset:0;background:#000a;opacity:0;transition:opacity .18s}
@@ -192,6 +219,8 @@ export const workoutsHubTheme = `
 #sheetBody p{color:#c9d2de;font-size:14px;line-height:1.5}
 .sheet-days{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:10px 0 14px}.sheet-days .btn{display:grid;gap:2px;padding:10px 4px;font-size:12px;text-align:center}.sheet-days b{text-transform:capitalize}
 .sheet-danger{width:100%;border-color:#5a2a33;color:#ffb3bd}.sheet-wide{width:100%;min-height:48px;font-size:16px}
+/* Wider screens: the sheet is a centred panel, not a full-width drawer. */
+@media(min-width:701px){.sheet-panel{left:50%;right:auto;width:min(560px,calc(100% - 32px));border-radius:20px 20px 0 0;transform:translate(-50%,100%)}.sheet.open .sheet-panel{transform:translateX(-50%)}}
 .quick-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:6px 0 4px}
 .quick-actions button{display:grid;justify-items:center;gap:6px;padding:16px 6px;border-radius:14px;border:1px solid #2f3745;background:#1a1f2b;color:#eef1f7;font-size:12px;font-weight:650}
 .quick-actions span{font-size:24px}
@@ -218,27 +247,11 @@ body.gym-mode-open{overflow:hidden}
 .gm-rest-actions{display:flex;gap:10px}.gm-rest-actions .btn{min-height:48px;min-width:120px}
 .gm-empty{margin:auto;text-align:center;display:grid;gap:10px;justify-items:center}.gm-check{width:84px;height:84px;border-radius:50%;display:grid;place-items:center;background:#173a30;color:#3fda9c;font-size:42px}
 @media(max-width:700px){
-  .phone-only{display:flex!important}.nav button[data-view="overview"]{display:none!important}
+  .nav button[data-view="overview"]{display:none!important}
   .nav{grid-template-columns:repeat(6,minmax(0,1fr))!important}
   .fab{display:grid;place-items:center;position:fixed;right:16px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:31;width:58px;height:58px;border-radius:50%;border:0;background:linear-gradient(135deg,#a16fff,#7e50e5);color:#fff;font-size:32px;font-weight:300;line-height:1;box-shadow:0 10px 26px #0009}
   .fab[hidden]{display:none}
-  .today-head h1{font-size:30px;margin:2px 0 12px}
-  .mini-rings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
-  .mini-ring{display:grid;justify-items:center;gap:3px;padding:12px 4px 10px;border-radius:16px;border:1px solid #262d39;background:#121722;color:#eef1f7;text-align:center}
-  .mini-ring-dial{width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at center,#121722 63%,transparent 64%),conic-gradient(var(--c) calc(var(--p)*1%),#2a313e 0)}
-  .mini-ring-dial b{font-size:15px}.mini-ring-label{font-size:12px;font-weight:700}.mini-ring small{font-size:10px;color:#9ca6b5;line-height:1.2}
-  .today-card{padding:14px!important;margin-bottom:12px}
-  .today-item{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #222936}
-  .today-item:last-of-type{border-bottom:0}.today-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#1b2130;font-size:16px}
-  .today-item strong{display:block;font-size:14px}.today-item small{display:block;font-size:11px;color:#9ca6b5}
-  .today-item.role .today-icon{border:1px dashed #6b5a99;background:transparent}.today-item.done .today-icon{background:#173a30}
-  .today-item .btn{padding:8px 12px;font-size:13px;min-height:38px}
-  .week-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px;padding-top:12px;border-top:1px solid #222936}
-  .strip-day{display:grid;justify-items:center;gap:1px;padding:6px 0;border-radius:12px;border:1px solid transparent;background:transparent;color:#c9d2de}
-  .strip-day span{font-size:10px;text-transform:uppercase;color:#9ca6b5}.strip-day b{font-size:16px}.strip-day i{font-style:normal;font-size:11px;min-height:15px;letter-spacing:-2px}
-  .strip-day.today b{color:#c6acff}.strip-day.active{background:#231c38;border-color:#9b6bff}
-  .today-more{width:100%;margin-top:4px}
-  #today #dayTimeline{margin:0 0 12px}
+  .today-head h1{font-size:30px}.today-layout{display:block}.tl-verb{display:none}
 }
 .planner-chip .proposal{color:#e9e2ff;font-weight:650}
 .chip-actions{display:flex;gap:4px;flex-basis:100%;flex-wrap:wrap;margin-top:2px}.chip-actions .btn{padding:3px 7px;font-size:10px;border-radius:6px}

@@ -50,7 +50,40 @@ export const EXERCISE_INTELLIGENCE = {
   "Cable woodchop": { muscle: "core", pattern: "rotation", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Pallof press"] },
   "Roman chair": { muscle: "core", pattern: "trunk_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Abs bench crunch"] },
   "Standing calf raise": { muscle: "calves", pattern: "plantar_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.45, variants: [] },
-  "Cable crunch": { muscle: "core", pattern: "trunk_flexion", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Abs bench crunch"] }
+  "Cable crunch": { muscle: "core", pattern: "trunk_flexion", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Abs bench crunch"] },
+  "Cable glute kickback": { muscle: "glutes", pattern: "hip_extension", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Glute hyperextension", "Hip thrust"] },
+  "Cable pull-through": { muscle: "glutes", pattern: "hip_hinge", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.5, variants: ["DB Romanian deadlift", "Hip thrust"] },
+  "Cable hip abduction": { muscle: "abductors", pattern: "abduction", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Abduction machine"] },
+  "Barbell hip thrust": { muscle: "glutes", pattern: "hip_extension", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["Hip thrust"] },
+  "DB reverse lunge": { muscle: "glutes", pattern: "lunge", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.9, variants: ["DB step-up", "DB Bulgarian split squat"] },
+  "DB step-up": { muscle: "glutes", pattern: "lunge", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.85, variants: ["DB reverse lunge", "DB Bulgarian split squat"] },
+  "DB single-leg Romanian deadlift": { muscle: "hamstrings", pattern: "hip_hinge", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.8, variants: ["DB Romanian deadlift"] },
+  "DB sumo squat": { muscle: "quads", pattern: "knee_dominant", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.85, variants: ["Goblet squat"] },
+  "Leg press high feet": { muscle: "glutes", pattern: "glute_press", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.2, variants: ["Pivot leg press", "Hip thrust"] },
+  "Abduction machine forward lean": { muscle: "glutes", pattern: "abduction", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: ["Abduction machine"] },
+  "Glute hyperextension": { muscle: "glutes", pattern: "hip_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.45, variants: ["Roman chair", "Cable pull-through"] },
+  "Cable fly": { muscle: "chest", pattern: "horizontal_adduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.5, variants: ["Pec deck", "Low-to-high cable fly"] },
+  "Low-to-high cable fly": { muscle: "chest", pattern: "horizontal_adduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable fly"] },
+  "Single-arm cable row": { muscle: "back", pattern: "horizontal_pull", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.6, variants: ["One-arm DB row", "Low row"] },
+  "Close-grip lat pulldown": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.85, variants: ["Lat pulldown"] },
+  "Wide-grip low row": { muscle: "back", pattern: "horizontal_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.8, variants: ["Low row"] },
+  "Barbell row": { muscle: "back", pattern: "horizontal_pull", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.05, variants: ["One-arm DB row", "Low row"] },
+  "DB lateral raise": { muscle: "side_delts", pattern: "lateral_raise", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Cable lateral raise", "Standing multi flight"] },
+  "DB Arnold press": { muscle: "shoulders", pattern: "vertical_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.85, variants: ["DB shoulder press"] },
+  "DB rear delt fly": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Rear delt pec deck", "Face pull"] },
+  "DB incline curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.45, variants: ["DB curl", "Hammer curl"] },
+  "Cable rope hammer curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable curl", "Hammer curl"] },
+  "Cable triceps kickback": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable triceps extension"] },
+  "DB overhead triceps extension": { muscle: "triceps", pattern: "elbow_extension", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.45, variants: ["Cable overhead triceps extension"] },
+  "Single-leg calf raise": { muscle: "calves", pattern: "plantar_flexion", equipment: "dumbbell", unilateral: true, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Standing calf raise"] },
+  "Barbell back squat": { muscle: "quads", pattern: "knee_dominant", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.4, variants: ["Smith machine squat", "Pendulum squat"] },
+  "Barbell front squat": { muscle: "quads", pattern: "knee_dominant", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.3, variants: ["Barbell back squat", "Goblet squat"] },
+  "Smith machine squat": { muscle: "quads", pattern: "knee_dominant", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.2, variants: ["Barbell back squat", "Pendulum squat"] },
+  "Smith machine split squat": { muscle: "glutes", pattern: "lunge", equipment: "smith", unilateral: true, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB Bulgarian split squat", "DB reverse lunge"] },
+  "Smith machine hip thrust": { muscle: "glutes", pattern: "hip_extension", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["Barbell hip thrust", "Hip thrust"] },
+  "Smith machine incline press": { muscle: "chest", pattern: "incline_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB incline press"] },
+  "Barbell overhead press": { muscle: "shoulders", pattern: "vertical_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["DB shoulder press", "Shoulder press Prime"] }
+
 };
 
 function n(v) { const x = Number(v); return Number.isFinite(x) ? x : null; }
@@ -83,7 +116,8 @@ function transferFactor(from, to) {
 
 export const LOAD_RULES = {
   // METAGYM dumbbells: use a practical standard until the exact rack inventory is verified.
-  DUMBBELL: { min: 10, max: 50, step: 2.5, strict: true },
+  // Light pairs from 2.5 kg are needed for raises, flies and starting loads of women.
+  DUMBBELL: { min: 2.5, max: 50, step: 2.5, strict: true },
   // Cable stacks are machine-specific; 2.5 kg is the temporary conservative default.
   CABLE_STACK: { min: 2.5, max: null, step: 2.5, strict: true },
   // Plate-loaded machines and barbells can be built from 1.25 kg plates per side.
