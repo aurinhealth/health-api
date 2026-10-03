@@ -11,6 +11,10 @@ test("a data reload does not take the timeline out of the visible Přehled", () 
   assert.match(client, /if\(tl&&el\.classList\.contains\('active'\)\)\$\('todayTimelineSlot'\)\.appendChild\(tl\)/);
 });
 
+test("rebuilding Dnes parks the timeline first instead of deleting it", () => {
+  assert.match(client, /const parked=\$\('dayTimeline'\);if\(parked&&el\.contains\(parked\)\)\$\('dailyPulse'\)\?\.after\(parked\);\s*el\.innerHTML='<div class="today-layout">/);
+});
+
 test("Dnes is a screen on the web too", () => {
   assert.match(page, /<button class="navbtn" data-view="today">/);
   assert.doesNotMatch(page, /phone-only/);

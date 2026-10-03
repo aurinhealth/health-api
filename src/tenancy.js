@@ -26,6 +26,7 @@ export const PERSONAL_TABLES = {
   // scoped database enforces the filter.
   training_capabilities: { pk: ["user_id", "sport", "system"] },
   workout_feedback: {},
+  coach_reflections: {},
   workout_schedule_links: {},
   training_profile: {},
   week_plan_preferences: {}

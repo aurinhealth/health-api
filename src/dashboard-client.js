@@ -409,12 +409,13 @@ function renderScheduledWorkouts(rows){
     const reviewed=Boolean(w.feedback_id),paired=w.status==='completed'||w.completed_percent!=null,due=w.scheduled_date<=today;
     const done=w.completed_percent!=null?' · dokončeno '+Math.round(num(w.completed_percent))+' %':'';
     const status=reviewed?'Hodnoceno · RPE '+(w.feedback_rpe!=null?fmt(w.feedback_rpe,1):'—')+done:paired?'Spárováno s aktivitou v Intervals.icu'+done:due?'Čekám na aktivitu z Intervals.icu':'Naplánováno';
-    return '<article class="scheduled-workout" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><div><strong>'+esc(w.name)+'</strong><div class="small">'+esc(longDate(w.scheduled_date))+' · '+esc(capabilityLabel(w.primary_system,w.sport))+' · '+num(w.duration_minutes)+' min · '+status+'</div></div>'+
+    const note=reviewed&&(state.coachNotes||[]).find(r=>r.workoutId===w.workout_id&&r.date===w.scheduled_date);
+    return '<article class="scheduled-workout" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><div><strong>'+esc(w.name)+'</strong><div class="small">'+esc(longDate(w.scheduled_date))+' · '+esc(capabilityLabel(w.primary_system,w.sport))+' · '+num(w.duration_minutes)+' min · '+status+'</div>'+(note?'<p class="coach-note-inline">💬 '+esc(note.text)+'</p>':'')+'</div>'+
       (reviewed?'<span class="small">✓ Uloženo</span>':due?'<form class="workout-feedback rpe-form"><label><span class="small">RPE 1–10 <button type="button" class="info-tip" data-info="rpe" aria-label="Vysvětlivka: RPE">i</button></span><input name="rpe" type="number" min="1" max="10" step="1" required></label><label><span class="small">Pocit / poznámka (volitelně)</span><input name="notes" type="text" maxlength="300" placeholder="např. těžké nohy, horko"></label><button class="btn primary" type="submit">Uložit RPE</button></form>':'<span class="small">'+(w.sport==='run'?'Čeká na běh':'Čeká na jízdu')+'</span>')+(!paired&&!reviewed&&w.intervals_event_id?'<button type="button" class="btn" data-delete-event="'+esc(w.intervals_event_id)+'" data-name="'+esc(w.name)+'">Smazat</button>':'')+'</article>';
   }).join(''):'<div class="small">Zatím není naplánovaný žádný workout.</div>';
 }
 async function loadScheduledWorkouts(){
-  try{const result=await jsonFetch('/app/api/workouts/scheduled');renderScheduledWorkouts(result.workouts||[])}
+  try{const [result,notes]=await Promise.all([jsonFetch('/app/api/workouts/scheduled'),jsonFetch('/app/api/coach/reflections').catch(()=>({}))]);state.coachNotes=notes.reflections||[];renderScheduledWorkouts(result.workouts||[])}
   catch(error){$('scheduledWorkouts').innerHTML='<div class="notice status-error">'+esc(error.message)+'</div>'}
 }
 async function loadWorkoutLibrary(){
@@ -438,7 +439,7 @@ async function saveWorkoutFeedback(form){
   try{
     const body={workoutId:row.dataset.id,scheduledDate:row.dataset.date,rpe:Number(form.elements.rpe.value),notes:form.elements.notes.value};
     const r=await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-    toast(r.intervals?.status==='ok'?'RPE je uložené i u aktivity v Intervals.icu.':r.intervals?.status==='error'?'RPE je uložené; zápis do Intervals.icu selhal: '+r.intervals.message:'RPE je uložené.');await loadWorkoutLibrary();
+    toast(r.intervals?.status==='ok'?'RPE je uložené i u aktivity v Intervals.icu.':r.intervals?.status==='error'?'RPE je uložené; zápis do Intervals.icu selhal: '+r.intervals.message:'RPE je uložené.');await loadWorkoutLibrary();if(r.reflection==='pending'){toast('Uloženo. Kouč teď připravuje zpětnou vazbu…');awaitReflection(body.scheduledDate);}
   }catch(error){toast('Hodnocení se neuložilo: '+error.message);button.disabled=false}
 }
 
@@ -1406,10 +1407,29 @@ function renderDayTimeline(){
   // written to Google Health comes back from it as the same point: shown once.
   const weights=(state.weight?.records||[]).filter(r=>measured(r.value_numeric)).map(r=>({...r,day:pragueDay(r.sample_time)})).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time))),before=weights.filter(r=>r.day<date).at(-1),seen=new Set();
   for(const w of weights.filter(r=>r.day===date)){const at=clock(w.sample_time),kg=num(w.value_numeric),key=at+'|'+fmt(kg,1);if(seen.has(key))continue;seen.add(key);const delta=before?kg-num(before.value_numeric):null;items.push({t:date+'T'+(at||'12:00')+':00',icon:'⚖',cls:'weight',title:'Váha · '+fmt(kg,1)+' kg',meta:delta==null?'první záznam':(delta>0?'+':delta<0?'−':'±')+fmt(Math.abs(delta),1)+' kg od '+dateLabel(before.day)});}
+  // The coach's notes on the day close it.
+  for(const r of (state.reflections?.[date]||[]))items.push({t:date+'T23:58',icon:'💬',cls:'coach',title:'Kouč'+(r.rpe!=null?' · RPE '+fmt(r.rpe):'')+(r.notes?' · „'+r.notes+'“':''),meta:r.text,label:r.source==='ai'?'AI':'kouč'});
   items.sort((a,b)=>String(a.t||'').localeCompare(String(b.t||'')));
-  el.innerHTML='<div class="detail-heading"><div><div class="label">Timeline</div><h3>'+(date===pragueToday()?'Tvůj den':'Den '+esc(longDate(date)))+'</h3></div><div class="actions"><button class="btn" type="button" id="timelineWeight">⚖ <span class="tl-verb">Zapsat </span>váhu</button><button class="btn" type="button" id="timelineFood">＋ <span class="tl-verb">Zapsat </span>jídlo</button></div></div>'+(items.length?'<ol class="timeline">'+items.map(x=>'<li class="tl-'+x.cls+'"><span class="tl-icon">'+x.icon+'</span><div><strong>'+esc(x.title)+'</strong><small>'+(x.raw?x.meta:esc(x.meta))+'</small></div><time>'+esc(x.cls==='planned'&&/T23:59/.test(x.t)?'plán':clock(x.t))+'</time></li>').join('')+'</ol>':'<div class="data-gap">Pro tento den zatím nic nemám.</div>');
+  el.innerHTML='<div class="detail-heading"><div><div class="label">Timeline</div><h3>'+(date===pragueToday()?'Tvůj den':'Den '+esc(longDate(date)))+'</h3></div><div class="actions"><button class="btn" type="button" id="timelineWeight">⚖ <span class="tl-verb">Zapsat </span>váhu</button><button class="btn" type="button" id="timelineFood">＋ <span class="tl-verb">Zapsat </span>jídlo</button><button class="btn" type="button" id="timelineCoach">💬 Kouč</button></div></div>'+(items.length?'<ol class="timeline">'+items.map(x=>'<li class="tl-'+x.cls+'"><span class="tl-icon">'+x.icon+'</span><div><strong>'+esc(x.title)+'</strong><small>'+(x.raw?x.meta:esc(x.meta))+'</small></div><time>'+esc(x.label||(x.cls==='planned'&&/T23:59/.test(x.t)?'plán':clock(x.t)))+'</time></li>').join('')+'</ol>':'<div class="data-gap">Pro tento den zatím nic nemám.</div>');
   $('timelineFood').onclick=()=>{activate('nutrition');$('foodQuery')?.focus();};
   $('timelineWeight').disabled=date>pragueToday();$('timelineWeight').onclick=()=>openWeightSheet(date);
+  $('timelineCoach').disabled=date>pragueToday();$('timelineCoach').onclick=()=>openCoachSheet(date);
+}
+// ---- Coach's notes: after RPE in the background, or asked for any day ----
+async function loadReflections(date=selectedHistoryDate){
+  try{const r=await jsonFetch('/app/api/coach/reflections?date='+date);state.reflections={...(state.reflections||{}),[date]:r.reflections||[]};if(date===selectedHistoryDate)renderDayTimeline();return state.reflections[date];}catch{return state.reflections?.[date]||[];}
+}
+// The note after an RPE is written on the server; check back a few times.
+async function awaitReflection(date){
+  const before=(await loadReflections(date)).length;
+  for(let i=0;i<6;i++){await new Promise(r=>setTimeout(r,5000));const now=await loadReflections(date);if(now.length>before){toast('💬 Kouč napsal zpětnou vazbu k tréninku – najdeš ji v timeline dne.');loadScheduledWorkouts?.();return now[0];}}
+}
+function openCoachSheet(date){
+  const notes=(state.reflections?.[date]||[]).map(r=>'<div class="coach-note"><small>'+esc(r.source==='ai'?'AI kouč':'Kouč')+(r.rpe!=null?' · RPE '+fmt(r.rpe):'')+(r.notes?' · „'+esc(r.notes)+'“':'')+'</small><p>'+esc(r.text)+'</p></div>').join('');
+  openSheet('Kouč · '+(date===pragueToday()?'dnes':longDate(date)),notes+'<label class="coach-ask"><span class="small">Jak ses cítil? Co bylo jinak? (volitelné)</span><textarea id="coachNotes" rows="3" maxlength="1000" placeholder="např. těžké nohy, ráno procházka se psy"></textarea></label><div class="rpe-scale" id="coachRpe" role="group" aria-label="RPE">'+[1,2,3,4,5,6,7,8,9,10].map(n=>'<button type="button" data-rpe="'+n+'">'+n+'</button>').join('')+'</div><p class="small">RPE je volitelné. Kouč projde timeline dne, předchozí dny, formu (TSB), spánek, HRV a tvoje poznámky.</p><button type="button" class="btn primary sheet-wide" id="coachAsk">Zeptat se kouče</button>',body=>{
+    let rpe=null;$('coachRpe').onclick=e=>{const b=e.target.closest('[data-rpe]');if(!b)return;rpe=rpe===Number(b.dataset.rpe)?null:Number(b.dataset.rpe);$('coachRpe').querySelectorAll('button').forEach(x=>x.classList.toggle('active',Number(x.dataset.rpe)===rpe));};
+    $('coachAsk').onclick=async()=>{const b=$('coachAsk');b.disabled=true;b.textContent='Kouč přemýšlí…';try{const r=await jsonFetch('/app/api/coach/reflections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,notes:$('coachNotes').value,rpe})});state.reflections={...(state.reflections||{}),[date]:[r.reflection,...(state.reflections?.[date]||[])]};renderDayTimeline();openCoachSheet(date);}catch(error){toast(error.message);b.disabled=false;b.textContent='Zeptat se kouče';}};
+  });
 }
 // The Prague calendar day of a timestamp; one without a zone is already local.
 function pragueDay(v){const s=String(v||'');if(!/(Z|[+-]\d{2}:?\d{2})$/.test(s))return s.slice(0,10);const d=new Date(s);if(Number.isNaN(d.getTime()))return s.slice(0,10);const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d),g=t=>p.find(x=>x.type===t).value;return g('year')+'-'+g('month')+'-'+g('day');}
@@ -1440,7 +1460,7 @@ function installFitnessInsights(){
   if(anchor){const sec=$('fitnessInsights').previousElementSibling;anchor.before(sec,$('fitnessInsights'));}
   $('dailyPulse')?.insertAdjacentHTML('afterend','<article class="card" id="dayTimeline" style="margin-bottom:12px"></article>');
   installMultiCopy();
-  const previous=load;load=async()=>{await previous();renderDayTimeline();loadInsights();};
+  const previous=load;load=async()=>{await previous();renderDayTimeline();loadInsights();loadReflections();};
   const diary=renderMealDiary;renderMealDiary=function(){diary();renderDayTimeline();};
   const openDetail=openActivityProfile;openActivityProfile=async function(activity){
     await openDetail(activity);
@@ -1490,6 +1510,9 @@ function renderToday(){
   const days=(hubDays()||state.week?.days||[]).map(d=>d.date);if(!state.todayPick||!days.includes(state.todayPick))state.todayPick=days.includes(date)?date:days[0];
   const strip=days.map(d=>{const items=todayItems(d),icons=[...new Set(items.map(x=>x.sport).filter(Boolean))].slice(0,3).map(s=>SPORT_ICON[s]).join('');return '<button type="button" class="strip-day'+(d===state.todayPick?' active':'')+(d===pragueToday()?' today':'')+'" data-strip="'+d+'"><span>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d+'T12:00:00Z')))+'</span><b>'+Number(d.slice(8))+'</b><i>'+(icons||'·')+'</i></button>';}).join('');
   const pick=state.todayPick,pickItems=todayItems(pick);
+  // The timeline may sit in this screen: park it back in Přehled before the
+  // screen is rebuilt, or the rebuild would delete it.
+  const parked=$('dayTimeline');if(parked&&el.contains(parked))$('dailyPulse')?.after(parked);
   el.innerHTML='<div class="today-layout"><div class="today-main"><div class="today-head"><div class="eyebrow">'+esc(longDate(date))+'</div><h1>'+(date!==pragueToday()?'Den':hour<10?'Dobré ráno':hour<18?'Dnes':'Dobrý večer')+'</h1></div>'+
     '<div class="mini-rings">'+miniRing('Spánek',sleep==null?'—':sleep+'%',sleep||0,'#a99bff',night?hm(night.durationMin):'bez záznamu','recovery')+miniRing('Zátěž',done?fmt(done):'—',plan?done/plan*100:done?100:0,'#83e9c3',plan?'plán '+fmt(plan)+' TSS':'TSS dnes','training')+miniRing('Kalorie',target?fmt(num(food.kcal)/target*100)+'%':'—',target?num(food.kcal)/target*100:0,'#ffc274',fmt(food.kcal)+' / '+fmt(target)+' kcal','nutrition')+'</div>'+
     '<article class="card today-card"><div class="label">Trénink · '+esc(pick===pragueToday()?'dnes':longDate(pick))+'</div>'+(pickItems.length?pickItems.map(todayItemHtml).join(''):'<p class="small">Volno. Sport na tento den přidáš ve Workoutech v plánu týdne.</p>')+'<div class="week-strip" role="group" aria-label="Dny týdne">'+strip+'</div></article>'+
@@ -1511,7 +1534,7 @@ async function openRpeSheet(){
   let rows=[];try{rows=(await jsonFetch('/app/api/workouts/scheduled')).workouts||[];}catch{}
   const due=rows.filter(w=>!w.feedback_id&&w.scheduled_date<=pragueToday());
   $('sheetBody').innerHTML=due.length?due.map(w=>'<div class="rpe-pick" data-id="'+esc(w.workout_id)+'" data-date="'+esc(w.scheduled_date)+'"><strong>'+esc(w.name)+'</strong><small>'+esc(longDate(w.scheduled_date))+(w.completed_percent!=null?' · dokončeno '+Math.round(w.completed_percent)+' %':'')+'</small><div class="rpe-scale">'+[1,2,3,4,5,6,7,8,9,10].map(n=>'<button type="button" data-rpe="'+n+'">'+n+'</button>').join('')+'</div></div>').join('')+'<p class="small">1–2 velmi lehce · 5–6 středně · 9–10 maximum. Uloží se i do Intervals.icu.</p>':'<p class="small">Žádný odjetý workout z knihovny nečeká na RPE.</p>';
-  $('sheetBody').onclick=async e=>{const b=e.target.closest('[data-rpe]');if(!b)return;const row=b.closest('.rpe-pick');b.disabled=true;try{const r=await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:row.dataset.id,scheduledDate:row.dataset.date,rpe:Number(b.dataset.rpe)})});row.innerHTML='<strong>✓ RPE '+b.dataset.rpe+' uloženo</strong><small>'+(r.intervals?.status==='ok'?'i v Intervals.icu':'v aplikaci')+'</small>';}catch(error){toast(error.message);b.disabled=false;}};
+  $('sheetBody').onclick=async e=>{const b=e.target.closest('[data-rpe]');if(!b)return;const row=b.closest('.rpe-pick');b.disabled=true;try{const r=await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:row.dataset.id,scheduledDate:row.dataset.date,rpe:Number(b.dataset.rpe)})});row.innerHTML='<strong>✓ RPE '+b.dataset.rpe+' uloženo</strong><small>'+(r.intervals?.status==='ok'?'i v Intervals.icu':'v aplikaci')+(r.reflection==='pending'?' · kouč připravuje zpětnou vazbu':'')+'</small>';if(r.reflection==='pending')awaitReflection(row.dataset.date);}catch(error){toast(error.message);b.disabled=false;}};
 }
 function openWeightSheet(date=pragueToday()){
   // The last weight, or an empty field to type the first one.
