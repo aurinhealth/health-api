@@ -72,7 +72,32 @@ export const EXERCISE_STATIONS = {
   "Cable crunch": ["cables"],
   "Pallof press": ["cables"],
   "Cable woodchop": ["cables"],
-  "Roman chair": ["roman_chair"]
+  "Roman chair": ["roman_chair"],
+  "Cable glute kickback": ["cables"],
+  "Cable pull-through": ["cables"],
+  "Cable hip abduction": ["cables"],
+  "Barbell hip thrust": ["barbells", "adjustable_bench", "floor_mats"],
+  "DB reverse lunge": ["dumbbells"],
+  "DB step-up": ["dumbbells", "adjustable_bench"],
+  "DB single-leg Romanian deadlift": ["dumbbells"],
+  "DB sumo squat": ["dumbbells"],
+  "Leg press high feet": ["pivot_leg_press"],
+  "Abduction machine forward lean": ["adduction_abduction"],
+  "Glute hyperextension": ["roman_chair"],
+  "Cable fly": ["cables"],
+  "Low-to-high cable fly": ["cables"],
+  "Single-arm cable row": ["cables"],
+  "Close-grip lat pulldown": ["lat_pulldown_low_row"],
+  "Wide-grip low row": ["lat_pulldown_low_row"],
+  "Barbell row": ["barbells"],
+  "DB lateral raise": ["dumbbells"],
+  "DB Arnold press": ["dumbbells", "adjustable_bench"],
+  "DB rear delt fly": ["dumbbells", "adjustable_bench"],
+  "DB incline curl": ["dumbbells", "adjustable_bench"],
+  "Cable rope hammer curl": ["cables"],
+  "Cable triceps kickback": ["cables"],
+  "DB overhead triceps extension": ["dumbbells", "adjustable_bench"],
+  "Single-leg calf raise": ["dumbbells"]
 };
 
 export function stationLabel(exercise, gym = METAGYM_KUTNA_HORA) {

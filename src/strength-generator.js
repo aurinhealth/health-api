@@ -44,24 +44,50 @@ const EXERCISES = {
   "Standing multi flight": { pattern: "lateral_raise", muscle: "side_delts", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Boční ramena; stroj na roztahování ve stoje", fatigue: 0.4 },
   "Face pull": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 20, warmup: false, note: "Zadní ramena a lopatky; lano na kladce", fatigue: 0.35 },
   "Cable overhead triceps extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 15, warmup: false, note: "Triceps (dlouhá hlava); lano na kladce za hlavou", fatigue: 0.45 },
-  "Goblet squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Dřep s jednoručkou na hrudi", fatigue: 0.9 }
+  "Goblet squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Dřep s jednoručkou na hrudi", fatigue: 0.9 },
+  // Variations on the same METAGYM stations (added 2026-10-03).
+  "Cable glute kickback": { pattern: "glute_kickback", muscle: "glutes", unilateral: true, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Hýždě; manžeta na kotníku, kladka dole, kg = váha na kladce", fatigue: 0.35 },
+  "Cable pull-through": { pattern: "hinge", muscle: "glutes", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Hýždě a hamstringy; lano mezi nohama, pohyb z kyčlí", fatigue: 0.5 },
+  "Cable hip abduction": { pattern: "abduction", muscle: "abductors", unilateral: true, sets: 2, reps: "12–20", baseKg: 5, warmup: false, note: "Střední hýžďový sval; unožování ve stoje na kladce", fatigue: 0.3 },
+  "Barbell hip thrust": { pattern: "hip_extension", muscle: "glutes", unilateral: false, sets: 3, reps: "8–12", baseKg: 60, warmup: true, note: "Hýždě; záda o polohovací lavici, osa přes pánev s podložkou, kg = celá osa", fatigue: 1.0 },
+  "DB reverse lunge": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 10, warmup: false, note: "Hýždě a stehna; výpad vzad, kg = 1 jednoručka", fatigue: 0.9 },
+  "DB step-up": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 10, warmup: false, note: "Hýždě a stehna; výstupy na polohovací lavici, kg = 1 jednoručka", fatigue: 0.85 },
+  "DB single-leg Romanian deadlift": { pattern: "hinge", muscle: "hamstrings", unilateral: true, sets: 3, reps: "8–12", baseKg: 12.5, warmup: false, note: "Hamstringy a hýždě, stabilita; kg = 1 jednoručka", fatigue: 0.8 },
+  "DB sumo squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "10–12", baseKg: 20, warmup: false, note: "Široký dřep s jednoručkou; vnitřní stehna a hýždě", fatigue: 0.85 },
+  "Leg press high feet": { pattern: "glute_press", muscle: "glutes", unilateral: false, sets: 3, reps: "8–12", baseKg: 120, warmup: true, note: "Hýždě; chodidla vysoko a šířeji na plošině, kg = celková zátěž stroje", fatigue: 1.2 },
+  "Abduction machine forward lean": { pattern: "abduction", muscle: "glutes", unilateral: false, sets: 2, reps: "12–20", baseKg: 50, warmup: false, note: "Hýždě; v předklonu na kraji sedáku", fatigue: 0.35 },
+  "Glute hyperextension": { pattern: "hip_extension", muscle: "glutes", unilateral: false, sets: 3, reps: "12–15", baseKg: 10, warmup: false, note: "Hýždě; Roman chair s kulatými zády, tlak pánví do opěrky", fatigue: 0.45 },
+  "Cable fly": { pattern: "horizontal_push", muscle: "chest", unilateral: false, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Hrudník; rozpažování na kladkách, kg = jedna strana", fatigue: 0.5 },
+  "Low-to-high cable fly": { pattern: "horizontal_push", muscle: "chest", unilateral: false, sets: 3, reps: "12–15", baseKg: 7.5, warmup: false, note: "Horní hrudník; kladky dole, tah šikmo nahoru, kg = jedna strana", fatigue: 0.45 },
+  "Single-arm cable row": { pattern: "pull", muscle: "back", unilateral: true, sets: 3, reps: "10–12", baseKg: 20, warmup: false, note: "Záda; přítah jednoruč na kladce", fatigue: 0.6 },
+  "Close-grip lat pulldown": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 45, warmup: false, note: "Laty; úzký neutrální úchop", fatigue: 0.85 },
+  "Wide-grip low row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "10–12", baseKg: 35, warmup: false, note: "Horní záda a zadní ramena; široký úchop, lokty do stran", fatigue: 0.8 },
+  "Barbell row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "6–10", baseKg: 50, warmup: true, note: "Záda; přítah osy v předklonu, kg = celá osa", fatigue: 1.05 },
+  "DB lateral raise": { pattern: "lateral_raise", muscle: "side_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 6, warmup: false, note: "Boční ramena; kg = 1 jednoručka", fatigue: 0.35 },
+  "DB Arnold press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "8–12", baseKg: 10, warmup: false, note: "Ramena; rotace dlaní, sed na polohovací lavici, kg = 1 jednoručka", fatigue: 0.85 },
+  "DB rear delt fly": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 5, warmup: false, note: "Zadní ramena; hrudník opřený o šikmou lavici, kg = 1 jednoručka", fatigue: 0.35 },
+  "DB incline curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "10–12", baseKg: 8, warmup: false, note: "Biceps (dlouhá hlava); šikmá lavice, kg = 1 jednoručka", fatigue: 0.45 },
+  "Cable rope hammer curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 15, warmup: false, note: "Biceps a brachialis; lano na kladce", fatigue: 0.45 },
+  "Cable triceps kickback": { pattern: "triceps", muscle: "triceps", unilateral: true, sets: 3, reps: "12–15", baseKg: 5, warmup: false, note: "Triceps; jednoruč v předklonu na kladce", fatigue: 0.35 },
+  "DB overhead triceps extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–12", baseKg: 15, warmup: false, note: "Triceps (dlouhá hlava); jedna jednoručka oběma rukama za hlavou", fatigue: 0.45 },
+  "Single-leg calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: true, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Lýtka; jednonož s jednoručkou, opora rukou", fatigue: 0.35 }
 };
 
 export const FOCUS_GROUPS = {
-  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck']},
-  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row']},
-  lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover']},
-  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime']},
-  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise']},
-  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull']},
-  biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl']},
-  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension']},
+  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly']},
+  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row']},
+  lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown']},
+  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press']},
+  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise']},
+  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly']},
+  biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl']},
+  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension']},
   abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch']},
   obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop']},
-  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat']},
-  hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift']},
-  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine']},
-  calves: {label:'Lýtka', exercises:['Standing calf raise']}
+  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat']},
+  hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift']},
+  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat']},
+  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise']}
 };
 
 export function validateFocusMuscles(value){
@@ -171,6 +197,20 @@ export function exerciseCountFor(minutes) {
   return m <= 35 ? 3 : m <= 50 ? 4 : m <= 65 ? 5 : m <= 80 ? 6 : 7;
 }
 const LEG_MUSCLES = new Set(["quads", "hamstrings", "glutes", "adductors", "abductors", "calves"]);
+// Training emphasis by sex: an order of priority, not a filter. Women usually
+// want more glutes and legs and less chest, men the other way round; every
+// pattern stays available and the session length decides how many are kept.
+export function athleteSex(context, options = {}) {
+  const sex = options.sex ?? context?.profile?.sex;
+  return sex === "female" || sex === "male" ? sex : "";
+}
+// The catalogue's default loads come from a male athlete's history. Without
+// any own or similar exercise history a woman starts lighter; women are
+// relatively stronger in the lower body than in the upper body.
+export function startingLoadScale(muscle, sex) {
+  if (sex !== "female") return 1;
+  return LEG_MUSCLES.has(muscle) ? 0.7 : 0.55;
+}
 function choosePlan(context, options = {}) {
   const history = selectionHistory(context);
   const legStress = cyclingLegStress(context);
@@ -203,27 +243,35 @@ function choosePlan(context, options = {}) {
   const score = (ex, rank = 0) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05;
+    return recent + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0);
   };
+
+  // Within a pattern, the variant for the emphasised muscle wins a close call.
+  const sex = athleteSex(context, options), female = sex === "female";
+  const emphasis = female ? { glutes: -0.6, abductors: -0.3 } : {};
+  const sexNote = female ? " Pořadí cviků upřednostňuje hýždě a nohy, hrudník má nižší prioritu (profil: žena)." : "";
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
   const forceLower = options.focus === "lower";
 
   const candidatesByPattern = {
-    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck"],
-    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row"],
-    verticalPush: ["DB shoulder press", "Shoulder press Prime"],
-    verticalPull: ["Lat pulldown", "Cable pullover"],
-    lateralRaise: ["Cable lateral raise", "Standing multi flight"],
-    biceps: ["DB curl", "Hammer curl", "Cable curl"],
-    triceps: ["Cable triceps extension", "Cable overhead triceps extension"],
-    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull"],
+    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly"],
+    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row", "Single-arm cable row", "Wide-grip low row", "Barbell row"],
+    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press"],
+    verticalPull: ["Lat pulldown", "Cable pullover", "Close-grip lat pulldown"],
+    lateralRaise: ["Cable lateral raise", "Standing multi flight", "DB lateral raise"],
+    biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl"],
+    triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension"],
+    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly"],
     core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"],
-    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat"],
-    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust"],
-    unilateral: ["DB Bulgarian split squat"],
+    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat"],
+    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift"],
+    unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up"],
     posterior: ["Prone leg curl Prime"],
-    calves: ["Standing calf raise"]
+    calves: ["Standing calf raise", "Single-leg calf raise"],
+    glutes: ["Hip thrust", "Barbell hip thrust", "Leg press high feet", "Cable glute kickback", "Glute hyperextension", "Cable pull-through"],
+    // Low-fatigue glute work that fits even a day that protects the legs.
+    glutesLight: ["Cable glute kickback", "Abduction machine forward lean", "Cable hip abduction", "Glute hyperextension"]
   };
 
   // An exercise actually done in the last two days is left out entirely.
@@ -232,10 +280,12 @@ function choosePlan(context, options = {}) {
     const ex = normalizeExerciseName(row.exercise);
     if (ex && daysBetween(row.workout_date, context.date) <= 2) used.add(ex);
   }
+  // A movement already in the session (e.g. a hip thrust) counts against its twin.
+  const usedPatterns = new Set();
   function pick(patterns) {
     const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && !used.has(ex));
     const ex = pool.sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
-    if (ex) used.add(ex);
+    if (ex) { used.add(ex); usedPatterns.add(EXERCISES[ex].pattern); }
     return ex;
   }
   // Ordered by priority; the session length decides how many are kept.
@@ -251,40 +301,46 @@ function choosePlan(context, options = {}) {
     return {
       ...base,
       name: "Upper Body",
-      exercises: build(["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", "rearDelts", "biceps", "triceps", "lateralRaise", "core"]),
-      rationale: options.focusSource === "week"
+      exercises: build(female
+        ? ["horizontalPull", "verticalPull", "verticalPush", "glutesLight", "rearDelts", "lateralRaise", "horizontalPush", "triceps", "core", "biceps"]
+        : ["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", "rearDelts", "biceps", "triceps", "lateralRaise", "core"]),
+      rationale: (options.focusSource === "week"
         ? "Podle týdenního plánu je kolem tohoto dne náročnější trénink na kole nebo běh, proto horní tělo a core; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
         : forceUpper
         ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
         : (recentTss >= 700 || nextHard || nextLong
           ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a cviky horní části těla vybíráme podle čerstvosti a nedávné svalové zátěže."
-          : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku; výběr cviků zohledňuje nedávnou svalovou zátěž a opakování cviků."),
+          : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku; výběr cviků zohledňuje nedávnou svalovou zátěž a opakování cviků.")) + sexNote,
       protectedLegs: true
     };
   }
 
   if (forceLower) {
     // One knee-dominant movement, one hip hinge, then accessories.
-    const exercises = build(["quad", "hinge", "posterior", "unilateral", "core", "calves", "quad"]);
+    const exercises = build(female
+      ? ["glutes", "quad", "hinge", "unilateral", "glutesLight", "posterior", "core", "calves"]
+      : ["quad", "hinge", "posterior", "unilateral", "core", "calves", "quad"]);
     return {
       ...base,
       name: "Lower Body",
       exercises: exercises.length ? exercises : ["Pivot leg press", "Prone leg curl Prime"],
-      rationale: "Požadavek uživatele soustředí trénink na dolní část těla; skladba nejprve zajišťuje různé pohybové vzory a teprve potom vybírá podle čerstvosti a nedávné svalové zátěže.",
+      rationale: "Požadavek uživatele soustředí trénink na dolní část těla; skladba nejprve zajišťuje různé pohybové vzory a teprve potom vybírá podle čerstvosti a nedávné svalové zátěže." + sexNote,
       protectedLegs: false
     };
   }
 
   // Full body: the freshest leg movement, then the second leg pattern
   // (knee after hip or hip after knee) among the upper-body patterns.
-  const leg = pick(["quad", "hinge", "posterior", "unilateral"]);
-  const kneeFirst = ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
-  const exercises = [leg, ...build(["horizontalPush", "horizontalPull", kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], "verticalPush", "verticalPull", "core", "biceps", "triceps"])].filter(Boolean);
+  const leg = pick(female ? ["glutes"] : ["quad", "hinge", "posterior", "unilateral"]);
+  const kneeFirst = female || ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
+  const exercises = [leg, ...build(female
+    ? ["horizontalPull", ["quad", "unilateral"], "verticalPull", "verticalPush", "horizontalPush", "glutesLight", "core", "triceps"]
+    : ["horizontalPush", "horizontalPull", kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], "verticalPush", "verticalPull", "core", "biceps", "triceps"])].filter(Boolean);
   return {
     ...base,
     name: "Full Body",
     exercises,
-    rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; výběr cviků zohledňuje nedávnou svalovou zátěž a čerstvost jednotlivých cviků.",
+    rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; výběr cviků zohledňuje nedávnou svalovou zátěž a čerstvost jednotlivých cviků." + sexNote,
     protectedLegs: false
   };
 }
@@ -320,8 +376,9 @@ function adaptiveSetCount(exercise, muscleLoad, recoveryFactorValue, volumeModif
   return clamp(sets, minSets, maxSets);
 }
 
-function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4) {
-  const def = EXERCISES[exercise], estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: def.reps, fallbackKg: def.baseKg, loadFactor: factor });
+function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "") {
+  const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex);
+  const estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: def.reps, fallbackKg, loadFactor: factor });
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : def.reps;
   const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier), maxSets);
@@ -371,7 +428,7 @@ export function generateStrengthPlan(context, options = {}) {
   const maxSets = focusMuscles && Number(options.durationMinutes) <= 45 ? 2 : focusMuscles && Number(options.durationMinutes) <= 60 ? 3 : 4;
   let warmedUp = false;
   for (const exercise of exercises) {
-    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier, maxSets);
+    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier, maxSets, athleteSex(context, options));
     const warmup = warmupRows(exercise, work.kg, !warmedUp);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...work.rows);
