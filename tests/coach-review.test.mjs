@@ -47,3 +47,12 @@ test("the dashboard offers Revize dne and the model comparison", () => {
   assert.match(client, /id="assistantCompare"/);
   assert.match(client, /async function openReviewSheet\(date,compare=false\)/);
 });
+
+test("Hodnocení replaces the bare RPE button: RPE and a note for any finished session", () => {
+  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  assert.match(client, /data-today="rate" data-name="'\+esc\(x\.name\|\|'Trénink'\)\+'">Hodnocení<\/button>/);
+  assert.doesNotMatch(client, /data-today="rpe">RPE<\/button>/);
+  // A library workout gets the RPE (and Intervals.icu); any other session goes to the coach.
+  assert.match(client, /if\(match&&rpe\)\{\s*const res=await jsonFetch\('\/app\/api\/workouts\/feedback'/);
+  assert.match(client, /jsonFetch\('\/app\/api\/coach\/reflections',\{method:'POST'[^)]*body:JSON\.stringify\(\{date,rpe,notes:\(pick\?pick\+': ':''\)\+notes\}\)/);
+});

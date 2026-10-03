@@ -1543,7 +1543,7 @@ function todayItemHtml(x){
   const actions=x.kind==='planned'&&/^planned:/.test(String(x.p?.id||''))?'<button class="btn" data-today="move" data-id="'+esc(x.p.id)+'" data-name="'+esc(x.name)+'">Přesunout</button>':
     x.kind==='role'&&x.sport!=='gym'?'<button class="btn primary" data-today="generate" data-sport="'+x.sport+'">Generovat</button>':
     (x.kind==='gymplan'||x.kind==='role'&&x.sport==='gym')?'<button class="btn primary" data-today="gym">▶ Začít</button>':
-    x.kind==='done'?'<button class="btn" data-today="rpe">RPE</button>':'';
+    x.kind==='done'?'<button class="btn" data-today="rate" data-name="'+esc(x.name||'Trénink')+'">Hodnocení</button>':'';
   return '<div class="today-item '+x.kind+'"><span class="today-icon">'+(SPORT_ICON[x.sport]||'•')+'</span><div><strong>'+esc(x.name)+'</strong><small>'+(x.kind==='done'?'✓ hotovo · ':x.kind==='planned'?'plán · ':x.kind==='role'?'návrh · ':'')+esc(x.meta||'')+'</small></div>'+actions+'</div>';
 }
 function renderToday(){
@@ -1571,7 +1571,7 @@ async function todayAction(b){
   if(a==='move'){const id=b.dataset.id,name=b.dataset.name;openSheet('Přesunout „'+name+'“',dayChips(),body=>body.addEventListener('click',e=>{const c=e.target.closest('[data-move-to]');if(c){closeSheet();movePlanned(id,c.dataset.moveTo,name);}if(e.target.closest('[data-delete-planned]')){closeSheet();deletePlanned(id,name);}}));return}
   if(a==='generate'){activate('workouts');setWorkoutSport(b.dataset.sport);$('generateDate').value=state.todayPick||pragueToday();await generateWorkoutForDay(0);$('generatedWorkout').scrollIntoView({behavior:'smooth',block:'start'});return}
   if(a==='gym'){await openGymDay(state.todayPick||pragueToday(),false);openGymMode();return}
-  if(a==='rpe'){openRpeSheet();}
+  if(a==='rpe'){openRpeSheet();}if(a==='rate')openRatingSheet({date:state.todayPick||pragueToday(),name:b.dataset.name});
 }
 function dayChips(){const today=pragueToday();return '<p class="small">Vyber den. Změna se propíše i do Intervals.icu.</p><div class="sheet-days">'+Array.from({length:10},(_,i)=>{const d=dateShift(today,i);return '<button type="button" class="btn" data-move-to="'+d+'"><b>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d+'T12:00:00Z')))+'</b>'+esc(dateLabel(d))+'</button>'}).join('')+'</div><button type="button" class="btn sheet-danger" data-delete-planned>Smazat z plánu i z Intervals.icu</button>';}
 async function openRpeSheet(){
@@ -1592,8 +1592,8 @@ function openWeightSheet(date=pragueToday()){
   });
 }
 function openQuickAdd(){
-  openSheet('Rychle zapsat','<div class="quick-actions">'+[['food','🍽','Jídlo'],['barcode','▥','Čárový kód'],['label','📷','Fotka etikety'],['water','💧','Pití'],['weight','⚖','Váha'],['rpe','💬','RPE tréninku'],['gym','🏋️','Gym trénink']].map(([k,i,l])=>'<button type="button" data-quick="'+k+'"><span>'+i+'</span>'+l+'</button>').join('')+'</div>',body=>body.onclick=e=>{const b=e.target.closest('[data-quick]');if(!b)return;const k=b.dataset.quick;
-    if(k==='water')return openFluidSheet(selectedHistoryDate);if(k==='weight')return openWeightSheet();if(k==='rpe')return openRpeSheet();closeSheet();
+  openSheet('Rychle zapsat','<div class="quick-actions">'+[['food','🍽','Jídlo'],['barcode','▥','Čárový kód'],['label','📷','Fotka etikety'],['water','💧','Pití'],['weight','⚖','Váha'],['rpe','💬','Hodnocení'],['gym','🏋️','Gym trénink']].map(([k,i,l])=>'<button type="button" data-quick="'+k+'"><span>'+i+'</span>'+l+'</button>').join('')+'</div>',body=>body.onclick=e=>{const b=e.target.closest('[data-quick]');if(!b)return;const k=b.dataset.quick;
+    if(k==='water')return openFluidSheet(selectedHistoryDate);if(k==='weight')return openWeightSheet();if(k==='rpe')return openRatingSheet({date:selectedHistoryDate});closeSheet();
     if(k==='gym')return openGymMode();
     if(k==='barcode')return openBarcodeScanner();openFoodLogger();if(k==='label')$('foodLabelPhoto')?.click();});
 }
@@ -2005,3 +2005,38 @@ function installFoodPanel(){
   const next=$('foodPlan')?.closest('.card'),chart=$('mealDistribution');if(next&&chart){chart.classList.add('replaced');chart.after(next);}
 }
 installFoodPanel();
+
+// ---- Hodnocení: RPE and how it felt for any finished session ----
+// A library workout scheduled that day gets the RPE (also to Intervals.icu)
+// and the coach's note in the background; any other session goes straight to
+// the coach with the same RPE and note.
+function openRatingSheet({date=pragueToday(),name=null}={}){
+  const done=(date===selectedHistoryDate?state.daily?.training?.completed||[]:[]).filter(a=>!isNutritionItem(a)).map(a=>a.name||a.type||'Trénink');
+  let pick=name||done.at(-1)||null,rpe=null;
+  openSheet('Hodnocení'+(pick?' · '+pick:''),(done.length>1?'<div class="fluid-kinds" role="group" aria-label="Trénink">'+done.map(n=>'<button type="button" class="btn'+(n===pick?' active':'')+'" data-rate-pick="'+esc(n)+'">'+esc(n)+'</button>').join('')+'</div>':'')+
+    '<p class="small">Jak náročné to bylo? 1–2 velmi lehce · 5–6 středně · 9–10 maximum</p><div class="rpe-scale" id="rateRpe">'+[1,2,3,4,5,6,7,8,9,10].map(n=>'<button type="button" data-rpe="'+n+'">'+n+'</button>').join('')+'</div>'+
+    '<label class="coach-ask"><span class="small">Jak ses cítil? Co bylo jinak? (volitelné)</span><textarea id="rateNotes" rows="3" maxlength="1000" placeholder="např. těžké nohy, ráno procházka se psy, horko"></textarea></label>'+
+    '<button type="button" class="btn primary sheet-wide" id="rateSave">Uložit hodnocení</button><div id="rateResult"></div>',body=>{
+    body.onclick=async e=>{
+      const p=e.target.closest('[data-rate-pick]');if(p){pick=p.dataset.ratePick;body.querySelectorAll('[data-rate-pick]').forEach(b=>b.classList.toggle('active',b===p));$('sheetTitle').textContent='Hodnocení · '+pick;return}
+      const r=e.target.closest('#rateRpe [data-rpe]');if(r){rpe=Number(r.dataset.rpe);body.querySelectorAll('#rateRpe [data-rpe]').forEach(b=>b.classList.toggle('active',b===r));return}
+      if(e.target.id!=='rateSave')return;
+      const notes=$('rateNotes').value.trim(),btn=$('rateSave');if(!rpe&&!notes)return toast('Vyber RPE nebo napiš, jak ses cítil.');
+      btn.disabled=true;btn.textContent='Ukládám…';
+      try{
+        const scheduled=(await jsonFetch('/app/api/workouts/scheduled').catch(()=>({}))).workouts||[];
+        const library=scheduled.filter(w=>w.scheduled_date===date&&!w.feedback_id);
+        const match=library.find(w=>pick&&String(pick).toLowerCase().includes(String(w.name).toLowerCase().slice(0,12)))||(library.length===1?library[0]:null);
+        if(match&&rpe){
+          const res=await jsonFetch('/app/api/workouts/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:match.workout_id,scheduledDate:date,rpe,notes})});
+          $('rateResult').innerHTML='<p class="small">✓ Uloženo'+(res.intervals?.status==='ok'?' i v Intervals.icu':'')+'. Kouč připravuje zpětnou vazbu, objeví se v timeline.</p>';awaitReflection(date);
+        }else{
+          const res=await jsonFetch('/app/api/coach/reflections',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,rpe,notes:(pick?pick+': ':'')+notes})});
+          state.reflections={...(state.reflections||{}),[date]:[res.reflection,...(state.reflections?.[date]||[])]};renderDayTimeline();
+          $('rateResult').innerHTML='<div class="coach-note"><small>💬 Kouč</small><p>'+esc(res.reflection.text)+'</p></div>';
+        }
+        btn.textContent='✓ Uloženo';
+      }catch(error){toast(error.message);btn.disabled=false;btn.textContent='Uložit hodnocení';}
+    };
+  });
+}
