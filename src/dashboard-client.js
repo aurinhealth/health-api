@@ -2291,7 +2291,7 @@ function renderAthleteStatus(){
   $('coachAdviceCard')?.remove();
   if(a){$('assistantConversation').insertAdjacentHTML('beforebegin','<div class="notice coach-advice" id="coachAdviceCard"><strong>'+esc(a.headline)+'</strong><p>'+esc(a.message)+'</p><div class="select-row"><button class="btn primary" type="button" id="adviceAccept">Změnit na On break</button><button class="btn" type="button" id="adviceDiscuss">Probrat kompromis</button><button class="btn" type="button" id="adviceDecline">Teď ne</button></div></div>');
     $('adviceAccept').onclick=()=>saveAthleteStatus('on_break','Pauza podle doporučení regenerace');
-    $('adviceDiscuss').onclick=()=>openFloatingAssistant('Vidíš slabší regeneraci: '+a.reasons.join(' ')+' '+a.message+' Najdeme kompromis místo úplné pauzy?');
+    $('adviceDiscuss').onclick=()=>discussWithAssistant('Chci probrat kompromis k doporučení regenerace: '+(a.reasons||[]).join(' ')+' '+a.message+' Najdeme kompromis místo úplné pauzy?');
     $('adviceDecline').onclick=async()=>{await athleteStatePost({dismiss:a.id});state.coachAdvice=null;renderAthleteStatus();};
   }
   const fab=$('floatingAssistant');if(fab){fab.textContent=a?'✦ Asistent · návrh':'✦ Asistent';fab.classList.toggle('has-advice',!!a);}
@@ -2349,9 +2349,16 @@ function coachRichText(value){
   flush();return out;
 }
 function coachTurnHtml(role,content){return '<div class="coach-turn '+(role==='user'?'user':'assistant')+'"><strong>'+esc(role==='user'?'Ty':'Asistent')+'</strong><div class="coach-message">'+coachRichText(content)+'</div></div>';}
-function appendCoachTurn(role,content){$('assistantConversation').querySelector('.assistant-welcome')?.remove();$('assistantConversation').insertAdjacentHTML('beforeend',coachTurnHtml(role,content));scrollAssistant();}
-function scrollAssistant(){const el=$('assistantScroll');if(el)el.scrollTop=el.scrollHeight;}
-let assistantBusy=false;
+function appendCoachTurn(role,content){$('assistantConversation').querySelector('.assistant-welcome')?.remove();$('assistantConversation').insertAdjacentHTML('beforeend',coachTurnHtml(role,content));scrollAssistant(true);}
+function scrollAssistant(focusConversation=false){const el=$('assistantScroll'),turn=focusConversation?$('assistantConversation')?.lastElementChild:null;if(!el)return;if(turn)el.scrollTop+=turn.getBoundingClientRect().bottom-el.getBoundingClientRect().bottom;else el.scrollTop=el.scrollHeight;}
+let assistantBusy=false,assistantDiscussionPending=false;
+async function discussWithAssistant(message){
+  if(assistantBusy||assistantDiscussionPending){toast('Asistent právě odpovídá. Počkej na dokončení odpovědi.');return;}
+  assistantDiscussionPending=true;
+  try{await openFloatingAssistant();await sendAssistantMessage(message);}
+  catch(error){$('assistantStatus').textContent=error.message;}
+  finally{assistantDiscussionPending=false;}
+}
 function updateAssistantComposer(){
   const input=$('assistantMessage'),button=$('assistantForm').querySelector('[type=submit]');
   input.style.height='auto';input.style.height=Math.min(144,Math.max(44,input.scrollHeight))+'px';
@@ -2387,19 +2394,19 @@ async function sendAssistantMessage(message,{retry=false}={}){
   if(!retry){appendCoachTurn('user',message);rememberCoachTurn('user',message);}
   if(!retry)setAssistantDraft('');else updateAssistantComposer();
   $('assistantConversation').insertAdjacentHTML('beforeend','<div class="assistant-typing" id="assistantTyping" role="status" aria-label="Asistent připravuje odpověď"><span></span><span></span><span></span><small>Asistent odpovídá</small></div>');
-  $('assistantStatus').textContent='Zpráva odeslána';scrollAssistant();
+  $('assistantStatus').textContent='Zpráva odeslána';scrollAssistant(true);
   let streamedTurn=null;
   try{
     const r=await fetchAssistantReply(message,answer=>{
       if(revision!==statusCoachingRevision)return;
       $('assistantTyping')?.remove();
       if(!streamedTurn){appendCoachTurn('assistant','');streamedTurn=$('assistantConversation').lastElementChild;streamedTurn.classList.add('streaming');}
-      streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(answer);scrollAssistant();
+      streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(answer);scrollAssistant(true);
     });
     $('assistantTyping')?.remove();
     if(revision!==statusCoachingRevision){streamedTurn?.remove();appendCoachTurn('assistant','Stav se mezitím změnil. Pošli požadavek znovu pro aktuální doporučení.');return;}
     if(r.kind==='food_draft'){renderFoodDraft(message,r);scrollAssistant();return;}
-    if(streamedTurn){streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(r.answer);streamedTurn.classList.remove('streaming');scrollAssistant();}else appendCoachTurn('assistant',r.answer);rememberCoachTurn('assistant',r.answer);
+    if(streamedTurn){streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(r.answer);streamedTurn.classList.remove('streaming');scrollAssistant(true);}else appendCoachTurn('assistant',r.answer);rememberCoachTurn('assistant',r.answer);
     if(r.actions?.length)renderCoachActionCards(r.actions);
     $('assistantStatus').textContent=r.memorySaved?'Preference uložena. Najdeš ji v Nastavení.':'Změny potvrdíš až v návrhu.';
     if(r.memorySaved){state.athleteState.memories=[...new Set([...(state.athleteState.memories||[]),r.memorySaved])];renderCoachMemories();}
@@ -2410,14 +2417,14 @@ async function sendAssistantMessage(message,{retry=false}={}){
     const copy=document.createElement('p');copy.textContent=error.message;notice.append(copy);
     const button=document.createElement('button');button.type='button';button.className='btn';button.textContent='Zkusit znovu';
     button.onclick=()=>{if(assistantBusy)return;notice.remove();streamedTurn?.remove();sendAssistantMessage(message,{retry:true});};notice.append(button);
-    $('assistantConversation').append(notice);$('assistantStatus').textContent='Zprávu se nepodařilo vyřídit.';scrollAssistant();
+    $('assistantConversation').append(notice);$('assistantStatus').textContent='Zprávu se nepodařilo vyřídit.';scrollAssistant(true);
   }finally{assistantBusy=false;updateAssistantComposer();}
 }
 function renderCoachActionCards(actions=[]){
   let el=$('coachActionCards');if(!el){$('assistantConversation').insertAdjacentHTML('afterend','<div id="coachActionCards"></div>');el=$('coachActionCards');}
   const label=a=>a.type==='gym_swap'?'Vyměnit '+a.fromExercise+' → '+a.toExercise+' · '+a.sets+' × '+a.reps+(a.kg==null?' · zátěž doplníš':(' · '+a.kg+' kg')):a.type==='status'?'Změnit stav na '+STATUS_LABELS[a.status]:a.type==='move'?'Přesunout '+(a.eventSnapshot?.name||'trénink')+' na '+longDate(a.date):a.type==='rest'?'Odstranit '+(a.eventSnapshot?.name||'trénink')+' · '+longDate(a.date):'Připravit '+HUB_SPORTS[a.sport]+' · '+longDate(a.date)+' · '+hm(a.minutes);
   el.innerHTML=actions.map((a,i)=>'<div class="notice coach-action"><strong>'+esc(label(a))+'</strong><p>'+esc(a.reason)+'</p><div class="select-row"><button class="btn primary" data-coach-action="'+i+'" data-decision="confirm">'+(a.type==='rest'?'Potvrdit odstranění':'Potvrdit')+'</button><button class="btn" data-coach-action="'+i+'" data-decision="reject">Odmítnout</button><button class="btn" data-coach-feedback="'+i+'">Navrhnout kompromis</button></div></div>').join('');
-  el.querySelectorAll('[data-coach-feedback]').forEach(b=>b.onclick=()=>{setAssistantDraft('K návrhu „'+label(actions[Number(b.dataset.coachFeedback)])+'“ mám zpětnou vazbu: ');$('assistantMessage').focus();});
+  el.querySelectorAll('[data-coach-feedback]').forEach(b=>b.onclick=()=>{const a=actions[Number(b.dataset.coachFeedback)];return discussWithAssistant('Chci probrat kompromis k návrhu „'+label(a)+'“. Důvod návrhu: '+(a.reason||'neuveden')+'. Navrhni mírnější variantu, která zohlední regeneraci, dostupný čas a můj cíl.');});
   el.querySelectorAll('[data-coach-action]').forEach(b=>b.onclick=async()=>{const a=actions[Number(b.dataset.coachAction)];b.disabled=true;try{const r=await jsonFetch('/app/api/assistant/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:a.draftId,decision:b.dataset.decision})});b.closest('.coach-action').innerHTML='<p>'+esc(r.message)+'</p>';if(b.dataset.decision==='confirm'){
       if(a.type==='status'){state.athleteState=r.result;state.coachAdvice=null;renderAthleteStatus();await refreshStatusCoaching();}
       else if(a.type==='gym_swap'){if(gymDay()===a.date){state.gym={...state.gym,...r.result};renderGym();}scheduleCoachRefresh();}
@@ -2485,7 +2492,7 @@ function renderAssistantWeekProposal(r){
     '<div class="assistant-week-tools">'+(items.length&&!paused?'<button class="btn primary" id="confirmWeekProposal">Připravit tyto tréninky</button>':'')+(!paused?'<button class="btn" id="detailExistingWeek">Rozpracovat plánované</button>':'')+'<button class="btn" id="discussWeekProposal">Probrat kompromis</button></div>';
   if($('proposalAvailability'))$('proposalAvailability').onclick=()=>openAvailabilityEditor('week');
   if($('confirmWeekProposal'))$('confirmWeekProposal').onclick=async()=>{const button=$('confirmWeekProposal');button.disabled=true;try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+r.start,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p.prefs)});await generateWeekProposals(items);appendCoachTurn('assistant','Konkrétní návrhy jsou připravené v plánu týdne. Před zápisem do kalendáře je můžeš zkontrolovat.');}catch(error){$('assistantStatus').textContent=error.message;button.disabled=false;}};
-  $('discussWeekProposal').onclick=()=>{setAssistantDraft('K návrhu pro týden '+r.start+' chci kompromis: ');$('assistantMessage').focus();};
+  $('discussWeekProposal').onclick=()=>discussWithAssistant('Chci probrat kompromis k návrhu pro týden '+r.start+'. '+(items.length?'Navržené aktivity: '+items.map(x=>x.date+' · '+HUB_SPORTS[x.sport]+' · '+hm(x.minutes)).join('; ')+'. ':'')+'Navrhni mírnější variantu, která zohlední regeneraci, dostupný čas a můj cíl. Pokud potřebuješ něco upřesnit, zeptej se.');
   if($('detailExistingWeek'))$('detailExistingWeek').onclick=async()=>{const button=$('detailExistingWeek');button.disabled=true;try{const week=await hubWeekData(),detail=[];for(const d of week.days||[]){if(d.date<pragueToday())continue;for(const a of d.daily?.training?.planned||[]){const sport=activitySport(a);if(!['ride','run','gym'].includes(sport))continue;detail.push({date:d.date,sport,minutes:Math.round((a.durationHours||1)*60),environment:sport==='gym'?'indoor':'auto',existing:a.id});}}if(detail.length){await generateWeekProposals(detail);appendCoachTurn('assistant','Podrobnosti k naplánovaným tréninkům jsou připravené v plánu týdne.');}else $('assistantStatus').textContent='V tomto týdnu nejsou zbývající plánované tréninky.';}catch(error){$('assistantStatus').textContent=error.message;}finally{button.disabled=false;}};
 }
 function openGymPreview(date,pr){
