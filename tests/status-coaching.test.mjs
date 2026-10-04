@@ -18,7 +18,10 @@ const completed=[{id:'done:1',name:'Endurance',type:'Ride',durationHours:1,tss:4
 const daily={training:{planned,completed},nutrition:{calorieTarget:2650,macros:{protein_g:150,carbs_g:330,fat_g:80},foodLog:{totals:{kcal:800}}}};
 const inputs={date,daily,week:{days:[{date,daily}]},fitness:{wellness:[{id:date,ctl:60,atl:55,tsb:5}]},health:{sleep:[{type:'sleep',durationMin:470,endTime:date+'T06:30:00'}]},gym:{history:[]},goal:{phase:'build',focus:'FTP'},availabilityMinutes:90};
 for(const status of ['sick','injured','on_break'])test('gym generator respects '+status+' even on a preview path',()=>{
-  assert.throws(()=>generateStrengthPlan({date,athleteState:{status}}),/pozastavené|přednost/);
+  const context={date,athleteState:{status}};
+  assert.throws(()=>generateStrengthPlan(context),/pozastavené|přednost/);
+  assert.ok(generateStrengthPlan(context,{diagnosticPreview:true}).rows.length);
+  assert.equal(context.athleteState.status,status);
 });
 const context={date,recovery:{sleep:[{sampleTime:date,value:470}],hrv:[{sampleTime:date,value:90}]},cycling:{nextRide:{name:'Threshold',intensity:true,durationHours:1.5},plannedWorkouts:[{intensity:true,durationHours:1.5}]},strength:{plannedWorkout:{name:'Gym'}}};
 
