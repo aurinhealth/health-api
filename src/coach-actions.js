@@ -2,16 +2,20 @@ import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
 
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','actions'],properties:{answer:{type:'string'},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','reason','fromExercise','toExercise'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','actions'],properties:{answer:{type:'string'},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','reason','fromExercise','toExercise'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'}}}}}}};
 export const ACTION_INSTRUCTIONS=`Vrať answer a nejvýše 3 actions k potvrzení. Každá action musí mít konkrétní důvod. Pokud uživatel jen diskutuje nebo odmítá, nemusíš navrhnout akci.
-type=gym_swap nahrazuje jeden nezačatý cvik v todayGym: fromExercise přesně z plánu a toExercise z jeho alternatives, date=todayGym.date. Zachová počet pracovních sérií a cílovou partii. Navrhuj ji při žádosti o změnu cviků; neodstraňuj místo toho celý trénink. Zátěž připraví aplikace z historie náhradního cviku. Neznámé kilogramy nevymýšlej.
+type=gym_swap nahrazuje jeden nezačatý cvik v selectedGym, pokud je otevřený, jinak v todayGym: fromExercise přesně z plánu a toExercise z jeho alternatives, date je datum tohoto plánu. Zachová počet pracovních sérií a cílovou partii. Navrhuj ji při žádosti o změnu cviků; neodstraňuj místo toho celý trénink. Zátěž připraví aplikace z historie náhradního cviku. Neznámé kilogramy nevymýšlej.
+type=week_sport přidá sport do rozvrhu na konkrétní date, i když ten den už obsahuje jiný sport. Použij ji pro žádost zařadit gym/kolo/běh do týdne; zachová ostatní sporty. Nevytváří hotový trénink ani zápis do Intervals.icu, minutes=0. K přípravě konkrétního tréninku s délkou slouží workout.
 type=status navrhuje změnu stavu; nemoc/zranění jen pokud ji uvedl uživatel. type=move přesouvá existující trénink na date; type=rest ruší konkrétní existující trénink pro odpočinek; obě používají skutečné eventId z kontextu week.planned. type=workout připraví náhled sportu pro konkrétní den s danými minutes. Nezapisuje přímo do kalendáře. Nepřidávej akci, kterou data nepodporují. Nepotřebná pole vyplň prázdným řetězcem, minutes=0. Akce jsou pouze návrhy, nic nebylo provedeno.`;
 export function validateCoachActions(actions,context,today){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
-    if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&a.date===today&&context.gymPlan?.values?.length){
-      try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason);return swap.date===today?[swap]:[];}catch{return [];}
+    if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
+      try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason);return swap.date===a.date?[swap]:[];}catch{return [];}
+    }
+    if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)){
+      return [{type:'week_sport',date:a.date,sport:a.sport,reason}];
     }
     if(a.type==='status'&&['active','sick','injured','on_break'].includes(a.status)){
       const words=[context.userMessage,...(context.conversation||[]).filter(t=>t.role==='user').map(t=>t.content)].join(' ');

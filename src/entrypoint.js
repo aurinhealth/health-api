@@ -23,6 +23,7 @@ import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext,lightModel,assistantTask} from './coach-assistant.js';
+import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions} from './coach-actions.js';
 import {weekReviewContext,fallbackWeekReview,WEEK_REVIEW_REQUEST} from './weekly-plan-review.js';
 import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
@@ -50,7 +51,7 @@ import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds } from "./intervals-athlete.js";
-import { getWeekPlan, saveWeekPlan, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate } from './adaptive-week.js';
@@ -546,24 +547,29 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try{const draft=await buildFoodDraft(env,message,pragueToday());if(draft.items.length)return Response.json({status:'ok',kind:'food_draft',draft,answer:foodDraftSummary(draft)},{headers:{'Cache-Control':'no-store'}});}
       catch(error){console.error('Food sentence failed',error.message);}
     }
-    const date=pragueToday(),task=assistantTask(message),started=Date.now();
+    const date=pragueToday(),appContext=assistantAppContext(body.appContext,date),task=assistantTask(message,body.appContext?appContext:null),started=Date.now();
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
     const manualReadiness=Number.isFinite(Number(body.manualReadiness))?Number(body.manualReadiness):null;
     const goal=body.goal&&typeof body.goal==='object'?body.goal:null;
     const preferences=body.preferences&&typeof body.preferences==='object'?body.preferences:{};
-    const reply=async onAnswer=>{
-      let inputs={},coachCtx={date};
+    const reply=async (onAnswer,onProgress=()=>{})=>{
+      let inputs={},coachCtx={date},selected=null;
       if(task!=='simple'){
+        onProgress('Načítám plán a aktuální regeneraci…');
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
         const [loaded,capabilities,athleteFeedback,notes,prefs,blockHistory]=await Promise.all([
           loadCoachInputs(env,ctx,internalAuth,date),getCapabilities(env.DB),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
           getWeekPlan(env.DB,date).then(async prefs=>({...prefs,weather:task==='adjustment'?null:await weekWeather(prefs.location,mondayOfDate(date))})),
           task==='block'?planningHistory(env,date,84):null
         ]);
+        const internalJson=async path=>{const response=await handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));if(!response.ok)throw new Error('Vybraný trénink se nepodařilo načíst.');return response.json();};
+        selected=await selectedAssistantContext(appContext,loaded,{loadGym:date=>internalJson('/app/api/gym?date='+date),loadWeek:start=>internalJson('/app/api/week?start='+start),loadPrefs:start=>getWeekPlan(env.DB,start)});
+        loaded.week=selected.week;
         inputs=loaded;Object.assign(preferences,{...prefs,...preferences});
         const coachNotes=notes.map(r=>({date:r.date,text:r.text}));
         coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState});
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:prefs.weather});
+        Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek});
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }
       Object.assign(coachCtx,{athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,preferenceMemory:athleteState.memories,conversation:athleteState.conversation});
@@ -574,8 +580,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         phase:coachCtx.cyclingCoachV2?.constraints?.phase
       }):{workouts:[]}:{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
+      onProgress('Trenér připravuje odpověď…');
       const contextMs=Date.now()-started,answer=await askCoach(env,message,coachCtx,{focus:inputs.focus,actions:true,task,onAnswer});
-      coachCtx.userMessage=message;coachCtx.gymPlan=inputs.gym;
+      onProgress('Kontroluji návrhy pro aplikaci…');
+      coachCtx.userMessage=message;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
       const actions=validateCoachActions(answer.actions,coachCtx,date),proposals=[];await ensureCoachInboxTable(env.DB);
       for(const action of actions){const draft={kind:'coach_action',action};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();proposals.push({...action,draftId:ins.meta?.last_row_id});}
       await updateAthleteState(env.DB,{turn:[{role:'user',content:message},{role:'assistant',content:answer.answer.slice(0,16000)}]});
@@ -600,12 +608,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const a=draft.action;
         if(a.type==='status')result=await updateAthleteState(env.DB,{status:a.status,note:a.reason});
         else if(a.type==='gym_swap'){
-          if(a.date!==pragueToday())throw new Error('Návrh je určený pro jiný den. Požádej o nový návrh.');
+          if(!validTrainingDay(a.date)||a.date<pragueToday())throw new Error('Návrh je určený pro minulý den. Požádej o nový návrh.');
           assertTrainingAllowed(await getAthleteState(env.DB));
           const latest=await readGymPlan(env.DB,a.date),values=applyGymSwap(latest.values,a);
           const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(values),env.USER_ID,a.date,JSON.stringify(latest.values)).run();
           if(saved.meta?.changes!==1)throw new Error('Plán se mezitím změnil. Požádej o nový návrh.');
           result={status:'ok',date:a.date,values};
+        }
+        else if(a.type==='week_sport'){
+          assertTrainingAllowed(await getAthleteState(env.DB));
+          if(!validTrainingDay(a.date)||a.date<pragueToday())throw new Error('Do minulého dne už nelze přidat sport.');
+          result={date:a.date,prefs:await addWeekSport(env.DB,a.date,a.sport)};
         }
         else if(a.type==='workout'){
           const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';

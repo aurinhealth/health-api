@@ -32,11 +32,11 @@ export const workoutsHubTheme = `
 .hub-empty{font-size:11px;color:#6f7888}
 .planner-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
 .hub-plan{display:flex;flex-direction:column;gap:4px;margin-top:auto;padding-top:6px;border-top:1px dashed #2c3442}
-.hub-plan .planner-chip{padding:4px 7px;font-size:11px;border-radius:6px}
+.hub-plan .planner-chip{touch-action:none;padding:4px 7px;font-size:11px;border-radius:6px}
 .hub-day.pickable{cursor:copy;border-style:dashed;border-color:#6b5a99}
 .planner-palette{display:flex;gap:8px;flex-wrap:wrap}
-.planner-chip{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 9px;border-radius:8px;border:1px solid #4a3f66;background:#231c38;color:#f1ecff;font-size:12px;font-weight:650;cursor:grab;user-select:none}
-.planner-chip.palette{padding:8px 12px;border-style:dashed;background:#171424}
+.planner-chip{touch-action:none;display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px 9px;border-radius:8px;border:1px solid #4a3f66;background:#231c38;color:#f1ecff;font-size:12px;font-weight:650;cursor:grab;user-select:none}
+.planner-chip.palette{padding:8px 12px;border-style:dashed;background:#171424;touch-action:none}
 .planner-chip.palette[aria-pressed="true"]{border-style:solid;border-color:#b393ff;background:#3a2c5c}
 .planner-chip.dragging{opacity:.45}
 .planner-chip small{flex-basis:100%;font-size:10px;font-weight:500;color:#c6acff}
