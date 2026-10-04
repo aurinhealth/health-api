@@ -1,3 +1,4 @@
+import { trainingStatus } from './training-status.js';
 const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function latestRecovery(recovery,keyMatchers){
@@ -42,6 +43,7 @@ function calculateLegReadiness(context,recovery){
   return Math.round(clamp(score,0,100));
 }
 export function buildAdaptiveDecision(context,food=null){
+  const policy=trainingStatus(context?.athleteState);
   const recovery=recoveryMetrics(context);
   const legReadiness=calculateLegReadiness(context,recovery);
   const next=context?.cycling?.nextRide||null;
@@ -50,7 +52,7 @@ export function buildAdaptiveDecision(context,food=null){
   const nextLong=n(next?.durationHours)>=2.5;
   const protectLegs=legReadiness<70||nextHard||nextLong;
   const volumeModifier=recovery.score<55?0.75:recovery.score<70?0.85:recovery.score<82?0.95:recovery.score>=92?1.05:1;
-  const strengthPriority=protectLegs?"upper_or_recovery":"normal_strength";
+  const strengthPriority=protectLegs?"balanced_reduced":"normal_strength";
   const foodTotals=food?.totals?.eaten||{};
   const target=food?.nutritionTarget||{};
   const remaining={
@@ -61,7 +63,7 @@ export function buildAdaptiveDecision(context,food=null){
   };
   const tomorrow=upcoming[0]||null;
   const recommendations=[];
-  if(protectLegs) recommendations.push("Chraň dnes nohy před vysokým silovým objemem; preferuj upper body nebo lehčí lower-body variantu.");
+  if(protectLegs) recommendations.push("Sniž objem a náročnost zatížených svalů a uprav načasování vůči klíčovému sportu. Nohy pravidelně posiluj i při cyklistice nebo běhu; sportovní zátěž jejich silový trénink nenahrazuje.");
   else recommendations.push("Recovery a cyklistická zátěž dovolují standardní silový stimul.");
   if(tomorrow?.intensity) recommendations.push("Před další intenzitou drž dnešní trénink technicky čistý a nejezdi zbytečný objem do selhání.");
   if(remaining.protein_g>=30) recommendations.push("V jídelníčku ještě chybí významná část bílkovin; další jídlo směruj hlavně na protein.");
@@ -71,12 +73,13 @@ export function buildAdaptiveDecision(context,food=null){
     recovery,
     legReadiness,
     protectLegs,
-    strengthPriority,
-    strengthVolumeModifier:volumeModifier,
-    nextRide:next,
-    upcomingCycling:upcoming,
+    athleteState:policy,
+    strengthPriority:policy.paused?'rest':strengthPriority,
+    strengthVolumeModifier:policy.paused?0:volumeModifier,
+    nextRide:policy.paused?null:next,
+    upcomingCycling:policy.paused?[]:upcoming,
     nutrition:{remaining},
-    recommendations
+    recommendations:policy.paused?policy.guidance:recommendations
   };
 }
 export { recoveryMetrics, calculateLegReadiness };

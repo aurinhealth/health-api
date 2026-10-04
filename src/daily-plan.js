@@ -1,9 +1,11 @@
 import { buildAdaptiveDecision } from "./adaptive-engine.js";
+import { trainingStatus } from './training-status.js';
 
 export function buildDailyPlan({context, nutrition, food, recommendations}) {
+  const policy=trainingStatus(context?.athleteState);
   const adaptive = context?.adaptive || buildAdaptiveDecision(context,{...food,nutritionTarget:nutrition});
-  const ride = context?.cycling?.nextRide || null;
-  const strength = context?.strength?.plannedWorkout || null;
+  const ride = policy.paused?null:context?.cycling?.nextRide || null;
+  const strength = policy.paused?null:context?.strength?.plannedWorkout || null;
   const meals = recommendations?.mealSchedule || [];
   const actions = [];
   if (ride) actions.push({
@@ -31,6 +33,7 @@ export function buildDailyPlan({context, nutrition, food, recommendations}) {
       protectLegs: !!adaptive.protectLegs
     },
     training: {
+      athleteState:policy.status,paused:policy.paused,statusNote:policy.note,
       actions,
       nextRide: ride,
       strength: strength
@@ -48,6 +51,6 @@ export function buildDailyPlan({context, nutrition, food, recommendations}) {
       remaining: recommendations?.remaining || {}
     },
     meals,
-    recommendations: recommendations?.suggestions || adaptive.recommendations || []
+    recommendations: [...policy.guidance,...(recommendations?.suggestions || (policy.paused?[]:adaptive.recommendations) || [])]
   };
 }

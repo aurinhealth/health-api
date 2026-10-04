@@ -2,8 +2,9 @@
 // day, stored in the layout the dashboard uses (title rows 1–7, the column
 // header on row 7, sets from row 8). Completed sets go to strength_sets.
 import { parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
+import { strengthSetOptions } from './gym-set-options.js';
 
-export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
+export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie"];
 const MAX_ROWS = 100;
 const DONE = new Set(["TRUE", "true", "1", "ANO", "ano", "✓", "☑"]);
 
@@ -51,6 +52,8 @@ export function planValues(body = {}) {
   ];
   const sets = rows.map(row => {
     const r = Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => row?.[i] == null ? "" : row[i]);
+    const options=strengthSetOptions({toFailure:r[11],superset:r[12]});
+    r[11]=options.toFailure?'TRUE':'FALSE';r[12]=options.superset;
     // Sheet-era hyperlink formulas and placeholders become a plain link.
     if (!/^https?:\/\//i.test(String(r[10])) && r[1]) r[10] = String(r[10]).match(/HYPERLINK\(\s*"([^"]+)"/i)?.[1] || videoUrl(r[1]);
     return r;
@@ -69,7 +72,7 @@ export async function writeStrengthPlanToDb(db, body) {
 export async function syncGymPlanHistory(db, values) {
   const parsed = parseStrengthSheet(values);
   if (!parsed.date) return { status: "ok", completedRows: 0, parsed };
-  const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note }));
+  const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset }));
   if (sets.length) await importStrengthHistory(db, { date: parsed.date, sets });
   return { status: "ok", completedRows: sets.length, parsed };
 }

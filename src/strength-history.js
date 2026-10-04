@@ -1,4 +1,5 @@
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { strengthSetOptions,strengthOptionNote } from './gym-set-options.js';
 
 const TZ = "Europe/Prague";
 const SHEET_NAME = "Dnešní trénink";
@@ -89,6 +90,7 @@ export function parseStrengthSheet(values) {
       completed: bool(r[8]),
       note: text(r[9]),
       video: text(r[10]),
+      ...strengthSetOptions({toFailure:!header.legacy&&bool(r[11]),superset:header.legacy?'':r[12]}),
       replacement: header.legacy ? text(r[11]) : "",
       execution: header.legacy ? text(r[12]) : ""
     });
@@ -195,9 +197,9 @@ export async function syncStrengthSheet(db, values) {
       row.plannedReps,
       performance.actualKg,
       performance.actualReps,
-      row.rpe,
+      row.completed&&row.toFailure?10:row.rpe,
       row.completed ? 1 : 0,
-      row.note,
+      strengthOptionNote(row),
       row.video,
       row.replacement,
       row.execution,
@@ -236,8 +238,8 @@ export async function importStrengthHistory(db, workout) {
     const plannedReps = text(s.plannedReps ?? s.actualReps);
     const { actualKg, actualReps } = resolveStrengthPerformance({ ...s, plannedKg, plannedReps });
     const setNo = numberOrNull(s.setNo);
-    const rpe = numberOrNull(s.rpe);
-    const note = text(s.note);
+    const rpe = strengthSetOptions(s).toFailure?10:numberOrNull(s.rpe);
+    const note = strengthOptionNote(s);
     const sourceKey = `manual:${date}:${i + 1}`;
 
     await db.prepare(`
@@ -282,7 +284,7 @@ export async function getStrengthHistory(db, limit = 100) {
     ORDER BY workout_date DESC, sheet_row ASC
     LIMIT ?
   `).bind(db.userId, safeLimit).all();
-  return (result.results || []).map(row => ({ ...row, exercise: normalizeExerciseName(row.exercise) }));
+  return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
 }
 
 export async function getExerciseHistory(db, exercise, limit = 30) {
@@ -296,5 +298,5 @@ export async function getExerciseHistory(db, exercise, limit = 30) {
     ORDER BY workout_date DESC, set_no ASC
     LIMIT ?
   `).bind(db.userId, text(exercise), safeLimit).all();
-  return (result.results || []).map(row => ({ ...row, exercise: normalizeExerciseName(row.exercise) }));
+  return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
 }
