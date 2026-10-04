@@ -49,6 +49,8 @@ U gymu uveď cviky, série, opakování, RPE/RIR, pauzy a vztah k ostatním spor
 
 Když uživatel žádá upravit dnešní cvičení, změnit cviky nebo najít alternativu, řeš především skladbu existujícího todayGym. Navrhni konkrétní náhradu z alternatives, počet sérií, opakování a rezervu; vysvětli změnu jednou větou. Běžná únava po kole či běhu sama není důvod zrušit posilovnu nebo vynechat nohy. Zachovej cílové partie, uprav dávku nebo náročnost. Zrušení zvaž jen při výslovném přání odpočívat, pozastaveném statusu, bolesti/nemoci nebo doložených závažných signálech; vysvětli proč. Když aktuální cviky chybí, přiznej to a požádej o jejich doplnění. Když je plán vhodný, řekni to, nevymýšlej nutnou změnu. Pokud navrhuješ náhradu cviku, použij gym_swap; workout je nový trénink, nenahrazuje cviky v existujícím plánu.
 
+appContext popisuje právě otevřenou obrazovku: date je vybraný den, weekStart otevřený týden a exercise aktuální cvik. selectedGym a selectedDay obsahují jeho skutečně uložená data, selectedWeek zvolené sporty a časové možnosti. U výrazů „to“, „tento trénink“ či „jiný cvik“ navazuj na tuto obrazovku a rozhovor; výslovně uvedené datum má přednost. Pro změnu otevřeného gymu použij selectedGym místo todayGym. date na kořeni kontextu zůstává skutečný dnešek pro regeneraci. Pokud plán na vybraný den chybí, přiznej to. Dva sporty mohou být ve stejný den; přidání gymu ke kolu do týdenního rozvrhu řeší week_sport. Zohledni celkový čas a únavu, žádný existující sport přitom neruš bez žádosti uživatele.
+
 Návrh nikdy sám neukládej ani neodesílej do Intervals.icu. Uživatel musí mít možnost návrh zkontrolovat před zápisem.`;
 
 export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null}) {
@@ -95,10 +97,12 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
 // cheaper OPENAI_LIGHT_MODEL. Both are server secrets/vars and can be changed
 // without a code change.
 export const lightModel = env => env.OPENAI_LIGHT_MODEL || 'gpt-6-luna';
-export function assistantTask(message) {
+export function assistantTask(message,appContext=null) {
   if (/12\s*tý|blok|periodiz|sez[oó]n/i.test(message)) return 'block';
   if(gymAdjustmentRequest(message)&&!/(?:týd|blok|měsíc)/i.test(message))return 'adjustment';
+  if(appContext?.sport==='gym'&&/(?:uprav|zm[eě]n|vym[eě]n|nahrad|jin[eéýá]|alternativ|kratší|krat[ií]t|lehčí)/i.test(message)&&!/(?:týd|blok|měsíc)/i.test(message))return 'adjustment';
   if (/pl[aá]n|tr[eé]n|posil|gym|cvi[cč]en|kolo|b[eě]h|únav|regener|sp[aá]nek|status|stav|týd|reviz|zm[eě]n|kompromis/i.test(message) || message.length > 180) return 'planning';
+  if(appContext&&/(?:\bto\b|tento|tuhle|tenhle|kratší|lehčí|přid|přesu|uprav|proč|prober)/i.test(message))return 'planning';
   return 'simple';
 }
 

@@ -1,5 +1,5 @@
 import { readGymPlan } from "./gym-plan-store.js";
-import { normalizeAvailability, ensureWeekOverrides, weekStartOf } from './training-availability.js';
+import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
 import { getAthleteState } from './athlete-state.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
@@ -75,6 +75,13 @@ export async function saveWeekPlan(db, input, date = null) {
   }
   await db.prepare("INSERT INTO week_plan_preferences(user_id,prefs_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET prefs_json=excluded.prefs_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(prefs)).run();
   return prefs;
+}
+
+export async function addWeekSport(db,date,sport) {
+  if(!validDay(date)||!PLANNER_SPORTS.includes(sport))throw new Error('Neplatný den nebo sport.');
+  const prefs=await getWeekPlan(db,date),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
+  if(!prefs.days[weekday].includes(sport))prefs.days[weekday].push(sport);
+  return saveWeekPlan(db,prefs,date);
 }
 
 export async function resetWeekPlan(db, date) {

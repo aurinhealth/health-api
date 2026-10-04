@@ -19,6 +19,16 @@ function client(rows,storage=new Map(),userId=1){
   return {context,el,state,run,click,storage};
 }
 
+test('AI exercise swaps protect edited drafts and preserve other drafts when row numbers change',async()=>{
+  const app=client([row('Low row',1),row('Low row',2),row('Leg press',1)]);await app.run('openGymMode()');
+  assert.equal(app.run("gymExerciseHasEditedDraft('Low row')"),false);
+  app.run('gymMode.kg=190;rememberGymDraft()');assert.equal(app.run("gymExerciseHasEditedDraft('Low row')"),true);
+  app.run('gymMode.kg=162.5;rememberGymDraft();moveGymMode(2);gymMode.kg=210;rememberGymDraft();moveGymMode(-2)');
+  const warm=row('Lat pulldown',1);warm[0]='WARMUP';app.context.result={values:Array.from({length:7},()=>[]).concat([warm,row('Lat pulldown',1),row('Lat pulldown',2),row('Leg press',1)])};
+  app.run("applyGymSwapToScreen({date:'2026-10-04',fromExercise:'Low row',toExercise:'Lat pulldown'},result)");
+  assert.match(app.el.innerHTML,/Lat pulldown/);app.run('moveGymMode(3)');assert.equal(app.run('gymMode.kg'),210);assert.equal(app.run('gymSets()[gymMode.pos].r[1]'),'Leg press');
+});
+
 test('comma weights and drafts survive navigation, closing and a fresh client for the same user',async()=>{
   const rows=[row('Leg press',1),row('Leg press',2)],a=client(rows);
   await a.run('openGymMode()');assert.match(a.el.innerHTML,/value="162.5"/);

@@ -2,9 +2,13 @@ export const assistantPanelTheme=String.raw`
 /* A chat anchored to its launcher, with a fixed composer and scrollable history. */
 dialog.assistant-dialog{position:fixed;inset:auto 24px 82px auto;margin:0;padding:0;width:430px;max-width:calc(100vw - 32px);height:min(710px,calc(100dvh - 116px));max-height:calc(100dvh - 116px);box-sizing:border-box;border:1px solid #3b504b;border-radius:22px;background:#11191f;color:#edf5f1;box-shadow:0 18px 64px #0008;overflow:hidden;z-index:40}
 dialog.assistant-dialog[open]{display:flex;flex-direction:column}
+body.gym-mode-open dialog.assistant-dialog{z-index:150}.gm-assistant{font-size:12px;padding:7px 12px;margin:0 0 12px}
 .assistant-panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid #2d3a40;background:#182620;flex:none}
 .assistant-panel-header h3{margin:0;font-size:17px}.assistant-panel-header small{display:block;color:#b2c8bc;margin-top:4px}.assistant-panel-header .btn{padding:7px 11px;border-radius:50%;width:36px;height:36px}
 .assistant-dialog #assistantStatus{padding:8px 18px;border:0;border-radius:0;background:#151f26;font-size:11px;color:#b6c6c9;flex:none;line-height:1.5}
+.assistant-context{padding:9px 18px;background:#1b2a25;border-bottom:1px solid #30433a;font-size:11px;line-height:1.5;color:#bce4ce;overflow-wrap:anywhere;flex:none}
+.assistant-quick-actions{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#172126;flex:none}
+.assistant-quick{padding:7px 10px;border:1px solid #3e574a;border-radius:16px;background:#20342a;color:#cce8d8;font:inherit;font-size:11px;line-height:1.4;cursor:pointer;touch-action:manipulation}.assistant-quick:disabled{opacity:.55;cursor:default}
 .assistant-scroll{overflow-y:auto;overscroll-behavior:contain;min-height:0;flex:1;padding:16px;scroll-behavior:smooth;scrollbar-width:thin}
 .assistant-dialog .coach-turn{border:1px solid #2a383f;border-radius:16px 16px 16px 4px;margin:0 20px 14px 0;padding:11px 14px;background:#19232b;overflow-wrap:anywhere}
 .assistant-dialog .coach-turn>strong{font-size:10px;color:#9ec6b7}

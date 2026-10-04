@@ -45,7 +45,7 @@ export function assistantStreamResponse(work){
   const stream=new ReadableStream({
     async start(controller){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
-      try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}));send({type:'done',result});}
+      try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}));send({type:'done',result});}
       catch(error){console.error('Streaming assistant failed',error.message);send({type:'error',message:'AI odpověď se nepodařilo dokončit. Zkus to znovu.'});}
       finally{if(!cancelled)controller.close();}
     },cancel(){cancelled=true;}
