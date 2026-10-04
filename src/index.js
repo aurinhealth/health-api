@@ -1,5 +1,6 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { nextUnloggedMeals } from "./nutrition-next.js";
+import {walkingEnergyCheck,activityTelemetryEnergy} from './activity-energy-check.js';
 import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight } from "./weight-sync.js";
@@ -2153,7 +2154,8 @@ function googleExerciseActivity(row) {
     BIKING: "Ride",
     CYCLING: "Ride",
     MOUNTAIN_BIKING: "Ride",
-    INDOOR_BIKING: "Ride",
+    INDOOR_BIKING: "VirtualRide",
+    TREADMILL_RUNNING: "VirtualRun",
     SWIMMING: "Swim",
     HIKING: "Hike",
     WEIGHTLIFTING: "WeightTraining",
@@ -2393,6 +2395,17 @@ async function energyForDate(env, date) {
       return (name && name!=="unknown") || (type && type!=="unknown") || Number(a.durationHours||0)>0 || Number(a.calories||0)>0;
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
+  const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||''));
+  if(walking.length){
+    const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,date,nextDate).all().catch(()=>({results:[]}))).results||[];
+    for(const activity of walking){
+      const checked=walkingEnergyCheck(activity,weight?.value_numeric),measured=activityTelemetryEnergy(activity,telemetry);
+      activity.reportedCalories=activity.calories;
+      if(measured){activity.calories=measured.kcal;activity.calorieSource=measured.source;activity.energyCoverage=measured.coverage;}
+      const check=walkingEnergyCheck(activity,weight?.value_numeric);
+      if(check){activity.energyCheck={...check,summaryCalories:activity.reportedCalories,summaryMismatch:checked?.status==='review',telemetry:measured};activity.caloriesForPlanning=measured?measured.kcal:check.status==='review'?check.estimated:activity.calories;}
+    }
+  }
 
   // One planned session is paired with at most one real activity.  The pairing
   // becomes part of the API response so the UI can render one combined card
@@ -2422,7 +2435,7 @@ async function energyForDate(env, date) {
     let activityAdjustment = 0;
     for (const a of completed) {
       const rate = CONFIG.activityKcalPerHour[a.type] || (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
-      const actual = Number(a.calories);
+      const actual = Number(a.caloriesForPlanning??a.calories);
       activityAdjustment += actual > 0 ? actual : (a.durationHours || 0) * rate;
     }
     for (const w of unmatchedPlanned) {

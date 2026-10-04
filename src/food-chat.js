@@ -3,7 +3,7 @@
 // up on the web. Nothing is logged until the user confirms the draft.
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { lookupFoodWithAI } from "./food-ai.js";
-import { searchPersonalFoods } from "./personal-foods.js";
+import { searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
 
 const MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 const MAX_ITEMS = 8;
