@@ -131,6 +131,7 @@ async function generateStrengthPlanRoute(env, request, url) {
     const duration = body?.preview === true ? body?.durationMinutes : trainingBudget(prefs, context.date, body?.durationMinutes == null ? 60 : Number(body.durationMinutes));
     if (body?.preview !== true && duration < 30) throw new Error('Na posilovnu nezbývá alespoň 30 minut.');
     const options = {
+      diagnosticPreview: body?.preview === true,
       focus: body?.focus ? String(body.focus) : undefined,
       focusSource: body?.focusSource === "week" ? "week" : undefined,
       forceProtectLegs: body?.forceProtectLegs === true,

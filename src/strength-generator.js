@@ -388,7 +388,9 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
 
 export function generateStrengthPlan(context, options = {}) {
   const policy=trainingStatus(context?.athleteState);
-  if(policy.paused)throw new Error(policy.headline+'. '+policy.guidance[0]);
+  // The gateway explicitly marks its read-only deployment diagnostic; ordinary
+  // gym requests and previews still obey the athlete's status.
+  if(policy.paused&&!options.diagnosticPreview)throw new Error(policy.headline+'. '+policy.guidance[0]);
   const chosen = choosePlan(context, options), factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   if (options.focusMuscles != null && !focusMuscles) throw new Error('Vyber 1 až 5 známých partií.');
