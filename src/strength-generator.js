@@ -4,6 +4,7 @@ import { isIntensity } from "./strength-context.js";
 import { availableAt } from "./gym-equipment.js";
 import { sportMuscleLoad,strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
+import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -440,13 +441,29 @@ export function generateStrengthPlan(context, options = {}) {
     rows.push(...warmup, ...work.rows);
     loadEstimates.push({ exercise, sets: work.sets, reducedDose, ...work.estimate });
   }
+  const requestedMinutes = Number(options.durationMinutes) > 0 ? Number(options.durationMinutes) : Math.max(60, (Number(options.maxExercises) || 5) * 12);
+  const configure = () => configureStrengthCoaching(rows, EXERCISES, { factor, muscleLoad, protectedLegs: chosen.protectedLegs, recoveryScore: context?.adaptive?.recovery?.score ?? null });
+  configure();
+  let timing = estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
+  while (timing.totalSeconds > requestedMinutes * 60) {
+    const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
+    const removable = names.slice().reverse().find(name => rows.filter(r => r[0] === 'WORK' && r[1] === name).length > (focusMuscles ? 1 : 2));
+    if (removable) rows.splice(rows.findLastIndex(r => r[0] === 'WORK' && r[1] === removable), 1);
+    else if (!focusMuscles && names.length > 1) { const last = names.at(-1); for (let i = rows.length - 1; i >= 0; i--) if (rows[i][1] === last) rows.splice(i, 1); }
+    else throw new Error('Zvolené partie se s rozcvičením a pauzami nevejdou do ' + requestedMinutes + ' minut. Vyber méně partií nebo delší čas.');
+    configure(); timing = estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
+  }
+  for (let i = loadEstimates.length - 1; i >= 0; i--) {
+    loadEstimates[i].sets = rows.filter(r => r[0] === 'WORK' && r[1] === loadEstimates[i].exercise).length;
+    if (!loadEstimates[i].sets) loadEstimates.splice(i, 1);
+  }
   const focusLabels = focusMuscles?.map(id => FOCUS_GROUPS[id].label).join(', ');
   const legCaution = chosen.protectedLegs && focusMuscles?.some(id => ['quads', 'hamstrings', 'hips'].includes(id));
   const baseRationale = focusMuscles ? 'Zvolené partie: ' + focusLabels + '. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ' + (legCaution ? 'Kvůli cyklistické zátěži je potřeba držet rezervu u nohou.' : '') : chosen.rationale;
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const rationale = baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '');
-  return { date: context.date, planName: focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name, rationale, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
+  return { date: context.date, planName: focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name, rationale: rationale + ' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', timing, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };

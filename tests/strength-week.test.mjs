@@ -13,10 +13,14 @@ const context = (date, plannedSessions = [], recentCompletedSets = []) => ({
 });
 const workExercises = plan => [...new Set(plan.rows.filter(r => r[0] === "WORK").map(r => r[1]))];
 
-test("the session length sets the number of exercises", () => {
+test("the session length bounds volume including warmups, rests and setup", () => {
   assert.deepEqual([30, 45, 60, 75, 90, undefined].map(exerciseCountFor), [3, 4, 5, 6, 7, 5]);
   for (const [minutes, count] of [[45, 4], [60, 5], [75, 6]]) {
-    assert.equal(workExercises(generateStrengthPlan(context("2026-10-03"), { focus: "upper", durationMinutes: minutes })).length, count);
+    const plan = generateStrengthPlan(context("2026-10-03"), { focus: "upper", durationMinutes: minutes });
+    assert.ok(workExercises(plan).length <= count);
+    assert.ok(workExercises(plan).length >= 3);
+    assert.ok(plan.timing.totalSeconds <= minutes * 60);
+    assert.ok(plan.timing.setupSeconds > 0 && plan.timing.bufferSeconds > 0);
   }
 });
 
@@ -25,7 +29,8 @@ test("a second gym day in the week gets different exercises", () => {
   const fridayExercises = workExercises(friday);
   const sunday = generateStrengthPlan(context("2026-10-04", [{ date: "2026-10-02", exercises: fridayExercises }]), { focus: "upper", durationMinutes: 60 });
   const sundayExercises = workExercises(sunday);
-  assert.equal(sundayExercises.length, 5);
+  assert.ok(sundayExercises.length >= 3 && sundayExercises.length <= 5);
+  assert.ok(sunday.timing.estimatedMinutes <= 60);
   const shared = sundayExercises.filter(x => fridayExercises.includes(x));
   assert.ok(shared.length <= 1, "shared: " + shared.join(", "));
   assert.match(sunday.rationale, /liší od plánu na/);

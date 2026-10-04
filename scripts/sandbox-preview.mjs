@@ -140,7 +140,7 @@ async function staticResponses() {
   const generated = {};
   for (const sport of ["ride", "run"]) for (const offset of [0, 1, 2, 3, 4, 5, 6]) generated[sport + "|" + day(offset)] = await generate({ sport, date: day(offset), environment: "outdoor" });
   return {
-    "/app/api/me": { status: "ok", user: { email: "sandbox@example.com", isAdmin: false }, missingProviders: [] },
+    "/app/api/me": { status: "ok", user: { id: 999, email: "sandbox@example.com", isAdmin: false }, missingProviders: [] },
     "/app/api/connections": { status: "ok", providers: [{ id: "google", name: "Google Health", connected: true, configured: true, connectUrl: "#", extras: { birthday: false, weightWrite: false }, extrasUrl: "#", metrics: ["Spánek", "Aktivity"], note: "Sandbox" }, { id: "intervals", name: "Intervals.icu", connected: true, configured: true, metrics: ["Aktivity", "Plán"], note: "Sandbox", connectUrl: "#" }] },
     "/app/api/daily": dailyFor(T).daily, "/app/api/coaches": { status: "ok", coaches: [], reviews: [], priorities: ["Sandbox: ukázková data, nic se neukládá do živé aplikace."] },
     "/app/api/fitness": { status: "ok", wellness }, "/app/api/weight": { status: "ok", current: 82.4, records: Array.from({ length: 30 }, (_, i) => ({ sample_time: day(i - 29) + "T06:30:00Z", value_numeric: 83.6 - i * .04 })) },

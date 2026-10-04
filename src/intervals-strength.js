@@ -40,7 +40,8 @@ function formatRows(rows) {
     const loads = [...new Set(g.rows.map(r => formatKg(r[3])))];
     const reps = [...new Set(g.rows.map(r => r[4] || "?"))];
     const sets = loads.length === 1 && reps.length === 1 ? `${g.rows.length} × ${reps[0]} @ ${loads[0]}` : g.rows.map(r => `${r[4] || "?"} @ ${formatKg(r[3])}`).join(", ");
-    return `${i + 1}. ${g.exercise}: ${sets}`;
+    const superset = g.rows[0][12], failure = g.rows.some(r => r[11] === 'TRUE'), rest = String(g.rows[0][9] || '').match(/\[Pauza (\d+) s\]/)?.[1];
+    return `${i + 1}. ${g.exercise}: ${sets}${superset ? ' · supersérie ' + superset : ''}${failure ? ' · poslední série do technického selhání' : ''}${rest ? ' · pauza ' + rest + ' s' : ''}`;
   }).join("\n"));
   return sections.join("\n\n");
 }

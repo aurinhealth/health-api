@@ -320,7 +320,18 @@ function renderHealth(){
 let gymSaveQueue=Promise.resolve();
 let gymExerciseCatalog=[],visibleGymExercises=[],gymExerciseIndex=0;
 function gymRowValues(tr){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]),idx=Number(tr.dataset.row)+7;if(!values[idx])values[idx]=[];tr.querySelectorAll("input[data-col]").forEach(inp=>{const c=Number(inp.dataset.col);values[idx][c]=inp.type==="checkbox"?(inp.checked?"TRUE":"FALSE"):inp.value;});upgradeGymOptionsHeader(values);if(values[idx][11]==='TRUE'&&values[idx][8]==='TRUE')values[idx][7]='10';return {values,idx};}
-function persistGymRow(tr){const {values}=gymRowValues(tr),used=values.slice(7);while(used.length&&used[used.length-1].every(v=>String(v??"").trim()===""))used.pop();const fullValues=values.slice(0,7).concat(used);gymSaveQueue=gymSaveQueue.then(async()=>{const result=await jsonFetch("/app/api/gym",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({values:used,fullValues,date:gymDay()})});state.gym={...state.gym,values:result.values||fullValues,history:result.history||state.gym?.history||[]};renderGym();renderGymHistory(state.gym.history);$("gymNotice").textContent=result.status==="error"?"Uložení do databáze selhalo: "+(result.message||"neznámá chyba"):"✓ Uloženo do Gym historie · "+new Date().toLocaleTimeString("cs-CZ");});return gymSaveQueue.catch(e=>{$("gymNotice").textContent="Uložení selhalo: "+e.message;throw e;});}
+function persistGymRow(tr){
+  clearTimeout(tr._saveTimer);const {values,idx}=gymRowValues(tr),row=values[idx].slice(),date=gymDay();
+  state.gym={...state.gym,values};
+  gymSaveQueue=gymSaveQueue.catch(()=>{}).then(async()=>{
+    const current=(state.gym?.date===date||gymDay()===date?state.gym.values:values).map(r=>r.slice());current[idx]=row;upgradeGymOptionsHeader(current);
+    const result=await jsonFetch('/app/api/gym',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:current.slice(7),fullValues:current,date})});
+    if(gymDay()!==date)return;
+    // A save response must not replace the focused field or newer pending edits.
+    state.gym={...state.gym,history:result.history||state.gym?.history||[]};renderGymHistory(state.gym.history);
+    $('gymNotice').textContent='✓ Uloženo do Gym historie · '+new Date().toLocaleTimeString('cs-CZ');
+  });return gymSaveQueue.catch(e=>{$('gymNotice').textContent='Uložení selhalo: '+e.message;throw e;});
+}
 function renderGymHistory(history){$("gymHistory").innerHTML=layeredHistory(history,x=>x.workout_date||x.date||x.started_at,x=>'<div class="history-workout"><strong>'+esc(x.exercise||"Cvik")+'</strong><div class="small">'+esc(String(x.actual_kg??x.actualKg??x.weightKg??"—"))+' kg × '+esc(String(x.actual_reps??x.actualReps??x.reps??"—"))+'</div>'+(x.toFailure?'<span class="gym-set-badge">Do selhání</span>':'')+(x.superset?'<span class="gym-set-badge">Supersérie '+esc(x.superset)+'</span>':'')+'</div>');}
 async function saveGymPlanValues(values){const rows=values.slice(7);while(rows.length&&rows[rows.length-1].every(v=>String(v??'').trim()===''))rows.pop();values=values.slice(0,7).concat(rows);await jsonFetch("/app/api/gym",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"plan",date:gymDay(),values})});state.gym={...state.gym,values};renderGym();}
 function gymPlanEdit(action,idx,exercise){const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]);const rows=values.slice(7);if(action==="remove-set"){rows.splice(idx,1);}else if(action==="add-set"){const src=rows[idx]||["WORK","","1","","10","","","","FALSE","",""];const copy=src.slice();copy[2]=String(Number(src[2]||1)+1);copy[5]="";copy[6]="";copy[7]="";copy[8]="FALSE";rows.splice(idx+1,0,copy);}else if(action==="remove-exercise"){const ex=String(rows[idx]?.[1]||"");for(let i=rows.length-1;i>=0;i--)if(String(rows[i]?.[1]||"")===ex)rows.splice(i,1);}else if(action==="add-exercise"){const selected=gymExerciseCatalog.find(item=>item.name===exercise?.name);if(!selected||rows.some(row=>row[1]===selected.name))return;for(let n=1;n<=selected.sets;n++)rows.push(["WORK",selected.name,String(n),"",selected.reps,"","","","FALSE","",""]);}values.splice(7,values.length-7,...rows);saveGymPlanValues(values).then(()=>{if(action==='add-exercise')toast('Cvik přidán do plánu.');}).catch(e=>toast("Úprava plánu selhala: "+e.message));}
@@ -1702,6 +1713,23 @@ function openQuickAdd(){
 
 // Gym workout mode: one set at a time, steppers for weight and reps, RPE, rest timer.
 let gymMode=null;
+function gymNumber(v,fallback=null){const text=String(v??'').trim().replace(',','.');return text!==''&&Number.isFinite(Number(text))?Number(text):fallback;}
+function gymDraftKey(){return 'pfd-gym-draft:'+state.account?.id+':'+gymDay()+':'+JSON.stringify((state.gym?.values||[]).slice(7).map(r=>r.slice(0,5)));}
+function rememberGymDraft(){
+  if(!gymMode)return;
+  const cur=gymSets().find(x=>x.i===gymMode.forIdx);
+  if(cur)gymMode.drafts[cur.i]={kg:gymMode.kg,reps:gymMode.reps,rpe:gymMode.rpe,toFailure:gymMode.toFailure,kgText:gymMode.kgText,repsText:gymMode.repsText,base:JSON.stringify(cur.r.slice(5,9))};
+  if(state.account?.id)try{sessionStorage.setItem(gymMode.draftKey,JSON.stringify({startedAt:gymMode.startedAt,drafts:gymMode.drafts}));}catch{}
+}
+function restoreGymDraft(cur,same){
+  const draft=gymMode.drafts[cur.i],saved=draft?.base===JSON.stringify(cur.r.slice(5,9))?draft:null;
+  const kg=gymNumber(cur.r[5],gymNumber(cur.r[3],gymNumber(same.find(x=>gymNumber(x.r[5])!=null)?.r[5],0)));
+  Object.assign(gymMode,saved||{kg,reps:gymNumber(cur.r[6],Number(String(cur.r[4]||'10').match(/\d+/)?.[0])||10),rpe:gymNumber(cur.r[7]),toFailure:gymFailureValue(cur.r[11]),kgText:null,repsText:null},{forIdx:cur.i});
+}
+function gymRestSeconds(cur,next){if(!next)return 0;if(cur.superset&&cur.superset===next.superset&&cur.round===next.round)return 0;return Number(String(cur.r[9]||'').match(/\[Pauza (\d+) s\]/)?.[1])||(String(cur.r[0]).toUpperCase()==='WARMUP'?60:90);}
+function gymBudgetMinutes(){const values=state.gym?.values||[];return Number(values[4]?.[0]==='Časový limit (min)'?values[4][1]:String(values[3]?.[1]||'').match(/Časový plán: přibližně \d+ z (\d+) minut/)?.[1])||0;}
+function updateGymClock(){const el=$('gmClock');if(!el||!gymMode)return;const elapsed=Math.floor((Date.now()-gymMode.startedAt)/60000),budget=gymBudgetMinutes();el.textContent='Uplynulo '+elapsed+' min'+(budget?' · '+(elapsed<budget?'zbývá '+(budget-elapsed)+' min z '+budget:'časový limit '+budget+' min překročen; dokonči aktuální sérii a zvaž konec'):'');el.classList.toggle('over',budget>0&&elapsed>=budget);}
+function moveGymMode(delta){if(!gymMode||gymMode.saving)return;rememberGymDraft();clearInterval(gymMode.timer);gymMode.rest=null;const next=gymMode.pos+delta;gymMode.finished=next>=gymSets().length;gymMode.pos=Math.max(0,Math.min(gymSets().length-1,next));gymMode.forIdx=null;renderGymMode();}
 function gymFailureValue(value){return value===true||/^(true|1|ano)$/i.test(String(value||''));}
 function gymSupersetSelect(group,attrs=''){return '<select class="gym-superset-select" '+attrs+' aria-label="Supersérie"><option value="">Bez supersérie</option>'+['A','B','C','D','E','F'].map(id=>'<option value="'+id+'"'+(group===id?' selected':'')+'>Supersérie '+id+'</option>').join('')+'</select>';}
 function gymOptionsCell(r){return String(r[0]).toUpperCase()==='WARMUP'?'<td class="gym-options-cell">—</td>':'<td class="gym-options-cell"><label><input type="checkbox" data-col="11"'+(gymFailureValue(r[11])?' checked':'')+'>Do selhání</label>'+gymSupersetSelect(r[12],'data-superset')+'</td>';}
@@ -1722,6 +1750,7 @@ function orderGymSets(values){
 }
 function gymSets(){return orderGymSets(state.gym?.values||[]);}
 async function saveGymSet(idx,{kg,reps,rpe,toFailure}){
+  await gymSaveQueue.catch(()=>{});
   const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]);const row=values[idx];row[5]=String(kg);row[6]=String(reps);row[7]=toFailure?'10':rpe?String(rpe):'';row[8]='TRUE';row[11]=toFailure?'TRUE':'FALSE';upgradeGymOptionsHeader(values);
   const used=values.slice(7);while(used.length&&used[used.length-1].every(v=>String(v??'').trim()===''))used.pop();
   const result=await jsonFetch('/app/api/gym',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:used,fullValues:values.slice(0,7).concat(used),date:gymDay()})});
@@ -1729,44 +1758,48 @@ async function saveGymSet(idx,{kg,reps,rpe,toFailure}){
 }
 async function openGymMode(){
   if(!state.gym?.values)await loadGym().catch(()=>{});
+  if(!state.account){const account=await jsonFetch('/app/api/me').catch(()=>null);state.account=account?.user;}
   if(!$('gymMode'))document.body.insertAdjacentHTML('beforeend','<div id="gymMode" class="gym-mode" hidden role="dialog" aria-modal="true" aria-label="Režim tréninku"></div>');
   const sets=gymSets();const first=sets.findIndex(x=>String(x.r[8]).toUpperCase()!=='TRUE');
-  gymMode={pos:first<0?0:first,rest:null};$('gymMode').hidden=false;document.body.classList.add('gym-mode-open');renderGymMode();
+  const draftKey=gymDraftKey();let saved;try{saved=JSON.parse(sessionStorage.getItem(draftKey)||'null');}catch{}
+  gymMode={pos:first<0?0:first,finished:first<0&&sets.length>0,rest:null,drafts:saved?.drafts||{},startedAt:saved?.startedAt||Date.now(),draftKey};$('gymMode').hidden=false;document.body.classList.add('gym-mode-open');renderGymMode();gymMode.clockTimer=setInterval(updateGymClock,10000);
 }
-function closeGymMode(){clearInterval(gymMode?.timer);$('gymMode').hidden=true;document.body.classList.remove('gym-mode-open');gymMode=null;try{renderToday();}catch{}}
+function closeGymMode(){rememberGymDraft();clearInterval(gymMode?.timer);clearInterval(gymMode?.clockTimer);$('gymMode').hidden=true;document.body.classList.remove('gym-mode-open');gymMode=null;try{renderToday();}catch{}}
 function renderGymMode(){
   const el=$('gymMode');if(!el||!gymMode)return;const sets=gymSets();
   if(!sets.length){el.innerHTML='<div class="gm-top"><button class="btn" data-gm="close">✕</button></div><div class="gm-empty"><h2>Dnes bez plánu</h2><p class="small">Nech trenéra sestavit trénink podle týdne a únavy.</p><button class="btn primary" data-gm="generate">Generovat trénink</button></div>';return wireGymMode();}
   const doneCount=sets.filter(x=>String(x.r[8]).toUpperCase()==='TRUE').length;
-  if(gymMode.finished||doneCount===sets.length&&gymMode.pos>=sets.length){const vol=sets.reduce((s,x)=>s+num(x.r[5])*num(x.r[6]),0);el.innerHTML='<div class="gm-top"><span></span><button class="btn" data-gm="close">✕</button></div><div class="gm-empty"><div class="gm-check">✓</div><h2>Trénink hotový</h2><p>'+doneCount+' sérií · objem '+fmt(vol)+' kg</p><button class="btn primary" data-gm="close">Zavřít</button></div>';return wireGymMode();}
-  gymMode.pos=Math.max(0,Math.min(sets.length-1,gymMode.pos));const cur=sets[gymMode.pos],r=cur.r,name=r[1],warm=x=>String(x.r[0]).toUpperCase()==='WARMUP',same=sets.filter(x=>x.r[1]===name&&warm(x)===warm(cur)),k=same.indexOf(cur)+1;
+  if(gymMode.finished){const vol=sets.filter(x=>gymFailureValue(x.r[8])).reduce((s,x)=>s+gymNumber(x.r[5],0)*gymNumber(x.r[6],0),0),allDone=doneCount===sets.length;el.innerHTML='<div class="gm-top"><span></span><button class="btn" data-gm="close">✕</button></div><div class="gm-empty"><div class="gm-check">'+(allDone?'✓':'…')+'</div><h2>'+(allDone?'Trénink hotový':'Konec plánu')+'</h2><p>'+doneCount+' / '+sets.length+' sérií · objem '+fmt(vol)+' kg</p>'+(allDone?'<button class="btn" data-gm="review">Prohlédnout série</button>':'<p>Zbývá '+(sets.length-doneCount)+' nezapsaných sérií.</p><button class="btn primary" data-gm="resume">Pokračovat v nezapsaných sériích</button>')+'<button class="btn primary" data-gm="close">Zavřít</button></div>';return wireGymMode();}
+  gymMode.pos=Math.max(0,Math.min(sets.length-1,gymMode.pos));const cur=sets[gymMode.pos],r=cur.r,name=r[1],warm=x=>String(x.r[0]).toUpperCase()==='WARMUP',same=sets.filter(x=>x.r[1]===name&&warm(x)===warm(cur)),k=same.findIndex(x=>x.i===cur.i)+1;
   const exercises=[...new Set(sets.map(x=>x.r[1]))],ex=exercises.indexOf(name)+1,done=String(r[8]).toUpperCase()==='TRUE';
-  if(gymMode.kg==null||gymMode.forIdx!==cur.i){gymMode.forIdx=cur.i;gymMode.kg=num(r[5]||r[3]||same.find(x=>x.r[5])?.r[5],0);gymMode.reps=num(r[6]||r[4],10);gymMode.rpe=num(r[7],0)||null;gymMode.toFailure=gymFailureValue(r[11]);}
+  if(gymMode.forIdx!==cur.i)restoreGymDraft(cur,same);
   const rest=gymMode.rest?'<div class="gm-rest"><div class="gm-rest-ring" style="--p:'+(gymMode.rest.left/gymMode.rest.total*100)+'"><b>'+Math.floor(gymMode.rest.left/60)+':'+String(gymMode.rest.left%60).padStart(2,'0')+'</b><small>pauza</small></div><div class="gm-rest-actions"><button class="btn" data-gm="rest+">+30 s</button><button class="btn primary" data-gm="rest-skip">Pokračovat</button></div></div>':'';
-  el.innerHTML='<div class="gm-top"><span class="small">Cvik '+ex+' / '+exercises.length+' · '+doneCount+' / '+sets.length+' sérií</span><button class="btn" data-gm="close" aria-label="Zavřít režim tréninku">✕</button></div><div class="gm-progress"><i style="width:'+(doneCount/sets.length*100)+'%"></i></div>'+
+  el.innerHTML='<div class="gm-top"><span class="small">Cvik '+ex+' / '+exercises.length+' · '+doneCount+' / '+sets.length+' sérií</span><button class="btn" data-gm="close" aria-label="Zavřít režim tréninku">✕</button></div><div class="gm-progress"><i style="width:'+(doneCount/sets.length*100)+'%"></i></div><div id="gmClock" class="gm-clock" role="status"></div>'+
     '<div class="gm-body" id="gmBody"><div class="eyebrow"'+(warm(cur)?' style="color:#f5c26b"':'')+'>'+(warm(cur)?'Rozcvička ':'Série ')+k+' z '+same.length+(done?' · ✓ hotovo':'')+'</div><h2>'+esc(name)+'</h2><p class="small">Plán '+esc(r[3]||'—')+' kg × '+esc(r[4]||'—')+'</p>'+
-    (rest||'<div class="gm-steppers"><div><span class="label">Váha · kg</span><div class="stepper"><button type="button" data-gm="kg-">−</button><output>'+fmt(gymMode.kg,1)+'</output><button type="button" data-gm="kg+">+</button></div></div><div><span class="label">Opakování</span><div class="stepper"><button type="button" data-gm="reps-">−</button><output>'+gymMode.reps+'</output><button type="button" data-gm="reps+">+</button></div></div></div><div class="label" style="margin-top:14px">RPE (volitelně)</div><div class="gm-rpe">'+[6,7,8,9,10].map(n=>'<button type="button" data-gm-rpe="'+n+'" aria-pressed="'+(gymMode.rpe===n)+'">'+n+'</button>').join('')+'</div>'+gymModeOptionsHtml(r)+'<button type="button" class="btn primary gm-done" data-gm="done">'+(done?'Uložit znovu ✓':'Série hotová ✓')+'</button>')+
+    (rest||'<div class="gm-steppers"><div><label class="label" for="gmKg">Váha · kg</label><div class="stepper"><button type="button" data-gm="kg-" aria-label="Ubrat 2,5 kg">−</button><input id="gmKg" type="text" inputmode="decimal" autocomplete="off" aria-label="Váha v kg" value="'+esc(gymMode.kgText??gymMode.kg??'')+'"><button type="button" data-gm="kg+" aria-label="Přidat 2,5 kg">+</button></div></div><div><label class="label" for="gmReps">Opakování</label><div class="stepper"><button type="button" data-gm="reps-" aria-label="Ubrat opakování">−</button><input id="gmReps" type="text" inputmode="numeric" autocomplete="off" aria-label="Počet opakování" value="'+esc(gymMode.repsText??gymMode.reps??'')+'"><button type="button" data-gm="reps+" aria-label="Přidat opakování">+</button></div></div></div><p class="gm-input-hint">Číslo můžeš napsat přímo. Rozepsané hodnoty se při přechodu zachovají.</p><div class="label" style="margin-top:10px">RPE (volitelně)</div><div class="gm-rpe">'+[1,2,3,4,5,6,7,8,9,10].map(n=>'<button type="button" data-gm-rpe="'+n+'" aria-pressed="'+(gymMode.rpe===n)+'">'+n+'</button>').join('')+'</div><p class="gm-rpe-hint">'+(warm(cur)?'Lehkou rozcvičku označ RPE 1–5 nebo RPE vynech.':'6–7: velká rezerva · 8: asi 2 opakování · 9: asi 1 · 10: bez rezervy.')+'</p>'+gymModeOptionsHtml(r)+'<button type="button" class="btn primary gm-done" data-gm="done">'+(done?'Uložit znovu ✓':'Série hotová ✓')+'</button>')+
     '</div><div class="gm-nav"><button class="btn" data-gm="prev">◀ Předchozí</button><button class="btn" data-gm="next">Další ▶</button></div>';
-  wireGymMode();
+  wireGymMode();updateGymClock();
 }
 function wireGymMode(){
   const el=$('gymMode');
-  el.onchange=async e=>{if(!gymMode)return;if(e.target.id==='gmFailure'){gymMode.toFailure=e.target.checked;if(gymMode.toFailure)gymMode.rpe=10;renderGymMode();}if(e.target.id==='gmSuperset'){const cur=gymSets()[gymMode.pos];try{await setGymSuperset(cur.i,e.target.value);gymMode.pos=gymSets().findIndex(x=>x.i===cur.i);renderGymMode();}catch(error){toast(error.message);}}};
-  el.onclick=async e=>{const b=e.target.closest('[data-gm],[data-gm-rpe]');if(!b||!gymMode)return;const a=b.dataset.gm,sets=gymSets();
-    if(b.dataset.gmRpe){gymMode.rpe=gymMode.rpe===Number(b.dataset.gmRpe)?null:Number(b.dataset.gmRpe);return renderGymMode();}
+  el.oninput=e=>{if(!gymMode||gymMode.saving)return;const key=e.target.id==='gmKg'?'kg':e.target.id==='gmReps'?'reps':null;if(!key)return;gymMode[key+'Text']=e.target.value;gymMode[key]=gymNumber(e.target.value);rememberGymDraft();};
+  el.onchange=async e=>{if(!gymMode||gymMode.saving)return;if(e.target.id==='gmFailure'){gymMode.toFailure=e.target.checked;if(gymMode.toFailure)gymMode.rpe=10;else if(gymMode.rpe===10)gymMode.rpe=null;rememberGymDraft();renderGymMode();}if(e.target.id==='gmSuperset'){rememberGymDraft();const cur=gymSets()[gymMode.pos];try{await setGymSuperset(cur.i,e.target.value);if(!gymMode)return;gymMode.pos=gymSets().findIndex(x=>x.i===cur.i);renderGymMode();}catch(error){toast(error.message);}}};
+  el.onclick=async e=>{const b=e.target.closest('[data-gm],[data-gm-rpe]');if(!b||!gymMode||gymMode.saving)return;const a=b.dataset.gm,sets=gymSets();
+    if(b.dataset.gmRpe){gymMode.rpe=gymMode.rpe===Number(b.dataset.gmRpe)?null:Number(b.dataset.gmRpe);if(gymMode.rpe!==10)gymMode.toFailure=false;rememberGymDraft();return renderGymMode();}
     if(a==='close')return closeGymMode();
+    if(a==='resume'||a==='review'){gymMode.finished=false;gymMode.pos=a==='review'?0:Math.max(0,sets.findIndex(x=>!gymFailureValue(x.r[8])));gymMode.forIdx=null;return renderGymMode();}
     if(a==='generate'){b.disabled=true;b.textContent='Generuji…';try{await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:gymDay()})});await loadGym();}catch(error){toast(error.message);}gymMode.pos=0;return renderGymMode();}
-    if(a==='kg-'||a==='kg+'){gymMode.kg=Math.max(0,Math.round((gymMode.kg+(a==='kg+'?2.5:-2.5))*10)/10);return renderGymMode();}
-    if(a==='reps-'||a==='reps+'){gymMode.reps=Math.max(0,gymMode.reps+(a==='reps+'?1:-1));return renderGymMode();}
-    if(a==='prev'||a==='next'){gymMode.rest=null;clearInterval(gymMode.timer);gymMode.pos+=a==='next'?1:-1;if(gymMode.pos>=sets.length){gymMode.finished=true;}return renderGymMode();}
+    if(a==='kg-'||a==='kg+'){gymMode.kg=Math.max(0,Math.round(((gymMode.kg??0)+(a==='kg+'?2.5:-2.5))*10)/10);gymMode.kgText=null;rememberGymDraft();return renderGymMode();}
+    if(a==='reps-'||a==='reps+'){gymMode.reps=Math.max(0,(gymMode.reps??0)+(a==='reps+'?1:-1));gymMode.repsText=null;rememberGymDraft();return renderGymMode();}
+    if(a==='prev'||a==='next')return moveGymMode(a==='next'?1:-1);
     if(a==='rest+'){gymMode.rest.left+=30;gymMode.rest.total+=30;return renderGymMode();}
     if(a==='rest-skip'){clearInterval(gymMode.timer);gymMode.rest=null;return renderGymMode();}
-    if(a==='done'){b.disabled=true;const cur=sets[gymMode.pos];try{await saveGymSet(cur.i,{kg:gymMode.kg,reps:gymMode.reps,rpe:gymMode.rpe,toFailure:gymMode.toFailure});}catch(error){toast('Série se neuložila: '+error.message);b.disabled=false;return}
+    if(a==='done'){if(!(gymMode.kg>=0&&gymMode.kg!=null&&gymMode.reps>0&&Number.isInteger(gymMode.reps)))return toast('Zadej nezápornou váhu a celý počet opakování.');rememberGymDraft();gymMode.saving=true;b.disabled=true;const cur=sets[gymMode.pos];try{await saveGymSet(cur.i,{kg:gymMode.kg,reps:gymMode.reps,rpe:gymMode.rpe,toFailure:gymMode.toFailure});delete gymMode.drafts[cur.i];gymMode.forIdx=null;rememberGymDraft();gymMode.saving=false;}catch(error){gymMode.saving=false;toast('Série se neuložila: '+error.message);b.disabled=false;return}
       const next=gymSets().findIndex((x,i)=>i>gymMode.pos&&String(x.r[8]).toUpperCase()!=='TRUE');if(next<0&&gymSets().every(x=>String(x.r[8]).toUpperCase()==='TRUE')){gymMode.finished=true;return renderGymMode();}
-      gymMode.pos=next<0?gymMode.pos+1:next;const upcoming=gymSets()[gymMode.pos],withinSuperset=cur.superset&&cur.superset===upcoming?.superset&&cur.round===upcoming?.round;clearInterval(gymMode.timer);gymMode.rest=withinSuperset?null:{left:90,total:90};if(gymMode.rest)gymMode.timer=setInterval(()=>{if(!gymMode?.rest)return clearInterval(gymMode?.timer);gymMode.rest.left--;if(gymMode.rest.left<=0){clearInterval(gymMode.timer);gymMode.rest=null;try{navigator.vibrate?.(200)}catch{}}renderGymMode();},1000);return renderGymMode();}
+      gymMode.pos=next<0?Math.max(0,gymSets().findIndex(x=>!gymFailureValue(x.r[8]))):next;const upcoming=gymSets()[gymMode.pos],seconds=gymRestSeconds(cur,upcoming);clearInterval(gymMode.timer);gymMode.rest=seconds?{left:seconds,total:seconds}:null;if(gymMode.rest)gymMode.timer=setInterval(()=>{if(!gymMode?.rest)return clearInterval(gymMode?.timer);gymMode.rest.left--;if(gymMode.rest.left<=0){clearInterval(gymMode.timer);gymMode.rest=null;try{navigator.vibrate?.(200)}catch{}}renderGymMode();},1000);return renderGymMode();}
   };
   // Swipe left / right between sets.
-  let x0=null;el.ontouchstart=e=>{x0=e.touches[0].clientX};el.ontouchend=e=>{if(x0==null||!gymMode)return;const dx=e.changedTouches[0].clientX-x0;x0=null;if(Math.abs(dx)>70&&!gymMode.rest){gymMode.pos+=dx<0?1:-1;if(gymMode.pos>=gymSets().length)gymMode.finished=true;renderGymMode();}};
+  let start=null;el.ontouchstart=e=>{start=e.target.closest('button,input,select,label,.stepper,.gm-rpe')?null:{x:e.touches[0].clientX,y:e.touches[0].clientY};};el.ontouchcancel=()=>{start=null;};el.ontouchend=e=>{if(!start||!gymMode)return;const dx=e.changedTouches[0].clientX-start.x,dy=e.changedTouches[0].clientY-start.y;start=null;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.5&&!gymMode.rest&&!gymMode.finished)moveGymMode(dx<0?1:-1);};
 }
 
 function installPhoneLayer(){
