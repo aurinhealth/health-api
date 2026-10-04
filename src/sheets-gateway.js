@@ -167,6 +167,7 @@ async function generateStrengthPlanRoute(env, request, url) {
       rows: plan.rows,
       planName: plan.planName,
       rationale: plan.rationale,
+      timing: plan.timing,
       protectedLegs: plan.protectedLegs,
       loadFactor: plan.loadFactor
     });

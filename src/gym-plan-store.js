@@ -63,7 +63,7 @@ export function planValues(body = {}) {
     [planName + "  •  " + date.split("-").reverse().join(". ")],
     ["Datum", date, "Plán", planName, "Nohy", body.protectedLegs === true ? "CHRÁNĚNO" : "NORMÁLNĚ", "Load", Number.isFinite(load) ? load.toFixed(2).replace(".", ",") : "—"],
     ["Poznámka", String(body.rationale || "").trim()],
-    [], [],
+    body.timing ? ['Časový limit (min)', body.timing.requestedMinutes, 'Odhad (min)', body.timing.estimatedMinutes] : [], [],
     GYM_PLAN_COLUMNS
   ];
   const sets = rows.map(row => {

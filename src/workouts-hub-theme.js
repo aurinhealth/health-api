@@ -255,6 +255,10 @@ body.gym-mode-open{overflow:hidden}
 .gm-steppers{display:grid;gap:14px;margin-top:18px}.gm-steppers .label{display:block;margin-bottom:6px}
 .gm-steppers .stepper{grid-template-columns:72px 1fr 72px}.gm-steppers .stepper button{height:72px;font-size:30px}.gm-steppers .stepper output{font-size:38px}
 .gm-rpe{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:6px}.gm-rpe button{height:44px;border-radius:10px;border:1px solid #333b49;background:#161b25;color:#fff;font-weight:700}.gm-rpe button[aria-pressed="true"]{background:#3a2c5c;border-color:#b393ff}
+.gym-mode button,.gym-table button{touch-action:manipulation}
+.gm-steppers .stepper input{width:100%;min-width:0;height:72px;background:#161b25;border:1px solid #435365;border-radius:10px;color:#fff;text-align:center;font-size:38px;font-weight:800;font-variant-numeric:tabular-nums}
+.gm-clock{max-width:520px;width:100%;margin:0 auto 12px;color:#a8b9c9;font-size:12px}.gm-clock.over{color:#f5c26b}
+.gm-input-hint{margin:8px 0;color:#9eafbe;font-size:12px}.gm-rpe-hint{margin:6px 0 10px;color:#9eafbe;font-size:12px}
 .gm-done{margin-top:auto;min-height:60px;font-size:18px;border-radius:16px}
 .gm-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;max-width:520px;width:100%;margin-inline:auto}.gm-nav .btn{min-height:46px}
 .gm-rest{display:grid;justify-items:center;gap:16px;margin:auto 0}
