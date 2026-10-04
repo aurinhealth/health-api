@@ -931,7 +931,7 @@ function renderFuelingBreakdown(daily){
   const today=googleWellness().find(r=>r.id===selectedHistoryDate)||{},active=measured(today.activeCalories)?Number(today.activeCalories):null,steps=measured(today.steps)?fmt(today.steps):'—';
   const budget=daily.nutrition?.energyBudget;
   if(budget)$('nutritionBalance').insertAdjacentHTML('beforeend','<p class="small">'+(budget.basis==='profile'?'Cíl dne: klidový výdej × tvoje běžná denní aktivita, minus deficit '+fmt(budget.deficit)+' kcal, plus trénink. Zvýší se, jakmile naměřený pohyb z Google Health (teď '+fmt(budget.active)+' kcal aktivní energie) přesáhne obvyklý den.':'Průběžný cíl: dnes se hýbeš víc než obvykle, takže cíl počítáme z naměřeného výdeje: bazální metabolismus + aktivní energie + trávení (10 %), minus deficit '+fmt(budget.deficit)+' kcal. Cíl se během dne mění s novými daty.')+'</p>');
-  $('nutritionBalance').insertAdjacentHTML('beforeend','<div class="experience-stats"><div><span>Dnešní cíl</span><strong>'+fmt(daily.nutrition?.calorieTarget)+' kcal</strong></div><div><span title="Výpočet Mifflin–St Jeor z hmotnosti, věku, výšky a referenčního pohlaví">Bazální metabolismus</span><strong>'+(bmr?fmt(bmr)+' kcal':'Doplň profil')+'</strong></div><div><span>Aktivní výdej · celý den</span><strong>'+(active==null?'Čekám na Google':fmt(active)+' kcal')+'</strong></div><div><span>Kroky dnes</span><strong>'+steps+'</strong></div></div><p class="small">'+done.map(a=>esc(a.name)+': '+(measured(a.calories)?fmt(a.calories)+' kcal':'výdej chybí')).join(' · ')+'</p><p class="small">'+(active==null?'Dnešní celodenní energie z Googlu chybí. Starší kroky ani energii nepřičítám k dnešku; cíl zatím vychází z tréninkového plánu.':'Celodenní aktivní výdej zahrnuje běžný pohyb i sport. Stejné aktivity ani kroky nepřičítám podruhé.')+'</p>');
+  $('nutritionBalance').insertAdjacentHTML('beforeend','<div class="experience-stats"><div><span>Dnešní cíl</span><strong>'+fmt(daily.nutrition?.calorieTarget)+' kcal</strong></div><div><span title="Výpočet Mifflin–St Jeor z hmotnosti, věku, výšky a referenčního pohlaví">Bazální metabolismus</span><strong>'+(bmr?fmt(bmr)+' kcal':'Doplň profil')+'</strong></div><div><span>Aktivní výdej · celý den</span><strong>'+(active==null?'Čekám na Google':fmt(active)+' kcal')+'</strong></div><div><span>Kroky dnes</span><strong>'+steps+'</strong></div></div><p class="small">'+done.map(a=>esc(a.name)+esc(activityEnergyLabel(a)||' · výdej chybí')).join(' · ')+'</p><p class="small">'+(active==null?'Dnešní celodenní energie z Googlu chybí. Starší kroky ani energii nepřičítám k dnešku; cíl zatím vychází z tréninkového plánu.':'Celodenní aktivní výdej zahrnuje běžný pohyb i sport. Stejné aktivity ani kroky nepřičítám podruhé.')+'</p>');
 }
 function installRequestedExperience(){
   $('foodProductName').required=false;
@@ -2036,7 +2036,7 @@ function installNutritionHome(){
   if(barcodeLabel){barcodeLabel.insertAdjacentHTML('beforebegin','<button type="button" class="btn food-quick" id="foodScan">▥<span>Skenovat</span></button>');barcodeLabel.hidden=true;$('foodScan').onclick=openBarcodeScanner;}
   const relabel=(el,icon,text)=>{if(!el)return;const input=el.querySelector('input');el.textContent='';el.classList.add('food-quick');el.insertAdjacentHTML('afterbegin',icon+'<span>'+text+'</span>');if(input)el.append(input);};
   relabel($('foodLabelPhoto')?.closest('label'),'📷','Etiketa');relabel($('foodPortionPhoto')?.closest('label'),'🍽','Moje porce');relabel($('foodManual'),'✎','Ručně');
-  const hint=[...$('foodEntry').querySelectorAll('.small')].find(x=>/Hledá v tvých uložených/.test(x.textContent));if(hint)hint.textContent='Nejdřív hledám v tvých uložených potravinách; co neznám, dohledám přes AI.';
+  const hint=[...$('foodEntry').querySelectorAll('.small')].find(x=>/Hledá v tvých uložených/.test(x.textContent));if(hint)hint.textContent='Nejdřív hledám ve tvých potravinách a společném katalogu; co neznám, dohledám přes AI.';
   $('foodBarcode').placeholder='EAN';
   // Meal chips in the food editor and a button that logs straight into that meal.
   const add=$('ingredientAdd');
@@ -2507,6 +2507,9 @@ function foodExportHtml(entry){
 }
 function installReliableFoodEditor(){
   const grid=$('foodAdvancedFields'),editor=$('foodEditor');
+  // The older compact editor moved the piece labels into the main grid.
+  // Restore them once, before the user starts editing, to keep extras optional.
+  $('foodPieceSettings').append($('foodPieceAmount').closest('label'),$('foodPieceUnit').closest('label'));
   for(const id of ['foodGrams','foodUnit'])$(id).closest('label').hidden=true;
   grid.append($('foodPackEditor'));$('foodPackEditor').classList.add('manual-food-package');
   $('foodAdvanced').querySelector('summary').textContent='Název a hodnoty z etikety';
@@ -2524,7 +2527,7 @@ function installReliableFoodEditor(){
   selectFoodProduct=function(p){
     const portion=foodPackageSize(p.serving_size),piece=foodPackageSize(p.piece_size);
     $('foodServingAmount').value=portion?.amount||'';$('foodServingUnit').value=portion?.unit||p.nutrition_basis||'g';
-    select(p);if(piece){$('foodPieceAmount').value=piece.amount;$('foodPieceUnit').value=piece.unit;}
+    select(p);$('foodPieceAmount').value=piece?.amount||'';$('foodPieceUnit').value=piece?.unit||foodPortionDefaults(p).basis;
     $('foodPieceSettings').hidden=false;extra.open=false;
     $('foodEditor').dispatchEvent(new Event('change',{bubbles:true}));
   };
