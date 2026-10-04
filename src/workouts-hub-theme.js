@@ -177,12 +177,17 @@ export const workoutsHubTheme = `
   .gym-table td:nth-child(6),.gym-table td:nth-child(7),.gym-table td:nth-child(8),.gym-table td:nth-child(9){display:grid;gap:2px;font-size:10px;color:#9ca6b5}
   .gym-table td:nth-child(6):before{content:"Skutečně kg"}.gym-table td:nth-child(7):before{content:"Opakování"}.gym-table td:nth-child(8):before{content:"RPE"}.gym-table td:nth-child(9):before{content:"Hotovo"}
   .gym-table input{width:100%!important;min-width:0}.gym-table input[type=checkbox]{width:24px!important;height:24px}
-  .gym-table td:nth-child(10){grid-column:1;align-self:center;font-size:12px}
-  .gym-table td:nth-child(11){grid-column:2/5;display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.gym-table td:nth-child(11) .btn{padding:5px 7px;font-size:11px}
+  .gym-table td.gym-options-cell{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;min-width:0;padding:8px 0}
+  .gym-table td.gym-options-cell label{margin:0;font-size:12px;white-space:nowrap}
+  .gym-table .gym-superset-select{max-width:100%;min-height:36px;font-size:12px}
+  .gym-table td.gym-video-cell{grid-column:1/-1;align-self:center;font-size:12px}
+  .gym-table td.gym-actions-cell{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;padding-top:8px;border-top:1px solid #262d39}
+  .gym-table td.gym-actions-cell .btn{padding:8px 10px;font-size:12px;min-height:36px;white-space:nowrap}
   .gym-table td[colspan]{grid-column:1/-1}
   /* One block per exercise: its name, video and actions once; warm-up sets
      marked so they do not read as a second round of work sets. */
-  .gym-table tr:not(.gym-first) td:nth-child(2),.gym-table tr:not(.gym-first) td:nth-child(10),.gym-table tr:not(.gym-last) td:nth-child(11){display:none}
+  .gym-table tr:not(.gym-first) td:nth-child(2),.gym-table tr:not(.gym-first) td.gym-video-cell,.gym-table tr:not(.gym-last) td.gym-actions-cell{display:none}
+  .gym-table tr[data-type=WARMUP] td.gym-options-cell{display:none}
   .gym-table tr:not(.gym-last){border-bottom:1px dashed #20262f}.gym-table tr.gym-first:not(:first-child){margin-top:12px;border-top:1px solid #3a4352;padding-top:14px}
   .gym-table tr[data-type=WARMUP] td:nth-child(3){color:#f5c26b}.gym-table tr[data-type=WARMUP] td:nth-child(3):before{content:"rozcvička "}
   .gym-table tr[data-type=WARMUP] td:nth-child(4),.gym-table tr[data-type=WARMUP] td:nth-child(5){color:#9ca6b5}
@@ -205,9 +210,20 @@ export const workoutsHubTheme = `
 .strip-day span{font-size:10px;text-transform:uppercase;color:#9ca6b5}.strip-day b{font-size:16px}.strip-day i{font-style:normal;font-size:11px;min-height:15px;letter-spacing:-2px}
 .strip-day.today b{color:#c6acff}.strip-day.active{background:#231c38;border-color:#9b6bff}
 .today-more{width:100%;margin-top:4px}
-#today #dayTimeline{margin:0 0 12px}
+#dayTimeline{margin-bottom:12px}#today #dayTimeline{margin:0 0 12px}
 .today-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px;align-items:start}
 .today-main{min-width:0}#todayTimelineSlot{min-width:0}#todayTimelineSlot:empty{display:none}
+.morning-summary:not([hidden]){padding:16px 18px;margin-bottom:18px;border:1px solid #486452;border-radius:16px;background:linear-gradient(120deg,#1b3026,#151e26)}.morning-summary h3{font-size:17px;margin:7px 0}.morning-summary p{color:#b9c9c1;font-size:13px;line-height:1.6;margin:8px 0}.morning-summary>strong{display:block;font-size:13px;line-height:1.6;font-weight:550;color:#e1f0e7}
+@media(min-width:701px){
+  .today-main{display:contents}
+  .today-layout>.today-main>.today-head{grid-column:1;grid-row:1}
+  .today-layout>.today-main>.mini-rings{grid-column:1;grid-row:2;margin:0}
+  .today-layout>.today-main>.today-card{grid-column:1;grid-row:3;margin:0}
+  #todayTimelineSlot{grid-column:2;grid-row:2/4;align-self:stretch;position:relative;min-height:0}
+  #today #todayTimelineSlot>#dayTimeline{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  #todayTimelineSlot .detail-heading{flex:none}
+  #todayTimelineSlot .timeline{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;margin-bottom:0}
+}
 .mini-ring:hover{border-color:#3a4354}
 .fab{display:none}
 .sheet{position:fixed;inset:0;z-index:80}
@@ -331,7 +347,7 @@ body.sheet-open{overflow:hidden}
 .status-choice:has(input:focus-visible){outline:2px solid var(--status-color);outline-offset:3px}
 .status-choice-copy{display:grid;gap:4px;flex:1;min-width:0}.status-choice-copy strong{font-size:16px;font-weight:650}.status-choice-copy small{font-size:12px;color:#aeb8c6;line-height:1.4}
 .status-radio{display:grid;place-items:center;width:21px;height:21px;flex:0 0 21px;border:1.5px solid #ffffff38;border-radius:50%}.status-choice:has(input:checked) .status-radio{border-color:var(--status-color)}.status-choice:has(input:checked) .status-radio:after{content:'';width:11px;height:11px;border-radius:50%;background:var(--status-color)}
-.status-duration{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #ffffff10;border-radius:16px;padding:13px 15px;font-size:12px;color:#929eae}.status-duration strong{font-weight:500;color:#c2cad5}
+.status-duration{display:grid;gap:8px;border:1px solid #ffffff10;border-radius:16px;padding:13px 15px;font-size:12px;color:#929eae}.status-duration select,.status-duration input{width:100%;box-sizing:border-box;min-height:42px;background:#101720;border:1px solid #3b4757;border-radius:10px;color:#e2e9f1;font-size:14px;padding:9px 10px}.status-duration label{display:grid;gap:7px}.status-duration label[hidden]{display:none}.status-duration small{font-size:11px;line-height:1.5}
 .status-note{margin:14px 0 0;color:#9ba8b8;font-size:12px}.status-note summary{cursor:pointer;padding:5px 0}.status-note textarea{margin-top:8px;min-height:70px!important}
 .control-sheet-footer{position:sticky;bottom:-20px;z-index:2;padding:16px 0 0;background:linear-gradient(transparent,#171d25 12px)}
 .control-sheet-footer .small{font-size:11px;color:#8f9cac;margin:0 0 9px}

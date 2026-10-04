@@ -8,7 +8,7 @@ import { healthScopes } from "./google-scopes.js";
 export default {
   async scheduled(event, env, ctx) {
     if (event.cron === "* * * * *") {
-      if(new Date().getUTCMinutes()===0)await syncGoogleRecent(env);
+      if(new Date().getUTCMinutes()%5===0&&(!env.CONNECTED_PROVIDERS||env.CONNECTED_PROVIDERS.includes('google')))await syncGoogleRecent(env);
       await processGoogleSyncBatch(env);
       return;
     }
@@ -53,6 +53,8 @@ export default {
         return await googleSyncStatus(env);
       }
       if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
+      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3});
+      if(url.pathname==='/sync/match'&&request.method==='POST')return Response.json(await matchActivities(env));
 
       if (url.pathname === "/sync/google") {
         const start = await startGoogleSync(env);
@@ -1525,10 +1527,10 @@ function activityEnd(a) {
 }
 
 
-async function syncIntervalsActivities(env) {
+async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}) {
   const oldest =
     dateDaysAgo(
-      CONFIG.activityDays
+      activityDays
     );
 
   const newest =
@@ -1669,16 +1671,8 @@ async function syncIntervalsEvents(env) {
 // ======================================================
 // INTERVALS SYNC
 // ======================================================
-async function syncIntervals(env) {
-  const activities =
-    await syncIntervalsActivities(
-      env
-    );
-
-  const planned =
-    await syncIntervalsEvents(
-      env
-    );
+async function syncIntervals(env,options={}) {
+  const [activities,planned]=await Promise.all([syncIntervalsActivities(env,options),syncIntervalsEvents(env)]);
 
   // Activities are stored in D1 only; the legacy Google Sheet mirror is gone.
   const historySheet = null;
@@ -3412,8 +3406,7 @@ async function healthDb(env) {
 // ======================================================
 
 async function syncAll(env) {
-  const google = await startGoogleSync(env);
-  const intervals = await syncIntervals(env);
+  const [google,intervals]=await Promise.all([startGoogleSync(env),syncIntervals(env)]);
   const matching = await matchActivities(env);
   const intervalsData = await intervals.json();
 

@@ -1,22 +1,32 @@
 import { reflectionSignals } from './coach-reflection.js';
 
 import { ATHLETE_STATUSES } from './training-status.js';
+import { validDay } from './training-availability.js';
 export { ATHLETE_STATUSES } from './training-status.js';
 const clean = v => String(v || '').trim().slice(0, 500);
+const pragueDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+// statusUntil is the first calendar day on which the status no longer applies.
+export function effectiveAthleteState(state,date=pragueDay()){
+  return state.statusUntil&&validDay(state.statusUntil)&&state.statusUntil<=date
+    ? {...state,status:'active',note:'',statusUntil:null} : state;
+}
 async function ensure(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS athlete_state (user_id INTEGER PRIMARY KEY, state_json TEXT NOT NULL)').run();
 }
-export async function getAthleteState(db) {
+export async function getAthleteState(db,{date=pragueDay()}={}) {
   await ensure(db);
   const row = await db.prepare('SELECT state_json FROM athlete_state WHERE user_id=?').bind(db.userId).first();
   let state = {}; try { state = JSON.parse(row?.state_json || '{}'); } catch { /* defaults */ }
-  return { status: 'active', note: '', memories: [], conversation: [], dismissed: [], ...state };
+  return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], conversation: [], dismissed: [], ...state },date);
 }
-export async function updateAthleteState(db, patch) {
-  const state = await getAthleteState(db);
+export async function updateAthleteState(db, patch,{date=pragueDay()}={}) {
+  const state = await getAthleteState(db,{date});
   if (patch.status != null) {
     if (!Object.hasOwn(ATHLETE_STATUSES, patch.status)) throw new Error('Neznámý stav.');
+    const until=patch.statusUntil||null;
+    if(until&&(!validDay(until)||until<=date))throw new Error('Konec platnosti musí být v budoucnu.');
     state.status = patch.status; state.note = clean(patch.note); state.changedAt = new Date().toISOString();
+    state.statusUntil=patch.status==='active'?null:until;
   }
   if (patch.memory) state.memories = [...new Set([...state.memories, clean(patch.memory)])].slice(-30);
   if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));}
