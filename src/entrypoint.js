@@ -54,11 +54,11 @@ import { getWeekPlan, saveWeekPlan, resetWeekPlan, planWeekRoles, roleFor, weekT
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate } from './adaptive-week.js';
-import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
+import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
-import { readGymPlan } from "./gym-plan-store.js";
+import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans } from "./gym-plan-store.js";
 import { applyGymSwap } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
 import { assistantStreamResponse } from './assistant-stream.js';
@@ -877,7 +877,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The day's plan and the history both live in D1.
       const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):pragueToday();
       let data={status:"ok",values:[],videoLinks:[]};
-      try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored}; }
+      try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored,cancelled:plan.cancelled,recoverable:plan.recoverable}; }
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:"Plán se nepodařilo načíst."}; }
       let history=[];
       try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
@@ -887,6 +887,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try {
       const body = await request.json().catch(() => ({}));
       const date = body?.date || pragueToday();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date)))return Response.json({message:'Neplatné datum.'},{status:400});
+      if(body.action==='cancel'){
+        const rows=(await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,date,shiftDate(date,1)).all()).results||[];
+        for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await deletePlannedEvent(env,{eventId:row.external_id});}
+        await cancelGymPlan(env.DB,date);
+        return Response.json({status:'ok',date,cancelled:true,message:'Posilovna je zrušená. Původní plán a výsledky zůstaly uložené.'},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(body.action==='restore'){
+        assertTrainingAllowed(await getAthleteState(env.DB));
+        const plan=await readGymPlan(env.DB,date,{includeCancelled:true});
+        if(!plan.cancelled||!plan.stored)return Response.json({message:'Není tu zrušený plán k obnovení.'},{status:409});
+        const event=plan.cancelledEvent;
+        let intervals=null;
+        if(env.INTERVALS_API_KEY)intervals=await writeStrengthPlanToIntervals(env,{date,rows:plan.values.slice(7),planName:plan.values[2]?.[3]||'Gym',rationale:plan.values[3]?.[1]||''},{durationMinutes:event?.moving_time?event.moving_time/60:60,startTime:String(event?.start_date_local||'').slice(11,16)||'00:00'});
+        await restoreGymPlan(env.DB,date);
+        return Response.json({status:'ok',date,intervals,message:'Původní plán obnoven.'},{headers:{'Cache-Control':'no-store'}});
+      }
+      if((await readGymPlan(env.DB,date)).cancelled)return Response.json({message:'Tento plán je zrušený. Nejdřív jej obnov, nebo vytvoř nový.'},{status:409});
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))`).run();
 
       if (body?.action === "plan") {
@@ -980,6 +998,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ? requestedStart
       : pragueWeekStart();
     const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
+    await ensureGymPlans(env.DB);
+    const cancelledGym=new Set((await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all()).results.map(r=>r.workout_date));
     // Same calorie target as the day view: one Google Health read covers the week.
     const profile = await dashboardProfile(env);
     const health = profile ? await googleDashboard(env.DB, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
@@ -997,6 +1017,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       return {
         date,
+        gymCancelled:cancelledGym.has(date),
         daily: applyEnergyBudget(await dailyResponse.json(), profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
         food: await foodResponse.json(),
         recommendations: await recommendResponse.json()

@@ -10,18 +10,34 @@ const DONE = new Set(["TRUE", "true", "1", "ANO", "ano", "✓", "☑"]);
 
 export async function ensureGymPlans(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS gym_plan_cancellations (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, event_json TEXT, cancelled_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))").run();
 }
 
 export function emptyPlanValues(date) {
   return [["ADAPTIVNÍ SILOVÝ TRÉNINK"], [""], ["Datum", date], [], [], [], GYM_PLAN_COLUMNS];
 }
 
-export async function readGymPlan(db, date) {
+export async function readGymPlan(db, date, { includeCancelled = false } = {}) {
   await ensureGymPlans(db);
   const row = await db.prepare("SELECT values_json FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, date).first();
   let values = null;
   try { values = row?.values_json ? JSON.parse(row.values_json) : null; } catch { values = null; }
-  return { date, values: Array.isArray(values) && values.length ? values : emptyPlanValues(date), stored: Boolean(values) };
+  const cancellation = await db.prepare("SELECT event_json FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).first();
+  const visible = !cancellation || includeCancelled;
+  return { date, values: visible && Array.isArray(values) && values.length ? values : emptyPlanValues(date), stored: visible && Boolean(values), cancelled: Boolean(cancellation), recoverable: Boolean(cancellation && values), cancelledEvent: includeCancelled && cancellation?.event_json ? JSON.parse(cancellation.event_json) : null };
+}
+
+// Keep the original plan and every completed set; cancellation only hides the
+// outstanding workout from the dashboard, coach and automatic generation.
+export async function cancelGymPlan(db, date, event = null) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error("Neplatné datum.");
+  await ensureGymPlans(db);
+  await db.prepare("INSERT INTO gym_plan_cancellations(user_id,workout_date,event_json) VALUES(?,?,?) ON CONFLICT(user_id,workout_date) DO UPDATE SET event_json=COALESCE(excluded.event_json,gym_plan_cancellations.event_json),cancelled_at=CURRENT_TIMESTAMP").bind(db.userId, date, event ? JSON.stringify(event) : null).run();
+}
+
+export async function restoreGymPlan(db, date) {
+  await ensureGymPlans(db);
+  await db.prepare("DELETE FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).run();
 }
 
 export async function saveGymPlan(db, date, values) {
@@ -64,6 +80,7 @@ export function planValues(body = {}) {
 export async function writeStrengthPlanToDb(db, body) {
   const values = planValues(body);
   await saveGymPlan(db, body.date, values);
+  await restoreGymPlan(db, body.date);
   return { status: "ok", storage: "d1", workoutDate: body.date, rowsWritten: values.length - 7, previousWorkoutSynced: false };
 }
 
