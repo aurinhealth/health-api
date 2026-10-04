@@ -20,10 +20,10 @@ export function foodIntake(product,quantity,unit,options={}){
   const q=parseFoodQuantity(quantity);if(!q||q>10000)throw new Error('Zadej množství, například 100, 0,5 nebo 1/2.');
   const meta=foodPortionDefaults(product);let amount=q,amountUnit=unit;
   if(unit==='pack'){if(!meta.package)throw new Error('Velikost balení není známá. Zadej g/ml nebo velikost jednoho kusu.');amount=q*meta.package.amount;amountUnit=meta.package.unit;}
-  else if(unit==='piece'){const piece=parseFoodQuantity(options.pieceAmount);if(!piece)throw new Error('Doplň velikost jednoho kusu podle etikety nebo vážení.');amount=q*piece;amountUnit=options.pieceUnit||meta.basis;}
+  else if(unit==='piece'){const saved=foodPackageSize(product?.piece_size),piece=parseFoodQuantity(options.pieceAmount)||saved?.amount;if(!piece)throw new Error('Doplň velikost jednoho kusu podle etikety nebo vážení.');amount=q*piece;amountUnit=options.pieceUnit||saved?.unit||meta.basis;}
   else if(unit!=='g'&&unit!=='ml'&&unit!=='portion')throw new Error('Neplatná jednotka.');
   if(product?.nutrition_basis==='portion'){if(unit!=='portion')throw new Error('Hodnoty jsou za celou porci. Zadej počet porcí.');amount=q;amountUnit='portion';}
-  else if(unit==='portion')throw new Error('Výrobek nemá hodnoty za celou porci.');
+  else if(unit==='portion'){if(!meta.serving)throw new Error('Doplň velikost jedné porce v g/ml.');amount=q*meta.serving.amount;amountUnit=meta.serving.unit;}
   if(amountUnit!==meta.basis&&amountUnit!=='portion'){const density=parseFoodQuantity(options.density);if(!density)throw new Error('Převod g ↔ ml vyžaduje hustotu v g/ml. Nebo použij jednotku nutriční tabulky.');amount=amountUnit==='ml'?amount*density:amount/density;amountUnit=meta.basis;}
   if(amount>100000)throw new Error('Množství je příliš velké.');
   const factor=amountUnit==='portion'?q:amount/100,result={amount,unit:amountUnit,factor};

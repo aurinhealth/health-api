@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {foodPortionDefaults,foodIntake} from '../src/food-portions.js';
+import {foodPortionDefaults,foodIntake,foodPackageSize} from '../src/food-portions.js';
 const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
-function options(product){const ctx=vm.createContext({foodPortionDefaults});vm.runInContext(source.slice(source.indexOf('function simpleFoodPortions('),source.indexOf('function installSimpleFoodEditor(')),ctx);return ctx.simpleFoodPortions(product);}
+function options(product){const ctx=vm.createContext({foodPortionDefaults,foodPackageSize});vm.runInContext(source.slice(source.indexOf('function simpleFoodPortions('),source.indexOf('function installSimpleFoodEditor(')),ctx);return ctx.simpleFoodPortions(product);}
 test('simple editor offers a real can size, fractions preserve half a can',()=>{
   const p={quantity:'250 ml',nutrition_basis:'ml',calories_100g:46,carbs_100g:11,protein_100g:0,fat_100g:0};const choices=options(p);assert.equal(choices[0].label,'Balení (250 ml)');const a=foodIntake(p,'1/2',choices[0].unit);assert.equal(a.amount,125);assert.equal(a.calories,57.5);
 });

@@ -15,6 +15,7 @@ export const PERSONAL_TABLES = {
   food_logs: { indexes: [["user_id", "consumed_date", "consumed_at"]] },
   food_log: { indexes: [["user_id", "date"]] },
   personal_foods: { pk: ["user_id", "food_key"] },
+  food_google_exports: { pk: ["user_id", "entry_id"] },
   strength_sets: { unique: [["user_id", "source_key"]] },
   gym_plans: { pk: ["user_id", "workout_date"] },
   dashboard_profile: { pk: ["user_id", "id"] },

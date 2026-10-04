@@ -38,6 +38,6 @@ test("the dashboard offers the AI lookup and saves the confirmed food for next t
   assert.match(entry, /url\.pathname==='\/app\/api\/food\/ai-lookup'/);
   assert.match(client, /id="foodAiLookup"/);
   assert.match(client, /async function rememberAiFood\(p\)\{try\{await jsonFetch\('\/app\/api\/food\/personal'/);
-  assert.match(client, /for\(const a of ingredients\)if\(a\.product\?\.source==='ai'\)await rememberAiFood\(a\.product\);/);
-  assert.match(client, /if\(p\.source==='ai'\)await rememberAiFood\(p\);/);
+  assert.match(client, /for\(const a of ingredients\)if\(a\.product\)await rememberAiFood\(a\.product\);/);
+  assert.match(entry, /personal=await savePersonalFood\(env\.DB,p\)/);
 });

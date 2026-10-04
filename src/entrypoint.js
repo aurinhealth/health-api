@@ -10,6 +10,7 @@ import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders } from "./connection-secrets.js";
 import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
 import { foodIntake } from './food-portions.js';
+import {productFromLabel} from './food-sources.js';
 import {activityDetail} from './activity-detail.js';
 import {rideReviewSections} from './ride-analysis.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
@@ -26,7 +27,19 @@ import {validateCoachActions} from './coach-actions.js';
 import {weekReviewContext,fallbackWeekReview,WEEK_REVIEW_REQUEST} from './weekly-plan-review.js';
 import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
-import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
+import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
+import {listPersonalFoods} from './personal-foods.js';
+import {queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from './food-google-sync.js';
+async function queueFoodGoogleSafely(env,ctx,id,options){
+  try{
+    const result=await queueFoodGoogle(env.DB,id,options);
+    ctx.waitUntil(processFoodGoogle(env,{token:googleToken}).catch(error=>console.error('Food export',error.message)));
+    return result;
+  }catch{
+    // The local write already succeeded. A retry must not create another meal.
+    return {status:'error',message:'Jídlo je uložené v aplikaci. Export do Google se nepodařilo připravit; zkus Odeslat znovu.'};
+  }
+}
 import { lookupFoodWithAI } from "./food-ai.js";
 import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
@@ -81,6 +94,7 @@ export default {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
+    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google'],async scoped=>{await backfillFoodGoogle(scoped.DB);return processFoodGoogle(scoped,{token:googleToken});});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],scoped=>legacyHealthApi.fetch(new Request('https://internal/sync/intervals/recent',{method:'POST'}),scoped,ctx));
     // Hourly, half an hour after the Google Health sync: weight the same in the
     // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
@@ -380,6 +394,7 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
 }
 
 async function handleDashboardApi(request, env, ctx, url, session = {}) {
+  env={...env,INTERFACE_LANGUAGE:String(request.headers.get('X-Interface-Language')||'cs').slice(0,20)};
   const internalAuth = { "Authorization": "Bearer " + String(env.STRENGTH_API_KEY || "") };
   if(url.pathname==='/app/api/athlete-state'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
@@ -613,23 +628,37 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
   if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
+  if(url.pathname==='/app/api/food/personal'&&request.method==='GET')return Response.json({status:'ok',products:await listPersonalFoods(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/food/sync'){
+    if(request.method==='POST'){
+      try{const body=await request.json();await retryFoodGoogle(env.DB,body.id);ctx.waitUntil(processFoodGoogle(env,{token:googleToken}).catch(error=>console.error('Food export',error.message)));return Response.json({status:'queued'});}
+      catch(error){return Response.json({message:error.message},{status:400});}
+    }
+    if(request.method==='GET')return Response.json({entries:await foodGoogleStatus(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
 
   if(url.pathname==='/app/api/food/entry'&&['PATCH','POST','DELETE'].includes(request.method)){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     try{
       const body=await request.json(),id=body.id;
       const result=request.method==='PATCH'?await updateFoodEntry(env.DB,id,body):request.method==='POST'?await copyFoodEntry(env.DB,id,body.targetDate):await deleteFoodEntry(env.DB,id);
+      const google=await queueFoodGoogleSafely(env,ctx,result.id,{deleted:request.method==='DELETE'});
+      result.google=google;
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
 
   if(url.pathname==='/app/api/food/day'&&request.method==='GET'){
     const target=new URL('/food/log',request.url);target.searchParams.set('date',url.searchParams.get('date')||pragueToday());
-    return legacyHealthApi.fetch(new Request(target,{headers:internalAuth}),env,ctx);
+    const response=await legacyHealthApi.fetch(new Request(target,{headers:internalAuth}),env,ctx);
+    if(!response.ok)return response;
+    const data=await response.json(),exports=await foodGoogleStatus(env.DB);
+    data.entries=(data.entries||[]).map(entry=>({...entry,google:exports.find(e=>Number(e.id)===Number(entry.id))||{status:'not_exported'}}));
+    return Response.json(data,{headers:{'Cache-Control':'no-store'}});
   }
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
-    // Only the user's saved foods: everything else comes from a label or the cookbook.
+    // Private saved foods first, then the common food-label catalogue.
     try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),candidates=await searchPersonalFoods(env.DB,name,barcode);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:'Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.',detail:String(error.message).slice(0,160)},{status:500});}
   }
@@ -639,7 +668,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena (chybí OPENAI_API_KEY). Zadej hodnoty z etikety.'},{status:503});
     try{
       const body=await request.json().catch(()=>({})),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24);
-      const r=await lookupFoodWithAI(env,{name,barcode});
+      const r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE});
       if(!r.product)return Response.json({status:'not_found',message:'AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).'},{headers:{'Cache-Control':'no-store'}});
       return Response.json({status:'ok',product:{...r.product,name:r.product.name||name},model:r.model},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:'Dohledání přes AI selhalo: '+String(error.message).slice(0,160)},{status:502});}
@@ -683,9 +712,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:'Doplň energii i všechna tři makra pro zvolený základ tabulky.'},{status:400});
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
       const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error('Uložení selhalo.');
-      return Response.json({...result,message:'Jídlo je uložené do denního příjmu.'},{headers:{'Cache-Control':'no-store'}});
+      let personal=null,warning=null;
+      if(p.source!=='composed'){try{personal=await savePersonalFood(env.DB,p);}catch(error){warning='Jídlo je zapsané, ale potravinu pro příště se nepodařilo uložit: '+error.message;}}
+      const google=await queueFoodGoogleSafely(env,ctx,result.id);
+      warning ||= google.status==='error'?google.message:null;
+      return Response.json({...result,google,personal,warning,message:warning||'Jídlo je zapsané'+(personal?' a potravina uložená pro příště':'')+'.'},{headers:{'Cache-Control':'no-store'}});
     }catch{return Response.json({message:'Jídlo se nepodařilo uložit. Zkontroluj hodnoty a zkus to znovu.'},{status:500});}
   }
 
@@ -760,6 +793,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if (!entries.length) return Response.json({status:"error",message:"entries is required"},{status:400});
       const results = [];
       for (const entry of entries) {
+        let note={};try{note=JSON.parse(entry.note||'{}');}catch{note={text:String(entry.note||'').slice(0,1000)};}
         const foodBody = {
           date: entry.date || null,
           consumed_at: entry.consumed_at || null,
@@ -770,7 +804,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           fat_g: Number(entry.fat_g || 0),
           fiber_g: Number(entry.fiber_g || 0),
           source: entry.source || "dashboard",
-          note: entry.note || null
+          note: JSON.stringify({...note,mealType:String(entry.mealType||note.mealType||'snack').toLowerCase()})
         };
         const foodResponse = await app.fetch(new Request(new URL("/food/log", request.url), {
           method:"POST",
@@ -781,22 +815,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if (!foodResponse.ok) throw new Error(foodResult.message || "Food log write failed");
         let googleResult=null;
         if (entry.google !== false) {
-          const nutritionResponse = await app.fetch(new Request(new URL("/health/nutrition/log", request.url), {
-            method:"POST",
-            headers:{...internalAuth,"Content-Type":"application/json"},
-            body:JSON.stringify({
-              consumed_at: entry.consumed_at || null,
-              name: entry.name || "Food",
-              mealType: entry.mealType || "SNACK",
-              kcal: Number(entry.kcal || 0),
-              protein_g: Number(entry.protein_g || 0),
-              carbs_g: Number(entry.carbs_g || 0),
-              fat_g: Number(entry.fat_g || 0),
-              servings: Number(entry.servings || 1)
-            })
-          }), env, ctx);
-          googleResult=await nutritionResponse.json().catch(()=>({}));
-          if (!nutritionResponse.ok) throw new Error(googleResult.message || "Google Health nutrition write failed");
+          googleResult=await queueFoodGoogleSafely(env,ctx,foodResult.id);
         }
         results.push({food:foodResult,google:googleResult});
       }

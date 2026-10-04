@@ -50,7 +50,7 @@ test("the dashboard has the day overview with drinks, compact meals and quick lo
   assert.match(client, /searchFood=async function\(\)\{await search\(\);if\(\$\('foodBarcode'\)\.value\.trim\(\)&&!foodCandidates\.length&&\$\('foodAiLookup'\)\)await lookupFoodAi\(\);\}/);
   // The meal select knows both snacks, so "+" on a snack selects it.
   assert.match(client, /meal\.innerHTML=mealSlots\.map\(s=>'<option value="'\+s\.id\+'">'/);
-  assert.match(client, /\$\('foodAddDirect'\)\.onclick=\(\)=>\$\('basketSave'\)\.onclick\(\);/);
+  assert.match(client, /await saveFoodEntry\(\{preventDefault\(\)\{\}\}\)/);
   // Logging lives in a panel that "+" on a meal opens; a saved meal closes it.
   assert.match(client, /function startMealLog\(slot\)\{openFoodLogger\(slot\);\}/);
   assert.match(client, /\$\('foodPanelBody'\)\.append\(entry\);/);
