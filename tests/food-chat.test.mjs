@@ -47,6 +47,6 @@ test("the assistant returns the draft and the dialog logs it only on confirmatio
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(entry, /if\(body\.mode!=='coach'&&isFoodLogMessage\(message\)\)/);
-  assert.match(client, /if\(result\.kind==='food_draft'\)\{renderFoodDraft\(message,result\);return\}/);
+  assert.match(client, /if\(r\.kind==='food_draft'\)\{renderFoodDraft\(message,r\);scrollAssistant\(\);return;\}/);
   assert.match(client, /\$\('foodDraftSave'\)\.onclick=async\(\)=>/);
 });

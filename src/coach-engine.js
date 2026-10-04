@@ -1,45 +1,88 @@
 import { trainingStatus } from './training-status.js';
-const n=v=>Number.isFinite(Number(v))?Number(v):0;
-const txt=v=>String(v||"");
-const isBike=x=>/ride|cycling|bike|kolo|endurance|threshold|tempo|vo2/i.test(txt(x?.name)+" "+txt(x?.type));
-const isGym=x=>/weight|strength|weights|posil|gym/i.test(txt(x?.name)+" "+txt(x?.type));
-const mobility={label:"10min mobilita pro cyklistu: kotník, kyčel, hrudní páteř",url:"https://www.rei.com/learn/expert-advice/cycling-how-to-cross-train.html"};
-function sleepFacts(xs=[]){const a=xs.filter(x=>n(x.durationMin)>=180).sort((x,y)=>new Date(y.endTime||y.startTime)-new Date(x.endTime||x.startTime)).slice(0,7);return{last:n(a[0]?.durationMin),avg:a.length?a.reduce((s,x)=>s+n(x.durationMin),0)/a.length:0};}
-function rideFuel(h,hard){if(h>=3)return hard?"70–90 g sacharidů/h + 500–750 ml tekutin/h":"60–75 g sacharidů/h + 500–750 ml tekutin/h";if(h>=1.5)return hard?"50–70 g sacharidů/h + 500–750 ml tekutin/h":"30–60 g sacharidů/h + 500–750 ml tekutin/h";if(h>=1)return hard?"30–45 g sacharidů/h podle pocitu":"voda; sacharidy jen při hladu nebo navazující náročné jednotce";return"obvykle stačí voda a běžné jídlo před jízdou";}
-function cycling(c){const a=[...(c.training?.planned||[]),...(c.training?.completed||[])],r=a.find(isBike),f=c.fitness||{},low=(c.sleep.last&&c.sleep.last<360)||n(f.tsb)<-25;if(!r)return{id:"cycling",title:"Hlavní trenér · cyklistika",status:"recovery",headline:"Den bez kola = prostor pro adaptaci",actions:["Volno není výpadek plánu: dnes buduješ schopnost absorbovat další cyklistický stimul.","Pokud nejsi bolestivý ani nemocný: 20–40 min klidné chůze v konverzačním tempu.","Potom 10 min: knee-to-wall kotník 2×8/strana, 90/90 kyčle 2×6/strana, otevřená kniha 2×6/strana. Bez protahování do bolesti."],evidence:["Proč: chůze zvyšuje běžný pohyb bez další významné tréninkové únavy; mobilita dává kyčli, kotníku a hrudní páteři pohyb mimo opakovanou pozici na kole.","Toto není povinný trénink. Při výrazné únavě je lepší úplné volno a spánek."],resources:[mobility],confidence:"high"};const h=n(r.durationHours),hard=/threshold|vo2|interval|sweet spot|tempo/i.test(txt(r.name)),fuel=rideFuel(h,hard);return{id:"cycling",title:"Hlavní trenér · cyklistika",status:low?"caution":"ready",headline:txt(r.name)||"Dnešní cyklistika",actions:[low&&hard?"Regenerace je slabá: intervaly změň na Z2 nebo je přesuň; cílem je dlouhodobá konzistence, ne splnění každé položky za cenu únavy.":hard?"Dnešní hlavní stimul je kvalita: rozjeď se, drž předepsané intervaly a mezi nimi opravdu lehce regeneruj.":"Dnešní cíl je aerobní objem: rovnoměrné tempo, žádné spontánní závody do kopce.","Fueling na kolo: "+fuel+".","Po jízdě: do 2–3 h normální jídlo s bílkovinou a sacharidy; přesný deficit řeš až po pokrytí výkonu a regenerace."],evidence:["Proč právě tento typ dne: "+(hard?"intenzita rozvíjí výkon v cílovém pásmu, proto nesmí být znehodnocena nedostatkem paliva nebo zbytečnou únavou z gymu.":"vytrvalostní objem rozvíjí aerobní kapacitu s menší cenou za regeneraci než další intenzita."),"Délka "+Math.round(h*60)+" min · Fitness "+n(f.ctl)+" · Fatigue "+n(f.atl)+" · Form "+n(f.tsb)+"."],confidence:r.name?"high":"medium"};}
-function gym(c){const a=[...(c.training?.planned||[]),...(c.training?.completed||[])],g=a.find(isGym),ride=a.find(isBike),hardRide=ride&&/threshold|vo2|interval|sweet spot|tempo/i.test(txt(ride.name)),low=c.sleep.last&&c.sleep.last<360;if(!g)return{id:"gym",title:"Silový trenér · pro kolo",status:"recovery",headline:"Dnes není potřeba náhradní gym",actions:["Síla je nástroj pro lepší přenos síly do pedálu, odolnost tkání a stabilní pozici na kole — ne druhý hlavní sport každý den.","Pokud chceš něco udělat: mobilita a lehká aktivace středu těla, ne trénink do únavy."],evidence:["Proč: progres na kole vzniká z kvalitních cyklistických jednotek a jejich regenerace; náhodný těžký gym by ubíral kvalitu dalšímu klíčovému dni."],resources:[mobility],confidence:"high"};return{id:"gym",title:"Silový trenér · pro kolo",status:low?"caution":"ready",headline:txt(g.name)||"Silový trénink pro cyklistu",actions:[low?"Dnes zkrať trénink: uber jednu pracovní sérii na cvik a nech 2–3 opakování v rezervě.":"Zaměření: silný hip hinge / dřepový vzor, jednostranná stabilita, tahy pro horní záda a střed těla. Cíl je síla a odolnost pro pozici na kole.",hardRide?"Vedle intervalů nechoď do selhání a nenech gym pokazit kvalitu kola. U zatížených svalů sniž počet sérií a nech větší rezervu. Kolo nenahrazuje pravidelné posilování nohou; při únavě uprav dávku nebo termín.":"Když zítra není klíčové kolo, můžeš progresovat: přidej zátěž až po splnění horní hranice opakování při čisté technice a RPE 7–9.","Zapiš váhu, opakování a RPE — bez těchto dat trenér neumí rozlišit opravdový progres od náhodně dobrého dne."],evidence:["Proč právě tento trénink: posilování doplňuje kolo tam, kde kolo samo nedává dostatečný stimul — maximální síla, kostní zatížení, stabilita kyčle a trupu.",hardRide?"Cyklistická kvalita je tento den hlavní. Gym ji podporuje, nesoutěží s ní.":"Bez konfliktu s intenzivní jízdou může gym nést plnohodnotný silový stimul."],confidence:"high"};}
-function nutrition(c){const t=n(c.nutrition?.calorieTarget||c.calories?.target),f=c.food||{},m=c.nutrition?.macros||{},protein=n(m.protein_g??m.proteinGrams),carbs=n(m.carbs_g??m.carbsGrams),fat=n(m.fat_g??m.fatGrams),r={k:Math.max(0,t-n(f.kcal)),p:Math.max(0,protein-n(f.protein_g)),c:Math.max(0,carbs-n(f.carbs_g)),f:Math.max(0,fat-n(f.fat_g))},ride=[...(c.training?.planned||[]),...(c.training?.completed||[])].find(isBike),h=n(ride?.durationHours),hard=/threshold|vo2|interval|sweet spot|tempo/i.test(txt(ride?.name));return{id:"nutrition",title:"Sportovní výživa · pro kolo",status:n(f.kcal)?"tracking":"missing-data",headline:n(f.kcal)?"Palivo pro výkon a regeneraci":"Nejdřív potřebujeme dnešní příjem",actions:["Dnešní rámec: "+Math.round(t)+" kcal · protein "+Math.round(protein)+" g · sacharidy "+Math.round(carbs)+" g · tuk "+Math.round(fat)+" g.",ride?"Protože máš "+(hard?"kvalitní":"vytrvalostní")+" kolo ("+Math.round(h*60)+" min), sacharidy nejsou odměna ani selhání diety: část patří před, během a po jízdě. Během: "+rideFuel(h,hard)+".":"Bez kola drž sacharidy spíš podle hladu a další jednotky; protein rozlož do 3–5 jídel, aby regenerace nestála na jednom večerním jídle.","Teď zbývá: "+Math.round(r.k)+" kcal · P "+Math.round(r.p)+" g · C "+Math.round(r.c)+" g · F "+Math.round(r.f)+" g."],evidence:["Proč tyto hodnoty: protein chrání a obnovuje svalovou hmotu při cyklistice i případném deficitu; sacharidy se periodizují podle délky a intenzity kola; tuk je minimální základ, ne hlavní palivo pro intervaly.",ride?"Tréninkové palivo je už součástí denního cíle, proto se nemá odečítat pod záminkou rychlejšího hubnutí.":"Bez evidovaných jídel je to plán, ne skutečné vyhodnocení deficitu."],confidence:n(f.kcal)?"high":"low"};}
+import { todayGymContext } from './coach-gym-adjustment.js';
+const n=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
+const txt=v=>String(v||'');
+const isBike=x=>/ride|cycling|bike|kolo/i.test(txt(x?.name)+' '+txt(x?.type));
+const isGym=x=>/weight|strength|weights|posil|gym/i.test(txt(x?.name)+' '+txt(x?.type));
+const isHard=x=>/threshold|vo2|interval|sweet spot|tempo/i.test(txt(x?.name));
+function sleepFacts(sessions,date){
+  const rows=sessions.filter(s=>n(s.durationMin)>=180&&(!date||!s.date||s.date<=date)).sort((a,b)=>txt(b.endTime||b.date).localeCompare(txt(a.endTime||a.date))).slice(0,7);
+  const last=rows[0],fresh=!date||!last?.date||last.date===date;
+  return {last:fresh?n(last?.durationMin):null,avg:rows.length?rows.reduce((sum,s)=>sum+n(s.durationMin),0)/rows.length:null};
+}
+function rideFuel(hours,hard){
+  if(hours>=3)return hard?'70–90 g sacharidů/h':'60–75 g sacharidů/h';
+  if(hours>=1.5)return hard?'50–70 g sacharidů/h':'30–60 g sacharidů/h';
+  if(hours>=1&&hard)return '30–45 g sacharidů/h podle pocitu';
+  return null;
+}
+const sportTitle=(base,focus)=>base+(focus?.sportLabel?' · '+focus.sportLabel:'');
+function morningSummary({date,sleep,fitness,yesterday,planned,policy}){
+  const facts=[],previous=yesterday?.training?.completed||[];
+  if(sleep.last!=null){
+    const delta=sleep.avg==null?null:Math.round(sleep.last-sleep.avg);
+    facts.push('Spánek '+Math.floor(sleep.last/60)+' h '+Math.round(sleep.last%60)+' min'+(delta!=null&&Math.abs(delta)>=30?' ('+Math.abs(delta)+' min '+(delta<0?'méně':'více')+' než poslední průměr)':'')+'.');
+  }
+  const load=previous.map(a=>n(a.tss)).filter(v=>v!=null),minutes=previous.reduce((sum,a)=>sum+(n(a.durationHours)||0)*60,0);
+  if(previous.length)facts.push('Včera '+previous.length+' '+(previous.length===1?'aktivita':'aktivity')+(minutes>0?' · '+Math.round(minutes)+' min':'')+(load.length?' · '+Math.round(load.reduce((a,b)=>a+b,0))+' TSS':'')+'.');
+  if(n(fitness.tsb)!=null)facts.push('Aktuální forma '+Math.round(n(fitness.tsb))+'.');
+  if(!facts.length&&!policy.paused)return null;
+  const low=sleep.last!=null&&sleep.last<360||n(fitness.tsb)!=null&&n(fitness.tsb)<-25,heavy=load.reduce((a,b)=>a+b,0)>150||minutes>=180;
+  const next=policy.paused?policy.guidance[0]:low?'Dnes drž rezervu: u posilování uber sérii, u vytrvalosti zvol lehké tempo. Před těžkou jednotkou doplň, jak se cítíš.':heavy?'Po včerejší velké zátěži začni klidně; podle pocitu uprav objem a nech rezervu.':planned.length?'Dnešní plán můžeš držet; při rozcvičení ověř, že se cítíš dobře.':'Dnes máš prostor pro regeneraci; další aktivitu přizpůsob chuti a dostupnému času.';
+  return {date,headline:policy.paused?policy.label+' · dnešní přehled':low?'Dnes s větší rezervou':heavy?'Navazujeme na náročný včerejšek':'Jak dnes začít',text:facts.join(' '),recommendation:next};
+}
+function bikeCoach(c,ride){
+  const low=c.sleep.last!=null&&c.sleep.last<360||n(c.fitness.tsb)!=null&&n(c.fitness.tsb)<-25,hard=isHard(ride);
+  return {id:'cycling',title:sportTitle('Vytrvalostní trenér',c.focus),phase:'before',status:low?'caution':'ready',headline:ride.name||'Dnešní jízda',
+    actions:[low&&hard?'Slabší regenerace: zvaž lehkou variantu bez intervalů; rozhodni podle pocitu při rozjetí.':hard?'Drž předepsané pracovní bloky a mezi nimi lehce regeneruj.':'Drž rovnoměrné vytrvalostní tempo, bez přidaných intenzivních úseků.'],confidence:ride.name?'high':'medium'};
+}
+function gymCoach(c,workout){
+  const low=c.sleep.last!=null&&c.sleep.last<360,hardRide=c.training.planned.some(a=>isBike(a)&&isHard(a)),actions=[];
+  if(c.todayGym?.exercises?.length)actions.push('Dnes: '+c.todayGym.exercises.map(e=>e.name+' ('+e.sets.filter(s=>!s.completed).length+' sérií)').join(', ')+'.');
+  if(low)actions.push('Po krátkém spánku uber jednu pracovní sérii na cvik a nech 2–3 opakování v rezervě.');
+  else if(hardRide)actions.push('Vedle náročné vytrvalostní jednotky nech 2–3 opakování v rezervě. U zatížených svalů uprav dávku, zachovej silový stimul.');
+  else actions.push('Drž plánované série. Zátěž přidej až po zvládnutí horní hranice opakování s čistou technikou a rezervou.');
+  return {id:'gym',title:sportTitle('Silový trenér',c.focus),phase:'before',status:low?'caution':'ready',headline:workout.name||'Dnešní posilování',actions,confidence:'high'};
+}
+function nutritionCoach(c,done,paused){
+  const intake=n(c.food.kcal),target=n(c.nutrition?.calorieTarget),ride=c.training.planned.find(isBike),hours=n(ride?.durationHours),fuel=ride&&!paused?rideFuel(hours,isHard(ride)):null;
+  if(!(intake>0)&&!fuel&&!done.length)return null;
+  const actions=[];
+  if(intake>0&&target>0)actions.push('Zapsáno '+Math.round(intake)+' / '+Math.round(target)+' kcal · zbývá '+Math.round(Math.max(0,target-intake))+' kcal.');
+  else if(intake>0)actions.push('Zapsáno '+Math.round(intake)+' kcal. Denní cíl zatím není dostupný.');
+  if(fuel)actions.push('Pro '+Math.round(hours*60)+'min jízdu počítej s '+fuel+'. Palivo během aktivity je součást denního příjmu.');
+  if(done.length){
+    const energy=done.map(a=>n(a.calories)).filter(v=>v!=null);
+    actions.push('Po '+done.map(a=>a.name||a.type).join(', ')+(energy.length?' · '+Math.round(energy.reduce((a,b)=>a+b,0))+' kcal evidovaného výdeje':'')+': doplň běžné jídlo s bílkovinou a sacharidy. Výdej už patří do denního cíle.');
+  }
+  const protein=n(c.nutrition?.macros?.protein_g??c.nutrition?.macros?.proteinGrams),loggedProtein=n(c.food.protein_g);
+  if(intake>0&&protein>0&&loggedProtein!=null&&protein-loggedProtein>20)actions.push('Do bílkovin zbývá '+Math.round(protein-loggedProtein)+' g; rozlož je do zbývajících jídel.');
+  if(paused)actions.splice(1,0,'Aktuální status pozastavuje běžné tréninky; zbývající plán v kalendáři není doporučení jej dnes absolvovat.');
+  return {id:'nutrition',title:sportTitle('Sportovní výživa',c.focus),status:intake>0?'tracking':'ready',phase:done.length?'after':ride?'before':'rest',headline:done.length?'Po aktivitě · doplnění energie':fuel?'Palivo pro dnešní jízdu':'Zbývající příjem',actions:actions.slice(0,4),confidence:intake>0?'high':'medium'};
+}
+function activityReview(a,matched){
+  const plan=matched.find(m=>String(m.actualId)===String(a.id))?.planned,h=n(a.durationHours),tss=n(a.tss),calories=n(a.calories),actions=[];
+  const measured=[h>0?Math.round(h*60)+' min':null,tss!=null?Math.round(tss)+' TSS':null,calories!=null?Math.round(calories)+' kcal':null].filter(Boolean);
+  if(measured.length)actions.push('Dokončeno: '+measured.join(' · ')+'.');
+  if(plan&&n(plan.tss)>0&&tss!=null)actions.push('Zátěž proti plánu: '+Math.round(tss/n(plan.tss)*100)+' %.'+(tss/n(plan.tss)>1.15?' Vyšší zátěž zohledni u zbývajících jednotek.':''));
+  else if(!plan)actions.push('Bez spárovaného plánu nelze vyhodnotit jeho splnění.');
+  const p=a.payload||{},np=n(p.icu_normalized_watts||p.icu_weighted_average_watts),ftp=n(p.icu_ftp),analysis=[];
+  if(plan&&n(plan.durationHours)>0&&h!=null)analysis.push({label:'Délka proti plánu',text:Math.round(h*60)+' / '+Math.round(n(plan.durationHours)*60)+' min. Délka sama nepotvrzuje provedení intervalů.'});
+  if(np>0&&ftp>0)analysis.push({label:'Intenzita',text:'IF '+(np/ftp).toFixed(2)+' · NP '+Math.round(np)+' W · FTP '+Math.round(ftp)+' W.'});
+  return {id:'review-'+a.id,title:isBike(a)?'Kolo · hodnocení jízdy':'Gym · dokončený trénink',headline:a.name||'Dokončená aktivita',phase:'after',status:'tracking',actions,analysis,confidence:'medium'};
+}
 export function buildCoachCouncil(input){
-  const policy=trainingStatus(input.athleteState);
-  const daily=input.daily||{},training=daily.training||{},completed=training.completed||[],matched=training.matched||[],used=new Set();
+  const date=input.date||input.daily?.date,daily=input.daily||{},training=daily.training||{},completed=training.completed||[],matched=training.matched||[],used=new Set(),policy=trainingStatus(input.athleteState);
   const planned=(training.planned||[]).filter(p=>{
     if(matched.some(m=>String(m.planned?.id)===String(p.id)&&p.id!=null))return false;
     const found=completed.find(a=>!used.has(a.id)&&(p.id!=null&&String(a.pairedEventId||a.plannedEventId)===String(p.id)||txt(p.name).trim()&&txt(p.name).trim().toLowerCase()===txt(a.name).trim().toLowerCase()));
-    if(found){used.add(found.id);return false}return true;
+    if(found){used.add(found.id);return false;}return true;
   });
-  const c={...daily,training:{...training,planned,completed:[]},sleep:sleepFacts(input.sleepSessions||[]),fitness:input.fitness||{},food:daily.nutrition?.foodLog?.totals||{}},coaches=[];
-  if(policy.paused)coaches.push({id:'athlete-status',title:'Hlavní kouč · aktuální stav',status:'recovery',headline:policy.headline,phase:'rest',confidence:'high',actions:policy.guidance,evidence:['Zdroj: tebou nastavený stav '+policy.label+'.'],analysis:[{label:'Priorita před plánem',text:'Aktuální stav má přednost před dobrou formou, spánkem i již naplánovanými tréninky.'}]});
-  else{
-    if(planned.some(isBike))coaches.push({...cycling(c),phase:'before'});
-    if(planned.some(isGym))coaches.push({...gym(c),phase:'before'});
-  }
-  const reviews=completed.filter(a=>isBike(a)||isGym(a)).map(a=>{
-    const bike=isBike(a),plan=matched.find(m=>String(m.actualId)===String(a.id))?.planned,h=n(a.durationHours),tss=n(a.tss),loadRatio=plan&&n(plan.tss)>0?tss/n(plan.tss):null,actions=[];
-    actions.push('Dokončeno: '+(h>0?Math.round(h*60)+' min · ':'délka není dostupná · ')+(tss>0?Math.round(tss)+' TSS · ':'')+Math.round(n(a.calories))+' kcal evidovaného výdeje.');
-    if(loadRatio!=null)actions.push('Zátěž proti plánu: '+Math.round(loadRatio*100)+' % ('+Math.round(tss)+' / '+Math.round(n(plan.tss))+' TSS). '+(loadRatio>1.15?'Zátěž byla vyšší než plán; při další jednotce zohledni skutečnou únavu.':loadRatio<.85?'Zátěž byla nižší než plán. Bez průběhu výkonu a důvodu zkrácení to neznamená nekvalitní trénink.':'Celková zátěž je blízko plánu; sama ale nepotvrzuje správné provedení intervalů.'));
-    else actions.push('Bez spárovaného plánu nelze vyhodnotit jeho splnění. Aktivita se přesto započítává do dnešní zátěže a výživy.');
-    const np=n(a.payload?.icu_weighted_average_watts),avg=n(a.payload?.average_watts),hr=n(a.payload?.average_heartrate);if(np||avg||hr)actions.push('Naměřeno: '+[np?'NP '+Math.round(np)+' W':'',avg?'průměr '+Math.round(avg)+' W':'',hr?'tep '+Math.round(hr)+' bpm':''].filter(Boolean).join(' · ')+'.');
-    if(!bike)actions.push('Pro hodnocení silového progresu jsou potřeba pracovní série, váhy, opakování a RPE v Gymu.');
-    return {id:'review-'+a.id,title:bike?'Kolo · hodnocení dokončené jízdy':'Gym · dokončený trénink',headline:txt(a.name)||'Dokončená aktivita',phase:'after',status:'tracking',confidence:'medium',actions,evidence:['Zdroj: dokončená aktivita '+txt(a.source||'z připojených dat')+'.','Jde o datový souhrn, ne analýzu průběhu intervalů. Bez výkonových křivek nelze potvrdit kvalitu jednotlivých bloků.']};
-  });
-  const fuel=nutrition(c),done=completed.filter(a=>isBike(a)||isGym(a));
-  if(done.length){fuel.headline=planned.some(isBike)||planned.some(isGym)?'Po aktivitě · palivo i pro zbývající plán':'Po aktivitě · regenerace a zbývající příjem';fuel.phase='after';fuel.actions[1]='Dnes už máš dokončeno '+done.map(a=>txt(a.name)||txt(a.type)).join(', ')+'. Evidovaný výdej těchto aktivit je '+Math.round(done.reduce((s,a)=>s+n(a.calories),0))+' kcal. Denní cíl zohledňuje dokončené i zbývající plánované aktivity; tento výdej nepřičítej podruhé.';fuel.actions.push('Zapiš i jídlo a nápoje snědené během aktivity. Zbývající makra počítám jen z evidovaného příjmu, ne z domněnky, že už jsi doplnil palivo.');}
-  else fuel.phase=planned.length?'before':'rest';
-  fuel.analysis=[{label:'Příjem a zbývající energie',text:c.nutrition&&c.nutrition.calorieTarget==null?'Kalorický cíl zatím chybí: doplň v profilu váhu, pohlaví, věk, výšku a denní aktivitu.':n(c.food.kcal)?'Zapsáno '+Math.round(n(c.food.kcal))+' z '+Math.round(n(c.nutrition?.calorieTarget))+' kcal. Zbývá '+Math.round(Math.max(0,n(c.nutrition?.calorieTarget)-n(c.food.kcal)))+' kcal. Nezapsaná jídla nelze započítat.':'Příjem zatím není evidovaný. Doporučení vychází z denního cíle, nikoli z měřeného energetického deficitu.'},{label:'Návaznost na trénink',text:done.length?'Do denního příjmu započítej také tyčinky, gely a nápoje z aktivity. Dokončený výdej již patří do denního cíle.':planned.some(isBike)?'Palivo během jízdy je část denního příjmu. Rozlož zbývající sacharidy mezi jídlo před jízdou, samotnou jízdu a následující jídlo.':'Rozlož protein mezi vybraná jídla. Bez evidovaného tréninku nelze odůvodnit závodní dávkování sacharidů.'}];
-  for(const coach of coaches){coach.analysis=coach.analysis||[{label:'Plán a provedení',text:coach.id==='cycling'?'Cílem je dodržet strukturu předepsané jednotky, nejen dosáhnout TSS. Délka ani název nepotvrzují cílové watty; rozhodující je intervalový předpis.':'Zapisuj každou pracovní sérii, zátěž, opakování a rezervu. Teprve srovnání stejných cviků umožňuje odlišit progres od změny programu.'},{label:'Kontext připravenosti',text:'Poslední dostupný spánek: '+(c.sleep.last?Math.round(c.sleep.last)+' min':'není dostupný')+'. Fitness / Fatigue / Form: '+[c.fitness.ctl,c.fitness.atl,c.fitness.tsb].map(v=>v==null?'nedostupné':Math.round(n(v))).join(' / ')+'. Tyto souhrny nenahrazují aktuální pocit únavy.'}];}
-  for(const review of reviews){const a=completed.find(x=>'review-'+x.id===review.id),p=a.payload||{},plan=matched.find(m=>String(m.actualId)===String(a.id))?.planned,np=n(p.icu_normalized_watts||p.icu_weighted_average_watts),avg=n(p.average_watts),ftp=n(p.icu_ftp);review.analysis=[{label:'Délka proti plánu',text:plan&&n(plan.durationHours)>0?Math.round(n(a.durationHours)*60)+' / '+Math.round(n(plan.durationHours)*60)+' minut ('+Math.round(n(a.durationHours)/n(plan.durationHours)*100)+' %). Samotná délka neříká, zda byly splněny pracovní bloky.':'Srovnatelný plán není dostupný.'},{label:'Intenzita a rovnoměrnost',text:np&&ftp?'IF '+(np/ftp).toFixed(2)+' z naměřeného NP '+Math.round(np)+' W a FTP '+Math.round(ftp)+' W.'+(avg?' Variabilita NP / průměr: '+(np/avg).toFixed(2)+'.':''): 'NP a FTP nejsou společně dostupné; intenzitu neodhaduji jako naměřenou hodnotu z pouhého TSS.'}];}
-  coaches.push(fuel);
-  if(policy.paused){fuel.headline=done.length?'Výživa po dokončené aktivitě během pauzy':'Výživa během tréninkové pauzy';fuel.actions[1]='Stav '+policy.label+' pozastavuje běžné tréninky. Zbývající plán v kalendáři není doporučení jej dnes absolvovat. Dokončené aktivity a evidované jídlo se dál započítávají.';fuel.analysis[1]={label:'Návaznost na stav',text:policy.guidance[0]};}
-  for(const coach of coaches)coach.evidence=coach.evidence?.map(text=>text.replace(/(Fitness|Fatigue|Form) (-?\d+(?:\.\d+)?)/g,(_,label,value)=>({Fitness:'Kondice',Fatigue:'Únava',Form:'Forma'}[label])+' '+Number(Number(value).toFixed(1))));
-  return {version:'adaptive-coach-council-v3',generatedAt:new Date().toISOString(),priorities:coaches.map(c=>c.headline+': '+c.actions[0]),coaches,reviews,guardrails:['Poradce se mění podle dnešních zbývajících plánů a dokončených aktivit, ne podle zítřejšího plánu.','Dokončení se projeví po synchronizaci zdroje a obnovení dat aplikace.','Chybějící délka, intervaly nebo záznam jídla nejsou nula ani důkaz splnění.']};
+  const c={...daily,training:{...training,planned,completed:[]},sleep:sleepFacts(input.sleepSessions||[],date),fitness:input.fitness||{},food:daily.nutrition?.foodLog?.totals||{},focus:input.focus,todayGym:input.gym?todayGymContext(input.gym,date):null};
+  const coaches=[],bike=planned.find(isBike),gym=planned.find(isGym);
+  if(policy.paused)coaches.push({id:'athlete-status',title:'Aktuální stav',status:'recovery',headline:policy.headline,phase:'rest',confidence:'high',actions:[policy.guidance[0],...(policy.note?['Tvoje omezení: '+policy.note]:[])]});
+  else{if(bike)coaches.push(bikeCoach(c,bike));if(gym)coaches.push(gymCoach(c,gym));}
+  const reviews=completed.filter(a=>isBike(a)||isGym(a)).map(a=>activityReview(a,matched)),fuel=nutritionCoach(c,completed.filter(a=>isBike(a)||isGym(a)),policy.paused);
+  if(fuel)coaches.push(fuel);
+  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
 }
