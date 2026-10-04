@@ -221,7 +221,7 @@ test("sync guard rejects mismatched completed row", () => {
 });
 
 
-test("generator protects legs when multiple hard rides are upcoming", () => {
+test("generator reduces leg dose while retaining strength work around hard rides", () => {
   const plan = generateStrengthPlan({
     status: "ok",
     date: "2026-09-23",
@@ -243,9 +243,11 @@ test("generator protects legs when multiple hard rides are upcoming", () => {
     strength: { recentCompletedSets: [] }
   }, { maxExercises: 5 });
   assert.equal(plan.protectedLegs, true);
-  assert.equal(plan.planName, "Upper Body");
+  assert.equal(plan.planName, "Full Body · s rezervou");
   assert.ok(plan.rows.length > 0);
-  assert.ok(!plan.loadEstimates.some(x => ["Pivot leg press", "Pendulum squat", "Prone leg curl Prime", "Hip thrust", "DB Romanian deadlift", "DB Bulgarian split squat", "Leg extension Prime"].includes(x.exercise)));
+  const legs=plan.loadEstimates.filter(x => ["Pivot leg press", "Pendulum squat", "Prone leg curl Prime", "Hip thrust", "DB Romanian deadlift", "DB Bulgarian split squat", "Leg extension Prime"].includes(x.exercise));
+  assert.ok(legs.length>=2);assert.ok(legs.every(x=>x.reducedDose&&x.sets<=2));
+  assert.ok(plan.rows.filter(r=>r[0]==='WORK'&&legs.some(x=>x.exercise===r[1])).every(r=>/3–4 opakování v rezervě/.test(r[9])));
 });
 
 test("lower-body plan includes a unilateral movement when fresh", () => {

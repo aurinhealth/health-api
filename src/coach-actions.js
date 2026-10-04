@@ -1,4 +1,5 @@
 import { validDay } from './training-availability.js';
+import { trainingStatus } from './training-status.js';
 
 export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','actions'],properties:{answer:{type:'string'},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','reason'],properties:{type:{type:'string',enum:['status','move','rest','workout']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},reason:{type:'string'}}}}}}};
 export const ACTION_INSTRUCTIONS=`Vrať answer a nejvýše 3 actions k potvrzení. Každá action musí mít konkrétní důvod. Pokud uživatel jen diskutuje nebo odmítá, nemusíš navrhnout akci.
@@ -17,9 +18,15 @@ export function validateCoachActions(actions,context,today){
       const event=events.get(String(a.eventId));
       if(!event||event.date<today||!String(a.eventId).startsWith('planned:'))return [];
       if(a.type==='move'&&(!validDay(a.date)||a.date<today))return [];
+      const budget=context.availabilityByDate?.[a.date]?.minutes;
+      if(a.type==='move'&&budget!=null&&Number(event.durationHours)*60>budget)return [];
       return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
     }
-    if(a.type==='workout'&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360)return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason}];
+    if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360){
+      if(context.remainingPlanned?.some(x=>x.date===a.date))return [];
+      const budget=context.availabilityByDate?.[a.date]?.minutes;if(budget!=null&&a.minutes>budget)return [];
+      return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason}];
+    }
     return [];
   });
 }

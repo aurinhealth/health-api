@@ -1,4 +1,5 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
+import { trainingStatus } from './training-status.js';
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -159,7 +160,8 @@ const WORDS={
   run:{hard3:"už byly nejméně 3 náročné běhy v aktuálním týdnu",hard2:"rozpočet kvalitních běhů je už téměř vyčerpaný",today:"dnes už proběhl běh",none:"V datech nevidím žádný nedávný běh – začínám lehkým během; kvalitu přidám, až bude běhání zase pravidelné.",off:d=>"Posledních "+d+" dní bez běhu – návrat přes lehký běh se sníženou obtížností; šlachy a klouby si na běh zvykají pomaleji než srdce.",two:"Dva kvalitní běhy v týdnu už byly – dnes lehký objem.",recent:"Kvalita byla před méně než 48 h – dnes lehký běh na zotavení.",safe:"Připravenost není ideální pro kvalitu – lehký běh je bezpečná volba.",gym:"chránit kvalitu běhu po lower-body gymu",labels:{sweet_spot:"Sub-threshold",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}}
 };
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride"}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null}={}){
+  const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=WORDS[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard;
   const targetDate=isoDate(date)||new Date().toISOString().slice(0,10);
@@ -328,10 +330,10 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     date:targetDate,
     readiness:{score,status:readiness,reasons:readinessReasons,sleepMinutes,ctl,atl,tsb,rampRate:ramp,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
-    rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
+    athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
-    recommendation:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
-    alternatives,
+    recommendation:policy.paused?{session:{kind:'rest',name:policy.headline,durationMinutes:0,steps:[],cadence:null},adaptations:policy.guidance,decisionRule:'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
+    alternatives:policy.paused?[]:alternatives,
     missingData:missing,
     confidence:missing.length>=4?"low":missing.length>=2?"medium":"high"
   };

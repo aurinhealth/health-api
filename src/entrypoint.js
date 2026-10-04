@@ -1,5 +1,6 @@
 import app from "./sheets-gateway.js";
 import { buildCoachCouncil } from "./coach-engine.js";
+import { trainingStatus } from './training-status.js';
 import { handleMcpCompat } from "./mcp-compat.js";
 import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
@@ -22,6 +23,7 @@ import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog} from './gym-catalog.js';
 import {askCoach,coachContext,lightModel,assistantTask} from './coach-assistant.js';
 import {validateCoachActions} from './coach-actions.js';
+import {weekReviewContext,fallbackWeekReview,WEEK_REVIEW_REQUEST} from './weekly-plan-review.js';
 import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchPersonalFoods} from './personal-foods.js';
@@ -324,7 +326,7 @@ async function loadCoachInputs(env,ctx,internalAuth,date){
   const json=r=>r.json().catch(()=>({}));
   const [daily,fitness,gym,sleep,profile,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env),...weekResponses.map(json)]);
   applyEnergyBudget(daily,profile,health);
-  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date)};
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB)};
 }
 
 async function planningHistory(env,date,days=84){
@@ -369,7 +371,7 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
   return {
     workout:workout?{id:workout.id,name:workout.name,system:workout.primary_system,sport:workout.sport,durationMinutes:workout.duration_minutes}:null,
     activities:dedupeActivities(activityRows.map(activityFromRow)),
-    wellness:fitness.wellness||[],sleep:[...nights.values()],food,recentFeedback,focus:athleteFocus(profile,date)
+    wellness:fitness.wellness||[],sleep:[...nights.values()],food,recentFeedback,focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB)
   };
 }
 
@@ -397,15 +399,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
     try{
       const body=await request.json(),start=validTrainingDay(body.start)?mondayOfDate(body.start):mondayOfDate(pragueToday());
-      const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,start)]);
+      const today=pragueToday();
+      const [prefs,state,inputs,athleteFeedback,coachNotes]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today),recentWorkoutFeedback(env.DB,shiftDate(today,-21)),listReflections(env.DB,{limit:5}).catch(()=>[])]);
+      if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week.days.push(...(data.days||[]));}
       const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<pragueToday()?start:pragueToday(),21)]),proposal=weekProposal({prefs,state,start,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,focus:inputs.focus,weather,history});
-      let review=null,aiError=null;
+      const context=weekReviewContext({inputs,prefs,state,start,today,proposal,weather,history,athleteFeedback,coachNotes});
+      const weeks=[...new Set(inputs.week.days.filter(d=>d.date>=today&&d.date<=context.reviewScope.end).map(d=>mondayOfDate(d.date)))];
+      const effectiveWeeks=new Map(await Promise.all(weeks.map(async w=>[w,await getWeekPlan(env.DB,w)])));
+      context.availabilityByDate=Object.fromEntries(inputs.week.days.filter(d=>d.date>=today&&d.date<=context.reviewScope.end).map(d=>[d.date,effectiveWeeks.get(mondayOfDate(d.date)).availability[(new Date(d.date+'T12:00:00Z').getUTCDay()+6)%7]]));
+      if(start<today)context.weatherUpcoming=await weekWeather(prefs.location,today);
+      let review=fallbackWeekReview(context),aiError=null;
       if(env.OPENAI_API_KEY){try{
-        const context=coachContext({...inputs,preferences:prefs});
-        Object.assign(context,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,weather,proposal,history});
-        review=await askCoach(env,'Proveď revizi plánovaných tréninků na týden '+start+'. Dej zpětnou vazbu a konkrétní návrhy změn. U prázdných dnů vysvětli navržené aktivity. Zohledni dostupný čas, historii, stav, počasí i preference. Plán sám neukládej.',context,{focus:inputs.focus,task:'planning'});
+        review={...await askCoach(env,WEEK_REVIEW_REQUEST,context,{focus:inputs.focus,task:'planning',actions:true,concise:true}),source:'ai'};
       }catch(error){aiError=error.message}}
-      return Response.json({status:'ok',start,proposal,review,aiError},{headers:{'Cache-Control':'no-store'}});
+      context.userMessage='Zkontroluj budoucí plán a navrhni změny.';
+      const actions=validateCoachActions(review.actions,context,today),drafts=[];await ensureCoachInboxTable(env.DB);
+      for(const action of actions){const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling','Revize budoucího plánu od '+today,JSON.stringify({kind:'coach_action',action})).run();drafts.push({...action,draftId:ins.meta?.last_row_id});}
+      await updateAthleteState(env.DB,{turn:[{role:'user',content:'Navrhnout tréninky · týden '+start},{role:'assistant',content:review.answer.slice(0,16000)}]});
+      return Response.json({status:'ok',start,proposal,review:{...review,actions:drafts},actions:drafts,reviewScope:context.reviewScope,reviewedCount:context.remainingPlanned.length,aiError},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   if (url.pathname === "/app/api/me" && request.method === "GET") {
@@ -526,15 +537,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const capabilities=await getCapabilities(env.DB);
       const athleteFeedback=await recentWorkoutFeedback(env.DB,shiftDate(date,-28)),coachNotes=(await listReflections(env.DB,{limit:5}).catch(()=>[])).map(r=>({date:r.date,text:r.text}));
       const prefs=await getWeekPlan(env.DB,date),effectivePreferences={...prefs,...preferences};Object.assign(preferences,effectivePreferences);
-      const coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes});
+      const coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState});
       Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,athleteState:athleteState.status,statusNote:athleteState.note,preferenceMemory:athleteState.memories,conversation:athleteState.conversation,weather:await weekWeather(prefs.location,mondayOfDate(date))});
       if(assistantTask(message)==='block')Object.assign(coachCtx,{blockHistory:await planningHistory(env,date,84),blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       const rec=coachCtx.cyclingCoachV2?.recommendation?.session||{},kind=rec.kind==="long_endurance"?"endurance":rec.kind==="vo2"?"vo2max":rec.kind;
-      const library=await searchWorkoutLibrary(env.DB,{system:kind,durationMinutes:rec.durationMinutes||availabilityMinutes||90,durationTolerance:20,limit:8},{
+      const library=athleteState.status==='active'?await searchWorkoutLibrary(env.DB,{system:kind,durationMinutes:rec.durationMinutes||availabilityMinutes||90,durationTolerance:20,limit:8},{
         readiness:coachCtx.cyclingCoachV2?.readiness?.status,
         hardBikeDaysRolling7d:coachCtx.cyclingCoachV2?.load?.hardBikeDaysRolling7d,
         phase:coachCtx.cyclingCoachV2?.constraints?.phase
-      });
+      }):{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
       const answer=await askCoach(env,message,coachCtx,{focus:inputs.focus,actions:true});
       coachCtx.userMessage=message;
@@ -702,17 +713,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const latest=Array.isArray(rows)&&rows.length?rows[rows.length-1]:{};
         fitness={...latest,tsb:Number.isFinite(Number(latest.ctl))&&Number.isFinite(Number(latest.atl))?Number(latest.ctl)-Number(latest.atl):null};
       }
-      const council=buildCoachCouncil({daily,fitness,sleepSessions:sleepData.sessions||[]});
+      const athleteState=newest===pragueToday()?await getAthleteState(env.DB):{status:'active',note:''};
+      const statusPolicy=trainingStatus(athleteState);
+      const council=buildCoachCouncil({daily,fitness,sleepSessions:sleepData.sessions||[],athleteState});
       await Promise.all((daily.training?.completed||[]).filter(a=>/^(Ride|VirtualRide|EBikeRide|Cycling|MountainBikeRide|GravelRide)$/i.test(a.type||'')).slice(0,2).map(async a=>{
         const response=await activityDetail(request,env,String(a.id).replace(/^activity:/,''),true);if(!response.ok)return;
         const detail=await response.json(),review=council.reviews.find(r=>r.id==='review-'+a.id);if(!review)return;
-        const sections=rideReviewSections(detail.analysis);if(!sections.length)return;
+        const sections=rideReviewSections(detail.analysis).map(section=>statusPolicy.paused&&section.label==='Tréninkový dopad a další krok'?{...section,text:statusPolicy.guidance.join(' ')}:section);if(!sections.length)return;
         review.analysis=[review.analysis?.[0],...sections].filter(Boolean);review.evidence=['Hodnocení využívá výkonový a tepový stream z Intervals.icu.'];
         const measured=detail.activity,impact=sections.find(s=>s.label==='Tréninkový dopad a další krok');
         review.actions=['Dokončeno: '+Math.round(Number(measured.moving_time)/60)+' min · '+(Number(measured.distance)/1000).toFixed(1)+' km · '+Math.round(Number(measured.total_elevation_gain))+' m převýšení.',...(impact?[impact.text]:[])];
-        council.priorities.unshift(a.name+': '+(impact?.text||sections[0].text));
+        if(!statusPolicy.paused)council.priorities.unshift(a.name+': '+(impact?.text||sections[0].text));
       }));
-      return Response.json({status:"ok",date:newest,...council},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",date:newest,...council,athleteState:{status:athleteState.status,note:athleteState.note}},{headers:{"Cache-Control":"no-store"}});
     } catch(error){return Response.json({status:"error",message:error.message},{status:500});}
   }
 
@@ -844,7 +857,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const sets = values.map((r,i)=>({
         type:String(r?.[0]||"WORK").toUpperCase(), exercise:r?.[1]||"", setNo:r?.[2],
         plannedKg:r?.[3], plannedReps:r?.[4], actualKg:r?.[5], actualReps:r?.[6],
-        rpe:r?.[7], completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")), note:r?.[9]||""
+        rpe:r?.[7], completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")), note:r?.[9]||"",toFailure:r?.[11]||false,superset:r?.[12]||''
       })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
       let historyResult=null;
       if(sets.length) historyResult=await importStrengthHistory(env.DB,{date,sets});

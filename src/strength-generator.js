@@ -2,6 +2,8 @@ import { estimateStartingLoad, resolveLoad } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
 import { availableAt } from "./gym-equipment.js";
+import { sportMuscleLoad,strengthCoverage } from './strength-balance.js';
+import { trainingStatus } from './training-status.js';
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -227,14 +229,13 @@ function choosePlan(context, options = {}) {
   const muscleExposure = recentMuscleExposure(history, context.date);
   const dates = completedWorkoutDates(context?.strength?.recentCompletedSets || []);
   const recentWorkoutCount = dates.filter(d => daysBetween(d, context.date) <= 10).length;
-  const recentTss = num(context?.cycling?.recentRideTss) || 0;
   const next = context?.cycling?.nextRide;
   const nextHard = isIntensity(next);
   const nextLong = (num(next?.durationHours) || 0) >= 2.5;
   const planned = Array.isArray(context?.cycling?.plannedWorkouts) ? context.cycling.plannedWorkouts.slice(0, 3) : [];
   const upcomingHard = planned.filter(isIntensity).length;
   const upcomingLong = planned.filter(x => (num(x?.durationHours) || 0) >= 2.5).length;
-  const protectLegs = legStress >= 0.85 || nextHard || nextLong || upcomingHard >= 2 || upcomingLong >= 2;
+  const protectLegs = legStress >= 0.85 || nextHard || nextLong || upcomingHard >= 2 || upcomingLong >= 2 || options.focusSource==='week'&&options.focus==='upper';
 
   const lastExerciseDate = new Map();
   for (const row of history) {
@@ -260,8 +261,9 @@ function choosePlan(context, options = {}) {
   const emphasis = female ? { glutes: -0.2, abductors: -0.1 } : {};
   const sexNote = female ? " Výchozí váhy bez historie a výběr variant cviků zohledňují profil (žena)." : "";
 
-  const forceUpper = options.forceProtectLegs === true || options.focus === "upper";
+  const forceUpper = options.forceProtectLegs === true || options.focus === "upper"&&options.focusSource!=='week';
   const forceLower = options.focus === "lower";
+  const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
 
   const candidatesByPattern = {
     horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"],
@@ -303,18 +305,14 @@ function choosePlan(context, options = {}) {
     plannedSessions: context?.strength?.plannedSessions || []
   };
 
-  if (forceUpper || (protectLegs && !forceLower)) {
+  if (forceUpper || (acuteRecovery && !forceLower)) {
     return {
       ...base,
       name: "Upper Body",
       exercises: build(["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", "rearDelts", "biceps", "triceps", "lateralRaise", "core"]),
-      rationale: (options.focusSource === "week"
-        ? "Podle týdenního plánu je kolem tohoto dne náročnější trénink na kole nebo běh, proto horní tělo a core; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
-        : forceUpper
+      rationale: (forceUpper
         ? "Požadavek uživatele chrání nohy a soustředí trénink na horní část těla; cviky se vybírají podle čerstvosti a nedávné svalové zátěže."
-        : (recentTss >= 700 || nextHard || nextLong
-          ? "Cyklistická zátěž je vysoká nebo následuje náročnější/long ride; proto chráníme nohy a cviky horní části těla vybíráme podle čerstvosti a nedávné svalové zátěže."
-          : "Aktuální kumulovaná zátěž favorizuje upper-body jednotku; výběr cviků zohledňuje nedávnou svalovou zátěž a opakování cviků.")) + sexNote,
+        : "Velmi slabá regenerace dnes dočasně omezuje zatížení nohou. Dej přednost odpočinku, případný gym zkrať; nohy znovu zařadíme po zlepšení stavu.") + sexNote,
       protectedLegs: true
     };
   }
@@ -338,10 +336,10 @@ function choosePlan(context, options = {}) {
   const exercises = [leg, ...build(["horizontalPush", "horizontalPull", kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], "verticalPush", "verticalPull", "core", "biceps", "triceps"])].filter(Boolean);
   return {
     ...base,
-    name: "Full Body",
+    name: protectLegs?"Full Body · s rezervou":"Full Body",
     exercises,
-    rationale: "Cyklistická zátěž a recovery dovolují plný silový stimul; výběr cviků zohledňuje nedávnou svalovou zátěž a čerstvost jednotlivých cviků." + sexNote,
-    protectedLegs: false
+    rationale: (protectLegs?"Vyvážený silový trénink zahrnuje i nohy. Kvůli okolní sportovní zátěži mají nejvýše 2 pracovní série na cvik, nižší zátěž a rezervu 3–4 opakování. Další výběr vychází ze skutečných silových tréninků.":"Vyvážený silový trénink zahrnuje dolní i horní část těla. Výběr cviků zohledňuje skutečné silové tréninky a čerstvost jednotlivých svalů.") + sexNote,
+    protectedLegs: protectLegs
   };
 }
 // Three ramp-up sets before the first main lift; later main lifts need one.
@@ -389,6 +387,8 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
 }
 
 export function generateStrengthPlan(context, options = {}) {
+  const policy=trainingStatus(context?.athleteState);
+  if(policy.paused)throw new Error(policy.headline+'. '+policy.guidance[0]);
   const chosen = choosePlan(context, options), factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   if (options.focusMuscles != null && !focusMuscles) throw new Error('Vyber 1 až 5 známých partií.');
@@ -422,25 +422,29 @@ export function generateStrengthPlan(context, options = {}) {
   exercises = exercises.sort((a, b) => Number(EXERCISES[b]?.warmup === true) - Number(EXERCISES[a]?.warmup === true));
 
   const rows = [], loadEstimates = [];
-  const muscleLoad = recentMuscleLoad(history, context.date);
+  const muscleLoad = recentMuscleLoad(history, context.date),sportLoad=sportMuscleLoad(context);
+  for(const [muscle,dose] of sportLoad)muscleLoad.set(muscle,(muscleLoad.get(muscle)||0)+dose*1.5);
   const durationVolume = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? .75 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? .9 : 1;
   const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume);
   const maxSets = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4;
   let warmedUp = false;
   for (const exercise of exercises) {
-    const work = workRows(exercise, historyMap, factor, chosen.protectedLegs, muscleLoad, volumeModifier, maxSets, athleteSex(context, options));
+    const muscle=EXERCISES[exercise].muscle;
+    const reducedDose=chosen.protectedLegs&&LEG_MUSCLES.has(muscle)||(sportLoad.get(muscle)||0)>=1;
+    const work = workRows(exercise, historyMap, reducedDose?factor*.9:factor, chosen.protectedLegs, muscleLoad, volumeModifier, reducedDose?Math.min(2,maxSets):maxSets, athleteSex(context, options));
+    if(reducedDose)for(const row of work.rows)row[9]+='; sportovní zátěž: nejvýše 2 pracovní série, nech 3–4 opakování v rezervě (RPE 6–7)';
     const warmup = warmupRows(exercise, work.kg, !warmedUp);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...work.rows);
-    loadEstimates.push({ exercise, sets: work.sets, ...work.estimate });
+    loadEstimates.push({ exercise, sets: work.sets, reducedDose, ...work.estimate });
   }
   const focusLabels = focusMuscles?.map(id => FOCUS_GROUPS[id].label).join(', ');
   const legCaution = chosen.protectedLegs && focusMuscles?.some(id => ['quads', 'hamstrings', 'hips'].includes(id));
   const baseRationale = focusMuscles ? 'Zvolené partie: ' + focusLabels + '. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ' + (legCaution ? 'Kvůli cyklistické zátěži je potřeba držet rezervu u nohou.' : '') : chosen.rationale;
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
-  const rationale = baseRationale + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '');
-  return { date: context.date, planName: focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name, rationale, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
+  const rationale = baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '');
+  return { date: context.date, planName: focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name, rationale, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };

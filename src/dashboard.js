@@ -2,6 +2,7 @@ import {experienceTheme} from './experience-theme.js';
 import {mobileTheme} from './mobile-theme.js';
 import {gymFocusView,gymFocusTheme,muscleMapView} from './gym-focus-view.js';
 import {workoutsHubTheme} from './workouts-hub-theme.js';
+import {assistantPanelTheme} from './assistant-panel-theme.js';
 export function dashboardPage() {
   const html = `<!doctype html>
 <html lang="cs">
@@ -149,11 +150,11 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   <div class="card generate-card"><div class="detail-heading"><div><div class="eyebrow">Posilovna</div><h3 style="margin:4px 0" id="gymMeta">Dnešní silový trénink</h3><label class="small gym-date">Den <input type="date" id="gymDate"></label></div><div class="actions"><button class="btn" id="generateGym">Generovat</button><button class="btn" id="addGymExercise">＋ Přidat cvik</button><button class="btn primary" id="saveGym">Uložit trénink</button></div></div><p class="small" id="gymPlanHint" style="margin:0">Vyber partie, nebo nech trenéra sestavit trénink podle týdne a únavy.</p></div>
   ${gymFocusView()}
   <div class="notice" id="gymNotice">Načítám dnešní trénink…</div>
-  <div class="card" style="margin-top:12px"><div class="scroll"><table class="gym-table"><thead><tr><th>Typ</th><th>Cvik</th><th>Série</th><th>Plán kg</th><th>Plán reps</th><th>Skutečně kg</th><th>Skutečně reps</th><th>RPE</th><th>Hotovo</th><th>Video</th></tr></thead><tbody id="gymRows"></tbody></table></div></div>
+  <div class="card" style="margin-top:12px"><div class="scroll"><table class="gym-table"><thead><tr><th>Typ</th><th>Cvik</th><th>Série</th><th>Plán kg</th><th>Plán reps</th><th>Skutečně kg</th><th>Skutečně reps</th><th>RPE</th><th>Hotovo</th><th>Provedení</th><th>Video</th><th>Úpravy</th></tr></thead><tbody id="gymRows"></tbody></table></div></div>
   </div>
 </section>
 
-<dialog id="assistantDialog" class="assistant-dialog"><div class="detail-heading"><h3>Osobní asistent</h3><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></div><p class="small">Jedno místo pro kolo, gym, výživu a zdravotní data.</p><div class="notice" id="assistantStatus">Návrhy se tvoří z dostupných dat; žádné změny se neukládají automaticky.</div><div id="assistantConversation" aria-live="polite"></div><form id="assistantForm"><label class="small" for="assistantMessage">Co potřebuješ?</label><textarea id="assistantMessage" placeholder="Vygeneruj mi kolo na týden. Zhodnoť dnešní jízdu. Měl jsem snickers a kafe s mlékem." required maxlength="4000"></textarea><button class="btn primary" type="submit">Odeslat</button></form></dialog>
+<dialog id="assistantDialog" class="assistant-dialog" aria-label="Osobní AI asistent"><header class="assistant-panel-header"><div><h3>✦ Osobní asistent</h3><small>Tvůj plán, regenerace a výživa</small></div><button class="btn" id="closeAssistant" aria-label="Zavřít asistenta">✕</button></header><div id="assistantStatus" role="status">Změny plánu čekají na tvé potvrzení.</div><div class="assistant-scroll" id="assistantScroll"><div id="assistantConversation" aria-live="polite"></div><div id="coachActionCards"></div><div id="weekProposalCards"></div></div><form id="assistantForm"><label for="assistantMessage">Napiš asistentovi</label><textarea id="assistantMessage" placeholder="Co chceš probrat nebo upravit?" required maxlength="4000"></textarea><button class="btn primary" type="submit" aria-label="Odeslat zprávu">Odeslat ↑</button></form></dialog>
 
 <section id="recovery" class="view">
   <div class="recovery-command"><div><div class="eyebrow">Daily readiness</div><h1 id="recoveryTitle">Recovery & Health</h1><p id="recoveryInsight">Spánek, regenerace a tělesný trend v jednom rozhodovacím přehledu.</p><div id="recoverySignal" class="focus-chip">Načítám signály</div></div><div class="recovery-score"><div id="recoveryOrb" class="score-orb"><div><strong id="recoveryScore">—</strong><span>recovery</span></div></div><div id="recoveryVsBaseline" class="score-caption">vs. osobní baseline</div></div><div class="recovery-guide"><div class="label">Dnešní doporučení</div><strong id="recoveryGuide">Načítám…</strong><span id="recoveryGuideMeta" class="small"></span></div></div>
@@ -173,7 +174,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 </div></main></div>
 <template id="muscleMapTemplate">${muscleMapView()}</template>
 <div id="toast" class="toast"></div>
-<style>${experienceTheme}${mobileTheme}${gymFocusTheme}${workoutsHubTheme}</style>
+<style>${experienceTheme}${mobileTheme}${gymFocusTheme}${workoutsHubTheme}${assistantPanelTheme}</style>
 <script src="/app/dashboard-client.js?v=20261001-hub" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});

@@ -1,6 +1,7 @@
 import { reflectionSignals } from './coach-reflection.js';
 
-export const ATHLETE_STATUSES = { active: 'Active', sick: 'Sick', injured: 'Injured', on_break: 'On break' };
+import { ATHLETE_STATUSES } from './training-status.js';
+export { ATHLETE_STATUSES } from './training-status.js';
 const clean = v => String(v || '').trim().slice(0, 500);
 async function ensure(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS athlete_state (user_id INTEGER PRIMARY KEY, state_json TEXT NOT NULL)').run();
