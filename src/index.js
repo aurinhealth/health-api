@@ -1,4 +1,5 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
+import { reconcileCancelledGymPlans } from './planned-events.js';
 import { nextUnloggedMeals } from "./nutrition-next.js";
 import {walkingEnergyCheck,activityTelemetryEnergy} from './activity-energy-check.js';
 import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
@@ -1611,6 +1612,9 @@ async function syncIntervalsEvents(env) {
       `/athlete/0/events?oldest=${oldest}&newest=${newest}`
     );
 
+  if (!Array.isArray(events)) throw new Error('Invalid Intervals event response');
+  const previous=(await env.DB.prepare("SELECT external_id,start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,oldest,rangeEnd).all()).results||[];
+
   await env.DB.prepare(
     `DELETE FROM health_datapoints
      WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'planned-workout'
@@ -1654,6 +1658,7 @@ async function syncIntervalsEvents(env) {
     saved++;
   }
 
+  await reconcileCancelledGymPlans(env.DB, previous, events, dateDaysAgo(0));
   return {
     events_found:
       events.length,

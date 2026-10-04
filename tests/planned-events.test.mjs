@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { movePlannedEvent, deletePlannedEvent, eventIdOf, shiftEventStart } from "../src/planned-events.js";
+import { movePlannedEvent, deletePlannedEvent, eventIdOf, shiftEventStart, reconcileCancelledGymPlans } from "../src/planned-events.js";
+import { readGymPlan, writeStrengthPlanToDb } from '../src/gym-plan-store.js';
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 
@@ -48,4 +49,31 @@ test("deleting removes the event in Intervals.icu and locally; a refused call ke
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=1").get().n, 0);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=2").get().n, 1);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM workout_schedule_links").get().n, 0);
+});
+
+test('deleting a strength event also cancels the local workout, including remote 404; a refusal keeps it active', async()=>{
+  const {raw,env}=await setup();
+  await writeStrengthPlanToDb(env.DB,{date:'2026-10-02',rows:[['WORK','Squat','1','60','8']]});
+  const event={id:77,type:'WeightTraining',start_date_local:'2026-10-02T17:30:00'};
+  raw.sqlite.prepare('UPDATE health_datapoints SET payload_json=? WHERE user_id=1').run(JSON.stringify(event));
+  await assert.rejects(deletePlannedEvent(env,{eventId:'77'},async()=>new Response('',{status:403})));
+  assert.equal((await readGymPlan(env.DB,'2026-10-02')).cancelled,false);
+  await deletePlannedEvent(env,{eventId:'77'},async()=>new Response('',{status:404}));
+  assert.equal((await readGymPlan(env.DB,'2026-10-02')).cancelled,true);
+});
+
+test('external cancellation is reconciled; cycling deletion, past events, another gym event and a moved event do not cancel a local plan',async()=>{
+  const {env}=await setup();
+  const event={id:77,type:'WeightTraining',start_date_local:'2026-10-04T17:30:00'};
+  const previous=[{external_id:'planned:77',payload_json:JSON.stringify(event)}];
+  await reconcileCancelledGymPlans(env.DB,previous,[{...event,start_date_local:'2026-10-05T17:30:00'}],'2026-10-04');
+  assert.equal((await readGymPlan(env.DB,'2026-10-04')).cancelled,false);
+  await reconcileCancelledGymPlans(env.DB,previous,[{...event,id:78}],'2026-10-04');
+  assert.equal((await readGymPlan(env.DB,'2026-10-04')).cancelled,false);
+  await reconcileCancelledGymPlans(env.DB,previous,[],'2026-10-05');
+  await reconcileCancelledGymPlans(env.DB,[{payload_json:JSON.stringify({...event,type:'Ride'})}],[],'2026-10-04');
+  assert.equal((await readGymPlan(env.DB,'2026-10-04')).cancelled,false);
+  await reconcileCancelledGymPlans(env.DB,previous,[],'2026-10-04');
+  assert.equal((await readGymPlan(env.DB,'2026-10-04')).cancelled,true);
+  await assert.rejects(reconcileCancelledGymPlans(env.DB,previous,{},'2026-10-04'));
 });

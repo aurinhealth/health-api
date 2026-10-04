@@ -3,7 +3,11 @@
 // datapoint and library schedule link) follows so the dashboard updates
 // without waiting for the next sync.
 
+import { cancelGymPlan } from './gym-plan-store.js';
+
 const BASE = "https://intervals.icu/api/v1/athlete/0/events/";
+export const isStrengthEvent = event => /^(WeightTraining|Strength|Gym)$/i.test(String(event?.type || ''));
+const eventDate = event => String(event?.start_date_local || event?.start_date || event?.date || '').slice(0, 10);
 const validDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
 
 // "planned:123" (dashboard id) or "123" → "123".
@@ -47,10 +51,32 @@ export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch
 export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error("Neplatný plánovaný trénink.");
+  const row = await plannedRow(env.DB, id);
+  let event = {}; try { event = JSON.parse(row?.payload_json || '{}'); } catch {}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "DELETE", headers: auth(env) });
   // Already gone in Intervals.icu: still remove the local copy.
   if (!response.ok && response.status !== 404) throw new Error("Intervals.icu smazání odmítlo (HTTP " + response.status + ").");
+  if (isStrengthEvent(event)) {
+    const date=eventDate(event)||String(row.start_time).slice(0,10);
+    const remaining=(await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id!=? AND start_time>=? AND start_time<?").bind(env.DB.userId,'planned:'+id,date,date+'T23:59:59.999').all()).results||[];
+    const another=remaining.some(r=>{try{return isStrengthEvent(JSON.parse(r.payload_json))}catch{return false}});
+    if(!another)await cancelGymPlan(env.DB,date,event);
+  }
   await env.DB.prepare("DELETE FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id=?").bind(env.DB.userId, "planned:" + id).run();
   await env.DB.prepare("DELETE FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?").bind(env.DB.userId, id).run().catch(() => {});
   return { status: "ok", eventId: id };
+}
+
+// Also honor cancellations made directly in Intervals. Only disappearance of
+// a previously imported strength event cancels its local plan; an unscheduled
+// local plan remains valid. Moving an event keeps its date handled separately.
+export async function reconcileCancelledGymPlans(db, previous, events, today) {
+  if (!Array.isArray(events)) throw new Error('Invalid Intervals event response');
+  const ids = new Set(events.map(e => String(e.id ?? e.event_id ?? '')));
+  const strengthDates = new Set(events.filter(isStrengthEvent).map(eventDate));
+  for (const row of previous) {
+    let event; try { event = JSON.parse(row.payload_json); } catch { continue; }
+    const date = eventDate(event) || String(row.start_time || '').slice(0, 10);
+    if (date >= today && isStrengthEvent(event) && !ids.has(String(event.id ?? event.event_id ?? String(row.external_id || '').replace(/^planned:/, ''))) && !strengthDates.has(date)) await cancelGymPlan(db, date, event);
+  }
 }

@@ -1,21 +1,26 @@
 const $=id=>document.getElementById(id);
 let coachRefreshRunning=false;
 let statusCoachingRevision=0;
+let planDataRevision=0;
 let coachRefreshTimer;
 function scheduleCoachRefresh(){clearTimeout(coachRefreshTimer);coachRefreshTimer=setTimeout(refreshCoachLifecycle,250);}
 async function refreshCoachLifecycle(){
   if(document.hidden||coachRefreshRunning||selectedHistoryDate!==pragueToday())return;
   coachRefreshRunning=true;
   const revision=statusCoachingRevision;
+  const planRevision=planDataRevision;
   try{
-    const [daily,coaches,fitness,sleep]=await Promise.all([jsonFetch('/app/api/daily'),jsonFetch('/app/api/coaches'),jsonFetch('/app/api/fitness?days=90'),jsonFetch('/app/api/sleep?start='+dateShift(pragueToday(),-31)+'&end='+dateShift(pragueToday(),1))]);
-    if(revision!==statusCoachingRevision||selectedHistoryDate!==pragueToday())return;
+    const [daily,coaches,fitness,sleep,gym]=await Promise.all([jsonFetch('/app/api/daily'),jsonFetch('/app/api/coaches'),jsonFetch('/app/api/fitness?days=90'),jsonFetch('/app/api/sleep?start='+dateShift(pragueToday(),-31)+'&end='+dateShift(pragueToday(),1)),jsonFetch('/app/api/gym?date='+gymDay())]);
+    if(revision!==statusCoachingRevision||planRevision!==planDataRevision||selectedHistoryDate!==pragueToday())return;
     const oldStatus=state.athleteState?.status;
     state.daily=daily;state.coaches=coaches;state.fitness=fitness;
+    const gymChanged=JSON.stringify(state.gym?.values)!==JSON.stringify(gym.values)||state.gym?.cancelled!==gym.cancelled;
+    const gymEditing=Boolean(document.activeElement?.closest('#workoutsGym,#gymMode'));
+    if(gym.cancelled||!gymEditing)state.gym=gym;updateCachedDay(pragueToday(),daily,gym);
     const dates=new Set((sleep.sessions||[]).map(s=>s.date));state.sleep={...sleep,sessions:[...(sleep.sessions||[]),...(state.sleep?.sessions||[]).filter(s=>!dates.has(s.date))]};
     if(coaches.athleteState)state.athleteState={...state.athleteState,...coaches.athleteState};
     if(oldStatus&&oldStatus!==state.athleteState?.status){statusCoachingRevision++;state.coachAdvice=null;state.proposals={};state.generated=null;if($('generatedWorkout'))$('generatedWorkout').innerHTML='';if($('weekProposalCards'))$('weekProposalCards').innerHTML='';await loadWeekPlan(true);}
-    renderOverview();renderCoachCouncil();renderToday();
+    renderOverview();renderCoachCouncil();renderToday();renderNutrition();if(gymChanged&&(gym.cancelled||!gymEditing))renderGym();await renderWeekHub();
   }catch{}finally{coachRefreshRunning=false;}
 }
 setInterval(refreshCoachLifecycle,30000);
@@ -56,15 +61,21 @@ function nutritionScore(food,target){
   const scores=vals.filter(([,t])=>Number(t)>0).map(([k,t])=>Math.min(1,Number(food?.[k]||0)/Number(t)));
   return scores.length?Math.round(scores.reduce((a,b)=>a+b,0)/scores.length*100):null;
 }
+function calorieChartDay(d){
+  const food=d.food?.totals||{},target=Math.max(0,num(d.daily?.nutrition?.calorieTarget??d.daily?.calories?.target)),eaten=Math.max(0,num(food.kcal));
+  const macros=[{label:'Bílkoviny',grams:num(food.protein_g),energy:num(food.protein_g)*4,color:'#60a5fa'},{label:'Sacharidy',grams:num(food.carbs_g),energy:num(food.carbs_g)*4,color:'#f59e0b'},{label:'Tuky',grams:num(food.fat_g),energy:num(food.fat_g)*9,color:'#a78bfa'}];
+  const energy=macros.reduce((sum,m)=>sum+m.energy,0);
+  return {target,eaten,logged:eaten>0||(d.food?.entries||[]).length>0,progress:target?eaten/target*100:null,macros:macros.map(m=>({...m,share:energy>0?m.energy/energy*100:0}))};
+}
 function macroChart(id,days){
-  const svg=$(id),shown=(days||[]).slice(-7);if(!shown.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return}
-  const compact=true,W=1000,H=440,top=96,bottom=18,left=12,plot=H-top-bottom,slot=(W-left-12)/shown.length,bw=slot*.86,dayNames=["Neděle","Pondělí","Úterý","Středa","Čtvrtek","Pátek","Sobota"];svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.style.height='auto';svg.style.width='100%';svg.style.aspectRatio='1000 / 440';
-  let out='';
-  shown.forEach((d,i)=>{const food=d.food?.totals||{},target=Math.max(1,num(d.daily?.nutrition?.calorieTarget||d.daily?.calories?.target)),eaten=Math.max(0,num(food.kcal)),macroKcal=num(food.protein_g)*4+num(food.carbs_g)*4+num(food.fat_g)*9,vals=[{kcal:num(food.protein_g)*4,color:"#60a5fa"},{kcal:num(food.carbs_g)*4,color:"#f59e0b"},{kcal:num(food.fat_g)*9,color:"#a78bfa"}],x=left+i*slot+(slot-bw)/2,base=top+plot;
-    out+='<text x="'+(x+bw/2)+'" y="32" text-anchor="middle" fill="#f4f7fb" font-size="19" font-weight="800">'+dayNames[new Date(d.date+"T12:00:00").getDay()]+'</text><rect x="'+x+'" y="'+top+'" width="'+bw+'" height="'+plot+'" rx="12" fill="#14253a" stroke="#355270" stroke-width="2"/>';
-    const totalY=62;out+='<text x="'+(x+bw/2)+'" y="'+totalY+'" text-anchor="middle" fill="#f4f7fb" font-size="23" font-weight="850">'+fmt(eaten)+'</text><text x="'+(x+bw/2)+'" y="'+(totalY+24)+'" text-anchor="middle" fill="#aebcd0" font-size="17">/ '+fmt(target)+'</text>';
-    let y=base,remaining=Math.min(target,eaten),visible=vals.filter(v=>Math.min(remaining,v.kcal)>0).length;vals.forEach(v=>{const amount=Math.min(remaining,v.kcal),raw=amount/target*plot;remaining-=amount;if(raw>0){const h=Math.max(4,raw-(visible>1?4:0)),share=macroKcal>0?Math.round(v.kcal/macroKcal*100):0;y-=h;out+='<rect x="'+(x+3)+'" y="'+y+'" width="'+(bw-6)+'" height="'+h+'" rx="6" fill="'+v.color+'"/>';if(h>=15)out+='<text x="'+(x+bw/2)+'" y="'+(y+h/2+5)+'" text-anchor="middle" fill="#07101d" font-size="'+(h<24?'13':'16')+'" font-weight="900">'+share+'%</text>';y-=4;}});});
-  svg.innerHTML=out;
+  let chart=$(id);if(chart.tagName.toLowerCase()==='svg'){const replacement=document.createElement('div');replacement.id=id;chart.replaceWith(replacement);chart=replacement;}
+  chart.className='macro-week-chart';const shown=(days||[]).slice(-7);
+  if(!shown.length){chart.innerHTML='<p class="small">Bez dat</p>';return}
+  chart.innerHTML='<div class="macro-legend"><span><i style="background:#60a5fa"></i>Bílkoviny</span><span><i style="background:#f59e0b"></i>Sacharidy</span><span><i style="background:#a78bfa"></i>Tuky</span></div><p class="small">Zapsaný příjem / denní cíl · kcal</p><div class="macro-chart-scroll"><div class="macro-columns">'+shown.map(d=>{
+    const v=calorieChartDay(d),label=new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d.date+'T12:00:00Z')),tip=v.macros.map(m=>m.label+' '+fmt(m.grams,1)+' g').join(' · '),fill=v.progress==null?0:Math.min(100,v.progress),progress=v.progress==null?'Cíl chybí':!v.logged?'Bez zápisu':v.progress>0&&v.progress<1?'<1 % cíle':fmt(v.progress)+' % cíle';
+    const segments=v.macros.some(m=>m.share>0)?v.macros.filter(m=>m.share>0).map(m=>'<i style="height:'+m.share+'%;background:'+m.color+'" title="'+esc(m.label+' '+fmt(m.grams,1)+' g')+'"></i>').join(''):'<i style="height:100%;background:#91e5c9"></i>';
+    return '<div class="macro-day'+(d.date===pragueToday()?' current':'')+'" title="'+esc(longDate(d.date)+' · '+(v.logged?v.eaten+' kcal · '+tip:'bez zápisu'))+'"><span class="macro-day-name">'+esc(label)+'</span><strong>'+(v.logged?fmt(v.eaten):'—')+'</strong><small>/ '+(v.target?fmt(v.target):'—')+'</small><div class="macro-day-track" role="img" aria-label="'+esc(longDate(d.date)+': '+(v.logged?v.eaten+' z '+v.target+' kcal':'bez zapsaného příjmu'))+'"><div class="macro-day-fill" style="height:'+fill+'%">'+(v.logged?segments:'')+'</div></div><span class="macro-day-progress'+(v.progress>100?' over':'')+'">'+progress+'</span></div>';
+  }).join('')+'</div></div>';
 }
 function isoWeek(date){
   const d=new Date(date+"T12:00:00Z"), th=new Date(d);
@@ -1058,7 +1069,7 @@ function installDataCorrections(){
   const saveBasket=$('basketSave').onclick;$('basketSave').onclick=async()=>{try{if(!$('foodEditor').hidden){const p=foodEditorProduct();if(['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||!Number.isFinite(p[k])||p[k]<0))throw new Error('Doplň energii a všechna makra. Nula je platná hodnota.');foodIntake(p,$('foodGrams').value,$('foodUnit').value,{pieceAmount:$('foodPieceAmount').value,pieceUnit:$('foodPieceUnit').value,density:$('foodDensity').value});$('foodGrams').dispatchEvent(new Event('input',{bubbles:true}));if(!$('basketName').value.trim()&&$('basketRows').querySelectorAll('[data-edit-ingredient]').length===1)$('basketName').value=p.name;}await saveBasket();}catch(e){foodMessage(e.message);}};
   for(const heading of $('settings').querySelectorAll('h3')){if(heading.textContent==='Jak pracujeme s více zdroji'){heading.parentElement.querySelector('p').textContent='Cyklistické aktivity čerpáme z Intervals.icu. Spánek, HRV, klidový tep, kroky, celodenní aktivní energii a ostatní dokončené aktivity čerpáme z Google Health. Dostupnost a stáří konkrétních měření najdeš v části Spánek a zdraví.';}}
   $('fitnessProfileForm').previousElementSibling.textContent='Profil se ukládá na server i do tohoto prohlížeče. Celodenní zátěž vychází z aktivní energie Google Health a osobní baseline; nejde o algoritmus WHOOP ani Bevel.';
-  const css=document.createElement('style');css.textContent='#calChart,#nutritionChart{height:auto!important;width:100%;aspect-ratio:1000/440;display:block}.experience-stats{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.macro-line{gap:12px;white-space:nowrap}.pulse-card{min-width:0}.pulse-card h3{font-size:19px}.pulse-card p{overflow-wrap:anywhere}.stack-chart{max-width:none!important}';document.head.append(css);
+  const css=document.createElement('style');css.textContent='#calChart,#nutritionChart{width:100%;display:block}.experience-stats{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.macro-line{gap:12px;white-space:nowrap}.pulse-card{min-width:0}.pulse-card h3{font-size:19px}.pulse-card p{overflow-wrap:anywhere}.stack-chart{max-width:none!important}';document.head.append(css);
   $('profileHrmax').parentElement.insertAdjacentHTML('afterend','<label>Klidový tep · bpm<input id="profileRhr" class="food-input" type="number" min="25" max="120" placeholder="Automaticky z Googlu"></label>');$('profileRhr').value=savedProfile().rhr||'';
   const saveProfile=$('fitnessProfileForm').onsubmit;$('fitnessProfileForm').onsubmit=async e=>{saveProfile(e);localStorage.setItem('fitnessProfile',JSON.stringify({...savedProfile(),rhr:$('profileRhr').value}));try{await jsonFetch('/app/api/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(savedProfile())});await load();toast('Profil uložen a výpočty aktualizované.');}catch(error){toast('Profil je pouze v prohlížeči: '+error.message);}renderExperience();correctDataPresentation();};
   $('foodSaveButton').insertAdjacentHTML('beforebegin','<button type="button" class="btn" id="savePersonalFood">Uložit potravinu pro příště</button>');$('savePersonalFood').onclick=async()=>{try{await jsonFetch('/app/api/food/personal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(foodEditorProduct())});foodMessage('Potravina je uložená v tvojí databázi. Příště ji najdeš podle názvu i podobného zadání.');}catch(e){foodMessage(e.message);}};
@@ -1319,7 +1330,7 @@ async function renderWeekHub(){
     if(d.date===gymDay()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');items.push('<div class="hub-item planned">'+HUB_SPORTS.gym+' · '+(d.date===today?'plán na dnes':'plán připraven')+'</div>');}
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
-    const plan=[...new Set([...(state.weekPlan?.prefs?.days?.[i]||[]),...Object.keys(state.proposals||{}).filter(k=>k.startsWith(d.date+'|')).map(k=>k.split('|')[1])])].map(sport=>{const x=state.weekPlan.dirty?null:(roles[i]?.items||[]).find(r=>r.sport===sport),tg=state.weekPlan.dirty?null:chipTarget(d.date,sport),pr=state.proposals?.[d.date+'|'+sport];
+    const plan=[...new Set([...(state.weekPlan?.prefs?.days?.[i]||[]),...Object.keys(state.proposals||{}).filter(k=>k.startsWith(d.date+'|')).map(k=>k.split('|')[1])])].filter(sport=>!(sport==='gym'&&gymCancelledOn(d.date))).map(sport=>{const x=state.weekPlan.dirty?null:(roles[i]?.items||[]).find(r=>r.sport===sport),tg=state.weekPlan.dirty?null:chipTarget(d.date,sport),pr=state.proposals?.[d.date+'|'+sport];
       const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open" data-date="'+d.date+'" data-sport="'+sport+'">Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add" data-date="'+d.date+'" data-sport="'+sport+'">Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym" data-date="'+d.date+'">Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
       return '<span class="planner-chip" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'" title="Plán týdne · přetáhni na jiný den">'+HUB_SPORTS[sport]+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(x?'<small>'+esc(x.label.replace(/^Gym · /,''))+(tg&&sport!=='gym'?' · '+hm(tg.minutes)+' · ~'+tg.tss+' TSS':'')+'</small>':'')+(!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
@@ -1409,16 +1420,28 @@ function installWorkoutsHub(){
 // The change shows at once; Intervals.icu is updated in the background and a
 // refused change is rolled back.
 function hubDays(){return state.hubWeek===weekStart&&state.week?.days?state.week.days:state.hubWeekData?.days||null}
+function updateCachedDay(date,daily,gym){
+  for(const days of [state.week?.days,state.hubWeekData?.days]){const day=days?.find(d=>d.date===date);if(!day)continue;if(daily){day.daily=daily;if(daily.nutrition?.foodLog)day.food=daily.nutrition.foodLog;}if(gym?.date===date)day.gymCancelled=Boolean(gym.cancelled);}
+}
+function gymCancelledOn(date){return (state.gym?.date===date&&state.gym.cancelled)||[...(state.week?.days||[]),...(state.hubWeekData?.days||[])].some(d=>d.date===date&&d.gymCancelled)}
 function takePlanned(days,eventId){for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===String(eventId));if(i>=0)return list.splice(i,1)[0];}return null}
 async function refreshAfterPlanChange(){
-  try{const fresh=await jsonFetch('/app/api/week?start='+weekStart);state.week=fresh;try{renderTraining();renderOverview();}catch{}}catch{}
+  const revision=++planDataRevision;
+  const results=await Promise.allSettled([jsonFetch('/app/api/week?start='+weekStart),jsonFetch('/app/api/daily?date='+selectedHistoryDate),jsonFetch('/app/api/gym?date='+gymDay())]);
+  if(revision!==planDataRevision)return;
+  if(results[0].status==='fulfilled')state.week=results[0].value;
+  if(results[1].status==='fulfilled')state.daily=results[1].value;
+  if(results[2].status==='fulfilled')state.gym=results[2].value;
+  updateCachedDay(selectedHistoryDate,state.daily,state.gym);
+  renderTraining();renderOverview();renderNutrition();renderGym();renderToday();scheduleCoachRefresh();
   if(state.hubWeek!==weekStart)state.hubWeekData=null;
   await renderWeekHub();loadScheduledWorkouts();
 }
 async function changePlanned(path,body,apply,done){
+  planDataRevision++;
   const days=hubDays(),snapshot=days?JSON.stringify(days):null;
   if(days){apply(days);renderWeekHub();if(typeof renderToday==='function')renderToday();}
-  try{await jsonFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast(done);refreshAfterPlanChange();}
+  try{await jsonFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast(done);await refreshAfterPlanChange();}
   catch(error){if(days)days.splice(0,days.length,...JSON.parse(snapshot));renderWeekHub();if(typeof renderToday==='function')renderToday();toast('Změna se neuložila, vracím ji zpět: '+error.message);}
 }
 function movePlanned(eventId,date,name){
@@ -1595,14 +1618,14 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
 const SPORT_ICON={ride:'🚴',run:'🏃',gym:'🏋️'};
 function miniRing(label,value,progress,color,sub,view){return '<button type="button" class="mini-ring" data-go="'+view+'"><span class="mini-ring-dial" style="--p:'+Math.max(0,Math.min(100,num(progress)))+';--c:'+color+'"><b>'+esc(value)+'</b></span><span class="mini-ring-label">'+esc(label)+'</span><small>'+esc(sub)+'</small></button>';}
 function todayItems(date){
-  const days=hubDays()||state.week?.days||[],d=days.find(x=>x.date===date)||(date===selectedHistoryDate?{date,daily:state.daily}:null),t=d?.daily?.training||{},out=[];
+  const days=hubDays()||state.week?.days||[],d=date===selectedHistoryDate&&state.daily?{date,daily:state.daily}:days.find(x=>x.date===date),t=d?.daily?.training||{},out=[];
   for(const a of (t.completed||[]).filter(x=>!isNutritionItem(x)))out.push({kind:'done',sport:activitySport(a),name:a.name||a.type,meta:hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss):''),a});
   const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
   for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||''))))out.push({kind:'planned',sport:activitySport(p),name:p.name||'Plán',meta:(p.durationHours?hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss):''),p});
   const sports=new Set(out.map(x=>x.sport));
-  if(date===pragueToday()&&(state.gym?.date||pragueToday())===date&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){out.push({kind:'gymplan',sport:'gym',name:state.gym.values[2]?.[1]||'Silový trénink',meta:(state.gym.values.slice(7).filter(r=>r?.[1]).length)+' sérií v plánu'});sports.add('gym');}
+  if(date===pragueToday()&&(state.gym?.date||pragueToday())===date&&!gymCancelledOn(date)&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){out.push({kind:'gymplan',sport:'gym',name:state.gym.values[2]?.[3]||state.gym.values[1]?.[0]||'Silový trénink',meta:(state.gym.values.slice(7).filter(r=>r?.[1]).length)+' sérií v plánu'});sports.add('gym');}
   const role=date>=pragueToday()&&!statusPausesTraining()?(state.weekPlan?.roles?.[weekdayOf(date)]?.items||[]):[];
-  for(const x of role)if(!sports.has(x.sport))out.push({kind:'role',sport:x.sport,name:x.label,meta:'podle plánu týdne'});
+  for(const x of role)if(!sports.has(x.sport)&&!(x.sport==='gym'&&gymCancelledOn(date)))out.push({kind:'role',sport:x.sport,name:x.label,meta:'podle plánu týdne'});
   return out;
 }
 // Walks are everyday movement, not training: they get no rating.
@@ -2478,7 +2501,7 @@ function weeklyEnergySummary(days,today){
     targets:days.filter(d=>measured(d.daily?.nutrition?.calorieTarget??d.daily?.calories?.target)).length};
 }
 function renderWeeklyEnergy(){
-  let card=$('weeklyEnergy');if(!card){card=document.createElement('article');card.id='weeklyEnergy';card.className='card weekly-energy';$('nutrition').querySelector('.nutrition-home')?.after(card);}
+  let card=$('weeklyEnergy');if(!card){card=document.createElement('article');card.id='weeklyEnergy';card.className='card weekly-energy';$('nutritionWeekly')?.append(card);}
   const days=state.week?.days||[];if(!days.length){card.hidden=true;return}card.hidden=false;
   const b=weeklyEnergySummary(days,pragueToday()),difference=Math.round(b.closedDifference);
   card.innerHTML='<div class="do-head"><h3>Kalorie za týden</h3><small>'+esc(dateLabel(weekStart)+' – '+dateLabel(dateShift(weekStart,6)))+'</small></div><div class="weekly-energy-values"><div><span>Cíl za celý týden</span><strong>'+(b.targets===days.length?fmt(b.target):'Neúplný cíl')+' <small>kcal</small></strong></div><div><span>Zapsaný příjem</span><strong>'+fmt(b.consumed)+' <small>kcal</small></strong></div><div><span>Do týdenního cíle</span><strong>'+(b.targets===days.length?fmt(b.remaining):'—')+' <small>kcal</small></strong></div></div><div class="weekly-energy-bar"><i style="width:'+Math.min(100,b.target?b.consumed/b.target*100:0)+'%"></i></div>'+
@@ -2548,3 +2571,11 @@ function installReliableFoodEditor(){
 }
 installReliableFoodEditor();
 setInterval(()=>{if(!document.hidden&&(mealEntries||[]).some(e=>['queued','syncing','operation'].includes(e.google?.status)))loadEnteredFood();},10000);
+
+function installGymCancellation(){
+  $('generateGym').insertAdjacentHTML('afterend','<button type="button" class="btn" id="cancelGym" hidden>Zrušit posilovnu</button><button type="button" class="btn" id="restoreGym" hidden>Obnovit původní plán</button>');
+  const original=renderGym;renderGym=function(){original();const cancelled=Boolean(state.gym?.cancelled);$('cancelGym').hidden=cancelled||!(state.gym?.values||[]).slice(7).some(r=>r?.[1]);$('restoreGym').hidden=!state.gym?.recoverable;$('saveGym').disabled=cancelled;$('addGymExercise').disabled=cancelled;if(cancelled)$('gymNotice').textContent='Posilovna na tento den je zrušená. Původní plán a zapsané výsledky zůstaly uložené.';};
+  for(const action of ['cancel','restore'])$(action+'Gym').onclick=async()=>{const b=$(action+'Gym');b.disabled=true;planDataRevision++;try{await gymSaveQueue.catch(()=>{});const r=await jsonFetch('/app/api/gym',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:gymDay(),action})});if(action==='cancel'){state.gym={...state.gym,cancelled:true,recoverable:true,values:[]};updateCachedDay(gymDay(),null,state.gym);delete state.proposals?.[gymDay()+'|gym'];renderToday();renderGym();}toast(r.message);await refreshAfterPlanChange();}catch(error){toast(error.message)}finally{b.disabled=false;}};
+  const style=document.createElement('style');style.textContent='.nutrition-weekly{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(300px,1fr);gap:16px;margin-top:16px;align-items:stretch}.nutrition-weekly>.card{min-width:0;margin:0}.nutrition-weekly .weekly-energy-values{grid-template-columns:1fr;gap:4px}.nutrition-weekly .weekly-energy-values strong{font-size:28px}.nutrition-weekly .weekly-energy-values>div{padding:10px 0;border-bottom:1px solid #29333b}.macro-week-chart{height:auto!important;aspect-ratio:auto!important}.macro-legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 10px;color:#b3c0ca;font-size:12px}.macro-legend span{display:flex;gap:6px;align-items:center}.macro-legend i{width:8px;height:8px;border-radius:50%}.macro-chart-scroll{overflow-x:auto;padding-bottom:6px}.macro-columns{display:grid;grid-template-columns:repeat(7,minmax(62px,1fr));gap:10px;min-width:480px}.macro-day{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}.macro-day-name{text-transform:capitalize;font-size:12px;color:#a7b7c1}.macro-day strong{font-size:20px}.macro-day small{font-size:11px;color:#a7b7c1}.macro-day-track{height:190px;width:100%;max-width:64px;border:1px solid #32434e;border-radius:10px;background:#101b24;display:flex;align-items:flex-end;overflow:hidden;margin:8px 0}.macro-day-fill{display:flex;flex-direction:column-reverse;width:100%;overflow:hidden}.macro-day-fill i{display:block;width:100%;flex-shrink:0}.macro-day-progress{font-size:10px;white-space:nowrap;color:#99adb9}.macro-day-progress.over{color:#ffc184}.macro-day.current .macro-day-name{color:#91e5c9}.macro-day.current .macro-day-track{border-color:#91e5c9}@media(max-width:900px){.nutrition-weekly{grid-template-columns:1fr}.nutrition-weekly .weekly-energy-values{grid-template-columns:repeat(3,minmax(0,1fr))}.nutrition-weekly .weekly-energy-values strong{font-size:21px}.nutrition-weekly .weekly-energy-values span{font-size:11px}}@media(max-width:800px){#nutrition>.nutrition-weekly{order:6;margin-top:12px}#nutrition>.nutrition-next{order:1;margin-bottom:12px}}';document.head.append(style);
+}
+installGymCancellation();

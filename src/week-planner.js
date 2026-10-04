@@ -59,7 +59,9 @@ export async function nightlyGymSkip(db, date) {
   const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
   if (prefs.availability[weekday].minutes === 0) return 'Tento den nemáš čas na aktivitu.';
   if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return "Podle týdenního plánu není tento den gym.";
-  if ((await readGymPlan(db, date)).stored) return "Na tento den už gym plán je.";
+  const gym = await readGymPlan(db, date);
+  if (gym.cancelled) return "Gym na tento den jsi zrušil.";
+  if (gym.stored) return "Na tento den už gym plán je.";
   return null;
 }
 
