@@ -1753,14 +1753,15 @@ function recordsCardHtml(rec){
   const t=rec.trends||{},key=prPeriod(t),period=t.periods?.[key],c=t.cardio||{},at=m=>m?.change?.[key]||null;
   const rows=(t.strength||[]).map(x=>({x,ch:at(x)})).filter(r=>r.ch).slice(0,10);
   const tile=(icon,label,value,badge,date)=>'<div><span>'+icon+'</span><strong>'+value+'</strong>'+badge+'<small>'+esc(label)+' · '+esc(dateLabel(date))+'</small></div>';
-  const tiles=[];
-  if(at(c.ftp)&&at(c.longestRide))tiles.push(tile('⚡','FTP',fmt(at(c.ftp).value)+' W',trendBadge(at(c.ftp),{unit:'W',format:v=>fmt(Math.abs(v))}),at(c.ftp).date));
-  if(at(c.runPace))tiles.push(tile('⏱','Nejrychlejší běh 5 km+',fmtPaceText(at(c.runPace).value)+' /km',trendBadge(at(c.runPace),{lowerIsBetter:true,format:v=>fmtPaceText(v)}),at(c.runPace).date));
-  for(const [k,icon,label] of [['longestRide','🚴','Nejdelší jízda'],['mostElevation','⛰','Nejvíc převýšení'],['longestRun','🏃','Nejdelší běh']])if(at(c[k])&&at(c[k]).value>0)tiles.push(tile(icon,label,String(fmt(at(c[k]).value,1)).replace('.',',')+' '+c[k].unit,trendBadge(at(c[k]),{unit:c[k].unit}),at(c[k]).date));
+  // Two rows: the bike (FTP, longest ride, most climbing), then the run (pace, longest run).
+  const distance=k=>at(c[k])&&at(c[k]).value>0?tile({longestRide:'🚴',mostElevation:'⛰',longestRun:'🏃'}[k],{longestRide:'Nejdelší jízda',mostElevation:'Nejvíc převýšení',longestRun:'Nejdelší běh'}[k],String(fmt(at(c[k]).value,1)).replace('.',',')+' '+c[k].unit,trendBadge(at(c[k]),{unit:c[k].unit}),at(c[k]).date):'';
+  const ride=[at(c.ftp)&&at(c.longestRide)?tile('⚡','FTP',fmt(at(c.ftp).value)+' W',trendBadge(at(c.ftp),{unit:'W',format:v=>fmt(Math.abs(v))}),at(c.ftp).date):'',distance('longestRide'),distance('mostElevation')].filter(Boolean);
+  const run=[at(c.runPace)?tile('⏱','Nejrychlejší běh 5 km+',fmtPaceText(at(c.runPace).value)+' /km',trendBadge(at(c.runPace),{lowerIsBetter:true,format:v=>fmtPaceText(v)}),at(c.runPace).date):'',distance('longestRun')].filter(Boolean);
+  const tiles=[ride,run].filter(r=>r.length).map(r=>'<div class="pr-cardio">'+r.join('')+'</div>');
   const day=d=>new Intl.DateTimeFormat('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'}).format(new Date(d+'T12:00:00Z')),span=period?(period.kind==='all'?'Všechna data v aplikaci od '+day(period.start):period.kind==='year'?'Rok '+period.label:'Od '+day(period.start)+' do dneška'):'';
   return '<article class="card insight-records"><div class="detail-heading"><div><div class="label">Personal Records</div><h3>Osobní rekordy</h3><p class="small pr-span">'+esc(span)+'</p></div>'+prPeriodControls(t,key)+'</div>'+
     (rows.length?'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Max. váha</th><th>Datum</th><th>Změna</th></tr></thead><tbody>'+rows.map(({x,ch})=>'<tr><td>'+esc(x.exercise)+'</td><td>'+String(fmt(ch.value,1)).replace('.',',')+' kg'+(ch.reps?' <span class="small">× '+ch.reps+'</span>':'')+'</td><td>'+esc(dateLabel(ch.date))+'</td><td>'+(trendBadge(ch,{unit:'kg'})||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<p class="small">V tomto období žádné série s váhou.</p>')+
-    (tiles.length?'<div class="pr-cardio">'+tiles.join('')+'</div>':'')+
+    tiles.join('')+
     '<p class="small">Rekord je nejlepší výkon v období, šipka ukazuje změnu proti nejlepšímu před ním (FTP: platné na konci proti začátku období). Když starší data chybí, porovnávám s prvním záznamem v období. U tempa je šipka dolů zlepšení.</p></article>';
 }
 function renderFitnessInsights(){

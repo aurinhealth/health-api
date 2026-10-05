@@ -104,7 +104,8 @@ export const workoutsHubTheme = `
 .pr-heaviest span{background:radial-gradient(circle at 35% 30%,#ffb38a,#e8642c)}.pr-setVolume span,.pr-sessionVolume span{background:radial-gradient(circle at 35% 30%,#ffe08a,#e0a21a)}.pr-setReps span{background:radial-gradient(circle at 35% 30%,#d6b5ff,#8a55e8)}
 .pr-badge strong{font-size:14px}.pr-badge small{font-size:10px;color:#9ca6b5;line-height:1.3}
 .pr-table{font-size:12px}.pr-table td,.pr-table th{padding:6px 8px}
-.pr-cardio{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px}
+.pr-cardio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+@media(max-width:480px){.pr-cardio{gap:6px}.pr-cardio div{padding:7px 8px;min-width:0}.pr-cardio span{font-size:15px}.pr-cardio strong{font-size:13px;white-space:nowrap}.pr-cardio .trend{font-size:10px;padding:1px 5px}.pr-cardio small{font-size:9.5px}}
 .pr-cardio div{display:grid;gap:2px;padding:8px 10px;border-radius:10px;background:#151b26;border:1px solid #2a3140}.pr-cardio span{font-size:18px}.pr-cardio strong{font-size:15px}.pr-cardio small{font-size:10px;color:#9ca6b5}
 .timeline{list-style:none;margin:6px 0 0;padding:0 0 0 6px;display:grid;gap:0}
 .timeline li{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 0 8px;border-left:2px solid #2a3140;padding-left:14px;margin-left:10px}
