@@ -9,12 +9,8 @@ export async function buildWeeklyReview(env,context,date){
   const rides=activities.filter(a=>a.cycling);
   const strength=(context?.strength?.recentCompletedSets||[]).filter(r=>dateKey(r.workout_date)>=start&&dateKey(r.workout_date)<=end&&String(r.type||"WORK").toUpperCase()==="WORK"&&Number(r.completed)===1);
   const byDate=[...new Set(strength.map(r=>dateKey(r.workout_date)).filter(Boolean))];
-  // The app's food diary plus ChatGPT's food log entries not linked to it yet.
-  const rows=async(sql,...args)=>{try{return (await env.DB.prepare(sql).bind(...args).all()).results||[];}catch{return [];}};
-  const food=[
-    ...await rows("SELECT consumed_date AS date,kcal AS calories,protein_g,carbs_g,fat_g,'eaten' AS status FROM food_logs WHERE user_id = ? AND consumed_date>=? AND consumed_date<=?",env.USER_ID,start,end),
-    ...await rows("SELECT f.date,f.calories,f.protein_g,f.carbs_g,f.fat_g,f.status FROM food_log f WHERE f.user_id = ? AND f.date>=? AND f.date<=? AND NOT EXISTS (SELECT 1 FROM food_logs d WHERE d.user_id=f.user_id AND d.source='food_log:'||f.id)",env.USER_ID,start,end)
-  ].sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  // The one food diary (the app and ChatGPT log into it).
+  const food=await env.DB.prepare("SELECT consumed_date AS date,kcal AS calories,protein_g,carbs_g,fat_g,COALESCE(status,'eaten') AS status FROM food_logs WHERE user_id = ? AND consumed_date>=? AND consumed_date<=? ORDER BY consumed_date").bind(env.USER_ID,start,end).all().then(r=>r.results||[]).catch(()=>[]);
   const eaten=food.filter(r=>r.status==="eaten");
   const foodDays=[...new Set(eaten.map(r=>r.date))];
   const avg=(arr,key)=>arr.length?Math.round(arr.reduce((s,r)=>s+n(r[key]),0)/arr.length):0;

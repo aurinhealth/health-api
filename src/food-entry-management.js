@@ -36,16 +36,12 @@ export async function updateFoodEntry(db,id,patch){
 export async function copyFoodEntry(db,id,targetDate){
   const row=await existing(db,id),date=dateValue(targetDate);
   const result=await db.prepare('INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .bind(db.userId,date,changedDate(row.consumed_at,date),row.cookbook_page,row.recipe_title,row.servings,row.kcal,row.protein_g,row.carbs_g,row.fat_g,row.fiber_g,linkedId(row)?'manual':row.source,row.note).run();
+    .bind(db.userId,date,changedDate(row.consumed_at,date),row.cookbook_page,row.recipe_title,row.servings,row.kcal,row.protein_g,row.carbs_g,row.fat_g,row.fiber_g,row.source,row.note).run();
   return {status:'ok',id:result.meta.last_row_id,date};
 }
 
-// A diary row made from ChatGPT's food log ("food_log:<id>", see food-log.js).
-const linkedId=row=>{const m=String(row?.source||'').match(/^food_log:(\d+)$/);return m?Number(m[1]):null;};
 export async function deleteFoodEntry(db,id){
   const row=await existing(db,id);
   await db.prepare('DELETE FROM food_logs WHERE id=? AND user_id=?').bind(row.id,db.userId).run();
-  // Deleted in the app: no longer eaten for ChatGPT either.
-  if(linkedId(row))await db.prepare("UPDATE food_log SET status='cancelled' WHERE user_id=? AND id=?").bind(db.userId,linkedId(row)).run().catch(()=>null);
   return {status:'ok',id:row.id,date:row.consumed_date};
 }

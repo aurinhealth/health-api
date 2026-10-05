@@ -72,7 +72,7 @@ export function drinkFromFoodEntry(row) {
 }
 
 export async function foodDrinks(db, userId, date) {
-  const rows = (await db.prepare("SELECT id,consumed_at,recipe_title,note FROM food_logs WHERE user_id=? AND consumed_date=? ORDER BY consumed_at").bind(userId, date).all().catch(() => ({ results: [] }))).results || [];
+  const rows = (await db.prepare("SELECT id,consumed_at,recipe_title,note FROM food_logs WHERE user_id=? AND consumed_date=? AND (status IS NULL OR status='eaten') ORDER BY consumed_at").bind(userId, date).all().catch(() => ({ results: [] }))).results || [];
   return rows.map(drinkFromFoodEntry).filter(Boolean);
 }
 

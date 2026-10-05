@@ -6,7 +6,6 @@ import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight } from "./weight-sync.js";
 import { healthScopes } from "./google-scopes.js";
-import { mirrorDayToDiary } from "./food-log.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -2909,11 +2908,10 @@ function scaleRecipe(recipe, servings) {
 }
 
 async function foodLogForDate(env, date) {
-  // Food logged through ChatGPT before the two diaries were linked.
-  await mirrorDayToDiary(env.DB, date);
+  // Planned or cancelled food (ChatGPT can plan a meal) is not eaten.
   const rows = await env.DB.prepare(`
     SELECT * FROM food_logs
-    WHERE user_id = ? AND consumed_date = ?
+    WHERE user_id = ? AND consumed_date = ? AND (status IS NULL OR status='eaten')
     ORDER BY consumed_at, id
   `).bind(env.USER_ID, date).all();
 
