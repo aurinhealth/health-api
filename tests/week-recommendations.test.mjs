@@ -39,8 +39,14 @@ test('day proposals wait 5 s after a change and show length, TSS, IF and focus',
   ctx.state.weekPlan.dirty = true;
   assert.equal(ctx.plannerQuiet(), true);
   assert.equal(vm.runInContext('PLANNER_QUIET_MS', ctx), 5000);
-  const html = ctx.chipSuggestion('2026-10-10', 'ride', { role: 'endurance', label: 'Vytrvalost' }, { minutes: 120, tss: 98, intensity: .7 });
-  assert.match(html, /2h 0m · ~98 TSS · IF 0,70 · Vytrvalost/);
+  const html = ctx.chipSuggestion('2026-10-10', 'ride', { role: 'endurance', label: 'Vytrvalost' }, { minutes: 120, tss: 98, intensity: .7 }, '5|ride|0');
+  assert.match(html, /⏱ 2h 0m ▾/);
+  assert.match(html, /~98 TSS · IF 0,70 · Vytrvalost/);
+  // The athlete's own length shows at once, the load follows the same IF.
+  ctx.state.weekPlan.prefs = { sessions: { '5|ride|0': { minutes: 60 } } };
+  const own = ctx.chipSuggestion('2026-10-10', 'ride', { role: 'endurance', label: 'Vytrvalost' }, { minutes: 120, tss: 98, intensity: .7 }, '5|ride|0');
+  assert.match(own, /⏱ 1h 0m ▾/);
+  assert.match(own, /~49 TSS/);
   assert.match(html, /data-chip-suggest/);
   assert.match(html, /data-minutes="120"/);
   // IF from load and length when the server gives none; gym has no IF.

@@ -28,6 +28,10 @@ Doporučené tréninky je okno s knihovnou workoutů: zaměření (vytrvalost, p
 
 Přesunutý gym trénink v Intervals.icu vezme s sebou i neodcvičený plán cviků.
 
+U každé kartičky jde kliknutím na ⏱ zvolit délku (gym 30–90 min, kolo a běh od 20 min do 5 h) a vedle názvu sportu přepnout venku / indoor. Bez vlastní volby rozhoduje předpověď počasí a sezóna. Indoor trénink je kratší a tím lehčí: kolo 70 % venkovní délky, nejvýš 90 min, běh na páse 80 %, nejvýš 60 min; intenzita role zůstává. Volby se ukládají k týdnu (`prefs.sessions`, klíč den|sport|pořadí) a cestují s kartičkou při přesunu.
+
+Doporučené tréninky se pro kartičky načítají předem na pozadí a server si výpočet kontextu trenéra a FTP pamatuje 10 minut (`api-cache.js`, Workers Cache API). Každá změna od uživatele (synchronizace, úprava plánu, hodnocení) mezipaměť zneplatní.
+
 Změny se v týdenním přehledu ukážou hned. Zbytek aplikace (Dnes, Trénink, Výživa) se obnoví, až se plán 5 s nemění. Přesuny a mazání tréninků se do Intervals.icu posílají sloučené nejpozději do 15 s (víc přesunů jednoho tréninku = jedna změna, při zavření stránky hned). Když je Intervals.icu odmítne, změna se vrátí zpět. Nový trénink z knihovny se uloží i lokálně, takže je v týdnu vidět bez čekání na synchronizaci.
 
 ## Stav a asistent

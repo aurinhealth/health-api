@@ -11,6 +11,7 @@ import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, mi
 import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from './food-label.js';
 import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { withIntervalsSleep } from './intervals-sleep.js';
+import { cached, bumpCacheVersion } from './api-cache.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail} from './activity-detail.js';
@@ -57,7 +58,7 @@ import { renderForEnvironment } from "./workout-model.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
-import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate } from './adaptive-week.js';
+import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
@@ -76,6 +77,8 @@ import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, 
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
+// Requests that read or preview only and so keep the cache.
+const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|training-profile\/estimate|assistant$|assistant\/stream)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/mcp/health']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -162,7 +165,10 @@ export default {
     if (googleLogin) return googleLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
-      return handleDashboardApi(request, env, ctx, url, { user, signedIn });
+      const response = await handleDashboardApi(request, env, ctx, url, { user, signedIn });
+      // A change by the user makes the cached coach inputs outdated.
+      if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
+      return response;
     }
     if (url.pathname === "/openapi.json" && request.method === "GET") {
       const response = await fetch(OPENAPI_URL, { cf: { cacheTtl: 60 } });
@@ -328,13 +334,17 @@ async function computeWeekTargets(env,ctx,start,prefs){
     if(r.data_type==='planned-workout'&&!/nutrition/i.test(String(p.name||'')+' '+String(p.category||''))){d.planned+=Number(p.icu_training_load)||0;}
     if(sport&&!/nutrition/i.test(String(p.name||'')))d.sports.push(sport);}
   for(const d of days)if(gymDays.has(d.date))d.sports.push('gym');
-  return capWeekTargets(weekTargets({roles:planWeekRoles(prefs.days),ctl,lastWeekLoad,days,today,weekStart:start}),prefs);
+  // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
+  const weather=await weekWeather(prefs.location,start).catch(()=>({}));
+  return capWeekTargets(weekTargets({roles:planWeekRoles(prefs.days),ctl,lastWeekLoad,days,today,weekStart:start}),prefs,[],weather);
 }
 const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
 
 // Everything the coaches look at for one day: the day, fitness, three weeks
 // around it, gym history, sleep and Google Health.
-async function loadCoachInputs(env,ctx,internalAuth,date){
+// Cached for a few minutes per user and day; any change the user makes resets it.
+function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
+async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
@@ -1103,13 +1113,13 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/render'&&request.method==='GET'){
       const workout=await getWorkout(env.DB,String(url.searchParams.get('id')||''));
       if(!workout)return Response.json({status:'error',message:'Workout nebyl nalezen.'},{status:404});
-      const environment=url.searchParams.get('environment')==='indoor'?'indoor':'outdoor',thresholds=await athleteThresholds(env),w=renderForEnvironment(workout,environment),kind=w.sport==='run'?'run':'ride';
+      const environment=url.searchParams.get('environment')==='indoor'?'indoor':'outdoor',thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=renderForEnvironment(workout,environment),kind=w.sport==='run'?'run':'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
       return Response.json({status:'ok',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
-      await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);
+      await cached(env,ctx,'reconcile:'+pragueToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
       const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
       const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport),sport});
       const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
@@ -1119,7 +1129,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(autoDuration)Object.assign(filters,{durationMinutes:autoDuration.durationMinutes,durationSoft:true});
       // With no type chosen, the type the coach recommends for the day ranks first.
       const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
-      const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),athleteThresholds(env)]);
+      const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),cached(env,ctx,'thresholds',()=>athleteThresholds(env))]);
       result.autoDuration=autoDuration;result.coachPick={system:filters.preferredSystem||null,durationMinutes:autoDuration?.durationMinutes||null};
       // Step rows with watts or paces for each card.
       for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});}
@@ -1139,12 +1149,14 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(weekTarget?.minutes)availabilityMinutes=weekTarget.minutes;
       availabilityMinutes=trainingBudget(prefs,date,availabilityMinutes);
       if(availabilityMinutes!=null&&availabilityMinutes<(genSport==='run'?20:30))throw new Error('V tento den nemáš dost času na tento trénink.');
-      const weather=await weekWeather(prefs.location,mondayOfDate(date)),suggestedEnvironment=environmentFor(date,genSport,weather[date]);
+      // The chip's place (the athlete's choice or the forecast) first, then the forecast.
+      const weather=weekTarget?.environment?{}:await weekWeather(prefs.location,mondayOfDate(date)),suggestedEnvironment=weekTarget?.environment?{environment:weekTarget.environment,reason:weekTarget.reason}:environmentFor(date,genSport,weather[date]);
       const environment=body.environment==='auto'||!body.environment?suggestedEnvironment.environment:body.environment;
-      if(environment==='indoor'&&genSport==='ride'&&(!body.environment||body.environment==='auto'))availabilityMinutes=Math.min(availabilityMinutes??90,90);
+      // Indoor is shorter (the chip already is when it says indoor).
+      if(environment==='indoor'&&weekTarget?.environment!=='indoor')availabilityMinutes=availabilityMinutes!=null?indoorMinutes(genSport,availabilityMinutes):genSport==='ride'?90:60;
       const goal=body.phase||weekRole?.focus?{...(body.phase?{phase:String(body.phase)}:{}),...(weekRole?.focus?{focus:weekRole.focus}:{})}:null;
       const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal,sport:genSport});
-      const thresholds=await athleteThresholds(env);
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));
       const resizeTo=Number.isFinite(Number(body.resizeTo))&&Number(body.resizeTo)>0?trainingBudget(prefs,date,Number(body.resizeTo)):null;
       if(resizeTo!=null&&resizeTo<(genSport==='run'?20:30))throw new Error('Na změnu délky nezbývá dost času.');
       let generated=await generateWorkout(env.DB,{sport:genSport,environment,date,coach,availabilityMinutes:resizeTo??availabilityMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo});

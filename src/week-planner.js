@@ -40,7 +40,23 @@ export function sanitizeWeekPlan(input = {}) {
     : DEFAULT_LOCATION;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
   if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error('Počet aktivit musí být 0 až 14.');
-  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count };
+  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days) };
+}
+
+// The athlete's own length or place for one plan chip, keyed "weekday|sport|slot"
+// (slot = the n-th session of that sport that day). Gym has no place to choose.
+export const SESSION_MINUTES = { gym: [30, 45, 60, 75, 90], ride: [30, 45, 60, 75, 90, 120, 150, 180, 240, 300], run: [20, 30, 45, 60, 75, 90, 120] };
+export function sanitizeSessions(raw, days) {
+  const out = {};
+  for (const [key, value] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
+    const m = String(key).match(/^([0-6])\|(ride|run|gym)\|([0-3])$/);
+    if (!m || (days[m[1]] || []).filter(s => s === m[2]).length <= Number(m[3])) continue;
+    const minutes = Number(value?.minutes), entry = {};
+    if (Number.isInteger(minutes) && minutes >= 20 && minutes <= 360 && minutes % 5 === 0) entry.minutes = minutes;
+    if (m[2] !== "gym" && ["indoor", "outdoor"].includes(value?.environment)) entry.environment = value.environment;
+    if (Object.keys(entry).length) out[key] = entry;
+  }
+  return out;
 }
 
 export async function getWeekPlan(db, date = null) {

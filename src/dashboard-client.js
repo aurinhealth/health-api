@@ -105,7 +105,7 @@ function populateWeekSelectors(weekId,dayId,days){
 // A modal dialog covers the page, so messages and tips move into it while open.
 function overlayHost(){try{return document.querySelector('dialog:modal')||document.body}catch{return document.body}}
 function toast(msg){const t=$("toast"),host=overlayHost();if(t.parentNode!==host)host.appendChild(t);t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
-async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options,headers:{...options.headers,"X-Interface-Language":document.documentElement.lang||"cs"}});const d=await r.json().catch(()=>({message:"Invalid response"}));if(r.status===401)showLoginGate();if(r.status===409&&d.status==="onboarding")showOnboarding(d.missingProviders||[]);if(!r.ok)throw new Error(d.message||"HTTP "+r.status);if(options.method&&options.method!=='GET'&&!/\/assistant|\/sync|\/athlete-state|\/food\/(?:label|photo|search|ai-lookup)|\/workouts\/(?:generate|schedule)|\/estimate|\/week-plan|\/planned\//.test(path))scheduleCoachRefresh();return d}
+async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options,headers:{...options.headers,"X-Interface-Language":document.documentElement.lang||"cs"}});const d=await r.json().catch(()=>({message:"Invalid response"}));if(r.status===401)showLoginGate();if(r.status===409&&d.status==="onboarding")showOnboarding(d.missingProviders||[]);if(!r.ok)throw new Error(d.message||"HTTP "+r.status);if(options.method&&options.method!=='GET'&&!/\/food\/(?:label|photo|search|ai-lookup)|\/workouts\/generate|\/estimate/.test(path)&&typeof clearLibraryCache==='function')clearLibraryCache();if(options.method&&options.method!=='GET'&&!/\/assistant|\/sync|\/athlete-state|\/food\/(?:label|photo|search|ai-lookup)|\/workouts\/(?:generate|schedule)|\/estimate|\/week-plan|\/planned\//.test(path))scheduleCoachRefresh();return d}
 // Every data API requires a session; the first 401 swaps the dashboard for a login screen.
 const gateStyle='position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:#0a0d12;overflow:auto';
 function showLoginGate(){if($("loginGate"))return;document.body.insertAdjacentHTML("beforeend",'<div id="loginGate" role="dialog" aria-modal="true" aria-labelledby="loginGateTitle" style="'+gateStyle+'"><div class="card" style="width:min(380px,100%);display:grid;gap:12px"><h2 id="loginGateTitle" style="margin:0">Přihlášení</h2><p class="small" style="margin:0">Do aplikace se přihlašuješ svým Google účtem. Přístup mají jen pozvaní uživatelé.</p><a class="btn primary" href="/auth/google" style="text-align:center;text-decoration:none">Přihlásit přes Google</a></div></div>');}
@@ -497,15 +497,41 @@ async function loadScheduledWorkouts(){
 }
 // Only the newest search renders, so quick filter clicks never show stale results.
 let workoutLibraryRequest=0;
+// The search for a set of filters; the same text for the dialog and the prefetch.
+function librarySearchQuery(f){
+  const p=new URLSearchParams();p.set("sport",f.sport);if(f.system)p.set("system",f.system);p.set("environment",f.environment||"outdoor");
+  if(f.duration){p.set("duration",f.duration);if(f.tolerance)p.set("durationTolerance",f.tolerance);}if(f.load)p.set("load",f.load);if(f.difficulty)p.set("maxDifficulty",f.difficulty);if(f.phase)p.set("phase",f.phase);if(f.date)p.set("date",f.date);p.set("limit","15");
+  return p.toString();
+}
+// Results kept for a few minutes: the dialog shows them at once, then refreshes quietly.
+const LIBRARY_CACHE_MS=10*60*1000,libraryCache=new Map();
+function fetchLibrary(query){
+  const hit=libraryCache.get(query);if(hit&&Date.now()-hit.at<LIBRARY_CACHE_MS&&hit.promise)return hit.promise;
+  const promise=jsonFetch("/app/api/workouts/search?"+query).then(r=>{libraryCache.set(query,{at:Date.now(),data:r,promise:Promise.resolve(r)});return r;}).catch(e=>{libraryCache.delete(query);throw e;});
+  libraryCache.set(query,{at:Date.now(),promise,data:hit?.data||null});return promise;
+}
 async function loadWorkoutLibrary(){
   const date=$("workoutScheduleDate");if(date&&!date.value)date.value=pragueToday();if(date)date.min=pragueToday();
-  const p=new URLSearchParams(),system=$("workoutSystem")?.value,duration=$("workoutDuration")?.value,tol=$("workoutDurationTolerance")?.value,load=$("workoutLoad")?.value,difficulty=$("workoutDifficulty")?.value,phase=$("workoutPhase")?.value;
-  p.set("sport",workoutSport());if(system)p.set("system",system);p.set("environment",$("workoutEnvironment")?.value||"outdoor");if(duration){p.set("duration",duration);if(tol)p.set("durationTolerance",tol);}if(load)p.set("load",load);if(difficulty)p.set("maxDifficulty",difficulty);if(phase)p.set("phase",phase);if(date?.value)p.set("date",date.value);p.set("limit","15");
-  $("workoutResults").innerHTML='<div class="small">Počítám vhodnost workoutů…</div>';state.workoutShowAll=false;
-  const request=++workoutLibraryRequest;if(typeof renderRecommendChrome==='function')renderRecommendChrome();
-  try{const r=await jsonFetch("/app/api/workouts/search?"+p.toString());if(request!==workoutLibraryRequest)return;state.workoutLibrary=r;renderWorkoutLibrary(r)}
-  catch(e){if(request===workoutLibraryRequest)$("workoutResults").innerHTML='<div class="notice status-error">'+esc(e.message)+'</div>'}
+  const query=librarySearchQuery({sport:workoutSport(),system:$("workoutSystem")?.value,environment:$("workoutEnvironment")?.value,duration:$("workoutDuration")?.value,tolerance:$("workoutDurationTolerance")?.value,load:$("workoutLoad")?.value,difficulty:$("workoutDifficulty")?.value,phase:$("workoutPhase")?.value,date:date?.value});
+  state.workoutShowAll=false;const request=++workoutLibraryRequest;if(typeof renderRecommendChrome==='function')renderRecommendChrome();
+  const ready=libraryCache.get(query)?.data;
+  if(ready){state.workoutLibrary=ready;renderWorkoutLibrary(ready);}else $("workoutResults").innerHTML='<div class="small">Počítám vhodnost workoutů…</div>';
+  try{const r=await fetchLibrary(query);if(request!==workoutLibraryRequest||r===ready)return;state.workoutLibrary=r;renderWorkoutLibrary(r)}
+  catch(e){if(request===workoutLibraryRequest&&!ready)$("workoutResults").innerHTML='<div class="notice status-error">'+esc(e.message)+'</div>'}
 }
+// After the week has been still, the workouts for each upcoming ride and run
+// chip are fetched in the background, so a click on a proposal opens at once.
+let libraryPrefetchTimer=null;
+function prefetchChipLibraries(){
+  clearTimeout(libraryPrefetchTimer);
+  libraryPrefetchTimer=setTimeout(async()=>{
+    if(plannerQuiet()||document.hidden)return;
+    const queries=[...document.querySelectorAll('#hubWeek [data-chip-suggest][data-minutes]')].filter(b=>b.dataset.sport!=='gym'&&b.dataset.date>=pragueToday()).slice(0,6).map(b=>librarySearchQuery({sport:b.dataset.sport,system:ROLE_SYSTEM[b.dataset.role]??'',environment:b.dataset.env,duration:b.dataset.minutes,tolerance:Number(b.dataset.minutes)>=150?'30':'15',difficulty:b.dataset.role==='recovery'?'':$("workoutDifficulty")?.value,phase:$("workoutPhase")?.value,date:b.dataset.date}));
+    for(const q of [...new Set(queries)]){if(plannerQuiet())return;const hit=libraryCache.get(q);if(hit&&Date.now()-hit.at<LIBRARY_CACHE_MS)continue;await fetchLibrary(q).catch(()=>{});}
+  },800);
+}
+// Anything the athlete changes can change the ranking: start over.
+function clearLibraryCache(){libraryCache.clear();}
 async function scheduleLibraryWorkout(id,dateOverride=null,environment=null){
   const date=dateOverride||$("workoutScheduleDate")?.value;if(!date){toast("Vyber datum.");return}
   const row=[...(state.workoutLibrary?.workouts||[]),state.generated?.workout,...(state.generated?.alternatives||[])].find(x=>x&&x.id===id),name=row?.name||id;
@@ -1450,11 +1476,30 @@ function intensityOf(tss,minutes){const t=num(tss),h=num(minutes)/60;return t>0&
 function ifText(tss,minutes,sport){const v=sport==='gym'?null:intensityOf(tss,minutes);return v&&v<1.6?' · IF '+fmt(v,2).toFixed(2).replace('.',','):''}
 // The day's proposal on a plan chip: length, load, IF and focus for rides and
 // runs; the gym role for gym. A click opens the matching workouts.
-function chipSuggestion(date,sport,role,target){
-  const focus=String(role.label||'').replace(/^Gym · /,'');
-  if(sport==='gym')return '<button type="button" class="chip-suggest" data-chip-suggest data-date="'+esc(date)+'" data-sport="gym" title="Otevřít gym na tento den">'+esc(focus)+(target?' · ~'+hm(target.minutes):'')+'</button>';
-  const parts=target?[hm(target.minutes),'~'+target.tss+' TSS',target.intensity||intensityOf(target.tss,target.minutes)?'IF '+fmt(target.intensity||intensityOf(target.tss,target.minutes),2).toFixed(2).replace('.',','):'',focus]:[focus];
-  return '<button type="button" class="chip-suggest" data-chip-suggest data-date="'+esc(date)+'" data-sport="'+sport+'" data-role="'+esc(role.role||'')+'" data-label="'+esc(focus)+'"'+(target?' data-minutes="'+num(target.minutes)+'" data-tss="'+num(target.tss)+'"':'')+' title="Ukázat nejvhodnější tréninky na tento den">'+esc(parts.filter(Boolean).join(' · '))+' ›</button>';
+// The athlete's own length or place for one chip (prefs.sessions), shown at
+// once while the server recalculates the week.
+const SESSION_MINUTES={gym:[30,45,60,75,90],ride:[30,45,60,75,90,120,150,180,240,300],run:[20,30,45,60,75,90,120]};
+function chipSession(key){return state.weekPlan?.prefs?.sessions?.[key]||{}}
+function chipEnvironment(key,target){return chipSession(key).environment||target?.environment||'outdoor'}
+function withSession(key,target,sport){
+  if(!target)return null;const own=chipSession(key),out={...target};
+  if(own.minutes&&own.minutes!==target.minutes){const f=target.intensity||intensityOf(target.tss,target.minutes);out.minutes=own.minutes;out.tss=sport==='gym'?Math.round(target.tss*own.minutes/target.minutes):f?Math.round(own.minutes/60*f*f*100):target.tss;}
+  return out;
+}
+// The day's proposal on a plan chip: length (a menu), load, IF and focus for
+// rides and runs; the gym role for gym. A click on the text opens the matching workouts.
+function chipSuggestion(date,sport,role,target,key){
+  const focus=String(role.label||'').replace(/^Gym · /,''),t=withSession(key,target,sport),own=chipSession(key);
+  const time=t?'<button type="button" class="chip-time'+(own.minutes?' chosen':'')+'" data-chip-time data-key="'+esc(key)+'" data-sport="'+sport+'" aria-haspopup="menu" title="Změnit délku tréninku">⏱ '+esc(hm(t.minutes))+' ▾</button>':'';
+  if(sport==='gym')return '<span class="chip-line">'+time+'<button type="button" class="chip-suggest" data-chip-suggest data-date="'+esc(date)+'" data-sport="gym"'+(t?' data-minutes="'+num(t.minutes)+'"':'')+' title="Otevřít gym na tento den">'+esc(focus)+' ›</button></span>';
+  const f=t?t.intensity||intensityOf(t.tss,t.minutes):null,parts=t?['~'+t.tss+' TSS',f?'IF '+fmt(f,2).toFixed(2).replace('.',','):'',focus]:[focus];
+  return '<span class="chip-line">'+time+'<button type="button" class="chip-suggest" data-chip-suggest data-date="'+esc(date)+'" data-sport="'+sport+'" data-role="'+esc(role.role||'')+'" data-label="'+esc(focus)+'" data-env="'+esc(chipEnvironment(key,target))+'"'+(t?' data-minutes="'+num(t.minutes)+'" data-tss="'+num(t.tss)+'"':'')+' title="Ukázat nejvhodnější tréninky na tento den">'+esc(parts.filter(Boolean).join(' · '))+' ›</button></span>';
+}
+// Outdoor or indoor next to the sport name: from the forecast, or the athlete's choice.
+function chipEnvBadge(key,sport,target,date){
+  if(sport==='gym'||date<pragueToday())return '';
+  const env=chipEnvironment(key,target),own=chipSession(key).environment,reason=own?'Zvoleno ručně · klikni pro změnu':(target?.reason||'Podle předpovědi a sezóny')+' · klikni pro změnu';
+  return '<button type="button" class="chip-env '+env+(own?' chosen':'')+'" data-chip-env data-key="'+esc(key)+'" data-env="'+env+'" data-auto="'+esc(target?.autoEnvironment||target?.environment||'outdoor')+'" title="'+esc(reason)+'">'+(env==='indoor'?(sport==='run'?'🏃 pás':'🏠 indoor'):'🌤 venku')+'</button>';
 }
 // Proposals wait until the plan has been still for 5 s, so moving chips
 // around does not flood the days with suggestions.
@@ -1484,12 +1529,13 @@ async function renderWeekHub(){
     const plan=planChips(i,d.date).map(({sport,slot,index})=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).filter(r=>r.sport===sport)[slot],tg=quiet?null:chipTarget(d.date,sport,slot),key=proposalKey(d.date,sport,slot),pr=state.proposals?.[key],cancelled=sport==='gym'&&gymCancelledOn(d.date),attrs=' data-date="'+d.date+'" data-sport="'+sport+'" data-slot="'+slot+'"';
       const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
       const picked=state.plannerPick===sport&&state.plannerFrom===i&&(state.plannerFromIndex===-1?index==null:state.plannerFromIndex==null||state.plannerFromIndex===index);
-      return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg):'')+(!quiet&&!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
+      return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+(index!=null?chipEnvBadge(i+'|'+sport+'|'+slot,sport,tg||chipTarget(d.date,sport,slot),d.date):'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg,i+'|'+sport+'|'+slot):'')+(!quiet&&!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
     const av=state.weekPlan?.prefs?.availability?.[i],avText=av?.minutes===0?'Nemám čas':av?.minutes!=null?hm(av.minutes)+(av.window?' · '+av.window:''):av?.window||'';
     const weather=(w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>')+(avText?'<div class="hub-availability">'+esc(avText)+'</div>':'');
     return '<div class="hub-day'+(d.date===today?' today':d.date<today?' past':'')+(state.plannerPick?' pickable':'')+'" data-hub-day="'+esc(d.date)+'"><div class="hub-day-head"><strong>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d.date+'T12:00:00Z')))+'</strong><span>'+esc(dateLabel(d.date))+'</span></div>'+weather+(items.join('')||(plan?'':'<div class="hub-empty">Volno</div>'))+(plan?'<div class="hub-plan">'+plan+'</div>':'')+'</div>';
   }).join('');
+  if(!plannerQuiet()&&typeof prefetchChipLibraries==='function')prefetchChipLibraries();
   $('hubWeekLoad').textContent=(state.weekPlan?.prefs?.source==='week'?'Vlastní nastavení týdne · ':'Běžný týden · ')+(weekTargetText()||'odjeto '+fmt(doneTss)+' TSS'+(plannedTss?' · v plánu dalších '+fmt(plannedTss)+' TSS':''))+(state.weatherError?' · počasí nedostupné':'');
 }
 // Planner: three sport chips dragged onto days (several per day), moved
@@ -1504,6 +1550,29 @@ function renderPlanner(){
 }
 const weekdayOf=date=>(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
 let plannerSaveTimer=null;
+// Length or place of one chip: shown at once, saved without the 5 s pause.
+function setChipSession(key,patch){
+  const prefs=state.weekPlan?.prefs;if(!prefs||!key)return;
+  const all=prefs.sessions||(prefs.sessions={}),entry={...(all[key]||{}),...patch};
+  for(const k of Object.keys(entry))if(entry[k]==null)delete entry[k];
+  if(Object.keys(entry).length)all[key]=entry;else delete all[key];
+  delete state.proposals?.[proposalKey(dateShift(state.weekPlan.start||state.hubWeek,Number(key.split('|')[0])),key.split('|')[1],Number(key.split('|')[2]))];
+  if(typeof planEdited==='function')planEdited();
+  renderWeekHub();clearTimeout(plannerSaveTimer);plannerSaveTimer=setTimeout(saveWeekPlanner,300);
+}
+function openChipTimeMenu(button){
+  closeChipMenu();const key=button.dataset.key,sport=button.dataset.sport,own=chipSession(key).minutes;
+  document.body.insertAdjacentHTML('beforeend','<div id="chipMenu" class="chip-menu" role="menu" aria-label="Délka tréninku"><button type="button" role="menuitem" data-minutes=""'+(own?'':' aria-checked="true"')+'>Automaticky</button>'+(SESSION_MINUTES[sport]||[]).map(m=>'<button type="button" role="menuitem" data-minutes="'+m+'"'+(own===m?' aria-checked="true"':'')+'>'+hm(m)+'</button>').join('')+'</div>');
+  const menu=$('chipMenu'),r=button.getBoundingClientRect();
+  menu.style.left=Math.max(8,Math.min(innerWidth-menu.offsetWidth-8,r.left))+'px';menu.style.top=(r.bottom+6+menu.offsetHeight>innerHeight?Math.max(8,r.top-menu.offsetHeight-6):r.bottom+6)+'px';
+  menu.onclick=e=>{const b=e.target.closest('[data-minutes]');if(!b)return;closeChipMenu();setChipSession(key,{minutes:b.dataset.minutes?Number(b.dataset.minutes):null});};
+  menu.querySelector('button')?.focus();
+  setTimeout(()=>document.addEventListener('click',closeChipMenuOutside,true),0);
+}
+function closeChipMenuOutside(e){if(!e.target.closest('#chipMenu'))closeChipMenu();}
+function closeChipMenu(){$('chipMenu')?.remove();document.removeEventListener('click',closeChipMenuOutside,true);}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeChipMenu();});
+window.addEventListener('scroll',()=>closeChipMenu(),{passive:true});
 function plannerChanged(){if(typeof planEdited==='function')planEdited();state.weekPlan.dirty=true;state.plannerQuietUntil=Date.now()+PLANNER_QUIET_MS;clearTimeout(plannerQuietTimer);plannerQuietTimer=setTimeout(()=>renderWeekHub(),PLANNER_QUIET_MS+50);$('plannerStatus').textContent='Ukládám…';renderPlanner();renderWeekHub();clearTimeout(plannerSaveTimer);plannerSaveTimer=setTimeout(saveWeekPlanner,500);}
 // fromIndex: the chip's position in the plan (-1 for a chip that only shows a
 // proposal); fromSlot: its number among the same sport that day.
@@ -1516,7 +1585,7 @@ function plannerPlace(sport,day,fromDay=null,fromIndex=null,fromSlot=null){
   if(fromDay!=null&&days[fromDay]){
     const at=fromIndex===-1?-1:fromIndex!=null&&days[fromDay][fromIndex]===sport?fromIndex:days[fromDay].indexOf(sport);
     const slot=at>=0?days[fromDay].slice(0,at).filter(x=>x===sport).length:Number(fromSlot)||0;
-    if(at>=0)days[fromDay].splice(at,1);
+    if(at>=0){days[fromDay].splice(at,1);moveChipSession(fromDay,sport,slot,day,days[day].filter(x=>x===sport).length);}
     // A proposal made for the old day must not keep the chip there.
     if(state.proposals&&dateOf(fromDay))delete state.proposals[proposalKey(dateOf(fromDay),sport,slot)];
   }
@@ -1528,6 +1597,14 @@ function plannerPlace(sport,day,fromDay=null,fromIndex=null,fromSlot=null){
   plannerChanged();
 }
 const MAX_PER_DAY=4;
+// A chip's own length/place travels with it; the later sessions of that sport
+// on the old day move up one slot. to=null drops it (the chip was removed).
+function moveChipSession(fromDay,sport,slot,toDay=null,toSlot=0){
+  const all=state.weekPlan?.prefs?.sessions;if(!all)return;
+  const own=all[fromDay+'|'+sport+'|'+slot];delete all[fromDay+'|'+sport+'|'+slot];
+  for(let n=slot+1;n<4;n++){const k=fromDay+'|'+sport+'|'+n;if(all[k]){all[fromDay+'|'+sport+'|'+(n-1)]=all[k];delete all[k];}}
+  if(own&&toDay!=null)all[toDay+'|'+sport+'|'+toSlot]=own;
+}
 async function saveWeekPlanner(){
   $('plannerStatus').textContent='Ukládám…';
   const sent=JSON.stringify(state.weekPlan.prefs),start=state.weekPlan.start||state.hubWeek||pragueMonday();
@@ -1542,7 +1619,7 @@ function installPlannerDrag(){
   const chipOrigin=chip=>({sport:chip.dataset.chipSport,from:chip.dataset.chipDay==null?null:Number(chip.dataset.chipDay),index:chip.dataset.chipDay==null||chip.dataset.chipIndex==null?null:Number(chip.dataset.chipIndex),slot:Number(chip.dataset.chipSlot)||0});
   const box=document.querySelector('#workouts .week-hub');let drag=null,touchDrag=null,suppressClickUntil=0;
   const clearTargets=()=>box.querySelectorAll('.drop-target').forEach(d=>d.classList.remove('drop-target'));
-  box.addEventListener('pointerdown',e=>{const chip=e.target.closest('.planner-chip');if(e.pointerType!=='touch'||!chip||e.target.closest('[data-chip-remove]'))return;touchDrag={...chipOrigin(chip),x:e.clientX,y:e.clientY,id:e.pointerId,chip,active:false};});
+  box.addEventListener('pointerdown',e=>{const chip=e.target.closest('.planner-chip');if(e.pointerType!=='touch'||!chip||e.target.closest('[data-chip-remove],[data-chip-time],[data-chip-env]'))return;touchDrag={...chipOrigin(chip),x:e.clientX,y:e.clientY,id:e.pointerId,chip,active:false};});
   box.addEventListener('pointermove',e=>{if(!touchDrag||e.pointerId!==touchDrag.id)return;if(!touchDrag.active&&Math.hypot(e.clientX-touchDrag.x,e.clientY-touchDrag.y)<12)return;e.preventDefault();if(!touchDrag.active){touchDrag.active=true;box.setPointerCapture(e.pointerId);touchDrag.chip.classList.add('dragging');}clearTargets();const day=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-hub-day]');if(day&&box.contains(day))day.classList.add('drop-target');});
   const finishTouch=(e,cancelled=false)=>{if(!touchDrag||e.pointerId!==touchDrag.id)return;const current=touchDrag;touchDrag=null;current.chip.classList.remove('dragging');clearTargets();if(!current.active)return;suppressClickUntil=Date.now()+500;if(box.hasPointerCapture(e.pointerId))box.releasePointerCapture(e.pointerId);if(cancelled)return;const day=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-hub-day]');if(day&&box.contains(day)){state.plannerPick=null;state.plannerFrom=null;plannerPlace(current.sport,weekdayOf(day.dataset.hubDay),current.from,current.index,current.slot);}};
   box.addEventListener('pointerup',e=>finishTouch(e));box.addEventListener('pointercancel',e=>finishTouch(e,true));
@@ -1557,7 +1634,11 @@ function installPlannerDrag(){
   box.addEventListener('click',e=>{
     if(Date.now()<suppressClickUntil)return;
     const remove=e.target.closest('[data-chip-remove]');
-    if(remove){const chip=remove.closest('.planner-chip'),o=chipOrigin(chip),date=chip.closest('[data-hub-day]').dataset.hubDay,list=state.weekPlan.prefs.days[o.from];if(state.proposals)delete state.proposals[typeof proposalKey==='function'?proposalKey(date,o.sport,o.slot):date+'|'+o.sport];const at=o.index===-1?-1:o.index!=null&&list[o.index]===o.sport?o.index:list.indexOf(o.sport);if(at>=0)list.splice(at,1);plannerChanged();return}
+    if(remove){const chip=remove.closest('.planner-chip'),o=chipOrigin(chip),date=chip.closest('[data-hub-day]').dataset.hubDay,list=state.weekPlan.prefs.days[o.from];if(state.proposals)delete state.proposals[typeof proposalKey==='function'?proposalKey(date,o.sport,o.slot):date+'|'+o.sport];const at=o.index===-1?-1:o.index!=null&&list[o.index]===o.sport?o.index:list.indexOf(o.sport);if(at>=0){list.splice(at,1);if(typeof moveChipSession==='function')moveChipSession(o.from,o.sport,o.slot);}plannerChanged();return}
+    const time=e.target.closest('[data-chip-time]');
+    if(time&&!state.plannerPick){openChipTimeMenu(time);return}
+    const envButton=e.target.closest('[data-chip-env]');
+    if(envButton&&!state.plannerPick){const next=envButton.dataset.env==='indoor'?'outdoor':'indoor';setChipSession(envButton.dataset.key,{environment:next===envButton.dataset.auto?null:next});return}
     const suggest=e.target.closest('[data-chip-suggest]');
     if(suggest&&!state.plannerPick){openChipSuggestion(suggest.dataset);return}
     const palette=e.target.closest('.planner-chip.palette');
@@ -2206,7 +2287,7 @@ function renderRecommendChrome(){
 function renderRecommendTarget(){
   const el=$('recommendTarget'),ctx=state.recContext;el.hidden=!ctx;if(!ctx)return;
   const minutes=num(ctx.minutes),tss=num(ctx.tss),intensity=intensityOf(tss,minutes);
-  el.innerHTML='<span class="eyebrow">'+esc(longDate(ctx.date))+' · '+esc(HUB_SPORTS[ctx.sport])+'</span><strong>'+esc([minutes?hm(minutes):'',tss?'~'+tss+' TSS':'',intensity?'IF '+fmt(intensity,2).toFixed(2).replace('.',','):'',ctx.label].filter(Boolean).join(' · '))+'</strong><span class="small">Nejvhodnější tréninky na tento den. Jiné zaměření vybereš níže.</span><button type="button" class="btn" id="clearRecommendTarget">Celá knihovna</button>';
+  el.innerHTML='<span class="eyebrow">'+esc(longDate(ctx.date))+' · '+esc(HUB_SPORTS[ctx.sport])+(ctx.environment?' · '+(ctx.environment==='indoor'?'indoor':'venku'):'')+'</span><strong>'+esc([minutes?hm(minutes):'',tss?'~'+tss+' TSS':'',intensity?'IF '+fmt(intensity,2).toFixed(2).replace('.',','):'',ctx.label].filter(Boolean).join(' · '))+'</strong><span class="small">Nejvhodnější tréninky na tento den. Jiné zaměření vybereš níže.</span><button type="button" class="btn" id="clearRecommendTarget">Celá knihovna</button>';
   $('clearRecommendTarget').onclick=()=>{state.recContext=null;$('workoutDuration').value='';$('workoutLoad').value='';$('workoutSystem').value='';renderRecommendTarget();loadWorkoutLibrary();};
 }
 // What today already holds: planned sessions, plan chips or a gym plan.
@@ -2273,8 +2354,9 @@ async function openRecommendations(){
 }
 // A day's proposal on a plan chip.
 function openChipSuggestion(data){
-  if(data.sport==='gym'){openGymDay(data.date);$('workoutsGym')?.scrollIntoView({behavior:'smooth',block:'start'});return}
-  const ctx={date:data.date,sport:data.sport,role:data.role,label:data.label,minutes:data.minutes?Number(data.minutes):null,tss:data.tss?Number(data.tss):null};
+  if(data.sport==='gym'){const sel=$('gymFocusDuration');if(sel&&data.minutes&&[...sel.options].some(o=>o.value===String(data.minutes)))sel.value=String(data.minutes);openGymDay(data.date);$('workoutsGym')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+  const ctx={date:data.date,sport:data.sport,role:data.role,label:data.label,minutes:data.minutes?Number(data.minutes):null,tss:data.tss?Number(data.tss):null,environment:data.env==='indoor'?'indoor':'outdoor'};
+  $('workoutEnvironment').value=ctx.environment;
   state.recContext=ctx;$('dailyRecommendation').hidden=true;$('generatedWorkout').innerHTML='';
   setRecSport(ctx.sport);$('generateDate').value=ctx.date;
   $('workoutScheduleDate').value=ctx.date>=pragueToday()?ctx.date:pragueToday();

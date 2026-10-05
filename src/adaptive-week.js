@@ -35,6 +35,15 @@ export async function weekWeather(location, start) {
     return Object.fromEntries((d?.time || []).map((date, i) => [date, { code: d.weather_code?.[i], max: d.temperature_2m_max?.[i], wind: d.wind_speed_10m_max?.[i], rain: d.precipitation_sum?.[i], rainProb: d.precipitation_probability_max?.[i] }]));
   } catch { return {}; }
 }
+// Indoor is shorter and so easier: no one should sit three hours on a
+// trainer. Rides take 70 % of the outdoor length (at most 90 min), treadmill
+// runs 80 % (at most 60 min); the intensity of the role stays.
+export const INDOOR_LIMITS = { ride: { share: .7, max: 90, min: 30 }, run: { share: .8, max: 60, min: 20 } };
+export function indoorMinutes(sport, minutes) {
+  const rule = INDOOR_LIMITS[sport];
+  return rule ? Math.max(rule.min, Math.min(rule.max, Math.round(minutes * rule.share / 5) * 5)) : minutes;
+}
+const weekdayOf = date => (new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7;
 export function capWeekTargets(targets, prefs, days = [], weather = {}) {
   const remaining = new Map();
   for (const x of targets.items || []) {
@@ -45,14 +54,21 @@ export function capWeekTargets(targets, prefs, days = [], weather = {}) {
   const items = [], skipped = [], openCounts=new Map();
   for(const x of targets.items||[])openCounts.set(x.date,(openCounts.get(x.date)||0)+1);
   for (const x of targets.items || []) {
-    const available = availabilityOn(prefs, x.date), env = environmentFor(x.date, x.sport, weather[x.date]);
+    const available = availabilityOn(prefs, x.date), own = prefs?.sessions?.[weekdayOf(x.date) + '|' + x.sport + '|' + (x.slot || 0)] || {};
+    const auto = environmentFor(x.date, x.sport, weather[x.date]);
+    const env = own.environment ? { environment: own.environment, reason: 'Zvoleno ručně.' } : auto;
     const open = openCounts.get(x.date);openCounts.set(x.date,open-1);
-    let minutes = Math.min(x.minutes, remaining.get(x.date) / open, env.environment === 'indoor' && x.sport === 'ride' ? 90 : Infinity);
-    minutes = Math.floor(minutes / 5) * 5;
-    const minimum = x.sport === 'run' ? 20 : 30;
-    if (minutes < minimum) { skipped.push({ ...x, reason: 'Na tento trénink nezbývá dost času.' }); continue; }
+    let minutes;
+    if (own.minutes) minutes = own.minutes;
+    else {
+      minutes = Math.min(x.minutes, remaining.get(x.date) / open);
+      if (env.environment === 'indoor') minutes = Math.min(minutes, indoorMinutes(x.sport, x.minutes));
+      minutes = Math.floor(minutes / 5) * 5;
+      const minimum = x.sport === 'run' ? 20 : 30;
+      if (minutes < minimum) { skipped.push({ ...x, reason: 'Na tento trénink nezbývá dost času.' }); continue; }
+    }
     remaining.set(x.date, remaining.get(x.date) - minutes);
-    items.push({ ...x, minutes, tss: Math.round(x.tss * minutes / x.minutes), ...env, window: available.window, startTime: parseTimeWindow(available.window)?.start || null });
+    items.push({ ...x, minutes, tss: Math.round(x.tss * minutes / x.minutes), ...env, autoEnvironment: auto.environment, chosenMinutes: Boolean(own.minutes), chosenEnvironment: Boolean(own.environment), window: available.window, startTime: parseTimeWindow(available.window)?.start || null });
   }
   return { ...targets, items, skipped };
 }
