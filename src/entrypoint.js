@@ -1405,7 +1405,7 @@ async function handleNutritionNotesAutomation(request, rawEnv) {
   try {
     await verifyGitHubActionsToken(request);
     const body=await request.json().catch(()=>({}));
-    const today=new Date(), oldest=String(body?.oldest||today.toISOString().slice(0,10)), newest=String(body?.newest||new Date(today.getTime()+14*86400000).toISOString().slice(0,10));
+    const today=pragueToday(), oldest=String(body?.oldest||today), newest=String(body?.newest||shiftDate(today,14));
     // Writing daily nutrition notes is opt-in ("sync"); anything else removes them.
     const remove=String(body?.action || "").toLowerCase() !== "sync";
     const users=await forEachUser(rawEnv,["intervals"],async env=>{

@@ -136,7 +136,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   let recovery;
   try { recovery = await d1Recovery(env, localDate(-7), localDate(1)); } catch (e) { throw new Error(`strength_context.recovery_d1: ${e.message}`); }
   let strengthHistory;
-  try { const { getStrengthHistory } = await import("./strength-history.js"); strengthHistory = await getStrengthHistory(env.DB, 150); } catch (e) { throw new Error(`strength_context.strength_d1: ${e.message}`); }
+  try { const { getStrengthHistory } = await import("./strength-history.js"); strengthHistory = await getStrengthHistory(env.DB, 500); } catch (e) { throw new Error(`strength_context.strength_d1: ${e.message}`); }
   const activities = (Array.isArray(activitiesRaw) ? activitiesRaw : []).map(activityInfo), events = (Array.isArray(eventsRaw) ? eventsRaw : []).map(eventInfo);
   const rides = activities.filter(x => x.cycling), plannedRides = events.filter(x => x.cycling && n(x.durationHours) > 0 && n(x.durationHours) <= 8);
   const recent = rides.filter(x => x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), planned = plannedRides.filter(x => x.date >= date).sort((a,b) => String(a.start).localeCompare(String(b.start)));

@@ -495,3 +495,23 @@ test("workout mode shows what the load of a work set is based on", async () => {
   assert.match(client, /const why=!warm\(cur\)&&String\(r\[9\]\|\|''\)\.replace\(\/\\s\*\\\[Pauza \\d\+ s\\\]\/g,''\)\.split\('; '\)\.find\(x=>\/\^\(↑\|↓\|= \|po delší pauze\)\/\.test\(x\)\)/);
   assert.match(client, /<p class="small gm-why">/);
 });
+
+test("after four solid weeks the fifth is a deload week, then training goes on", async () => {
+  const { strengthDeload } = await import("../src/strength-generator.js");
+  // Mondays and Thursdays, 15 work sets each, for the weeks before 2026-10-05.
+  const session = (date, sets = 15, note = "") => Array.from({ length: sets }, (_, i) => ({ workout_date: date, exercise: "DB bench press", type: "WORK", completed: 1, set_no: i + 1, actual_kg: 20, actual_reps: 10, rpe: 8, note }));
+  const weeks = (n, sets = [15, 15, 15, 15]) => Array.from({ length: n }, (_, k) => { const mon = new Date(Date.parse("2026-09-28T12:00:00Z") - k * 7 * 86400000), thu = new Date(mon.getTime() + 3 * 86400000); return [...session(mon.toISOString().slice(0, 10), sets[k]), ...session(thu.toISOString().slice(0, 10), sets[k])]; }).flat();
+  assert.ok(strengthDeload(weeks(4), "2026-10-05"));
+  assert.equal(strengthDeload(weeks(3), "2026-10-05"), null);
+  // A lighter week among the four (the last deload) resets the count.
+  assert.equal(strengthDeload(weeks(4, [15, 15, 10, 15]), "2026-10-05"), null);
+  assert.equal(strengthDeload([...weeks(4), ...session("2026-09-29", 1, "Hlavní tlak; odlehčený týden: stejná váha")], "2026-10-05"), null);
+  // One session a week is not a solid week.
+  assert.equal(strengthDeload(weeks(4).filter(r => new Date(r.workout_date + "T12:00:00Z").getUTCDay() === 1), "2026-10-05"), null);
+  const plan = generateStrengthPlan({ date: "2026-10-05", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: weeks(4) } }, { durationMinutes: 60 });
+  assert.match(plan.planName, /odlehčený týden/);
+  assert.ok(plan.loadEstimates.every(x => x.sets <= 2));
+  const bench = plan.loadEstimates.find(x => x.exercise === "DB bench press");
+  if (bench) assert.equal(bench.kg, 20);
+  assert.ok(plan.rows.every(r => r[11] !== "TRUE"));
+});
