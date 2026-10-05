@@ -77,3 +77,25 @@ test('external cancellation is reconciled; cycling deletion, past events, anothe
   assert.equal((await readGymPlan(env.DB,'2026-10-04')).cancelled,true);
   await assert.rejects(reconcileCancelledGymPlans(env.DB,previous,{},'2026-10-04'));
 });
+
+test('moving a strength event takes its unfinished gym plan to the new day', async()=>{
+  const {raw,env,fetchImpl}=await setup();
+  await writeStrengthPlanToDb(env.DB,{date:'2026-10-02',planName:'Horní tělo',rows:[['WORK','Bench press','1','60','8']]});
+  raw.sqlite.prepare('UPDATE health_datapoints SET payload_json=? WHERE user_id=1').run(JSON.stringify({id:77,type:'WeightTraining',start_date_local:'2026-10-02T17:30:00'}));
+  const r=await movePlannedEvent(env,{eventId:'planned:77',date:'2026-10-04'},fetchImpl);
+  assert.equal(r.gymPlanMoved,true);
+  assert.equal((await readGymPlan(env.DB,'2026-10-02')).stored,false);
+  const moved=await readGymPlan(env.DB,'2026-10-04');
+  assert.equal(moved.stored,true);assert.equal(moved.values[2][1],'2026-10-04');assert.match(moved.values[1][0],/04\. 10\. 2026/);assert.equal(moved.values[7][1],'Bench press');
+});
+
+test('a gym plan with logged sets, or a target day with its own plan, stays put', async()=>{
+  const {raw,env,fetchImpl}=await setup();
+  await writeStrengthPlanToDb(env.DB,{date:'2026-10-02',rows:[['WORK','Squat','1','60','8','60','8','7','TRUE']]});
+  raw.sqlite.prepare('UPDATE health_datapoints SET payload_json=? WHERE user_id=1').run(JSON.stringify({id:77,type:'WeightTraining',start_date_local:'2026-10-02T17:30:00'}));
+  assert.equal((await movePlannedEvent(env,{eventId:'77',date:'2026-10-04'},fetchImpl)).gymPlanMoved,false);
+  assert.equal((await readGymPlan(env.DB,'2026-10-02')).stored,true);
+  // A ride is never treated as gym.
+  raw.sqlite.prepare('UPDATE health_datapoints SET payload_json=? WHERE user_id=1').run(JSON.stringify({id:77,type:'Ride',start_date_local:'2026-10-04T17:30:00'}));
+  assert.equal((await movePlannedEvent(env,{eventId:'77',date:'2026-10-05'},fetchImpl)).gymPlanMoved,false);
+});

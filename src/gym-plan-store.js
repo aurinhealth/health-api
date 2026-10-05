@@ -40,6 +40,26 @@ export async function restoreGymPlan(db, date) {
   await db.prepare("DELETE FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).run();
 }
 
+// A strength event moved in the calendar takes its plan along, so the
+// exercises are on the day the workout now is. A plan with logged sets, or a
+// target day that already has its own plan, stays where it is.
+export async function moveGymPlan(db, from, to) {
+  const valid = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+  if (!valid(from) || !valid(to) || from === to) return { moved: false };
+  const source = await readGymPlan(db, from), target = await readGymPlan(db, to, { includeCancelled: true });
+  if (!source.stored || target.stored) return { moved: false };
+  const logged = source.values.slice(7).some(r => DONE.has(String(r?.[8] ?? "")) || String(r?.[5] ?? "").trim() || String(r?.[6] ?? "").trim());
+  if (logged) return { moved: false };
+  const label = d => d.split("-").reverse().join(". ");
+  const values = source.values.map(r => Array.isArray(r) ? [...r] : r);
+  if (typeof values[1]?.[0] === "string") values[1][0] = values[1][0].replace(label(from), label(to));
+  if (values[2]?.[0] === "Datum") values[2][1] = to;
+  await saveGymPlan(db, to, values);
+  await restoreGymPlan(db, to);
+  await db.prepare("DELETE FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, from).run();
+  return { moved: true };
+}
+
 export async function saveGymPlan(db, date, values) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error("Invalid date; expected YYYY-MM-DD");
   if (!Array.isArray(values)) throw new Error("values must be a 2D array");

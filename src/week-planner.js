@@ -146,6 +146,8 @@ export function roleFor(prefs, date, sport, options = {}) {
 // this one is a recovery week at 70 %. What is already done or planned in
 // Intervals.icu counts first; the rest is spread over the open plan chips,
 // within sensible limits per role, so one session never carries the week.
+// Load is TSS (what Intervals.icu calls Load and builds CTL/ATL from); the
+// intensity factor (IF) of the role says how hard it is: TSS = h × IF² × 100.
 const ROLE_IF = { recovery: .55, endurance: .68, long: .68, quality: .82 };
 const ROLE_RANGE = { recovery: [.35, .6], endurance: [.8, 1.6], long: [1.4, 2.6], quality: [1, 1.5] };
 const GYM_TSS = { gym_full: 35, gym_upper: 25 };
@@ -179,7 +181,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [
     const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
     const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = ROLE_IF[x.role] || .68;
     const minutes = Math.max(min, Math.min(max, round5(tss / (intensity * intensity * 100) * 60)));
-    return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes };
+    return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes, intensity };
   });
   const assigned = items.reduce((s, x) => s + x.tss, 0), shortfall = Math.max(0, target - committed - assigned);
   return { status: "ok", ctl: Math.round(fitness), base, target, recovery, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };

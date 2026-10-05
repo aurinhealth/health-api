@@ -144,7 +144,7 @@ export const workoutsHubTheme = `
   .week-hub-tools{display:flex;flex-wrap:nowrap;gap:6px;width:100%}
   .week-hub-tools .btn{padding:6px 9px;font-size:12px}#hubLocation{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .week-hub-tools .weeknav{width:auto;flex:none}.week-hub-tools .weeknav .btn{flex:none}
-  .planner-bar{gap:6px}.planner-bar>.small:first-of-type{display:none}.planner-palette{flex:1}.planner-chip.palette{flex:1;justify-content:center;padding:7px 6px}
+  .planner-bar{gap:6px}.planner-palette{flex:1}.planner-chip.palette{flex:1;justify-content:center;padding:7px 6px}
   /* The week reads as an agenda: day and weather on the left, the day's items on the right. */
   .hub-week{grid-template-columns:1fr!important;gap:6px}
   .hub-day{display:grid;grid-template-columns:62px minmax(0,1fr);grid-auto-flow:row dense;column-gap:10px;row-gap:0;padding:8px 10px;min-height:0}.hub-day>*:not(.hub-day-head):not(.hub-weather){margin-bottom:4px}
@@ -323,7 +323,6 @@ body.food-panel-open{overflow:hidden}#nutrition>.grid2:has(>.card:only-child){gr
 .chip-actions{display:flex;gap:4px;flex-basis:100%;flex-wrap:wrap;margin-top:2px}.chip-actions .btn{padding:3px 7px;font-size:10px;border-radius:6px}
 #proposeWeek{padding:7px 12px;font-size:12px}
 .gym-date{display:inline-flex;align-items:center;gap:6px;margin-top:4px}.gym-date input{background:#0d1119;color:#fff;border:1px solid #393245;border-radius:8px;padding:5px 8px}
-@media(max-width:700px){#proposeWeek{flex-basis:100%;order:3}}
 .availability-grid{display:grid;gap:8px;margin:14px 0}.availability-row{display:grid;grid-template-columns:85px 1fr 100px;gap:10px;align-items:center;padding:10px;border:1px solid #353547;border-radius:12px}.availability-row label{font-size:12px}.availability-row input:not([type=checkbox]){width:100%;box-sizing:border-box;padding:9px;border-radius:8px;background:#111722;border:1px solid #404258;color:#fff}.availability-sports{grid-column:2/4;display:flex;gap:10px;flex-wrap:wrap}.availability-sports label{white-space:nowrap}#availabilityCount{width:80px;padding:8px;background:#111722;color:#fff;border:1px solid #404258;border-radius:8px}.status-choices{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}#athleteStatusNote{display:block;width:100%;box-sizing:border-box;min-height:72px;background:#111722;color:#fff;border:1px solid #404258;border-radius:10px;padding:10px}.athlete-status{margin-top:10px;padding:7px 12px;font-size:13px}#athleteStatusBox{display:flex;gap:8px;align-items:center}.coach-advice{margin-top:12px}.coach-advice p{font-size:13px}.assistant-fab{position:fixed;bottom:24px;right:24px;z-index:35;background:#30284e;border:1px solid #9580d3;border-radius:24px;color:#eee5ff;padding:12px 18px;font-size:14px;font-weight:650;box-shadow:0 4px 22px #0005;cursor:pointer}.assistant-fab.has-advice{border-color:#ffc274}.coach-turn{padding:10px 14px;border-radius:12px;margin:8px 0;background:#171d2b}.coach-turn.user{background:#282338}.coach-turn p{white-space:pre-wrap;margin:5px 0;font-size:14px}.memory-row{display:flex;gap:12px;justify-content:space-between;align-items:center;border-bottom:1px solid #353547;padding:10px 0;font-size:13px}.week-proposal-list{display:grid;gap:8px;margin:14px 0}.week-proposal-list>div,.gym-preview-rows>div{display:grid;gap:4px;background:#171d2b;border-radius:10px;padding:10px}.week-proposal-list small{color:#b1bbcf}.gym-preview-rows{display:grid;gap:6px;margin:14px 0}.gym-preview-rows span{font-size:12px;color:#b1bbcf}.hub-availability{font-size:11px;color:#cbbce9;padding:6px 0}.assistant-dialog{max-height:85dvh;overflow:auto}
 @media(max-width:700px){.availability-row{grid-template-columns:65px 1fr 85px;gap:6px;padding:8px}.availability-sports{gap:6px;font-size:11px}.assistant-fab{left:16px;right:auto;bottom:84px;padding:10px 14px}#editWeekAvailability{font-size:11px}.assistant-dialog{max-width:calc(100vw - 20px);width:calc(100vw - 20px);box-sizing:border-box}}
 
@@ -379,4 +378,65 @@ body.sheet-open{overflow:hidden}
 .availability-sheet #sheetBody .availability-history-note{font-size:11px;line-height:1.6;color:#8f9dac}.availability-sheet #sheetBody .availability-intro p{font-size:13px}.status-sheet #sheetBody .status-intro{font-size:13px;color:#9ba8b8}
 @media(min-width:701px){.status-sheet .sheet-panel,.availability-sheet .sheet-panel{width:min(520px,calc(100% - 32px));left:50%;top:50%;bottom:auto;border-radius:28px;transform:translate(-50%,-45%)}.status-sheet.open .sheet-panel,.availability-sheet.open .sheet-panel{transform:translate(-50%,-50%)}.availability-sheet .sheet-panel{width:min(560px,calc(100% - 32px))}}
 @media(max-width:700px){.status-sheet .sheet-panel,.availability-sheet .sheet-panel{padding:8px 18px 20px}.status-sheet .sheet-head,.availability-sheet .sheet-head{top:-8px}.status-choice{padding:13px 14px;min-height:78px;gap:12px}.status-choice-copy small{font-size:11px}.status-choice .status-orb{width:45px;height:45px;flex-basis:45px}.availability-row{padding:8px 0 10px}.availability-intro{column-gap:8px}.availability-intro p{font-size:12px}.availability-total strong{font-size:16px}.availability-frequency-head{align-items:flex-start;flex-direction:column;gap:10px}.availability-frequency-controls{width:100%;justify-content:space-between}.do-water-actions{grid-template-columns:repeat(3,minmax(0,1fr))}.do-water-actions .btn{font-size:12px;padding:10px 4px}.hydration-kind{font-size:10px;padding:9px 2px}.hydration-total strong{font-size:21px}}
+
+/* Planner actions and the day's proposal on a chip (shown after 5 s of no changes). */
+.planner-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto}
+.planner-action{display:inline-flex;align-items:center;gap:2px}
+#plannerStatus{flex-basis:100%}
+#plannerStatus:empty{display:none}
+.planner-chip.picked{border-color:#b393ff;background:#3a2c5c;box-shadow:0 0 0 2px rgba(179,147,255,.35)}
+.planner-chip.cancelled{opacity:.65;border-style:dashed}
+.planner-chip .chip-suggest{flex-basis:100%;margin:2px 0 0;padding:4px 6px;border:1px solid #3f3560;border-radius:6px;background:#1a1530;color:#d9c9ff;font-size:10.5px;font-weight:600;line-height:1.35;text-align:left;cursor:pointer;animation:chipSuggestIn .25s ease}
+.planner-chip .chip-suggest:hover,.planner-chip .chip-suggest:focus-visible{background:#2b2148;color:#fff;border-color:#8c6be0;outline:none}
+@keyframes chipSuggestIn{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.planner-chip .chip-suggest{animation:none}}
+/* Doporučené tréninky */
+.recommend-dialog{width:min(980px,calc(100vw - 32px));max-height:calc(100dvh - 48px);padding:0;border:1px solid #3b3354;border-radius:20px;background:#12161f;color:#eef1f7;box-shadow:0 24px 80px #000b;overflow:hidden}
+.recommend-dialog[open]{display:flex;flex-direction:column}
+.recommend-dialog::backdrop{background:#05070bcc}
+.recommend-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #262d39;background:#151a25;flex:none}
+.recommend-head h3{margin:2px 0 0;font-size:19px}
+.recommend-head-tools{display:flex;gap:8px;align-items:center}
+.recommend-head .sport-switch{margin:0}
+.recommend-scroll{overflow:auto;padding:16px 20px 22px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.recommend-scroll>*{flex-shrink:0}
+.recommend-target{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:12px 14px;border:1px solid #4a3f66;border-radius:12px;background:linear-gradient(135deg,#231c38,#17141f)}
+.recommend-target strong{font-size:15px;flex-basis:100%;color:#fff}
+.recommend-target .btn{margin-left:auto;padding:6px 10px;font-size:12px}
+.daily-rec{border:1px solid #2f5a48;border-radius:14px;background:#111d19;padding:14px}
+.daily-rec-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+.daily-rec-head h4{margin:3px 0 2px;font-size:16px}
+.daily-rec-head p{margin:0}
+.daily-rec-sports{display:flex;gap:6px;flex-wrap:wrap}
+.daily-rec-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.daily-rec-tools label{display:flex;gap:6px;align-items:center}
+.daily-rec-tools select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px}
+.daily-rec #generatedWorkout:empty{display:none}
+.recommend-focus{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.recommend-focus .btn{flex:none;white-space:nowrap;padding:7px 11px;font-size:12px}
+.recommend-focus small{color:#e6c76b;font-size:10px;font-weight:600}
+.recommend-focus .btn.primary small{color:#3d2c00}
+.workout-result.generated{grid-template-columns:minmax(0,1fr)}
+.recommend-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.recommend-toolbar .small{color:#9ca6b5}
+.recommend-filters{border:1px solid #262d39;border-radius:12px;padding:12px;background:#0f141d}
+.recommend-context{margin:0}
+.recommend-level summary{cursor:pointer;color:#c3cbd8;font-size:13px;padding:6px 0}
+.recommend-level .capability-grid{margin-top:8px}
+@media(max-width:700px){
+  .recommend-dialog{width:100vw;max-width:100vw;height:100dvh;max-height:100dvh;border:0;border-radius:0;margin:0}
+  .recommend-head{padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top));flex-wrap:wrap}
+  .recommend-head h3{font-size:17px}
+  .recommend-head>div:first-child{flex:1 1 100%}
+  .recommend-head-tools{width:100%}
+  .recommend-head .sport-switch{flex:1}
+  .recommend-head .sport-switch .btn{white-space:nowrap;padding:7px 8px;font-size:13px}
+  .recommend-scroll{padding:12px 14px calc(24px + env(safe-area-inset-bottom))}
+  .planner-actions{margin-left:0;width:100%}
+  .planner-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .planner-action{grid-column:1/-1;display:flex}
+  .planner-action .btn{flex:1}
+  .planner-actions>.btn{padding:8px 6px;font-size:12px}
+  .recommend-target .btn{margin-left:0}
+}
 `;
