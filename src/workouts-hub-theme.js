@@ -470,4 +470,13 @@ body.sheet-open{overflow:hidden}
 .pr-table td{font-variant-numeric:tabular-nums}
 .pr-extra{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0;color:#9ca6b5;font-size:12px}
 .pr-extra b{color:#e8edf5}
+
+.pr-select{background:#171c26;border:1px solid #303746;color:var(--text);border-radius:10px;padding:5px 8px;font:inherit;font-size:11px;font-weight:650;cursor:pointer}
+.pr-select.active{background:#8ff0c9;border-color:#8ff0c9;color:#0d1a14}
+.pr-select:focus-visible{outline:2px solid #b393ff;outline-offset:1px}
+.pr-span{margin:2px 0 0;color:#8f9cac}
+.pr-cardio .trend{font-size:11px;margin:2px 0}
+/* Doporučené tréninky stands out next to Vygenerovat */
+#openRecommendations{background:linear-gradient(135deg,#7b4fe0,#9b6bff);border-color:#a98bff;color:#fff;box-shadow:0 6px 18px rgba(123,79,224,.35)}
+#openRecommendations:hover,#openRecommendations:focus-visible{background:linear-gradient(135deg,#8a5ef0,#ad84ff);outline:none}
 `;

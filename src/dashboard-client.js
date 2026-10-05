@@ -1732,30 +1732,36 @@ function loadGauge(o){
   return '<svg class="load-gauge" viewBox="0 0 200 118" role="img" aria-label="Svalová zátěž '+o.acute+', optimum '+o.range[0]+'–'+o.range[1]+'"><path d="'+arc(0,max,80)+'" stroke="#2a3140" stroke-width="12" fill="none" stroke-linecap="round"/><path d="'+arc(o.range[0],o.range[1],80)+'" stroke="#3fda9c" stroke-width="12" fill="none"/><circle cx="'+mx.toFixed(1)+'" cy="'+my.toFixed(1)+'" r="9" fill="#64d2ff" stroke="#0d1119" stroke-width="3"/><text x="100" y="96" text-anchor="middle" fill="#f6f7fb" font-size="34" font-weight="800">'+o.acute+'</text><text x="100" y="114" text-anchor="middle" fill="#9ca6b5" font-size="10">7 dní · optimum '+o.range[0]+'–'+o.range[1]+'</text></svg>';
 }
 function sparkBars(series,color){const max=Math.max(1,...series.map(x=>x.load));return '<svg class="spark-bars" viewBox="0 0 420 60" preserveAspectRatio="none" role="img" aria-label="Svalová zátěž za 42 dní">'+series.map((x,i)=>'<rect x="'+(i*10)+'" y="'+(58-x.load/max*54).toFixed(1)+'" width="7" height="'+(x.load/max*54).toFixed(1)+'" rx="2" fill="'+color+'"><title>'+esc(dateLabel(x.date))+' · '+x.load+'</title></rect>').join('')+'</svg>'}
-// Records with their progress over a chosen period: 12 weeks (default, one
-// training block), this year, or since the first data in the app.
-const PR_PERIODS=[['12w','12 týdnů'],['year','Letos'],['all','Od začátku']];
-function prPeriod(){try{const v=localStorage.getItem('pfd-pr-period');if(PR_PERIODS.some(([k])=>k===v))return v;}catch{}return '12w'}
-function trendBadge(change,{unit='',lowerIsBetter=false,format=v=>fmt(Math.abs(v),1).toString().replace('.',',')}={}){
-  if(!change)return '<span class="trend none" title="V tomto období žádný záznam">—</span>';
+// Records with their progress over a chosen period: the last 1 (default), 3
+// or 6 months, a calendar year, or all data in the app. Blocks without data
+// for the period (no rides, no power meter, no runs) are left out.
+function prPeriod(t){let v=null;try{v=localStorage.getItem('pfd-pr-period');}catch{}return t?.periods?.[v]?v:t?.defaultPeriod||'1m'}
+function trendBadge(change,{unit='',lowerIsBetter=false,format=v=>String(fmt(Math.abs(v),1)).replace('.',',')}={}){
+  if(!change)return '';
   const d=change.delta,good=lowerIsBetter?d<0:d>0,arrow=d>0?'↑':d<0?'↓':'=',sign=d>0?'+':d<0?'−':'';
-  const from=(lowerIsBetter?fmtPaceText(change.from):String(change.from).replace('.',',')+(unit?' '+unit:''))+' ('+dateLabel(change.fromDate)+(change.basis==='first'?', první záznam':'')+')';
+  const from=(lowerIsBetter?fmtPaceText(change.from):String(change.from).replace('.',',')+(unit?' '+unit:''))+' ('+dateLabel(change.fromDate)+(change.basis==='first'?', první záznam v období':'')+')';
   return '<span class="trend '+(d===0?'flat':good?'up':'down')+'" title="Proti '+esc(from)+'">'+arrow+(d?' '+sign+format(d)+(unit?' '+unit:''):'')+'</span>';
 }
 function fmtPaceText(sec){sec=Math.round(Math.abs(Number(sec)));return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0')}
+function prPeriodControls(t,key){
+  const periods=Object.entries(t.periods||{}),months=periods.filter(([,p])=>p.kind==='months'),years=periods.filter(([,p])=>p.kind==='year'),all=t.periods?.all,kind=t.periods?.[key]?.kind;
+  // An inactive select shows its name, so picking its first option still changes the period.
+  const select=(list,name,label)=>{const on=list.some(([k])=>k===key);return '<select class="pr-select'+(on?' active':'')+'" data-pr-select aria-label="'+label+'">'+(on?'':'<option value="" selected disabled hidden>'+name+'</option>')+list.map(([k,p])=>'<option value="'+k+'"'+(k===key?' selected':'')+'>'+esc(p.label)+'</option>').join('')+'</select>';};
+  return '<div class="pr-period" role="group" aria-label="Období rekordů">'+select(months,'Měsíce','Posledních měsíců')+select(years,'Rok','Rok')+(all?'<button type="button" class="btn'+(kind==='all'?' primary':'')+'" data-pr-period="all" aria-pressed="'+(kind==='all')+'" title="Všechna data uložená v aplikaci od '+esc(new Intl.DateTimeFormat('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'}).format(new Date(all.start+'T12:00:00Z')))+'">Vše</button>':'')+'</div>';
+}
 function recordsCardHtml(rec){
-  const t=rec.trends||{},period=prPeriod(),cardio=rec.cardio||{};
+  const t=rec.trends||{},key=prPeriod(t),period=t.periods?.[key],c=t.cardio||{},at=m=>m?.change?.[key]||null;
+  const rows=(t.strength||[]).map(x=>({x,ch:at(x)})).filter(r=>r.ch).slice(0,10);
+  const tile=(icon,label,value,badge,date)=>'<div><span>'+icon+'</span><strong>'+value+'</strong>'+badge+'<small>'+esc(label)+' · '+esc(dateLabel(date))+'</small></div>';
   const tiles=[];
-  if(t.ftp)tiles.push('<div class="pr-tile"><span class="label">FTP</span><strong>'+fmt(t.ftp.value)+' W</strong>'+trendBadge(t.ftp.change?.[period],{unit:'W',format:v=>fmt(Math.abs(v))})+'<small>z Intervals.icu · '+esc(dateLabel(t.ftp.date))+'</small></div>');
-  const pace=t.runPace?.change?.[period];
-  if(t.runPace)tiles.push('<div class="pr-tile"><span class="label">Tempo · běh 5 km+</span><strong>'+fmtPaceText(pace?pace.value:t.runPace.best.value)+' /km</strong>'+trendBadge(pace,{lowerIsBetter:true,format:v=>fmtPaceText(v)})+'<small>'+(pace?'nejlepší v období · '+esc(dateLabel(pace.date)):'rekord · '+esc(dateLabel(t.runPace.best.date)))+'</small></div>');
-  const extra=[['longestRide','Nejdelší jízda'],['mostElevation','Nejvíc převýšení'],['longestRun','Nejdelší běh']].filter(([k])=>cardio[k]).map(([k,label])=>'<span>'+esc(label)+' <b>'+fmt(cardio[k].value,1)+' '+esc(cardio[k].unit)+'</b> · '+esc(dateLabel(cardio[k].date))+'</span>').join('');
-  const rows=(t.strength||[]).slice(0,10);
-  return '<article class="card insight-records"><div class="detail-heading"><div><div class="label">Personal Records</div><h3>Osobní rekordy</h3></div><div class="pr-period" role="group" aria-label="Porovnat za období">'+PR_PERIODS.map(([k,label])=>'<button type="button" class="btn'+(k===period?' primary':'')+'" data-pr-period="'+k+'" aria-pressed="'+(k===period)+'">'+label+'</button>').join('')+'</div></div>'+
-    (tiles.length?'<div class="pr-tiles">'+tiles.join('')+'</div>':'')+
-    (rows.length?'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Max. váha</th><th>Datum</th><th>Změna</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+esc(x.exercise)+'</td><td>'+String(fmt(x.best.kg,1)).replace('.',',')+' kg <span class="small">× '+x.best.reps+'</span></td><td>'+esc(dateLabel(x.best.date))+'</td><td>'+trendBadge(x.change?.[period],{unit:'kg'})+'</td></tr>').join('')+'</tbody></table></div>':'<p class="small">Zatím žádné odcvičené série s váhou.</p>')+
-    (extra?'<div class="pr-extra">'+extra+'</div>':'')+
-    '<p class="small">Změna = nejlepší výkon v období proti nejlepšímu před ním (FTP: dnešní proti platnému na začátku období). Když starší data chybí, porovnávám s prvním záznamem v období. U tempa je šipka dolů zlepšení.</p></article>';
+  if(at(c.ftp)&&at(c.longestRide))tiles.push(tile('⚡','FTP',fmt(at(c.ftp).value)+' W',trendBadge(at(c.ftp),{unit:'W',format:v=>fmt(Math.abs(v))}),at(c.ftp).date));
+  if(at(c.runPace))tiles.push(tile('⏱','Nejrychlejší běh 5 km+',fmtPaceText(at(c.runPace).value)+' /km',trendBadge(at(c.runPace),{lowerIsBetter:true,format:v=>fmtPaceText(v)}),at(c.runPace).date));
+  for(const [k,icon,label] of [['longestRide','🚴','Nejdelší jízda'],['mostElevation','⛰','Nejvíc převýšení'],['longestRun','🏃','Nejdelší běh']])if(at(c[k])&&at(c[k]).value>0)tiles.push(tile(icon,label,String(fmt(at(c[k]).value,1)).replace('.',',')+' '+c[k].unit,trendBadge(at(c[k]),{unit:c[k].unit}),at(c[k]).date));
+  const day=d=>new Intl.DateTimeFormat('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'}).format(new Date(d+'T12:00:00Z')),span=period?(period.kind==='all'?'Všechna data v aplikaci od '+day(period.start):period.kind==='year'?'Rok '+period.label:'Od '+day(period.start)+' do dneška'):'';
+  return '<article class="card insight-records"><div class="detail-heading"><div><div class="label">Personal Records</div><h3>Osobní rekordy</h3><p class="small pr-span">'+esc(span)+'</p></div>'+prPeriodControls(t,key)+'</div>'+
+    (rows.length?'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Max. váha</th><th>Datum</th><th>Změna</th></tr></thead><tbody>'+rows.map(({x,ch})=>'<tr><td>'+esc(x.exercise)+'</td><td>'+String(fmt(ch.value,1)).replace('.',',')+' kg'+(ch.reps?' <span class="small">× '+ch.reps+'</span>':'')+'</td><td>'+esc(dateLabel(ch.date))+'</td><td>'+(trendBadge(ch,{unit:'kg'})||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<p class="small">V tomto období žádné série s váhou.</p>')+
+    (tiles.length?'<div class="pr-cardio">'+tiles.join('')+'</div>':'')+
+    '<p class="small">Rekord je nejlepší výkon v období, šipka ukazuje změnu proti nejlepšímu před ním (FTP: platné na konci proti začátku období). Když starší data chybí, porovnávám s prvním záznamem v období. U tempa je šipka dolů zlepšení.</p></article>';
 }
 function renderFitnessInsights(){
   const box=$('fitnessInsights'),r=state.insights;if(!box)return;
@@ -1773,7 +1779,10 @@ function renderFitnessInsights(){
   // The gym builder figure shows the same freshness behind the selection.
   const builder=document.querySelector('#workoutsGym .gym-figures');if(builder){paintMuscleMap(builder,fresh);if(!$('gymFreshLegend'))builder.insertAdjacentHTML('afterend','<div class="fresh-legend" id="gymFreshLegend"><span><i style="background:#3fda9c"></i>Zotavené</span><span><i style="background:#ffa64d"></i>Unavené</span><span><i style="background:#ff6478"></i>Vyčerpané</span><span><i style="background:#4a5361"></i>Kalibruji</span></div>');}
 }
-document.addEventListener('click',e=>{const b=e.target.closest('[data-pr-period]');if(!b)return;try{localStorage.setItem('pfd-pr-period',b.dataset.prPeriod);}catch{}const card=b.closest('.insight-records');if(card&&state.insights?.records)card.outerHTML=recordsCardHtml(state.insights.records);});
+// Period of the records: the Vše button or the month / year selects.
+function setPrPeriod(key,from){try{localStorage.setItem('pfd-pr-period',key);}catch{}const card=from.closest('.insight-records');if(card&&state.insights?.records)card.outerHTML=recordsCardHtml(state.insights.records);}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-pr-period]');if(b)setPrPeriod(b.dataset.prPeriod,b);});
+document.addEventListener('change',e=>{const sel=e.target.closest('[data-pr-select]');if(sel&&sel.value)setPrPeriod(sel.value,sel);});
 async function loadInsights(){try{state.insights=await jsonFetch('/app/api/fitness-insights');}catch(error){state.insights={status:'error',message:'Svaly a rekordy se nepodařilo načíst: '+error.message};}renderFitnessInsights();}
 
 // Day timeline: sleep, activities, planned workouts and meals in one order.

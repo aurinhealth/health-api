@@ -175,54 +175,64 @@ export function cardioRecords(activities) {
   };
 }
 
-// ---- Progress of the records over a period ----------------------------------
-// The best value inside the period against the best before it. When the data
-// starts inside the period (always for "all"), against the first session.
-export const RECORD_PERIODS = { "12w": "12 týdnů", year: "Letos", all: "Od začátku" };
-export function periodStarts(today) {
-  return { "12w": new Date(Date.parse(today + "T12:00:00Z") - 84 * DAY).toISOString().slice(0, 10), year: today.slice(0, 4) + "-01-01", all: null };
+// ---- Records over a period ----------------------------------------------------
+// Periods: the last 1, 3 or 6 months, one calendar year, or all data stored in
+// the app ("all": since the oldest synced or imported record). A record is the
+// best value inside the period; its change is against the best before the
+// period, or against the first session when the data starts inside it.
+const shiftMonths = (date, months) => { const d = new Date(date + "T12:00:00Z"); d.setUTCMonth(d.getUTCMonth() - months); return d.toISOString().slice(0, 10); };
+export function recordPeriods(today, dates = []) {
+  const known = dates.filter(Boolean).sort(), years = [...new Set(known.map(d => d.slice(0, 4)))].sort().reverse();
+  if (!years.includes(today.slice(0, 4))) years.unshift(today.slice(0, 4));
+  const periods = {};
+  for (const m of [1, 3, 6]) periods[m + "m"] = { kind: "months", months: m, label: m + (m === 1 ? " měsíc" : m <= 4 ? " měsíce" : " měsíců"), start: shiftMonths(today, m), end: today };
+  for (const y of years) periods["y" + y] = { kind: "year", year: Number(y), label: y, start: y + "-01-01", end: y === today.slice(0, 4) ? today : y + "-12-31" };
+  periods.all = { kind: "all", label: "Vše", start: known[0] || today, end: today };
+  return periods;
 }
-// points: [{date, value}]; better: (a, b) => a is better than b.
-function periodChange(points, start, better) {
-  const sorted = [...points].filter(p => p.date && Number.isFinite(p.value)).sort((a, b) => a.date.localeCompare(b.date));
-  if (!sorted.length) return null;
+// points: [{date, value}]; better(a, b): a beats b.
+export function periodChange(points, { start, end, kind }, better) {
+  const sorted = [...points].filter(p => p.date && Number.isFinite(p.value) && p.date <= end).sort((a, b) => a.date.localeCompare(b.date));
   const best = list => list.reduce((x, p) => !x || better(p.value, x.value) ? p : x, null);
-  const inside = start ? sorted.filter(p => p.date >= start) : sorted, before = start ? sorted.filter(p => p.date < start) : [];
+  const inside = kind === "all" ? sorted : sorted.filter(p => p.date >= start), before = kind === "all" ? [] : sorted.filter(p => p.date < start);
   if (!inside.length) return null;
-  const now = best(inside);
-  const from = before.length ? best(before) : best(inside.filter(p => p.date === inside[0].date));
+  const now = best(inside), from = before.length ? best(before) : best(inside.filter(p => p.date === inside[0].date));
   return { value: now.value, date: now.date, from: from.value, fromDate: from.date, basis: before.length ? "before" : "first", delta: round(now.value - from.value, 1) };
 }
+// FTP is a setting: the value in force at the end of the period against the one at its start.
+function settingChange(points, { start, end, kind }) {
+  const sorted = points.filter(p => p.date <= end).sort((a, b) => a.date.localeCompare(b.date));
+  if (!sorted.length) return null;
+  const now = sorted.at(-1), before = kind === "all" ? [] : sorted.filter(p => p.date < start), from = before.at(-1) || sorted.find(p => kind === "all" || p.date >= start);
+  if (!from || (kind !== "all" && now.date < start && !before.length)) return null;
+  return { value: now.value, date: now.date, from: from.value, fromDate: from.date, basis: before.length ? "before" : "first", delta: now.value - from.value };
+}
 export function recordTrends({ sets = [], activities = [], today }) {
-  const starts = periodStarts(today), changes = (points, better) => Object.fromEntries(Object.keys(RECORD_PERIODS).map(k => [k, periodChange(points, starts[k], better)]));
+  const field = (a, k) => n(a[k] ?? a.payload?.[k], NaN), dateOf = a => iso(a.date || a.start);
+  const rides = activities.filter(a => activityKind(a) === "ride"), runs = activities.filter(a => activityKind(a) === "run");
+  const lifts = sets.map(x => ({ exercise: normalizeExerciseName(x.exercise), kg: n(x.actual_kg), reps: n(x.actual_reps), date: iso(x.workout_date || x.date) })).filter(x => x.exercise && x.date && x.kg > 0 && x.reps > 0);
+  const periods = recordPeriods(today, [...lifts.map(x => x.date), ...rides.map(dateOf), ...runs.map(dateOf)]);
+  const each = fn => Object.fromEntries(Object.entries(periods).map(([k, p]) => [k, fn(p)]));
   const higher = (a, b) => a > b, lower = (a, b) => a < b;
   const byExercise = new Map();
-  for (const x of sets) {
-    const ex = normalizeExerciseName(x.exercise), kg = n(x.actual_kg), reps = n(x.actual_reps), date = iso(x.workout_date || x.date);
-    if (!ex || !date || !(kg > 0) || !(reps > 0)) continue;
-    if (!byExercise.has(ex)) byExercise.set(ex, []);
-    byExercise.get(ex).push({ date, value: kg, reps });
-  }
+  for (const x of lifts) { if (!byExercise.has(x.exercise)) byExercise.set(x.exercise, []); byExercise.get(x.exercise).push({ date: x.date, value: x.kg, reps: x.reps }); }
   const strength = [...byExercise].map(([exercise, points]) => {
-    const best = points.reduce((x, p) => !x || p.value > x.value || (p.value === x.value && p.date > x.date) ? p : x, null);
-    return { exercise, best: { kg: best.value, reps: best.reps, date: best.date }, change: changes(points, higher) };
-  }).sort((a, b) => b.best.date.localeCompare(a.best.date) || b.best.kg - a.best.kg);
-  const field = (a, k) => n(a[k] ?? a.payload?.[k], NaN);
-  const rides = activities.filter(a => activityKind(a) === "ride"), runs = activities.filter(a => activityKind(a) === "run");
-  const ftpPoints = rides.map(a => ({ date: iso(a.date || a.start), value: field(a, "icu_ftp") })).filter(p => p.value > 0).sort((a, b) => a.date.localeCompare(b.date));
-  // FTP is a setting, not a best effort: the current value against the one in force at the period start.
-  const ftpChange = start => {
-    if (!ftpPoints.length) return null;
-    const now = ftpPoints.at(-1), before = start ? ftpPoints.filter(p => p.date < start) : [], from = before.at(-1) || (start ? ftpPoints.find(p => p.date >= start) : ftpPoints[0]);
-    return from ? { value: now.value, date: now.date, from: from.value, fromDate: from.date, basis: before.length ? "before" : "first", delta: now.value - from.value } : null;
+    const change = each(p => { const c = periodChange(points, p, higher); return c && { ...c, reps: points.find(x => x.date === c.date && x.value === c.value)?.reps ?? null }; });
+    return { exercise, change };
+  }).sort((a, b) => (b.change.all?.date || "").localeCompare(a.change.all?.date || "") || (b.change.all?.value || 0) - (a.change.all?.value || 0));
+  const series = (list, value, minimum = 0) => list.map(a => ({ date: dateOf(a), value: value(a) })).filter(p => Number.isFinite(p.value) && p.value > minimum);
+  // FTP only for riders with power data; otherwise the number means nothing.
+  const powered = rides.some(a => field(a, "icu_weighted_avg_watts") > 0 || field(a, "average_watts") > 0);
+  const metric = (points, unit, better) => points.length ? { unit, change: each(p => periodChange(points, p, better)) } : null;
+  const ftpPoints = powered ? series(rides, a => field(a, "icu_ftp")) : [];
+  const cardio = {
+    ftp: ftpPoints.length ? { unit: "W", change: each(p => settingChange(ftpPoints, p)) } : null,
+    runPace: metric(series(runs.filter(a => field(a, "distance") >= 5000), a => Math.round(field(a, "moving_time") / (field(a, "distance") / 1000))), "s/km", lower),
+    longestRide: metric(series(rides, a => round(field(a, "distance") / 1000, 1)), "km", higher),
+    mostElevation: metric(series(rides, a => Math.round(field(a, "total_elevation_gain"))), "m", higher),
+    longestRun: metric(series(runs, a => round(field(a, "distance") / 1000, 1)), "km", higher)
   };
-  const pacePoints = runs.filter(a => field(a, "distance") >= 5000 && field(a, "moving_time") > 0).map(a => ({ date: iso(a.date || a.start), value: Math.round(field(a, "moving_time") / (field(a, "distance") / 1000)) }));
-  return {
-    periods: Object.fromEntries(Object.entries(RECORD_PERIODS).map(([k, label]) => [k, { label, start: starts[k] }])),
-    strength,
-    ftp: ftpPoints.length ? { value: ftpPoints.at(-1).value, date: ftpPoints.at(-1).date, change: Object.fromEntries(Object.keys(RECORD_PERIODS).map(k => [k, ftpChange(starts[k])])) } : null,
-    runPace: pacePoints.length ? { change: changes(pacePoints, lower), best: pacePoints.reduce((x, p) => !x || p.value < x.value ? p : x, null) } : null
-  };
+  return { periods, defaultPeriod: "1m", strength, cardio };
 }
 
 export function fitnessInsights({ sets = [], activities = [], today }) {
@@ -232,10 +242,11 @@ export function fitnessInsights({ sets = [], activities = [], today }) {
 }
 
 // Server side: strength history and the last year of activities from D1.
-// All strength history (records "od začátku"); activities for two years, so
-// "letos" and "12 týdnů" have the time before the period to compare with.
+// All stored history, so any year and "Vše" can be shown: the strength log and
+// every synced activity (Intervals.icu sends the last year at connection and
+// the app keeps what it has synced since).
 export async function loadFitnessInsights(db, today) {
-  const since = new Date(Date.parse(today + "T12:00:00Z") - 730 * DAY).toISOString().slice(0, 10);
+  const since = "2000-01-01";
   const [setRows, activityRows] = await Promise.all([
     db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' ORDER BY workout_date").bind(db.userId).all().catch(() => ({ results: [] })),
     db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family='intervals' AND data_type='activity') OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
