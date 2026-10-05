@@ -10,6 +10,7 @@ import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders } from "./connection-secrets.js";
 import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from './food-label.js';
 import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
+import { withIntervalsSleep } from './intervals-sleep.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail} from './activity-detail.js';
@@ -340,7 +341,7 @@ async function loadCoachInputs(env,ctx,internalAuth,date){
   const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health,...weekResponses]=await Promise.all([
     app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
     internal('/app/api/fitness?days=90'),internal('/app/api/gym?date='+date),
-    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-7),shiftDate(date,1))).then(d=>Response.json(d)),
     googleDashboard(env.DB,date).catch(()=>({})),
     ...weeks.map(w=>internal('/app/api/week?start='+w))
   ]);
@@ -381,7 +382,7 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   const [fitness,sleep,food,recentFeedback,workout,profile]=await Promise.all([
     internal('/app/api/fitness?days=42').then(r=>r.json()).catch(()=>({})),
-    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-21)+'&end='+to,{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-21)+'&end='+to,{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-21),to)),
     env.DB.prepare("SELECT consumed_at,recipe_title,kcal,carbs_g FROM food_logs WHERE user_id=? AND consumed_date=? ORDER BY consumed_at").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[]),
     recentWorkoutFeedback(env.DB,shiftDate(date,-21)),
     workoutId?getWorkout(env.DB,workoutId).catch(()=>null):null,
@@ -789,7 +790,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const fitnessJob=env.INTERVALS_API_KEY?fetch('https://intervals.icu/api/v1/athlete/0/wellness?oldest='+oldest+'&newest='+date,{headers:{Authorization:'Basic '+btoa('API_KEY:'+env.INTERVALS_API_KEY),Accept:'application/json'}}).then(r=>r.ok?r.json():[]).catch(()=>[]):[];
       const [daily,yesterday,sleepData,rows,profile,athleteState,gym]=await Promise.all([
         read('/analysis/daily?date='+date),read('/analysis/daily?date='+shiftDate(date,-1)),
-        read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)),fitnessJob,dashboardProfile(env),
+        read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)).then(d=>withIntervalsSleep(env,d,oldest,shiftDate(date,1))),fitnessJob,dashboardProfile(env),
         date===pragueToday()?getAthleteState(env.DB):{status:'active',note:'',statusUntil:null},readGymPlan(env.DB,date).catch(()=>null)
       ]);
       const latest=Array.isArray(rows)&&rows.length?rows.filter(r=>String(r.id||'')<=date).at(-1)||{}:{};
@@ -1072,6 +1073,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   };
   const target = routes[url.pathname];
   if (!target) return Response.json({ status: "error", message: "Not found" }, { status: 404 });
+  // Sleep: Google Health nights, and the nights only Intervals.icu has (Apple Health, Garmin…).
+  if (url.pathname === "/app/api/sleep") {
+    const internal = new URL(target, request.url);for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
+    const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
+    if (!response.ok) return response;
+    const start = url.searchParams.get("start") || shiftDate(pragueToday(), -30), end = url.searchParams.get("end") || shiftDate(pragueToday(), 1);
+    return Response.json(await withIntervalsSleep(env, await response.json(), start, end), { headers: { "Cache-Control": "no-store" } });
+  }
 
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);

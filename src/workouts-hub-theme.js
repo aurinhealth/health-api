@@ -480,4 +480,8 @@ body.sheet-open{overflow:hidden}
 /* Doporučené tréninky stands out next to Vygenerovat */
 #openRecommendations{background:linear-gradient(135deg,#7b4fe0,#9b6bff);border-color:#a98bff;color:#fff;box-shadow:0 6px 18px rgba(123,79,224,.35)}
 #openRecommendations:hover,#openRecommendations:focus-visible{background:linear-gradient(135deg,#8a5ef0,#ad84ff);outline:none}
+
+.apple-steps{display:grid;gap:10px;margin:10px 0;padding-left:20px;font-size:13px;line-height:1.55;color:#c9d2de}
+.apple-steps a{color:#c6acff}
+.apple-steps .pill{margin-left:4px}
 `;
