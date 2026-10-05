@@ -15,6 +15,7 @@ import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { getWeekPlan } from './week-planner.js';
 import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
 import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveFoodProduct, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
+import { pragueToday } from "./prague-date.js";
 
 
 export default {
@@ -317,7 +318,7 @@ async function logMealRoute(env, request) {
 }
 async function nutritionDayRoute(env, url) {
   try {
-    const date=url.searchParams.get("date") || new Date().toISOString().slice(0,10);
+    const date=url.searchParams.get("date") || pragueToday();
     const context=await buildStrengthContext(env,date);
     const plan=buildNutritionPlan(context,{});
     const food=await getFoodDay(env.DB,date);
@@ -328,7 +329,7 @@ async function nutritionDayRoute(env, url) {
 }
 async function nutritionRecommendRoute(env, request) {
   try {
-    const body=await request.json().catch(()=>({})), date=String(body.date || new Date().toISOString().slice(0,10));
+    const body=await request.json().catch(()=>({})), date=String(body.date || pragueToday());
     const context=await buildStrengthContext(env,date), plan=buildNutritionPlan(context,{...body,weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,date);
     return Response.json({...recommendFood({day:date,nutritionPlan:plan,entries:food}),adaptive:buildAdaptiveDecision(context,{...food,nutritionTarget:plan})});

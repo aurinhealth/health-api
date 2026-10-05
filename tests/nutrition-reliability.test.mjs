@@ -115,3 +115,13 @@ test('known old unexported food is backfilled once, waits when disconnected and 
   await processFoodGoogle({DB:owner,CONNECTED_PROVIDERS:[]},{token,...mockGoogle()});assert.equal((await foodGoogleStatus(owner))[0].status,'disconnected');
   await processFoodGoogle({DB:owner,CONNECTED_PROVIDERS:['google']},{token,...mockGoogle()});assert.equal((await foodGoogleStatus(owner))[0].status,'synced');
 });
+
+test("the nutrition plan uses the athlete's own latest weight, not a fixed 88 kg", async () => {
+  const { buildNutritionPlan } = await import("../src/nutrition-intelligence.js");
+  const context = { date: "2026-10-05", cycling: { plannedWorkouts: [], recentActivities: [], recentRideHours: 0, recentRideTss: 0 } };
+  const light = buildNutritionPlan(context, { weightTrend: { latestKg: 60, samples: 10, weeklyRateKg: -0.3 } });
+  const heavy = buildNutritionPlan(context, { weightTrend: { latestKg: 95, samples: 10, weeklyRateKg: -0.3 } });
+  assert.equal(light.macros.proteinGrams, 120);
+  assert.equal(heavy.macros.proteinGrams, 190);
+  assert.equal(buildNutritionPlan(context).macros.proteinGrams, 176);
+});

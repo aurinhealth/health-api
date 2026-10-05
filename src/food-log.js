@@ -1,8 +1,11 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
 import { searchPersonalFoods } from "./personal-foods.js";
+import { pragueToday } from "./prague-date.js";
 
-const n = (v, fallback = null) => Number.isFinite(Number(v)) ? Number(v) : fallback;
+// null and "" are missing values, not 0: ChatGPT sends "servings": null, and
+// that used to log 0.01 of a portion.
+const n = (v, fallback = null) => v == null || v === "" ? fallback : Number.isFinite(Number(v)) ? Number(v) : fallback;
 const text = v => v == null ? "" : String(v).trim();
 
 export async function ensureFoodLogTable(db) {
@@ -38,6 +41,56 @@ function nutritionFromRecipe(recipe) {
 function publicRecipe(recipe, requestedPage = null) {
   return { id:recipeId(recipe), name:text(recipe?.name || recipe?.title || recipe?.recipe_name) || null, page:n(recipe?.page), requested_page:requestedPage, ...nutritionFromRecipe(recipe), ingredients:recipe?.ingredients || null, description:recipe?.description || null, raw:recipe };
 }
+// ---- One food diary ------------------------------------------------------------
+// The app keeps eaten food in food_logs; ChatGPT (MCP) and the coach inbox use
+// food_log here, with planned/eaten/cancelled. Eaten food from here gets a diary
+// row linked by source "food_log:<id>", and the day read here counts what was
+// logged in the app, so both show the same intake. The diary belongs to the
+// app: a problem with it never fails logging here.
+export const diaryLink = id => "food_log:" + id;
+const DIARY_MEALS = [[/break|snída|snida/i, "breakfast"], [/lunch|oběd|obed/i, "lunch"], [/dinner|supper|večeř|veceř|vecer/i, "dinner"], [/snack|svač|svac/i, null]];
+function diaryMealType(row) {
+  const hit = DIARY_MEALS.find(([re]) => re.test(String(row.meal_type || "")));
+  if (!hit) return null;
+  if (hit[1]) return hit[1];
+  const hour = Number(String(row.meal_time || "").match(/^(\d{1,2}):/)?.[1]);
+  return Number.isFinite(hour) && hour < 12 ? "snack_am" : "snack_pm";
+}
+function diaryTime(row) {
+  const t = String(row.meal_time || "").match(/^(\d{1,2}):(\d{2})/);
+  if (t) return row.date + "T" + t[1].padStart(2, "0") + ":" + t[2] + ":00";
+  const created = String(row.created_at || "");
+  return created.slice(0, 10) === row.date && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(created) ? created.replace(" ", "T").slice(0, 19) + "Z" : row.date + "T12:00:00";
+}
+function parseNote(value) { try { const note = JSON.parse(value || "{}"); return note && typeof note === "object" && !Array.isArray(note) ? note : {}; } catch { return {}; } }
+export async function mirrorToDiary(db, id) {
+  try {
+    const row = await db.prepare("SELECT * FROM food_log WHERE user_id = ? AND id=?").bind(db.userId, id).first();
+    const linked = await db.prepare("SELECT id,note FROM food_logs WHERE user_id = ? AND source=?").bind(db.userId, diaryLink(id)).first();
+    if (!row || row.status !== "eaten") {
+      if (linked) await db.prepare("DELETE FROM food_logs WHERE user_id = ? AND id=?").bind(db.userId, linked.id).run();
+      return { status: "ok", diary: linked ? "removed" : "none" };
+    }
+    // A meal type chosen in the app stays.
+    const own = parseNote(linked?.note), meal = own.mealType || diaryMealType(row);
+    const note = JSON.stringify({ ...own, foodLogId: Number(id), ...(meal ? { mealType: meal } : {}) });
+    const num = (v, d = 0) => v == null || v === "" || !Number.isFinite(Number(v)) ? d : Number(v);
+    const values = [row.date, diaryTime(row), row.cookbook_page ?? row.recipe_page ?? null, row.recipe_name || "Jídlo", num(row.servings, 1), num(row.calories), num(row.protein_g), num(row.carbs_g), num(row.fat_g), row.fiber_g == null ? null : num(row.fiber_g)];
+    if (linked) await db.prepare("UPDATE food_logs SET consumed_date=?,consumed_at=?,cookbook_page=?,recipe_title=?,servings=?,kcal=?,protein_g=?,carbs_g=?,fat_g=?,fiber_g=?,note=? WHERE user_id = ? AND id=?").bind(...values, note, db.userId, linked.id).run();
+    else await db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId, ...values, diaryLink(id), note).run();
+    return { status: "ok", diary: linked ? "updated" : "added" };
+  } catch (error) { return { status: "skipped", message: error.message }; }
+}
+// Eaten food of a day logged here before the diary link existed: shown in the
+// app the first time the day is read.
+export async function mirrorDayToDiary(db, date) {
+  try {
+    const rows = (await db.prepare("SELECT f.id FROM food_log f WHERE f.user_id = ? AND f.date=? AND f.status='eaten' AND NOT EXISTS (SELECT 1 FROM food_logs d WHERE d.user_id=f.user_id AND d.source='food_log:'||f.id)").bind(db.userId, date).all()).results || [];
+    for (const r of rows) await mirrorToDiary(db, r.id);
+    return rows.length;
+  } catch { return 0; }
+}
+
 export async function searchCookbookRecipes({ page, name, limit = 10 } = {}) {
   const data = await getCookbook();
   const recipes = Array.isArray(data?.recipes) ? data.recipes : [];
@@ -104,9 +157,12 @@ export async function logResolvedFood(db, input = {}) {
 
 export async function logFood(db, input = {}) {
   await ensureFoodLogTable(db);
-  const date=text(input.date) || new Date().toISOString().slice(0,10), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
+  const date=text(input.date) || pragueToday(), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
   const sourceText = text(input.source).toLowerCase();
-  const useCookbook = sourceText === "" || sourceText === "cookbook" || input.page != null || input.recipeId;
+  // Own nutrition values make it a manual entry: a loose name match must not
+  // turn "Tvaroh, 200 kcal" into "Zapečené palačinky s tvarohem".
+  const ownValues = [input.calories, input.protein_g, input.carbs_g, input.fat_g].some(v => v != null && v !== "");
+  const useCookbook = input.page != null || input.recipeId || sourceText === "cookbook" || (sourceText === "" && !ownValues);
   const recipe = useCookbook && (input.page != null || input.name || input.recipeId) ? await getCookbookRecipe({page:input.page,name:useCookbook ? input.name : null,recipeId:input.recipeId}) : null;
   if (!recipe && input.calories == null && input.protein_g == null && input.carbs_g == null && input.fat_g == null) throw new Error("Recipe not found and no nutrition values were supplied");
   const calories=n(input.calories,recipe?.calories), protein=n(input.protein_g,recipe?.protein_g), carbs=n(input.carbs_g,recipe?.carbs_g), fat=n(input.fat_g,recipe?.fat_g);
@@ -114,7 +170,8 @@ export async function logFood(db, input = {}) {
     date,text(input.meal_time || input.mealTime)||null,text(input.meal_type || input.mealType)||null,recipe?.page ?? n(input.page),recipe?.name || text(input.name)||null,recipe?.page ?? n(input.page),servings,
     calories==null?null:calories*servings,protein==null?null:protein*servings,carbs==null?null:carbs*servings,fat==null?null:fat*servings,n(input.fiber_g, null)==null?null:n(input.fiber_g)*servings,n(input.salt_g, null)==null?null:n(input.salt_g)*servings,n(input.amount_g ?? input.grams, null),text(input.brand)||null,normalizeBarcode(input.barcode)||null,status,text(input.source)||"cookbook",text(input.note)||null
   ).run();
-  return {status:"ok",id:result.meta?.last_row_id ?? null,date,entryStatus:status,servings,recipe,nutrition:{calories:calories==null?null:calories*servings,protein_g:protein==null?null:protein*servings,carbs_g:carbs==null?null:carbs*servings,fat_g:fat==null?null:fat*servings,fiber_g:n(input.fiber_g,null)==null?null:n(input.fiber_g)*servings,salt_g:n(input.salt_g,null)==null?null:n(input.salt_g)*servings}};
+  const id=result.meta?.last_row_id ?? null, diary=id!=null&&status==="eaten"?(await mirrorToDiary(db,id)).diary||null:null;
+  return {status:"ok",id,diary,date,entryStatus:status,servings,recipe,nutrition:{calories:calories==null?null:calories*servings,protein_g:protein==null?null:protein*servings,carbs_g:carbs==null?null:carbs*servings,fat_g:fat==null?null:fat*servings,fiber_g:n(input.fiber_g,null)==null?null:n(input.fiber_g)*servings,salt_g:n(input.salt_g,null)==null?null:n(input.salt_g)*servings}};
 }
 export function remainingNutrition(nutritionPlan, eaten = {}) {
   const target=nutritionPlan||{};
@@ -138,6 +195,7 @@ export async function consumePlannedFood(db, input = {}) {
   if (requested > currentServings + 1e-9) throw new Error("Consumed servings exceed planned servings");
   if (Math.abs(requested-currentServings) < 1e-9) {
     await db.prepare("UPDATE food_log SET status='eaten' WHERE user_id = ? AND id=?").bind(db.userId, id).run();
+    await mirrorToDiary(db,id);
     return {status:"ok",mode:"promoted",id,consumedId:id,remainingPlannedServings:0};
   }
   const factor=requested/currentServings;
@@ -151,6 +209,7 @@ export async function consumePlannedFood(db, input = {}) {
   const ins=await db.prepare("INSERT INTO food_log (user_id, date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,fiber_g,salt_g,amount_g,brand,barcode,status,source,note) VALUES (?, ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId, 
     row.date,row.meal_time,row.meal_type,row.recipe_page,row.recipe_name,row.cookbook_page,requested,per.calories,per.protein_g,per.carbs_g,per.fat_g,per.fiber_g,per.salt_g,row.amount_g==null?null:n(row.amount_g,0)*factor,row.brand,row.barcode,"eaten",row.source,row.note
   ).run();
+  if(ins.meta?.last_row_id!=null)await mirrorToDiary(db,ins.meta.last_row_id);
   return {status:"ok",mode:"split",plannedId:id,consumedId:ins.meta?.last_row_id??null,remainingPlannedServings:remaining};
 }
 
@@ -171,19 +230,34 @@ export async function updateFoodEntry(db, input = {}) {
     baseCalories*servings,baseProtein*servings,baseCarbs*servings,baseFat*servings,fiber==null?null:fiber*servings,salt==null?null:salt*servings,
     normalizeStatus(input.status??row.status),text(input.note??row.note)||null,id,db.userId
   ).run();
+  await mirrorToDiary(db,id);
   return {status:"ok",id};
 }
 
 export async function cancelFoodEntry(db, id) {
   await ensureFoodLogTable(db); const key=n(id); if(!key) throw new Error("Missing food log id");
   const result=await db.prepare("UPDATE food_log SET status='cancelled' WHERE user_id = ? AND id=?").bind(db.userId, key).run();
+  await mirrorToDiary(db,key);
   return {status:"ok",id:key,cancelled:!!result.meta?.changes};
 }
 
 export async function getFoodDay(db,date) {
-  await ensureFoodLogTable(db); const day=text(date)||new Date().toISOString().slice(0,10);
+  await ensureFoodLogTable(db); const day=text(date)||pragueToday();
   const rows=await db.prepare("SELECT id,date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,fiber_g,salt_g,amount_g,brand,barcode,status,source,note,created_at FROM food_log WHERE user_id = ? AND date=? ORDER BY COALESCE(meal_time,created_at),id").bind(db.userId, day).all();
-  const all=rows.results||[],eaten=all.filter(r=>r.status==="eaten"),planned=all.filter(r=>r.status==="planned");
+  await mirrorDayToDiary(db, day);
+  const all=rows.results||[];
+  // The app's diary: its edits of linked meals win, and food logged only in
+  // the app counts as eaten (read-only here; it is edited in the app).
+  let diary=[];
+  try { diary=(await db.prepare("SELECT id,consumed_at,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note FROM food_logs WHERE user_id = ? AND consumed_date=? ORDER BY consumed_at,id").bind(db.userId, day).all()).results||[]; } catch {}
+  const linked=new Map(diary.filter(r=>String(r.source||"").startsWith("food_log:")).map(r=>[Number(String(r.source).slice(9)),r]));
+  for(const entry of all){const d=linked.get(Number(entry.id));if(d&&entry.status==="eaten")Object.assign(entry,{servings:d.servings,calories:d.kcal,protein_g:d.protein_g,carbs_g:d.carbs_g,fat_g:d.fat_g,fiber_g:d.fiber_g});}
+  const pragueTime=v=>{const t=String(v||"");if(!/T\d{2}:\d{2}/.test(t))return null;if(!/Z$|[+-]\d{2}:?\d{2}$/.test(t))return t.slice(11,16);const d=new Date(t);return Number.isFinite(d.getTime())?new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(d):null;};
+  for(const r of diary.filter(r=>!String(r.source||"").startsWith("food_log:"))){
+    let note={};try{note=JSON.parse(r.note||"{}")||{};}catch{}
+    all.push({id:null,diaryId:r.id,date:day,meal_time:pragueTime(r.consumed_at),meal_type:note.mealType||null,recipe_name:r.recipe_title,servings:r.servings,calories:r.kcal,protein_g:r.protein_g,carbs_g:r.carbs_g,fat_g:r.fat_g,fiber_g:r.fiber_g,status:"eaten",source:"app",readOnly:true});
+  }
+  const eaten=all.filter(r=>r.status==="eaten"),planned=all.filter(r=>r.status==="planned");
   const sum=list=>["calories","protein_g","carbs_g","fat_g","fiber_g","salt_g"].reduce((o,k)=>{o[k]=Math.round(list.reduce((s,r)=>s+n(r[k],0),0));return o;},{});
   return {status:"ok",date:day,entries:all,totals:{eaten:sum(eaten),planned:sum(planned),all:sum(all.filter(r=>r.status!=="cancelled"))}};
 }

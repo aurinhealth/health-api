@@ -1,6 +1,7 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { qualityDomain } from './session-intensity.js';
+import { pragueToday } from "./prague-date.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -184,7 +185,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=WORDS[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
-  const targetDate=isoDate(date)||new Date().toISOString().slice(0,10);
+  const targetDate=isoDate(date)||pragueToday();
   const weekActivities=allWeekActivities(week);
   const completedAll=weekActivities.filter(a=>a.completed&&isSport(a));
   const completed=completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=0&&d<=6;});

@@ -1,3 +1,4 @@
+import { pragueToday } from "./prague-date.js";
 const BASE_URL = "https://intervals.icu/api/v1";
 
 function auth(env) {
@@ -42,7 +43,7 @@ function withCalories(description, calories) {
 }
 
 export async function syncPlannedEventCalories(env, options = {}) {
-  const oldest = String(options.oldest || new Date().toISOString().slice(0, 10));
+  const oldest = String(options.oldest || pragueToday());
   const newest = String(options.newest || oldest);
   const weightKg = n(options.weightKg, 88);
   const ftp = n(options.ftp, 260);

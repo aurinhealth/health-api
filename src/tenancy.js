@@ -34,7 +34,11 @@ export const PERSONAL_TABLES = {
   training_profile: {},
   week_plan_preferences: {},
   week_plan_overrides: {},
-  athlete_state: {}
+  athlete_state: {},
+  assistant_chats: {},
+  assistant_messages: {},
+  exercise_videos: {},
+  api_cache_versions: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

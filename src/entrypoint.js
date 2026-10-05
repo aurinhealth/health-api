@@ -77,6 +77,7 @@ import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./
 import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo } from "./exercise-technique.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout } from "./dashboard-auth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
+import { pragueToday } from './prague-date.js';
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
@@ -196,10 +197,6 @@ function staticRoute(url) {
   return Response.json({name:"Petr Fitness Data",short_name:"Fitness Data",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
 }
 
-function pragueToday() {
-  const parts=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
-  return parts.find(x=>x.type==="year").value+"-"+parts.find(x=>x.type==="month").value+"-"+parts.find(x=>x.type==="day").value;
-}
 
 // The dashboard profile (age, height, sex, …) with height and activity from
 // Google Health and steps filling the gaps; null when there is nothing yet.

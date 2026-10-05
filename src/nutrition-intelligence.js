@@ -79,17 +79,21 @@ function estimateStrengthCalories(weightKg, minutes) {
 }
 
 export function buildNutritionPlan(context, options = {}) {
-  const weightKg = n(options.weightKg, n(context?.weightKg, 88));
+  const weightTrend = options.weightTrend || context?.weightTrend || null;
+  // The athlete's own latest weight; 88 kg (the owner's calibration) only
+  // when nothing is known, so protein and carbs fit every user.
+  const weightKg = n(options.weightKg, n(context?.weightKg, n(weightTrend?.latestKg, 88)));
   const defaults = { ...NUTRITION_DEFAULTS, ...(options.defaults || {}) };
   const dayType = classifyDay(context);
-  const weightTrend = options.weightTrend || context?.weightTrend || null;
   const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend);
   const next = context?.cycling?.nextRide || null;
   const durationHours = n(next?.durationHours);
   const plannedRideCarbs = durationHours >= defaults.rideFuelingThresholdHours
     ? Math.round(durationHours * activityCarbsPerHour(next))
     : 0;
-  const protein = Math.round(Math.max(defaults.proteinGrams, weightKg * defaults.proteinPerKg));
+  // A known weight sets protein per kg; the fixed 176 g is only the fallback.
+  const weightKnown = [options.weightKg, context?.weightKg, weightTrend?.latestKg].some(v => Number(v) > 0);
+  const protein = Math.round(weightKnown ? weightKg * defaults.proteinPerKg : Math.max(defaults.proteinGrams, weightKg * defaults.proteinPerKg));
   const fatMin = Math.round(weightKg * defaults.fatMinimumPerKg);
   const carbPerKg = dayType === "long"
     ? defaults.carbPerKgLong
