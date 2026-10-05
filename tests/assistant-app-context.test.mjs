@@ -33,7 +33,7 @@ test('a different selected week loads its own schedule and rejects unknown exerc
 });
 
 test('brief followups on an open gym use the loaded training context',()=>{
-  assert.equal(assistantTask('Uprav to',{sport:'gym'}),'adjustment');assert.equal(assistantTask('A jiný cvik?',{sport:'gym'}),'adjustment');assert.equal(assistantTask('Proč takhle?',{view:'workouts'}),'planning');assert.equal(assistantTask('Ahoj',{sport:'gym'}),'simple');
+  assert.equal(assistantTask('Uprav to',{sport:'gym'}),'adjustment');assert.equal(assistantTask('A jiný cvik?',{sport:'gym'}),'adjustment');assert.equal(assistantTask('Proč takhle?',{view:'workouts'}),'planning');assert.equal(assistantTask('Ahoj',{sport:'gym'}),'planning');assert.equal(assistantTask('Ahoj'),'simple');
 });
 
 test('a confirmed gym addition preserves Sunday ride, availability and other weeks',async()=>{

@@ -3084,8 +3084,14 @@ async function openFloatingAssistant(message=''){
   updateAssistantComposer();
   positionAssistantInViewport();
   const replyRevision=assistantReplyRevision;
-  loadInbox().then(()=>{if(!assistantBusy&&replyRevision===assistantReplyRevision&&$('assistantDialog').open){renderCoachActionCards((state.inbox||[]).filter(x=>x.status==='draft'&&x.draft?.kind==='coach_action').map(x=>({...x.draft.action,draftId:x.id})));scrollAssistant();}}).catch(()=>{});
+  loadInbox().then(()=>{if(!assistantBusy&&replyRevision===assistantReplyRevision&&$('assistantDialog').open){renderCoachActionCards((state.inbox||[]).filter(openCoachDraft).map(x=>({...x.draft.action,draftId:x.id})));scrollAssistant();}}).catch(()=>{});
   scrollAssistant();
+}
+// Open proposals worth showing again: made today, for today or later, in this
+// chat (week-review proposals have no chat). Older ones expire on the server.
+function openCoachDraft(x){
+  const a=x.draft?.action,created=new Date(String(x.created_at||'').replace(' ','T')+'Z'),day=isNaN(created)?'':created.toLocaleDateString('sv-SE',{timeZone:'Europe/Prague'});
+  return x.status==='draft'&&x.draft?.kind==='coach_action'&&day===pragueToday()&&(!a?.date||a.date>=pragueToday())&&(x.draft.chatId==null||x.draft.chatId===assistantChat.id);
 }
 function coachRichText(value){
   const inline=s=>esc(s).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
@@ -3142,14 +3148,17 @@ async function sendAssistantMessage(message,{retry=false,appContext=captureAssis
   if(!retry)setAssistantDraft('');else updateAssistantComposer();
   $('assistantConversation').insertAdjacentHTML('beforeend','<div class="assistant-typing" id="assistantTyping" role="status" aria-label="Asistent připravuje odpověď"><span></span><span></span><span></span><small>Asistent odpovídá</small></div>');
   $('assistantStatus').textContent='Zpráva odeslána';scrollAssistant(true);
-  let streamedTurn=null;
+  // Each frame carries the whole answer so far; it is re-rendered at most every 100 ms.
+  let streamedTurn=null,pendingAnswer=null,paintedAt=0;
+  const paint=()=>{if(pendingAnswer==null||!streamedTurn)return;streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(pendingAnswer);pendingAnswer=null;paintedAt=Date.now();scrollAssistant(true);};
   try{
     const r=await fetchAssistantReply(message,answer=>{
       if(revision!==statusCoachingRevision)return;
       $('assistantTyping')?.remove();
       if(!streamedTurn){appendCoachTurn('assistant','');streamedTurn=$('assistantConversation').lastElementChild;streamedTurn.classList.add('streaming');}
-      streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(answer);scrollAssistant(true);
+      pendingAnswer=answer;if(Date.now()-paintedAt>=100)paint();
     },appContext,progress=>{if(revision!==statusCoachingRevision)return;$('assistantStatus').textContent=progress;const typing=$('assistantTyping')?.querySelector('small');if(typing)typing.textContent=progress;});
+    pendingAnswer=null;
     $('assistantTyping')?.remove();
     if(r.chatId)rememberAssistantChat(r.chatId);
     if(revision!==statusCoachingRevision){streamedTurn?.remove();appendCoachTurn('assistant','Stav se mezitím změnil. Pošli požadavek znovu pro aktuální doporučení.');return;}
@@ -3160,7 +3169,7 @@ async function sendAssistantMessage(message,{retry=false,appContext=captureAssis
     if(r.memorySaved){state.athleteState.memories=[...new Set([...(state.athleteState.memories||[]),r.memorySaved])];renderCoachMemories();}
   }catch(error){
     $('assistantTyping')?.remove();
-    if(streamedTurn){streamedTurn.classList.remove('streaming');streamedTurn.querySelector('strong').textContent='Asistent · nedokončená odpověď';}
+    if(streamedTurn){paint();streamedTurn.classList.remove('streaming');streamedTurn.querySelector('strong').textContent='Asistent · nedokončená odpověď';}
     const notice=document.createElement('div');notice.className='assistant-retry';notice.setAttribute('role','alert');
     const copy=document.createElement('p');copy.textContent=error.message;notice.append(copy);
     const button=document.createElement('button');button.type='button';button.className='btn';button.textContent='Zkusit znovu';
@@ -3170,7 +3179,7 @@ async function sendAssistantMessage(message,{retry=false,appContext=captureAssis
 }
 function renderCoachActionCards(actions=[]){
   let el=$('coachActionCards');if(!el){$('assistantConversation').insertAdjacentHTML('afterend','<div id="coachActionCards"></div>');el=$('coachActionCards');}
-  const label=a=>a.type==='gym_swap'?'Vyměnit '+a.fromExercise+' → '+a.toExercise+' · '+a.sets+' × '+a.reps+(a.kg==null?' · zátěž doplníš':(' · '+a.kg+' kg')):a.type==='week_sport'?'Přidat '+HUB_SPORTS[a.sport]+' do týdne · '+longDate(a.date):a.type==='status'?'Změnit stav na '+STATUS_LABELS[a.status]:a.type==='move'?'Přesunout '+(a.eventSnapshot?.name||'trénink')+' na '+longDate(a.date):a.type==='rest'?'Odstranit '+(a.eventSnapshot?.name||'trénink')+' · '+longDate(a.date):'Připravit '+HUB_SPORTS[a.sport]+' · '+longDate(a.date)+' · '+hm(a.minutes);
+  const label=a=>a.type==='gym_swap'?'Vyměnit '+a.fromExercise+' → '+a.toExercise+' · '+a.sets+' × '+a.reps+(a.kg==null?' · zátěž doplníš':(' · '+a.kg+' kg')):a.type==='week_sport'?'Přidat '+HUB_SPORTS[a.sport]+' do týdne · '+longDate(a.date):a.type==='status'?'Změnit stav na '+STATUS_LABELS[a.status]+(a.statusUntil?' · znovu Active od '+longDate(a.statusUntil):''):a.type==='move'?'Přesunout '+(a.eventSnapshot?.name||'trénink')+' na '+longDate(a.date):a.type==='rest'?'Odstranit '+(a.eventSnapshot?.name||'trénink')+' · '+longDate(a.date):'Připravit '+HUB_SPORTS[a.sport]+(a.workoutName?' „'+a.workoutName+'“':'')+' · '+longDate(a.date)+' · '+hm(a.minutes);
   el.innerHTML=actions.map((a,i)=>'<div class="notice coach-action"><strong>'+esc(label(a))+'</strong><p>'+esc(a.reason)+'</p><div class="select-row"><button class="btn primary" data-coach-action="'+i+'" data-decision="confirm">'+(a.type==='rest'?'Potvrdit odstranění':'Potvrdit')+'</button><button class="btn" data-coach-action="'+i+'" data-decision="reject">Odmítnout</button><button class="btn" data-coach-feedback="'+i+'">Navrhnout kompromis</button></div></div>').join('');
   el.querySelectorAll('[data-coach-feedback]').forEach(b=>b.onclick=()=>{const a=actions[Number(b.dataset.coachFeedback)],appContext=a.date?{...captureAssistantContext(),view:'workouts',date:a.date,weekStart:mondayOf(a.date),sport:a.type==='gym_swap'?'gym':a.sport||null,exercise:a.fromExercise||null}:captureAssistantContext();return discussWithAssistant('Chci probrat kompromis k návrhu „'+label(a)+'“. Důvod návrhu: '+(a.reason||'neuveden')+'. Navrhni mírnější variantu, která zohlední regeneraci, dostupný čas a můj cíl.',{appContext});});
   el.querySelectorAll('[data-coach-action]').forEach(b=>b.onclick=async()=>{const a=actions[Number(b.dataset.coachAction)],card=b.closest('.coach-action');b.disabled=true;try{if(b.dataset.decision==='confirm'&&a.type==='gym_swap'&&gymDay()===a.date&&gymExerciseHasEditedDraft(a.fromExercise))throw new Error('U tohoto cviku máš rozepsané hodnoty. Nejdřív sérii ulož, nebo vrať hodnoty na původní zadání.');const r=await jsonFetch('/app/api/assistant/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:a.draftId,decision:b.dataset.decision})});card.innerHTML='<p>'+esc(r.message)+'</p>';if(b.dataset.decision==='confirm'){

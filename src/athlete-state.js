@@ -17,6 +17,7 @@ export async function getAthleteState(db,{date=pragueDay()}={}) {
   await ensure(db);
   const row = await db.prepare('SELECT state_json FROM athlete_state WHERE user_id=?').bind(db.userId).first();
   let state = {}; try { state = JSON.parse(row?.state_json || '{}'); } catch { /* defaults */ }
+  // `conversation` is no longer written (chats live in assistant_chats); old rows still read.
   return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], conversation: [], dismissed: [], ...state },date);
 }
 export async function updateAthleteState(db, patch,{date=pragueDay()}={}) {
@@ -31,12 +32,16 @@ export async function updateAthleteState(db, patch,{date=pragueDay()}={}) {
   if (patch.memory) state.memories = [...new Set([...state.memories, clean(patch.memory)])].slice(-30);
   if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));}
   if (patch.dismiss) state.dismissed = [...new Set([...state.dismissed, clean(patch.dismiss)])].slice(-30);
-  if (patch.turn) state.conversation = [...state.conversation, ...patch.turn].slice(-12);
   await db.prepare('INSERT INTO athlete_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json').bind(db.userId, JSON.stringify(state)).run();
   return state;
 }
+// A lasting preference ("Nechci běhat"), not a remark about one day or a
+// question: "Nechci dnes nohy" or "Nechci zítra kolo?" are not remembered.
+const TEMPORARY=/\?|(?<!\p{L})(?:dnes|dneska|dnešní\p{L}*|zítra|zítřejší\p{L}*|teď|ted|tentokrát|(?:tento|tenhle|tenhleten) (?:týden|víkend))(?!\p{L})/iu;
 export function explicitPreference(message) {
-  return /(?:nemám rád|nemam rad|nemám ráda|nemam rada|nechci|nesnáším|nesnasim|preferuji|preferuju|mám rád|mam rad)/i.test(message) ? clean(message) : null;
+  const text=String(message||'');
+  if(TEMPORARY.test(text))return null;
+  return /(?:nemám rád|nemam rad|nemám ráda|nemam rada|nechci|nesnáším|nesnasim|preferuji|preferuju|mám rád|mam rad)/i.test(text) ? clean(text) : null;
 }
 export function assertTrainingAllowed(state) {
   if (state?.status && state.status !== 'active') throw new Error('Aktuální stav je ' + ATHLETE_STATUSES[state.status] + '. Trénink navrhnu po změně stavu na Active; nyní řeš odpočinek nebo omezení s asistentem.');

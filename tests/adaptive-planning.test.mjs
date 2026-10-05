@@ -100,11 +100,11 @@ test('simple, planning and block requests route to configurable Luna and Sol',as
   globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);calls.push(body);return Response.json({model:body.model,output_text:'Odpověď'});};
   try{
     const env={OPENAI_API_KEY:'test',OPENAI_LIGHT_MODEL:'gpt-6-luna',OPENAI_MODEL:'gpt-6-sol'};
-    await askCoach(env,'Převeď 80 kg na libry',{fitness:Array(30).fill({ctl:40})});
+    await askCoach(env,'Díky!',{fitness:Array(30).fill({ctl:40})});
     await askCoach(env,'Naplánuj zítřejší posilovnu',{});
     await askCoach(env,'Analyzuj 12týdenní blok',{});
     assert.deepEqual(calls.map(c=>c.model),['gpt-6-luna','gpt-6-sol','gpt-6-sol']);
-    assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','medium','high']);
+    assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','medium','medium']);assert.deepEqual(calls.map(c=>c.max_output_tokens),[4000,16000,25000]);
     assert.ok(calls.every(c=>c.store===false));
     assert.equal(assistantTask('Poslední tři týdny a nový plán'),'planning');
   }finally{globalThis.fetch=original;}

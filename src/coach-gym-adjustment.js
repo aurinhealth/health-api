@@ -41,4 +41,10 @@ export function applyGymSwap(values,action){
   return result;
 }
 
-export const gymAdjustmentRequest=message=>/(?:uprav|zm[eě]n|vym[eě]n|nahrad|jin[eéýá]|alternativ|skladb|cvik)/i.test(message)&&/(?:gym|posil|cvi[cč]en|cvik|tr[eé]nink)/i.test(message);
+// A change to a gym session: a change word plus a gym word ("Vyměň dřep",
+// "Uprav dnešní cvičení"). "Trénink" alone counts only on the open gym screen,
+// so "Jiný trénink na kole" stays a ride request. [nň]/[dď]: "Změň", "Nahraď".
+export const gymAdjustmentRequest=(message,appContext=null)=>{
+  const m=String(message||'');
+  return /(?:uprav|zm[eě][nň]|vym[eě][nň]|nahra[dď]|jin[eéýá]|alternativ|skladb|cvik)/i.test(m)&&(/(?:gym|posil|cvi[cč]en|cvik|s[eé]ri|bench|d[řr]ep|mrtv|přítah|tlak|činky|stroj)/i.test(m)||appContext?.sport==='gym'&&/tr[eé]nink/i.test(m));
+};

@@ -15,12 +15,12 @@ const make=(exercise,done=false)=>['WORK',exercise,'1','10','8–12','','','',do
 const gym={values:planValues({date,rows:[make('DB Arnold press'),make('Low row',true)]}),history:[]};
 test('status expires on the chosen Prague calendar day without losing preferences',async()=>{
   const db=scopedDb(createD1(),1);
-  await updateAthleteState(db,{memory:'Nemám rád masáže',turn:[{role:'user',content:'Ahoj'}]},{date});
+  await updateAthleteState(db,{memory:'Nemám rád masáže'},{date});
   await updateAthleteState(db,{status:'sick',note:'Nachlazení',statusUntil:'2026-10-05'},{date});
   assert.equal((await getAthleteState(db,{date})).status,'sick');
   const expired=await getAthleteState(db,{date:'2026-10-05'});
   assert.equal(expired.status,'active');assert.equal(expired.note,'');assert.equal(expired.statusUntil,null);
-  assert.deepEqual(expired.memories,['Nemám rád masáže']);assert.equal(expired.conversation.length,1);
+  assert.deepEqual(expired.memories,['Nemám rád masáže']);
   await updateAthleteState(db,{status:'on_break'},{date:'2026-10-05'});
   assert.equal((await getAthleteState(db,{date:'2027-01-01'})).status,'on_break');
   await assert.rejects(updateAthleteState(db,{status:'sick',statusUntil:'2026-02-30'},{date}),/Konec/);
@@ -53,7 +53,7 @@ test('adjustment requests offer a swap and do not default to cancelling gym',()=
 test('a short exercise adjustment uses Sol with low reasoning and the current plan',async()=>{
   const original=globalThis.fetch,calls=[];globalThis.fetch=async(_,options)=>{calls.push(JSON.parse(options.body));return Response.json({output_text:'Odpověď'});};
   try{await askCoach({OPENAI_API_KEY:'test'},'Změnil bys něco na dnešním cvičení?',{todayGym:todayGymContext(gym,date)});
-    assert.equal(assistantTask('Uprav dnešní cvičení'),'adjustment');assert.equal(calls[0].model,'gpt-6-sol');assert.equal(calls[0].reasoning.effort,'low');assert.match(calls[0].input,/DB Arnold press/);
+    assert.equal(assistantTask('Uprav dnešní cvičení'),'adjustment');assert.equal(calls[0].model,'gpt-6-sol');assert.equal(calls[0].reasoning.effort,'low');assert.match(JSON.stringify(calls[0].input),/DB Arnold press/);
   }finally{globalThis.fetch=original;}
 });
 test('council hides empty nutrition and boilerplate, and follows the athlete sport',()=>{
