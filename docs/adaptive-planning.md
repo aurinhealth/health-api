@@ -52,7 +52,7 @@ Nové tabulky `week_plan_overrides` a `athlete_state` vznikají při použití f
 
 ## Detail tréninku v týdnu
 
-Klik na trénink v týdenním přehledu otevře jeho detail. U naplánovaného je délka, TSS, IF a struktura z Intervals.icu a akce Přesunout, Vyměnit za jiný (nový trénink z doporučení nahradí původní) a Zrušit. U hotového je porovnání s plánem (délka, TSS, IF a celkové hodnocení), u posilovny plán proti zapsaným sériím. Kartička týdenního plánu se pro sport, který už má v daný den naplánovaný nebo hotový trénink, nezobrazuje.
+Klik na trénink v týdenním přehledu otevře jeho detail. Naplánované kolo nebo běh vypadá jako karta doporučeného tréninku: profil výkonu, délka, TSS, IF, FTP a rozpis kroků (z workoutu knihovny, ze kterého vznikl, jinak z workout_doc nebo textu události v Intervals.icu; `src/planned-detail.js`, `/app/api/workouts/planned`). Gym ukáže postavu se zvýrazněnými partiemi podle počtu sérií a krátký seznam cviků. Akce u naplánovaného: Přesunout, Vyměnit za jiný (nový trénink z doporučení nahradí původní) a Zrušit. U hotového je porovnání s plánem (délka, TSS, IF a celkové hodnocení) a celý záznam aktivity: čísla, trasa, výkon, tep a intervaly; u posilovny plán proti zapsaným sériím a postava podle odcvičených sérií. Kartička týdenního plánu se pro sport, který už má v daný den naplánovaný nebo hotový trénink, nezobrazuje.
 
 ## Technika cviků
 

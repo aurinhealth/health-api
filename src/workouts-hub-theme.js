@@ -523,4 +523,14 @@ body.sheet-open{overflow:hidden}
 .plan-verdict{margin:0 0 8px;font-weight:650}.plan-verdict.ok{color:#7fd1a8}.plan-verdict.over{color:#ffb86b}.plan-verdict.under{color:#8fb8ff}
 .training-plan summary{cursor:pointer;color:#c9d2de;font-size:13px;margin:4px 0}
 .training-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.training-move{margin-top:12px}
+.gym-detail{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:16px;align-items:start;margin:6px 0}
+.gym-detail-figure .muscle-map{max-width:260px;margin:0}.gym-detail-figure .gym-figure svg{max-height:240px}
+.gym-figure-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#9ca6b5;margin-top:4px}.gym-figure-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.gym-compact{list-style:none;margin:0;padding:0;display:grid;gap:6px;counter-reset:ex}
+.gym-compact li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;border:1px solid #2a323d;border-radius:9px;background:#121820;counter-increment:ex}
+.gym-compact li div{display:grid;min-width:0}.gym-compact li b{font-size:14px}.gym-compact li b::before{content:counter(ex) ". ";color:#8f9dac;font-weight:600}
+.gym-compact li small{color:#9ca6b5;font-size:11px}.gym-compact li span{white-space:nowrap;font-size:13px;color:#d6dde7}
+.training-detail .workout-profile{margin:4px 0 12px}.training-detail .workout-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:0 0 12px}
+.activity-sheet .experience-chart{width:100%;height:auto}.activity-sheet h3{font-size:14px;margin:14px 0 4px}.activity-sheet .route-map{margin:6px 0}
+@media(max-width:700px){.gym-detail{grid-template-columns:1fr}.gym-detail-figure .muscle-map{margin:auto}}
 `;

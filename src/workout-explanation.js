@@ -137,7 +137,8 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
   const ranges = run ? RUN_ZONE_RANGE : ZONE_RANGE;
   const row = s => {
     const zone = ranges[String(s.note || "").toUpperCase()];
-    const low = zone ? zone[0] : s.ramp ? n(s.powerStart) : n(s.power) - width(n(s.power)), high = zone ? zone[1] : s.ramp ? n(s.powerEnd) : n(s.power) + width(n(s.power));
+    const range = !zone && !s.ramp && s.powerLow != null && s.powerHigh != null;
+    const low = zone ? zone[0] : s.ramp ? n(s.powerStart) : range ? n(s.powerLow) : n(s.power) - width(n(s.power)), high = zone ? zone[1] : s.ramp ? n(s.powerEnd) : range ? n(s.powerHigh) : n(s.power) + width(n(s.power));
     const out = {
       durationSeconds: Math.round(n(s.durationMinutes, 0) * 60), percentLow: Math.round(low), percentHigh: Math.round(high),
       wattsLow: s.free || run ? null : watts(low), wattsHigh: s.free || run ? null : watts(high), free: Boolean(s.free), ramp: Boolean(s.ramp),

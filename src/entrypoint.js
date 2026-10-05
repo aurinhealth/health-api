@@ -55,12 +55,13 @@ import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabil
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { renderForEnvironment } from "./workout-model.js";
+import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
-import { loadFitnessInsights } from "./fitness-insights.js";
+import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans } from "./gym-plan-store.js";
@@ -946,7 +947,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:"Plán se nepodařilo načíst."}; }
       let history=[];
       try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
-      return Response.json({...data,history,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
+      // Muscles each exercise of the day loads (plan and saved sets), for the body figure.
+      const names=new Set([...(data.values||[]).slice(7).map(r=>r?.[1]),...history.filter(r=>String(r.workout_date||'').slice(0,10)===date).map(r=>r.exercise)].filter(Boolean));
+      const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
+      return Response.json({...data,history,muscles,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
       try {
@@ -1147,6 +1151,21 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/capabilities'&&request.method==='GET')return Response.json({status:'ok',sport,capabilities:await getCapabilities(env.DB,sport)},{headers:{'Cache-Control':'no-store'}});
     if(url.pathname==='/app/api/workouts/scheduled'&&request.method==='GET')return Response.json({status:'ok',workouts:await getScheduledWorkouts(env.DB)},{headers:{'Cache-Control':'no-store'}});
     // One library workout as ridden outdoors or indoors (steps, watts, notes).
+    // A planned event of the week drawn like a library workout: the library
+    // workout it was scheduled from, or the structure of the Intervals.icu event.
+    if(url.pathname==='/app/api/workouts/planned'&&request.method==='GET'){
+      const id=String(url.searchParams.get('id')||'').replace(/^planned:/,'');
+      if(!id)return Response.json({status:'error',message:'Chybí trénink.'},{status:400});
+      const row=await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
+      let event=null;try{event=JSON.parse(row?.payload_json||'null');}catch{event=null;}
+      const link=await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);
+      const library=link?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
+      if(!event&&!library)return Response.json({status:'error',message:'Trénink nebyl nalezen.'},{status:404});
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor'):plannedEventWorkout(event),kind=w.sport==='run'?'run':'ride';
+      let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+      w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
+    }
     if(url.pathname==='/app/api/workouts/render'&&request.method==='GET'){
       const workout=await getWorkout(env.DB,String(url.searchParams.get('id')||''));
       if(!workout)return Response.json({status:'error',message:'Workout nebyl nalezen.'},{status:404});

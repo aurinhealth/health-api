@@ -35,7 +35,7 @@ export async function activityDetail(request,env,id,authorized){
   const headers={Authorization:'Basic '+btoa('API_KEY:'+String(env.INTERVALS_API_KEY)),Accept:'application/json'},base='https://intervals.icu/api/v1/activity/'+encodeURIComponent(id);
   try{
     const [detail,streams]=await Promise.all([fetch(base+'?intervals=true',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson),fetch(base+'/streams?types=time,watts,heartrate,altitude,cadence,latlng',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson).catch(()=>[])]);
-    const keys=['id','name','type','distance','moving_time','elapsed_time','total_elevation_gain','average_watts','icu_average_watts','icu_weighted_avg_watts','icu_normalized_watts','icu_weighted_average_watts','icu_ftp','average_heartrate','max_heartrate','average_cadence','icu_training_load','calories'];
+    const keys=['id','name','type','distance','moving_time','elapsed_time','total_elevation_gain','average_watts','icu_average_watts','icu_weighted_avg_watts','icu_normalized_watts','icu_weighted_average_watts','icu_ftp','average_heartrate','max_heartrate','average_cadence','icu_training_load','icu_intensity','average_speed','calories'];
     const activity=Object.fromEntries(keys.filter(k=>detail[k]!=null).map(k=>[k,detail[k]]));
     activity.average_watts=detail.icu_average_watts??detail.average_watts;
     activity.icu_normalized_watts=detail.icu_weighted_avg_watts??detail.icu_normalized_watts??detail.icu_weighted_average_watts;
