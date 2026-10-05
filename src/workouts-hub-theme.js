@@ -501,4 +501,5 @@ body.sheet-open{overflow:hidden}
 .chip-menu button:hover,.chip-menu button:focus-visible{border-color:#b393ff;outline:none}
 .hub-plan .planner-chip{position:relative;padding-right:22px}
 .hub-plan .planner-chip [data-chip-remove]{position:absolute;top:5px;right:5px;margin:0}
+.week-proposal-done{display:grid;gap:6px}.week-proposal-done p{margin:0}
 `;
