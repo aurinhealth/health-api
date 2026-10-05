@@ -967,7 +967,7 @@ function renderMealDiary(){
   if($('mealDistribution')&&typeof renderNutritionExperience==='function')renderNutritionExperience(state.daily?.nutrition?.foodLog?.totals||{},num(state.daily?.nutrition?.calorieTarget),state.daily||{});
 }
 let enteredFoodRequest=0;
-async function loadEnteredFood(){const request=++enteredFoodRequest;try{const date=$('foodDate').value||pragueToday(),r=await jsonFetch('/app/api/food/day?date='+date);if(request!==enteredFoodRequest)return;mealEntries=r.entries||[];mealDiaryPreview=Boolean(r.preview);renderMealDiary();}catch(e){if(request===enteredFoodRequest)$('enteredFood').textContent=e.message;}}
+async function loadEnteredFood(){const request=++enteredFoodRequest;try{const date=$('foodDate').value||pragueToday(),r=await jsonFetch('/app/api/food/day?date='+date);if(request!==enteredFoodRequest)return;mealEntries=r.entries||[];mealDiaryPreview=Boolean(r.preview);renderMealDiary();foodFeedbackAfterLoad();}catch(e){if(request===enteredFoodRequest)$('enteredFood').textContent=e.message;}}
 function installExperience(){
   $('overview').insertAdjacentHTML('afterbegin','<div id="dailyPulse"></div>');
   $('recovery').insertAdjacentHTML('beforeend','<div class="experience-grid"><article class="card" id="sleepNights"></article><article class="card" id="sleepRegularity"></article></div><div class="section">Dlouhodobé zdraví</div><article class="card healthspan-card" id="healthspan"></article>');
@@ -2701,15 +2701,55 @@ function renderMealList(){
   const rows=active.map(s=>({id:s.id,name:s.name,share:s.share/weight,entries:entries.filter(e=>foodMealSlot(e)===s.id)}));
   const other=entries.filter(e=>!mealEnabled.includes(foodMealSlot(e)));if(other.length)rows.push({id:'other',name:'Ostatní',share:0,entries:other});
   el.innerHTML='<div class="do-head"><h3>Jídla</h3><button type="button" class="btn ml-settings" id="mealSettings">Upravit jídla</button></div>'+rows.map(r=>{const t=mealTotals(r.entries),isOpen=open.has(r.id);return '<div class="ml-row'+(isOpen?' open':'')+'" data-meal-row="'+r.id+'"><button type="button" class="ml-main" data-meal-toggle-row="'+r.id+'" aria-expanded="'+isOpen+'"><span class="ml-icon">'+(MEAL_ICON[r.id]||'🍽')+'</span><span class="ml-text"><strong>'+esc(r.name)+'</strong><small>'+fmt(t.kcal)+(r.share&&target?' / '+fmt(target*r.share):'')+' kcal'+(r.entries.length?' · '+esc(r.entries.map(e=>e.recipe_title||'Jídlo').join(', ')):'')+'</small></span></button>'+(r.id==='other'?'':'<button type="button" class="ml-add" data-meal-add="'+r.id+'" aria-label="Zapsat do: '+esc(r.name)+'">+</button>')+
-    (isOpen?'<div class="ml-entries">'+(r.entries.length?r.entries.map(e=>'<div class="ml-entry"><span>'+esc(e.recipe_title||'Jídlo')+'<small>'+fmt(e.kcal)+' kcal · B '+fmt(e.protein_g)+' · S '+fmt(e.carbs_g)+' · T '+fmt(e.fat_g)+' g</small>'+foodAssessmentHtml(e)+foodExportHtml(e)+'</span>'+(e.id?'<button type="button" class="btn" data-meal-edit="'+esc(e.id)+'">Upravit</button>':'')+'</div>').join(''):'<p class="small">Zatím nic. Přidej jídlo tlačítkem +.</p>')+'</div>':'')+'</div>';}).join('')+
+    (isOpen?'<div class="ml-entries">'+(r.entries.length?r.entries.map(e=>'<div class="ml-entry"><span>'+esc(e.recipe_title||'Jídlo')+'<small>'+fmt(e.kcal)+' kcal · B '+fmt(e.protein_g)+' · S '+fmt(e.carbs_g)+' · T '+fmt(e.fat_g)+' g</small>'+foodAssessmentHtml(e,{dayTarget:target,date})+foodExportHtml(e)+'</span>'+(e.id?'<span class="ml-entry-actions"><button type="button" class="btn" data-meal-move="'+esc(e.id)+'">Přesunout</button><button type="button" class="btn" data-meal-copy="'+esc(e.id)+'">Kopírovat</button><button type="button" class="btn" data-meal-edit="'+esc(e.id)+'">Upravit</button></span>':'')+'</div>').join(''):'<p class="small">Zatím nic. Přidej jídlo tlačítkem +.</p>')+'</div>':'')+'</div>';}).join('')+
     '<div id="mealSettingsBox" hidden><p class="small">Která jídla během dne sleduješ:</p><div class="meal-preferences">'+mealSlots.map(s=>'<label><input type="checkbox" data-meal-pref="'+s.id+'" '+(mealEnabled.includes(s.id)?'checked':'')+'> '+s.name+'</label>').join('')+'</div></div>';
   el.onclick=e=>{
     const add=e.target.closest('[data-meal-add]');if(add){startMealLog(add.dataset.mealAdd);return}
     const retry=e.target.closest('[data-food-sync]');if(retry){retry.disabled=true;jsonFetch('/app/api/food/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:Number(retry.dataset.foodSync)})}).then(()=>{toast('Zápis do Google zkouším znovu.');loadEnteredFood();}).catch(error=>{toast(error.message);retry.disabled=false;});return}const edit=e.target.closest('[data-meal-edit]');if(edit){openFoodManage(edit.dataset.mealEdit);return}
+    const move=e.target.closest('[data-meal-move]');if(move){openFoodQuickSheet(move.dataset.mealMove,'move');return}
+    const copy=e.target.closest('[data-meal-copy]');if(copy){openFoodQuickSheet(copy.dataset.mealCopy,'copy');return}
     const row=e.target.closest('[data-meal-toggle-row]');if(row){const id=row.dataset.mealToggleRow,s=new Set(state.openMeals||[]);s.has(id)?s.delete(id):s.add(id);state.openMeals=[...s];renderMealList();return}
     if(e.target.id==='mealSettings'){$('mealSettingsBox').hidden=!$('mealSettingsBox').hidden;}
   };
   el.querySelectorAll('[data-meal-pref]').forEach(input=>input.onchange=()=>{const selected=[...el.querySelectorAll('[data-meal-pref]:checked')].map(i=>i.dataset.mealPref);if(!selected.length){input.checked=true;return toast('Nech vybrané alespoň jedno jídlo.');}mealEnabled=selected;try{localStorage.setItem('pfd-meals-v1',JSON.stringify(selected));}catch{}renderMealDiary();});
+}
+// Move a logged food to another meal or day, or copy it to other days, in two taps.
+function openFoodQuickSheet(id,mode){
+  const entry=(mealEntries||[]).find(e=>String(e.id)===String(id));if(!entry)return;
+  const from=entry.consumed_date||nutritionDay(),slot=foodMealSlot(entry),today=pragueToday();
+  const days=[-1,0,1,2,3,4,5,6].map(i=>dateShift(today,i)).filter(d=>mode==='copy'?d!==from:true);
+  const dayLabel=d=>d===today?'Dnes':d===dateShift(today,-1)?'Včera':d===dateShift(today,1)?'Zítra':new Intl.DateTimeFormat('cs-CZ',{weekday:'short',day:'numeric',month:'numeric'}).format(new Date(d+'T12:00:00Z'));
+  const type=mode==='copy'?'checkbox':'radio';
+  openSheet((mode==='copy'?'Kopírovat: ':'Přesunout: ')+(entry.recipe_title||'jídlo'),
+    '<p class="small">'+(mode==='copy'?'Vyber dny a část dne pro kopii.':'Vyber, kam jídlo patří.')+'</p>'+
+    '<div class="label">Část dne</div><div class="copy-days quick-meals">'+mealSlots.map(s=>'<label><input type="radio" name="quickMeal" value="'+s.id+'" '+(s.id===(slot==='unassigned'?mealByTime():slot)?'checked':'')+'> '+(MEAL_ICON[s.id]||'')+' '+esc(s.name)+'</label>').join('')+'</div>'+
+    '<div class="label">Den</div><div class="copy-days quick-days">'+days.map(d=>'<label><input type="'+type+'" name="quickDay" value="'+d+'" '+(mode==='move'&&d===from?'checked':'')+'> '+esc(dayLabel(d))+'</label>').join('')+'</div>'+
+    '<button type="button" class="btn primary" id="quickFoodApply">'+(mode==='copy'?'Kopírovat':'Přesunout')+'</button>',
+    body=>{body.querySelector('#quickFoodApply').onclick=async()=>{
+      const button=body.querySelector('#quickFoodApply'),meal=body.querySelector('[name=quickMeal]:checked')?.value,targets=[...body.querySelectorAll('[name=quickDay]:checked')].map(i=>i.value);
+      if(!targets.length)return toast('Vyber den.');button.disabled=true;
+      try{
+        if(mode==='move'){await jsonFetch('/app/api/food/entry',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:entry.id,date:targets[0],mealType:meal})});toast('Přesunuto: '+(mealSlots.find(s=>s.id===meal)?.name||'jídlo')+' · '+dayLabel(targets[0]).toLowerCase()+'.');}
+        else{for(const targetDate of targets){const copy=await jsonFetch('/app/api/food/entry',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:entry.id,targetDate})});if(copy?.id&&meal&&meal!==slot)await jsonFetch('/app/api/food/entry',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:copy.id,mealType:meal})});}toast('Zkopírováno do: '+targets.map(d=>dayLabel(d).toLowerCase()).join(', ')+'.');}
+        closeSheet();await refreshFoodDiary();
+      }catch(error){toast((mode==='copy'?'Kopie':'Přesun')+' selhal: '+error.message);button.disabled=false;}
+    };});
+}
+// After a food is added (any way: search, label, photo, quick add, assistant)
+// a short note says what it brought and what is left for the day.
+let knownFoodIds=null,knownFoodDate=null;
+function foodFeedbackAfterLoad(){
+  const date=nutritionDay(),ids=new Set((mealEntries||[]).map(e=>String(e.id)));
+  if(knownFoodIds&&knownFoodDate===date){
+    const added=(mealEntries||[]).filter(e=>!knownFoodIds.has(String(e.id))&&(e.consumed_date||date)===date);
+    if(added.length){
+      const n=dayNutrition(date)||{},target=num(n.calorieTarget),t=mealTotals(mealEntries.filter(e=>(e.consumed_date||date)===date)),a=mealTotals(added),protein=num(n.macros?.proteinGrams);
+      const tag=foodAssessment(added.length===1?added[0]:{...a,consumed_date:date},{dayTarget:target,date}).find(([kind])=>kind!=='info');
+      const slotName=mealSlots.find(s=>s.id===foodMealSlot(added[0]))?.name;
+      toast('Zapsáno'+(slotName?' do: '+slotName.toLowerCase():'')+' · '+fmt(a.kcal)+' kcal · B '+fmt(a.protein_g)+' g'+(tag?' · '+tag[1]:'')+'.'+(target?' Dnes zbývá '+fmt(Math.max(0,target-t.kcal))+' kcal'+(protein?' a '+fmt(Math.max(0,protein-t.protein_g))+' g bílkovin':'')+'.':''));
+    }
+  }
+  knownFoodIds=ids;knownFoodDate=date;
 }
 // "+" on a meal: log into it.
 function startMealLog(slot){openFoodLogger(slot);}
@@ -2866,7 +2906,7 @@ function installFoodPanel(){
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('sheet')?.hidden!==false)closeFoodLogger();});
   $('foodMeal').addEventListener('change',()=>{$('foodPanelTitle').textContent='Přidat · '+(mealSlots.find(s=>s.id===$('foodMeal').value)?.name||'jídlo');});
   // A saved meal closes the panel (the basket empties on success).
-  const save=$('basketSave').onclick;$('basketSave').onclick=async()=>{const before=(mealEntries||[]).length,meal=mealSlots.find(s=>s.id===$('foodMeal').value)?.name||'jídla';await save();if((mealEntries||[]).length>before){closeFoodLogger();toast('Zapsáno do: '+meal);}};
+  const save=$('basketSave').onclick;$('basketSave').onclick=async()=>{const before=(mealEntries||[]).length;await save();if((mealEntries||[]).length>before){closeFoodLogger();}};
   // "Co dál dnes?" takes the place of the energy-by-meal chart.
   const next=$('foodPlan')?.closest('.card'),chart=$('mealDistribution');if(next&&chart){chart.classList.add('replaced');chart.after(next);}
 }
@@ -3350,13 +3390,27 @@ function activityEnergyLabel(a){
   if(c?.status==='review')text+=c.telemetry?' · ⚠ výdej chůze k ověření':' · ⚠ výdej k ověření; pro plán orientačně '+fmt(a.caloriesForPlanning)+' kcal (odhad podle hmotnosti a délky chůze)';
   return text;
 }
-function foodAssessmentHtml(entry){
-  const p=num(entry.protein_g),c=num(entry.carbs_g),f=num(entry.fat_g),energy=p*4+c*4+f*9;
-  if(!energy)return '';
-  let text=p*4/energy>=.2&&p>=10?'Bílkovinná porce · '+fmt(p)+' g bílkovin':c*4/energy>=.6?'Převážně sacharidy · '+fmt(c)+' g':f*9/energy>=.6?'Převážně tuky · '+fmt(f)+' g':'Smíšená porce · '+fmt(p)+' g bílkovin';
+// What a logged food brings, in a few short tags: protein per 100 kcal, its
+// share of the day, carbs next to a ride or run, fibre and salt when known.
+function enduranceSoon(date){const days=[...(state.week?.days||[]),...(state.hubWeekData?.days||[])];return [date,dateShift(date,1)].some(d=>(days.find(x=>x.date===d)?.daily?.training?.planned||[]).concat(d===date?days.find(x=>x.date===d)?.daily?.training?.completed||[]:[]).some(a=>/ride|run|cycl|bike|běh/i.test(String(a.type||'')+' '+String(a.name||''))&&num(a.durationHours)>=1));}
+function foodAssessment(entry,{dayTarget=0,date=null}={}){
+  const p=num(entry.protein_g),c=num(entry.carbs_g),f=num(entry.fat_g),kcal=num(entry.kcal)||p*4+c*4+f*9,energy=p*4+c*4+f*9;
+  if(!energy||!kcal)return [];
+  const tags=[],density=p/kcal*100;
+  if(density>=8)tags.push(['good','výborný zdroj bílkovin ('+fmt(density,1)+' g/100 kcal)']);
+  else if(density>=5)tags.push(['good','dobrý zdroj bílkovin · '+fmt(p)+' g']);
+  else if(kcal>=250&&density<2.5)tags.push(['warn','málo bílkovin na '+fmt(kcal)+' kcal']);
+  if(c*4/energy>=.6)tags.push(enduranceSoon(date||entry.consumed_date||pragueToday())?['good','sacharidy se hodí k jízdě nebo běhu']:['info','převážně sacharidy · '+fmt(c)+' g']);
+  else if(f*9/energy>=.55)tags.push(['warn','hodně tuku · '+fmt(f)+' g']);
+  if(num(entry.fiber_g)>=5)tags.push(['good','hodně vlákniny · '+fmt(entry.fiber_g)+' g']);
   let note={};try{note=JSON.parse(entry.note||'{}');}catch{}
-  if(num(note.salt_g)>=1.5)text+=' · sůl '+fmt(note.salt_g,1)+' g';
-  return '<small class="food-assessment" title="Stručný přehled podle zapsané porce a maker">'+esc(text)+'</small>';
+  if(num(note.salt_g)>=1.5)tags.push(['warn','sůl '+fmt(note.salt_g,1)+' g']);
+  if(dayTarget>0&&kcal/dayTarget>=.15)tags.push(['info',fmt(kcal/dayTarget*100)+' % denního cíle']);
+  return tags.slice(0,3);
+}
+function foodAssessmentHtml(entry,options){
+  const tags=foodAssessment(entry,options);
+  return tags.length?'<span class="food-tags" title="Přehled podle zapsané porce a maker">'+tags.map(([kind,text])=>'<small class="food-tag tag-'+kind+'">'+esc(text)+'</small>').join('')+'</span>':'';
 }
 function foodExportHtml(entry){
   const status=entry.google?.status||'not_exported',labels={synced:'✓ Google Health',queued:'Google · čeká na odeslání',syncing:'Google · odesílám',operation:'Google · potvrzuji zápis',planned:'Plán · do Google až v daný den',error:'Google · zápis se nepodařil',uncertain:'Google · výsledek není potvrzený',disconnected:'Google · není připojené',not_exported:'Google · dosud neodesláno'};
