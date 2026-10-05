@@ -33,20 +33,22 @@ async function refreshCoachLifecycle(){
 setInterval(refreshCoachLifecycle,30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshCoachLifecycle();});
 let weekStart=pragueMonday(),selectedHistoryDate=pragueToday(),state={};
-let inboxChannel="cycling";
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
 function czPlural(n,one,few,many){return n+' '+(n===1?one:n>=2&&n<=4?few:many)}
 function num(v,d=0){const n=Number(v);return Number.isFinite(n)?n:d}
 function fmt(v,d=0){return Math.round(num(v)*10**d)/10**d}
+// Numbers in Czech notation: dec() keeps the decimals ("0,85"), cz() rounds and drops trailing zeros ("12,5", "12").
+function dec(v,d=1){const x=Number(v);return Number.isFinite(x)?x.toFixed(d).replace('.',','):''}
+function cz(v,d=1){return String(fmt(v,d)).replace('.',',')}
 function dateShift(date,days){const p=date.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]+days)).toISOString().slice(0,10)}
 function pragueToday(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value+"-"+p.find(x=>x.type==="day").value}
 function pragueMonday(){const d=pragueToday().split("-").map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
 function mondayOf(date){const d=date.split('-').map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
 function dateLabel(d){return new Intl.DateTimeFormat("cs-CZ",{day:"2-digit",month:"2-digit"}).format(new Date(d+"T12:00:00Z"))}
 function longDate(d){return new Intl.DateTimeFormat("cs-CZ",{weekday:"long",day:"numeric",month:"numeric"}).format(new Date(d+"T12:00:00Z"))}
-// Rounded first, so 359.6 min is "6h 0m" and never "5h 60m".
 // Form (TSB) with a word and a decimal near zero: a bare "0" read like a missing value.
 function formText(tsb){if(!measured(tsb))return '—';const v=Number(tsb),word=v>=15?'velmi svěží':v>=5?'svěží':v>-10?'vyrovnaná':v>-25?'únava':'velká únava';return fmt(v,Math.abs(v)<10?1:0)+' <small class="form-word">'+word+'</small>';}
+// Rounded first, so 359.6 min is "6h 0m" and never "5h 60m".
 function hm(min){if(!Number.isFinite(Number(min)))return "—";const m=Math.round(Number(min));return Math.floor(m/60)+"h "+(m%60)+"m"}
 function isNutritionItem(x){const n=String(x?.name||"").trim(),t=String(x?.type||"").trim();return /nutrition/i.test(n)||/^nutrition$/i.test(t)}
 function scoreClass(v){return v>=80?"":" "+(v>=60?"mid":"low")}
@@ -122,15 +124,12 @@ function onboardingSkipped(){try{return localStorage.getItem('onboardingSkipped'
 function showOnboarding(missing){if($("loginGate")||$("onboardingGate"))return;const need=id=>missing.includes(id);document.body.insertAdjacentHTML("beforeend",'<div id="onboardingGate" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle" style="'+gateStyle+'"><div class="card" style="width:min(520px,100%);display:grid;gap:14px"><div><div class="eyebrow">Vítej</div><h2 id="onboardingTitle" style="margin:4px 0 6px">Připoj svoje data</h2><p class="small" style="margin:0">Propoj Google Health a Intervals.icu a data se budou načítat sama. Můžeš pokračovat i bez nich: váhu a jídlo pak zapisuješ ručně a kalorický cíl spočítáme z profilu. Každý uživatel vidí jen svoje vlastní data.</p></div><div class="notice"><strong>1. Google Health</strong> '+(need("google")?'<span class="pill">Nepřipojeno</span><p class="small">Spánek, aktivity, hmotnost a jídlo. Budeš přesměrován na souhlas Google.</p><a class="btn primary" href="/oauth/google" style="display:inline-block;text-decoration:none">Připojit Google Health</a>':'<span class="pill good">Připojeno</span>')+'</div><div class="notice"><strong>2. Intervals.icu</strong> '+(need("intervals")?'<span class="pill">Nepřipojeno</span><p class="small">API klíč najdeš v Intervals.icu → Settings → Developer Settings. Athlete ID zadávat nemusíš.</p><form id="onboardingIntervals" class="select-row"><input id="onboardingIntervalsKey" type="password" autocomplete="off" placeholder="API klíč Intervals.icu" aria-label="API klíč Intervals.icu" required style="background:#0d1119;color:#fff;border:1px solid #393245;border-radius:9px;padding:10px;min-width:0;flex:1"><button class="btn primary" type="submit">Ověřit a připojit</button></form><div class="small" id="onboardingIntervalsResult" aria-live="polite"></div>':'<span class="pill good">Připojeno</span>')+'</div><button class="btn primary" id="onboardingSkip" type="button">Pokračovat bez propojení</button><button class="btn" id="onboardingLogout" type="button">Odhlásit</button></div></div>');$("onboardingSkip").onclick=()=>{try{localStorage.setItem('onboardingSkipped','1');}catch{}$("onboardingGate").remove();load();toast('Propojit služby můžeš kdykoli v Nastavení.');};const form=$("onboardingIntervals");if(form)form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector("button");b.disabled=true;try{await jsonFetch("/app/api/connections",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({provider:"intervals",key:$("onboardingIntervalsKey").value.trim()})});location.reload();}catch(error){$("onboardingIntervalsResult").textContent=error.message;b.disabled=false;}};$("onboardingLogout").onclick=logout;}
 async function logout(){await fetch("/app/logout",{method:"POST",credentials:"same-origin"}).catch(()=>{});location.href="/app";}
 function activate(view){if(!$(view)?.classList.contains('view'))return;try{localStorage.setItem('pfd-active-view',view);}catch{}document.querySelectorAll(".navbtn").forEach(b=>b.classList.toggle("active",b.dataset.view===view));document.querySelectorAll(".view").forEach(v=>v.classList.toggle("active",v.id===view));window.scrollTo({top:0,behavior:'instant'});}
-function renderInboxHistory(items=[]){const el=$("inboxHistory");if(!el)return;el.innerHTML=items.length?items.map(x=>'<div class="inbox-item"><div class="small"><b>'+esc(({cycling:"Kolo",gym:"Gym",nutrition:"Výživa"}[x.channel]||x.channel))+'</b><span>'+esc(String(x.status)==="confirmed"?"Potvrzeno":"Návrh")+'</span></div><p>'+esc(x.message)+'</p><div class="small">'+esc(x.draft?.reply||"")+'</div></div>').join(""):'<div class="small">Zatím tu nejsou žádné požadavky.</div>'}
-function renderInboxDraft(draftId,draft){const el=$("inboxDraft");if(!el)return;el.innerHTML='<div class="notice"><strong>Návrh trenéra</strong><div style="margin-top:6px">'+esc(draft.reply||"Návrh připraven.")+'</div><div style="margin-top:10px"><button class="btn primary" id="confirmInbox" data-id="'+esc(draftId)+'">Potvrdit a provést</button></div></div>';const confirm=$("confirmInbox");if(confirm)confirm.onclick=async()=>{confirm.disabled=true;confirm.textContent="Provádím…";try{const r=await jsonFetch("/app/api/inbox",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"confirm",draftId})});toast(r.message||"Potvrzeno");el.innerHTML='<div class="notice">✓ '+esc(r.message||"Potvrzeno")+'</div>';await loadInbox();if(draft.action?.type==="gym_generate")await loadGym();if(draft.action?.type==="food_log")await load();}catch(e){toast("Potvrzení selhalo: "+e.message);confirm.disabled=false;confirm.textContent="Potvrdit a provést";}}}
-async function loadInbox(){try{const r=await jsonFetch("/app/api/inbox");state.inbox=r.items||[];renderInboxHistory(state.inbox)}catch(e){const el=$("inboxHistory");if(el)el.innerHTML='<div class="small">Schránku se nepodařilo načíst.</div>';}}
-async function sendInbox(){const text=$("inboxMessage")?.value.trim();if(!text){toast("Napiš požadavek pro trenéra.");return}const b=$("sendInbox");b.disabled=true;b.textContent="Připravuji…";try{const r=await jsonFetch("/app/api/inbox",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel:inboxChannel,message:text})});renderInboxDraft(r.draftId,r.draft);$("inboxMessage").value="";await loadInbox()}catch(e){toast("Návrh se nepodařilo připravit: "+e.message)}finally{b.disabled=false;b.textContent="Připravit návrh"}}
+// Open coach proposals (the assistant's action cards read them).
+async function loadInbox(){try{const r=await jsonFetch("/app/api/inbox");state.inbox=r.items||[];}catch{/* the cards stay as they are */}}
 // Charts draw in a coordinate system as wide as they are on screen, so their
 // labels keep their size on a phone instead of shrinking with the SVG.
 // A chart drawn while its view is hidden has no width yet: the window decides.
 function chartWidth(svg,max){const w=Math.round(svg?.getBoundingClientRect?.().width||0)||(typeof window!=='undefined'&&window.innerWidth?window.innerWidth-48:max);return Math.max(300,Math.min(max,w));}
-function multiLineChart(id,series,labels,opts={}){const svg=$(id),W=opts.W||1000,H=opts.H||300,pad=40,all=series.flatMap(s=>s.values.map(Number).filter(Number.isFinite));if(!all.length){svg.innerHTML='<text x="50%" y="50%" text-anchor="middle" fill="#91a0b5">Bez dat</text>';return}let min=Math.min(...all),max=Math.max(...all);if(min===max){min-=1;max+=1}const x=i=>pad+(W-pad*2)*(labels.length<=1?.5:i/(labels.length-1)),y=v=>H-pad-(H-pad*2)*(v-min)/(max-min);let out='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#24364d"/>';for(let i=0;i<labels.length;i++){if(i===0||i===labels.length-1||i%Math.max(1,Math.floor(labels.length/6))===0)out+='<text x="'+x(i)+'" y="'+(H-10)+'" text-anchor="middle" fill="#91a0b5" font-size="10">'+esc(labels[i])+'</text>'}series.forEach(s=>{const pts=[];s.values.forEach((v,i)=>{if(Number.isFinite(Number(v)))pts.push(x(i)+","+y(Number(v)))});if(pts.length>1)out+='<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+s.stroke+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'});let lx=pad;series.forEach(s=>{out+='<line x1="'+lx+'" y1="16" x2="'+(lx+18)+'" y2="16" stroke="'+s.stroke+'" stroke-width="3"/><text x="'+(lx+24)+'" y="20" fill="#91a0b5" font-size="11">'+esc(s.label)+'</text>';lx+=95+String(s.label).length*4});svg.innerHTML=out}
 function chartSvg(id,values,targets,labels,opts={}){
   const svg=$(id),W=opts.W||700,H=opts.H||250,padL=opts.axis?58:34,padR=20,padB=42,padT=28;
   const vals=values.map(v=>Number(v)).filter(Number.isFinite),tar=(targets||[]).map(v=>Number(v)).filter(Number.isFinite),all=vals.concat(tar);
@@ -196,7 +195,7 @@ function renderOverview(){
   const recovery30=sleepSessions.slice(1,31).map(sleepRecovery).filter(Number.isFinite),avgRecovery=recovery30.length?recovery30.reduce((a,b)=>a+b,0)/recovery30.length:null,lastRecovery=sleepRecovery(lastSleep);
   $("oSleep").innerHTML=lastSleep?hm(lastSleep.durationMin):"—";
   $("oSleepMeta").innerHTML=lastRecovery==null?"bez dat pro recovery":'Recovery '+lastRecovery+'/100'+trendArrow(lastRecovery,avgRecovery,false," b vs 30 dní");
-  const plannedLoad=planned.reduce((sum,x)=>sum+num(x.tss),0),actualLoad=completed.reduce((sum,x)=>sum+num(x.tss),0),sleepPct=lastSleep?Math.min(100,Math.round(num(lastSleep.durationMin)/480*100)):0,loadPct=Math.min(100,Math.round((actualLoad||plannedLoad||0)/1.8));
+  const plannedLoad=planned.reduce((sum,x)=>sum+num(x.tss),0),actualLoad=completed.reduce((sum,x)=>sum+num(x.tss),0),loadPct=Math.min(100,Math.round((actualLoad||plannedLoad||0)/1.8));
   const recoveryTone=lastRecovery==null?"#60a5fa":lastRecovery>=67?"#35c48b":lastRecovery>=40?"#e9b44c":"#ef6b73",recoveryWord=lastRecovery==null?"Čekám na data":lastRecovery>=67?"Dobrá připravenost":lastRecovery>=40?"Střední připravenost":"Dnes opatrně";
   $("readinessOrb").style.setProperty("--orb-value",lastRecovery??0);$("readinessOrb").style.setProperty("--orb-color",recoveryTone);$("readinessScore").textContent=lastRecovery??"—";$("readinessTitle").textContent=recoveryWord;$("readinessCaption").textContent=lastRecovery==null?"spánek nedostupný":'vs 30 dní '+(avgRecovery==null?"—":(lastRecovery-avgRecovery>=0?"+":"")+fmt(lastRecovery-avgRecovery,1)+" bodu");
   $("readinessInsight").textContent=lastRecovery==null?"Po načtení spánku vyhodnotím připravenost pro dnešní trénink.":lastRecovery>=67?"Spánek a regenerace dávají prostor držet plánovanou kvalitu. Trénink přizpůsob konkrétní únavě ve svalech.":"Regenerace není na plný plyn. Drž kvalitu, ale sniž objem nebo intenzitu, pokud se necítíš svěže.";
@@ -241,9 +240,6 @@ function renderTraining(){
   $("trainingRange").textContent="Týden "+isoWeek(weekStart)+" · "+dateLabel(weekStart)+" – "+dateLabel(dateShift(weekStart,6));
   populateWeekSelectors("trainingWeekSelect",null,days);
   const selected=days.find(x=>x.date===selectedHistoryDate)||days.find(x=>x.date===pragueToday())||days[0];
-  const planned=days.flatMap(x=>(x.daily?.training?.planned||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
-  const completed=days.flatMap(x=>(x.daily?.training?.completed||[]).filter(z=>!isNutritionItem(z)).map(z=>({...z,date:x.date})));
-  const matched=days.flatMap(x=>(x.daily?.training?.matched||[]).map(z=>({...z,date:x.date})));
   $("trainingWeekOverview").innerHTML=days.map(trainingDayMarkup).join("");
   const latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
   $("tFitness").innerHTML=(measured(latest.ctl)?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
@@ -482,7 +478,7 @@ function dayShort(d){return new Intl.DateTimeFormat('cs-CZ',{weekday:'short',day
 function workoutCardHtml(w,i,athlete){
   const reason=(w.reasons||[]).slice(0,4).join(" · "),run=w.sport==='run',env=w.environment==='indoor'?'indoor':'outdoor',day=$("workoutScheduleDate")?.value||pragueToday();
   const ftp=run?null:(env==='indoor'?athlete.indoorFtp:athlete.ftp)||athlete.ftp||null;
-  const facts=[['Délka',hm(num(w.duration_minutes))],['Load',Math.round(num(w.target_load))+' TSS'],['IF',fmt(w.intensity_factor,2).toFixed(2).replace('.',',')],['Obtížnost',fmt(w.difficulty,1)+' / 10'],['Tvoje úroveň',fmt(w.capability_level,1)+' / 10'],...(run?[]:[['Kadence',w.cadence||'dle bloku']]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])];
+  const facts=[['Délka',hm(num(w.duration_minutes))],['Load',Math.round(num(w.target_load))+' TSS'],['IF',dec(w.intensity_factor,2)],['Obtížnost',fmt(w.difficulty,1)+' / 10'],['Tvoje úroveň',fmt(w.capability_level,1)+' / 10'],...(run?[]:[['Kadence',w.cadence||'dle bloku']]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])];
   const steps=run?stepTableHtml(w.steps||[],null,{sport:'run',pace:athlete.runThresholdPace}):stepTableHtml(w.steps||[],ftp);
   return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+steps+'</details><p>'+esc(w.description||"")+'</p>'+(w.environment_notes?.length?'<ul class="env-notes">'+w.environment_notes.slice(0,2).map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul>':'')+'<div class="reason">'+esc(reason||"Seřazeno podle cíle, tvé úrovně a aktuálního kontextu.")+'</div></div>'+
     '<aside class="workout-side"><div class="env-toggle" role="group" aria-label="Kde trénink pojedeš">'+['outdoor','indoor'].map(e=>'<button type="button" class="btn'+(e===env?' primary':'')+'" data-workout-env="'+e+'" aria-pressed="'+(e===env)+'"'+(e==='outdoor'&&Number(w.indoor_only)?' disabled title="Tento trénink je jen na trenažér"':'')+'>'+(e==='outdoor'?(run?'🌳 Venku':'🌤 Outdoor'):(run?'🏃 Pás':'🏠 Indoor'))+'</button>').join('')+'</div>'+
@@ -1134,7 +1130,6 @@ function renderRequestedExperience(done,latest,vo2,daily){
 function renderFuelingBreakdown(daily){
   const profile=appProfile(),done=(daily.training?.completed||[]).filter(a=>!isNutritionItem(a));
   const weight=Number(daily.weight?.current??daily.nutrition?.currentWeight),bmr=weight>0&&profile.age&&profile.height&&profile.sex?10*weight+6.25*Number(profile.height)-5*Number(profile.age)+(profile.sex==='male'?5:-161):null;
-  const current=state.week?.days?.find(d=>d.date===selectedHistoryDate)?.daily?.nutrition||daily.nutrition||{},breakdown=current.calorieBreakdown||{},burned=done.reduce((s,a)=>s+num(a.calories),0);
   const today=googleWellness().find(r=>r.id===selectedHistoryDate)||{},active=measured(today.activeCalories)?Number(today.activeCalories):null,steps=measured(today.steps)?fmt(today.steps):'—';
   const budget=daily.nutrition?.energyBudget;
   if(budget)$('nutritionBalance').insertAdjacentHTML('beforeend','<p class="small">'+(budget.basis==='profile'?'Cíl dne: klidový výdej × tvoje běžná denní aktivita, minus deficit '+fmt(budget.deficit)+' kcal, plus trénink. Zvýší se, jakmile naměřený pohyb z Google Health (teď '+fmt(budget.active)+' kcal aktivní energie) přesáhne obvyklý den.':'Průběžný cíl: dnes se hýbeš víc než obvykle, takže cíl počítáme z naměřeného výdeje: bazální metabolismus + aktivní energie + trávení (10 %), minus deficit '+fmt(budget.deficit)+' kcal. Cíl se během dne mění s novými daty.')+'</p>');
@@ -1528,7 +1523,7 @@ function weekTargetText(){
 }
 // IF from load and length (TSS = h × IF² × 100); gym load has no IF.
 function intensityOf(tss,minutes){const t=num(tss),h=num(minutes)/60;return t>0&&h>0?Math.sqrt(t/(h*100)):null}
-function ifText(tss,minutes,sport){const v=sport==='gym'?null:intensityOf(tss,minutes);return v&&v<1.6?' · IF '+fmt(v,2).toFixed(2).replace('.',','):''}
+function ifText(tss,minutes,sport){const v=sport==='gym'?null:intensityOf(tss,minutes);return v&&v<1.6?' · IF '+dec(v,2):''}
 // The day's proposal on a plan chip: length, load, IF and focus for rides and
 // runs; the gym role for gym. A click opens the matching workouts.
 // The athlete's own length or place for one chip (prefs.sessions), shown at
@@ -1547,7 +1542,7 @@ function chipSuggestion(date,sport,role,target,key){
   const focus=String(role.label||'').replace(/^Gym · /,''),t=withSession(key,target,sport),own=chipSession(key);
   const time=t?'<button type="button" class="chip-time'+(own.minutes?' chosen':'')+'" data-chip-time data-key="'+esc(key)+'" data-sport="'+sport+'" aria-haspopup="menu" title="Změnit délku tréninku">⏱ '+esc(hm(t.minutes))+' ▾</button>':'';
   if(sport==='gym')return '<span class="chip-line">'+time+'<button type="button" class="chip-suggest" data-chip-suggest data-date="'+esc(date)+'" data-sport="gym"'+(t?' data-minutes="'+num(t.minutes)+'"':'')+' title="Otevřít gym na tento den">'+esc(focus)+' ›</button></span>';
-  const f=t?t.intensity||intensityOf(t.tss,t.minutes):null,parts=t?['~'+t.tss+' TSS',f?'IF '+fmt(f,2).toFixed(2).replace('.',','):'',focus]:[focus];
+  const f=t?t.intensity||intensityOf(t.tss,t.minutes):null,parts=t?['~'+t.tss+' TSS',f?'IF '+dec(f,2):'',focus]:[focus];
   return '<span class="chip-line">'+time+'<button type="button" class="chip-suggest" data-chip-suggest data-date="'+esc(date)+'" data-sport="'+sport+'" data-role="'+esc(role.role||'')+'" data-label="'+esc(focus)+'" data-env="'+esc(chipEnvironment(key,target))+'"'+(t?' data-minutes="'+num(t.minutes)+'" data-tss="'+num(t.tss)+'"':'')+' title="Ukázat nejvhodnější tréninky na tento den">'+esc(parts.filter(Boolean).join(' · '))+' ›</button></span>';
 }
 // Outdoor or indoor next to the sport name: from the forecast, or the athlete's choice.
@@ -1866,7 +1861,7 @@ function planVerdict(plan,a){
 }
 function trainingFacts(item,sport){
   const minutes=num(item.durationHours)*60,f=sport==='gym'?null:intensityOf(item.tss,minutes);
-  return '<div class="training-facts">'+[minutes>0?['Délka',hm(minutes)]:null,measured(item.tss)?['TSS',fmt(item.tss)]:null,f&&f<1.6?['IF',fmt(f,2).toFixed(2).replace('.',',')]:null].filter(Boolean).map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div>';
+  return '<div class="training-facts">'+[minutes>0?['Délka',hm(minutes)]:null,measured(item.tss)?['TSS',fmt(item.tss)]:null,f&&f<1.6?['IF',dec(f,2)]:null].filter(Boolean).map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div>';
 }
 // Plan of the day against the saved sets (history, or the plan's done rows).
 function gymCompareHtml(values,done,history=[]){
@@ -1883,7 +1878,7 @@ function gymMuscleLoad(muscles,sets){const load={};for(const {exercise,count} of
 function gymMuscleFigure(load){
   const max=Math.max(0,...Object.values(load)),tpl=$('muscleMapTemplate');if(!tpl||!max)return '';
   const box=document.createElement('div');box.append(tpl.content.cloneNode(true));
-  const one=v=>String(Math.round(v*10)/10).replace('.',',');
+  const one=v=>cz(v,1);
   box.querySelectorAll('[data-muscle]').forEach(el=>{const v=load[el.dataset.muscle]||0,r=v/max;el.style.setProperty('--fresh-fill',r>=.6?'#a77bff':r>=.3?'#7a5cc4':r>0?'#4f437a':'#2b323c');const t=document.createElementNS('http://www.w3.org/2000/svg','title');t.textContent=(MUSCLE_LABELS[el.dataset.muscle]||el.dataset.muscle)+(v?' · '+one(v)+' sérií':' · bez zátěže');el.appendChild(t);});
   const main=Object.entries(load).sort((a,b)=>b[1]-a[1]).filter(([,v])=>v/max>=.3).slice(0,6).map(([m])=>MUSCLE_LABELS[m]||m);
   return '<div class="gym-detail-figure">'+box.innerHTML+'<div class="gym-figure-legend"><span><i style="background:#a77bff"></i>hlavně</span><span><i style="background:#7a5cc4"></i>středně</span><span><i style="background:#4f437a"></i>doplňkově</span></div>'+(main.length?'<p class="small">Hlavně: '+esc(main.join(', '))+'</p>':'')+'</div>';
@@ -1898,15 +1893,15 @@ function gymCompactList(values,muscles){
 // A planned ride or run drawn like a recommended workout: profile, numbers, steps.
 function plannedWorkoutHtml(w,athlete={}){
   const run=w.sport==='run',env=w.environment==='indoor'?'indoor':'outdoor',ftp=run?null:(env==='indoor'?athlete.indoorFtp:athlete.ftp)||athlete.ftp||null;
-  const facts=[['Délka',num(w.duration_minutes)?hm(num(w.duration_minutes)):null],['Load',measured(w.target_load)?Math.round(num(w.target_load))+' TSS':null],['IF',num(w.intensity_factor)?fmt(w.intensity_factor,2).toFixed(2).replace('.',','):null],['Obtížnost',measured(w.difficulty)?fmt(w.difficulty,1)+' / 10':null],...(run?[]:[['Kadence',w.cadence||null]]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])].filter(([,v])=>v);
+  const facts=[['Délka',num(w.duration_minutes)?hm(num(w.duration_minutes)):null],['Load',measured(w.target_load)?Math.round(num(w.target_load))+' TSS':null],['IF',num(w.intensity_factor)?dec(w.intensity_factor,2):null],['Obtížnost',measured(w.difficulty)?fmt(w.difficulty,1)+' / 10':null],...(run?[]:[['Kadence',w.cadence||null]]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])].filter(([,v])=>v);
   const rows=w.steps||[],steps=rows.length?(run?stepTableHtml(rows,null,{sport:'run',pace:athlete.runThresholdPace}):stepTableHtml(rows,ftp)):'';
   return workoutProfile(w)+'<dl class="workout-facts">'+facts.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl>'+(steps?'<details class="explain-block" open><summary>Rozpis kroků</summary>'+steps+'</details>':'<p class="small">Trénink nemá v Intervals.icu popsanou strukturu kroků.</p>')+(w.description?'<p>'+esc(w.description)+'</p>':'')+(w.environment_notes?.length?'<ul class="env-notes">'+w.environment_notes.slice(0,2).map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul>':'');
 }
 // The recorded activity: numbers, route, power and heart rate, intervals.
 function activityDetailHtml(result,sport){
-  const a=result.activity||{},streams=result.streams||[],run=sport==='run',one=v=>String(Math.round(v*10)/10).replace('.',',');
+  const a=result.activity||{},streams=result.streams||[],run=sport==='run',one=v=>cz(v,1);
   const pace=run&&num(a.distance)>0&&num(a.moving_time)>0?fmtPace(a.moving_time/(a.distance/1000))+' /km':null;
-  const stats=[['Čas',num(a.moving_time)?hm(a.moving_time/60):null],['Vzdálenost',num(a.distance)?one(a.distance/1000)+' km':null],['Převýšení',measured(a.total_elevation_gain)?Math.round(a.total_elevation_gain)+' m':null],[run?'Tempo':'Ø výkon',run?pace:num(a.average_watts)?Math.round(a.average_watts)+' W':null],['NP',!run&&num(a.icu_normalized_watts)?Math.round(a.icu_normalized_watts)+' W':null],['Ø tep',num(a.average_heartrate)?Math.round(a.average_heartrate)+' bpm':null],['Max tep',num(a.max_heartrate)?Math.round(a.max_heartrate)+' bpm':null],['Kadence',num(a.average_cadence)?Math.round(a.average_cadence)+(run?' spm':' rpm'):null],['TSS',measured(a.icu_training_load)?Math.round(a.icu_training_load):null],['IF',num(a.icu_intensity)?(a.icu_intensity/100).toFixed(2).replace('.',','):null],['Energie',num(a.calories)?Math.round(a.calories)+' kcal':null]].filter(([,v])=>v!=null);
+  const stats=[['Čas',num(a.moving_time)?hm(a.moving_time/60):null],['Vzdálenost',num(a.distance)?one(a.distance/1000)+' km':null],['Převýšení',measured(a.total_elevation_gain)?Math.round(a.total_elevation_gain)+' m':null],[run?'Tempo':'Ø výkon',run?pace:num(a.average_watts)?Math.round(a.average_watts)+' W':null],['NP',!run&&num(a.icu_normalized_watts)?Math.round(a.icu_normalized_watts)+' W':null],['Ø tep',num(a.average_heartrate)?Math.round(a.average_heartrate)+' bpm':null],['Max tep',num(a.max_heartrate)?Math.round(a.max_heartrate)+' bpm':null],['Kadence',num(a.average_cadence)?Math.round(a.average_cadence)+(run?' spm':' rpm'):null],['TSS',measured(a.icu_training_load)?Math.round(a.icu_training_load):null],['IF',num(a.icu_intensity)?dec(a.icu_intensity/100,2):null],['Energie',num(a.calories)?Math.round(a.calories)+' kcal':null]].filter(([,v])=>v!=null);
   const route=streams.find(s=>s.type==='latlng')?.points?.length>1?activityRouteSvg(streams.find(s=>s.type==='latlng')):'';
   const chart=(type,color,label,unit)=>streams.find(s=>s.type===type)?.points?.length?activityStreamChart(streams.find(s=>s.type===type),color,label,unit):'';
   return '<div class="activity-sheet"><div class="training-facts">'+stats.map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div>'+route+chart('watts','#83e9c3','Výkon','W')+chart('heartrate','#ff9c97','Tep','bpm')+'<div class="activity-extras">'+activityExtras(result)+'</div></div>';
@@ -1949,7 +1944,7 @@ async function openTrainingDetail(entry){
   const item=entry.item,plan=kind==='done'?entry.plan:item,env=activityEnvironmentBadge(item,sport);
   let body='<div class="eyebrow">'+(kind==='done'?'Hotovo':item.pending?'Ukládám do Intervals.icu…':'Naplánováno')+'</div><h4 class="training-name">'+esc(item.name||'Trénink')+env+'</h4>';
   if(kind==='done'){
-    body+=plan?planVerdict(plan,item)+compareTableHtml([['Délka',num(plan.durationHours)*60||null,num(item.durationHours)*60||null,hm],['TSS',measured(plan.tss)?num(plan.tss):null,measured(item.tss)?num(item.tss):null,v=>fmt(v)],['IF',intensityOf(plan.tss,num(plan.durationHours)*60),intensityOf(item.tss,num(item.durationHours)*60),v=>fmt(v,2).toFixed(2).replace('.',',')]])+'<details class="training-plan"><summary>Plán „'+esc(plan.name||'trénink')+'“</summary>'+workoutPlanHtml(plan.description)+'</details>':trainingFacts(item,sport);
+    body+=plan?planVerdict(plan,item)+compareTableHtml([['Délka',num(plan.durationHours)*60||null,num(item.durationHours)*60||null,hm],['TSS',measured(plan.tss)?num(plan.tss):null,measured(item.tss)?num(item.tss):null,v=>fmt(v)],['IF',intensityOf(plan.tss,num(plan.durationHours)*60),intensityOf(item.tss,num(item.durationHours)*60),v=>dec(v,2)]])+'<details class="training-plan"><summary>Plán „'+esc(plan.name||'trénink')+'“</summary>'+workoutPlanHtml(plan.description)+'</details>':trainingFacts(item,sport);
     body+='<div id="tdActivity"><p class="small">Načítám záznam aktivity…</p></div>';
   }else{
     body+='<div id="tdPlan">'+trainingFacts(item,sport)+(/^planned:/.test(String(item.id||''))?'<p class="small">Načítám strukturu tréninku…</p>':'<h4>Plán</h4>'+workoutPlanHtml(item.description))+'</div>';
@@ -2011,7 +2006,7 @@ function sparkBars(series,color){const max=Math.max(1,...series.map(x=>x.load));
 // or 6 months, a calendar year, or all data in the app. Blocks without data
 // for the period (no rides, no power meter, no runs) are left out.
 function prPeriod(t){let v=null;try{v=localStorage.getItem('pfd-pr-period');}catch{}return t?.periods?.[v]?v:t?.defaultPeriod||'1m'}
-function trendBadge(change,{unit='',lowerIsBetter=false,format=v=>String(fmt(Math.abs(v),1)).replace('.',',')}={}){
+function trendBadge(change,{unit='',lowerIsBetter=false,format=v=>cz(Math.abs(v),1)}={}){
   if(!change)return '';
   const d=change.delta,good=lowerIsBetter?d<0:d>0,arrow=d>0?'↑':d<0?'↓':'=',sign=d>0?'+':d<0?'−':'';
   const from=(lowerIsBetter?fmtPaceText(change.from):String(change.from).replace('.',',')+(unit?' '+unit:''))+' ('+dateLabel(change.fromDate)+(change.basis==='first'?', první záznam v období':'')+')';
@@ -2029,13 +2024,13 @@ function recordsCardHtml(rec){
   const rows=(t.strength||[]).map(x=>({x,ch:at(x)})).filter(r=>r.ch).slice(0,10);
   const tile=(icon,label,value,badge,date)=>'<div><span>'+icon+'</span><strong>'+value+'</strong>'+badge+'<small>'+esc(label)+' · '+esc(dateLabel(date))+'</small></div>';
   // Two rows: the bike (FTP, longest ride, most climbing), then the run (pace, longest run).
-  const distance=k=>at(c[k])&&at(c[k]).value>0?tile({longestRide:'🚴',mostElevation:'⛰',longestRun:'🏃'}[k],{longestRide:'Nejdelší jízda',mostElevation:'Nejvíc převýšení',longestRun:'Nejdelší běh'}[k],String(fmt(at(c[k]).value,1)).replace('.',',')+' '+c[k].unit,trendBadge(at(c[k]),{unit:c[k].unit}),at(c[k]).date):'';
+  const distance=k=>at(c[k])&&at(c[k]).value>0?tile({longestRide:'🚴',mostElevation:'⛰',longestRun:'🏃'}[k],{longestRide:'Nejdelší jízda',mostElevation:'Nejvíc převýšení',longestRun:'Nejdelší běh'}[k],cz(at(c[k]).value,1)+' '+c[k].unit,trendBadge(at(c[k]),{unit:c[k].unit}),at(c[k]).date):'';
   const ride=[at(c.ftp)&&at(c.longestRide)?tile('⚡','FTP',fmt(at(c.ftp).value)+' W',trendBadge(at(c.ftp),{unit:'W',format:v=>fmt(Math.abs(v))}),at(c.ftp).date):'',distance('longestRide'),distance('mostElevation')].filter(Boolean);
   const run=[at(c.runPace)?tile('⏱','Nejrychlejší běh 5 km+',fmtPaceText(at(c.runPace).value)+' /km',trendBadge(at(c.runPace),{lowerIsBetter:true,format:v=>fmtPaceText(v)}),at(c.runPace).date):'',distance('longestRun')].filter(Boolean);
   const tiles=[ride,run].filter(r=>r.length).map(r=>'<div class="pr-cardio">'+r.join('')+'</div>');
   const day=d=>new Intl.DateTimeFormat('cs-CZ',{day:'numeric',month:'numeric',year:'numeric'}).format(new Date(d+'T12:00:00Z')),span=period?(period.kind==='all'?'Všechna data v aplikaci od '+day(period.start):period.kind==='year'?'Rok '+period.label:'Od '+day(period.start)+' do dneška'):'';
   return '<article class="card insight-records"><div class="detail-heading"><div><div class="label">Výkonnost</div><h3>Osobní rekordy</h3><p class="small pr-span">'+esc(span)+'</p></div>'+prPeriodControls(t,key)+'</div>'+
-    (rows.length?'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Max. váha</th><th>Datum</th><th>Změna</th></tr></thead><tbody>'+rows.map(({x,ch})=>'<tr><td>'+esc(x.exercise)+'</td><td>'+String(fmt(ch.value,1)).replace('.',',')+' kg'+(ch.reps?' <span class="small">× '+ch.reps+'</span>':'')+'</td><td>'+esc(dateLabel(ch.date))+'</td><td>'+(trendBadge(ch,{unit:'kg'})||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<p class="small">V tomto období žádné série s váhou.</p>')+
+    (rows.length?'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Max. váha</th><th>Datum</th><th>Změna</th></tr></thead><tbody>'+rows.map(({x,ch})=>'<tr><td>'+esc(x.exercise)+'</td><td>'+cz(ch.value,1)+' kg'+(ch.reps?' <span class="small">× '+ch.reps+'</span>':'')+'</td><td>'+esc(dateLabel(ch.date))+'</td><td>'+(trendBadge(ch,{unit:'kg'})||'—')+'</td></tr>').join('')+'</tbody></table></div>':'<p class="small">V tomto období žádné série s váhou.</p>')+
     tiles.join('')+
     '<p class="small">Rekord je nejlepší výkon v období, šipka ukazuje změnu proti nejlepšímu před ním (FTP: platné na konci proti začátku období). Když starší data chybí, porovnávám s prvním záznamem v období. U tempa je šipka dolů zlepšení.</p></article>';
 }
@@ -2658,7 +2653,6 @@ installProposals();
 // for that day, other focuses one tap away) or with a generated workout.
 const ROLE_SYSTEM={endurance:'endurance',long:'endurance',recovery:'recovery',quality:''};
 const REC_SYSTEMS={ride:['endurance','tempo','sweet_spot','threshold','vo2max','anaerobic','sprint','recovery'],run:['endurance','tempo','threshold','vo2max','anaerobic','sprint','recovery']};
-function recommendDialogOpen(){return Boolean($('recommendDialog')?.open)}
 function showRecommendDialog(){const d=$('recommendDialog');if(!d.open){try{d.showModal();}catch{d.show();}}d.querySelector('.recommend-scroll').scrollTop=0;}
 function setRecSport(sport){state.recSport=sport==='run'?'run':'ride';syncRecSportUi();}
 function renderRecommendChrome(){
@@ -2672,7 +2666,7 @@ function renderRecommendChrome(){
 function renderRecommendTarget(){
   const el=$('recommendTarget'),ctx=state.recContext;el.hidden=!ctx;if(!ctx)return;
   const minutes=num(ctx.minutes),tss=num(ctx.tss),intensity=intensityOf(tss,minutes);
-  el.innerHTML='<span class="eyebrow">'+esc(longDate(ctx.date))+' · '+esc(HUB_SPORTS[ctx.sport])+(ctx.environment?' · '+(ctx.environment==='indoor'?'indoor':'venku'):'')+'</span><strong>'+esc([minutes?hm(minutes):'',tss?'~'+tss+' TSS':'',intensity?'IF '+fmt(intensity,2).toFixed(2).replace('.',','):'',ctx.label].filter(Boolean).join(' · '))+'</strong><span class="small">Nejvhodnější tréninky na tento den. Jiné zaměření vybereš níže.</span><button type="button" class="btn" id="clearRecommendTarget">Celá knihovna</button>';
+  el.innerHTML='<span class="eyebrow">'+esc(longDate(ctx.date))+' · '+esc(HUB_SPORTS[ctx.sport])+(ctx.environment?' · '+(ctx.environment==='indoor'?'indoor':'venku'):'')+'</span><strong>'+esc([minutes?hm(minutes):'',tss?'~'+tss+' TSS':'',intensity?'IF '+dec(intensity,2):'',ctx.label].filter(Boolean).join(' · '))+'</strong><span class="small">Nejvhodnější tréninky na tento den. Jiné zaměření vybereš níže.</span><button type="button" class="btn" id="clearRecommendTarget">Celá knihovna</button>';
   $('clearRecommendTarget').onclick=()=>{state.recContext=null;$('workoutDuration').value='';$('workoutLoad').value='';$('workoutSystem').value='';renderRecommendTarget();loadWorkoutLibrary();};
 }
 // What today already holds: planned sessions, plan chips or a gym plan.
@@ -2822,7 +2816,7 @@ const renderNutritionWithoutNotice=renderNutrition;renderNutrition=function(){re
 // ---- Výživa like a food diary app: day overview with drinks, meals, quick logging ----
 // Drinks of the shown day and the day's target, from /app/api/fluids.
 const FLUID_KINDS=[['water','💧','Voda'],['coffee','☕','Káva'],['tea','🍵','Čaj'],['milk','🥛','Mléko'],['other','🧃','Jiné']];
-function fluidLabel(ml){return ml>=1000?fmt(ml/1000,2).toString().replace('.',',')+' l':fmt(ml)+' ml';}
+function fluidLabel(ml){return ml>=1000?cz(ml/1000,2)+' l':fmt(ml)+' ml';}
 async function loadFluids(date=nutritionDay()){try{const r=await jsonFetch('/app/api/fluids?date='+date);state.fluids={...(state.fluids||{}),[date]:r};}catch{}renderDayOverview();if(date===selectedHistoryDate){renderDayTimeline();if($('today')?.classList.contains('active'))renderToday();}return state.fluids?.[date];}
 async function addFluidDrink(date,ml,kind='water'){
   const now=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',hour:'2-digit',minute:'2-digit'}).format(new Date());

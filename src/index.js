@@ -632,145 +632,10 @@ async function markMatch(
 }
 
 
-// ======================================================
-// GOOGLE DAILY ROLLUP
-// ======================================================
-
-function googleDate(date) {
-  const p = date.split("-");
-
-  return {
-    date: {
-      year: Number(p[0]),
-      month: Number(p[1]),
-      day: Number(p[2])
-    },
-
-    time: {
-      hours: 0,
-      minutes: 0,
-      seconds: 0,
-      nanos: 0
-    }
-  };
-}
 
 
-async function googleDailyRollup(
-  token,
-  type,
-  start,
-  end
-) {
-  const response =
-    await fetch(
-      `https://health.googleapis.com/v4/users/me/dataTypes/${type}/dataPoints:dailyRollUp`,
-      {
-        method: "POST",
-
-        headers: {
-          "Authorization":
-            "Bearer " + token,
-
-          "Content-Type":
-            "application/json"
-        },
-
-        body: JSON.stringify({
-          range: {
-            start:
-              googleDate(start),
-
-            end:
-              googleDate(end)
-          },
-
-          windowSizeDays: 1,
-
-          dataSourceFamily:
-            "users/me/dataSourceFamilies/google-wearables"
-        })
-      }
-    );
-
-  const data =
-    await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      `${type} HTTP ${response.status}: ` +
-      JSON.stringify(data)
-    );
-  }
-
-  return data;
-}
 
 
-// ======================================================
-// GOOGLE RECONCILE
-// ======================================================
-
-async function googleReconcile(
-  token,
-  type,
-  filterName,
-  filterType,
-  startDate,
-  sourceFamily,
-  endDate = null
-) {
-  const params = new URLSearchParams();
-  params.set("dataSourceFamily", sourceFamily);
-
-  const end = endDate || dateDaysFromNow(1);
-  let filter;
-
-  if (filterType === "interval") {
-    filter = `${filterName}.interval.start_time >= "${startDate}T00:00:00Z" AND ${filterName}.interval.start_time < "${end}T00:00:00Z"`;
-  } else if (filterType === "sample") {
-    filter = `${filterName}.sample_time.physical_time >= "${startDate}T00:00:00Z" AND ${filterName}.sample_time.physical_time < "${end}T00:00:00Z"`;
-  } else if (filterType === "daily") {
-    filter = `${filterName}.date >= "${startDate}" AND ${filterName}.date < "${end}"`;
-  } else if (filterType === "exercise") {
-    filter = `${filterName}.interval.civil_start_time >= "${startDate}T00:00:00" AND ${filterName}.interval.civil_start_time < "${end}T00:00:00"`;
-  } else if (filterType === "sleep") {
-    filter = `sleep.interval.civil_end_time >= "${startDate}" AND sleep.interval.civil_end_time < "${end}"`;
-  } else {
-    throw new Error(`Unsupported Google filter type: ${filterType}`);
-  }
-
-  params.set("filter", filter);
-
-  const all = [];
-  let pageToken = null;
-
-  for (let page = 0; page < 60; page++) {
-    if (pageToken) params.set("pageToken", pageToken);
-
-    const response = await fetchWithTimeout(
-      `https://health.googleapis.com/v4/users/me/dataTypes/${type}/dataPoints:reconcile?${params.toString()}`,
-      {
-        headers: {
-          Authorization: "Bearer " + token,
-          Accept: "application/json"
-        }
-      },
-      12000
-    );
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(`${type} HTTP ${response.status}: ` + JSON.stringify(data));
-    }
-
-    all.push(...(data.dataPoints || []));
-    pageToken = data.nextPageToken || null;
-    if (!pageToken) break;
-  }
-
-  return all;
-}
 
 // ======================================================
 // GOOGLE NUTRITION API
@@ -1129,8 +994,6 @@ const GOOGLE_SYNC_CONFIGS = [
   ["body-fat", "body_fat", "sample", "google-sources", 30]
 ];
 
-const GOOGLE_SYNC_PAGE_LIMIT = 1;
-
 async function googleReconcilePage(
   token,
   type,
@@ -1403,90 +1266,6 @@ async function processGoogleSyncBatch(env) {
       if (processed >= 2) return { status: "running", details };
     }
   }
-}
-// ======================================================
-// GOOGLE SYNC
-// ======================================================
-
-async function syncGoogle(env) {
-  const token = await googleToken(env);
-  const today = pragueDate();
-  const results = [];
-
-  const configs = [
-    ["active-energy-burned", "active_energy_burned", "interval", "google-wearables", 7],
-    ["active-minutes", "active_minutes", "interval", "google-wearables", 7],
-    ["active-zone-minutes", "active_zone_minutes", "interval", "google-wearables", 7],
-    ["steps", "steps", "interval", "google-wearables", 7],
-    ["distance", "distance", "interval", "google-wearables", 7],
-    ["floors", "floors", "interval", "google-wearables", 7],
-    ["heart-rate", "heart_rate", "sample", "google-wearables", 7],
-    ["heart-rate-variability", "heart_rate_variability", "sample", "google-wearables", 7],
-    ["oxygen-saturation", "oxygen_saturation", "sample", "google-wearables", 7],
-    ["daily-resting-heart-rate", "daily_resting_heart_rate", "daily", "google-wearables", 30],
-    ["daily-heart-rate-variability", "daily_heart_rate_variability", "daily", "google-wearables", 30],
-    ["daily-oxygen-saturation", "daily_oxygen_saturation", "daily", "google-wearables", 30],
-    ["daily-respiratory-rate", "daily_respiratory_rate", "daily", "google-wearables", 30],
-    ["daily-vo2-max", "daily_vo2_max", "daily", "google-wearables", 30],
-    ["daily-heart-rate-zones", "daily_heart_rate_zones", "daily", "google-wearables", 30],
-    ["respiratory-rate-sleep-summary", "respiratory_rate_sleep_summary", "sample", "google-wearables", 7],
-    ["sedentary-period", "sedentary_period", "interval", "google-wearables", 7],
-    ["time-in-heart-rate-zone", "time_in_heart_rate_zone", "interval", "google-wearables", 7],
-    ["sleep", "sleep", "sleep", "google-wearables", 730],
-    ["exercise", "exercise", "exercise", "google-wearables", 365],
-    ["weight", "weight", "sample", "google-sources", 365],
-    ["body-fat", "body_fat", "sample", "google-sources", 30]
-  ];
-
-  const runConfig = async ([type, filterName, filterType, family, days]) => {
-    try {
-      const end = dateDaysFromNow(1);
-      const start = dateDaysAgo(days);
-      const points = await googleReconcile(
-        token, type, filterName, filterType, start,
-        `users/me/dataSourceFamilies/${family}`, end
-      );
-      let saved = 0;
-      for (const point of points) {
-        const i = googleInfo(type, point);
-        const fallbackId = point?.name || `${type}:${i.sample || i.start || crypto.randomUUID()}`;
-        await savePoint(env, family, type, point, i.value, i.unit, i.sample, i.start, i.end, fallbackId);
-        saved++;
-      }
-      return { data_type: type, records_found: points.length, records_saved: saved, status: "ok" };
-    } catch (error) {
-      return { data_type: type, records_found: 0, records_saved: 0, status: "error", message: error?.message || String(error) };
-    }
-  };
-
-  // Small concurrent batches prevent one slow Google dataset from blocking the whole sync.
-  for (let offset = 0; offset < configs.length; offset += 4) {
-    results.push(...await Promise.all(configs.slice(offset, offset + 4).map(runConfig)));
-  }
-
-  // Total calories is a daily rollup and is the source of truth for total
-  // daily expenditure. We never add Intervals workout calories on top of it.
-  try {
-    const data = await googleDailyRollup(token, "total-calories", dateDaysAgo(7), dateDaysFromNow(1));
-    const rollups = data.rollupDataPoints || [];
-    let saved = 0;
-    for (const r of rollups) {
-      const d = r.date || r.startTime || null;
-      const kcal = r.totalCalories?.kcalSum;
-      if (kcal == null) continue;
-      let day = null;
-      if (d?.year) day = `${d.year}-${String(d.month).padStart(2, "0")}-${String(d.day).padStart(2, "0")}`;
-      else if (typeof d === "string") day = d.slice(0, 10);
-      if (!day) continue;
-      await savePoint(env, "google-wearables", "total-calories", r, Number(kcal), "kcal", day, `${day}T00:00:00`, `${dateDaysFromNow(1)}T00:00:00`, `total-calories:${day}`);
-      saved++;
-    }
-    results.push({ data_type: "total-calories", records_found: rollups.length, records_saved: saved, status: "ok" });
-  } catch (error) {
-    results.push({ data_type: "total-calories", records_found: 0, records_saved: 0, status: "error", message: error.message });
-  }
-
-  return Response.json({ status: "ok", source: "google", date: today, results });
 }
 
 // ======================================================
@@ -2110,9 +1889,6 @@ function plannedMatch(planned, actuals){
     const sameFamily=family!=="other" && activityFamily(a)===family;
     return nameMatch || sameFamily;
   }) || null;
-}
-function plannedMatchesActual(planned, actual){
-  return Boolean(plannedMatch(planned, actual));
 }
 
 function cyclingKcalPerHour(item) {

@@ -1,7 +1,6 @@
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { strengthSetOptions,strengthOptionNote } from './gym-set-options.js';
 
-const TZ = "Europe/Prague";
 const SHEET_NAME = "Dnešní trénink";
 const VISIBLE_HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
 const LEGACY_HEADER_ROW = [...VISIBLE_HEADER_ROW, "Náhrada cviku", "Provedení"];

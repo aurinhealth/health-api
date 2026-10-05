@@ -213,7 +213,6 @@ function recentMuscleExposure(history, contextDate) {
     if (!def || String(row.type || "WORK").toUpperCase() !== "WORK") continue;
     const age = daysBetween(row.workout_date, contextDate);
     if (age > 7) continue;
-    const sets = Math.max(1, num(row.set_no) || 1);
     exposure.set(def.muscle, (exposure.get(def.muscle) || 0) + 1);
   }
   return exposure;

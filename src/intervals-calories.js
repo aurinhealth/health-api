@@ -16,7 +16,6 @@ function strengthCalories(weightKg, minutes) {
 function cyclingCalories(event, weightKg, ftp = 260) {
   const seconds = n(event?.moving_time);
   if (!seconds) return 0;
-  const hours = seconds / 3600;
   const intensity = n(event?.icu_intensity);
   const watts = n(event?.icu_weighted_average_watts ?? event?.weighted_average_watts);
   const estimatedWatts = watts > 0 ? watts : intensity > 0 ? ftp * intensity : null;

@@ -25,7 +25,6 @@ function durationHours(p){
 function textFor(p){return `${p?.type||""} ${p?.activity_type||""} ${p?.category||""} ${p?.name||p?.title||""} ${p?.description||""} ${p?.exercise?.exerciseType||""} ${p?.exercise?.displayName||""}`.toLowerCase();}
 function isRide(p){return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textFor(p));}
 function isIntensity(p){return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(textFor(p));}
-function recipeMinutes(r){return n(String(r?.time||"").match(/\d+/)?.[0],60);}
 function calories(r){return n(r?.kcal);}
 function macros(r){return {protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g)};}
 

@@ -233,7 +233,6 @@ export function recommendFood({day,nutritionPlan,entries}) {
   const remaining=remainingNutrition(target,eaten);
   const planned=(entries?.entries||[]).filter(r=>r.status==="planned");
   const plannedFoodOptions=planned.map(r=>{
-    const ratio=Math.max(0.01,n(r.servings,1));
     const kcal=n(r.calories,0), protein=n(r.protein_g,0), carbs=n(r.carbs_g,0), fat=n(r.fat_g,0);
     const proteinFit=Math.min(protein/Math.max(remaining.protein_g,1),1);
     const calorieFit=Math.min(kcal/Math.max(remaining.calories,1),1);

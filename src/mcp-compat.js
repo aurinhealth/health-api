@@ -1,4 +1,4 @@
-import { handleMcp, TOOLS } from "./mcp.js";
+import { handleMcp } from "./mcp.js";
 
 const MODERN = "2026-07-28";
 const SERVER_INFO = { name: "health-api-strength-coach", title: "Health API Strength Coach", version: "1.1.0" };

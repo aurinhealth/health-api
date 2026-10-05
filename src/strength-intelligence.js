@@ -142,10 +142,6 @@ function loadRule(meta) {
   return LOAD_RULES.PLATE_LOADED;
 }
 
-function practicalStep(meta) {
-  return loadRule(meta).step;
-}
-
 function roundToStep(value, step, min = 0, max = null) {
   if (value == null || !Number.isFinite(value)) return null;
   let rounded = Math.max(min, Math.round(value / step) * step);
