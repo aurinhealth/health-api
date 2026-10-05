@@ -165,7 +165,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   const cyclingCoachV2 = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus)
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus
   });
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),

@@ -169,6 +169,9 @@ export function roleFor(prefs, date, sport, options = {}) {
 // Load is TSS (what Intervals.icu calls Load and builds CTL/ATL from); the
 // intensity factor (IF) of the role says how hard it is: TSS = h × IF² × 100.
 const ROLE_IF = { recovery: .55, endurance: .68, long: .68, quality: .82 };
+// Running IF is pace against threshold pace: an easy run is ~0.78, not the
+// 0.68 of an easy ride, so the same load means a shorter run.
+const RUN_IF = { recovery: .7, endurance: .78, long: .78, quality: .9 };
 const ROLE_RANGE = { recovery: [.35, .6], endurance: [.8, 1.6], long: [1.4, 2.6], quality: [1, 1.5] };
 const GYM_TSS = { gym_full: 35, gym_upper: 25 };
 const SPORT_MINUTES = { ride: [30, 300], run: [20, 150] };
@@ -201,7 +204,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [
     if (x.sport === "gym") return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: (x.role === "gym_upper" ? 60 : 70) - (recovery ? 10 : 0) };
     const [lo, hi] = ROLE_RANGE[x.role] || [.8, 1.6], cap = recovery ? .85 : 1;
     const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
-    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = ROLE_IF[x.role] || .68;
+    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = (x.sport === "run" ? RUN_IF : ROLE_IF)[x.role] || .68;
     const minutes = Math.max(min, Math.min(max, round5(tss / (intensity * intensity * 100) * 60)));
     return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes, intensity };
   });

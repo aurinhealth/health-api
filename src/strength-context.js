@@ -1,4 +1,5 @@
 import { getAthleteState } from './athlete-state.js';
+import { isQualityName } from './session-intensity.js';
 const TZ = "Europe/Prague";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
@@ -63,7 +64,7 @@ export function isIntensity(a) {
   if (typeof a?.intensity === "boolean") return a.intensity;
   if (typeof a?.is_intensity === "boolean") return a.is_intensity;
   const semantic = semanticIntensityText(a);
-  return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic);
+  return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic) || isQualityName(semantic);
 }
 function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), intensity: isIntensity(a) }; }
 function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), intensity: isIntensity(e), payload: e }; }
@@ -91,6 +92,13 @@ export async function d1Recovery(env, startDate, endDate) {
     if (!r) continue;
     let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {}
     out[type] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
+    // HRV and resting heart rate only mean something against the athlete's
+    // own average: 4 weeks before the latest value.
+    if (/hrv|variability|resting/i.test(type)) {
+      const from28 = new Date(Date.parse(String(t).slice(0, 10) + "T12:00:00Z") - 28 * 86400000).toISOString().slice(0, 10) + "T00:00:00";
+      const avg = await env.DB.prepare(`SELECT AVG(value_numeric) AS v, COUNT(value_numeric) AS c FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND data_type = ? AND COALESCE(sample_time, start_time) >= ? AND COALESCE(sample_time, start_time) < ?`).bind(env.USER_ID, type, from28, String(t).slice(0, 10) + "T00:00:00").first().catch(() => null);
+      if (avg?.c >= 5 && Number(avg.v) > 0) out[type][0].baseline = Math.round(Number(avg.v) * 10) / 10;
+    }
   }
   return out;
 }
