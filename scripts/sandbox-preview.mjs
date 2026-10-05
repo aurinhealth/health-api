@@ -245,7 +245,8 @@ async function page({ inline }) {
 
 // A hosted page supplies its own document skeleton: keep the styles and body only.
 function fragment(html) {
-  return '<title>PFD Workouty Sandbox</title>\n' + html.replace(/^<!doctype html>\s*<html[^>]*>\s*<head>/i, "").replace(/<meta[^>]*>\s*/g, "").replace(/<title>[^<]*<\/title>/, "").replace("</head>\n<body>", "").replace(/<\/body><\/html>\s*$/, "");
+  // A hosted viewer answers confirm() with false; sample data needs no question.
+  return '<title>PFD Workouty Sandbox</title>\n<script>window.confirm=()=>true;</script>\n' + html.replace(/^<!doctype html>\s*<html[^>]*>\s*<head>/i, "").replace(/<meta[^>]*>\s*/g, "").replace(/<title>[^<]*<\/title>/, "").replace("</head>\n<body>", "").replace(/<\/body><\/html>\s*$/, "");
 }
 
 let inlineData;
