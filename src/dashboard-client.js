@@ -537,9 +537,12 @@ function clearLibraryCache(){libraryCache.clear();}
 async function scheduleLibraryWorkout(id,dateOverride=null,environment=null){
   const date=dateOverride||$("workoutScheduleDate")?.value;if(!date){toast("Vyber datum.");return}
   const row=[...(state.workoutLibrary?.workouts||[]),state.generated?.workout,...(state.generated?.alternatives||[])].find(x=>x&&x.id===id),name=row?.name||id;
-  if(!window.confirm('Přidat „'+name+'“ na '+longDate(date)+(environment?' ('+(environment==='indoor'?'indoor':'outdoor')+')':'')+' do Intervals.icu?'))return;
+  // "Vyměnit za jiný" from a planned training's detail: the new one replaces it.
+  const replace=state.replaceEvent;
+  if(!window.confirm('Přidat „'+name+'“ na '+longDate(date)+(environment?' ('+(environment==='indoor'?'indoor':'outdoor')+')':'')+' do Intervals.icu'+(replace?' místo „'+(replace.name||'trénink')+'“':'')+'?'))return;
   const pending=showPendingAdd(row||{id,name},date,row?.sport||workoutSport());
-  try{const r=await jsonFetch("/app/api/workouts/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workoutId:id,date,confirm:true,environment:environment||$("workoutEnvironment")?.value||"outdoor"})});settlePendingAdd(pending,r.status!=='already_scheduled',r.eventId);toast(r.status==='already_scheduled'?'Workout už je na tento den naplánovaný.':r.workout.name+' je na '+longDate(r.date)+' i v Intervals.icu.')}
+  try{const r=await jsonFetch("/app/api/workouts/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workoutId:id,date,confirm:true,environment:environment||$("workoutEnvironment")?.value||"outdoor"})});settlePendingAdd(pending,r.status!=='already_scheduled',r.eventId);
+    if(replace&&r.status!=='already_scheduled'){state.replaceEvent=null;deletePlanned(replace.id,replace.name,false);}toast(r.status==='already_scheduled'?'Workout už je na tento den naplánovaný.':r.workout.name+' je na '+longDate(r.date)+' i v Intervals.icu.')}
   catch(e){settlePendingAdd(pending,false);toast("Zápis do Intervals.icu selhal: "+e.message)}
 }
 async function saveWorkoutFeedback(form){
@@ -1518,20 +1521,23 @@ async function renderWeekHub(){
   const days=week.days||[],gym=weekGymSessions(days),today=pragueToday();
   const roles=plan.roles||[];
   let doneTss=0,plannedTss=0;
+  // Every training in the week opens its detail; the registry maps the click back.
+  const details=state.hubDetails=[],detail=entry=>{details.push(entry);return ' data-detail="'+(details.length-1)+'" role="button" tabindex="0"';};
   el.innerHTML=days.map((d,i)=>{
-    const t=d.daily?.training||{},items=[];
+    const t=d.daily?.training||{},items=[],covered={},cover=sport=>{covered[sport]=(covered[sport]||0)+1;};
     const completed=(t.completed||[]).filter(a=>!isNutritionItem(a)),sports=new Set();
-    for(const a of completed){const sport=activitySport(a);if(!sport)continue;sports.add(sport);doneTss+=num(a.tss);items.push('<div class="hub-item done">✓ '+esc(HUB_SPORTS[sport])+' · '+esc(a.name||'')+activityEnvironmentBadge(a,sport)+'<span class="meta">'+hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss)+ifText(a.tss,num(a.durationHours)*60,sport):'')+'</span></div>');}
-    if(gym.some(g=>g.date===d.date)&&!sports.has('gym')){sports.add('gym');const g=gym.find(x=>x.date===d.date);items.push('<div class="hub-item done">✓ '+HUB_SPORTS.gym+'<span class="meta">'+new Set(g.sets.map(r=>r.exercise)).size+' cviků · '+g.sets.length+' sérií</span></div>');}
+    for(const a of completed){const sport=activitySport(a);if(!sport)continue;sports.add(sport);cover(sport);doneTss+=num(a.tss);items.push('<div class="hub-item done"'+detail({kind:'done',date:d.date,sport,item:a,plan:(t.matched||[]).find(m=>String(m.actualId)===String(a.id))?.planned||null})+'>✓ '+esc(HUB_SPORTS[sport])+' · '+esc(a.name||'')+activityEnvironmentBadge(a,sport)+'<span class="meta">'+hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss)+ifText(a.tss,num(a.durationHours)*60,sport):'')+'</span></div>');}
+    if(gym.some(g=>g.date===d.date)&&!sports.has('gym')){sports.add('gym');cover('gym');const g=gym.find(x=>x.date===d.date);items.push('<div class="hub-item done"'+detail({kind:'gym',date:d.date,done:true,sets:gym.find(x=>x.date===d.date).sets})+'>✓ '+HUB_SPORTS.gym+'<span class="meta">'+new Set(g.sets.map(r=>r.exercise)).size+' cviků · '+g.sets.length+' sérií</span></div>');}
     const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
-    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''))&&!p.pending;items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+(editable?' draggable="true" tabindex="0" data-event-id="'+esc(p.id)+'" data-name="'+esc(p.name||'Plán')+'" title="Přetáhni na jiný den, nebo klikni pro možnosti"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+activityEnvironmentBadge(p,sport)+'<span class="meta">'+(p.pending?'ukládám do Intervals…':'plán')+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss)+ifText(p.tss,num(p.durationHours)*60,sport):'')+'</span>'+(editable?'<span class="hub-actions"><label class="small">Přesunout na <input type="date" data-hub-date min="'+today+'" value="'+esc(d.date<today?today:d.date)+'"></label><button type="button" class="btn" data-hub-move>Přesunout</button><button type="button" class="btn" data-hub-delete>Smazat</button></span>':'')+'</div>');}
-    if(d.date===gymDay()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');items.push('<div class="hub-item planned">'+HUB_SPORTS.gym+' · '+(d.date===today?'plán na dnes':'plán připraven')+'</div>');}
+    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);cover(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''))&&!p.pending;items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+detail({kind:'planned',date:d.date,sport,item:p,editable})+(editable?' draggable="true" data-event-id="'+esc(p.id)+'" data-name="'+esc(p.name||'Plán')+'" title="Klikni pro detail a úpravy, nebo přetáhni na jiný den"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+activityEnvironmentBadge(p,sport)+'<span class="meta">'+(p.pending?'ukládám do Intervals…':'plán')+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss)+ifText(p.tss,num(p.durationHours)*60,sport):'')+'</span></div>');}
+    if(d.date===gymDay()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');cover('gym');items.push('<div class="hub-item planned"'+detail({kind:'gym',date:d.date,done:false})+'>'+HUB_SPORTS.gym+' · '+(d.date===today?'plán na dnes':'plán připraven')+'</div>');}
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
-    const plan=planChips(i,d.date).map(({sport,slot,index})=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).filter(r=>r.sport===sport)[slot],tg=quiet?null:chipTarget(d.date,sport,slot),key=proposalKey(d.date,sport,slot),pr=state.proposals?.[key],cancelled=sport==='gym'&&gymCancelledOn(d.date),attrs=' data-date="'+d.date+'" data-sport="'+sport+'" data-slot="'+slot+'"';
+    // A chip whose training is already planned or done gives way to the training itself.
+    const plan=planChips(i,d.date).filter(c=>c.slot>=(covered[c.sport]||0)).map(({sport,slot,index})=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).filter(r=>r.sport===sport)[slot],tg=quiet?null:chipTarget(d.date,sport,slot),key=proposalKey(d.date,sport,slot),pr=state.proposals?.[key],cancelled=sport==='gym'&&gymCancelledOn(d.date),attrs=' data-date="'+d.date+'" data-sport="'+sport+'" data-slot="'+slot+'"';
       const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(friendlyProposalError(pr.error))+'</small>'+(pr.item?'<span class="chip-actions"><button type="button" class="btn" data-proposal="retry"'+attrs+'>Zkusit znovu</button></span>':''):'';
       const picked=state.plannerPick===sport&&state.plannerFrom===i&&(state.plannerFromIndex===-1?index==null:state.plannerFromIndex==null||state.plannerFromIndex===index);
-      return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+(index!=null?chipEnvBadge(i+'|'+sport+'|'+slot,sport,tg||chipTarget(d.date,sport,slot),d.date):'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg,i+'|'+sport+'|'+slot):'')+(!quiet&&!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
+      return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+(index!=null?chipEnvBadge(i+'|'+sport+'|'+slot,sport,tg||chipTarget(d.date,sport,slot),d.date):'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg,i+'|'+sport+'|'+slot):'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
     const av=state.weekPlan?.prefs?.availability?.[i],avText=av?.minutes===0?'Nemám čas':av?.minutes!=null?hm(av.minutes)+(av.window?' · '+av.window:''):av?.window||'';
     const weather=(w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>')+(avText?'<div class="hub-availability">'+esc(avText)+'</div>':'');
@@ -1770,8 +1776,8 @@ function movePlanned(eventId,date,name){
   renderWeekHub();
   toast('„'+(name||'Trénink')+'“ je na '+longDate(date)+'. Do Intervals.icu se propíše během pár vteřin.');
 }
-function deletePlanned(eventId,name){
-  if(!eventId||!window.confirm('Smazat „'+(name||'trénink')+'“ z plánu i z Intervals.icu?'))return;
+function deletePlanned(eventId,name,ask=true){
+  if(!eventId||ask&&!window.confirm('Smazat „'+(name||'trénink')+'“ z plánu i z Intervals.icu?'))return;
   planDataRevision++;
   for(const days of cachedWeeks())takePlanned(days,eventId);
   queuePlanned(eventId,{type:'delete',name});
@@ -1790,6 +1796,67 @@ function settlePendingAdd(id,ok,eventId=null){
   for(const days of cachedWeeks())for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===id);if(i<0)continue;if(ok&&item)list[i]={...item,id:eventId||item.id,pending:!eventId};else list.splice(i,1);}
   renderWeekHub();planEdited();
 }
+// Detail of a training in the week: a planned one shows its plan and the
+// changes (move, swap, cancel); a done one compares the plan with the result.
+function workoutPlanHtml(description){
+  const lines=String(description||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,40);
+  if(!lines.length)return '<p class="small">Plán nemá v Intervals.icu popsanou strukturu.</p>';
+  return '<div class="plan-steps">'+lines.map(l=>/^[-•]/.test(l)?'<div class="plan-step">'+esc(l.replace(/^[-•]\s*/,''))+'</div>':'<div class="plan-step-head">'+esc(l)+'</div>').join('')+'</div>';
+}
+function planDiff(plan,actual){return num(plan)>0&&measured(actual)?Math.round((num(actual)-num(plan))/num(plan)*100):null}
+function compareTableHtml(rows){
+  const body=rows.filter(r=>r[1]!=null||r[2]!=null).map(([label,plan,actual,show])=>{const d=planDiff(plan,actual),cls=d==null?'':Math.abs(d)<=10?'ok':d>0?'over':'under';return '<tr><th>'+label+'</th><td>'+(plan!=null?esc(show(plan)):'—')+'</td><td>'+(actual!=null?esc(show(actual)):'—')+'</td><td class="'+cls+'">'+(d==null?'':(d>0?'+':'')+d+' %')+'</td></tr>';}).join('');
+  return '<table class="plan-compare"><thead><tr><th></th><th>Plán</th><th>Skutečnost</th><th>Rozdíl</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+function planVerdict(plan,a){
+  const dur=planDiff(num(plan.durationHours)*60,num(a.durationHours)*60),tss=planDiff(plan.tss,a.tss),main=tss??dur;
+  if(main==null)return '';
+  return '<p class="plan-verdict '+(Math.abs(main)<=10?'ok':main>0?'over':'under')+'">'+(Math.abs(main)<=10?'✓ Splněno podle plánu':main>0?'Odjeto náročněji než plán':'Odjeto lehčeji než plán')+(tss!=null&&dur!=null?' · zátěž '+(tss>0?'+':'')+tss+' %, délka '+(dur>0?'+':'')+dur+' %':'')+'</p>';
+}
+function trainingFacts(item,sport){
+  const minutes=num(item.durationHours)*60,f=sport==='gym'?null:intensityOf(item.tss,minutes);
+  return '<div class="training-facts">'+[minutes>0?['Délka',hm(minutes)]:null,measured(item.tss)?['TSS',fmt(item.tss)]:null,f&&f<1.6?['IF',fmt(f,2).toFixed(2).replace('.',',')]:null].filter(Boolean).map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div>';
+}
+// Plan of the day against the saved sets (history, or the plan's done rows).
+function gymCompareHtml(values,done,history=[]){
+  const rows=(values||[]).slice(7).filter(r=>r?.[1]&&String(r[0]).toUpperCase()==='WORK'),kg=v=>String(v??'').trim().replace('.',',');
+  const logged=history.filter(r=>String(r.type||'WORK').toUpperCase()==='WORK').map(r=>({exercise:r.exercise,kg:r.actual_kg??r.actualKg,reps:r.actual_reps??r.actualReps}));
+  const actual=name=>{const own=logged.filter(r=>r.exercise===name);return own.length?own:rows.filter(r=>r[1]===name&&/^(true|1|ano)$/i.test(String(r[8]))).map(r=>({kg:r[5],reps:r[6]}));};
+  const names=[...new Set([...rows.map(r=>r[1]),...(done?logged.map(r=>r.exercise):[])])];
+  if(!names.length)return '<p class="small">Pro tento den není uložený gym plán.</p>';
+  return '<table class="plan-compare gym"><thead><tr><th>Cvik</th><th>Plán</th>'+(done?'<th>Odcvičeno</th>':'')+'</tr></thead><tbody>'+names.map(name=>{const sets=rows.filter(r=>r[1]===name),did=done?actual(name):[],plan=sets.length?sets.length+' × '+(sets[0][4]||'—')+(kg(sets[0][3])?' · '+kg(sets[0][3])+' kg':''):'mimo plán';
+    return '<tr><th>'+esc(name)+'</th><td>'+esc(plan)+'</td>'+(done?'<td class="'+(!sets.length||did.length>=sets.length?'ok':did.length?'under':'')+'">'+(did.length?esc(did.map(r=>kg(r.kg)+'×'+r.reps).join(', ')):'nezapsáno')+'</td>':'')+'</tr>';}).join('')+'</tbody></table>';
+}
+async function openTrainingDetail(entry){
+  const {kind,date,sport='gym'}=entry,today=pragueToday(),title=HUB_SPORTS[sport]+' · '+longDate(date);
+  if(kind==='gym'){
+    openSheet(title,'<p class="small">Načítám gym…</p>',null,'training-detail');
+    try{const g=await jsonFetch('/app/api/gym?date='+date);if($('sheetTitle')?.textContent!==title)return;
+      $('sheetBody').innerHTML='<div class="eyebrow">'+(entry.done?'Odcvičeno · plán a skutečnost':'Naplánovaný gym')+'</div>'+(g.values?.[2]?.[3]?'<h4 class="training-name">'+esc(g.values[2][3])+'</h4>':'')+gymCompareHtml(g.values,entry.done,entry.sets||[])+
+        '<div class="training-actions">'+(date===today&&!entry.done?'<button type="button" class="btn primary" data-td="gym-mode">▶ Režim tréninku</button>':'')+'<button type="button" class="btn" data-td="gym-open">'+(entry.done?'Otevřít gym':'Upravit gym')+'</button></div>';
+    }catch(error){$('sheetBody').innerHTML='<p>'+esc(error.message)+'</p>';}
+    $('sheetBody').onclick=async e=>{const b=e.target.closest('[data-td]');if(!b)return;closeSheet();await openGymDay(date);if(b.dataset.td==='gym-mode')openGymMode();else $('workoutsGym')?.scrollIntoView({behavior:'smooth',block:'start'});};
+    return;
+  }
+  const item=entry.item,plan=kind==='done'?entry.plan:item,env=activityEnvironmentBadge(item,sport);
+  let body='<div class="eyebrow">'+(kind==='done'?'Hotovo':item.pending?'Ukládám do Intervals.icu…':'Naplánováno')+'</div><h4 class="training-name">'+esc(item.name||'Trénink')+env+'</h4>';
+  if(kind==='done'){
+    body+=plan?planVerdict(plan,item)+compareTableHtml([['Délka',num(plan.durationHours)*60||null,num(item.durationHours)*60||null,hm],['TSS',measured(plan.tss)?num(plan.tss):null,measured(item.tss)?num(item.tss):null,v=>fmt(v)],['IF',intensityOf(plan.tss,num(plan.durationHours)*60),intensityOf(item.tss,num(item.durationHours)*60),v=>fmt(v,2).toFixed(2).replace('.',',')]])+'<details class="training-plan"><summary>Plán „'+esc(plan.name||'trénink')+'“</summary>'+workoutPlanHtml(plan.description)+'</details>':trainingFacts(item,sport)+'<p class="small">K tomuto tréninku nebyl v plánu odpovídající trénink, není s čím porovnat.</p>';
+    body+='<div class="training-actions"><button type="button" class="btn" data-td="activity">Celý záznam aktivity</button></div>';
+  }else{
+    body+=trainingFacts(item,sport)+'<h4>Plán</h4>'+workoutPlanHtml(item.description);
+    if(entry.editable&&date>=today)body+='<div class="training-actions"><button type="button" class="btn" data-td="move" aria-expanded="false">Přesunout</button><button type="button" class="btn" data-td="swap">Vyměnit za jiný</button><button type="button" class="btn sheet-danger" data-td="delete">Zrušit trénink</button></div><div class="training-move" hidden>'+dayChips().replace(/<button type="button" class="btn sheet-danger" data-delete-planned>[^<]*<\/button>/,'')+'</div>';
+    else if(entry.editable)body+='<p class="small">Minulý trénink už nejde přesunout ani zrušit.</p>';
+  }
+  openSheet(title,body,el=>{el.onclick=e=>{
+    const move=e.target.closest('[data-move-to]');if(move){closeSheet();return movePlanned(item.id,move.dataset.moveTo,item.name);}
+    const b=e.target.closest('[data-td]');if(!b)return;const a=b.dataset.td;
+    if(a==='move'){const box=el.querySelector('.training-move');box.hidden=!box.hidden;b.setAttribute('aria-expanded',String(!box.hidden));return;}
+    if(a==='delete'){closeSheet();return deletePlanned(item.id,item.name);}
+    if(a==='swap'){closeSheet();state.replaceEvent={id:item.id,name:item.name,date};return openChipSuggestion({date,sport,minutes:num(item.durationHours)*60?Math.round(num(item.durationHours)*60):null,env:/indoor|virtual|trainer|pás|treadmill/i.test(String(item.type||'')+' '+String(item.name||''))?'indoor':'outdoor'});}
+    if(a==='activity'){closeSheet();selectedHistoryDate=date;activate('training');return openActivityProfile(item);}
+  };},'training-detail');
+}
 function installPlannedEditing(){
   const week=$('hubWeek');let dragged=null;
   // The week re-renders on a drop, so the dragged node may never see dragend:
@@ -1799,21 +1866,18 @@ function installPlannedEditing(){
   week.addEventListener('dragover',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day||day.dataset.hubDay<pragueToday())return;e.preventDefault();e.dataTransfer.dropEffect='move';week.querySelectorAll('.drop-target').forEach(d=>{if(d!==day)d.classList.remove('drop-target')});day.classList.add('drop-target');});
   week.addEventListener('dragleave',e=>{const day=e.target.closest('[data-hub-day]');if(day&&!day.contains(e.relatedTarget))day.classList.remove('drop-target');});
   week.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day)return;e.preventDefault();day.classList.remove('drop-target');const item=dragged;dragged=null;if(item.closest('[data-hub-day]')===day)return;movePlanned(item.dataset.eventId,day.dataset.hubDay,item.dataset.name);});
+  const open=item=>{const entry=state.hubDetails?.[Number(item.dataset.detail)];if(entry)openTrainingDetail(entry);};
   week.addEventListener('click',e=>{
     if(state.plannerPick)return;
-    const item=e.target.closest('.hub-item.editable');if(!item)return;
-    if(e.target.closest('[data-hub-move]')){movePlanned(item.dataset.eventId,item.querySelector('[data-hub-date]').value,item.dataset.name);return}
-    if(e.target.closest('[data-hub-delete]')){deletePlanned(item.dataset.eventId,item.dataset.name);return}
-    if(e.target.closest('.hub-actions'))return;
-    week.querySelectorAll('.hub-item.open').forEach(x=>{if(x!==item)x.classList.remove('open')});item.classList.toggle('open');
+    const item=e.target.closest('.hub-item[data-detail]');if(item&&!e.target.closest('a,button,select,input'))open(item);
   });
-  week.addEventListener('keydown',e=>{const item=e.target.closest('.hub-item.editable');if(item&&e.target===item&&(e.key==='Enter'||e.key===' ')){e.preventDefault();item.classList.toggle('open');}});
+  week.addEventListener('keydown',e=>{const item=e.target.closest('.hub-item[data-detail]');if(item&&e.target===item&&(e.key==='Enter'||e.key===' ')){e.preventDefault();open(item);}});
   $('scheduledWorkouts').addEventListener('click',e=>{const b=e.target.closest('[data-delete-event]');if(b)deletePlanned(b.dataset.deleteEvent,b.dataset.name);});
 }
 installWorkoutsHub();
 
 // ---- Fitness insights: muscle freshness & load, cardio focus, records, timeline ----
-const MUSCLE_LABELS={chest:'Hrudník',upper_back:'Horní záda',lats:'Široký zádový',front_delts:'Přední ramena',side_delts:'Boční ramena',rear_delts:'Zadní ramena',biceps:'Biceps',triceps:'Triceps',abs:'Břicho',obliques:'Šikmé břišní',quads:'Přední stehna',hamstrings:'Zadní stehna',hips:'Hýždě a kyčle',calves:'Lýtka'};
+const MUSCLE_LABELS={chest:'Hrudník',upper_back:'Horní záda',lats:'Široký zádový',front_delts:'Přední ramena',side_delts:'Boční ramena',rear_delts:'Zadní ramena',biceps:'Biceps',triceps:'Triceps',abs:'Břicho',obliques:'Šikmé břišní',quads:'Přední stehna',hamstrings:'Zadní stehna',hips:'Hýždě a kyčle',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
 const FRESH_LABEL={recovered:'Zotavené',fatigued:'Unavené',depleted:'Vyčerpané',calibrating:'Kalibruji'};
 const LOAD_LABEL={detraining:'Detrénink',maintaining:'Udržování',productive:'Produktivní',peaking:'Vrchol formy',overtraining:'Přetížení',calibrating:'Kalibruji'};
 function freshColor(x){if(!x||x.freshness==null)return '#4a5361';const f=x.freshness;if(f>=75)return '#3fda9c';if(f>=55)return '#d9d45a';if(f>=35)return '#ffa64d';return '#ff6478'}
@@ -2128,6 +2192,15 @@ function orderGymSets(values){
   return out;
 }
 function gymSets(){return orderGymSets(state.gym?.values||[]);}
+// A set is done once saved. Warm-ups are optional: one left behind a later
+// logged set was skipped and is never offered again; only unfinished work
+// sets count as missing at the end.
+function gymSetDone(x){return String(x?.r?.[8]).toUpperCase()==='TRUE';}
+function gymIsWarmup(x){return String(x?.r?.[0]).toUpperCase()==='WARMUP';}
+function gymLastDone(sets){return sets.reduce((m,x,i)=>gymSetDone(x)?i:m,-1);}
+function gymCounted(sets){const last=gymLastDone(sets);return sets.filter((x,i)=>gymSetDone(x)||!(gymIsWarmup(x)&&i<last));}
+function gymMissingWork(sets){return sets.filter(x=>!gymIsWarmup(x)&&!gymSetDone(x));}
+function gymNextOpen(sets,after){return sets.findIndex((x,i)=>i>after&&!gymSetDone(x));}
 async function saveGymSet(idx,{kg,reps,rpe,toFailure}){
   await gymSaveQueue.catch(()=>{});
   const values=(state.gym?.values||[]).map(r=>Array.isArray(r)?r.slice():[]);const row=values[idx];row[5]=String(kg);row[6]=String(reps);row[7]=toFailure?'10':rpe?String(rpe):'';row[8]='TRUE';row[11]=toFailure?'TRUE':'FALSE';upgradeGymOptionsHeader(values);
@@ -2139,7 +2212,7 @@ async function openGymMode(){
   if(!state.gym?.values)await loadGym().catch(()=>{});
   if(!state.account){const account=await jsonFetch('/app/api/me').catch(()=>null);state.account=account?.user;}
   if(!$('gymMode'))document.body.insertAdjacentHTML('beforeend','<div id="gymMode" class="gym-mode" hidden role="dialog" aria-modal="true" aria-label="Režim tréninku"></div>');
-  const sets=gymSets();const first=sets.findIndex(x=>String(x.r[8]).toUpperCase()!=='TRUE');
+  const sets=gymSets();const first=gymNextOpen(sets,gymLastDone(sets));
   const draftKey=gymDraftKey();let saved;try{saved=JSON.parse(sessionStorage.getItem(draftKey)||'null');}catch{}
   gymMode={pos:first<0?0:first,finished:first<0&&sets.length>0,rest:null,drafts:saved?.drafts||{},startedAt:saved?.startedAt||Date.now(),draftKey};$('gymMode').hidden=false;document.body.classList.add('gym-mode-open');renderGymMode();gymMode.clockTimer=setInterval(updateGymClock,10000);
 }
@@ -2147,14 +2220,14 @@ function closeGymMode(){rememberGymDraft();clearInterval(gymMode?.timer);clearIn
 function renderGymMode(){
   const el=$('gymMode');if(!el||!gymMode)return;const sets=gymSets();
   if(!sets.length){el.innerHTML='<div class="gm-top"><button class="btn" data-gm="close">✕</button></div><div class="gm-empty"><h2>Dnes bez plánu</h2><p class="small">Nech trenéra sestavit trénink podle týdne a únavy.</p><button class="btn primary" data-gm="generate">Generovat trénink</button></div>';return wireGymMode();}
-  const doneCount=sets.filter(x=>String(x.r[8]).toUpperCase()==='TRUE').length;
-  if(gymMode.finished){const vol=sets.filter(x=>gymFailureValue(x.r[8])).reduce((s,x)=>s+gymNumber(x.r[5],0)*gymNumber(x.r[6],0),0),allDone=doneCount===sets.length;el.innerHTML='<div class="gm-top"><span></span><button class="btn" data-gm="close">✕</button></div><div class="gm-empty"><div class="gm-check">'+(allDone?'✓':'…')+'</div><h2>'+(allDone?'Trénink hotový':'Konec plánu')+'</h2><p>'+doneCount+' / '+sets.length+' sérií · objem '+fmt(vol)+' kg</p>'+(allDone?'<button class="btn" data-gm="review">Prohlédnout série</button>':'<p>Zbývá '+(sets.length-doneCount)+' nezapsaných sérií.</p><button class="btn primary" data-gm="resume">Pokračovat v nezapsaných sériích</button>')+'<button class="btn primary" data-gm="close">Zavřít</button></div>';return wireGymMode();}
+  const counted=gymCounted(sets),doneCount=sets.filter(gymSetDone).length,total=counted.length;
+  if(gymMode.finished){const vol=sets.filter(gymSetDone).reduce((s,x)=>s+gymNumber(x.r[5],0)*gymNumber(x.r[6],0),0),missing=gymMissingWork(sets),allDone=!missing.length,byExercise=[...new Set(missing.map(x=>x.r[1]))].map(name=>esc(name)+' · '+missing.filter(x=>x.r[1]===name).length+'×');el.innerHTML='<div class="gm-top"><span></span><button class="btn" data-gm="close">✕</button></div><div class="gm-empty"><div class="gm-check">'+(allDone?'✓':'…')+'</div><h2>'+(allDone?'Trénink hotový':'Konec plánu')+'</h2><p>'+doneCount+' sérií · objem '+fmt(vol)+' kg</p>'+(allDone?'<button class="btn" data-gm="review">Prohlédnout série</button>':'<p>Přeskočené pracovní série: '+byExercise.join(', ')+'.</p><p class="small">Nemusíš je dodělávat, trénink se uloží i bez nich.</p><button class="btn" data-gm="resume">Doplnit přeskočené série</button>')+'<button class="btn primary" data-gm="close">'+(allDone?'Zavřít':'Ukončit trénink')+'</button></div>';return wireGymMode();}
   gymMode.pos=Math.max(0,Math.min(sets.length-1,gymMode.pos));const cur=sets[gymMode.pos],r=cur.r,name=r[1],warm=x=>String(x.r[0]).toUpperCase()==='WARMUP',same=sets.filter(x=>x.r[1]===name&&warm(x)===warm(cur)),k=same.findIndex(x=>x.i===cur.i)+1;
   const exercises=[...new Set(sets.map(x=>x.r[1]))],ex=exercises.indexOf(name)+1,done=String(r[8]).toUpperCase()==='TRUE';
   if(gymMode.forIdx!==cur.i)restoreGymDraft(cur,same);
   const rest=gymMode.rest?'<div class="gm-rest"><div class="gm-rest-ring" style="--p:'+(gymMode.rest.left/gymMode.rest.total*100)+'"><b>'+Math.floor(gymMode.rest.left/60)+':'+String(gymMode.rest.left%60).padStart(2,'0')+'</b><small>pauza</small></div><div class="gm-rest-actions"><button class="btn" data-gm="rest+">+30 s</button><button class="btn primary" data-gm="rest-skip">Pokračovat</button></div></div>':'';
-  el.innerHTML='<div class="gm-top"><span class="small">Cvik '+ex+' / '+exercises.length+' · '+doneCount+' / '+sets.length+' sérií</span><button class="btn" data-gm="close" aria-label="Zavřít režim tréninku">✕</button></div><div class="gm-progress"><i style="width:'+(doneCount/sets.length*100)+'%"></i></div><div id="gmClock" class="gm-clock" role="status"></div>'+
-    '<div class="gm-body" id="gmBody"><div class="eyebrow"'+(warm(cur)?' style="color:#f5c26b"':'')+'>'+(warm(cur)?'Rozcvička ':'Série ')+k+' z '+same.length+(done?' · ✓ hotovo':'')+'</div><h2>'+esc(name)+'</h2><p class="small">Plán '+esc(r[3]||'—')+' kg × '+esc(r[4]||'—')+'</p><button type="button" class="btn gm-assistant" data-gm="assistant">✦ Poradit s cvikem</button>'+
+  el.innerHTML='<div class="gm-top"><span class="small">Cvik '+ex+' / '+exercises.length+' · '+doneCount+' / '+total+' sérií</span><button class="btn" data-gm="close" aria-label="Zavřít režim tréninku">✕</button></div><div class="gm-progress"><i style="width:'+(total?doneCount/total*100:0)+'%"></i></div><div id="gmClock" class="gm-clock" role="status"></div>'+
+    '<div class="gm-body" id="gmBody"><div class="eyebrow"'+(warm(cur)?' style="color:#f5c26b"':'')+'>'+(warm(cur)?'Rozcvička ':'Série ')+k+' z '+same.length+(done?' · ✓ hotovo':'')+'</div><h2>'+esc(name)+'</h2><p class="small">Plán '+esc(r[3]||'—')+' kg × '+esc(r[4]||'—')+'</p><div class="gm-help"><button type="button" class="btn gm-technique" data-gm="technique">📖 Technika a video</button><button type="button" class="btn gm-assistant" data-gm="assistant" aria-label="Zeptat se AI trenéra">✦ AI</button></div>'+
     (rest||'<div class="gm-steppers"><div><label class="label" for="gmKg">Váha · kg</label><div class="stepper"><button type="button" data-gm="kg-" aria-label="Ubrat 2,5 kg">−</button><input id="gmKg" type="text" inputmode="decimal" autocomplete="off" aria-label="Váha v kg" value="'+esc(gymMode.kgText??gymMode.kg??'')+'"><button type="button" data-gm="kg+" aria-label="Přidat 2,5 kg">+</button></div></div><div><label class="label" for="gmReps">Opakování</label><div class="stepper"><button type="button" data-gm="reps-" aria-label="Ubrat opakování">−</button><input id="gmReps" type="text" inputmode="numeric" autocomplete="off" aria-label="Počet opakování" value="'+esc(gymMode.repsText??gymMode.reps??'')+'"><button type="button" data-gm="reps+" aria-label="Přidat opakování">+</button></div></div></div><p class="gm-input-hint">Číslo můžeš napsat přímo. Rozepsané hodnoty se při přechodu zachovají.</p><div class="label" style="margin-top:10px">RPE (volitelně)</div><div class="gm-rpe">'+[1,2,3,4,5,6,7,8,9,10].map(n=>'<button type="button" data-gm-rpe="'+n+'" aria-pressed="'+(gymMode.rpe===n)+'">'+n+'</button>').join('')+'</div><p class="gm-rpe-hint">'+(warm(cur)?'Lehkou rozcvičku označ RPE 1–5 nebo RPE vynech.':'6–7: velká rezerva · 8: asi 2 opakování · 9: asi 1 · 10: bez rezervy.')+'</p>'+gymModeOptionsHtml(r)+'<button type="button" class="btn primary gm-done" data-gm="done">'+(done?'Uložit znovu ✓':'Série hotová ✓')+'</button>')+
     '</div><div class="gm-nav"><button class="btn" data-gm="prev">◀ Předchozí</button><button class="btn" data-gm="next">Další ▶</button></div>';
   wireGymMode();updateGymClock();
@@ -2167,7 +2240,8 @@ function wireGymMode(){
     if(b.dataset.gmRpe){gymMode.rpe=gymMode.rpe===Number(b.dataset.gmRpe)?null:Number(b.dataset.gmRpe);if(gymMode.rpe!==10)gymMode.toFailure=false;rememberGymDraft();return renderGymMode();}
     if(a==='close')return closeGymMode();
     if(a==='assistant'){rememberGymDraft();return openFloatingAssistant();}
-    if(a==='resume'||a==='review'){gymMode.finished=false;gymMode.pos=a==='review'?0:Math.max(0,sets.findIndex(x=>!gymFailureValue(x.r[8])));gymMode.forIdx=null;return renderGymMode();}
+    if(a==='technique'){rememberGymDraft();return openTechnique(sets[gymMode.pos]?.r[1]);}
+    if(a==='resume'||a==='review'){gymMode.finished=false;gymMode.pos=a==='review'?0:Math.max(0,sets.indexOf(gymMissingWork(sets)[0]));gymMode.forIdx=null;return renderGymMode();}
     if(a==='generate'){b.disabled=true;b.textContent='Generuji…';try{await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:gymDay()})});await loadGym();}catch(error){toast(error.message);}gymMode.pos=0;return renderGymMode();}
     if(a==='kg-'||a==='kg+'){gymMode.kg=Math.max(0,Math.round(((gymMode.kg??0)+(a==='kg+'?2.5:-2.5))*10)/10);gymMode.kgText=null;rememberGymDraft();return renderGymMode();}
     if(a==='reps-'||a==='reps+'){gymMode.reps=Math.max(0,(gymMode.reps??0)+(a==='reps+'?1:-1));gymMode.repsText=null;rememberGymDraft();return renderGymMode();}
@@ -2175,11 +2249,37 @@ function wireGymMode(){
     if(a==='rest+'){gymMode.rest.left+=30;gymMode.rest.total+=30;return renderGymMode();}
     if(a==='rest-skip'){clearInterval(gymMode.timer);gymMode.rest=null;return renderGymMode();}
     if(a==='done'){if(!(gymMode.kg>=0&&gymMode.kg!=null&&gymMode.reps>0&&Number.isInteger(gymMode.reps)))return toast('Zadej nezápornou váhu a celý počet opakování.');rememberGymDraft();gymMode.saving=true;b.disabled=true;const cur=sets[gymMode.pos];try{await saveGymSet(cur.i,{kg:gymMode.kg,reps:gymMode.reps,rpe:gymMode.rpe,toFailure:gymMode.toFailure});delete gymMode.drafts[cur.i];gymMode.forIdx=null;rememberGymDraft();gymMode.saving=false;}catch(error){gymMode.saving=false;toast('Série se neuložila: '+error.message);b.disabled=false;return}
-      const next=gymSets().findIndex((x,i)=>i>gymMode.pos&&String(x.r[8]).toUpperCase()!=='TRUE');if(next<0&&gymSets().every(x=>String(x.r[8]).toUpperCase()==='TRUE')){gymMode.finished=true;return renderGymMode();}
-      gymMode.pos=next<0?Math.max(0,gymSets().findIndex(x=>!gymFailureValue(x.r[8]))):next;const upcoming=gymSets()[gymMode.pos],seconds=gymRestSeconds(cur,upcoming);clearInterval(gymMode.timer);gymMode.rest=seconds?{left:seconds,total:seconds}:null;if(gymMode.rest)gymMode.timer=setInterval(()=>{if(!gymMode?.rest)return clearInterval(gymMode?.timer);gymMode.rest.left--;if(gymMode.rest.left<=0){clearInterval(gymMode.timer);gymMode.rest=null;try{navigator.vibrate?.(200)}catch{}}renderGymMode();},1000);return renderGymMode();}
+      // Forward only: after the last set the summary lists anything skipped
+      // instead of jumping back to an exercise that is already behind.
+      const next=gymNextOpen(gymSets(),gymMode.pos);if(next<0){clearInterval(gymMode.timer);gymMode.rest=null;gymMode.finished=true;return renderGymMode();}
+      gymMode.pos=next;const upcoming=gymSets()[gymMode.pos],seconds=gymRestSeconds(cur,upcoming);clearInterval(gymMode.timer);gymMode.rest=seconds?{left:seconds,total:seconds}:null;if(gymMode.rest)gymMode.timer=setInterval(()=>{if(!gymMode?.rest)return clearInterval(gymMode?.timer);gymMode.rest.left--;if(gymMode.rest.left<=0){clearInterval(gymMode.timer);gymMode.rest=null;try{navigator.vibrate?.(200)}catch{}}renderGymMode();},1000);return renderGymMode();}
   };
   // Swipe left / right between sets.
   let start=null;el.ontouchstart=e=>{start=e.target.closest('button,input,select,label,.stepper,.gm-rpe')?null:{x:e.touches[0].clientX,y:e.touches[0].clientY};};el.ontouchcancel=()=>{start=null;};el.ontouchend=e=>{if(!start||!gymMode)return;const dx=e.changedTouches[0].clientX-start.x,dy=e.changedTouches[0].clientY-start.y;start=null;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.5&&!gymMode.rest&&!gymMode.finished)moveGymMode(dx<0?1:-1);};
+}
+
+// Technique card of an exercise: setup, movement, mistakes, breathing and a
+// video from the library (or the athlete's own link).
+const techniqueCache=new Map();
+function techniqueHtml(t){
+  const list=(items,tag='ol')=>items.length?'<'+tag+'>'+items.map(x=>'<li>'+esc(x)+'</li>').join('')+'</'+tag+'>':'';
+  const video=t.video?'<div class="tech-video"><iframe src="https://www.youtube-nocookie.com/embed/'+esc(t.video.id)+'?rel=0&playsinline=1" title="Video: '+esc(t.exercise)+'" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div><p class="small tech-video-note">'+(t.video.source==='own'?'Tvoje video':'Ukázka techniky'+(t.video.title?' · '+esc(t.video.title):''))+'</p>':(t.ownUrl?'<a class="btn" href="'+esc(t.ownUrl)+'" target="_blank" rel="noopener">▶ Tvoje video</a>':'');
+  const meta=[t.muscles.join(', '),t.station].filter(Boolean).join(' · ');
+  const body=t.steps.length?(t.setup.length?'<h4>Nastavení</h4>'+list(t.setup):'')+'<h4>Provedení</h4>'+list(t.steps)+(t.mistakes.length?'<h4>Časté chyby</h4>'+list(t.mistakes,'ul'):'')+(t.breathing?'<h4>Dýchání</h4><p>'+esc(t.breathing)+'</p>':''):'<p class="small">Popis techniky k tomuto cviku zatím chybí.</p>'+(t.note?'<p>'+esc(t.note)+'</p>':'');
+  return '<div class="technique">'+(meta?'<p class="small tech-meta">'+esc(meta)+'</p>':'')+video+body+
+    '<div class="tech-actions"><a class="btn" href="'+esc(t.searchUrl)+'" target="_blank" rel="noopener">Další videa na YouTube ↗</a><button type="button" class="btn" data-tech="ai">✦ Zeptat se AI trenéra</button></div>'+
+    '<details class="tech-own"'+(t.ownUrl?' open':'')+'><summary>Vlastní video ke cviku</summary><p class="small">Odkaz z YouTube se přehraje přímo tady, jiný odkaz se otevře v prohlížeči.</p><input id="techOwnUrl" type="url" inputmode="url" placeholder="https://youtu.be/…" value="'+esc(t.ownUrl||'')+'"><div class="tech-own-actions"><button type="button" class="btn primary" data-tech="save">Uložit</button>'+(t.ownUrl?'<button type="button" class="btn" data-tech="remove">Odebrat</button>':'')+'</div></details></div>';
+}
+async function openTechnique(exercise){
+  if(!exercise)return;
+  const wire=body=>{body.onclick=async e=>{const b=e.target.closest('[data-tech]');if(!b)return;
+    if(b.dataset.tech==='ai'){closeSheet();return openFloatingAssistant('Jak správně provádět '+exercise+'? Na co si dát pozor?');}
+    b.disabled=true;try{const r=await jsonFetch('/app/api/gym/technique',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exercise,url:b.dataset.tech==='remove'?'':$('techOwnUrl')?.value||''})});techniqueCache.set(exercise,r.technique);body.innerHTML=techniqueHtml(r.technique);toast(b.dataset.tech==='remove'?'Vlastní video odebráno.':'Video uloženo.');}catch(error){toast(error.message);b.disabled=false;}};};
+  const cached=techniqueCache.get(exercise);
+  openSheet(exercise,cached?techniqueHtml(cached):'<p class="small">Načítám techniku…</p>',body=>wire(body),'technique-sheet');
+  if(cached)return;
+  try{const r=await jsonFetch('/app/api/gym/technique?exercise='+encodeURIComponent(exercise));techniqueCache.set(exercise,r.technique);if($('sheetTitle')?.textContent===exercise)$('sheetBody').innerHTML=techniqueHtml(r.technique);}
+  catch(error){if($('sheetTitle')?.textContent===exercise)$('sheetBody').innerHTML='<p>'+esc(error.message)+'</p><div class="tech-actions"><button type="button" class="btn" data-tech="ai">✦ Zeptat se AI trenéra</button></div>';}
 }
 
 function installPhoneLayer(){
@@ -2191,8 +2291,6 @@ function installPhoneLayer(){
     if(!isPhone())return;
     const tip=e.target.closest('.info-tip');
     if(tip){e.preventDefault();e.stopPropagation();const [title,...ps]=INFO_TEXTS[tip.dataset.info]||['Nápověda','Bez popisu.'];openSheet(title,ps.map(p=>'<p>'+esc(p)+'</p>').join(''));return}
-    const item=e.target.closest('#hubWeek .hub-item.editable');
-    if(item&&!e.target.closest('.hub-actions')){e.preventDefault();e.stopPropagation();const id=item.dataset.eventId,name=item.dataset.name;openSheet('„'+name+'“',dayChips(),body=>body.addEventListener('click',ev=>{const c=ev.target.closest('[data-move-to]');if(c){closeSheet();movePlanned(id,c.dataset.moveTo,name);}if(ev.target.closest('[data-delete-planned]')){closeSheet();deletePlanned(id,name);}}));}
   },true);
   // The gym panel gets the workout mode on every screen size.
   $('generateGym')?.insertAdjacentHTML('beforebegin','<button class="btn primary" id="startGymMode" type="button">▶ Režim tréninku</button>');
@@ -2382,6 +2480,7 @@ function installRecommendations(){
   const dialog=$('recommendDialog');document.body.appendChild(dialog);
   $('openRecommendations').onclick=()=>openRecommendations();
   $('closeRecommend').onclick=()=>dialog.close();
+  dialog.addEventListener('close',()=>{state.replaceEvent=null;});
   dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
   dialog.querySelectorAll('[data-rec-sport]').forEach(b=>b.onclick=()=>{setRecSport(b.dataset.recSport);if(state.recContext&&state.recContext.sport!==b.dataset.recSport){state.recContext=null;renderRecommendTarget();}loadWorkoutLibrary();});
   $('recommendFocus').addEventListener('click',e=>{const b=e.target.closest('[data-rec-system]');if(!b)return;$('workoutSystem').value=b.dataset.recSystem;loadWorkoutLibrary();});
@@ -2852,13 +2951,63 @@ function renderAssistantContext(context=captureAssistantContext()){
   quick.innerHTML=items.map((x,i)=>'<button class="assistant-quick" type="button" data-assistant-quick="'+i+'"'+(assistantBusy?' disabled':'')+'>'+esc(x[0])+'</button>').join('');
   quick.querySelectorAll('[data-assistant-quick]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.assistantQuick);return discussWithAssistant(items[i][1],{appContext:i===1?{...context,sport:null,exercise:null,date:context.weekStart}:i===2?{view:'today',date:pragueToday(),weekStart:mondayOf(pragueToday()),sport:null,exercise:null}:context});});
 }
+// Chats: the current one is remembered on the device; the list lives on the
+// server. A chat idle for 6 hours is left in the history and a new one starts.
+const ASSISTANT_CHAT_IDLE_MS=6*3600e3;
+let assistantChat={id:null,lastAt:0};
+try{const saved=JSON.parse(localStorage.getItem('pfd-assistant-chat')||'null');if(saved?.id)assistantChat={id:Number(saved.id),lastAt:Number(saved.lastAt)||0};}catch{}
+function rememberAssistantChat(id){assistantChat={id:id||null,lastAt:id?Date.now():0};try{localStorage.setItem('pfd-assistant-chat',JSON.stringify(assistantChat));}catch{}}
+const ASSISTANT_WELCOME='<div class="assistant-welcome"><span>✦</span><strong>Co dnes upravíme?</strong>Projdeme plán, regeneraci nebo výživu.<br>Návrhy můžeš potvrdit, odmítnout i probrat.</div>';
+function startAssistantChat(){
+  if(assistantBusy)return toast('Asistent právě odpovídá. Počkej na dokončení odpovědi.');
+  rememberAssistantChat(null);if(state.athleteState)state.athleteState.conversation=[];
+  $('assistantConversation').innerHTML=ASSISTANT_WELCOME;$('weekProposalCards')&&($('weekProposalCards').innerHTML='');
+  hideAssistantHistory();$('assistantStatus').textContent='Nový chat';updateAssistantComposer();
+}
+async function showAssistantChat(id){
+  const {chat}=await jsonFetch('/app/api/assistant/chats/'+id);
+  assistantChat={id:chat.id,lastAt:Date.now()};try{localStorage.setItem('pfd-assistant-chat',JSON.stringify(assistantChat));}catch{}
+  if(state.athleteState)state.athleteState.conversation=chat.messages.map(m=>({role:m.role,content:m.content}));
+  $('assistantConversation').innerHTML=chat.messages.map(m=>coachTurnHtml(m.role,m.content)).join('')||ASSISTANT_WELCOME;
+  hideAssistantHistory();$('assistantStatus').textContent=chat.title;scrollAssistant();
+}
+function chatTimeLabel(value){
+  const d=new Date(String(value||'').replace(' ','T')+'Z');if(isNaN(d))return '';
+  const day=d.toLocaleDateString('sv-SE',{timeZone:'Europe/Prague'});
+  return day===pragueToday()?d.toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Prague'}):day===dateShift(pragueToday(),-1)?'včera':d.toLocaleDateString('cs-CZ',{day:'numeric',month:'numeric',timeZone:'Europe/Prague'});
+}
+function hideAssistantHistory(){const h=$('assistantHistory');if(h)h.hidden=true;$('assistantChats')?.setAttribute('aria-expanded','false');}
+async function toggleAssistantHistory(){
+  const h=$('assistantHistory');if(!h)return;
+  if(!h.hidden)return hideAssistantHistory();
+  h.hidden=false;h.style.top=($('assistantDialog').querySelector('.assistant-panel-header')?.offsetHeight||64)+'px';$('assistantChats').setAttribute('aria-expanded','true');h.innerHTML='<p class="small">Načítám chaty…</p>';
+  try{
+    const {chats}=await jsonFetch('/app/api/assistant/chats');
+    h.innerHTML='<div class="assistant-history-head"><strong>Chaty</strong><button type="button" class="btn" data-chat-new>＋ Nový chat</button></div>'+(chats.length?'<ul>'+chats.map(c=>'<li class="'+(c.id===assistantChat.id?'current':'')+'"><button type="button" class="assistant-chat-open" data-chat-open="'+c.id+'"><span>'+esc(c.title)+'</span><small>'+esc(chatTimeLabel(c.updatedAt))+' · '+Math.ceil(c.messages/2)+'× dotaz</small></button><button type="button" class="assistant-chat-delete" data-chat-delete="'+c.id+'" aria-label="Smazat chat „'+esc(c.title)+'“">✕</button></li>').join('')+'</ul>':'<p class="small">Zatím žádné uložené chaty.</p>')+'<p class="small assistant-history-note">Chaty se ukládají 90 dní od poslední zprávy.</p>';
+  }catch(error){h.innerHTML='<p>'+esc(error.message)+'</p>';}
+}
+function installAssistantChats(){
+  const button=$('assistantChats');if(!button?.dataset||button.dataset.ready)return;
+  button.dataset.ready='1';
+  $('assistantChats').onclick=toggleAssistantHistory;
+  $('assistantNewChat').onclick=startAssistantChat;
+  $('assistantHistory').onclick=async e=>{
+    const open=e.target.closest('[data-chat-open]'),del=e.target.closest('[data-chat-delete]');
+    if(e.target.closest('[data-chat-new]'))return startAssistantChat();
+    if(open){if(assistantBusy)return toast('Asistent právě odpovídá. Počkej na dokončení odpovědi.');try{await showAssistantChat(Number(open.dataset.chatOpen));}catch(error){toast(error.message);}return;}
+    if(del){const id=Number(del.dataset.chatDelete);del.disabled=true;try{await jsonFetch('/app/api/assistant/chats/'+id,{method:'DELETE'});if(id===assistantChat.id)startAssistantChat();del.closest('li')?.remove();}catch(error){toast(error.message);del.disabled=false;}}
+  };
+}
 async function openFloatingAssistant(message=''){
   if(!$('assistantDialog').open){if(gymMode)$('assistantDialog').showModal();else $('assistantDialog').show();}
   $('floatingAssistant')?.classList.add('is-open');
   if(message)setAssistantDraft(message);
-  const turns=state.athleteState?.conversation||[];
-  if(turns.length&&!$('assistantConversation').children.length)$('assistantConversation').innerHTML=turns.map(t=>coachTurnHtml(t.role,t.content)).join('');
-  else if(!$('assistantConversation').children.length)$('assistantConversation').innerHTML='<div class="assistant-welcome"><span>✦</span><strong>Co dnes upravíme?</strong>Projdeme plán, regeneraci nebo výživu.<br>Návrhy můžeš potvrdit, odmítnout i probrat.</div>';
+  installAssistantChats();
+  if(!$('assistantConversation').children.length){
+    // The last chat continues while it is fresh; after a pause a new one starts.
+    const chat=assistantChat.id&&Date.now()-assistantChat.lastAt<ASSISTANT_CHAT_IDLE_MS?assistantChat.id:null;
+    if(chat)await showAssistantChat(chat).catch(()=>startAssistantChat());else startAssistantChat();
+  }
   renderAssistantContext();
   if(window.matchMedia?.('(hover: hover) and (pointer: fine)').matches)$('assistantMessage').focus();
   updateAssistantComposer();
@@ -2904,7 +3053,7 @@ function rememberCoachTurn(role,content){
   state.athleteState.conversation=[...(state.athleteState.conversation||[]),{role,content}].slice(-20);
 }
 async function fetchAssistantReply(message,onAnswer,appContext,onProgress){
-  const response=await fetch('/app/api/assistant',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,stream:true,appContext})});
+  const response=await fetch('/app/api/assistant',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,stream:true,appContext,chatId:assistantChat.id})});
   if(response.status===401)showLoginGate();
   if(!response.headers.get('Content-Type')?.includes('application/x-ndjson')){const result=await response.json();if(!response.ok)throw new Error(result.message||'Odpověď se nepodařilo načíst.');return result;}
   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
@@ -2931,6 +3080,7 @@ async function sendAssistantMessage(message,{retry=false,appContext=captureAssis
       streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(answer);scrollAssistant(true);
     },appContext,progress=>{if(revision!==statusCoachingRevision)return;$('assistantStatus').textContent=progress;const typing=$('assistantTyping')?.querySelector('small');if(typing)typing.textContent=progress;});
     $('assistantTyping')?.remove();
+    if(r.chatId)rememberAssistantChat(r.chatId);
     if(revision!==statusCoachingRevision){streamedTurn?.remove();appendCoachTurn('assistant','Stav se mezitím změnil. Pošli požadavek znovu pro aktuální doporučení.');return;}
     if(r.kind==='food_draft'){renderFoodDraft(message,r);scrollAssistant();return;}
     if(streamedTurn){streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(r.answer);streamedTurn.classList.remove('streaming');scrollAssistant(true);}else appendCoachTurn('assistant',r.answer);rememberCoachTurn('assistant',r.answer);

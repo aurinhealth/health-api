@@ -107,7 +107,15 @@ export const EXERCISE_STATIONS = {
   "Smith machine split squat": ["smith_machine", "adjustable_bench"],
   "Smith machine hip thrust": ["smith_machine", "adjustable_bench"],
   "Smith machine incline press": ["smith_machine", "adjustable_bench"],
-  "Barbell overhead press": ["squat_rack", "barbells"]
+  "Barbell overhead press": ["squat_rack", "barbells"],
+  "DB wrist curl": ["dumbbells", "adjustable_bench"],
+  "DB reverse wrist curl": ["dumbbells", "adjustable_bench"],
+  "Cable reverse curl": ["cables"],
+  "DB shrug": ["dumbbells"],
+  "Barbell shrug": ["squat_rack", "barbells"],
+  "Smith machine shrug": ["smith_machine"],
+  "Cable upright row": ["cables"],
+  "Barbell good morning": ["squat_rack", "barbells"]
 
 };
 

@@ -72,13 +72,15 @@ import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZO
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
 import legacyHealthApi, { googleToken } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
+import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
+import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo } from "./exercise-technique.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout } from "./dashboard-auth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
 // Requests that read or preview only and so keep the cache.
-const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|training-profile\/estimate|assistant$|assistant\/stream)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/mcp/health']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -558,10 +560,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const body=await request.json().catch(()=>({})),message=String(body.message||'').trim();
     if(!message||message.length>4000)return Response.json({message:'Zadej požadavek do 4000 znaků.'},{status:400});
     const memory=explicitPreference(message),athleteState=memory?await updateAthleteState(env.DB,{memory}):await getAthleteState(env.DB);
-    if(!env.OPENAI_API_KEY)return memory?Response.json({status:'ok',answer:'Zapamatoval jsem si: '+memory,memorySaved:memory}):Response.json({status:'unavailable',message:'AI není připojena (chybí OPENAI_API_KEY).'},{status:503});
+    // Each answer belongs to a chat; without a known chat id a new chat starts.
+    const remember=async answer=>appendChatTurn(env.DB,body.chatId,message,answer).catch(error=>{console.error('Chat save failed',error.message);return null;});
+    if(!env.OPENAI_API_KEY)return memory?Response.json({status:'ok',answer:'Zapamatoval jsem si: '+memory,memorySaved:memory,chatId:await remember('Zapamatoval jsem si: '+memory)}):Response.json({status:'unavailable',message:'AI není připojena (chybí OPENAI_API_KEY).'},{status:503});
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
     if(body.mode!=='coach'&&isFoodLogMessage(message)){
-      try{const draft=await buildFoodDraft(env,message,pragueToday());if(draft.items.length)return Response.json({status:'ok',kind:'food_draft',draft,answer:foodDraftSummary(draft)},{headers:{'Cache-Control':'no-store'}});}
+      try{const draft=await buildFoodDraft(env,message,pragueToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,chatId:await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
       catch(error){console.error('Food sentence failed',error.message);}
     }
     const date=pragueToday(),appContext=assistantAppContext(body.appContext,date),task=assistantTask(message,body.appContext?appContext:null),started=Date.now();
@@ -589,7 +593,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek});
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }
-      Object.assign(coachCtx,{athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,preferenceMemory:athleteState.memories,conversation:athleteState.conversation});
+      Object.assign(coachCtx,{athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,preferenceMemory:athleteState.memories,conversation:await chatContext(env.DB,body.chatId).catch(()=>[])});
       const rec=coachCtx.cyclingCoachV2?.recommendation?.session||{},kind=rec.kind==="long_endurance"?"endurance":rec.kind==="vo2"?"vo2max":rec.kind;
       const library=task==='planning'||task==='block'?athleteState.status==='active'?await searchWorkoutLibrary(env.DB,{system:kind,durationMinutes:rec.durationMinutes||availabilityMinutes||90,durationTolerance:20,limit:8},{
         readiness:coachCtx.cyclingCoachV2?.readiness?.status,
@@ -604,11 +608,27 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const actions=validateCoachActions(answer.actions,coachCtx,date),proposals=[];await ensureCoachInboxTable(env.DB);
       for(const action of actions){const draft={kind:'coach_action',action};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();proposals.push({...action,draftId:ins.meta?.last_row_id});}
       await updateAthleteState(env.DB,{turn:[{role:'user',content:message},{role:'assistant',content:answer.answer.slice(0,16000)}]});
-      return {...answer,actions:proposals,memorySaved:memory,costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
+      const chatId=await remember(answer.answer);
+      return {...answer,chatId,actions:proposals,memorySaved:memory,costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
     if(body.stream)return assistantStreamResponse(reply);
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
     catch(error){console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
+  }
+  // The list of chats, one chat with its messages, and deleting a chat.
+  if(url.pathname==='/app/api/assistant/chats'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    return Response.json({status:'ok',chats:await listChats(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
+  const chatPath=url.pathname.match(/^\/app\/api\/assistant\/chats\/(\d+)$/);
+  if(chatPath){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(request.method==='DELETE'){
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+      await deleteChat(env.DB,chatPath[1]);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});
+    }
+    const chat=await readChat(env.DB,chatPath[1]);
+    return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
   }
   if(url.pathname==='/app/api/assistant/action'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
@@ -1008,6 +1028,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(env.USER_ID,row.id).run();
       return Response.json({status:'ok',intervals,message:'Gym plán je uložený.'},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
+  }
+  // Technique card of one exercise (text and video), plus the athlete's own video link.
+  if(url.pathname==='/app/api/gym/technique'){
+    if(request.method==='POST'){
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+      const body=await request.json().catch(()=>({}));
+      try{await saveOwnExerciseVideo(env.DB,body.exercise,body.url);}catch(error){return Response.json({message:error.message},{status:400});}
+      return Response.json({status:'ok',technique:techniqueFor(body.exercise,await ownExerciseVideo(env.DB,body.exercise))},{headers:{'Cache-Control':'no-store'}});
+    }
+    const exercise=String(url.searchParams.get('exercise')||'').slice(0,120),technique=techniqueFor(exercise,exercise?await ownExerciseVideo(env.DB,exercise).catch(()=>null):null);
+    return technique?Response.json({status:'ok',technique},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Cvik není v databázi.'},{status:404});
   }
   if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));

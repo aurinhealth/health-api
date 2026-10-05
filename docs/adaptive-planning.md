@@ -40,7 +40,7 @@ V Dnes lze přepnout Active, Sick, Injured nebo On break a doplnit poznámku. St
 
 Po načtení nebo změně denních dat se vyhodnotí více signálů regenerace. Kombinace krátkého spánku, horší HRV, vyššího klidového tepu nebo nízké formy může nabídnout On break. Jediné špatné číslo stav nemění a z naměřených dat se neurčuje Sick ani Injured. Nabídku lze přijmout, odmítnout pro daný den nebo probrat kompromis.
 
-Plovoucí asistent uchovává posledních 12 zpráv a výslovné preference. Preference jsou vidět v Nastavení a lze je odstranit. Každá navržená změna stavu, přesun nebo vynechání tréninku má samostatné potvrzení/odmítnutí. Server kontroluje vlastníka návrhu a před změnou existujícího tréninku znovu ověří aktuální událost v Intervals.icu. Návrh jiné aktivity nejprve vytvoří náhled; zápis do kalendáře vyžaduje další potvrzení.
+Plovoucí asistent ukládá rozhovory jako chaty (D1, tabulky `assistant_chats` a `assistant_messages`). Trenér vidí jen posledních 12 zpráv aktuálního chatu; „＋ Nový“ začne čistý chat a po 6 hodinách bez zprávy se nový chat začne sám. Seznam „☰ Chaty“ umí otevřít nebo smazat starší chat; chaty bez zprávy 90 dní se mažou. Výslovné preference platí napříč chaty, jsou vidět v Nastavení a lze je odstranit. Každá navržená změna stavu, přesun nebo vynechání tréninku má samostatné potvrzení/odmítnutí. Server kontroluje vlastníka návrhu a před změnou existujícího tréninku znovu ověří aktuální událost v Intervals.icu. Návrh jiné aktivity nejprve vytvoří náhled; zápis do kalendáře vyžaduje další potvrzení.
 
 ## AI modely a data
 
@@ -49,3 +49,11 @@ Plovoucí asistent uchovává posledních 12 zpráv a výslovné preference. Pre
 Oficiální dokumentace: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol).
 
 Nové tabulky `week_plan_overrides` a `athlete_state` vznikají při použití funkcí a jsou zahrnuté do ochrany osobních tabulek. Všechny dotazy filtrují `user_id`; změna nevyžaduje převod ani mazání historických dat.
+
+## Detail tréninku v týdnu
+
+Klik na trénink v týdenním přehledu otevře jeho detail. U naplánovaného je délka, TSS, IF a struktura z Intervals.icu a akce Přesunout, Vyměnit za jiný (nový trénink z doporučení nahradí původní) a Zrušit. U hotového je porovnání s plánem (délka, TSS, IF a celkové hodnocení), u posilovny plán proti zapsaným sériím. Kartička týdenního plánu se pro sport, který už má v daný den naplánovaný nebo hotový trénink, nezobrazuje.
+
+## Technika cviků
+
+V režimu tréninku otevře „📖 Technika a video“ kartu cviku: nastavení, provedení, časté chyby, dýchání a ukázkové video (`src/exercise-technique-data.js`, videa dohledaná vyhledáváním). Vlastní odkaz na video se ukládá ke cviku (tabulka `exercise_videos`) a nahradí ukázku; odkaz mimo YouTube se otevře v prohlížeči. AI trenér zůstává dostupný tlačítkem „✦ AI“.

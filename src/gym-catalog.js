@@ -2,7 +2,7 @@ import {EXERCISES} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE} from './strength-intelligence.js';
 import {availableAt,stationLabel} from './gym-equipment.js';
 
-const muscleLabels={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka'};
+const muscleLabels={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
 const searchTerms={
   'DB bench press':'bench tlaky jednoručky prsa',
   'Low row':'veslování přítahy záda',
@@ -74,7 +74,15 @@ const searchTerms={
   'Smith machine split squat':'bulharský dřep smith hýždě výpad',
   'Smith machine hip thrust':'hip thrust smith hýždě zdvih pánve',
   'Smith machine incline press':'tlaky šikmá lavice smith horní prsa',
-  'Barbell overhead press':'tlak osy nad hlavu ramena military press'
+  'Barbell overhead press':'tlak osy nad hlavu ramena military press',
+  'DB wrist curl':'předloktí zápěstí flexe úchop',
+  'DB reverse wrist curl':'předloktí zápěstí extenze nadhmat',
+  'Cable reverse curl':'předloktí obrácený bicepsový zdvih nadhmat kladka',
+  'DB shrug':'trapézy krčení ramen jednoručky',
+  'Barbell shrug':'trapézy krčení ramen osa',
+  'Smith machine shrug':'trapézy krčení ramen smith',
+  'Cable upright row':'trapézy přítah k bradě kladka ramena',
+  'Barbell good morning':'spodní záda dobré ráno předklon osa'
 
 };
 

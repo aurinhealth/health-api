@@ -59,11 +59,24 @@ test('warmups accept effort below six, failure can be corrected and rest follows
   assert.equal(a.run('gymRestSeconds(cur,null)'),0);
 });
 
-test('saving the final crunch returns to an earlier missing set without repeating crunch',async()=>{
+test('saving the final set ends the workout and lists a skipped work set instead of jumping back',async()=>{
   const a=client([row('Leg press',1),row('Crunch',1,{done:true}),row('Crunch',2)]);
-  await a.run('openGymMode()');a.run('gymMode.pos=2;renderGymMode()');
-  await a.click('done');assert.equal(a.run('gymMode.pos'),0);assert.match(a.el.innerHTML,/<h2>Leg press<\/h2>/);
+  await a.run('openGymMode()');assert.equal(a.run('gymMode.pos'),2);
+  await a.click('done');assert.match(a.el.innerHTML,/Konec plánu/);assert.match(a.el.innerHTML,/Leg press · 1×/);assert.doesNotMatch(a.el.innerHTML,/<h2>Leg press/);
   assert.equal(a.state.gym.values[9][8],'TRUE');assert.equal(a.state.gym.values[7][8],'FALSE');
+  await a.click('resume');assert.match(a.el.innerHTML,/<h2>Leg press<\/h2>/);
+});
+
+test('skipped warm-ups are never offered again and do not block the finished workout',async()=>{
+  const warm=(name,n)=>{const r=row(name,n);r[0]='WARMUP';return r;};
+  const a=client([warm('Bench',1),warm('Bench',2),row('Bench',1),row('Bench',2),warm('Row',1),row('Row',1)]);
+  await a.run('openGymMode()');assert.equal(a.run('gymMode.pos'),0);
+  await a.click('next');await a.click('next');await a.click('done');assert.equal(a.run('gymMode.pos'),3);
+  assert.match(a.el.innerHTML,/1 \/ 4 sérií/);
+  await a.click('done');assert.equal(a.run('gymSets()[gymMode.pos].r[1]'),'Row');
+  await a.click('next');await a.click('done');
+  assert.match(a.el.innerHTML,/Trénink hotový/);assert.doesNotMatch(a.el.innerHTML,/Přeskočené/);
+  await a.click('close');await a.run('openGymMode()');assert.match(a.el.innerHTML,/Trénink hotový/);
 });
 
 test('controls do not trigger swipes and vertical scrolling leaves the current set unchanged',async()=>{

@@ -80,7 +80,16 @@ const EXERCISES = {
   "Smith machine split squat": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 30, warmup: false, note: "Hýždě a stehna; bulharský dřep na Smithu, zadní noha na lavici, kg = kotouče + osa", fatigue: 0.95 },
   "Smith machine hip thrust": { pattern: "hip_extension", muscle: "glutes", unilateral: false, sets: 3, reps: "8–12", baseKg: 60, warmup: true, note: "Hýždě; hip thrust pod osou Smithu, záda o lavici, kg = kotouče + osa", fatigue: 1.0 },
   "Smith machine incline press": { pattern: "horizontal_push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Horní hrudník; šikmá lavice pod Smithem, kg = kotouče + osa", fatigue: 0.95 },
-  "Barbell overhead press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "5–8", baseKg: 35, warmup: true, note: "Ramena; tlak osy nad hlavu ve stoje z klece, kg = celá osa", fatigue: 1.0 }
+  "Barbell overhead press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "5–8", baseKg: 35, warmup: true, note: "Ramena; tlak osy nad hlavu ve stoje z klece, kg = celá osa", fatigue: 1.0 },
+  // Forearms, traps and lower back (added 2026-10-05).
+  "DB wrist curl": { pattern: "wrist_flexion", muscle: "forearms", unilateral: false, sets: 3, reps: "12–20", baseKg: 8, warmup: false, note: "Předloktí (flexory); předloktí na lavici, dlaně nahoru, kg = 1 jednoručka", fatigue: 0.25 },
+  "DB reverse wrist curl": { pattern: "wrist_extension", muscle: "forearms", unilateral: false, sets: 3, reps: "12–20", baseKg: 4, warmup: false, note: "Předloktí (extenzory); předloktí na lavici, dlaně dolů, kg = 1 jednoručka", fatigue: 0.25 },
+  "Cable reverse curl": { pattern: "reverse_curl", muscle: "forearms", unilateral: false, sets: 3, reps: "10–15", baseKg: 12.5, warmup: false, note: "Předloktí a brachioradialis; nadhmat na rovné tyči, spodní kladka", fatigue: 0.3 },
+  "DB shrug": { pattern: "shrug", muscle: "traps", unilateral: false, sets: 3, reps: "10–15", baseKg: 24, warmup: false, note: "Trapézy; ramena nahoru k uším a výdrž, kg = 1 jednoručka", fatigue: 0.35 },
+  "Barbell shrug": { pattern: "shrug", muscle: "traps", unilateral: false, sets: 3, reps: "8–12", baseKg: 60, warmup: false, note: "Trapézy; osa z klece ve výšce stehen, kg = celá osa", fatigue: 0.45 },
+  "Smith machine shrug": { pattern: "shrug", muscle: "traps", unilateral: false, sets: 3, reps: "10–15", baseKg: 50, warmup: false, note: "Trapézy; osa Smithu ve výšce stehen, kg = kotouče + osa", fatigue: 0.4 },
+  "Cable upright row": { pattern: "upright_row", muscle: "traps", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Trapézy a boční ramena; tyč na spodní kladce, lokty nejvýš do výšky ramen", fatigue: 0.4 },
+  "Barbell good morning": { pattern: "hinge", muscle: "lower_back", unilateral: false, sets: 3, reps: "8–12", baseKg: 30, warmup: true, note: "Spodní záda a hamstringy; osa na zádech z klece, rovná záda, kg = celá osa", fatigue: 0.9 }
 
 };
 
@@ -98,7 +107,10 @@ export const FOCUS_GROUPS = {
   quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat']},
   hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift']},
   hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat']},
-  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise']}
+  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise']},
+  forearms: {label:'Předloktí', exercises:['DB wrist curl','DB reverse wrist curl','Cable reverse curl']},
+  traps: {label:'Trapézy', exercises:['DB shrug','Barbell shrug','Smith machine shrug','Cable upright row']},
+  lower_back: {label:'Spodní záda', exercises:['Roman chair','Barbell good morning']}
 };
 
 export function validateFocusMuscles(value){

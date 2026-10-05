@@ -82,7 +82,15 @@ export const EXERCISE_INTELLIGENCE = {
   "Smith machine split squat": { muscle: "glutes", pattern: "lunge", equipment: "smith", unilateral: true, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB Bulgarian split squat", "DB reverse lunge"] },
   "Smith machine hip thrust": { muscle: "glutes", pattern: "hip_extension", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["Barbell hip thrust", "Hip thrust"] },
   "Smith machine incline press": { muscle: "chest", pattern: "incline_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB incline press"] },
-  "Barbell overhead press": { muscle: "shoulders", pattern: "vertical_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["DB shoulder press", "Shoulder press Prime"] }
+  "Barbell overhead press": { muscle: "shoulders", pattern: "vertical_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["DB shoulder press", "Shoulder press Prime"] },
+  "DB wrist curl": { muscle: "forearms", pattern: "wrist_flexion", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.25, variants: ["Cable reverse curl", "DB reverse wrist curl"] },
+  "DB reverse wrist curl": { muscle: "forearms", pattern: "wrist_extension", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.25, variants: ["Cable reverse curl", "DB wrist curl"] },
+  "Cable reverse curl": { muscle: "forearms", pattern: "reverse_curl", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["DB reverse wrist curl", "Hammer curl"] },
+  "DB shrug": { muscle: "traps", pattern: "shrug", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Barbell shrug", "Smith machine shrug"] },
+  "Barbell shrug": { muscle: "traps", pattern: "shrug", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.45, variants: ["DB shrug", "Smith machine shrug"] },
+  "Smith machine shrug": { muscle: "traps", pattern: "shrug", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Barbell shrug", "DB shrug"] },
+  "Cable upright row": { muscle: "traps", pattern: "upright_row", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.4, variants: ["DB shrug"] },
+  "Barbell good morning": { muscle: "lower_back", pattern: "hip_hinge", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.9, variants: ["Roman chair"] },
 
 };
 

@@ -502,4 +502,25 @@ body.sheet-open{overflow:hidden}
 .hub-plan .planner-chip{position:relative;padding-right:22px}
 .hub-plan .planner-chip [data-chip-remove]{position:absolute;top:5px;right:5px;margin:0}
 .week-proposal-done{display:grid;gap:6px}.week-proposal-done p{margin:0}
+.gm-help{display:flex;gap:8px;margin:0 0 12px}.gm-help .gm-assistant{margin:0}
+.gm-technique{font-size:13px;padding:7px 12px;border-color:#3a4a5c;background:#16202b}
+.technique h4{margin:16px 0 6px;font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:#9fb0c2}
+.technique ol,.technique ul{margin:0;padding-left:20px;color:#d6dde7;font-size:14px;line-height:1.5}.technique li{margin:3px 0}
+.technique ul li::marker{content:"✕  ";color:#ff8a8a}
+.tech-meta{margin:0 0 10px}
+.tech-video{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000}.tech-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.tech-video-note{margin:6px 0 0}
+.tech-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.tech-actions .btn{text-decoration:none}
+.tech-own{margin-top:14px;border-top:1px solid #2a323d;padding-top:10px}.tech-own summary{cursor:pointer;color:#c9d2de;font-size:13px}
+.tech-own input{width:100%;margin:8px 0;padding:9px 10px;border-radius:8px;border:1px solid #344050;background:#0f141b;color:#eef2f7;font:inherit}
+.tech-own-actions{display:flex;gap:8px}
+.hub-item[data-detail]{cursor:pointer}.hub-item[data-detail]:hover{border-color:#5a6b80}.hub-item[data-detail]:focus-visible{outline:2px solid #b393ff;outline-offset:1px}
+.training-detail .training-name{margin:4px 0 10px;font-size:17px;line-height:1.3}
+.training-facts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.training-facts div{background:#10161e;border:1px solid #2a323d;border-radius:9px;padding:7px 11px;display:grid}.training-facts span{font-size:11px;color:#8f9dac}.training-facts strong{font-size:15px}
+.plan-steps{display:grid;gap:4px;margin:4px 0 8px}.plan-step{padding:6px 10px;border-left:3px solid #7b61c4;background:#141a23;border-radius:0 7px 7px 0;font-size:13px;color:#dfe5ee}.plan-step-head{font-size:12px;font-weight:700;color:#aab6c4;margin-top:6px;text-transform:uppercase;letter-spacing:.03em}
+.plan-compare{width:100%;border-collapse:collapse;margin:6px 0 12px;font-size:13px}.plan-compare th,.plan-compare td{padding:7px 6px;border-bottom:1px solid #252d38;text-align:left}.plan-compare thead th{font-size:11px;color:#8f9dac;font-weight:600}.plan-compare tbody th{color:#c9d2de;font-weight:600;text-transform:none;letter-spacing:0;font-size:13px}.plan-compare thead th{text-transform:none;letter-spacing:0}
+.plan-compare .ok{color:#7fd1a8}.plan-compare .over{color:#ffb86b}.plan-compare .under{color:#8fb8ff}
+.plan-verdict{margin:0 0 8px;font-weight:650}.plan-verdict.ok{color:#7fd1a8}.plan-verdict.over{color:#ffb86b}.plan-verdict.under{color:#8fb8ff}
+.training-plan summary{cursor:pointer;color:#c9d2de;font-size:13px;margin:4px 0}
+.training-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.training-move{margin-top:12px}
 `;
