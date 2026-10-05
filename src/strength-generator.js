@@ -450,8 +450,8 @@ function progressionNote(estimate) {
   if (estimate.progression === "increase") return "↑ " + last + " → +" + kgText(diff) + " kg";
   if (estimate.progression === "decrease") return "↓ " + last + " → " + kgText(diff) + " kg, ať držíš rozsah opakování";
   if (estimate.progression === "return") return "po delší pauze lehčeji (" + last + ")";
-  if (estimate.stalled) return "= " + last + "; 3× bez posunu: přidej opakování, jinak příště vyměníme cvik";
-  return "= " + last + "; cíl: o opakování víc";
+  if (estimate.stalled) return "= " + last + " – 3× bez posunu: přidej opakování, jinak příště vyměníme cvik";
+  return "= " + last + " – cíl: o opakování víc";
 }
 function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null) {
   const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex);

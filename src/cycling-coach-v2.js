@@ -215,7 +215,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(rhr&&rhr.delta>=7){score-=18;readinessReasons.push("klidový tep "+Math.round(rhr.today)+" je o "+Math.round(rhr.delta)+" tepů nad tvým průměrem");}
   else if(rhr&&rhr.delta>=4){score-=8;readinessReasons.push("klidový tep o "+Math.round(rhr.delta)+" tepy nad průměrem");}
   // Both at once is a strong sign of fatigue or a coming illness.
-  if(hrv&&rhr&&hrv.deltaPct<=-10&&rhr.delta>=4){score-=8;readinessReasons.push("HRV i klidový tep ukazují na únavu nebo začínající nemoc");}
+  if(hrv&&rhr&&hrv.deltaPct<=-10&&rhr.delta>=4){score-=8;readinessReasons.push("HRV i klidový tep zároveň ukazují na výraznou únavu");}
   if(sleepMinutes!=null){
     if(sleepMinutes<360){score-=18;readinessReasons.push("spánek pod 6 h");}
     else if(sleepMinutes<420){score-=8;readinessReasons.push("spánek pod 7 h");}

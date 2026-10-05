@@ -503,6 +503,7 @@ body.sheet-open{overflow:hidden}
 .hub-plan .planner-chip [data-chip-remove]{position:absolute;top:5px;right:5px;margin:0}
 .week-proposal-done{display:grid;gap:6px}.week-proposal-done p{margin:0}
 .gm-help{display:flex;gap:8px;margin:0 0 12px}.gm-help .gm-assistant{margin:0}
+.gm-why{margin:-6px 0 12px;color:var(--muted,#9aa3b2)}
 .gm-technique{font-size:13px;padding:7px 12px;border-color:#3a4a5c;background:#16202b}
 .technique h4{margin:16px 0 6px;font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:#9fb0c2}
 .technique ol,.technique ul{margin:0;padding-left:20px;color:#d6dde7;font-size:14px;line-height:1.5}.technique li{margin:3px 0}

@@ -32,7 +32,7 @@ test("deep fatigue with a falling HRV is not green and gets no sweet spot", () =
   assert.deepEqual(wellnessTrend({ wellness: wellness({ hrv: 58 }) }, date, "hrv"), { today: 58, baseline: 80, deltaPct: -27.5, delta: -22 });
   const rhr = coach({ fitness: { wellness: wellness({ tsb: -5, restingHR: 57, hrv: 70 }) } });
   assert.ok(rhr.readiness.reasons.some(r => /klidový tep 57 je o 9 tepů nad tvým průměrem/.test(r)));
-  assert.ok(rhr.readiness.reasons.some(r => /začínající nemoc/.test(r)));
+  assert.ok(rhr.readiness.reasons.some(r => /HRV i klidový tep zároveň/.test(r)));
   // A fresh athlete at their usual HRV stays green.
   assert.equal(coach({ fitness: { wellness: wellness({ tsb: 2 }) } }).readiness.status, "green");
 });
@@ -81,4 +81,10 @@ test("the daily readiness uses HRV and resting HR only against the athlete's own
   assert.equal(buildAdaptiveDecision(base).recovery.score, 100);
   const tired = { ...base, recovery: { "daily-heart-rate-variability": [{ sampleTime: date, value: 34, baseline: 46 }], "daily-resting-heart-rate": [{ sampleTime: date, value: 53, baseline: 45 }] } };
   assert.ok(buildAdaptiveDecision(tired).recovery.score <= 75);
+});
+
+test("a plan for weeks, a month or up to the race is a training block", async () => {
+  const { assistantTask } = await import("../src/coach-assistant.js");
+  for (const m of ["Udělej mi plán na 8 týdnů do závodu", "Připrav mi rozpis na měsíc", "Plán do závodu"]) assert.equal(assistantTask(m), "block", m);
+  for (const m of ["Naplánuj mi tento týden", "Plán na 2 týdny", "Kolik mám dát na bench?"]) assert.equal(assistantTask(m), "planning", m);
 });

@@ -487,3 +487,11 @@ test("on a phone, warm-up sets are labelled and each exercise is one block", asy
   // Workout mode counts warm-up and work sets separately.
   assert.match(client, /\(warm\(cur\)\?'Rozcvička ':'Série '\)\+k\+' z '\+same\.length/);
 });
+
+test("workout mode shows what the load of a work set is based on", async () => {
+  const { readFileSync } = await import("node:fs");
+  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  // The line comes from the set's note, without the rest marker, never for warm-ups.
+  assert.match(client, /const why=!warm\(cur\)&&String\(r\[9\]\|\|''\)\.replace\(\/\\s\*\\\[Pauza \\d\+ s\\\]\/g,''\)\.split\('; '\)\.find\(x=>\/\^\(↑\|↓\|= \|po delší pauze\)\/\.test\(x\)\)/);
+  assert.match(client, /<p class="small gm-why">/);
+});
