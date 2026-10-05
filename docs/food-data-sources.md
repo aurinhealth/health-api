@@ -17,3 +17,10 @@ The app uses no external food database. Food values come from:
 NutriDatabaze.cz, OpenNutrition and Open Food Facts were removed; their data
 went with `migrations/0004_drop_food_databases.sql`. A food that is not saved
 yet is entered from its label once and saved for next time.
+
+Barcodes: a photo is decoded straight and turned by 90°, 180° and 270°
+(the live ZXing scanner tries harder as well); when the bars cannot be read,
+AI reads the printed digits and only a code with a valid check digit is used.
+A scanned or typed code searches the saved foods first and, when nothing is
+found, starts the AI web lookup on its own.
+

@@ -39,3 +39,19 @@ test('only small data-URL images are sent, with the image and the schema', async
     await assert.rejects(readFoodPhotoWithAI({ OPENAI_API_KEY: 'k' }, { image: 'data:text/html;base64,AA==' }), /JPG/);
   } finally { globalThis.fetch = original; }
 });
+
+test('barcode digits read by AI count only with a valid check digit', async () => {
+  const { validBarcode, readBarcodeWithAI } = await import('../src/food-photo.js');
+  assert.equal(validBarcode('8594001170012'), true);
+  assert.equal(validBarcode('8594001170013'), false);
+  assert.equal(validBarcode('5000159461122'), true);
+  assert.equal(validBarcode('96385074'), true);
+  const original = globalThis.fetch;
+  const reply = digits => async () => new Response(JSON.stringify({ model: 'm', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ found: true, digits }) }] }] }), { status: 200 });
+  try {
+    globalThis.fetch = reply('8594 0011 70012');
+    assert.equal((await readBarcodeWithAI({ OPENAI_API_KEY: 'k' }, { image: IMAGE })).barcode, '8594001170012');
+    globalThis.fetch = reply('8594001170019');
+    assert.equal((await readBarcodeWithAI({ OPENAI_API_KEY: 'k' }, { image: IMAGE })).barcode, null);
+  } finally { globalThis.fetch = original; }
+});

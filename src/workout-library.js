@@ -403,5 +403,9 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   await db.prepare(`INSERT INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)
     ON CONFLICT(user_id,intervals_external_id) DO UPDATE SET intervals_event_id=excluded.intervals_event_id,status=excluded.status`)
     .bind(db.userId, sportOf(workout.sport), workout.id, workout.family || null, date, event.tags.includes("outdoor") ? "outdoor" : "indoor", event.external_id, String(first.id), "scheduled").run();
-  return { status: "ok", workout: { id: workout.id, name: workout.name }, date, environment: event.tags.includes("outdoor") ? "outdoor" : "indoor", externalId: event.external_id, intervalsEventId: first.id };
+  // The local copy of the event, so the week shows it now and not after the next sync.
+  const start = first.start_date_local || event.start_date_local || date + "T00:00:00";
+  await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,end_time,payload_json) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET sample_time=excluded.sample_time,start_time=excluded.start_time,end_time=excluded.end_time,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP")
+    .bind(db.userId, "intervals", "planned-workout", "planned:" + first.id, start, start, first.end_date_local || null, JSON.stringify({ ...event, ...first })).run().catch(() => {});
+  return { status: "ok", workout: { id: workout.id, name: workout.name }, date, environment: event.tags.includes("outdoor") ? "outdoor" : "indoor", externalId: event.external_id, intervalsEventId: first.id, eventId: "planned:" + first.id };
 }

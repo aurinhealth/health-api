@@ -9,7 +9,7 @@ import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders } from "./connection-secrets.js";
 import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from './food-label.js';
-import { readFoodPhotoWithAI } from './food-photo.js';
+import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail} from './activity-detail.js';
@@ -699,6 +699,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena; fotku přečtu na zařízení.'},{status:503});
     try{
       const body=await request.json().catch(()=>({}));
+      if(body.mode==='barcode'){const b=await readBarcodeWithAI(env,{image:body.image});return Response.json(b.barcode?{status:'ok',barcode:b.barcode}:{status:'unreadable',message:'Číslo pod čárovým kódem se nepodařilo přečíst. Vyfoť kód zblízka, nebo číslo opiš.'},{headers:{'Cache-Control':'no-store'}});}
       const r=await readFoodPhotoWithAI(env,{image:body.image,mode:body.mode==='portion'?'portion':'label',language:env.INTERFACE_LANGUAGE});
       if(!r.result)return Response.json({status:'unreadable',message:'Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.'},{headers:{'Cache-Control':'no-store'}});
       return Response.json({status:'ok',...r.result,model:r.model},{headers:{'Cache-Control':'no-store'}});
@@ -921,6 +922,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await deletePlannedEvent(env,{eventId:row.external_id});}
         await cancelGymPlan(env.DB,date);
         return Response.json({status:'ok',date,cancelled:true,message:'Posilovna je zrušená. Původní plán a výsledky zůstaly uložené.'},{headers:{'Cache-Control':'no-store'}});
+      }
+      // Gym put back on the day in the week plan: only the cancellation goes,
+      // nothing is written to Intervals.icu until a plan is saved or confirmed.
+      if(body.action==='uncancel'){
+        await restoreGymPlan(env.DB,date);
+        return Response.json({status:'ok',date,cancelled:false,message:'Gym je na tento den znovu v plánu.'},{headers:{'Cache-Control':'no-store'}});
       }
       if(body.action==='restore'){
         assertTrainingAllowed(await getAthleteState(env.DB));

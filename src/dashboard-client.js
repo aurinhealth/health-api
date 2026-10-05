@@ -1,5 +1,8 @@
 const $=id=>document.getElementById(id);
 let coachRefreshRunning=false;
+// Plan edits not yet in Intervals.icu (see "Plan changes" below); declared first
+// because the week can render before that part of the file runs.
+const plannedQueue=new Map(),pendingAdds=new Map();
 let statusCoachingRevision=0;
 let planDataRevision=0;
 let coachRefreshTimer;
@@ -102,7 +105,7 @@ function populateWeekSelectors(weekId,dayId,days){
 // A modal dialog covers the page, so messages and tips move into it while open.
 function overlayHost(){try{return document.querySelector('dialog:modal')||document.body}catch{return document.body}}
 function toast(msg){const t=$("toast"),host=overlayHost();if(t.parentNode!==host)host.appendChild(t);t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2600)}
-async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options,headers:{...options.headers,"X-Interface-Language":document.documentElement.lang||"cs"}});const d=await r.json().catch(()=>({message:"Invalid response"}));if(r.status===401)showLoginGate();if(r.status===409&&d.status==="onboarding")showOnboarding(d.missingProviders||[]);if(!r.ok)throw new Error(d.message||"HTTP "+r.status);if(options.method&&options.method!=='GET'&&!/\/assistant|\/sync|\/athlete-state|\/food\/(?:label|photo|search|ai-lookup)|\/workouts\/generate|\/estimate/.test(path))scheduleCoachRefresh();return d}
+async function jsonFetch(path,options={}){const r=await fetch(path,{credentials:"same-origin",...options,headers:{...options.headers,"X-Interface-Language":document.documentElement.lang||"cs"}});const d=await r.json().catch(()=>({message:"Invalid response"}));if(r.status===401)showLoginGate();if(r.status===409&&d.status==="onboarding")showOnboarding(d.missingProviders||[]);if(!r.ok)throw new Error(d.message||"HTTP "+r.status);if(options.method&&options.method!=='GET'&&!/\/assistant|\/sync|\/athlete-state|\/food\/(?:label|photo|search|ai-lookup)|\/workouts\/(?:generate|schedule)|\/estimate|\/week-plan|\/planned\//.test(path))scheduleCoachRefresh();return d}
 // Every data API requires a session; the first 401 swaps the dashboard for a login screen.
 const gateStyle='position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:16px;background:#0a0d12;overflow:auto';
 function showLoginGate(){if($("loginGate"))return;document.body.insertAdjacentHTML("beforeend",'<div id="loginGate" role="dialog" aria-modal="true" aria-labelledby="loginGateTitle" style="'+gateStyle+'"><div class="card" style="width:min(380px,100%);display:grid;gap:12px"><h2 id="loginGateTitle" style="margin:0">Přihlášení</h2><p class="small" style="margin:0">Do aplikace se přihlašuješ svým Google účtem. Přístup mají jen pozvaní uživatelé.</p><a class="btn primary" href="/auth/google" style="text-align:center;text-decoration:none">Přihlásit přes Google</a></div></div>');}
@@ -479,8 +482,9 @@ async function scheduleLibraryWorkout(id,dateOverride=null,environment=null){
   const date=dateOverride||$("workoutScheduleDate")?.value;if(!date){toast("Vyber datum.");return}
   const row=[...(state.workoutLibrary?.workouts||[]),state.generated?.workout,...(state.generated?.alternatives||[])].find(x=>x&&x.id===id),name=row?.name||id;
   if(!window.confirm('Přidat „'+name+'“ na '+date+' do Intervals.icu?'))return;
-  try{const r=await jsonFetch("/app/api/workouts/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workoutId:id,date,confirm:true,environment:environment||$("workoutEnvironment")?.value||"outdoor"})});toast(r.status==='already_scheduled'?'Workout už je na tento den naplánovaný.':r.workout.name+' přidán do Intervals.icu na '+longDate(r.date));state.hubWeekData=null;await refreshAfterPlanChange()}
-  catch(e){toast("Zápis do Intervals.icu selhal: "+e.message)}
+  const pending=showPendingAdd(row||{id,name},date,row?.sport||workoutSport());
+  try{const r=await jsonFetch("/app/api/workouts/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workoutId:id,date,confirm:true,environment:environment||$("workoutEnvironment")?.value||"outdoor"})});settlePendingAdd(pending,r.status!=='already_scheduled',r.eventId);toast(r.status==='already_scheduled'?'Workout už je na tento den naplánovaný.':r.workout.name+' je na '+longDate(r.date)+' i v Intervals.icu.')}
+  catch(e){settlePendingAdd(pending,false);toast("Zápis do Intervals.icu selhal: "+e.message)}
 }
 async function saveWorkoutFeedback(form){
   const row=form.closest('.scheduled-workout'),button=form.querySelector('button[type=submit]');
@@ -775,7 +779,7 @@ async function lookupFoodAi(){
   if(!name&&!barcode){foodMessage('Napiš název potraviny (u naskenovaného kódu pomůže i značka).');$('foodQuery').focus();return}
   if(b){b.disabled=true;b.textContent='AI hledá na webu…';}foodMessage('Dohledávám „'+(name||barcode)+'“ na webu…');
   try{const r=await jsonFetch('/app/api/food/ai-lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,barcode})});
-    if(r.status!=='ok'){foodMessage(r.message);return}
+    if(r.status!=='ok'||!r.product){foodMessage(r.message||'AI výrobek nenašla. Načti etiketu nebo zadej hodnoty ručně.');return}
     selectFoodProduct(r.product);
     const p=r.product,conf={high:'vysoká',medium:'střední',low:'nízká'}[p.confidence]||p.confidence;
     const info='Dohledáno AI · jistota '+esc(conf)+(p.barcode?' · EAN '+esc(p.barcode):'')+(p.note?' · '+esc(p.note):'')+(p.sources?.length?'<br>Zdroje: '+p.sources.map(x=>'<a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">'+esc(x.title||x.url)+'</a>').join(' · '):'');
@@ -814,10 +818,39 @@ async function readFoodPhotoAi(file,kind){
     return false;
   }
 }
+// A barcode photo in any orientation: the bars are decoded straight and
+// turned by 90°, 180° and 270°; when that fails, AI reads the printed digits.
+const BARCODE_FORMATS=['ean_13','ean_8','upc_a','upc_e'];
+function zxingHints(ZX){return new Map([[ZX.DecodeHintType?.TRY_HARDER??3,true]])}
+function barcodeCanvas(bitmap,deg,max=1600){
+  const scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height)),w=Math.round(bitmap.width*scale),h=Math.round(bitmap.height*scale),side=deg%180!==0;
+  const canvas=document.createElement('canvas');canvas.width=side?h:w;canvas.height=side?w:h;
+  const c=canvas.getContext('2d');c.translate(canvas.width/2,canvas.height/2);c.rotate(deg*Math.PI/180);c.drawImage(bitmap,-w/2,-h/2,w,h);return canvas;
+}
+async function decodeBarcodePhoto(file){
+  const bitmap=await createImageBitmap(file),valid=v=>/^\d{8,14}$/.test(String(v||''));
+  try{
+    const turns=[0,90,270,180].map(deg=>barcodeCanvas(bitmap,deg));
+    if('BarcodeDetector'in window){try{const detector=new BarcodeDetector({formats:BARCODE_FORMATS});for(const canvas of turns){const code=(await detector.detect(canvas)).map(c=>c.rawValue).find(valid);if(code)return code;}}catch{}}
+    try{const ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser'),reader=new ZX.BrowserMultiFormatReader(zxingHints(ZX));
+      for(const canvas of turns){try{const code=(await reader.decodeFromImageUrl(canvas.toDataURL('image/png'))).getText();if(valid(code))return code;}catch{}}}catch{}
+    if(state.foodPhotoAi!==false){
+      foodMessage('Čtu číslo pod čárovým kódem pomocí AI…');
+      try{const r=await jsonFetch('/app/api/food/photo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image:await foodPhotoDataUrl(file),mode:'barcode'})});if(valid(r.barcode))return r.barcode;}
+      catch(error){if(/AI není připojena/.test(error.message))state.foodPhotoAi=false;}
+    }
+    return '';
+  }finally{bitmap.close();}
+}
+// A scanned or typed code: saved foods first, then AI on the web when unknown.
+async function lookupBarcode(code){
+  $('foodBarcode').value=code;$('foodQuery').value='';
+  await searchFood();
+  if(!foodCandidates.length&&$('foodBarcode').value===code)await lookupFoodAi();
+}
 async function readFoodPhoto(file,kind){if(!file)return;if(!file.type.startsWith('image/')||file.size>15*1024*1024){foodMessage('Vyber fotografii JPG/PNG do 15 MB.');return;}const object=URL.createObjectURL(file);let worker;try{foodMessage(kind==='barcode'?'Čtu čárový kód…':'Načítám čtečku etikety…');if(kind==='barcode'){
-    let code='';if('BarcodeDetector'in window){try{const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']}),bitmap=await createImageBitmap(file);try{const codes=await detector.detect(bitmap);code=codes[0]?.rawValue||'';}finally{bitmap.close();}}catch{}}
-    if(!code){const ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser'),reader=new ZX.BrowserMultiFormatReader();const result=await reader.decodeFromImageUrl(object);code=result.getText();}
-    if(!/^\d{8,14}$/.test(code))throw new Error('Čárový kód není čitelný. Vyfoť ho rovně a zblízka, nebo opiš číslo.');$('foodBarcode').value=code;$('foodQuery').value='';await searchFood();
+    const code=await decodeBarcodePhoto(file);
+    if(!code)throw new Error('Čárový kód není čitelný. Vyfoť ho zblízka, nebo opiš číslo.');await lookupBarcode(code);
   }else{if(await readFoodPhotoAi(file,kind))return;const OCR=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js','Tesseract');worker=await OCR.createWorker('ces+eng',1,{logger:m=>{if(m.status==='recognizing text')foodMessage('Čtu fotografii: '+Math.round(m.progress*100)+' %');}});const result=kind==='portion'?await recognizeFoodPhotoSummary(worker,file,object):await worker.recognize(object);$('foodOcrText').value=result.data.text;$('foodOcrDetails').open=true;$('foodPhotoMode').value=kind==='portion'?'portion':'label';await applyFoodLabel();if(kind==='portion'&&['protein_100g','carbs_100g','fat_100g'].some(k=>!$('food-'+k).value)){await worker.setParameters({tessedit_pageseg_mode:'6'});const second=await worker.recognize(object);const r=await jsonFetch('/app/api/food/label',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:second.data.text,mode:'portion'})});if(['calories_100g','protein_100g','carbs_100g','fat_100g'].every(k=>r.values[k]!=null)){$('foodOcrText').value=second.data.text;await applyFoodLabel();}else foodMessage('Některé hodnoty na fotce jsou nečitelné. Přepsané údaje zůstaly v návrhu; chybějící pole doplň ručně.');}}
   }catch(e){foodMessage(kind==='barcode'?'Kód se nepodařilo přečíst. Opiš číslo pod čárovým kódem nebo zkus ostřejší fotografii.':e.message);}finally{if(worker)await worker.terminate();URL.revokeObjectURL(object);}}
 async function applyFoodLabel(mode=$('foodPhotoMode').value){try{const r=await jsonFetch('/app/api/food/label',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:$('foodOcrText').value,mode})});selectFoodProduct({...(mode==='portion'?{}:foodSelected),name:mode==='portion'?r.name:foodSelected?.name||$('foodQuery').value.trim(),barcode:mode==='portion'?null:foodSelected?.barcode||$('foodBarcode').value.trim(),quantity:mode==='portion'?'':foodSelected?.quantity,...r.values,nutrition_basis:mode==='portion'?'portion':/100\s*ml/i.test($('foodOcrText').value)?'ml':'g',source:'package_label'});foodMessage((r.warning?r.warning+' ':'')+(mode==='portion'?(r.ambiguous?'Fotka obsahuje také sloupec na 100 g/ml. Použil jsem poslední sloupec; porovnej přepsané hodnoty s fotkou.':'Hodnoty jsou za celou porci. Počet porcí může být i 1/2. Před uložením můžeš opravit přepis.'):'Přepsané hodnoty můžeš upravit. Zvol základ 100 g nebo 100 ml podle etikety.'));}catch(e){foodMessage(e.message);}}
@@ -1107,7 +1140,7 @@ function installFoodEntry(){
   $('foodPortionPreview').insertAdjacentHTML('beforebegin','<div id="foodPieceSettings" class="food-editor-grid" hidden><label>Velikost jednoho kusu<input id="foodPieceAmount" class="food-input" inputmode="decimal" placeholder="Podle obalu nebo vážení"></label><label>Jednotka kusu<select id="foodPieceUnit" class="food-input"><option value="g">g</option><option value="ml">ml</option></select></label></div><div id="foodDensitySettings" hidden><label>Hustota · g/ml<input id="foodDensity" class="food-input" inputmode="decimal" placeholder="Nutná pouze pro převod g ↔ ml"></label></div>');
   $('foodConfirmed').closest('label').remove();
   $('foodDate').value=pragueToday();$('foodDate').onchange=loadEnteredFood;$('foodSearchButton').onclick=searchFood;for(const id of ['foodQuery','foodBarcode'])$(id).onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();searchFood();}};
-  $('foodBarcodePhoto').onchange=e=>readFoodPhoto(e.target.files[0],'barcode');$('foodLabelPhoto').onchange=e=>readFoodPhoto(e.target.files[0],'label');$('foodPortionPhoto').onchange=e=>readFoodPhoto(e.target.files[0],'portion');$('foodApplyLabel').onclick=()=>applyFoodLabel();$('foodManual').onclick=()=>selectFoodProduct({name:$('foodQuery').value.trim(),barcode:$('foodBarcode').value.trim(),source:'package_label'});$('foodEditor').onsubmit=saveFoodEntry;$('foodEditor').oninput=()=>{updateFoodPreview();};loadEnteredFood();
+  $('foodBarcodePhoto').onchange=e=>readFoodPhoto(e.target.files[0],'barcode');$('foodBarcode').addEventListener('change',e=>{const code=e.target.value.replace(/\D/g,'');if(/^\d{8,14}$/.test(code)&&!$('foodQuery').value.trim())lookupBarcode(code);});$('foodLabelPhoto').onchange=e=>readFoodPhoto(e.target.files[0],'label');$('foodPortionPhoto').onchange=e=>readFoodPhoto(e.target.files[0],'portion');$('foodApplyLabel').onclick=()=>applyFoodLabel();$('foodManual').onclick=()=>selectFoodProduct({name:$('foodQuery').value.trim(),barcode:$('foodBarcode').value.trim(),source:'package_label'});$('foodEditor').onsubmit=saveFoodEntry;$('foodEditor').oninput=()=>{updateFoodPreview();};loadEnteredFood();
 }
 installDetailViews();installFoodEntry();installExperience();installRequestedExperience();installPortionControls();
 if(location.hash==='#settings')activate('settings');
@@ -1360,7 +1393,16 @@ async function hubWeekData(){
   state.hubWeekData=await jsonFetch('/app/api/week?start='+state.hubWeek);return state.hubWeekData;
 }
 // Targets for the chips come from the server, the same numbers the generator uses.
-function chipTarget(date,sport){return (state.weekPlan?.targets?.items||[]).find(x=>x.date===date&&x.sport===sport)||null}
+function chipTarget(date,sport,slot=0){return (state.weekPlan?.targets?.items||[]).find(x=>x.date===date&&x.sport===sport&&(x.slot||0)===slot)||null}
+// Proposals of the first session keep the old key; a second ride that day is date|ride|1.
+function proposalKey(date,sport,slot=0){return date+'|'+sport+(Number(slot)?'|'+Number(slot):'')}
+// Chips of one weekday: every planned session (the same sport may repeat) and
+// any proposal without a chip, each with its slot among the same sport.
+function planChips(i,date){
+  const seen={},chips=(state.weekPlan?.prefs?.days?.[i]||[]).map((sport,index)=>({sport,slot:(seen[sport]=(seen[sport]??-1)+1),index}));
+  for(const key of Object.keys(state.proposals||{})){const [d,sport,slot]=key.split('|');if(d!==date||!HUB_SPORTS[sport])continue;const n=Number(slot)||0;if(!chips.some(c=>c.sport===sport&&c.slot===n))chips.push({sport,slot:n,index:null});}
+  return chips;
+}
 function weekTargetText(){
   const t=state.weekPlan?.targets;if(!t||t.status!=='ok')return '';
   return (t.recovery?'Regenerační týden · cíl ≈ '+t.target+' TSS (70 % z udržovacích '+t.base+', minulý týden '+t.lastWeekLoad+' TSS)':'Cíl týdne ≈ '+t.target+' TSS (udržení kondice CTL '+t.ctl+' × 7 + 5 %)')+' · hotovo a v plánu '+t.committed+' TSS'+(t.shortfall?' · do cíle chybí ~'+t.shortfall+' TSS, přidej další den':'');
@@ -1387,6 +1429,7 @@ async function renderWeekHub(){
   $('hubWeekTitle').textContent='Týden '+isoWeek(state.hubWeek)+' · '+dateLabel(state.hubWeek)+' – '+dateLabel(dateShift(state.hubWeek,6));
   const plan=await loadWeekPlan();$('hubLocationName').textContent=plan.prefs?.location?.name||'Kutná Hora';
   let week;try{[week]=await Promise.all([hubWeekData(),loadWeather()]);}catch(error){el.innerHTML='<div class="notice status-error">'+esc(error.message)+'</div>';return;}
+  applyPendingPlanned(week.days);
   const days=week.days||[],gym=weekGymSessions(days),today=pragueToday();
   const roles=plan.roles||[];
   let doneTss=0,plannedTss=0;
@@ -1396,14 +1439,14 @@ async function renderWeekHub(){
     for(const a of completed){const sport=activitySport(a);if(!sport)continue;sports.add(sport);doneTss+=num(a.tss);items.push('<div class="hub-item done">✓ '+esc(HUB_SPORTS[sport])+' · '+esc(a.name||'')+activityEnvironmentBadge(a,sport)+'<span class="meta">'+hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss)+ifText(a.tss,num(a.durationHours)*60,sport):'')+'</span></div>');}
     if(gym.some(g=>g.date===d.date)&&!sports.has('gym')){sports.add('gym');const g=gym.find(x=>x.date===d.date);items.push('<div class="hub-item done">✓ '+HUB_SPORTS.gym+'<span class="meta">'+new Set(g.sets.map(r=>r.exercise)).size+' cviků · '+g.sets.length+' sérií</span></div>');}
     const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
-    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''));items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+(editable?' draggable="true" tabindex="0" data-event-id="'+esc(p.id)+'" data-name="'+esc(p.name||'Plán')+'" title="Přetáhni na jiný den, nebo klikni pro možnosti"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+activityEnvironmentBadge(p,sport)+'<span class="meta">plán'+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss)+ifText(p.tss,num(p.durationHours)*60,sport):'')+'</span>'+(editable?'<span class="hub-actions"><label class="small">Přesunout na <input type="date" data-hub-date min="'+today+'" value="'+esc(d.date<today?today:d.date)+'"></label><button type="button" class="btn" data-hub-move>Přesunout</button><button type="button" class="btn" data-hub-delete>Smazat</button></span>':'')+'</div>');}
+    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''))&&!p.pending;items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+(editable?' draggable="true" tabindex="0" data-event-id="'+esc(p.id)+'" data-name="'+esc(p.name||'Plán')+'" title="Přetáhni na jiný den, nebo klikni pro možnosti"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+activityEnvironmentBadge(p,sport)+'<span class="meta">'+(p.pending?'ukládám do Intervals…':'plán')+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss)+ifText(p.tss,num(p.durationHours)*60,sport):'')+'</span>'+(editable?'<span class="hub-actions"><label class="small">Přesunout na <input type="date" data-hub-date min="'+today+'" value="'+esc(d.date<today?today:d.date)+'"></label><button type="button" class="btn" data-hub-move>Přesunout</button><button type="button" class="btn" data-hub-delete>Smazat</button></span>':'')+'</div>');}
     if(d.date===gymDay()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');items.push('<div class="hub-item planned">'+HUB_SPORTS.gym+' · '+(d.date===today?'plán na dnes':'plán připraven')+'</div>');}
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
-    const plan=[...new Set([...(state.weekPlan?.prefs?.days?.[i]||[]),...Object.keys(state.proposals||{}).filter(k=>k.startsWith(d.date+'|')).map(k=>k.split('|')[1])])].map(sport=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).find(r=>r.sport===sport),tg=quiet?null:chipTarget(d.date,sport),pr=state.proposals?.[d.date+'|'+sport],cancelled=sport==='gym'&&gymCancelledOn(d.date);
-      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open" data-date="'+d.date+'" data-sport="'+sport+'">Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add" data-date="'+d.date+'" data-sport="'+sport+'">Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym" data-date="'+d.date+'">Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
-      const picked=state.plannerPick===sport&&state.plannerFrom===i;
-      return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg):'')+(!quiet&&!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
+    const plan=planChips(i,d.date).map(({sport,slot,index})=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).filter(r=>r.sport===sport)[slot],tg=quiet?null:chipTarget(d.date,sport,slot),key=proposalKey(d.date,sport,slot),pr=state.proposals?.[key],cancelled=sport==='gym'&&gymCancelledOn(d.date),attrs=' data-date="'+d.date+'" data-sport="'+sport+'" data-slot="'+slot+'"';
+      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
+      const picked=state.plannerPick===sport&&state.plannerFrom===i&&(state.plannerFromIndex===-1?index==null:state.plannerFromIndex==null||state.plannerFromIndex===index);
+      return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg):'')+(!quiet&&!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
     const av=state.weekPlan?.prefs?.availability?.[i],avText=av?.minutes===0?'Nemám čas':av?.minutes!=null?hm(av.minutes)+(av.window?' · '+av.window:''):av?.window||'';
     const weather=(w?'<div class="hub-weather" title="'+esc(word+(w.rainProb!=null?' · srážky '+w.rainProb+' %':'')+(w.wind!=null?' · vítr '+fmt(w.wind)+' km/h':''))+'"><span>'+icon+'</span><b>'+fmt(w.max)+'°</b><span>'+fmt(w.min)+'°</span>'+(w.rainProb!=null&&w.rainProb>=30?'<span>💧'+fmt(w.rainProb)+' %</span>':'')+'</div>':'<div class="hub-weather"></div>')+(avText?'<div class="hub-availability">'+esc(avText)+'</div>':'');
@@ -1423,20 +1466,30 @@ function renderPlanner(){
 }
 const weekdayOf=date=>(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
 let plannerSaveTimer=null;
-function plannerChanged(){state.weekPlan.dirty=true;state.plannerQuietUntil=Date.now()+PLANNER_QUIET_MS;clearTimeout(plannerQuietTimer);plannerQuietTimer=setTimeout(()=>renderWeekHub(),PLANNER_QUIET_MS+50);$('plannerStatus').textContent='Ukládám…';renderPlanner();renderWeekHub();clearTimeout(plannerSaveTimer);plannerSaveTimer=setTimeout(saveWeekPlanner,500);}
-function plannerPlace(sport,day,fromDay=null){
+function plannerChanged(){if(typeof planEdited==='function')planEdited();state.weekPlan.dirty=true;state.plannerQuietUntil=Date.now()+PLANNER_QUIET_MS;clearTimeout(plannerQuietTimer);plannerQuietTimer=setTimeout(()=>renderWeekHub(),PLANNER_QUIET_MS+50);$('plannerStatus').textContent='Ukládám…';renderPlanner();renderWeekHub();clearTimeout(plannerSaveTimer);plannerSaveTimer=setTimeout(saveWeekPlanner,500);}
+// fromIndex: the chip's position in the plan (-1 for a chip that only shows a
+// proposal); fromSlot: its number among the same sport that day.
+function plannerPlace(sport,day,fromDay=null,fromIndex=null,fromSlot=null){
   const days=state.weekPlan.prefs.days;if(!HUB_SPORTS[sport]||!days[day])return;
   // Dropped back on its own day: nothing changes.
   if(fromDay===day&&days[day].includes(sport)){renderPlanner();renderWeekHub();return;}
-  if(fromDay!=null&&fromDay!==day){
-    days[fromDay]=days[fromDay].filter(x=>x!==sport);
+  if(days[day].length>=MAX_PER_DAY){if(typeof toast==='function')toast('Jeden den pojme nejvýš '+MAX_PER_DAY+' tréninky.');renderPlanner();renderWeekHub();return;}
+  const start=state.weekPlan.start||state.hubWeek,dateOf=i=>start&&typeof dateShift==='function'?dateShift(start,i):null;
+  if(fromDay!=null&&days[fromDay]){
+    const at=fromIndex===-1?-1:fromIndex!=null&&days[fromDay][fromIndex]===sport?fromIndex:days[fromDay].indexOf(sport);
+    const slot=at>=0?days[fromDay].slice(0,at).filter(x=>x===sport).length:Number(fromSlot)||0;
+    if(at>=0)days[fromDay].splice(at,1);
     // A proposal made for the old day must not keep the chip there.
-    const start=state.weekPlan.start||state.hubWeek;
-    if(start&&state.proposals&&typeof dateShift==='function')delete state.proposals[dateShift(start,fromDay)+'|'+sport];
+    if(state.proposals&&dateOf(fromDay))delete state.proposals[proposalKey(dateOf(fromDay),sport,slot)];
   }
-  if(!days[day].includes(sport))days[day].push(sport);
+  // Several sessions a day are fine, the same sport twice included; gym onto
+  // a day whose gym was cancelled brings that one back instead of a second.
+  const revive=sport==='gym'&&days[day].includes('gym')&&dateOf(day)&&typeof gymCancelledOn==='function'&&gymCancelledOn(dateOf(day));
+  if(!revive)days[day].push(sport);
+  if(sport==='gym'&&dateOf(day)&&typeof restoreCancelledGym==='function')restoreCancelledGym(dateOf(day));
   plannerChanged();
 }
+const MAX_PER_DAY=4;
 async function saveWeekPlanner(){
   $('plannerStatus').textContent='Ukládám…';
   const sent=JSON.stringify(state.weekPlan.prefs),start=state.weekPlan.start||state.hubWeek||pragueMonday();
@@ -1447,32 +1500,34 @@ async function saveWeekPlanner(){
   catch(error){$('plannerStatus').innerHTML='Neuloženo: '+esc(error.message)+' <button type="button" class="btn" id="plannerRetry">Zkusit znovu</button>';const retry=$('plannerRetry');if(retry)retry.onclick=saveWeekPlanner;}
 }
 function installPlannerDrag(){
+  // Where a dragged or tapped chip comes from (the palette has no day).
+  const chipOrigin=chip=>({sport:chip.dataset.chipSport,from:chip.dataset.chipDay==null?null:Number(chip.dataset.chipDay),index:chip.dataset.chipDay==null||chip.dataset.chipIndex==null?null:Number(chip.dataset.chipIndex),slot:Number(chip.dataset.chipSlot)||0});
   const box=document.querySelector('#workouts .week-hub');let drag=null,touchDrag=null,suppressClickUntil=0;
   const clearTargets=()=>box.querySelectorAll('.drop-target').forEach(d=>d.classList.remove('drop-target'));
-  box.addEventListener('pointerdown',e=>{const chip=e.target.closest('.planner-chip');if(e.pointerType!=='touch'||!chip||e.target.closest('[data-chip-remove]'))return;touchDrag={sport:chip.dataset.chipSport,from:chip.dataset.chipDay==null?null:Number(chip.dataset.chipDay),x:e.clientX,y:e.clientY,id:e.pointerId,chip,active:false};});
+  box.addEventListener('pointerdown',e=>{const chip=e.target.closest('.planner-chip');if(e.pointerType!=='touch'||!chip||e.target.closest('[data-chip-remove]'))return;touchDrag={...chipOrigin(chip),x:e.clientX,y:e.clientY,id:e.pointerId,chip,active:false};});
   box.addEventListener('pointermove',e=>{if(!touchDrag||e.pointerId!==touchDrag.id)return;if(!touchDrag.active&&Math.hypot(e.clientX-touchDrag.x,e.clientY-touchDrag.y)<12)return;e.preventDefault();if(!touchDrag.active){touchDrag.active=true;box.setPointerCapture(e.pointerId);touchDrag.chip.classList.add('dragging');}clearTargets();const day=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-hub-day]');if(day&&box.contains(day))day.classList.add('drop-target');});
-  const finishTouch=(e,cancelled=false)=>{if(!touchDrag||e.pointerId!==touchDrag.id)return;const current=touchDrag;touchDrag=null;current.chip.classList.remove('dragging');clearTargets();if(!current.active)return;suppressClickUntil=Date.now()+500;if(box.hasPointerCapture(e.pointerId))box.releasePointerCapture(e.pointerId);if(cancelled)return;const day=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-hub-day]');if(day&&box.contains(day)){state.plannerPick=null;state.plannerFrom=null;plannerPlace(current.sport,weekdayOf(day.dataset.hubDay),current.from);}};
+  const finishTouch=(e,cancelled=false)=>{if(!touchDrag||e.pointerId!==touchDrag.id)return;const current=touchDrag;touchDrag=null;current.chip.classList.remove('dragging');clearTargets();if(!current.active)return;suppressClickUntil=Date.now()+500;if(box.hasPointerCapture(e.pointerId))box.releasePointerCapture(e.pointerId);if(cancelled)return;const day=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-hub-day]');if(day&&box.contains(day)){state.plannerPick=null;state.plannerFrom=null;plannerPlace(current.sport,weekdayOf(day.dataset.hubDay),current.from,current.index,current.slot);}};
   box.addEventListener('pointerup',e=>finishTouch(e));box.addEventListener('pointercancel',e=>finishTouch(e,true));
   document.addEventListener?.('keydown',e=>{if(e.key==='Escape'&&state.plannerPick){state.plannerPick=null;state.plannerFrom=null;renderPlanner();renderWeekHub();}});
-  box.addEventListener('dragstart',e=>{const chip=e.target.closest('.planner-chip');if(!chip)return;drag={sport:chip.dataset.chipSport,from:chip.dataset.chipDay==null?null:Number(chip.dataset.chipDay)};e.dataTransfer.effectAllowed=drag.from==null?'copy':'move';e.dataTransfer.setData('text/plain',drag.sport);chip.classList.add('dragging');});
+  box.addEventListener('dragstart',e=>{const chip=e.target.closest('.planner-chip');drag=null;if(!chip)return;drag=chipOrigin(chip);e.dataTransfer.effectAllowed=drag.from==null?'copy':'move';e.dataTransfer.setData('text/plain',drag.sport);chip.classList.add('dragging');});
   box.addEventListener('dragend',e=>{e.target.closest?.('.planner-chip')?.classList.remove('dragging');box.querySelectorAll('.drop-target').forEach(d=>d.classList.remove('drop-target'));
     // A cancelled drag keeps the plan; removal has its own explicit button.
     drag=null;});
   box.addEventListener('dragover',e=>{const day=e.target.closest('[data-hub-day]');if(!drag||!day)return;e.preventDefault();e.dataTransfer.dropEffect=drag.from==null?'copy':'move';box.querySelectorAll('.drop-target').forEach(d=>{if(d!==day)d.classList.remove('drop-target')});day.classList.add('drop-target');});
   box.addEventListener('dragleave',e=>{const day=e.target.closest('[data-hub-day]');if(day&&!day.contains(e.relatedTarget))day.classList.remove('drop-target');});
-  box.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!drag||!day)return;e.preventDefault();const d=drag;drag=null;plannerPlace(d.sport,weekdayOf(day.dataset.hubDay),d.from);});
+  box.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!drag||!day)return;e.preventDefault();const d=drag;drag=null;plannerPlace(d.sport,weekdayOf(day.dataset.hubDay),d.from,d.index,d.slot);});
   box.addEventListener('click',e=>{
     if(Date.now()<suppressClickUntil)return;
     const remove=e.target.closest('[data-chip-remove]');
-    if(remove){const chip=remove.closest('.planner-chip'),i=Number(chip.dataset.chipDay),date=chip.closest('[data-hub-day]').dataset.hubDay;delete state.proposals?.[date+'|'+chip.dataset.chipSport];state.weekPlan.prefs.days[i]=state.weekPlan.prefs.days[i].filter(x=>x!==chip.dataset.chipSport);plannerChanged();return}
+    if(remove){const chip=remove.closest('.planner-chip'),o=chipOrigin(chip),date=chip.closest('[data-hub-day]').dataset.hubDay,list=state.weekPlan.prefs.days[o.from];if(state.proposals)delete state.proposals[typeof proposalKey==='function'?proposalKey(date,o.sport,o.slot):date+'|'+o.sport];const at=o.index===-1?-1:o.index!=null&&list[o.index]===o.sport?o.index:list.indexOf(o.sport);if(at>=0)list.splice(at,1);plannerChanged();return}
     const suggest=e.target.closest('[data-chip-suggest]');
     if(suggest&&!state.plannerPick){openChipSuggestion(suggest.dataset);return}
     const palette=e.target.closest('.planner-chip.palette');
-    if(palette){state.plannerPick=state.plannerPick===palette.dataset.chipSport&&state.plannerFrom==null?null:palette.dataset.chipSport;state.plannerFrom=null;renderPlanner();renderWeekHub();return}
+    if(palette){state.plannerPick=state.plannerPick===palette.dataset.chipSport&&state.plannerFrom==null?null:palette.dataset.chipSport;state.plannerFrom=null;state.plannerFromIndex=null;renderPlanner();renderWeekHub();return}
     const chip=e.target.closest('.planner-chip');
-    if(chip&&!state.plannerPick){state.plannerPick=chip.dataset.chipSport;state.plannerFrom=Number(chip.dataset.chipDay);renderPlanner();renderWeekHub();return;}
+    if(chip&&!state.plannerPick){const o=chipOrigin(chip);state.plannerPick=o.sport;state.plannerFrom=o.from;state.plannerFromIndex=o.index;state.plannerFromSlot=o.slot;renderPlanner();renderWeekHub();return;}
     const day=e.target.closest('[data-hub-day]');
-    if(day&&state.plannerPick&&!e.target.closest('button,input,select,textarea,a')){const sport=state.plannerPick,from=state.plannerFrom??null;state.plannerPick=null;state.plannerFrom=null;plannerPlace(sport,weekdayOf(day.dataset.hubDay),from);}
+    if(day&&state.plannerPick&&!e.target.closest('button,input,select,textarea,a')){const sport=state.plannerPick,from=state.plannerFrom??null,index=state.plannerFromIndex??null,slot=state.plannerFromSlot??null;state.plannerPick=null;state.plannerFrom=null;state.plannerFromIndex=null;state.plannerFromSlot=null;plannerPlace(sport,weekdayOf(day.dataset.hubDay),from,index,slot);}
   });
 }
 // The gym panel suggests muscle groups from the day's planner role.
@@ -1513,12 +1568,21 @@ function updateCachedDay(date,daily,gym){
   for(const days of [state.week?.days,state.hubWeekData?.days]){const day=days?.find(d=>d.date===date);if(!day)continue;if(daily){day.daily=daily;if(daily.nutrition?.foodLog)day.food=daily.nutrition.foodLog;}if(gym?.date===date)day.gymCancelled=Boolean(gym.cancelled);}
 }
 function gymCancelledOn(date){return (state.gym?.date===date&&state.gym.cancelled)||[...(state.week?.days||[]),...(state.hubWeekData?.days||[])].some(d=>d.date===date&&d.gymCancelled)}
+// Gym placed on a day where it was cancelled: the plan wants it again.
+async function restoreCancelledGym(date){
+  if(!gymCancelledOn(date))return;
+  for(const day of [...(state.week?.days||[]),...(state.hubWeekData?.days||[])])if(day.date===date)day.gymCancelled=false;
+  if(state.gym?.date===date)state.gym={...state.gym,cancelled:false};
+  renderWeekHub();
+  try{await jsonFetch('/app/api/gym',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,action:'uncancel'})});planEdited();}
+  catch(error){toast('Gym se na '+longDate(date)+' nepodařilo vrátit: '+error.message);for(const day of [...(state.week?.days||[]),...(state.hubWeekData?.days||[])])if(day.date===date)day.gymCancelled=true;renderWeekHub();}
+}
 function takePlanned(days,eventId){for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===String(eventId));if(i>=0)return list.splice(i,1)[0];}return null}
 async function refreshAfterPlanChange(){
   const revision=++planDataRevision;
   const results=await Promise.allSettled([jsonFetch('/app/api/week?start='+weekStart),jsonFetch('/app/api/daily?date='+selectedHistoryDate),jsonFetch('/app/api/gym?date='+gymDay())]);
   if(revision!==planDataRevision)return;
-  if(results[0].status==='fulfilled')state.week=results[0].value;
+  if(results[0].status==='fulfilled'){state.week=results[0].value;applyPendingPlanned(state.week.days);}
   if(results[1].status==='fulfilled')state.daily=results[1].value;
   if(results[2].status==='fulfilled')state.gym=results[2].value;
   updateCachedDay(selectedHistoryDate,state.daily,state.gym);
@@ -1526,29 +1590,94 @@ async function refreshAfterPlanChange(){
   if(state.hubWeek!==weekStart)state.hubWeekData=null;
   await renderWeekHub();loadScheduledWorkouts();
 }
-async function changePlanned(path,body,apply,done){
-  planDataRevision++;
-  const days=hubDays(),snapshot=days?JSON.stringify(days):null;
-  if(days){apply(days);renderWeekHub();if(typeof renderToday==='function')renderToday();}
-  try{await jsonFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast(done);await refreshAfterPlanChange();}
-  catch(error){if(days)days.splice(0,days.length,...JSON.parse(snapshot));renderWeekHub();if(typeof renderToday==='function')renderToday();toast('Změna se neuložila, vracím ji zpět: '+error.message);}
+// ---- Plan changes: the week shows them at once, the rest of the app after
+// 5 s without further changes, Intervals.icu within 15 s. Moves and deletes
+// of one event are merged, so dragging a session around sends one change.
+const PLAN_SETTLE_MS=5000,INTERVALS_DELAY_MAX_MS=15000;
+let plannedQueueSince=0,plannedFlushTimer=null,planSettleTimer=null,plannedFlushing=null;
+function planEdited(){clearTimeout(planSettleTimer);planSettleTimer=setTimeout(planSettled,PLAN_SETTLE_MS);}
+async function planSettled(){await flushPlannedQueue();await refreshAfterPlanChange();}
+function cachedWeeks(){return [state.week?.days,state.hubWeekData?.days].filter((days,i,all)=>days&&all.indexOf(days)===i)}
+function plannedDate(days,eventId){for(const d of days||[])if((d.daily?.training?.planned||[]).some(x=>String(x.id)===String(eventId)))return d.date;return null}
+// Queued changes stay visible over any data fetched before they reach the server.
+function applyPendingPlanned(days){
+  if(!days||!plannedQueue.size&&!pendingAdds.size)return;
+  for(const [eventId,op] of plannedQueue){
+    takePlanned(days,eventId);
+    const target=op.type==='move'&&op.item?days.find(d=>d.date===op.date):null;
+    if(target)((target.daily||={}).training||={},target.daily.training.planned||=[]).push({...op.item,start:op.date+String(op.item.start||'').slice(10)});
+  }
+  for(const [id,item] of pendingAdds){if(days.some(d=>(d.daily?.training?.planned||[]).some(x=>String(x.id)===id)))continue;const target=days.find(d=>d.date===item.date);if(target)((target.daily||={}).training||={},target.daily.training.planned||=[]).push(item);}
 }
+function queuePlanned(eventId,op){
+  const id=String(eventId),prev=plannedQueue.get(id);
+  plannedQueue.set(id,{...op,from:prev?prev.from:op.from,item:op.item||prev?.item||null});
+  if(!plannedQueueSince)plannedQueueSince=Date.now();
+  clearTimeout(plannedFlushTimer);
+  plannedFlushTimer=setTimeout(flushPlannedQueue,Math.max(0,Math.min(PLAN_SETTLE_MS,plannedQueueSince+INTERVALS_DELAY_MAX_MS-Date.now())));
+  planEdited();
+}
+async function flushPlannedQueue(){
+  clearTimeout(plannedFlushTimer);
+  while(plannedFlushing)await plannedFlushing;
+  if(!plannedQueue.size)return;
+  const ops=[...plannedQueue];plannedQueue.clear();plannedQueueSince=0;
+  plannedFlushing=(async()=>{
+    const failed=[];
+    for(const [eventId,op] of ops){
+      // Moved back where it was: nothing to tell Intervals.icu.
+      if(op.type==='move'&&op.date===op.from)continue;
+      try{await jsonFetch(op.type==='move'?'/app/api/planned/move':'/app/api/planned/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(op.type==='move'?{eventId,date:op.date}:{eventId}),keepalive:true});}
+      catch(error){failed.push('„'+(op.name||'Trénink')+'“: '+error.message);}
+    }
+    if(failed.length){toast('Intervals.icu změnu nepřijalo, vracím ji zpět. '+failed.join(' · '));state.hubWeekData=null;}
+  })();
+  try{await plannedFlushing;}finally{plannedFlushing=null;}
+  if(document.visibilityState!=='hidden')await refreshAfterPlanChange();
+}
+// Leaving the page sends what is waiting right away.
+window.addEventListener('pagehide',()=>{if(plannedQueue.size)flushPlannedQueue();});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&plannedQueue.size)flushPlannedQueue();});
 function movePlanned(eventId,date,name){
   if(!eventId||!date)return;
   if(date<pragueToday()){toast('Trénink jde přesunout jen na dnešek nebo pozdější den.');return}
-  changePlanned('/app/api/planned/move',{eventId,date},days=>{const item=takePlanned(days,eventId),target=days.find(d=>d.date===date);if(item&&target)(target.daily.training.planned||=[]).push({...item,start:date});},'„'+(name||'Trénink')+'“ je na '+longDate(date)+' i v Intervals.icu.');
+  planDataRevision++;
+  let item=null,from=null;
+  for(const days of cachedWeeks()){from=from||plannedDate(days,eventId);const x=takePlanned(days,eventId);item=item||x;}
+  queuePlanned(eventId,{type:'move',date,name,from,item:item?{...item}:null});
+  for(const days of cachedWeeks())applyPendingPlanned(days);
+  renderWeekHub();
+  toast('„'+(name||'Trénink')+'“ je na '+longDate(date)+'. Do Intervals.icu se propíše během pár vteřin.');
 }
 function deletePlanned(eventId,name){
   if(!eventId||!window.confirm('Smazat „'+(name||'trénink')+'“ z plánu i z Intervals.icu?'))return;
-  changePlanned('/app/api/planned/delete',{eventId},days=>takePlanned(days,eventId),'„'+(name||'Trénink')+'“ je smazaný i z Intervals.icu.');
+  planDataRevision++;
+  for(const days of cachedWeeks())takePlanned(days,eventId);
+  queuePlanned(eventId,{type:'delete',name});
+  renderWeekHub();
+  toast('„'+(name||'Trénink')+'“ je smazaný. Z Intervals.icu zmizí během pár vteřin.');
+}
+// A workout added from the library or a proposal shows in the week at once
+// (pendingAdds, declared at the top).
+function showPendingAdd(workout,date,sport){
+  const id='pending:'+(workout?.id||'w')+':'+date,item={id,date,name:workout?.name||'Trénink',type:sport==='run'?'Run':'Ride',durationHours:num(workout?.duration_minutes)/60||null,tss:workout?.target_load??null,start:date,pending:true};
+  pendingAdds.set(id,item);for(const days of cachedWeeks())applyPendingPlanned(days);renderWeekHub();return id;
+}
+// ok: the server took it (eventId makes it editable at once); otherwise it goes.
+function settlePendingAdd(id,ok,eventId=null){
+  const item=pendingAdds.get(id);pendingAdds.delete(id);
+  for(const days of cachedWeeks())for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===id);if(i<0)continue;if(ok&&item)list[i]={...item,id:eventId||item.id,pending:!eventId};else list.splice(i,1);}
+  renderWeekHub();planEdited();
 }
 function installPlannedEditing(){
   const week=$('hubWeek');let dragged=null;
-  week.addEventListener('dragstart',e=>{const item=e.target.closest('.hub-item.editable');if(!item||e.target.closest('.planner-chip'))return;dragged=item;item.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',item.dataset.eventId);});
+  // The week re-renders on a drop, so the dragged node may never see dragend:
+  // every new drag starts clean.
+  week.addEventListener('dragstart',e=>{const item=e.target.closest('.hub-item.editable');dragged=null;if(!item||e.target.closest('.planner-chip'))return;dragged=item;item.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',item.dataset.eventId);});
   week.addEventListener('dragend',()=>{dragged?.classList.remove('dragging');dragged=null;week.querySelectorAll('.drop-target').forEach(d=>d.classList.remove('drop-target'));});
   week.addEventListener('dragover',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day||day.dataset.hubDay<pragueToday())return;e.preventDefault();e.dataTransfer.dropEffect='move';week.querySelectorAll('.drop-target').forEach(d=>{if(d!==day)d.classList.remove('drop-target')});day.classList.add('drop-target');});
   week.addEventListener('dragleave',e=>{const day=e.target.closest('[data-hub-day]');if(day&&!day.contains(e.relatedTarget))day.classList.remove('drop-target');});
-  week.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day)return;e.preventDefault();day.classList.remove('drop-target');const item=dragged;if(item.closest('[data-hub-day]')===day)return;movePlanned(item.dataset.eventId,day.dataset.hubDay,item.dataset.name);});
+  week.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day)return;e.preventDefault();day.classList.remove('drop-target');const item=dragged;dragged=null;if(item.closest('[data-hub-day]')===day)return;movePlanned(item.dataset.eventId,day.dataset.hubDay,item.dataset.name);});
   week.addEventListener('click',e=>{
     if(state.plannerPick)return;
     const item=e.target.closest('.hub-item.editable');if(!item)return;
@@ -1933,7 +2062,7 @@ async function generateWeekProposals(items){
   const b=$('proposeWeek');
   b.disabled=true;state.proposals=state.proposals||{};
   try{
-    let n=0;for(const x of items){if(revision!==statusCoachingRevision)return;n++;$('plannerStatus').textContent='Navrhuji '+n+' / '+items.length+'…';const key=x.date+'|'+x.sport;state.proposals[key]={status:'busy'};renderWeekHub();
+    let n=0;for(const x of items){if(revision!==statusCoachingRevision)return;n++;$('plannerStatus').textContent='Navrhuji '+n+' / '+items.length+'…';const key=proposalKey(x.date,x.sport,x.slot);state.proposals[key]={status:'busy'};renderWeekHub();
       try{
         if(x.sport==='gym'){
           const g=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,preview:true,durationMinutes:x.minutes,startTime:x.startTime,focus:x.role==='gym_upper'?'upper':undefined,focusSource:'week'})});
@@ -1953,22 +2082,24 @@ async function generateWeekProposals(items){
   }finally{b.disabled=false;}
 }
 async function scheduleProposal(key){
-  const pr=state.proposals?.[key];if(!pr?.workout||pr.existing)return false;const [date]=key.split('|');
-  await jsonFetch('/app/api/workouts/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:pr.workout.id,date,confirm:true,environment:pr.result?.environment||'outdoor'})});
-  pr.scheduled=true;return true;
+  const pr=state.proposals?.[key];if(!pr?.workout||pr.existing)return false;const [date,sport]=key.split('|');
+  pr.scheduled=true;const pending=showPendingAdd(pr.workout,date,sport);
+  try{const r=await jsonFetch('/app/api/workouts/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workoutId:pr.workout.id,date,confirm:true,environment:pr.result?.environment||'outdoor'})});settlePendingAdd(pending,r.status!=='already_scheduled',r.eventId);}
+  catch(error){pr.scheduled=false;settlePendingAdd(pending,false);throw error;}
+  return true;
 }
 async function addAllProposals(){
   const keys=Object.keys(state.proposals||{}).filter(k=>state.proposals[k].workout&&!state.proposals[k].scheduled&&!state.proposals[k].existing);
   if(!keys.length||!window.confirm('Přidat '+keys.length+' navržené tréninky do Intervals.icu?'))return;
   let ok=0;for(const k of keys){try{if(await scheduleProposal(k))ok++;}catch(error){toast('Zápis selhal: '+error.message);}}
-  toast(ok+' tréninků je v Intervals.icu.');$('plannerStatus').textContent='✓ '+ok+' v Intervals.icu';state.hubWeekData=null;await refreshAfterPlanChange();
+  toast(ok+' tréninků je v Intervals.icu.');$('plannerStatus').textContent='✓ '+ok+' v Intervals.icu';
 }
 function installProposals(){
   $('proposeWeek').onclick=proposeWeek;
   $('hubWeek').addEventListener('click',async e=>{
     const b=e.target.closest('[data-proposal]');if(!b)return;e.stopPropagation();
-    const key=b.dataset.date+'|'+(b.dataset.sport||'gym'),pr=state.proposals?.[key];
-    if(b.dataset.proposal==='add'){if(!window.confirm('Přidat „'+pr.workout.name+'“ na '+longDate(b.dataset.date)+' do Intervals.icu?'))return;b.disabled=true;try{await scheduleProposal(key);toast(pr.workout.name+' je v Intervals.icu.');state.hubWeekData=null;await refreshAfterPlanChange();}catch(error){toast('Zápis selhal: '+error.message);b.disabled=false;}}
+    const key=proposalKey(b.dataset.date,b.dataset.sport||'gym',b.dataset.slot),pr=state.proposals?.[key];
+    if(b.dataset.proposal==='add'){if(!window.confirm('Přidat „'+pr.workout.name+'“ na '+longDate(b.dataset.date)+' do Intervals.icu?'))return;b.disabled=true;try{await scheduleProposal(key);toast(pr.workout.name+' je v Intervals.icu.');}catch(error){toast('Zápis selhal: '+error.message);b.disabled=false;renderWeekHub();}}
     if(b.dataset.proposal==='open'){state.generatedVariant=0;await openDailyRecommendation({date:b.dataset.date,sport:b.dataset.sport,generated:{...pr.result,existing:pr.existing},title:'Návrh na '+longDate(b.dataset.date)});}
     if(b.dataset.proposal==='gym'){if(pr?.gymPreview)openGymPreview(b.dataset.date,pr);else openGymDay(b.dataset.date);}
   },true);
@@ -2279,7 +2410,7 @@ async function openBarcodeScanner(){
       const tick=async()=>{if(!live)return;try{const codes=await detector.detect(video);const code=codes.find(c=>/^\d{8,14}$/.test(c.rawValue))?.rawValue;if(code){barcodeFound(code);return}}catch{}setTimeout(tick,200);};tick();
     }else{
       status.textContent='Načítám čtečku…';
-      const ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser'),reader=new ZX.BrowserMultiFormatReader();
+      const ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser'),reader=new ZX.BrowserMultiFormatReader(zxingHints(ZX));
       if(!$('scanVideo'))return;
       const controls=await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},video,result=>{const code=result?.getText?.();if(code&&/^\d{8,14}$/.test(code))barcodeFound(code);});
       scanStop=()=>controls.stop();if(!$('scanVideo')){stopScanner();return}status.textContent='Namiř kameru na čárový kód.';
@@ -2289,8 +2420,7 @@ async function openBarcodeScanner(){
 function stopScanner(){try{scanStop?.();}catch{}scanStop=null;}
 async function barcodeFound(code){
   stopScanner();navigator.vibrate?.(60);closeSheet();openFoodLogger();
-  $('foodBarcode').value=code;$('foodQuery').value='';
-  await searchFood();
+  await lookupBarcode(code);
 }
 
 function installNutritionHome(){
@@ -2725,7 +2855,7 @@ function renderAssistantWeekProposal(r){
   if($('proposalAvailability'))$('proposalAvailability').onclick=()=>openAvailabilityEditor('week');
   if($('confirmWeekProposal'))$('confirmWeekProposal').onclick=async()=>{const button=$('confirmWeekProposal');button.disabled=true;try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+r.start,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p.prefs)});await generateWeekProposals(items);appendCoachTurn('assistant','Konkrétní návrhy jsou připravené v plánu týdne. Před zápisem do kalendáře je můžeš zkontrolovat.');}catch(error){$('assistantStatus').textContent=error.message;button.disabled=false;}};
   $('discussWeekProposal').onclick=()=>discussWithAssistant('Chci probrat kompromis k návrhu pro týden '+r.start+'. '+(items.length?'Navržené aktivity: '+items.map(x=>x.date+' · '+HUB_SPORTS[x.sport]+' · '+hm(x.minutes)).join('; ')+'. ':'')+'Navrhni mírnější variantu, která zohlední regeneraci, dostupný čas a můj cíl. Pokud potřebuješ něco upřesnit, zeptej se.',{appContext:{view:'workouts',date:r.start,weekStart:r.start,sport:null,exercise:null}});
-  if($('detailExistingWeek'))$('detailExistingWeek').onclick=async()=>{const button=$('detailExistingWeek');button.disabled=true;try{const week=await hubWeekData(),detail=[];for(const d of week.days||[]){if(d.date<pragueToday())continue;for(const a of d.daily?.training?.planned||[]){const sport=activitySport(a);if(!['ride','run','gym'].includes(sport))continue;detail.push({date:d.date,sport,minutes:Math.round((a.durationHours||1)*60),environment:sport==='gym'?'indoor':'auto',existing:a.id});}}if(detail.length){await generateWeekProposals(detail);appendCoachTurn('assistant','Podrobnosti k naplánovaným tréninkům jsou připravené v plánu týdne.');}else $('assistantStatus').textContent='V tomto týdnu nejsou zbývající plánované tréninky.';}catch(error){$('assistantStatus').textContent=error.message;}finally{button.disabled=false;}};
+  if($('detailExistingWeek'))$('detailExistingWeek').onclick=async()=>{const button=$('detailExistingWeek');button.disabled=true;try{const week=await hubWeekData(),detail=[];for(const d of week.days||[]){if(d.date<pragueToday())continue;for(const a of d.daily?.training?.planned||[]){const sport=activitySport(a);if(!['ride','run','gym'].includes(sport))continue;detail.push({date:d.date,sport,slot:detail.filter(x=>x.date===d.date&&x.sport===sport).length,minutes:Math.round((a.durationHours||1)*60),environment:sport==='gym'?'indoor':'auto',existing:a.id});}}if(detail.length){await generateWeekProposals(detail);appendCoachTurn('assistant','Podrobnosti k naplánovaným tréninkům jsou připravené v plánu týdne.');}else $('assistantStatus').textContent='V tomto týdnu nejsou zbývající plánované tréninky.';}catch(error){$('assistantStatus').textContent=error.message;}finally{button.disabled=false;}};
 }
 function openGymPreview(date,pr){
   const g=pr.gymPreview,plan=g.plan;

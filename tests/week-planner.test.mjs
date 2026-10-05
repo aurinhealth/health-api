@@ -118,3 +118,15 @@ test("the nightly gym plan follows the week plan and keeps an existing plan", as
   await saveGymPlan(db, "2026-10-05", [["x"]]);
   assert.match(await nightlyGymSkip(db, "2026-10-05"), /už gym plán je/);
 });
+
+test('a day may hold the same sport twice; the second session stays easy and gets its own target', async () => {
+  const { sanitizeWeekPlan, planWeekRoles, weekTargets } = await import('../src/week-planner.js');
+  const prefs = sanitizeWeekPlan({ days: [['gym', 'ride', 'ride'], [], [], [], [], [], ['run', 'gym', 'run', 'ride', 'ride']] });
+  assert.deepEqual(prefs.days[0], ['ride', 'ride', 'gym']);
+  assert.equal(prefs.days[6].length, 4);
+  const roles = planWeekRoles(prefs.days);
+  assert.deepEqual(roles[0].items.map(x => [x.sport, x.slot, x.role]), [['ride', 0, 'quality'], ['ride', 1, 'recovery'], ['gym', 0, 'gym_upper']]);
+  const targets = weekTargets({ roles, ctl: 50, days: [{ date: '2026-10-05', done: 0, planned: 60, sports: ['ride'] }], today: '2026-10-05', weekStart: '2026-10-05' });
+  // One planned ride covers the first ride chip only.
+  assert.deepEqual(targets.items.filter(x => x.date === '2026-10-05').map(x => [x.sport, x.slot]), [['ride', 1], ['gym', 0]]);
+});

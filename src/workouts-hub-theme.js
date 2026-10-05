@@ -386,6 +386,7 @@ body.sheet-open{overflow:hidden}
 #plannerStatus:empty{display:none}
 .planner-chip.picked{border-color:#b393ff;background:#3a2c5c;box-shadow:0 0 0 2px rgba(179,147,255,.35)}
 .planner-chip.cancelled{opacity:.65;border-style:dashed}
+.planner-chip .chip-slot{font-size:10px;color:#c6acff;font-weight:700}
 .planner-chip .chip-suggest{flex-basis:100%;margin:2px 0 0;padding:4px 6px;border:1px solid #3f3560;border-radius:6px;background:#1a1530;color:#d9c9ff;font-size:10.5px;font-weight:600;line-height:1.35;text-align:left;cursor:pointer;animation:chipSuggestIn .25s ease}
 .planner-chip .chip-suggest:hover,.planner-chip .chip-suggest:focus-visible{background:#2b2148;color:#fff;border-color:#8c6be0;outline:none}
 @keyframes chipSuggestIn{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}

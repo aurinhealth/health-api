@@ -18,6 +18,7 @@ function context(extra = {}) {
 test('moving a chip drops the proposal of its old day, so the chip really moves', () => {
   const changed = [];
   const ctx = context({ plannerChanged: () => changed.push(1) });
+  vm.runInContext(slice('function chipTarget(', 'function weekTargetText('), ctx);
   vm.runInContext(slice('function plannerPlace(', 'async function saveWeekPlanner('), ctx);
   ctx.state.weekPlan = { start: '2026-10-05', prefs: { days: [['ride'], [], [], [], [], [], []] } };
   ctx.state.proposals = { '2026-10-05|ride': { workout: { name: 'Sweet spot' } }, '2026-10-07|gym': { gym: 4 } };
@@ -69,4 +70,25 @@ test('the daily recommendation appears only when today has no plan', () => {
   ctx.state.weekPlan.prefs.days[0] = [];
   ctx.state.week.days[0].daily.training.planned = [{ type: 'Ride', name: 'Endurance' }];
   assert.equal(ctx.todayHasPlan(), true);
+});
+
+test('one day holds several sessions: a second ride, gym back on a cancelled day', () => {
+  const restored = [];
+  const ctx = context({ plannerChanged() {}, restoreCancelledGym: date => restored.push(date), toast() {} });
+  vm.runInContext(slice('function chipTarget(', 'function weekTargetText('), ctx);
+  vm.runInContext(slice('function plannerPlace(', 'async function saveWeekPlanner('), ctx);
+  ctx.state.weekPlan = { start: '2026-10-05', prefs: { days: [['ride'], [], [], [], [], [], ['ride']] } };
+  ctx.state.proposals = { '2026-10-11|ride|1': { workout: { name: 'Lehce' } } };
+  ctx.plannerPlace('ride', 6, 0, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.state.weekPlan.prefs.days[6])), ['ride', 'ride']);
+  // Chips keep their slot among the same sport, and a lone proposal gets a chip.
+  ctx.state.weekPlan.prefs.days[6] = ['ride'];
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.planChips(6, '2026-10-11'))), [{ sport: 'ride', slot: 0, index: 0 }, { sport: 'ride', slot: 1, index: null }]);
+  ctx.plannerPlace('gym', 6);
+  assert.deepEqual(restored, ['2026-10-11']);
+  ctx.state.weekPlan.prefs.days[2] = ['ride', 'ride', 'run', 'gym'];
+  ctx.plannerPlace('run', 2);
+  assert.equal(ctx.state.weekPlan.prefs.days[2].length, 4);
+  assert.equal(ctx.proposalKey('2026-10-11', 'ride', 0), '2026-10-11|ride');
+  assert.equal(ctx.proposalKey('2026-10-11', 'ride', '1'), '2026-10-11|ride|1');
 });
