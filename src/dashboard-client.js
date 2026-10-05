@@ -525,10 +525,12 @@ let libraryPrefetchTimer=null;
 function prefetchChipLibraries(){
   clearTimeout(libraryPrefetchTimer);
   libraryPrefetchTimer=setTimeout(async()=>{
-    if(plannerQuiet()||document.hidden)return;
-    const queries=[...document.querySelectorAll('#hubWeek [data-chip-suggest][data-minutes]')].filter(b=>b.dataset.sport!=='gym'&&b.dataset.date>=pragueToday()).slice(0,6).map(b=>librarySearchQuery({sport:b.dataset.sport,system:ROLE_SYSTEM[b.dataset.role]??'',environment:b.dataset.env,duration:b.dataset.minutes,tolerance:Number(b.dataset.minutes)>=150?'30':'15',difficulty:b.dataset.role==='recovery'?'':$("workoutDifficulty")?.value,phase:$("workoutPhase")?.value,date:b.dataset.date}));
-    for(const q of [...new Set(queries)]){if(plannerQuiet())return;const hit=libraryCache.get(q);if(hit&&Date.now()-hit.at<LIBRARY_CACHE_MS)continue;await fetchLibrary(q).catch(()=>{});}
-  },800);
+    // Only the next few chips, one at a time, and never next to other heavy work.
+    const busy=()=>plannerQuiet()||document.hidden||state.proposalsBusy||!$('workouts')?.classList.contains('active');
+    if(busy())return;
+    const queries=[...document.querySelectorAll('#hubWeek [data-chip-suggest][data-minutes]')].filter(b=>b.dataset.sport!=='gym'&&b.dataset.date>=pragueToday()).slice(0,3).map(b=>librarySearchQuery({sport:b.dataset.sport,system:ROLE_SYSTEM[b.dataset.role]??'',environment:b.dataset.env,duration:b.dataset.minutes,tolerance:Number(b.dataset.minutes)>=150?'30':'15',difficulty:b.dataset.role==='recovery'?'':$("workoutDifficulty")?.value,phase:$("workoutPhase")?.value,date:b.dataset.date}));
+    for(const q of [...new Set(queries)]){if(busy())return;const hit=libraryCache.get(q);if(hit&&Date.now()-hit.at<LIBRARY_CACHE_MS)continue;await fetchLibrary(q).catch(()=>{});await new Promise(r=>setTimeout(r,1500));}
+  },4000);
 }
 // Anything the athlete changes can change the ranking: start over.
 function clearLibraryCache(){libraryCache.clear();}
@@ -1527,7 +1529,7 @@ async function renderWeekHub(){
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
     const plan=planChips(i,d.date).map(({sport,slot,index})=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).filter(r=>r.sport===sport)[slot],tg=quiet?null:chipTarget(d.date,sport,slot),key=proposalKey(d.date,sport,slot),pr=state.proposals?.[key],cancelled=sport==='gym'&&gymCancelledOn(d.date),attrs=' data-date="'+d.date+'" data-sport="'+sport+'" data-slot="'+slot+'"';
-      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(pr.error)+'</small>':'';
+      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(friendlyProposalError(pr.error))+'</small>'+(pr.item?'<span class="chip-actions"><button type="button" class="btn" data-proposal="retry"'+attrs+'>Zkusit znovu</button></span>':''):'';
       const picked=state.plannerPick===sport&&state.plannerFrom===i&&(state.plannerFromIndex===-1?index==null:state.plannerFromIndex==null||state.plannerFromIndex===index);
       return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+(index!=null?chipEnvBadge(i+'|'+sport+'|'+slot,sport,tg||chipTarget(d.date,sport,slot),d.date):'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg,i+'|'+sport+'|'+slot):'')+(!quiet&&!pr&&!tg&&sports.has(sport)&&d.date>=today?'<small class="proposal">✓ trénink už je naplánovaný</small>':'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
@@ -2208,29 +2210,40 @@ installPhoneLayer();
 async function proposeWeek(){
   return showAdaptiveWeekProposal();
 }
+// A server that is busy (D1 queue, CPU limit) answers with an error page or
+// "overloaded": one more try after a pause usually goes through.
+const TRANSIENT_ERROR=/Invalid response|overloaded|queued for too long|HTTP 5\d\d|exceeded|network|Failed to fetch/i;
+function friendlyProposalError(message){return TRANSIENT_ERROR.test(String(message))?'Server byl přetížený, návrh se nepřipravil.':String(message||'Bez návrhu')}
+async function proposalFor(x){
+  if(x.sport==='gym'){
+    const g=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,preview:true,durationMinutes:x.minutes,startTime:x.startTime,focus:x.role==='gym_upper'?'upper':undefined,focusSource:'week'})});
+    return {gym:new Set((g.plan?.rows||[]).map(r=>r?.[1]).filter(Boolean)).size,gymPreview:g,existing:x.existing};
+  }
+  const r=await jsonFetch('/app/api/workouts/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,sport:x.sport,environment:x.environment||'auto',availabilityMinutes:x.minutes})});
+  return r.status==='ok'?{workout:r.workout,result:r,existing:x.existing}:{error:r.message||'Bez návrhu',item:x};
+}
+// One proposal at a time (the server builds each from the whole week), with
+// one retry after a pause when the server was only busy. Returns how it went.
 async function generateWeekProposals(items){
-  const revision=statusCoachingRevision;
-  const b=$('proposeWeek');
-  b.disabled=true;state.proposals=state.proposals||{};
+  const revision=statusCoachingRevision,b=$('proposeWeek'),done={ok:0,failed:[]};
+  b.disabled=true;state.proposals=state.proposals||{};state.proposalsBusy=true;
   try{
-    let n=0;for(const x of items){if(revision!==statusCoachingRevision)return;n++;$('plannerStatus').textContent='Navrhuji '+n+' / '+items.length+'…';const key=proposalKey(x.date,x.sport,x.slot);state.proposals[key]={status:'busy'};renderWeekHub();
-      try{
-        if(x.sport==='gym'){
-          const g=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,preview:true,durationMinutes:x.minutes,startTime:x.startTime,focus:x.role==='gym_upper'?'upper':undefined,focusSource:'week'})});
-          if(revision!==statusCoachingRevision)return;
-          state.proposals[key]={gym:new Set((g.plan?.rows||[]).map(r=>r?.[1]).filter(Boolean)).size,gymPreview:g,existing:x.existing};
-        }else{
-          const r=await jsonFetch('/app/api/workouts/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:x.date,sport:x.sport,environment:x.environment||'auto',availabilityMinutes:x.minutes})});
-          if(revision!==statusCoachingRevision)return;
-          state.proposals[key]=r.status==='ok'?{workout:r.workout,result:r,existing:x.existing}:{error:r.message||'Bez návrhu'};
-        }
-      }catch(error){if(revision!==statusCoachingRevision)return;state.proposals[key]={error:error.message};}
+    let n=0;for(const x of items){if(revision!==statusCoachingRevision)return done;n++;$('plannerStatus').textContent='Připravuji '+n+' / '+items.length+'…';const key=proposalKey(x.date,x.sport,x.slot);state.proposals[key]={status:'busy'};renderWeekHub();
+      let result=null;
+      for(let attempt=0;attempt<2&&!result;attempt++){
+        try{result=await proposalFor(x);}
+        catch(error){if(attempt===0&&TRANSIENT_ERROR.test(error.message)){await new Promise(r=>setTimeout(r,2500));continue;}result={error:friendlyProposalError(error.message),item:x};}
+      }
+      if(revision!==statusCoachingRevision)return done;
+      state.proposals[key]=result;if(result.error)done.failed.push(x);else done.ok++;
       renderWeekHub();
     }
     const open=Object.values(state.proposals).filter(p=>p.workout&&!p.scheduled&&!p.existing).length;
-    $('plannerStatus').innerHTML=open?'Hotovo · <button type="button" class="btn" id="proposeAddAll">Přidat vše do Intervals.icu ('+open+')</button>':'Hotovo';
+    $('plannerStatus').innerHTML='Hotovo · připraveno '+done.ok+(done.failed.length?' · nepovedlo se '+done.failed.length+' <button type="button" class="btn" id="proposeRetry">Zkusit znovu</button>':'')+(open?' <button type="button" class="btn" id="proposeAddAll">Přidat vše do Intervals.icu ('+open+')</button>':'');
     const all=$('proposeAddAll');if(all)all.onclick=addAllProposals;
-  }finally{b.disabled=false;}
+    const again=$('proposeRetry');if(again)again.onclick=()=>generateWeekProposals(done.failed);
+    return done;
+  }finally{b.disabled=false;state.proposalsBusy=false;}
 }
 async function scheduleProposal(key){
   const pr=state.proposals?.[key];if(!pr?.workout||pr.existing)return false;const [date,sport]=key.split('|');
@@ -2250,6 +2263,7 @@ function installProposals(){
   $('hubWeek').addEventListener('click',async e=>{
     const b=e.target.closest('[data-proposal]');if(!b)return;e.stopPropagation();
     const key=proposalKey(b.dataset.date,b.dataset.sport||'gym',b.dataset.slot),pr=state.proposals?.[key];
+    if(b.dataset.proposal==='retry'&&pr?.item){await generateWeekProposals([pr.item]);return}
     if(b.dataset.proposal==='add'){if(!window.confirm('Přidat „'+pr.workout.name+'“ na '+longDate(b.dataset.date)+' do Intervals.icu?'))return;b.disabled=true;try{await scheduleProposal(key);toast(pr.workout.name+' je v Intervals.icu.');}catch(error){toast('Zápis selhal: '+error.message);b.disabled=false;renderWeekHub();}}
     if(b.dataset.proposal==='open'){state.generatedVariant=0;await openDailyRecommendation({date:b.dataset.date,sport:b.dataset.sport,generated:{...pr.result,existing:pr.existing},title:'Návrh na '+longDate(b.dataset.date)});}
     if(b.dataset.proposal==='gym'){if(pr?.gymPreview)openGymPreview(b.dataset.date,pr);else openGymDay(b.dataset.date);}
@@ -3005,7 +3019,15 @@ function renderAssistantWeekProposal(r){
     (items.length?'<h4>Nové aktivity · '+dateLabel(r.start)+'</h4><div class="week-proposal-list">'+items.map(x=>'<div><strong>'+esc(longDate(x.date))+'</strong><span>'+esc(HUB_SPORTS[x.sport])+' · '+hm(x.minutes)+' · '+(x.environment==='indoor'?'indoor':'outdoor')+'</span><small>'+esc(x.reason||x.label||'')+'</small></div>').join('')+'</div>':'')+
     '<div class="assistant-week-tools">'+(items.length&&!paused?'<button class="btn primary" id="confirmWeekProposal">Připravit tyto tréninky</button>':'')+(!paused?'<button class="btn" id="detailExistingWeek">Rozpracovat plánované</button>':'')+'<button class="btn" id="discussWeekProposal">Probrat kompromis</button></div>';
   if($('proposalAvailability'))$('proposalAvailability').onclick=()=>openAvailabilityEditor('week');
-  if($('confirmWeekProposal'))$('confirmWeekProposal').onclick=async()=>{const button=$('confirmWeekProposal');button.disabled=true;try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+r.start,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p.prefs)});await generateWeekProposals(items);appendCoachTurn('assistant','Konkrétní návrhy jsou připravené v plánu týdne. Před zápisem do kalendáře je můžeš zkontrolovat.');}catch(error){$('assistantStatus').textContent=error.message;button.disabled=false;}};
+  if($('confirmWeekProposal'))$('confirmWeekProposal').onclick=async()=>{const button=$('confirmWeekProposal'),tools=button.closest('.assistant-week-tools');tools.querySelectorAll('button').forEach(x=>x.disabled=true);button.textContent='Připravuji…';
+    try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+r.start,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p.prefs)});state.hubWeek=r.start;renderPlanner();
+      const done=await generateWeekProposals(items);
+      // The proposal is answered: the list and its buttons give way to the result.
+      $('weekProposalCards').innerHTML='<div class="notice week-proposal-done"><strong>✓ Plán týdne je uložený.</strong><p>Připraveno '+done.ok+' z '+items.length+' tréninků'+(done.failed.length?', '+done.failed.length+' se nepovedlo – zkus je znovu':'')+'. Do Intervals.icu se nic nezapsalo; návrhy zkontroluješ v plánu týdne.</p><div class="assistant-week-tools"><button class="btn primary" type="button" id="showWeekProposals">Otevřít plán týdne</button>'+(done.failed.length?'<button class="btn" type="button" id="retryWeekProposals">Zkusit znovu ('+done.failed.length+')</button>':'')+'</div></div>';
+      $('showWeekProposals').onclick=()=>{$('assistantDialog').close();activate('workouts');openWorkouts();$('hubWeek').scrollIntoView({behavior:'smooth',block:'start'});};
+      if($('retryWeekProposals'))$('retryWeekProposals').onclick=async()=>{$('retryWeekProposals').disabled=true;const again=await generateWeekProposals(done.failed);$('retryWeekProposals')?.remove();appendCoachTurn('assistant','Znovu připraveno '+again.ok+' z '+done.failed.length+'.');};
+      appendCoachTurn('assistant',done.failed.length?'Připravil jsem '+done.ok+' z '+items.length+' tréninků. '+done.failed.length+' se nepovedlo, server byl přetížený – můžeš je zkusit znovu.':'Konkrétní návrhy jsou připravené v plánu týdne. Před zápisem do kalendáře je můžeš zkontrolovat.');
+    }catch(error){$('assistantStatus').textContent=error.message;tools.querySelectorAll('button').forEach(x=>x.disabled=false);button.textContent='Připravit tyto tréninky';}};
   $('discussWeekProposal').onclick=()=>discussWithAssistant('Chci probrat kompromis k návrhu pro týden '+r.start+'. '+(items.length?'Navržené aktivity: '+items.map(x=>x.date+' · '+HUB_SPORTS[x.sport]+' · '+hm(x.minutes)).join('; ')+'. ':'')+'Navrhni mírnější variantu, která zohlední regeneraci, dostupný čas a můj cíl. Pokud potřebuješ něco upřesnit, zeptej se.',{appContext:{view:'workouts',date:r.start,weekStart:r.start,sport:null,exercise:null}});
   if($('detailExistingWeek'))$('detailExistingWeek').onclick=async()=>{const button=$('detailExistingWeek');button.disabled=true;try{const week=await hubWeekData(),detail=[];for(const d of week.days||[]){if(d.date<pragueToday())continue;for(const a of d.daily?.training?.planned||[]){const sport=activitySport(a);if(!['ride','run','gym'].includes(sport))continue;detail.push({date:d.date,sport,slot:detail.filter(x=>x.date===d.date&&x.sport===sport).length,minutes:Math.round((a.durationHours||1)*60),environment:sport==='gym'?'indoor':'auto',existing:a.id});}}if(detail.length){await generateWeekProposals(detail);appendCoachTurn('assistant','Podrobnosti k naplánovaným tréninkům jsou připravené v plánu týdne.');}else $('assistantStatus').textContent='V tomto týdnu nejsou zbývající plánované tréninky.';}catch(error){$('assistantStatus').textContent=error.message;}finally{button.disabled=false;}};
 }

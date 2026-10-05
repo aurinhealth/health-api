@@ -78,7 +78,7 @@ import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
 
 // Requests that read or preview only and so keep the cache.
-const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|training-profile\/estimate|assistant$|assistant\/stream)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|training-profile\/estimate|assistant$|assistant\/stream)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/mcp/health']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -348,15 +348,19 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
-  const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health,...weekResponses]=await Promise.all([
-    app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
-    internal('/app/api/fitness?days=90'),internal('/app/api/gym?date='+date),
-    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-7),shiftDate(date,1))).then(d=>Response.json(d)),
-    googleDashboard(env.DB,date).catch(()=>({})),
-    ...weeks.map(w=>internal('/app/api/week?start='+w))
-  ]);
   const json=r=>r.json().catch(()=>({}));
-  const [daily,fitness,gym,sleep,profile,...weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env),...weekResponses.map(json)]);
+  const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health]=await Promise.all([
+    app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
+    cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>Response.json(d)),internal('/app/api/gym?date='+date),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-7),shiftDate(date,1))).then(d=>Response.json(d)),
+    googleDashboard(env.DB,date).catch(()=>({}))
+  ]);
+  // The three weeks are the heavy part (every day's analysis, food and
+  // recommendations). One week at a time, cached and shared by every day of
+  // that week, so the database is never asked for all of them at once.
+  const weekData=[];
+  for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
+  const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
   return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB)};
 }
@@ -1050,7 +1054,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // Same calorie target as the day view: one Google Health read covers the week.
     const profile = await dashboardProfile(env);
     const health = profile ? await googleDashboard(env.DB, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
-    const days = await Promise.all(dates.map(async date => {
+    // D1 runs one query at a time: three days at once keep its queue short
+    // (all seven at once overloaded it when several weeks were asked together).
+    const days = await mapLimit(dates, 3, async date => {
       const dailyUrl = new URL("/analysis/daily", request.url);
       dailyUrl.searchParams.set("date", date);
       const foodUrl = new URL("/food/log", request.url);
@@ -1069,7 +1075,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         food: await foodResponse.json(),
         recommendations: await recommendResponse.json()
       };
-    }));
+    });
     return Response.json({status:"ok",start,end:dates[6],days},{headers:{"Cache-Control":"no-store"}});
   }
 
@@ -1350,6 +1356,12 @@ function pragueWeekStart() {
   const weekday = parts.find(x=>x.type==="weekday").value;
   const index = {Mon:0,Tue:1,Wed:2,Thu:3,Fri:4,Sat:5,Sun:6}[weekday] ?? 0;
   return shiftDate(`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`, -index);
+}
+// Like Promise.all over items, with at most `limit` running at a time; keeps order.
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); } }));
+  return out;
 }
 function shiftDate(date, days) {
   const p = String(date).slice(0,10).split("-").map(Number);
