@@ -13,6 +13,7 @@ export function dashboardPage() {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
 <meta name="robots" content="noindex,nofollow">
 <title>Petr Fitness Data — Command Center</title>
 <style>
