@@ -51,6 +51,7 @@ const weekActivities = {
   [day(1, MON)]: { completed: [ride(day(1, MON), "Sweet Spot 3×12", 1.25, 82, 141)], matched: [{ planned: { id: "planned:e0", name: "Sweet Spot 3×12", type: "Ride", durationHours: 1.33, tss: 88, description: "Rozjetí\n- 15m 55-70%\n3x\n- 12m 88-93%\n- 4m 55%\nVyjetí\n- 10m 50-60%" }, actualId: "i" + day(1, MON).replace(/-/g, "") + "Sweet Spot 3×12".length }] },
   [day(2, MON)]: { completed: [walk(day(2, MON), 38, 97)] },
   [day(3, MON)]: { planned: [{ id: "planned:e1", name: "Threshold 4×8", type: "Ride", durationHours: 1.33, tss: 95, start: day(3, MON), description: "Rozjetí\n- 15m ramp 50-75%\nHlavní část 4x\n- 8m 95-100%\n- 4m 55%\nVyjetí\n- 10m 50%" }] },
+  [day(4, MON)]: { planned: [{ id: "planned:g1", name: "Gym · Strength — Horní tělo", type: "WeightTraining", durationHours: 1, start: day(4, MON) }] },
   [day(6, MON)]: { planned: [{ id: "planned:e2", name: "Long Endurance", type: "Ride", durationHours: 3.5, tss: 190, start: day(6, MON), description: "- 3h30m 60-72% 85-95rpm" }] }
 };
 // Six weeks of gym (upper on Monday, lower on Thursday) with slowly rising weights.
@@ -160,7 +161,7 @@ async function staticResponses() {
     "/app/api/gym/exercises": { status: "ok", exercises: gymExerciseCatalog() }, "/app/api/training-profile": trainingProfile(), "/app/api/profile": { status: "ok", profile: null, suggestions: { height: 182, activity: "light", averageSteps: 6400, rhr: 52, hrmax: 187, birthDate: "1990-05-14" } },
     "/app/api/workouts/scheduled": { status: "ok", workouts: [{ workout_id: searches.ride.workouts[0].id, name: searches.ride.workouts[0].name, sport: "ride", scheduled_date: day(1, MON) <= T ? day(1, MON) : T, status: "completed", completed_percent: 96, primary_system: searches.ride.workouts[0].primary_system, duration_minutes: searches.ride.workouts[0].duration_minutes }] },
     muscles: Object.fromEntries(Object.keys(EXERCISES).map(name => [name, exerciseMuscles(name)])),
-    planned: Object.fromEntries(Object.values(weekActivities).flatMap(w => [...(w.planned || []), ...(w.matched || []).map(m => m.planned)]).map(e => { const w = plannedEventWorkout({ ...e, moving_time: e.durationHours * 3600, icu_training_load: e.tss }); w.steps = stepRows(JSON.parse(w.structure_json), { ftp: w.environment === "indoor" ? 247 : 260, environment: w.environment }); return [e.id, { status: "ok", source: "intervals", workout: w, athlete: { ftp: 260, indoorFtp: 247, indoorFtpEstimated: true, runThresholdPace: 285 } }]; })),
+    planned: Object.fromEntries(Object.values(weekActivities).flatMap(w => [...(w.planned || []), ...(w.matched || []).map(m => m.planned)]).filter(e => !/weight/i.test(e.type)).map(e => { const w = plannedEventWorkout({ ...e, moving_time: e.durationHours * 3600, icu_training_load: e.tss }); w.steps = stepRows(JSON.parse(w.structure_json), { ftp: w.environment === "indoor" ? 247 : 260, environment: w.environment }); return [e.id, { status: "ok", source: "intervals", workout: w, athlete: { ftp: 260, indoorFtp: 247, indoorFtpEstimated: true, runThresholdPace: 285 } }]; })),
     technique: Object.fromEntries(Object.keys(EXERCISES).map(name => [name, techniqueFor(name)])),
     searches, generated, weeks: { [MON]: week(MON), [day(-7, MON)]: week(day(-7, MON)), [day(7, MON)]: week(day(7, MON)) }
   };
@@ -192,6 +193,7 @@ function shim(data, planner) {
 const statusCoaches=(()=>{const todayGymContext=(gym,date)=>({date,exercises:[...new Set((gym.values||[]).slice(7).filter(r=>r[0]==='WORK').map(r=>r[1]))].map(name=>({name,sets:gym.values.slice(7).filter(r=>r[0]==='WORK'&&r[1]===name).map(r=>({completed:r[8]==='TRUE'}))}))});${statusCoachText.map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return buildCoachCouncil;})();
 const fallbackReview=(()=>{${[statusCoachText[0],weeklyReviewText].map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return fallbackWeekReview;})();
 let prefs=${JSON.stringify(weekPlan)},overrides={},inboxItems=[],fluidDays={},fluidId=10,athleteState={status:'active',note:'',memories:[],conversation:[],dismissed:[]},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}},GYM_WEEK=${JSON.stringify(gymPlansForWeek())};
+gymByDay[${JSON.stringify(day(4, MON))}]=GYM_WEEK[${JSON.stringify(day(4, MON))}]?.values||gymByDay[${JSON.stringify(T)}];
 let gymCancelled={},foodProducts=[],foodEntries=JSON.parse(JSON.stringify(DATA['/app/api/food/day'].entries)),foodEntryId=100,sandboxChats=[];
 const T=${JSON.stringify(T)},CTL=${JSON.stringify(CTL)},LAST=${JSON.stringify(LAST_WEEK)},WEEKDAYS=${JSON.stringify(Object.fromEntries([day(-7, MON), MON, day(7, MON)].map(w => [w, weekDays(w)])))};
 const FOCUS=${JSON.stringify(FOCUS_GROUPS)},weather=${JSON.stringify(weatherSample())};

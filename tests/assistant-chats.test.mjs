@@ -38,3 +38,15 @@ test('chats untouched for 90 days are removed and titles stay short',async()=>{
   assert.ok(title.length<=60&&title.endsWith('…'));
   assert.equal(chatTitle('  '),'Nový chat');
 });
+
+test('the client continues a chat only the same day and within 3 hours of the last message',async()=>{
+  const {readFileSync}=await import('node:fs'),vm=await import('node:vm');
+  const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
+  const context=vm.createContext({pragueToday:()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Prague'})});
+  vm.runInContext(source.slice(source.indexOf('// Chats: the current one'),source.indexOf('const ASSISTANT_WELCOME')),context);
+  const fresh=lastAt=>vm.runInContext('assistantChat={id:5,lastAt:'+lastAt+'};assistantChatFresh()',context);
+  assert.equal(fresh(Date.now()-60e3),true);
+  assert.equal(fresh(Date.now()-4*3600e3),false);
+  assert.equal(fresh(Date.now()-30*3600e3),false);
+  assert.equal(vm.runInContext('assistantChat={id:null,lastAt:Date.now()};assistantChatFresh()',context),false);
+});

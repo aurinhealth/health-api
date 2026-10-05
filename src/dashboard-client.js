@@ -1861,19 +1861,38 @@ function activityDetailHtml(result,sport){
   return '<div class="activity-sheet"><div class="training-facts">'+stats.map(([l,v])=>'<div><span>'+l+'</span><strong>'+esc(v)+'</strong></div>').join('')+'</div>'+route+chart('watts','#83e9c3','Výkon','W')+chart('heartrate','#ff9c97','Tep','bpm')+'<div class="activity-extras">'+activityExtras(result)+'</div></div>';
 }
 function activityIdOf(a){return a.payload?.id||a.externalId||a.sourceId||String(a.id||'').replace(/^intervals[:_-]/,'');}
+// Gym off a day from the week: its strength events go, the plan stays restorable.
+async function cancelGymDay(date,button){
+  if(!window.confirm('Zrušit gym na '+longDate(date)+'? Plán zůstane uložený a jde obnovit.'))return;
+  button.disabled=true;planDataRevision++;
+  try{const r=await jsonFetch('/app/api/gym',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,action:'cancel'})});
+    for(const days of cachedWeeks())for(const d of days)if(d.date===date&&d.daily?.training)d.daily.training.planned=(d.daily.training.planned||[]).filter(p=>activitySport(p)!=='gym');
+    if(gymDay()===date)state.gym={...state.gym,cancelled:true,recoverable:true,values:[]};
+    closeSheet();renderWeekHub();toast(r.message);await refreshAfterPlanChange();
+  }catch(error){toast(error.message);button.disabled=false;}
+}
 async function openTrainingDetail(entry){
   const {kind,date,sport='gym'}=entry,today=pragueToday(),title=HUB_SPORTS[sport]+' · '+longDate(date),current=()=>$('sheetTitle')?.textContent===title&&!$('sheet').hidden;
-  if(kind==='gym'){
+  // A planned strength event opens like the gym day: figure, exercises, its changes.
+  if(kind==='gym'||kind==='planned'&&sport==='gym'){
+    const event=kind==='planned'?entry.item:null,canEdit=Boolean(event&&entry.editable&&date>=today);
     openSheet(title,'<p class="small">Načítám gym…</p>',null,'training-detail');
     try{const g=await jsonFetch('/app/api/gym?date='+date);if(!current())return;
       const values=g.values||[],plannedSets=[...new Set(values.slice(7).filter(r=>r?.[1]&&String(r[0]).toUpperCase()==='WORK').map(r=>r[1]))].map(exercise=>({exercise,count:values.slice(7).filter(r=>r[1]===exercise&&String(r[0]).toUpperCase()==='WORK').length}));
       const logged=(entry.sets||[]).filter(r=>String(r.type||'WORK').toUpperCase()==='WORK'),doneSets=[...new Set(logged.map(r=>r.exercise))].map(exercise=>({exercise,count:logged.filter(r=>r.exercise===exercise).length}));
-      const figure=gymMuscleFigure(gymMuscleLoad(g.muscles,entry.done&&doneSets.length?doneSets:plannedSets));
-      $('sheetBody').innerHTML='<div class="eyebrow">'+(entry.done?'Odcvičeno · plán a skutečnost':'Naplánovaný gym')+'</div>'+(values[2]?.[3]?'<h4 class="training-name">'+esc(values[2][3])+'</h4>':'')+
-        '<div class="gym-detail">'+figure+'<div>'+(entry.done?gymCompareHtml(values,true,entry.sets||[]):gymCompactList(values,g.muscles))+'</div></div>'+
-        '<div class="training-actions">'+(date===today&&!entry.done?'<button type="button" class="btn primary" data-td="gym-mode">▶ Režim tréninku</button>':'')+'<button type="button" class="btn" data-td="gym-open">'+(entry.done?'Otevřít gym':'Upravit gym')+'</button></div>';
+      const figure=gymMuscleFigure(gymMuscleLoad(g.muscles,entry.done&&doneSets.length?doneSets:plannedSets)),name=values[2]?.[3]||event?.name||'';
+      const list=entry.done?gymCompareHtml(values,true,entry.sets||[]):plannedSets.length?gymCompactList(values,g.muscles):event?.description?'<h4>Plán</h4>'+workoutPlanHtml(event.description):gymCompactList(values,g.muscles);
+      $('sheetBody').innerHTML='<div class="eyebrow">'+(entry.done?'Odcvičeno · plán a skutečnost':'Naplánovaný gym')+'</div>'+(name?'<h4 class="training-name">'+esc(name)+'</h4>':'')+(event?trainingFacts(event,'gym'):'')+
+        '<div class="gym-detail">'+figure+'<div>'+list+'</div></div>'+
+        '<div class="training-actions">'+(date===today&&!entry.done?'<button type="button" class="btn primary" data-td="gym-mode">▶ Režim tréninku</button>':'')+'<button type="button" class="btn" data-td="gym-open">'+(entry.done?'Otevřít gym':'Upravit gym')+'</button>'+(canEdit?'<button type="button" class="btn" data-td="move" aria-expanded="false">Přesunout</button><button type="button" class="btn sheet-danger" data-td="gym-cancel">Zrušit gym</button>':'')+'</div>'+(canEdit?'<div class="training-move" hidden>'+dayChips().replace(/<button type="button" class="btn sheet-danger" data-delete-planned>[^<]*<\/button>/,'')+'</div>':'');
     }catch(error){$('sheetBody').innerHTML='<p>'+esc(error.message)+'</p>';}
-    $('sheetBody').onclick=async e=>{const b=e.target.closest('[data-td]');if(!b)return;closeSheet();await openGymDay(date);if(b.dataset.td==='gym-mode')openGymMode();else $('workoutsGym')?.scrollIntoView({behavior:'smooth',block:'start'});};
+    $('sheetBody').onclick=async e=>{
+      const move=e.target.closest('[data-move-to]');if(move&&event){closeSheet();return movePlanned(event.id,move.dataset.moveTo,event.name);}
+      const b=e.target.closest('[data-td]');if(!b)return;const a=b.dataset.td;
+      if(a==='move'){const box=$('sheetBody').querySelector('.training-move');box.hidden=!box.hidden;b.setAttribute('aria-expanded',String(!box.hidden));return;}
+      if(a==='gym-cancel')return cancelGymDay(date,b);
+      closeSheet();await openGymDay(date);if(a==='gym-mode')openGymMode();else $('workoutsGym')?.scrollIntoView({behavior:'smooth',block:'start'});
+    };
     return;
   }
   const item=entry.item,plan=kind==='done'?entry.plan:item,env=activityEnvironmentBadge(item,sport);
@@ -3000,21 +3019,24 @@ function renderAssistantContext(context=captureAssistantContext()){
   quick.querySelectorAll('[data-assistant-quick]').forEach(b=>b.onclick=()=>{const i=Number(b.dataset.assistantQuick);return discussWithAssistant(items[i][1],{appContext:i===1?{...context,sport:null,exercise:null,date:context.weekStart}:i===2?{view:'today',date:pragueToday(),weekStart:mondayOf(pragueToday()),sport:null,exercise:null}:context});});
 }
 // Chats: the current one is remembered on the device; the list lives on the
-// server. A chat idle for 6 hours is left in the history and a new one starts.
-const ASSISTANT_CHAT_IDLE_MS=6*3600e3;
+// server. After 3 hours of silence, or on a new day, the chat stays in the
+// history and a new one starts, so old context does not leak into today.
+const ASSISTANT_CHAT_IDLE_MS=3*3600e3;
+function assistantChatFresh(){if(!assistantChat.id)return false;const day=new Date(assistantChat.lastAt).toLocaleDateString('sv-SE',{timeZone:'Europe/Prague'});return Date.now()-assistantChat.lastAt<ASSISTANT_CHAT_IDLE_MS&&day===pragueToday();}
 let assistantChat={id:null,lastAt:0};
 try{const saved=JSON.parse(localStorage.getItem('pfd-assistant-chat')||'null');if(saved?.id)assistantChat={id:Number(saved.id),lastAt:Number(saved.lastAt)||0};}catch{}
 function rememberAssistantChat(id){assistantChat={id:id||null,lastAt:id?Date.now():0};try{localStorage.setItem('pfd-assistant-chat',JSON.stringify(assistantChat));}catch{}}
 const ASSISTANT_WELCOME='<div class="assistant-welcome"><span>✦</span><strong>Co dnes upravíme?</strong>Projdeme plán, regeneraci nebo výživu.<br>Návrhy můžeš potvrdit, odmítnout i probrat.</div>';
-function startAssistantChat(){
+function startAssistantChat(auto=false){
   if(assistantBusy)return toast('Asistent právě odpovídá. Počkej na dokončení odpovědi.');
   rememberAssistantChat(null);if(state.athleteState)state.athleteState.conversation=[];
-  $('assistantConversation').innerHTML=ASSISTANT_WELCOME;$('weekProposalCards')&&($('weekProposalCards').innerHTML='');
+  $('assistantConversation').innerHTML=ASSISTANT_WELCOME+(auto?'<p class="assistant-new-note">Po odmlce začínám nový chat. Předchozí rozhovor najdeš v ☰ Chaty.</p>':'');$('weekProposalCards')&&($('weekProposalCards').innerHTML='');
   hideAssistantHistory();$('assistantStatus').textContent='Nový chat';updateAssistantComposer();
 }
-async function showAssistantChat(id){
+// Picked from the list, a chat counts as fresh again; resumed on open, it keeps its time.
+async function showAssistantChat(id,picked=true){
   const {chat}=await jsonFetch('/app/api/assistant/chats/'+id);
-  assistantChat={id:chat.id,lastAt:Date.now()};try{localStorage.setItem('pfd-assistant-chat',JSON.stringify(assistantChat));}catch{}
+  assistantChat={id:chat.id,lastAt:picked?Date.now():assistantChat.lastAt};try{localStorage.setItem('pfd-assistant-chat',JSON.stringify(assistantChat));}catch{}
   if(state.athleteState)state.athleteState.conversation=chat.messages.map(m=>({role:m.role,content:m.content}));
   $('assistantConversation').innerHTML=chat.messages.map(m=>coachTurnHtml(m.role,m.content)).join('')||ASSISTANT_WELCOME;
   hideAssistantHistory();$('assistantStatus').textContent=chat.title;scrollAssistant();
@@ -3038,7 +3060,7 @@ function installAssistantChats(){
   const button=$('assistantChats');if(!button?.dataset||button.dataset.ready)return;
   button.dataset.ready='1';
   $('assistantChats').onclick=toggleAssistantHistory;
-  $('assistantNewChat').onclick=startAssistantChat;
+  $('assistantNewChat').onclick=()=>startAssistantChat();
   $('assistantHistory').onclick=async e=>{
     const open=e.target.closest('[data-chat-open]'),del=e.target.closest('[data-chat-delete]');
     if(e.target.closest('[data-chat-new]'))return startAssistantChat();
@@ -3051,10 +3073,11 @@ async function openFloatingAssistant(message=''){
   $('floatingAssistant')?.classList.add('is-open');
   if(message)setAssistantDraft(message);
   installAssistantChats();
-  if(!$('assistantConversation').children.length){
-    // The last chat continues while it is fresh; after a pause a new one starts.
-    const chat=assistantChat.id&&Date.now()-assistantChat.lastAt<ASSISTANT_CHAT_IDLE_MS?assistantChat.id:null;
-    if(chat)await showAssistantChat(chat).catch(()=>startAssistantChat());else startAssistantChat();
+  // The last chat continues while it is fresh; after a pause a new one starts,
+  // also when the panel was left open with the old conversation.
+  const stale=assistantChat.id&&!assistantChatFresh()&&!assistantBusy;
+  if(!$('assistantConversation').children.length||stale){
+    if(assistantChatFresh())await showAssistantChat(assistantChat.id,false).catch(()=>startAssistantChat());else startAssistantChat(Boolean(stale));
   }
   renderAssistantContext();
   if(window.matchMedia?.('(hover: hover) and (pointer: fine)').matches)$('assistantMessage').focus();

@@ -50,4 +50,5 @@ body.gym-mode-open dialog.assistant-dialog{z-index:150}.gm-assistant{font-size:1
 .assistant-chat-delete{background:none;border:0;color:#93a39b;padding:0 12px;cursor:pointer;font-size:14px}.assistant-chat-delete:hover{color:#ff8a8a}
 .assistant-history-note{margin-top:12px}
 @media(max-width:700px){.assistant-panel-header .assistant-head-btn{padding:6px 9px}.assistant-history{top:62px}}
+.assistant-new-note{margin:10px 4px 0;font-size:12px;color:#93a39b;text-align:center}
 `;
