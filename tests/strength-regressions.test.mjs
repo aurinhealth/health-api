@@ -529,3 +529,39 @@ test("the gym deloads in the shared recovery week; its own four-week count is on
   const fallback = generateStrengthPlan({ ...base, strength: { recentCompletedSets: solid } }, { durationMinutes: 60 });
   assert.match(fallback.planName, /odlehčený týden/);
 });
+
+test("an exercise three sessions without progress makes way for another variant, with the reason", async () => {
+  const { stalledExercises } = await import("../src/strength-generator.js");
+  const session = (date, reps = 8) => [1, 2, 3].map(n => ({ workout_date: date, exercise: "DB bench press", type: "WORK", completed: 1, actual_kg: 20, actual_reps: reps, rpe: 8, set_no: n }));
+  const stuck = [...session("2026-09-18"), ...session("2026-09-14"), ...session("2026-09-10")];
+  assert.deepEqual([...stalledExercises(stuck, "2026-09-25")], ["DB bench press"]);
+  // One more rep last time is progress, not a stall.
+  assert.equal(stalledExercises([...session("2026-09-18", 9), ...session("2026-09-14"), ...session("2026-09-10")], "2026-09-25").size, 0);
+  // The machine press was done three days ago, so without the stall the bench press would be next.
+  const machine = [1, 2].map(n => ({ workout_date: "2026-09-22", exercise: "Chest flat press Prime", type: "WORK", completed: 1, actual_kg: 40, actual_reps: 10, rpe: 8, set_no: n }));
+  const context = { date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: [...machine, ...stuck] } };
+  const others = ["Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"];
+  const plan = generateStrengthPlan(context, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: others });
+  const work = plan.rows.filter(r => r[0] === "WORK");
+  assert.equal(work[0][1], "Chest flat press Prime");
+  assert.match(work[0][9], /místo DB bench press: 3 tréninky bez posunu/);
+  assert.match(plan.rationale, /Po třech trénincích bez posunu nová varianta: DB bench press → Chest flat press Prime/);
+  // The only variant left: it stays, with the stall note asking for a rep more.
+  const only = generateStrengthPlan(context, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: [...others, "Chest flat press Prime"] });
+  const kept = only.rows.filter(r => r[0] === "WORK");
+  assert.equal(kept[0][1], "DB bench press");
+  assert.match(kept[0][9], /3× bez posunu/);
+  assert.doesNotMatch(only.rationale, /nová varianta/);
+});
+
+test("grip and traps take a turn among the small muscles once the others had theirs", () => {
+  const recent = (exercise, date) => [1, 2, 3].map(n => ({ workout_date: date, exercise, type: "WORK", completed: 1, actual_kg: 10, actual_reps: 12, rpe: 7, set_no: n }));
+  const fresh = { date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: [] } };
+  const small = /wrist|reverse curl|shrug|upright row/i;
+  // Nothing done yet: the usual small muscles first, no grip or traps.
+  assert.equal(generateStrengthPlan(fresh, { durationMinutes: 75 }).rows.some(r => small.test(r[1])), false);
+  // Arms, shoulders, core and calves trained twice in the last two weeks: now grip or traps get a slot.
+  const sets = ["DB curl", "Cable triceps extension", "Cable lateral raise", "Face pull", "Cable crunch", "Standing calf raise"].flatMap(ex => [...recent(ex, "2026-09-15"), ...recent(ex, "2026-09-19")]);
+  const plan = generateStrengthPlan({ ...fresh, strength: { recentCompletedSets: sets } }, { durationMinutes: 75 });
+  assert.ok(plan.rows.some(r => small.test(r[1])), plan.rows.map(r => r[1]).join(", "));
+});

@@ -7,7 +7,7 @@
 import http from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { dashboardPage } from "../src/dashboard.js";
-import { gymExerciseCatalog } from "../src/gym-catalog.js";
+import { gymExerciseCatalog, gymAlternatives } from "../src/gym-catalog.js";
 import { FOCUS_GROUPS, generateStrengthPlan } from "../src/strength-generator.js";
 import { planValues } from "../src/gym-plan-store.js";
 import { searchWorkoutLibrary, generateWorkout, getCapabilities } from "../src/workout-library.js";
@@ -163,6 +163,7 @@ async function staticResponses() {
     muscles: Object.fromEntries(Object.keys(EXERCISES).map(name => [name, exerciseMuscles(name)])),
     planned: Object.fromEntries(Object.values(weekActivities).flatMap(w => [...(w.planned || []), ...(w.matched || []).map(m => m.planned)]).filter(e => !/weight/i.test(e.type)).map(e => { const w = plannedEventWorkout({ ...e, moving_time: e.durationHours * 3600, icu_training_load: e.tss }); w.steps = stepRows(JSON.parse(w.structure_json), { ftp: w.environment === "indoor" ? 247 : 260, environment: w.environment }); return [e.id, { status: "ok", source: "intervals", workout: w, athlete: { ftp: 260, indoorFtp: 247, indoorFtpEstimated: true, runThresholdPace: 285 } }]; })),
     technique: Object.fromEntries(Object.keys(EXERCISES).map(name => [name, techniqueFor(name)])),
+    alternatives: Object.fromEntries(gymExerciseCatalog().map(e => [e.name, gymAlternatives(e.name, gymHistory)])),
     searches, generated, weeks: { [MON]: week(MON), [day(-7, MON)]: week(day(-7, MON)), [day(7, MON)]: week(day(7, MON)) }
   };
 }
@@ -224,6 +225,7 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
  if(p==='/app/api/gym/technique'){const name=m==='POST'?body.exercise:url.searchParams.get('exercise'),t=DATA.technique[name];if(!t)return ok({message:'Cvik není v databázi.'},404);if(m==='POST'){const id=(String(body.url||'').match(/(?:v=|youtu[.]be[/]|shorts[/])([A-Za-z0-9_-]{11})/)||[])[1];t.ownUrl=body.url||null;t.video=id?{id,source:'own'}:DATA.techniqueVideo?.[name]??t.video;}return ok({status:'ok',technique:t});}
  if(p==='/app/api/assistant/action'){const row=inboxItems.find(x=>x.id===body.draftId);let result=athleteState;if(row&&row.status==='draft'){row.status=body.decision==='confirm'?'confirmed':'rejected';if(body.decision==='confirm'){const a=row.draft.action;if(a.type==='status')athleteState.status=a.status;if(a.type==='week_sport'){const weekday=(new Date(a.date+'T12:00:00Z').getUTCDay()+6)%7,start=shift(a.date,-weekday),effective=sanitizeWeekPlan(overrides[start]||prefs);if(!effective.days[weekday].includes(a.sport))effective.days[weekday].push(a.sport);overrides[start]=effective;result={date:a.date,prefs:effective};}}}return ok({status:'ok',message:body.decision==='confirm'?'Návrh potvrzen.':'Návrh odmítnut.',result});}
  if(p==='/app/api/gym/confirm')return ok({status:'ok',intervals:{status:'ok'}});
+ if(p==='/app/api/gym/alternatives'){const d=url.searchParams.get('date')||T,inPlan=(gymByDay[d]||[]).slice(7).map(r=>r?.[1]).filter(Boolean);return ok({status:'ok',alternatives:(DATA.alternatives[url.searchParams.get('exercise')]||[]).filter(a=>!inPlan.includes(a.name))});}
  if(p==='/app/api/week'){const w=DATA.weeks[url.searchParams.get('start')]||DATA.weeks[Object.keys(DATA.weeks)[1]];return ok({...w,days:w.days.map(d=>({...d,gymCancelled:Boolean(gymCancelled[d.date])}))});}
  if(p==='/app/api/daily'){const d=url.searchParams.get('date')||T;return ok(Object.values(DATA.weeks).flatMap(w=>w.days).find(day=>day.date===d)?.daily||DATA[p]);}
  if(p==='/app/api/workouts/search'){const q=url.searchParams,sport=q.get('sport')==='run'?'run':'ride';return ok(DATA.searches[sport+'|'+(q.get('system')||'')+'|'+(q.get('environment')==='indoor'?'indoor':'outdoor')]||DATA.searches[sport]);}

@@ -24,7 +24,7 @@ import {athleteFocus} from './athlete-focus.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
-import {gymExerciseCatalog} from './gym-catalog.js';
+import {gymExerciseCatalog,gymAlternatives} from './gym-catalog.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,pragueNow} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
@@ -49,7 +49,7 @@ import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, f
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
-import { importStrengthHistory, getStrengthHistory, parseStrengthSheet } from "./strength-history.js";
+import { importStrengthHistory, getStrengthHistory, parseStrengthSheet, removeManualSets } from "./strength-history.js";
 import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -476,6 +476,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // entries (weight, food) and the profile; missingProviders drives the
   // connection prompt in the client.
   if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
+  // Replacements for one exercise of a day's plan (workout mode, gym table).
+  if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
+    const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):pragueToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
+    const [plan,history]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[])]);
+    const inPlan=[...new Set((plan?.values||[]).slice(7).map(r=>r?.[1]).filter(Boolean))];
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan)},{headers:{'Cache-Control':'no-store'}});
+  }
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
   if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
@@ -1006,7 +1013,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         await restoreGymPlan(env.DB,date);
         return Response.json({status:'ok',date,intervals,message:'Původní plán obnoven.'},{headers:{'Cache-Control':'no-store'}});
       }
-      if((await readGymPlan(env.DB,date)).cancelled)return Response.json({message:'Tento plán je zrušený. Nejdřív jej obnov, nebo vytvoř nový.'},{status:409});
+      const storedPlan=await readGymPlan(env.DB,date);
+      if(storedPlan.cancelled)return Response.json({message:'Tento plán je zrušený. Nejdřív jej obnov, nebo vytvoř nový.'},{status:409});
       await env.DB.prepare(`CREATE TABLE IF NOT EXISTS gym_plans (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, values_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date))`).run();
 
       if (body?.action === "plan") {
@@ -1018,13 +1026,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
       const values = Array.isArray(body?.values) ? body.values : null;
       if (!values) return Response.json({status:"error",message:"values must be a 2D array"},{status:400});
-      const sets = values.map((r,i)=>({
+      const completedSets = rows => rows.map((r,i)=>({
         type:String(r?.[0]||"WORK").toUpperCase(), exercise:r?.[1]||"", setNo:r?.[2],
         plannedKg:r?.[3], plannedReps:r?.[4], actualKg:r?.[5], actualReps:r?.[6],
         rpe:r?.[7], completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")), note:r?.[9]||"",toFailure:r?.[11]||false,superset:r?.[12]||''
       })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
+      const sets = completedSets(values);
       let historyResult=null;
       if(sets.length) historyResult=await importStrengthHistory(env.DB,{date,sets});
+      // A saved set or exercise taken out of the day leaves the history too
+      // (only the keys this day's own saves wrote).
+      const before = storedPlan.stored ? completedSets(storedPlan.values.slice(7)).length : 0;
+      if(before>sets.length) await removeManualSets(env.DB,date,sets.length,before);
       // Keep the editable workout snapshot together with the completed-set
       // history.  The UI can then be safely reloaded after every autosave.
       const storedValues = Array.isArray(body?.fullValues) ? body.fullValues : values;

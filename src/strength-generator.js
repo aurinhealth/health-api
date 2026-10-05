@@ -1,4 +1,4 @@
-import { estimateStartingLoad, resolveLoad } from "./strength-intelligence.js";
+import { estimateStartingLoad, resolveLoad, progressionDecision } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
 import { availableAt } from "./gym-equipment.js";
@@ -270,6 +270,17 @@ export function startingLoadScale(muscle, sex) {
   if (sex !== "female") return 1;
   return LEG_MUSCLES.has(muscle) ? 0.7 : 0.55;
 }
+// Exercises stuck at the same load for three sessions without more reps.
+export function stalledExercises(rows, date) {
+  const byExercise = new Map();
+  for (const r of rows || []) {
+    const ex = normalizeExerciseName(r.exercise);
+    if (!EXERCISES[ex] || String(r.type || "WORK").toUpperCase() !== "WORK" || r.planned) continue;
+    (byExercise.get(ex) || byExercise.set(ex, []).get(ex)).push(r);
+  }
+  return new Set([...byExercise].filter(([ex, list]) => progressionDecision(list, ex, EXERCISES[ex].reps, 1, date)?.stalled).map(([ex]) => ex));
+}
+
 function choosePlan(context, options = {}) {
   const history = selectionHistory(context);
   const muscleLoad = recentMuscleLoad(history, context.date);
@@ -299,10 +310,13 @@ function choosePlan(context, options = {}) {
     const group = groupOf[ex], last = group && lastGroupDate.get(group);
     return last ? 2 * Math.exp(-daysBetween(last, context.date) / 5) : 0;
   };
-  const score = (ex, rank = 0) => {
+  // Three sessions at the same load without more reps: another variant of
+  // the movement takes over for a while (a new stimulus), if there is one.
+  const stalled = stalledExercises(context?.strength?.recentCompletedSets, context.date), stallSwaps = {};
+  const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + groupRecency(ex) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0);
+    return recent + groupRecency(ex) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -328,7 +342,11 @@ function choosePlan(context, options = {}) {
     hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift"],
     unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat"],
     posterior: ["Prone leg curl Prime"],
-    calves: ["Standing calf raise", "Single-leg calf raise"]
+    calves: ["Standing calf raise", "Single-leg calf raise"],
+    // Grip and upper traps help posture on the bike and in daily life; they
+    // are not a priority, so they take a turn about every second week.
+    forearms: ["DB wrist curl", "Cable reverse curl", "DB reverse wrist curl"],
+    traps: ["DB shrug", "Smith machine shrug", "Cable upright row", "Barbell shrug"]
   };
 
   const groupOf = {}, lastGroupDate = new Map();
@@ -337,13 +355,13 @@ function choosePlan(context, options = {}) {
 
   // Small muscles (arms, core, shoulders, calves) take turns by how few sets
   // they got in the last 14 days; calves of a cyclist or runner also count the riding.
-  const sportLoad = sportMuscleLoad(context), accessoryMuscle = { core: "core", biceps: "biceps", triceps: "triceps", lateralRaise: "side_delts", rearDelts: "rear_delts", calves: "calves" };
+  const sportLoad = sportMuscleLoad(context), accessoryMuscle = { core: "core", biceps: "biceps", triceps: "triceps", lateralRaise: "side_delts", rearDelts: "rear_delts", calves: "calves", forearms: "forearms", traps: "traps" };
   const accessorySets = {};
   for (const row of history) {
     const def = EXERCISES[normalizeExerciseName(row.exercise)];
     if (def && daysBetween(row.workout_date, context.date) <= 14) accessorySets[def.muscle] = (accessorySets[def.muscle] || 0) + (row.planned ? 2 : 1);
   }
-  const accessories = Object.keys(accessoryMuscle).map((group, order) => ({ group, order, sets: (accessorySets[accessoryMuscle[group]] || 0) + (group === "calves" ? 2 * (sportLoad.get("calves") || 0) + 2 : 0) }))
+  const accessories = Object.keys(accessoryMuscle).map((group, order) => ({ group, order, sets: (accessorySets[accessoryMuscle[group]] || 0) + (group === "calves" ? 2 * (sportLoad.get("calves") || 0) + 2 : 0) + (group === "forearms" || group === "traps" ? 4 : 0) }))
     .sort((a, b) => a.sets - b.sets || a.order - b.order).map(x => x.group);
 
   // An exercise actually done in the last two days is left out entirely.
@@ -356,13 +374,16 @@ function choosePlan(context, options = {}) {
   const usedPatterns = new Set();
   function pick(patterns) {
     const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && !used.has(ex));
-    const ex = pool.sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
+    const ex = pool.slice().sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
+    const plain = pool.slice().sort((a, b) => score(a.ex, a.rank, false) - score(b.ex, b.rank, false))[0]?.ex;
+    if (ex && plain !== ex && stalled.has(plain)) stallSwaps[ex] = plain;
     if (ex) { used.add(ex); usedPatterns.add(EXERCISES[ex].pattern); }
     return ex;
   }
   // Ordered by priority; the session length decides how many are kept.
   const build = groups => groups.map(pick).filter(Boolean);
   const base = {
+    stallSwaps,
     muscleExposure: Object.fromEntries(muscleExposure),
     recentWorkoutCount,
     muscleLoad,
@@ -508,16 +529,19 @@ export function generateStrengthPlan(context, options = {}) {
     const exercise = normalizeExerciseName(row.exercise), date = dateKey(row.workout_date);
     if (exercise && date && (!lastExerciseDate.has(exercise) || daysBetween(date, context.date) < daysBetween(lastExerciseDate.get(exercise), context.date))) lastExerciseDate.set(exercise, date);
   }
+  const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
   const focusedExercise = group => {
     const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && !excluded.has(name));
     if (!candidates.length) throw new Error('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.');
-    const score = name => {
+    const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
       const recent = last && daysBetween(last, context.date) < 5 ? 2 : 0;
       const legPenalty = chosen.protectedLegs && ['quads', 'hamstrings', 'hips'].includes(group) ? def.fatigue * 2 : 0;
-      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1;
+      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + (withStall && stalled.has(name) ? 3 : 0);
     };
-    return candidates.sort((a, b) => score(a) - score(b))[0];
+    const best = candidates.slice().sort((a, b) => score(a) - score(b))[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
+    if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
+    return best;
   };
   let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex));
   const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
@@ -553,6 +577,7 @@ export function generateStrengthPlan(context, options = {}) {
     if(reducedDose)for(const row of work.rows)row[9]+='; sportovní zátěž: nejvýše 2 pracovní série, nech 3–4 opakování v rezervě (RPE 6–7)';
     if(deload)for(const row of work.rows)row[9]+='; odlehčený týden: stejná váha, 3 opakování v rezervě';
     if(moderated)for(const row of work.rows)row[9]+=explicitLegs?'; blízko je náročná jízda: nech 2–3 opakování v rezervě (RPE 7)':'; nohy po jízdě: nech 2–3 opakování v rezervě (RPE 7)';
+    if(stallSwaps[exercise])for(const row of work.rows)row[9]+='; místo '+stallSwaps[exercise]+': 3 tréninky bez posunu, nový podnět (k původnímu cviku se vrátíme)';
     const warmup = warmupRows(exercise, work.kg, !warmedUp);
     if (warmup.length) warmedUp = true;
     rows.push(...warmup, ...work.rows);
@@ -583,7 +608,8 @@ export function generateStrengthPlan(context, options = {}) {
   const baseRationale = focusMuscles ? 'Zvolené partie: ' + focusLabels + '. Cviky zohledňují nedávné posilování, regeneraci a cyklistickou zátěž. ' + cautionText : chosen.rationale + (cautionText ? ' ' + cautionText : '');
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
-  const rationale = baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '');
+  const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);
+  const rationale = baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '') + (swapped.length ? ' Po třech trénincích bez posunu nová varianta: ' + swapped.join(', ') + '.' : '');
   return { date: context.date, planName: (focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name) + (deload ? ' · odlehčený týden' : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + rationale + ' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', timing, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 

@@ -91,3 +91,19 @@ test("one-time repair is limited to the owner's completed workout and preserves 
     assert.equal(raw.sqlite.prepare("SELECT changes() AS count").get().count, 0);
   } finally { raw.sqlite.close(); }
 });
+
+test('a saved set taken out of the day leaves the history too', async () => {
+  const { getStrengthHistory, removeManualSets } = await import('../src/strength-history.js');
+  const db = scopedDb(createD1(), 1);
+  const set = (exercise, kg) => ({ type: 'WORK', exercise, actualKg: kg, actualReps: 8, completed: true });
+  await importStrengthHistory(db, { date: '2026-10-04', sets: [set('Lat pulldown', 50), set('Lat pulldown', 50), set('Low row', 40)] });
+  await importStrengthHistory(db, { date: '2026-10-03', sets: [set('Lat pulldown', 47.5)] });
+  // The day saved again without the second pulldown set.
+  await importStrengthHistory(db, { date: '2026-10-04', sets: [set('Lat pulldown', 50), set('Low row', 40)] });
+  assert.equal(await removeManualSets(db, '2026-10-04', 2, 3), 1);
+  const rows = await getStrengthHistory(db);
+  assert.deepEqual(rows.filter(r => r.workout_date === '2026-10-04').map(r => r.exercise + ':' + r.actual_kg), ['Lat pulldown:50', 'Low row:40']);
+  assert.equal(rows.filter(r => r.workout_date === '2026-10-03').length, 1);
+  const entry = fs.readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  assert.match(entry, /const before = storedPlan\.stored \? completedSets\(storedPlan\.values\.slice\(7\)\)\.length : 0;\s*if\(before>sets\.length\) await removeManualSets\(env\.DB,date,sets\.length,before\);/);
+});

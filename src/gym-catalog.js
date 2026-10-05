@@ -1,5 +1,6 @@
 import {EXERCISES} from './strength-generator.js';
-import {EXERCISE_INTELLIGENCE} from './strength-intelligence.js';
+import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad} from './strength-intelligence.js';
+import {normalizeExerciseName} from './strength-normalization.js';
 import {availableAt,stationLabel} from './gym-equipment.js';
 
 const muscleLabels={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
@@ -89,6 +90,18 @@ const searchTerms={
 export function gymExerciseCatalog(){
   // Only exercises that can be done in the gym (METAGYM Kutná Hora), with the station.
   return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name)).map(([name,def])=>({name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
+}
+
+// What can take the place of an exercise in the plan: the same muscle,
+// possible in the gym, the most similar first, with the load from the
+// athlete's own history (or a similar exercise) when there is one.
+export function gymAlternatives(exercise,history=[],exclude=[]){
+  const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
+  if(!EXERCISE_INTELLIGENCE[name])return [];
+  return findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)).slice(0,8).map(a=>{
+    const def=EXERCISES[a.name],estimate=estimateStartingLoad({exercise:a.name,history,targetReps:def.reps,fallbackKg:null});
+    return {name:a.name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
+  });
 }
 
 export function findGymExercises(query,items=gymExerciseCatalog()){

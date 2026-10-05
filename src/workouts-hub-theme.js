@@ -180,7 +180,6 @@ export const workoutsHubTheme = `
   .gym-table input{width:100%!important;min-width:0}.gym-table input[type=checkbox]{width:24px!important;height:24px}
   .gym-table td.gym-options-cell{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;min-width:0;padding:8px 0}
   .gym-table td.gym-options-cell label{margin:0;font-size:12px;white-space:nowrap}
-  .gym-table .gym-superset-select{max-width:100%;min-height:36px;font-size:12px}
   .gym-table td.gym-video-cell{grid-column:1/-1;align-self:center;font-size:12px}
   .gym-table td.gym-actions-cell{grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;padding-top:8px;border-top:1px solid #262d39}
   .gym-table td.gym-actions-cell .btn{padding:8px 10px;font-size:12px;min-height:36px;white-space:nowrap}
@@ -505,6 +504,12 @@ body.sheet-open{overflow:hidden}
 .gm-help{display:flex;gap:8px;margin:0 0 12px}.gm-help .gm-assistant{margin:0}
 .gm-why{margin:-6px 0 12px;color:var(--muted,#9aa3b2)}
 .gm-technique{font-size:13px;padding:7px 12px;border-color:#3a4a5c;background:#16202b}
+.gm-edit-toggle{font-size:13px;padding:7px 12px;border-color:#3a4a5c;background:#16202b}.gm-edit-toggle[aria-pressed="true"]{border-color:#b393ff;background:#2a2244}
+.gm-coach{margin:10px 0;padding:8px 10px;border-left:3px solid #b393ff;border-radius:6px;background:#1c1830;color:#ddd3ff;font-size:13px;line-height:1.4}
+.gm-edit{display:grid;gap:12px;margin-top:6px}.gm-edit h3{margin:0;font-size:16px}
+.gm-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.gm-edit-grid .btn{min-height:52px;white-space:normal;line-height:1.25}
+.gm-alt-list{display:grid;gap:8px}.gm-alt{display:grid;gap:2px;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid #333b49;background:#161b25;color:#fff;cursor:pointer;touch-action:manipulation}.gm-alt small{color:#9eafbe}.gm-alt:hover,.gm-alt:focus-visible{border-color:#b393ff;outline:none}
+.gym-set-badge.coach{color:#ddd3ff;border-color:#5b4a8a}
 .technique h4{margin:16px 0 6px;font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:#9fb0c2}
 .technique ol,.technique ul{margin:0;padding-left:20px;color:#d6dde7;font-size:14px;line-height:1.5}.technique li{margin:3px 0}
 .technique ul li::marker{content:"✕  ";color:#ff8a8a}
