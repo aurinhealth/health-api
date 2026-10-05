@@ -1,21 +1,25 @@
 // Include both sides of unilateral work, equipment setup, rests and gym delays.
+// Rests are counted between sets of an exercise; moving to the next exercise
+// is a changeover (setting up the station) instead of a full rest.
 export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   let workSeconds = 0, warmupSeconds = 0, restSeconds = 0;
   const exercises = [...new Set(rows.map(r => r[1]))], groups = new Map();
-  for (const r of rows) {
+  rows.forEach((r, i) => {
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     const reps = Math.max(...(String(r[4]).match(/\d+/g) || ['12']).map(Number));
-    const seconds = Math.max(30, reps * 4) * (def.unilateral ? 2 : 1) + 15;
+    const seconds = Math.max(25, reps * 3.5) * (def.unilateral ? 2 : 1) + 10;
     if (warm) warmupSeconds += seconds; else workSeconds += seconds;
-    const rest = Number(String(r[9] || '').match(/\[Pauza (\d+) s\]/)?.[1]) || (warm ? 60 : 90);
+    const last = rows[i + 1]?.[1] !== r[1];
+    const rest = warm ? 45 : Number(String(r[9] || '').match(/\[Pauza (\d+) s\]/)?.[1]) || 90;
     if (r[12] && !warm) { const key = r[12] + ':' + r[2]; groups.set(key, Math.max(groups.get(key) || 0, rest)); }
-    else restSeconds += rest;
-  }
+    else if (!last) restSeconds += rest;
+  });
+  // A superset rests once per round, after both exercises.
   restSeconds += [...groups.values()].reduce((a, b) => a + b, 0);
-  const setupSeconds = 300 + exercises.length * 150;
-  const bufferSeconds = Math.max(180, Math.round(requestedMinutes * 60 * .12));
-  const totalSeconds = workSeconds + warmupSeconds + restSeconds + setupSeconds + bufferSeconds;
-  return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds, warmupSeconds, restSeconds, setupSeconds, bufferSeconds };
+  const setupSeconds = 240 + exercises.length * 90;
+  const bufferSeconds = Math.max(180, Math.round(requestedMinutes * 60 * .05));
+  const totalSeconds = Math.round(workSeconds + warmupSeconds + restSeconds + setupSeconds + bufferSeconds);
+  return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
 }
 
 export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null } = {}) {

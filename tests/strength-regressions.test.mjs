@@ -134,9 +134,45 @@ test("load estimator uses multiple recent performances", () => {
     fallbackKg: 35,
     loadFactor: 1
   });
+  // The latest session decides: 42.5 kg × 10 at RPE 8 stays at 42.5 kg
+  // (older, lighter sessions no longer pull it back to 37.5 kg).
   assert.equal(estimate.source, "own-history");
   assert.equal(estimate.performanceCount, 3);
-  assert.equal(estimate.kg, 37.5);
+  assert.equal(estimate.kg, 42.5);
+  assert.equal(estimate.progression, "hold");
+});
+
+test("double progression adds at least one real load step and takes one back after a miss", () => {
+  const set = (kg, reps, rpe, date = "2026-09-22") => ({ workout_date: date, type: "WORK", exercise: "DB bench press", actual_kg: kg, actual_reps: reps, rpe, completed: 1, set_no: 1 });
+  const estimate = history => estimateStartingLoad({ exercise: "DB bench press", history, targetReps: "6–10", fallbackKg: 16, today: "2026-09-25" });
+  // Top of the range on every set: 20 kg × 1.025 used to round back to 20 kg.
+  assert.equal(estimate([set(20, 10, 8), set(20, 10, 8.5)]).kg, 22.5);
+  assert.equal(estimate([set(20, 10, 8), set(20, 10, 8.5)]).progression, "increase");
+  // Easy and within range: also up.
+  assert.equal(estimate([set(20, 8, 6.5), set(20, 8, 7)]).kg, 22.5);
+  // In range, hard: hold and aim for a rep more.
+  const hold = estimate([set(20, 8, 8), set(20, 7, 9)]);
+  assert.equal(hold.kg, 20); assert.equal(hold.progression, "hold");
+  // Missed the range: one step back.
+  assert.equal(estimate([set(20, 4, 9.5)]).kg, 17.5);
+  // Without RPE, reps alone decide.
+  assert.equal(estimate([set(20, 10, null), set(20, 10, null)]).kg, 22.5);
+  // A heavy machine moves by a larger step.
+  const press = estimateStartingLoad({ exercise: "Pivot leg press", history: [{ workout_date: "2026-09-22", type: "WORK", exercise: "Pivot leg press", actual_kg: 160, actual_reps: 10, rpe: 6, completed: 1, set_no: 1 }], targetReps: "6–10", today: "2026-09-25" });
+  assert.equal(press.kg, 167.5);
+  // Poor recovery keeps the load; a long break starts lighter.
+  assert.equal(estimateStartingLoad({ exercise: "DB bench press", history: [set(20, 10, 8)], targetReps: "6–10", loadFactor: .85, today: "2026-09-25" }).kg, 20);
+  assert.equal(estimateStartingLoad({ exercise: "DB bench press", history: [set(20, 10, 8, "2026-08-20")], targetReps: "6–10", today: "2026-09-25" }).kg, 17.5);
+});
+
+test("the plan says what each load is based on", () => {
+  const plan = generateStrengthPlan({
+    date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {},
+    strength: { recentCompletedSets: [1, 2, 3].map(n => ({ workout_date: "2026-09-21", exercise: "DB bench press", type: "WORK", completed: 1, actual_kg: 20, actual_reps: 10, rpe: 8, set_no: n })) }
+  }, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: ["Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"] });
+  const work = plan.rows.filter(r => r[0] === "WORK");
+  assert.equal(work[0][1], "DB bench press"); assert.equal(work[0][3], "22,5");
+  assert.match(work[0][9], /↑ minule 3× 10 op\. @ 20 kg, RPE 8 → \+2,5 kg/);
 });
 
 test("generator treats aliased recent leg curl as the same exercise", () => {
