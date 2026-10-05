@@ -105,3 +105,30 @@ test("the week plan is a recovery week only after a heavy week or three solid we
   const wellness = Array.from({ length: 21 }, (_, i) => ({ id: new Date(Date.parse("2026-09-14T12:00:00Z") + i * 86400000).toISOString().slice(0, 10), ctlLoad: i < 7 ? 10 : i < 14 ? 20 : 30 }));
   assert.deepEqual(weekLoadsBefore(wellness, "2026-10-05"), [210, 140, 70]);
 });
+
+test("a week's running grows at most 10 % over the recent weeks", async () => {
+  const { weeklyRunCap, capRunVolume } = await import("../src/week-planner.js");
+  const { weekProposal } = await import("../src/adaptive-week.js");
+  const runDay = (date, minutes, type = "Run") => ({ date, daily: { training: { completed: [{ type, durationHours: minutes / 60 }] } } });
+  // Last week 80 min, four-week average 49 min: the larger counts, +10 %.
+  const history = [runDay("2026-09-08", 40), runDay("2026-09-15", 45), runDay("2026-09-22", 30), runDay("2026-09-29", 50), runDay("2026-10-01", 30), runDay("2026-10-02", 90, "Ride"), runDay("2026-10-03", 60, "Walk")];
+  const cap = weeklyRunCap(history, "2026-10-05");
+  assert.deepEqual(cap, { cap: 90, base: 80, weeks: [80, 30, 45, 40] });
+  // Nothing run yet: a fresh start of 60 min a week is always allowed.
+  assert.equal(weeklyRunCap([], "2026-10-05").cap, 60);
+  const targets = { status: "ok", items: [{ sport: "run", role: "endurance", minutes: 60, tss: 61, intensity: .78 }, { sport: "run", role: "long", minutes: 70, tss: 71, intensity: .78 }, { sport: "ride", minutes: 90, tss: 70 }] };
+  const capped = capRunVolume(targets, cap, 30);
+  assert.deepEqual(capped.items.map(x => x.sport + ":" + x.minutes), ["run:30", "run:30", "ride:90"]);
+  assert.equal(capped.items[0].tss, Math.round(30 / 60 * .78 * .78 * 100));
+  assert.equal(capped.runCap.limited, true); assert.equal(capped.runCap.committed, 30);
+  // Under the cap nothing changes.
+  assert.deepEqual(capRunVolume(targets, { cap: 200, base: 180, weeks: [] }, 0).items, targets.items);
+  // The week proposal applies it with the athlete's history, not without.
+  const prefs = { days: [["run"], [], ["run"], [], [], ["run"], []], availability: Array.from({ length: 7 }, () => ({ minutes: 180, preferredSports: [] })), sessions: {} };
+  const fitness = { wellness: [{ id: "2026-10-04", ctl: 60, tsb: 0 }] };
+  const proposal = weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness, history });
+  const runs = proposal.items.filter(x => x.sport === "run");
+  assert.ok(runs.reduce((n, x) => n + x.minutes, 0) <= 90 + 5, JSON.stringify(runs));
+  assert.equal(proposal.targets.runCap.limited, true);
+  assert.equal(weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness }).targets.runCap, undefined);
+});

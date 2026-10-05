@@ -10,8 +10,15 @@ import { gymAdjustmentRequest } from '../src/coach-gym-adjustment.js';
 const today='2026-10-05';
 
 test('real questions about the athlete get the planning context, small talk stays simple',()=>{
-  for(const m of ['Kolik mám dát na bench?','Jak zlepšit dřep?','Můžu dnes dělat mrtvý tah?','Jak dlouho mám odpočívat mezi sériemi?','Jaké mám FTP?','Jaké mám zóny?','Jaká je moje forma?','Jak se mi povedla včerejší jízda?','Mám dnes jít na intervaly?','Bolí mě koleno, co s tím?','Jsem nemocný','A co zítra?','Díky, a v sobotu?','A kdybych měl jen 45 minut?'])
+  for(const m of ['Kolik mám dát na bench?','Jak zlepšit dřep?','Můžu dnes dělat mrtvý tah?','Jak se mi povedla včerejší jízda?','Mám dnes jít na intervaly?','Je dnes vhodné jet intervaly?','Bolí mě koleno, co s tím?','Jsem nemocný','A co zítra?','Díky, a v sobotu?','A kdybych měl jen 45 minut?'])
     assert.equal(assistantTask(m),'planning',m);
+  // Quick questions about the athlete's own numbers: the same data, the light model.
+  for(const m of ['Jaké mám FTP?','Jaké mám zóny?','Jaká je moje forma?','Jak dlouho mám odpočívat mezi sériemi?','Kolik mám dnes bílkovin?','Co mám zítra za trénink?','Kolik TSS mám tento týden?'])
+    assert.equal(assistantTask(m),'quick',m);
+  // A quick question after a planning chat is still quick; a follow-up is not.
+  const chat=t=>[{role:'user',content:t},{role:'assistant',content:'Odpověď'}];
+  assert.equal(assistantTask('Jaké mám FTP?',null,chat('Naplánuj mi tento týden')),'quick');
+  assert.equal(assistantTask('A co v sobotu?',null,chat('Naplánuj mi tento týden')),'planning');
   for(const m of ['Ahoj','Díky!','Co je sweet spot?','Dobré ráno'])assert.equal(assistantTask(m),'simple',m);
   assert.equal(isSimpleMessage('x'.repeat(130)),false);
   // The open screen and the views about training never get the light context.

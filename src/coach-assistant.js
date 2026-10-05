@@ -192,11 +192,14 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
 }
 
 // One text answer from the OpenAI Responses API.
-// Models: the assistant (weekly plans, reviews) uses OPENAI_MODEL; short,
-// focused tasks (coach's notes, food lookups and food sentences) use the
-// cheaper OPENAI_LIGHT_MODEL. Both are server secrets/vars and can be changed
-// without a code change.
+// Models: quick and simple questions, coach's notes and food use the cheap,
+// fast OPENAI_LIGHT_MODEL (Luna); plans, changes, reviews and analysis use
+// OPENAI_MODEL (Sol) with a low reasoning effort, so a complex answer does not
+// cost many tokens (OPENAI_REASONING_EFFORT can raise it). All are server
+// variables and can be changed without a code change.
 export const lightModel = env => env.OPENAI_LIGHT_MODEL || 'gpt-6-luna';
+export const complexModel = env => env.OPENAI_MODEL || 'gpt-6-sol';
+export const complexEffort = env => ['minimal','low','medium','high'].includes(env.OPENAI_REASONING_EFFORT) ? env.OPENAI_REASONING_EFFORT : 'low';
 
 // Task routing. 'simple' (light model, almost no context) is only for short
 // small talk and generic definitions; anything about the athlete, the data or
@@ -212,10 +215,19 @@ const DATA=/pl[aá]n|tr[eé]n|posil|gym|cvi[cč]|cvik|s[eé]ri|opak|(?<!\p{L})kg
 // A follow-up ("A co zítra?", "Díky, a v sobotu?") continues the earlier topic.
 const FOLLOW_UP=/(?:^|[,;.!]\s*)a(?:le)?\s/iu;
 export const isSimpleMessage=message=>{const m=String(message||'').trim();return m.length<=120&&!PERSONAL.test(m)&&!DATA.test(m)&&!FOLLOW_UP.test(m);};
+// A quick question about the athlete's own numbers ("Jaké mám FTP?", "Kolik
+// mám dnes bílkovin?", "Co mám zítra za trénink?"): the light model reads the
+// same data and answers fast. A decision, advice, a why or an evaluation
+// ("Mám dnes jít na intervaly?", "Kolik mám dát na bench?", "Jak se mi
+// povedla jízda?") stays with the main model.
+const QUICK_ASK=/^(?:kolik|jak(?:ý|á|é|ou|ých|ým|ými)?(?=\s|\?|$)|kdy|kde|co\s+(?:mám|mam|je|bylo|jsem|dělám)|je\s|jsou\s|byl[aoy]?\s|ukaž|ukaz|vypiš|vypis|připomeň|pripomen)/iu;
+const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|navrh|uprav|zm[eě][nň]|vym[eě][nň]|napl[aá]n|p[řr]iprav|vygener|vytvo[řr]|p[řr]idej|p[řr]esu[nň]|zru[sš]|analyz|porovn|vyhodno|zhodno|hodnot|povedl|rozbor|zlep[sš]|vhodn|lep[sš][ií]|rad[ua]\b|pomoz|pomoc|stoj[ií]\s+za|strategi|bude\s+st[aá][čt]|m[eě]l\s+bych|by\s*ch|co\s+bys|(?:m[aá]m|m[uů][zž]u|mohu|sm[ií]m)[^?]*?(?:j[ií]t|jet|b[eě][zž]et|cvi[cč]it|vynech|zkr[aá]t|d[aá]t|zvol|pokra[cč]ov|odpo[cč]in(?:out)?\b|tr[eé]nov|za[řr]adit|p[řr]idat)/iu;
+export const isQuickQuestion=message=>{const m=String(message||'').trim();return m.length<=120&&!FOLLOW_UP.test(m)&&!isSimpleMessage(m)&&QUICK_ASK.test(m)&&!NEEDS_THOUGHT.test(m);};
 function ownTask(message,appContext=null){
   const m=String(message||'');
   if(BLOCK.test(m)||LONG_PLAN.test(m)&&LONG_SPAN.test(m))return 'block';
   if(!LONG_RANGE.test(m)&&(gymAdjustmentRequest(m,appContext)||appContext?.sport==='gym'&&GYM_CHANGE.test(m)))return 'adjustment';
+  if(isQuickQuestion(m))return 'quick';
   if(appContext?.sport||['workouts','training','health'].includes(appContext?.view))return 'planning';
   return isSimpleMessage(m)?'simple':'planning';
 }
@@ -223,8 +235,9 @@ function ownTask(message,appContext=null){
 export function assistantTask(message,appContext=null,history=[]) {
   const own=ownTask(message,appContext);
   if(own==='block'||own==='adjustment')return own;
-  const earlier=(history||[]).filter(t=>t?.role==='user').map(t=>ownTask(t.content)).reverse().find(t=>t!=='simple');
+  const earlier=(history||[]).filter(t=>t?.role==='user').map(t=>ownTask(t.content)).reverse().find(t=>t!=='simple'&&t!=='quick');
   if(own==='simple')return earlier||'simple';
+  if(own==='quick')return own;
   return earlier==='block'&&String(message).length<=80?'block':own;
 }
 
@@ -259,7 +272,7 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
 }
 
 // Output limits include reasoning tokens, so they leave room for both.
-export const TASK_LIMITS={simple:4000,adjustment:8000,planning:16000,block:25000};
+export const TASK_LIMITS={simple:4000,quick:6000,adjustment:8000,planning:16000,block:25000};
 export const TRUNCATED_NOTE='Odpověď byla zkrácena. Napiš „pokračuj“ nebo otázku zúžit.';
 // The visible answer of a reply: a cut-off structured reply keeps the part of
 // the answer that arrived, and raw JSON never reaches the chat.
@@ -275,7 +288,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null} = {}) {
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: 'AI není připojena. Nastav serverový secret OPENAI_API_KEY; předplatné ChatGPT není API klíč.'};
   const started = Date.now();
-  const chosen = model || (task === 'simple' ? lightModel(env) : env.OPENAI_MODEL || 'gpt-6-sol');
+  const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
   const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory} : {...context};
   delete data.conversation;
   // Earlier turns go as real messages: the data first, the question last.
@@ -284,7 +297,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   const brief=concise||task==='adjustment';
   let streamed='',lastAnswer='';
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
-  const r = await callOpenAI(env, {instructions:withFocus(coachInstructions, focus)+(actions?'\n\n'+ACTION_INSTRUCTIONS:'')+(brief?'\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.':''), input, model:chosen, reasoningEffort:['simple','adjustment'].includes(task) ? 'low' : 'medium', maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
+  const r = await callOpenAI(env, {instructions:withFocus(coachInstructions, focus)+(actions?'\n\n'+ACTION_INSTRUCTIONS:'')+(brief?'\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.':''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
   return {status:'ok', answer:reply.answer,actions:reply.actions,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }

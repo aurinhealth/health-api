@@ -22,6 +22,8 @@ Předpověď Open-Meteo se načítá i na serveru. Pro kolo se od listopadu do �
 
 Sporty se do dnů přetahují (nebo na mobilu ťuknutím vyberou a ťuknutím na den položí); jeden den může mít až čtyři tréninky, třeba kolo i gym nebo dvakrát kolo (druhý trénink stejného sportu je lehký a má vlastní cíl). Gym položený na den, kde byl dřív zrušený, se tam znovu počítá. Přesunutá kartička s sebou nebere návrh vytvořený pro původní den. Návrh dne (např. „2h 0m · ~98 TSS · IF 0,70 · Vytrvalost“) se u kartiček ukáže až po 5 s bez změny plánu, aby přesouvání nezahlcovalo kalendář.
 
+Běh roste pomalu: týdenní objem běhu (hotové, naplánované i navržené běhy) je nejvýš o 10 % nad větším z minulého týdne a průměru posledních 4 týdnů; 60 min týdně jde vždy. Návrhy běhu se podle toho zkrátí a záhlaví týdne to řekne.
+
 Zátěž zůstává v TSS: je to Load z Intervals.icu, ze kterého se počítá CTL/ATL. Vedle ní se ukazuje IF (intensity factor, TSS = h × IF² × 100), aby bylo vidět, jak tvrdý trénink je, nejen jak velký.
 
 Doporučené tréninky je okno s knihovnou workoutů: zaměření (vytrvalost, práh…) se přepíná nahoře, filtry se rozbalují tlačítkem Filtry. Po kliknutí na návrh dne ukáže pět nejvhodnějších tréninků pro ten den. Otevřené tlačítkem v plánovači nejdřív nabídne Denní doporučení, ale jen když na dnešek není nic v plánu; to může být kolo, běh i gym. Samostatná karta Trénink na den byla zrušena.
@@ -46,7 +48,7 @@ Plovoucí asistent ukládá rozhovory jako chaty (D1, tabulky `assistant_chats` 
 
 ## AI modely a data
 
-`OPENAI_LIGHT_MODEL` (výchozí `gpt-6-luna`) slouží pro jednoduché úlohy, jídlo, krátké odpovědi a stručné hodnocení. `OPENAI_MODEL` (výchozí `gpt-6-sol`) slouží pro plánování a revizi týdne s reasoning `medium`; analýza bloku používá `high` a až 84 dní uložených aktivit plus dostupnou fitness historii. Chybějící či nesynchronizované záznamy zůstávají chybějícími daty. Modely lze změnit serverovou konfigurací. Požadavky používají Responses API s `store:false`.
+`OPENAI_LIGHT_MODEL` (výchozí `gpt-6-luna`) odpovídá na rychlé a jednoduché dotazy („Jaké mám FTP?“, „Kolik mám dnes bílkovin?“, „Co mám zítra za trénink?“ – se stejnými daty jako trenér), na small talk, jídlo a stručná hodnocení. `OPENAI_MODEL` (výchozí `gpt-6-sol`) dostane vše, co chce úvahu: plánování, úpravy, revizi týdne, rozhodnutí („Mám dnes jít na intervaly?“), doporučení a analýzu bloku (až 84 dní aktivit). Reasoning je u obou `low`, aby složitá odpověď nebrala zbytečně tokeny; `OPENAI_REASONING_EFFORT` ho pro hlavní model může zvýšit. Chybějící či nesynchronizované záznamy zůstávají chybějícími daty. Modely lze změnit serverovou konfigurací. Požadavky používají Responses API s `store:false`.
 
 Oficiální dokumentace: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol).
 
@@ -58,4 +60,4 @@ Klik na trénink v týdenním přehledu otevře jeho detail. Naplánované kolo 
 
 ## Technika cviků
 
-V režimu tréninku otevře „📖 Technika a video“ kartu cviku: nastavení, provedení, časté chyby, dýchání a ukázkové video (`src/exercise-technique-data.js`, videa dohledaná vyhledáváním). Vlastní odkaz na video se ukládá ke cviku (tabulka `exercise_videos`) a nahradí ukázku; odkaz mimo YouTube se otevře v prohlížeči. AI trenér zůstává dostupný tlačítkem „✦ AI“.
+V režimu tréninku otevře „📖 Technika a video“ kartu cviku: nastavení, provedení, kde má být cvik cítit a co nemá bolet (`src/exercise-feel.js`), časté chyby, dýchání a ukázkové video (`src/exercise-technique-data.js`, videa dohledaná vyhledáváním). Každý cvik katalogu musí mít kartu i „Kde to cítit“ (hlídá test). Cvik mimo katalog, který má sportovec v plánu nebo historii, dostane kartu jednou od AI (lehký model s vyhledáním videa) a uloží se do tabulky `exercise_techniques`, takže se příště čte ze serveru. Vlastní odkaz na video se ukládá ke cviku (tabulka `exercise_videos`) a nahradí ukázku; odkaz mimo YouTube se otevře v prohlížeči. AI trenér zůstává dostupný tlačítkem „✦ AI“.

@@ -519,6 +519,7 @@ body.sheet-open{overflow:hidden}
 .technique h4{margin:16px 0 6px;font-size:13px;letter-spacing:.02em;text-transform:uppercase;color:#9fb0c2}
 .technique ol,.technique ul{margin:0;padding-left:20px;color:#d6dde7;font-size:14px;line-height:1.5}.technique li{margin:3px 0}
 .technique ul li::marker{content:"✕  ";color:#ff8a8a}
+.technique ul.tech-feel li::marker{content:"●  ";color:#7fd6a6}.technique ul.tech-feel li:last-child::marker{content:"!  ";color:#f5c26b}
 .tech-meta{margin:0 0 10px}
 .tech-video{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000}.tech-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .tech-video-note{margin:6px 0 0}

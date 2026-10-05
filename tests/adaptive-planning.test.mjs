@@ -103,9 +103,19 @@ test('simple, planning and block requests route to configurable Luna and Sol',as
     await askCoach(env,'Díky!',{fitness:Array(30).fill({ctl:40})});
     await askCoach(env,'Naplánuj zítřejší posilovnu',{});
     await askCoach(env,'Analyzuj 12týdenní blok',{});
-    assert.deepEqual(calls.map(c=>c.model),['gpt-6-luna','gpt-6-sol','gpt-6-sol']);
-    assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','medium','medium']);assert.deepEqual(calls.map(c=>c.max_output_tokens),[4000,16000,25000]);
+    await askCoach(env,'Jaké mám FTP?',{date:'2026-10-05',thresholds:{ftp:265}});
+    // Quick and simple on Luna; plans and analysis on Sol, with a low effort to keep tokens down.
+    assert.deepEqual(calls.map(c=>c.model),['gpt-6-luna','gpt-6-sol','gpt-6-sol','gpt-6-luna']);
+    assert.deepEqual(calls.map(c=>c.reasoning.effort),['low','low','low','low']);assert.deepEqual(calls.map(c=>c.max_output_tokens),[4000,16000,25000,6000]);
+    // A quick question still sees the athlete's data.
+    assert.match(calls[3].input[0].content,/"ftp":265/);
     assert.ok(calls.every(c=>c.store===false));
+    // The effort of complex answers can be raised on the server.
+    await askCoach({...env,OPENAI_REASONING_EFFORT:'medium'},'Naplánuj zítřejší posilovnu',{});
+    assert.equal(calls.at(-1).reasoning.effort,'medium');
+    // Without OPENAI_MODEL the complex model is Sol.
+    await askCoach({OPENAI_API_KEY:'test'},'Naplánuj zítřejší posilovnu',{});
+    assert.equal(calls.at(-1).model,'gpt-6-sol');
     assert.equal(assistantTask('Poslední tři týdny a nový plán'),'planning');
   }finally{globalThis.fetch=original;}
 });

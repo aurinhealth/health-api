@@ -236,4 +236,26 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
   const assigned = items.reduce((s, x) => s + x.tss, 0), shortfall = Math.max(0, target - committed - assigned);
   return { status: "ok", ctl: Math.round(fitness), base, target, recovery, recoveryReason: rule.reason, weekLoads: weekLoads || null, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
 }
+// Running grows slowly: tendons and bones adapt later than heart and lungs.
+// A week's running (done, planned and proposed together) stays within 10 %
+// above the more of last week and the 4-week average; 60 min is always
+// allowed for a fresh start. `history` is days with completed activities.
+export const RUN_FLOOR_MINUTES = 60;
+const dayShift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+export const isRunActivity = a => /run/i.test(String(a?.type || a?.sport || "")) && !/walk/i.test(String(a?.type || ""));
+const runMinutes = list => (list || []).filter(isRunActivity).reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0);
+export function weeklyRunCap(history = [], weekStart) {
+  const weeks = [1, 2, 3, 4].map(k => { const from = dayShift(weekStart, -7 * k), to = dayShift(weekStart, -7 * (k - 1)); return Math.round((history || []).filter(d => d.date >= from && d.date < to).reduce((n, d) => n + runMinutes(d.daily?.training?.completed), 0)); });
+  const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
+  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks };
+}
+// Proposed runs share what is left under the cap (at least 20 min each).
+export function capRunVolume(targets, runCap, committed = 0) {
+  if (!runCap || targets?.status !== "ok") return targets;
+  const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
+  const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
+  if (!runs.length || proposed <= room) return { ...targets, runCap: info };
+  const items = targets.items.map(x => { if (x.sport !== "run") return x; const minutes = Math.max(20, round5(x.minutes * room / proposed)), intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true }; });
+  return { ...targets, items, runCap: { ...info, proposed: items.filter(x => x.sport === "run").reduce((n, x) => n + x.minutes, 0), limited: true } };
+}
 export function targetFor(targets, date, sport) { return (targets?.items || []).find(x => x.date === date && x.sport === sport) || null; }
