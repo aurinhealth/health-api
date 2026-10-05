@@ -125,3 +125,26 @@ test("the nutrition plan uses the athlete's own latest weight, not a fixed 88 kg
   assert.equal(heavy.macros.proteinGrams, 190);
   assert.equal(buildNutritionPlan(context).macros.proteinGrams, 176);
 });
+
+test("ChatGPT gets the app's calorie target: same kcal, app protein and fat, carbs fill the rest", async () => {
+  const { buildNutritionPlan, withAppTarget } = await import("../src/nutrition-intelligence.js");
+  const context = { date: "2026-10-05", cycling: { plannedWorkouts: [], recentActivities: [], recentRideHours: 0, recentRideTss: 0 } };
+  const own = buildNutritionPlan(context, { weightTrend: { latestKg: 80, samples: 10, weeklyRateKg: -0.3 } });
+  const daily = { nutrition: { calorieTarget: 2612.4, macros: { protein_g: 160, carbs_g: 290, fat_g: 70 }, energyBudget: { target: 2612 } } };
+  const plan = withAppTarget(own, daily);
+  assert.equal(plan.calorieTarget, 2612);
+  assert.equal(plan.estimatedCalorieTarget, own.calorieTarget);
+  assert.deepEqual(plan.macros, { proteinGrams: 160, carbsGrams: Math.round((2612 - 160 * 4 - 70 * 9) / 4), fatGrams: 70, caloriesFromMacros: 160 * 4 + 336 * 4 + 70 * 9 });
+  assert.match(plan.targetSource, /Google Health/);
+  // No personal target in the app yet (no profile or weight): the estimate stays.
+  assert.equal(withAppTarget(own, { nutrition: { calorieTarget: null, macros: null } }), own);
+  assert.equal(withAppTarget(own, null), own);
+  // Missing app macros fall back to the plan's own protein and fat.
+  const partial = withAppTarget(own, { nutrition: { calorieTarget: 2400, macros: { protein_g: null } } });
+  assert.equal(partial.macros.proteinGrams, own.macros.proteinGrams);
+  assert.equal(partial.macros.fatGrams, own.macros.fatGrams);
+  // Every nutrition route ChatGPT calls goes through the app target.
+  const gateway = readFileSync(new URL("../src/sheets-gateway.js", import.meta.url), "utf8");
+  assert.equal((gateway.match(/buildNutritionPlan\(/g) || []).length, 1);
+  assert.equal((gateway.match(/await nutritionFor\(/g) || []).length, 6);
+});

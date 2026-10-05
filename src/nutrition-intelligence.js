@@ -168,3 +168,23 @@ export function buildNutritionPlan(context, options = {}) {
 }
 
 // Deployment marker: nutrition endpoint requires the current Worker revision.
+
+// ChatGPT plans meals against the number the app shows. The app's day target
+// (profile, training and the Google Health energy budget) replaces the
+// estimate above; protein and fat follow the app, carbohydrates fill the rest.
+export function withAppTarget(plan, daily) {
+  const target = Math.round(Number(daily?.nutrition?.calorieTarget));
+  if (!plan || !(target > 0)) return plan;
+  const m = daily.nutrition.macros || {}, own = plan.macros || {};
+  const pick = (...values) => values.filter(v => v != null && v !== "").map(Number).find(v => Number.isFinite(v) && v >= 0);
+  const protein = Math.round(pick(m.protein_g, m.proteinGrams, own.proteinGrams) ?? 0);
+  const fat = Math.round(pick(m.fat_g, m.fatGrams, own.fatGrams) ?? 0);
+  const carbs = Math.max(0, Math.round((target - protein * 4 - fat * 9) / 4));
+  return {
+    ...plan,
+    calorieTarget: target,
+    estimatedCalorieTarget: plan.calorieTarget,
+    targetSource: daily.nutrition.energyBudget ? "app (Google Health energy budget)" : "app",
+    macros: { proteinGrams: protein, carbsGrams: carbs, fatGrams: fat, caloriesFromMacros: protein * 4 + carbs * 4 + fat * 9 }
+  };
+}

@@ -5,7 +5,10 @@ import { getStrengthHistory, parseStrengthSheet, importStrengthHistory } from ".
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { readGymPlan, writeStrengthPlanToDb, syncGymPlanHistory } from "./gym-plan-store.js";
-import { buildNutritionPlan } from "./nutrition-intelligence.js";
+import { buildNutritionPlan, withAppTarget } from "./nutrition-intelligence.js";
+import { applyEnergyBudget } from "./energy-budget.js";
+import { googleDashboard } from "./google-dashboard.js";
+import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { buildAdaptiveDecision } from "./adaptive-engine.js";
 import { buildWeeklyReview } from "./weekly-review.js";
 import { buildDailyPlan } from "./daily-plan.js";
@@ -31,7 +34,7 @@ export default {
     if (url.pathname === "/strength/sheet/write" && request.method === "POST") return SHEETS_RETIRED();
     if (url.pathname === "/strength/sheet/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
     if (url.pathname === "/strength/sheet/simplify" && request.method === "POST") return SHEETS_RETIRED();
-    if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url);
+    if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url, ctx);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
     if (url.pathname === "/strength/sheets/maintenance" && request.method === "POST") return maintainStrengthSheetsRoute(env, request);
@@ -40,14 +43,14 @@ export default {
     if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
     if (url.pathname === "/strength/alternatives" && request.method === "POST") return alternativesRoute(env, request);
     if (url.pathname === "/strength/substitute" && request.method === "POST") return substituteRoute(env, request);
-    if (url.pathname === "/nutrition/plan" && request.method === "POST") return nutritionPlanRoute(env, request);
+    if (url.pathname === "/nutrition/plan" && request.method === "POST") return nutritionPlanRoute(env, request, ctx);
     if (url.pathname === "/cookbook/search" && request.method === "GET") return cookbookSearchRoute(env, url);
     if (url.pathname === "/cookbook/recipe" && request.method === "GET") return cookbookRecipeRoute(env, url);
     if (url.pathname === "/nutrition/log-meal" && request.method === "POST") return logMealRoute(env, request);
-    if (url.pathname === "/nutrition/day" && request.method === "GET") return nutritionDayRoute(env, url);
-    if (url.pathname === "/nutrition/recommend" && request.method === "POST") return nutritionRecommendRoute(env, request);
-    if (url.pathname === "/decision/daily" && request.method === "POST") return dailyDecisionRoute(env, request);
-    if (url.pathname === "/daily/plan" && request.method === "GET") return dailyPlanRoute(env, url);
+    if (url.pathname === "/nutrition/day" && request.method === "GET") return nutritionDayRoute(env, url, ctx);
+    if (url.pathname === "/nutrition/recommend" && request.method === "POST") return nutritionRecommendRoute(env, request, ctx);
+    if (url.pathname === "/decision/daily" && request.method === "POST") return dailyDecisionRoute(env, request, ctx);
+    if (url.pathname === "/daily/plan" && request.method === "GET") return dailyPlanRoute(env, url, ctx);
     if (url.pathname === "/training/weekly-review" && request.method === "GET") return weeklyReviewRoute(env, url);
     if (url.pathname === "/food/resolve" && request.method === "POST") return foodResolveRoute(env, request);
     if (url.pathname === "/food/product" && request.method === "GET") return foodProductRoute(env, url);
@@ -75,6 +78,27 @@ async function cyclingContextRoute(env, url) {
   } catch (error) {
     return Response.json({ status: "error", step: "cycling_context", message: error.message }, { status: 502 });
   }
+}
+
+// The day's calorie target exactly as the app shows it: /analysis/daily plus
+// the Google Health energy budget, the same steps as /app/api/daily. Without
+// it (no profile or weight yet) the nutrition plan keeps its own estimate.
+async function appDailyTarget(env, ctx, date) {
+  try {
+    const day = date || pragueToday();
+    const response = await app.fetch(new Request("https://internal/analysis/daily?date=" + encodeURIComponent(day)), env, ctx);
+    if (!response.ok) return null;
+    const daily = await response.json();
+    const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
+    if (profile) applyEnergyBudget(daily, profile, await googleDashboard(env.DB, day).catch(() => null));
+    return daily;
+  } catch (error) {
+    console.error("App calorie target unavailable", error.message);
+    return null;
+  }
+}
+async function nutritionFor(env, ctx, context, options) {
+  return withAppTarget(buildNutritionPlan(context, options), await appDailyTarget(env, ctx, context?.date));
 }
 
 function authorizeStrength(request, env) {
@@ -119,7 +143,7 @@ async function writeStrengthPlanRoute(env, request) {
   } catch (error) { return Response.json({ status: "error", step: "strength_write_plan", message: error.message }, { status: 500 }); }
 }
 
-async function generateStrengthPlanRoute(env, request, url) {
+async function generateStrengthPlanRoute(env, request, url, ctx) {
   try {
     const body = await request.json().catch(() => ({}));
     const date = String(body?.date || url.searchParams.get("date") || "").trim() || null;
@@ -184,7 +208,7 @@ async function generateStrengthPlanRoute(env, request, url) {
       intervals = { status: "error", message: error.message };
     }
 
-    const nutrition = buildNutritionPlan(context, { ...body, strengthPlan: plan });
+    const nutrition = await nutritionFor(env, ctx, context, { ...body, strengthPlan: plan });
     return Response.json({
       ...result,
       planName: plan.planName,
@@ -266,7 +290,7 @@ async function alternativesRoute(env, request) {
 }
 
 
-async function nutritionPlanRoute(env, request) {
+async function nutritionPlanRoute(env, request, ctx) {
   try {
     const body = await request.json().catch(() => ({}));
     const date = String(body?.date || "").trim() || null;
@@ -293,7 +317,7 @@ async function nutritionPlanRoute(env, request) {
       }
     }
 
-    const plan = buildNutritionPlan(context, { ...body, strengthPlan, weightTrend: context.weightTrend });
+    const plan = await nutritionFor(env, ctx, context, { ...body, strengthPlan, weightTrend: context.weightTrend });
     return Response.json({ status: "ok", plan });
   } catch (error) {
     return Response.json({ status: "error", step: "nutrition_plan", message: error.message }, { status: 500 });
@@ -316,41 +340,41 @@ async function logMealRoute(env, request) {
   try { return Response.json(await logFood(env.DB, await request.json().catch(()=>({})))); }
   catch (error) { return Response.json({ status:"error", step:"nutrition_log_meal", message:error.message }, { status:400 }); }
 }
-async function nutritionDayRoute(env, url) {
+async function nutritionDayRoute(env, url, ctx) {
   try {
     const date=url.searchParams.get("date") || pragueToday();
     const context=await buildStrengthContext(env,date);
-    const plan=buildNutritionPlan(context,{});
+    const plan=await nutritionFor(env,ctx,context,{weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,date);
     const recommendations=recommendFood({day:date,nutritionPlan:plan,entries:food});
     const adaptive=buildAdaptiveDecision(context,{...food,nutritionTarget:plan});
     return Response.json({ status:"ok", date, plan, food, recommendations, adaptive });
   } catch (error) { return Response.json({ status:"error", step:"nutrition_day", message:error.message }, { status:500 }); }
 }
-async function nutritionRecommendRoute(env, request) {
+async function nutritionRecommendRoute(env, request, ctx) {
   try {
     const body=await request.json().catch(()=>({})), date=String(body.date || pragueToday());
-    const context=await buildStrengthContext(env,date), plan=buildNutritionPlan(context,{...body,weightTrend:context.weightTrend});
+    const context=await buildStrengthContext(env,date), plan=await nutritionFor(env,ctx,context,{...body,weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,date);
     return Response.json({...recommendFood({day:date,nutritionPlan:plan,entries:food}),adaptive:buildAdaptiveDecision(context,{...food,nutritionTarget:plan})});
   } catch (error) { return Response.json({ status:"error", step:"nutrition_recommend", message:error.message }, { status:500 }); }
 }
 
-async function dailyDecisionRoute(env, request) {
+async function dailyDecisionRoute(env, request, ctx) {
   try {
     const body=await request.json().catch(()=>({}));
     const date=String(body.date||"").trim()||null;
     const context=await buildStrengthContext(env,date);
-    const plan=buildNutritionPlan(context,{...body,weightTrend:context.weightTrend});
+    const plan=await nutritionFor(env,ctx,context,{...body,weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,context.date);
     return Response.json({...buildAdaptiveDecision(context,{...food,nutritionTarget:plan}),nutrition:plan,food});
   } catch(error) { return Response.json({status:"error",step:"daily_decision",message:error.message},{status:500}); }
 }
-async function dailyPlanRoute(env,url) {
+async function dailyPlanRoute(env,url,ctx) {
   try {
     const date=String(url.searchParams.get("date")||"").trim()||null;
     const context=await buildStrengthContext(env,date);
-    const nutrition=buildNutritionPlan(context,{weightTrend:context.weightTrend});
+    const nutrition=await nutritionFor(env,ctx,context,{weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,context.date);
     const recommendations=recommendFood({day:context.date,nutritionPlan:nutrition,entries:food});
     return Response.json(buildDailyPlan({context,nutrition,food,recommendations}));
