@@ -100,51 +100,53 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
 
 <section id="workouts" class="view">
   <div class="hero section-hero">
-    <div><div class="eyebrow" id="workoutsEyebrow">Adaptive library · cycling</div><h1>Workouty</h1><p>Týden, plán a trénink na den na jednom místě – kolo, běh i posilovna.</p><div class="sport-switch" role="group" aria-label="Sport"><button class="btn primary" type="button" data-sport="ride" aria-pressed="true">🚴 Kolo</button><button class="btn" type="button" data-sport="run" aria-pressed="false">🏃 Běh</button><button class="btn" type="button" data-sport="gym" aria-pressed="false">🏋️ Gym</button></div></div>
+    <div><div class="eyebrow" id="workoutsEyebrow">Plán a knihovna · kolo</div><h1>Workouty</h1><p>Plán týdne, doporučené tréninky a posilovna na jednom místě.</p><div class="sport-switch" role="group" aria-label="Sport"><button class="btn primary" type="button" data-sport="ride" aria-pressed="true">🚴 Kolo</button><button class="btn" type="button" data-sport="run" aria-pressed="false">🏃 Běh</button><button class="btn" type="button" data-sport="gym" aria-pressed="false">🏋️ Gym</button></div></div>
     <div class="hero-status"><span>PERSONALIZACE</span><strong>Úroveň → výzva → hodnocení</strong></div>
   </div>
   <div class="card week-hub">
     <div class="week-hub-head"><div><div class="eyebrow">Tento týden</div><h3 id="hubWeekTitle" style="margin:3px 0 0">Týdenní přehled</h3><div class="small" id="hubWeekLoad"></div></div><div class="week-hub-tools"><button class="btn" type="button" id="hubLocation" title="Změnit místo pro počasí">📍 <span id="hubLocationName">Kutná Hora</span></button><div class="weeknav"><button class="btn" type="button" id="hubPrevWeek" aria-label="Předchozí týden">←</button><button class="btn" type="button" id="hubThisWeek">Tento týden</button><button class="btn" type="button" id="hubNextWeek" aria-label="Další týden">→</button></div></div></div>
-    <div class="planner-bar" id="weekPlanner"><div id="plannerPalette" class="planner-palette" aria-label="Sporty k přetažení do týdne"></div><span class="small">Přetáhni sport, nebo na něj ťukni a pak vyber den. V jednom dni můžeš mít více sportů.</span> <button type="button" class="info-tip" data-info="planner" aria-label="Vysvětlivka: plán týdne">i</button><button type="button" class="btn primary" id="proposeWeek">✨ Navrhnout tréninky</button><span class="small" id="plannerStatus" aria-live="polite"></span></div>
+    <div class="planner-bar" id="weekPlanner"><div id="plannerPalette" class="planner-palette" aria-label="Sporty k přetažení do týdne"></div><button type="button" class="info-tip" data-info="planner" aria-label="Vysvětlivka: plán týdne">i</button><div class="planner-actions"><span class="planner-action"><button type="button" class="btn primary" id="proposeWeek">✨ Vygenerovat tréninky</button><button type="button" class="info-tip" data-info="generateWeek" aria-label="Vysvětlivka: Vygenerovat tréninky">i</button></span><button type="button" class="btn" id="openRecommendations">📚 Doporučené tréninky</button></div><span class="small" id="plannerStatus" aria-live="polite"></span></div>
     <form id="hubLocationForm" class="select-row" hidden><input id="hubLocationQuery" type="search" placeholder="Město nebo obec" aria-label="Místo pro počasí" autocomplete="off"><button class="btn primary" type="submit">Hledat</button><div id="hubLocationResults" class="select-row"></div></form>
     <div id="hubWeek" class="hub-week"><div class="small">Načítám týden…</div></div>
   </div>
   <div id="workoutsEndurance">
-  <div class="card generate-card">
-    <div class="detail-heading"><div><div class="eyebrow">Doporučení na den</div><h3 style="margin:4px 0">Trénink na den</h3></div></div>
-    <p class="small" style="margin-top:0">Trenér zváží únavu, spánek, tvrdé dny v týdnu, gym, plán týdne a tvoji aktuální úroveň a vybere trénink i jeho nejvhodnější délku.</p>
-    <div class="workout-filter-grid">
-      <label><span class="small">Den</span><input id="generateDate" type="date"></label>
-      <label><span class="small">Čas na trénink (min) <button type="button" class="info-tip" data-info="duration" aria-label="Vysvětlivka: čas na trénink">i</button></span><input id="generateMinutes" type="number" min="20" max="360" step="5" placeholder="auto"></label>
-      <label><span class="small">Kde</span><select id="generateEnvironment" data-env-select><option value="outdoor" selected>Outdoor</option><option value="indoor">Indoor</option></select></label>
-      <div class="workout-filter-actions"><button class="btn primary" id="generateWorkoutBtn">Generovat</button></div>
-    </div>
-    <div id="generatedWorkout" style="margin-top:12px"></div>
-  </div>
-  <div class="section">Knihovna workoutů</div>
-  <div class="card">
-    <div class="workout-filter-grid">
-      <label><span class="small">Typ</span><select id="workoutSystem">
-        <option value="">Doporučí trenér</option><option value="recovery">Regenerace</option><option value="endurance">Vytrvalost</option><option value="tempo">Tempo</option><option value="sweet_spot" data-ride-only>Sweet spot</option><option value="threshold">Práh</option><option value="vo2max">VO₂max</option><option value="anaerobic">Anaerobní</option><option value="sprint">Sprint</option>
-      </select></label>
-      <label><span class="small">Délka (min) <button type="button" class="info-tip" data-info="libraryDuration" aria-label="Vysvětlivka: délka">i</button></span><input id="workoutDuration" type="number" min="20" max="360" step="5" placeholder="auto"></label>
-      <label><span class="small">Tolerance délky</span><select id="workoutDurationTolerance"><option value="5">±5 min</option><option value="10">±10 min</option><option value="15" selected>±15 min</option><option value="30">±30 min</option></select></label>
-      <label><span class="small">Cílový load <button type="button" class="info-tip" data-info="load" aria-label="Vysvětlivka: load">i</button></span><input id="workoutLoad" type="number" min="0" max="400" step="5" placeholder="např. 100"></label>
-      <label><span class="small">Max. obtížnost <button type="button" class="info-tip" data-info="difficulty" aria-label="Vysvětlivka: obtížnost">i</button></span><select id="workoutDifficulty"><option value="">Bez limitu</option><option value="2">2 · velmi lehké</option><option value="3">3 · lehké</option><option value="4">4</option><option value="5">5 · střední</option><option value="6">6</option><option value="7">7 · náročné</option><option value="8">8</option><option value="9">9 · velmi náročné</option><option value="10">10 · maximum</option></select></label>
-      <label><span class="small">Fáze <button type="button" class="info-tip" data-info="phase" aria-label="Vysvětlivka: fáze">i</button></span><select id="workoutPhase"><option value="">Auto</option><option value="base">Základ (Base)</option><option value="build">Rozvoj (Build)</option><option value="recovery">Regenerace</option><option value="taper">Ladění (Taper)</option></select></label>
-      <label><span class="small">Kde</span><select id="workoutEnvironment" data-env-select><option value="outdoor" selected>Outdoor</option><option value="indoor">Indoor</option></select></label>
-      <label><span class="small">Naplánovat na</span><input id="workoutScheduleDate" type="date"></label>
-      <div class="workout-filter-actions"><button class="btn primary" id="searchWorkouts">Najít workouty</button></div>
-    </div>
-  </div>
-  <div class="section">Moje úroveň <button type="button" class="info-tip" data-info="capability" aria-label="Vysvětlivka: úroveň">i</button></div>
-  <div id="workoutCapabilities" class="capability-grid"></div>
-  <div id="workoutRankingContext" class="notice" style="margin-top:12px">Zvol parametry a spusť hledání.</div>
-  <div class="section">Doporučené workouty <button type="button" class="info-tip" data-info="suitability" aria-label="Vysvětlivka: vhodnost">i</button></div>
-  <div id="workoutResults" class="workout-results"><div class="small">Načítám knihovnu…</div></div>
   <div class="section">Naplánované workouty <button type="button" class="info-tip" data-info="feedback" aria-label="Vysvětlivka: hodnocení">i</button></div>
-  <div id="scheduledWorkouts" class="scheduled-workouts"></div>
+  <div id="scheduledWorkouts" class="scheduled-workouts"><div class="small">Načítám…</div></div>
   </div>
+  <dialog id="recommendDialog" class="recommend-dialog" aria-labelledby="recommendTitle">
+    <header class="recommend-head">
+      <div><div class="eyebrow" id="recommendEyebrow">Knihovna workoutů</div><h3 id="recommendTitle">Doporučené tréninky</h3></div>
+      <div class="recommend-head-tools"><div class="sport-switch rec-sport" role="group" aria-label="Sport"><button class="btn" type="button" data-rec-sport="ride" aria-pressed="true">🚴 Kolo</button><button class="btn" type="button" data-rec-sport="run" aria-pressed="false">🏃 Běh</button></div><button class="btn" type="button" id="closeRecommend" aria-label="Zavřít doporučené tréninky">✕</button></div>
+    </header>
+    <div class="recommend-scroll">
+      <div id="recommendTarget" class="recommend-target" hidden></div>
+      <section id="dailyRecommendation" class="daily-rec" hidden>
+        <div class="daily-rec-head"><div><div class="eyebrow" id="dailyRecEyebrow">Denní doporučení</div><h4 id="dailyRecTitle">Na dnešek nemáš nic v plánu</h4><p class="small" id="dailyRecReason"></p></div><div class="daily-rec-sports" role="group" aria-label="Sport doporučení" id="dailyRecSports"></div></div>
+        <div class="daily-rec-tools"><input id="generateDate" type="hidden"><input id="generateMinutes" type="hidden"><label class="small">Kde <select id="generateEnvironment" data-env-select><option value="outdoor" selected>Outdoor</option><option value="indoor">Indoor</option></select></label><button class="btn" type="button" id="generateWorkoutBtn">Vygenerovat znovu</button><button class="btn" type="button" id="hideDailyRec">Skrýt</button></div>
+        <div id="generatedWorkout"></div>
+      </section>
+      <div class="recommend-focus" id="recommendFocus" role="group" aria-label="Zaměření tréninku"></div>
+      <div class="recommend-toolbar"><button class="btn" type="button" id="toggleRecommendFilters" aria-expanded="false" aria-controls="recommendFilters">⚙ Filtry</button><span class="small" id="recommendFilterSummary"></span></div>
+      <div id="recommendFilters" class="recommend-filters" hidden>
+        <div class="workout-filter-grid">
+          <label><span class="small">Typ</span><select id="workoutSystem">
+            <option value="">Doporučí trenér</option><option value="recovery">Regenerace</option><option value="endurance">Vytrvalost</option><option value="tempo">Tempo</option><option value="sweet_spot" data-ride-only>Sweet spot</option><option value="threshold">Práh</option><option value="vo2max">VO₂max</option><option value="anaerobic">Anaerobní</option><option value="sprint">Sprint</option>
+          </select></label>
+          <label><span class="small">Délka (min) <button type="button" class="info-tip" data-info="libraryDuration" aria-label="Vysvětlivka: délka">i</button></span><input id="workoutDuration" type="number" min="20" max="360" step="5" placeholder="auto"></label>
+          <label><span class="small">Tolerance délky</span><select id="workoutDurationTolerance"><option value="5">±5 min</option><option value="10">±10 min</option><option value="15" selected>±15 min</option><option value="30">±30 min</option></select></label>
+          <label><span class="small">Cílový load (TSS) <button type="button" class="info-tip" data-info="load" aria-label="Vysvětlivka: load">i</button></span><input id="workoutLoad" type="number" min="0" max="400" step="5" placeholder="např. 100"></label>
+          <label><span class="small">Max. obtížnost <button type="button" class="info-tip" data-info="difficulty" aria-label="Vysvětlivka: obtížnost">i</button></span><select id="workoutDifficulty"><option value="">Bez limitu</option><option value="2">2 · velmi lehké</option><option value="3">3 · lehké</option><option value="4">4</option><option value="5">5 · střední</option><option value="6">6</option><option value="7">7 · náročné</option><option value="8">8</option><option value="9">9 · velmi náročné</option><option value="10">10 · maximum</option></select></label>
+          <label><span class="small">Fáze <button type="button" class="info-tip" data-info="phase" aria-label="Vysvětlivka: fáze">i</button></span><select id="workoutPhase"><option value="">Auto</option><option value="base">Základ (Base)</option><option value="build">Rozvoj (Build)</option><option value="recovery">Regenerace</option><option value="taper">Ladění (Taper)</option></select></label>
+          <label><span class="small">Kde</span><select id="workoutEnvironment" data-env-select><option value="outdoor" selected>Outdoor</option><option value="indoor">Indoor</option></select></label>
+          <label><span class="small">Naplánovat na</span><input id="workoutScheduleDate" type="date"></label>
+          <div class="workout-filter-actions"><button class="btn primary" type="button" id="searchWorkouts">Najít workouty</button><button class="btn" type="button" id="resetRecommendFilters">Výchozí</button></div>
+        </div>
+      </div>
+      <div id="workoutRankingContext" class="notice recommend-context">Vyber zaměření nebo uprav filtry.</div>
+      <div id="workoutResults" class="workout-results"></div>
+      <details class="recommend-level"><summary>Moje úroveň <button type="button" class="info-tip" data-info="capability" aria-label="Vysvětlivka: úroveň">i</button></summary><div id="workoutCapabilities" class="capability-grid"></div></details>
+    </div>
+  </dialog>
   <div id="workoutsGym" hidden>
   <dialog id="gymExerciseDialog" class="gym-exercise-dialog" aria-labelledby="gymExerciseTitle"><div class="detail-heading"><h3 id="gymExerciseTitle">Přidat cvik</h3><button class="btn" id="closeGymExercise" type="button" aria-label="Zavřít výběr cviku">✕</button></div><label for="gymExerciseSearch" class="small">Hledat cvik nebo partii</label><input id="gymExerciseSearch" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="gymExerciseResults" aria-expanded="true" placeholder="Např. dřep, záda, triceps"><div id="gymExerciseResults" role="listbox" aria-label="Nalezené cviky"></div><p id="gymExerciseHint" class="small" role="status"></p></dialog>
   <div class="card generate-card"><div class="detail-heading"><div><div class="eyebrow">Posilovna</div><h3 style="margin:4px 0" id="gymMeta">Dnešní silový trénink</h3><label class="small gym-date">Den <input type="date" id="gymDate"></label></div><div class="actions"><button class="btn" id="generateGym">Generovat</button><button class="btn" id="addGymExercise">＋ Přidat cvik</button><button class="btn primary" id="saveGym">Uložit trénink</button></div></div><p class="small" id="gymPlanHint" style="margin:0">Vyber partie, nebo nech trenéra sestavit trénink podle týdne a únavy.</p></div>

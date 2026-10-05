@@ -3,7 +3,7 @@
 // datapoint and library schedule link) follows so the dashboard updates
 // without waiting for the next sync.
 
-import { cancelGymPlan } from './gym-plan-store.js';
+import { cancelGymPlan, moveGymPlan } from './gym-plan-store.js';
 
 const BASE = "https://intervals.icu/api/v1/athlete/0/events/";
 export const isStrengthEvent = event => /^(WeightTraining|Strength|Gym)$/i.test(String(event?.type || ''));
@@ -45,7 +45,10 @@ export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch
   const end = event.end_date_local || null;
   if (row) await env.DB.prepare("UPDATE health_datapoints SET sample_time=?,start_time=?,end_time=?,payload_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(event.start_date_local, event.start_date_local, end, JSON.stringify(event), env.DB.userId, row.id).run();
   await env.DB.prepare("UPDATE workout_schedule_links SET scheduled_date=? WHERE user_id=? AND intervals_event_id=?").bind(date, env.DB.userId, id).run().catch(() => {});
-  return { status: "ok", eventId: id, date, name: event.name || null };
+  // A moved gym session keeps its exercises.
+  const from = eventDate(payload) || String(row?.start_time || "").slice(0, 10);
+  const gym = isStrengthEvent(payload) ? await moveGymPlan(env.DB, from, date).catch(() => ({ moved: false })) : { moved: false };
+  return { status: "ok", eventId: id, date, name: event.name || null, gymPlanMoved: gym.moved };
 }
 
 export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {

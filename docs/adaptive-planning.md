@@ -12,11 +12,23 @@ Denní přehled výživy umožňuje přímo vybrat nápoj, zapsat šest obvyklý
 
 ## Návrhy a revize
 
-Navrhnout tréninky připraví revizi existujícího týdne a návrhy pro prázdné dny. Plánovač funguje i bez CTL nebo API klíče; AI revize je volitelná. Akce Připravit konkrétní tréninky uloží sportovní rozvrh pouze pro tento týden a vytvoří náhledy workoutů. Gym se uloží až po potvrzení konkrétního náhledu, nikoli při pouhém návrhu.
+Vygenerovat tréninky (vedle tlačítka je „i“ s vysvětlením) připraví revizi existujícího týdne a návrhy pro prázdné dny. Plánovač funguje i bez CTL nebo API klíče; AI revize je volitelná. Akce Připravit konkrétní tréninky uloží sportovní rozvrh pouze pro tento týden a vytvoří náhledy workoutů. Gym se uloží až po potvrzení konkrétního náhledu, nikoli při pouhém návrhu.
 
 Rozpracovat plánované vytvoří konkrétní alternativy pro již naplánované sporty, aniž by přidávalo další událost do stejného dne. Změny existujícího plánu lze probrat s asistentem nebo provést běžným ovládáním kalendáře.
 
 Předpověď Open-Meteo se načítá i na serveru. Pro kolo se od listopadu do února preferuje indoor, stejně jako při nízké teplotě, silném větru nebo dešti. Automatická indoor jednotka má nejvýše 90 minut. Bez předpovědi se jasně uvádí sezónní odhad. Uživatel může v jednotlivém generátoru výslovně zvolit prostředí.
+
+## Plán týdne a Doporučené tréninky
+
+Sporty se do dnů přetahují (nebo na mobilu ťuknutím vyberou a ťuknutím na den položí); jeden den může mít až čtyři tréninky, třeba kolo i gym nebo dvakrát kolo (druhý trénink stejného sportu je lehký a má vlastní cíl). Gym položený na den, kde byl dřív zrušený, se tam znovu počítá. Přesunutá kartička s sebou nebere návrh vytvořený pro původní den. Návrh dne (např. „2h 0m · ~98 TSS · IF 0,70 · Vytrvalost“) se u kartiček ukáže až po 5 s bez změny plánu, aby přesouvání nezahlcovalo kalendář.
+
+Zátěž zůstává v TSS: je to Load z Intervals.icu, ze kterého se počítá CTL/ATL. Vedle ní se ukazuje IF (intensity factor, TSS = h × IF² × 100), aby bylo vidět, jak tvrdý trénink je, nejen jak velký.
+
+Doporučené tréninky je okno s knihovnou workoutů: zaměření (vytrvalost, práh…) se přepíná nahoře, filtry se rozbalují tlačítkem Filtry. Po kliknutí na návrh dne ukáže pět nejvhodnějších tréninků pro ten den. Otevřené tlačítkem v plánovači nejdřív nabídne Denní doporučení, ale jen když na dnešek není nic v plánu; to může být kolo, běh i gym. Samostatná karta Trénink na den byla zrušena.
+
+Přesunutý gym trénink v Intervals.icu vezme s sebou i neodcvičený plán cviků.
+
+Změny se v týdenním přehledu ukážou hned. Zbytek aplikace (Dnes, Trénink, Výživa) se obnoví, až se plán 5 s nemění. Přesuny a mazání tréninků se do Intervals.icu posílají sloučené nejpozději do 15 s (víc přesunů jednoho tréninku = jedna změna, při zavření stránky hned). Když je Intervals.icu odmítne, změna se vrátí zpět. Nový trénink z knihovny se uloží i lokálně, takže je v týdnu vidět bez čekání na synchronizaci.
 
 ## Stav a asistent
 

@@ -84,3 +84,27 @@ test("heart rate recovery and intervals from Intervals.icu data", () => {
   assert.equal(heartRateRecovery(time.slice(0, 20), hr.slice(0, 20), 160), null);
   assert.deepEqual(activityIntervals({ icu_intervals: [{ type: "WORK", moving_time: 240, average_watts: 310.4, average_heartrate: 165 }] })[0].watts, 310);
 });
+
+test("record trends: best in the period against the best before it, or the first session", async () => {
+  const { recordTrends } = await import("../src/fitness-insights.js");
+  const set = (d, kg, reps = 8) => ({ workout_date: ago(d), exercise: "Lat pulldown", actual_kg: kg, actual_reps: reps });
+  const t = recordTrends({ today, sets: [set(400, 35), set(200, 40), set(60, 42.5), set(10, 47.5), set(3, 45)], activities: [
+    { type: "Ride", date: ago(300), icu_ftp: 240, distance: 40000, icu_weighted_avg_watts: 200 }, { type: "Ride", date: ago(100), icu_ftp: 250, distance: 90000 }, { type: "Ride", date: ago(5), icu_ftp: 262, distance: 60000 },
+    { type: "Run", date: ago(150), distance: 5000, moving_time: 1500 }, { type: "Run", date: ago(20), distance: 10000, moving_time: 2800 }, { type: "Run", date: ago(8), distance: 3000, moving_time: 700 }] });
+  const lat = t.strength[0].change;
+  assert.equal(t.defaultPeriod, "1m");
+  // One month: 47.5 against the best before it (42.5, 60 days ago).
+  assert.deepEqual([lat["1m"].value, lat["1m"].reps, lat["1m"].from, lat["1m"].delta, lat["1m"].basis], [47.5, 8, 42.5, 5, "before"]);
+  assert.deepEqual([lat.all.value, lat.all.from, lat.all.delta, lat.all.basis], [47.5, 35, 12.5, "first"]);
+  // A past year shows its own best: 2025 had only the 35 kg session (400 days before 1. 10. 2026).
+  assert.deepEqual(Object.keys(t.periods).filter(k => k.startsWith("y")), ["y2026", "y2025"]);
+  assert.equal(lat.y2025.value, 35);
+  assert.equal(t.periods.all.start, ago(400));
+  // FTP: in force at the end of the period against the start; pace: lower is better, runs under 5 km do not count.
+  assert.deepEqual([t.cardio.ftp.change["3m"].value, t.cardio.ftp.change["3m"].from, t.cardio.ftp.change["3m"].delta], [262, 250, 12]);
+  assert.deepEqual([t.cardio.runPace.change["1m"].value, t.cardio.runPace.change["1m"].from, t.cardio.runPace.change["1m"].delta], [280, 300, -20]);
+  assert.deepEqual([t.cardio.longestRide.change["6m"].value, t.cardio.longestRide.change["6m"].delta], [90, 50]);
+  assert.equal(t.cardio.longestRide.change["1m"].value, 60);
+  // Without power data there is no FTP block.
+  assert.equal(recordTrends({ today, activities: [{ type: "Ride", date: ago(5), icu_ftp: 250, distance: 30000 }] }).cardio.ftp, null);
+});

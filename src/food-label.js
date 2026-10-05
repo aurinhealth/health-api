@@ -1,14 +1,43 @@
 // OCR output is a draft; missing fields remain missing until the user verifies the label.
+// The table usually starts with energy, so a nutrient word before it (e.g. the
+// product name "Protein pudding 200 g") is used only when the table lacks it.
+const NUTRIENTS=[['protein_100g',/b[ií]lkovin|\bproteins?\b/i],['carbs_100g',/sacharid|carbohydrate/i],['fat_100g',/\btuky?\b|\bfats?\b/i],['fiber_100g',/vl[aá]knin|\bfib(?:er|re)\b/i],['salt_100g',/\bs[uů]l\b|\bsalt\b/i]];
+const SUB_ITEM=/nasycen|saturated|cukr|sugars?\b|z toho|of which|mastn[eé] kyseliny/i;
 export function parseNutritionLabel(text){
   const result={};const lines=String(text||'').split(/\r?\n/);
   const number=raw=>Number(String(raw).replace(',','.'));
-  for(const line of lines){
-    const energy=line.match(/([\d]+(?:[.,]\d+)?)\s*kcal/i);if(energy&&!('calories_100g'in result))result.calories_100g=number(energy[1]);
-    for(const [field,pattern]of [['protein_100g',/b[ií]lkoviny|proteins?/i],['carbs_100g',/sacharidy|carbohydrates?/i],['fat_100g',/tuky|^\s*fat\b/i],['fiber_100g',/vl[aá]knina|fib(?:er|re)/i],['salt_100g',/s[uů]l|salt/i]]){
-      if(pattern.test(line)&&!field.includes('calories')&&!/nasycen|saturated|cukry|sugars/i.test(line)){const match=line.match(/([\d]+(?:[.,]\d+)?)\s*g\b/i);if(match&&!(field in result))result[field]=number(match[1]);}
+  const energyLine=lines.findIndex(line=>/kcal|\bkj\b|energ/i.test(line)&&/\d/.test(line));
+  const kcalOf=line=>{
+    const pair=line.match(/kj\s*\/\s*kcal\D*?(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/i);if(pair)return number(pair[2]);
+    const kcal=line.match(/(\d+(?:[.,]\d+)?)\s*kcal/i);if(kcal)return number(kcal[1]);
+    return null;
+  };
+  // Energy: a line naming it first (a "1 porce = 120 kcal" note may precede the table).
+  for(const line of [...lines.filter(l=>/energ/i.test(l)),...lines]){const v=kcalOf(line);if(v!=null){result.calories_100g=v;break;}}
+  if(result.calories_100g==null){const kj=lines.map(l=>l.match(/(\d+(?:[.,]\d+)?)\s*kj\b/i)).find(Boolean);if(kj)result.calories_100g=Math.round(number(kj[1])/4.184);}
+  const ordered=energyLine>0?[...lines.slice(energyLine),...lines.slice(0,energyLine)]:lines;
+  for(const line of ordered){
+    if(SUB_ITEM.test(line))continue;
+    for(const [field,pattern] of NUTRIENTS){
+      if(field in result)continue;
+      const at=line.search(pattern);if(at<0)continue;
+      const rest=line.slice(at);
+      // "12,5 g"; when OCR drops the unit, the first number after the word.
+      const match=rest.match(/(\d+(?:[.,]\d+)?)\s*g\b/i)||rest.match(/^[^\d]*?(\d+(?:[.,]\d+)?)(?:\s|$)/);
+      if(match)result[field]=number(match[1]);
     }
   }
   return result;
+}
+
+// A warning when energy and macronutrients do not add up (4/4/9 kcal per g,
+// fibre 2), which is the usual sign of a misread digit or a wrong column.
+export function nutritionConsistency(values={}){
+  const kcal=Number(values.calories_100g),p=Number(values.protein_100g),c=Number(values.carbs_100g),f=Number(values.fat_100g);
+  if(![kcal,p,c,f].every(Number.isFinite)||kcal<40)return null;
+  const fiber=Number(values.fiber_100g)||0,estimate=4*p+4*Math.max(0,c)+9*f+2*fiber;
+  if(Math.abs(estimate-kcal)<=Math.max(25,kcal*.2))return null;
+  return 'Energie '+Math.round(kcal)+' kcal nesedí s makroživinami (≈ '+Math.round(estimate)+' kcal). Zkontroluj přepis proti fotce.';
 }
 
 export function parseNutritionPortion(text){

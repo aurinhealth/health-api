@@ -25,10 +25,13 @@ async function ensure(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS week_plan_preferences (user_id INTEGER PRIMARY KEY, prefs_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
 }
 
+// A day can hold several sessions, the same sport twice included (two rides),
+// up to MAX_PER_DAY; they are kept in the order ride, run, gym.
+export const MAX_PER_DAY = 4;
 export function sanitizeWeekPlan(input = {}) {
   const days = Array.from({ length: 7 }, (_, i) => {
     const raw = Array.isArray(input.days?.[i]) ? input.days[i] : [];
-    return PLANNER_SPORTS.filter(s => raw.includes(s));
+    return raw.filter(s => PLANNER_SPORTS.includes(s)).slice(0, MAX_PER_DAY).sort((a, b) => PLANNER_SPORTS.indexOf(a) - PLANNER_SPORTS.indexOf(b));
   });
   const loc = input.location || {};
   const lat = Number(loc.latitude), lon = Number(loc.longitude);
@@ -80,7 +83,7 @@ export async function saveWeekPlan(db, input, date = null) {
 export async function addWeekSport(db,date,sport) {
   if(!validDay(date)||!PLANNER_SPORTS.includes(sport))throw new Error('Neplatný den nebo sport.');
   const prefs=await getWeekPlan(db,date),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
-  if(!prefs.days[weekday].includes(sport))prefs.days[weekday].push(sport);
+  if(!prefs.days[weekday].includes(sport)&&prefs.days[weekday].length<MAX_PER_DAY)prefs.days[weekday].push(sport);
   return saveWeekPlan(db,prefs,date);
 }
 
@@ -117,16 +120,17 @@ export function planWeekRoles(days = [], { readiness = "green" } = {}) {
   return Array.from({ length: 7 }, (_, i) => {
     const items = [];
     const sports = (days[i] || []).filter(s => s !== "gym");
+    const slot = sport => items.filter(x => x.sport === sport).length;
     sports.forEach((sport, k) => {
-      // A second endurance sport on the same day stays easy.
+      // A second endurance session on the same day stays easy.
       const r = k === 0 ? role[i] : "recovery";
-      items.push({ sport, role: r, label: ROLE_LABELS[r], share: SHARE[r], focus: ROLE_FOCUS[r] });
+      items.push({ sport, slot: slot(sport), role: r, label: ROLE_LABELS[r], share: SHARE[r], focus: ROLE_FOCUS[r] });
     });
-    if (has(i, "gym")) {
+    for (const _ of (days[i] || []).filter(s => s === "gym")) {
       // Legs stay fresh for intervals; a long easy ride the next day tolerates leg work.
       const hardSoon = ["quality", "long"].includes(role[i]) || role[i + 1] === "quality";
       const r = hardSoon ? "gym_upper" : "gym_full";
-      items.push({ sport: "gym", role: r, label: ROLE_LABELS[r], share: SHARE[r], focus: null });
+      items.push({ sport: "gym", slot: slot("gym"), role: r, label: ROLE_LABELS[r], share: SHARE[r], focus: null });
     }
     return { weekday: i, items };
   });
@@ -146,6 +150,8 @@ export function roleFor(prefs, date, sport, options = {}) {
 // this one is a recovery week at 70 %. What is already done or planned in
 // Intervals.icu counts first; the rest is spread over the open plan chips,
 // within sensible limits per role, so one session never carries the week.
+// Load is TSS (what Intervals.icu calls Load and builds CTL/ATL from); the
+// intensity factor (IF) of the role says how hard it is: TSS = h × IF² × 100.
 const ROLE_IF = { recovery: .55, endurance: .68, long: .68, quality: .82 };
 const ROLE_RANGE = { recovery: [.35, .6], endurance: [.8, 1.6], long: [1.4, 2.6], quality: [1, 1.5] };
 const GYM_TSS = { gym_full: 35, gym_upper: 25 };
@@ -165,21 +171,23 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [
   const info = date => days.find(d => d.date === date) || { done: 0, planned: 0, sports: [] };
   let committed = 0;
   for (let i = 0; i < 7; i++) { const d = info(dateOf(i)); committed += Number(d.done) || 0; if (dateOf(i) >= today) committed += Number(d.planned) || 0; }
-  // Open chips: today or later, and that sport is not already done or planned that day.
+  // Open chips: today or later, and not covered by a session of that sport
+  // already done or planned that day (two planned rides cover two ride chips).
   const open = [];
   roles.forEach((day, i) => {
     const date = dateOf(i); if (date < today) return;
-    for (const x of day.items || []) if (!(info(date).sports || []).includes(x.sport)) open.push({ date, ...x });
+    const covered = sport => (info(date).sports || []).filter(s => s === sport).length;
+    for (const x of day.items || []) if ((x.slot || 0) >= covered(x.sport)) open.push({ date, ...x });
   });
   let remaining = Math.max(0, target - committed - open.filter(x => x.sport === "gym").reduce((s, x) => s + (GYM_TSS[x.role] || 30), 0));
   const endurance = open.filter(x => x.sport !== "gym"), shares = endurance.reduce((s, x) => s + (x.share || 1), 0);
   const items = open.map(x => {
-    if (x.sport === "gym") return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: (x.role === "gym_upper" ? 60 : 70) - (recovery ? 10 : 0) };
+    if (x.sport === "gym") return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: (x.role === "gym_upper" ? 60 : 70) - (recovery ? 10 : 0) };
     const [lo, hi] = ROLE_RANGE[x.role] || [.8, 1.6], cap = recovery ? .85 : 1;
     const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
     const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = ROLE_IF[x.role] || .68;
     const minutes = Math.max(min, Math.min(max, round5(tss / (intensity * intensity * 100) * 60)));
-    return { date: x.date, sport: x.sport, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes };
+    return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes, intensity };
   });
   const assigned = items.reduce((s, x) => s + x.tss, 0), shortfall = Math.max(0, target - committed - assigned);
   return { status: "ok", ctl: Math.round(fitness), base, target, recovery, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };

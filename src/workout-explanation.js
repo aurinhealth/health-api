@@ -3,6 +3,7 @@
 // pace and min/km).
 import { n, outdoorWidth } from "./workout-model.js";
 import { zoneForPercent, formatPace } from "./training-zones.js";
+import { rideFtpFor } from "./intervals-athlete.js";
 
 const SYSTEM_LABEL = { recovery: "Recovery", endurance: "Endurance", tempo: "Tempo", sweet_spot: "Sweet Spot", threshold: "Threshold", vo2max: "VO₂max", anaerobic: "Anaerobní kapacita", sprint: "Sprint" };
 
@@ -154,14 +155,15 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
   try { structure = JSON.parse(workout.structure_json || "[]"); } catch {}
   const system = workout.primary_system, minutes = n(workout.duration_minutes, 0);
   if (sport === "run") return explainRun(workout, structure, { coach, environment, thresholds, planned, system, minutes });
-  const ftp = environment === "indoor" ? (thresholds.indoorFtp || thresholds.ftp) : thresholds.ftp;
+  const { ftp, estimated } = rideFtpFor(thresholds, environment);
   const why = [...(coach.rationale || []), ...readinessLines(coach)];
   const p = coach.recommendation?.progression;
   if (p && ["recovery", "endurance"].includes(system)) why.push(system === "recovery" ? "Regenerační jízda: cílem je zotavení, ne progres – intenzita zůstává v Z1." : "Aerobní jízda: staví základ a nezvyšuje únavu; obtížnost se řídí délkou, ne intenzitou.");
   else if (p) why.push(progressLine(p, workout, SYSTEM_LABEL));
   if (!coach.rationale?.length && !planned) why.push("V plánu na tento den nic nemáš, proto vybírám podle zátěže posledních dní a tvé úrovně.");
   const how = [...structureHow(structure, { system, sport: "ride", ftp }), ...(HOW[system] || HOW.endurance).slice(0, 2)];
-  if (ftp) how.unshift("Watty počítám z tvého " + (environment === "indoor" && thresholds.indoorFtp ? "indoor " : "") + "FTP " + ftp + " W" + ({ manual: " (nastaveno v aplikaci)", "latest-ride": " (z poslední jízdy)" }[thresholds.source] || " (z Intervals.icu)") + ".");
+  if (ftp && estimated) how.unshift("Na trenažéru počítám watty z indoor FTP " + ftp + " W – odhad 95 % z tvého FTP " + thresholds.ftp + " W, protože indoor se stejný výkon drží hůř. Vlastní indoor FTP nastavíš v Intervals.icu.");
+  else if (ftp) how.unshift("Watty počítám z tvého " + (environment === "indoor" && thresholds.indoorFtp ? "indoor " : "") + "FTP " + ftp + " W" + ({ manual: " (nastaveno v aplikaci)", "latest-ride": " (z poslední jízdy)" }[thresholds.source] || " (z Intervals.icu)") + ".");
   else how.unshift("FTP neznám – cíle jsou v % FTP. Zadej nebo spočítej FTP v Nastavení → FTP a zóny.");
   return {
     title: SYSTEM_LABEL[system] || system,

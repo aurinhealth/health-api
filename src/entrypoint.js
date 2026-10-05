@@ -8,7 +8,8 @@ import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders } from "./connection-secrets.js";
-import { parseNutritionLabel, parseNutritionPortion } from './food-label.js';
+import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from './food-label.js';
+import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail} from './activity-detail.js';
@@ -50,7 +51,8 @@ import { importStrengthHistory, getStrengthHistory, parseStrengthSheet } from ".
 import { searchCookbookRecipes, logFood } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
-import { athleteThresholds } from "./intervals-athlete.js";
+import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
+import { renderForEnvironment } from "./workout-model.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
@@ -435,7 +437,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       context.userMessage='Zkontroluj budoucí plán a navrhni změny.';
       const actions=validateCoachActions(review.actions,context,today),drafts=[];await ensureCoachInboxTable(env.DB);
       for(const action of actions){const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling','Revize budoucího plánu od '+today,JSON.stringify({kind:'coach_action',action})).run();drafts.push({...action,draftId:ins.meta?.last_row_id});}
-      await updateAthleteState(env.DB,{turn:[{role:'user',content:'Navrhnout tréninky · týden '+start},{role:'assistant',content:review.answer.slice(0,16000)}]});
+      await updateAthleteState(env.DB,{turn:[{role:'user',content:'Vygenerovat tréninky · týden '+start},{role:'assistant',content:review.answer.slice(0,16000)}]});
       return Response.json({status:'ok',start,proposal,review:{...review,actions:drafts},actions:drafts,reviewScope:context.reviewScope,reviewedCount:context.remainingPlanned.length,aiError},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
@@ -687,7 +689,22 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }catch(error){return Response.json({status:'error',message:'Dohledání přes AI selhalo: '+String(error.message).slice(0,160)},{status:502});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
-    const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000);return Response.json(body.mode==='portion'?{status:'ok',...parseNutritionPortion(text)}:{status:'ok',values:parseNutritionLabel(text)});
+    const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000),parsed=body.mode==='portion'?parseNutritionPortion(text):{values:parseNutritionLabel(text)};
+    return Response.json({status:'ok',...parsed,warning:nutritionConsistency(parsed.values)});
+  }
+  // A label, a portion summary or a meal photographed: AI vision reads the
+  // values as a draft for the food editor. Without AI the client uses OCR.
+  if(url.pathname==='/app/api/food/photo'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:'AI není připojena; fotku přečtu na zařízení.'},{status:503});
+    try{
+      const body=await request.json().catch(()=>({}));
+      if(body.mode==='barcode'){const b=await readBarcodeWithAI(env,{image:body.image});return Response.json(b.barcode?{status:'ok',barcode:b.barcode}:{status:'unreadable',message:'Číslo pod čárovým kódem se nepodařilo přečíst. Vyfoť kód zblízka, nebo číslo opiš.'},{headers:{'Cache-Control':'no-store'}});}
+      const r=await readFoodPhotoWithAI(env,{image:body.image,mode:body.mode==='portion'?'portion':'label',language:env.INTERFACE_LANGUAGE});
+      if(!r.result)return Response.json({status:'unreadable',message:'Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.'},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',...r.result,model:r.model},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:'Čtení fotky přes AI selhalo: '+String(error.message).slice(0,160)},{status:/JPG|PNG/.test(error.message)?400:502});}
   }
   // Cookbook by recipe name (the page lookup is below).
   if(url.pathname==='/app/api/food/recipes'&&request.method==='GET'){
@@ -907,6 +924,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         await cancelGymPlan(env.DB,date);
         return Response.json({status:'ok',date,cancelled:true,message:'Posilovna je zrušená. Původní plán a výsledky zůstaly uložené.'},{headers:{'Cache-Control':'no-store'}});
       }
+      // Gym put back on the day in the week plan: only the cancellation goes,
+      // nothing is written to Intervals.icu until a plan is saved or confirmed.
+      if(body.action==='uncancel'){
+        await restoreGymPlan(env.DB,date);
+        return Response.json({status:'ok',date,cancelled:false,message:'Gym je na tento den znovu v plánu.'},{headers:{'Cache-Control':'no-store'}});
+      }
       if(body.action==='restore'){
         assertTrainingAllowed(await getAthleteState(env.DB));
         const plan=await readGymPlan(env.DB,date,{includeCancelled:true});
@@ -1067,6 +1090,15 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
   try{
     if(url.pathname==='/app/api/workouts/capabilities'&&request.method==='GET')return Response.json({status:'ok',sport,capabilities:await getCapabilities(env.DB,sport)},{headers:{'Cache-Control':'no-store'}});
     if(url.pathname==='/app/api/workouts/scheduled'&&request.method==='GET')return Response.json({status:'ok',workouts:await getScheduledWorkouts(env.DB)},{headers:{'Cache-Control':'no-store'}});
+    // One library workout as ridden outdoors or indoors (steps, watts, notes).
+    if(url.pathname==='/app/api/workouts/render'&&request.method==='GET'){
+      const workout=await getWorkout(env.DB,String(url.searchParams.get('id')||''));
+      if(!workout)return Response.json({status:'error',message:'Workout nebyl nalezen.'},{status:404});
+      const environment=url.searchParams.get('environment')==='indoor'?'indoor':'outdoor',thresholds=await athleteThresholds(env),w=renderForEnvironment(workout,environment),kind=w.sport==='run'?'run':'ride';
+      let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+      w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+      return Response.json({status:'ok',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
+    }
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
       await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);
       const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):pragueToday();
@@ -1081,8 +1113,8 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),athleteThresholds(env)]);
       result.autoDuration=autoDuration;result.coachPick={system:filters.preferredSystem||null,durationMinutes:autoDuration?.durationMinutes||null};
       // Step rows with watts or paces for each card.
-      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:w.environment==='indoor'&&thresholds.indoorFtp?thresholds.indoorFtp:thresholds.ftp,zones:thresholds.powerZones});}
-      return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:thresholds.indoorFtp,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?'Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.':'Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.'},{headers:{'Cache-Control':'no-store'}});
+      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});}
+      return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?'Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.':'Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.'},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/generate'&&request.method==='POST'){
       const body=await request.json().catch(()=>({}));
