@@ -124,7 +124,7 @@ export function strengthProgress(history=[],date,weeks=8){
   }).sort((a,b)=>b.lastDate.localeCompare(a.lastDate)).slice(0,25);
 }
 
-const paceText=s=>s?Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0')+'/km':null;
+const paceText=s=>{if(!s)return null;const t=Math.round(s);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+'/km';};
 // FTP, heart rate and pace thresholds with the athlete's zones (athleteThresholds).
 export function thresholdsContext(t){
   if(!t)return null;

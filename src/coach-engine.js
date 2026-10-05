@@ -22,7 +22,7 @@ function morningSummary({date,sleep,fitness,yesterday,planned,policy}){
   const facts=[],previous=yesterday?.training?.completed||[];
   if(sleep.last!=null){
     const delta=sleep.avg==null?null:Math.round(sleep.last-sleep.avg);
-    facts.push('Spánek '+Math.floor(sleep.last/60)+' h '+Math.round(sleep.last%60)+' min'+(delta!=null&&Math.abs(delta)>=30?' ('+Math.abs(delta)+' min '+(delta<0?'méně':'více')+' než poslední průměr)':'')+'.');
+    facts.push('Spánek '+Math.floor(Math.round(sleep.last)/60)+' h '+Math.round(sleep.last)%60+' min'+(delta!=null&&Math.abs(delta)>=30?' ('+Math.abs(delta)+' min '+(delta<0?'méně':'více')+' než poslední průměr)':'')+'.');
   }
   const load=previous.map(a=>n(a.tss)).filter(v=>v!=null),minutes=previous.reduce((sum,a)=>sum+(n(a.durationHours)||0)*60,0);
   if(previous.length)facts.push('Včera '+previous.length+' '+(previous.length===1?'aktivita':'aktivity')+(minutes>0?' · '+Math.round(minutes)+' min':'')+(load.length?' · '+Math.round(load.reduce((a,b)=>a+b,0))+' TSS':'')+'.');

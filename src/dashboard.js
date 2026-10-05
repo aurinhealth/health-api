@@ -87,7 +87,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   </div>
   <div class="section">Týdenní rytmus · plán vs. skutečnost</div>
   <div class="card"><div id="trainingWeekOverview" class="plan-grid"></div></div>
-  <div class="card" style="margin-top:12px"><div class="weekbar"><h3>Fitness · Fatigue · Form</h3><select id="pmcRange" aria-label="Období grafu zátěže"><option value="14">14 dní</option><option value="30">30 dní</option><option value="90">90 dní</option></select></div><svg id="pmcChart" class="chart" style="height:420px" viewBox="0 0 1000 420"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>
+  <div class="card" style="margin-top:12px"><div class="weekbar"><h3>Kondice · únava · forma</h3><select id="pmcRange" aria-label="Období grafu zátěže"><option value="14">14 dní</option><option value="30">30 dní</option><option value="90">90 dní</option></select></div><svg id="pmcChart" class="chart" style="height:420px" viewBox="0 0 1000 420"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>
   <div class="card" style="margin-top:12px"><h3>Týdenní zátěž · plán a skutečnost</h3><svg id="tssChart" class="chart" style="height:320px" viewBox="0 0 1000 320"></svg><div id="tssInsight" class="notice" style="margin-top:10px"></div></div>
   <div class="grid2" style="margin-top:12px">
     <div class="card"><h3>Tréninkový load · posledních 42 dní</h3><svg id="loadChart" class="chart" viewBox="0 0 1000 250"></svg></div>
@@ -170,7 +170,7 @@ body{background:radial-gradient(circle at 78% -12%,#211938 0,transparent 28%),va
   <div class="weekbar section-hero"><div><div class="eyebrow">Fueling intelligence</div><div class="section" style="margin:2px 0">Výživa</div><div id="nutritionRange" class="small"></div><div id="nutritionReason" class="small" style="margin-top:5px"></div><div id="nutritionTargetSummary" class="notice" style="margin-top:8px"></div></div><div class="select-row"><select id="nutritionWeekSelect"></select><select id="nutritionDaySelect"></select></div></div>
   <div class="daygrid" id="nutritionDays"></div>
   <div class="nutrition-weekly" id="nutritionWeekly"><div class="card"><h3>Kalorie · cíl vs. příjem</h3><div id="nutritionChart"></div></div><div class="card weekly-energy" id="weeklyEnergy"></div></div><div class="card nutrition-next" style="margin-top:12px"><h3>Co dál dnes?</h3><div id="foodPlan"></div></div>
-  <div class="section">Záznam jídel</div><div class="card"><details><summary>Historie jídel ▾</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div id="nutritionRows"></div></details></div>
+  <div class="section">Záznam jídel</div><div class="card"><details><summary>Historie jídel</summary><div id="nutritionInfo" class="small" style="margin:10px 0"></div><div id="nutritionRows"></div></details></div>
 </section>
 
 </div></main></div>
