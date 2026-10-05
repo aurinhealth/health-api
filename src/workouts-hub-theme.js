@@ -204,7 +204,13 @@ export const workoutsHubTheme = `
 .today-item:last-of-type{border-bottom:0}.today-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#1b2130;font-size:16px}
 .today-item strong{display:block;font-size:14px}.today-item small{display:block;font-size:11px;color:#9ca6b5}
 .today-item.role .today-icon{border:1px dashed #6b5a99;background:transparent}.today-item.done .today-icon{background:#173a30}
-.today-item .btn{padding:8px 12px;font-size:13px;min-height:38px}
+.today-item .btn{padding:8px 12px;font-size:13px;min-height:38px}.today-rated{font-size:12px;color:#7fd6a6;white-space:nowrap}
+.deploy-steps{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:8px 0;padding:0;counter-reset:deploy}
+.deploy-steps li{counter-increment:deploy;display:grid;gap:1px;min-width:0;padding:6px 10px;border-radius:10px;border:1px solid #2b3442;background:#141a24;color:#8e9aab;font-size:12px}
+.deploy-steps li b::before{content:counter(deploy) " · ";color:#6b7686;font-weight:600}
+.deploy-steps li small{font-size:11px;color:inherit;opacity:.85}
+.deploy-steps li.done{border-color:#2f6b52;background:#132a22;color:#9fe3c2}.deploy-steps li.active{border-color:#7a64c8;background:#211b38;color:#ddd3ff}.deploy-steps li.fail{border-color:#7a4545;background:#2a1717;color:#ffb4b4}
+.deploy-live,.deploy-wait{display:block;flex-basis:100%;font-size:10px;font-weight:600;line-height:1.3}.deploy-live{color:#7fd6a6}.deploy-wait{color:#cbb8ff}
 .week-strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:12px;padding-top:12px;border-top:1px solid #222936}
 .strip-day{display:grid;justify-items:center;gap:1px;padding:6px 0;border-radius:12px;border:1px solid transparent;background:transparent;color:#c9d2de}
 .strip-day span{font-size:10px;text-transform:uppercase;color:#9ca6b5}.strip-day b{font-size:16px}.strip-day i{font-style:normal;font-size:11px;min-height:15px;letter-spacing:-2px}

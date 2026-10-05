@@ -12,7 +12,7 @@ Denní přehled výživy umožňuje přímo vybrat nápoj, zapsat šest obvyklý
 
 ## Návrhy a revize
 
-Vygenerovat tréninky (vedle tlačítka je „i“ s vysvětlením) připraví revizi existujícího týdne a návrhy pro prázdné dny. Plánovač funguje i bez CTL nebo API klíče; AI revize je volitelná. Akce Připravit konkrétní tréninky uloží sportovní rozvrh pouze pro tento týden a vytvoří náhledy workoutů. Gym se uloží až po potvrzení konkrétního náhledu, nikoli při pouhém návrhu.
+Vygenerovat tréninky (vedle tlačítka je „i“ s vysvětlením) připraví revizi existujícího týdne a návrhy pro prázdné dny. Plánovač funguje i bez CTL nebo API klíče; AI revize je volitelná. Akce Připravit konkrétní tréninky je schválení: uloží sportovní rozvrh pouze pro tento týden, připraví konkrétní workouty i gym a ty se do Intervals.icu zapíšou samy do 15 s, stejně jako přesuny a mazání (při zavření stránky hned). Do té doby jde kterýkoli zastavit tlačítkem Nezapisovat u kartičky. Průběh Vygenerováno → Schváleno → Nasazeno je vidět pod plánem týdne i v odpovědi asistenta. Trénink potvrzený v asistentovi jde stejnou cestou. Přidání workoutu z knihovny tlačítkem Naplánovat se už znovu nepotvrzuje; dotaz zůstal jen u mazání a rušení.
 
 Rozpracovat plánované vytvoří konkrétní alternativy pro již naplánované sporty, aniž by přidávalo další událost do stejného dne. Změny existujícího plánu lze probrat s asistentem nebo provést běžným ovládáním kalendáře.
 
@@ -35,6 +35,8 @@ Doporučené tréninky se pro kartičky načítají předem na pozadí a server 
 Změny se v týdenním přehledu ukážou hned. Zbytek aplikace (Dnes, Trénink, Výživa) se obnoví, až se plán 5 s nemění. Přesuny a mazání tréninků se do Intervals.icu posílají sloučené nejpozději do 15 s (víc přesunů jednoho tréninku = jedna změna, při zavření stránky hned). Když je Intervals.icu odmítne, změna se vrátí zpět. Nový trénink z knihovny se uloží i lokálně, takže je v týdnu vidět bez čekání na synchronizaci.
 
 ## Stav a asistent
+
+Ohodnocený trénink (RPE v Intervals.icu, poznámka kouče k němu, nebo hodnocení právě uložené) má v Dnes místo tlačítka Hodnocení „✓ ohodnoceno“.
 
 V Dnes lze přepnout Active, Sick, Injured nebo On break a doplnit poznámku. Stav je uložený na serveru pro daného uživatele. Neaktivní stav pozastaví generování, nové kalendářní zápisy a noční gym automatizaci. Kalendář ani historie se přepnutím stavu nemažou.
 

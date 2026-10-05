@@ -5,6 +5,8 @@ let coachRefreshRunning=false;
 const plannedQueue=new Map(),pendingAdds=new Map();
 // Week requests in flight (see fetchWeek), declared early for the first load.
 const weekRequests=new Map();
+// Days whose coach notes were asked for (see renderToday), also declared early.
+const reflectionDays=new Set();
 let statusCoachingRevision=0;
 let planDataRevision=0;
 let coachRefreshTimer;
@@ -571,7 +573,6 @@ async function scheduleLibraryWorkout(id,dateOverride=null,environment=null){
   const row=[...(state.workoutLibrary?.workouts||[]),state.generated?.workout,...(state.generated?.alternatives||[])].find(x=>x&&x.id===id),name=row?.name||id;
   // "Vyměnit za jiný" from a planned training's detail: the new one replaces it.
   const replace=state.replaceEvent;
-  if(!window.confirm('Přidat „'+name+'“ na '+longDate(date)+(environment?' ('+(environment==='indoor'?'indoor':'outdoor')+')':'')+' do Intervals.icu'+(replace?' místo „'+(replace.name||'trénink')+'“':'')+'?'))return;
   const pending=showPendingAdd(row||{id,name},date,row?.sport||workoutSport());
   try{const r=await jsonFetch("/app/api/workouts/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workoutId:id,date,confirm:true,environment:environment||$("workoutEnvironment")?.value||"outdoor"})});settlePendingAdd(pending,r.status!=='already_scheduled',r.eventId);
     if(replace&&r.status!=='already_scheduled'){state.replaceEvent=null;deletePlanned(replace.id,replace.name,false);}toast(r.status==='already_scheduled'?'Workout už je na tento den naplánovaný.':r.workout.name+' je na '+longDate(r.date)+' i v Intervals.icu.')}
@@ -1584,7 +1585,8 @@ async function renderWeekHub(){
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
     // A chip whose training is already planned or done gives way to the training itself.
     const plan=planChips(i,d.date).filter(c=>c.slot>=(covered[c.sport]||0)).map(({sport,slot,index})=>{const quiet=plannerQuiet(),x=quiet?null:(roles[i]?.items||[]).filter(r=>r.sport===sport)[slot],tg=quiet?null:chipTarget(d.date,sport,slot),key=proposalKey(d.date,sport,slot),pr=state.proposals?.[key],cancelled=sport==='gym'&&gymCancelledOn(d.date),attrs=' data-date="'+d.date+'" data-sport="'+sport+'" data-slot="'+slot+'"';
-      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+(pr.existing?'<span class="small">Alternativa k revizi</span>':pr.scheduled?'<span class="small">✓ v Intervals</span>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>')+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button></span>':pr?.error?'<small class="proposal">'+esc(friendlyProposalError(pr.error))+'</small>'+(pr.item?'<span class="chip-actions"><button type="button" class="btn" data-proposal="retry"'+attrs+'>Zkusit znovu</button></span>':''):'';
+      const deploy=pr?.existing?'<span class="small">Alternativa k revizi</span>':pr?.scheduled?'<span class="small deploy-live">✓ v Intervals.icu</span>':pr?.deploying?'<span class="small">Zapisuji do Intervals.icu…</span>':proposalWaiting(pr)?'<span class="small deploy-wait">→ Intervals.icu do 15 s</span><button type="button" class="btn" data-proposal="keep"'+attrs+'>Nezapisovat</button>':'<button type="button" class="btn primary" data-proposal="add"'+attrs+'>Do Intervals</button>';
+      const proposal=pr?.status==='busy'?'<small class="proposal">Navrhuji…</small>':pr?.workout?'<small class="proposal">'+esc(pr.workout.name)+'</small><span class="chip-actions"><button type="button" class="btn" data-proposal="open"'+attrs+'>Detail</button>'+deploy+'</span>':pr?.gym?'<small class="proposal">Návrh · '+pr.gym+' cviků</small><span class="chip-actions"><button type="button" class="btn" data-proposal="gym"'+attrs+'>Prohlédnout</button>'+deploy+'</span>':pr?.error?'<small class="proposal">'+esc(friendlyProposalError(pr.error))+'</small>'+(pr.item?'<span class="chip-actions"><button type="button" class="btn" data-proposal="retry"'+attrs+'>Zkusit znovu</button></span>':''):'';
       const picked=state.plannerPick===sport&&state.plannerFrom===i&&(state.plannerFromIndex===-1?index==null:state.plannerFromIndex==null||state.plannerFromIndex===index);
       return '<span class="planner-chip'+(picked?' picked':'')+(cancelled?' cancelled':'')+'" draggable="true" data-chip-sport="'+sport+'" data-chip-day="'+i+'"'+' data-chip-index="'+(index??-1)+'"'+' data-chip-slot="'+slot+'" title="Přetáhni na jiný den, nebo ťukni a pak ťukni na den">'+HUB_SPORTS[sport]+(slot?' <b class="chip-slot">'+(slot+1)+'.</b>':'')+(index!=null?chipEnvBadge(i+'|'+sport+'|'+slot,sport,tg||chipTarget(d.date,sport,slot),d.date):'')+'<button type="button" data-chip-remove aria-label="Odebrat '+esc(HUB_SPORTS[sport])+' z plánu">✕</button>'+(cancelled?'<small>Gym na tento den je zrušený</small>':!pr&&x&&d.date>=today?chipSuggestion(d.date,sport,x,tg,i+'|'+sport+'|'+slot):'')+proposal+'</span>'}).join('');
     const w=state.weather?.[d.date],[,icon,word]=w?weatherIcon(w.code):[0,'',''];
@@ -1836,7 +1838,7 @@ function deletePlanned(eventId,name,ask=true){
 // A workout added from the library or a proposal shows in the week at once
 // (pendingAdds, declared at the top).
 function showPendingAdd(workout,date,sport){
-  const id='pending:'+(workout?.id||'w')+':'+date,item={id,date,name:workout?.name||'Trénink',type:sport==='run'?'Run':'Ride',durationHours:num(workout?.duration_minutes)/60||null,tss:workout?.target_load??null,start:date,pending:true};
+  const id='pending:'+(workout?.id||'w')+':'+date,item={id,date,name:workout?.name||'Trénink',type:sport==='run'?'Run':sport==='gym'?'WeightTraining':'Ride',durationHours:num(workout?.duration_minutes)/60||null,tss:workout?.target_load??null,start:date,pending:true};
   pendingAdds.set(id,item);for(const days of cachedWeeks())applyPendingPlanned(days);renderWeekHub();return id;
 }
 // ok: the server took it (eventId makes it editable at once); otherwise it goes.
@@ -2171,7 +2173,8 @@ const SPORT_ICON={ride:'🚴',run:'🏃',gym:'🏋️'};
 function miniRing(label,value,progress,color,sub,view){return '<button type="button" class="mini-ring" data-go="'+view+'"><span class="mini-ring-dial" style="--p:'+Math.max(0,Math.min(100,num(progress)))+';--c:'+color+'"><b>'+esc(value)+'</b></span><span class="mini-ring-label">'+esc(label)+'</span><small>'+esc(sub)+'</small></button>';}
 function todayItems(date){
   const days=hubDays()||state.week?.days||[],d=date===selectedHistoryDate&&state.daily?{date,daily:state.daily}:days.find(x=>x.date===date),t=d?.daily?.training||{},out=[];
-  for(const a of (t.completed||[]).filter(x=>!isNutritionItem(x)))out.push({kind:'done',sport:activitySport(a),name:a.name||a.type,meta:hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss):''),a});
+  for(const a of (t.completed||[]).filter(x=>!isNutritionItem(x)))out.push({kind:'done',sport:activitySport(a),name:a.name||a.type,meta:hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss):''),a,date});
+  const sessions=out.filter(x=>!isWalkActivity(x.a)).length;for(const x of out)x.daySessions=sessions;
   const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
   for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||''))))out.push({kind:'planned',sport:activitySport(p),name:p.name||'Plán',meta:(p.durationHours?hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss):''),p});
   const sports=new Set(out.map(x=>x.sport));
@@ -2180,13 +2183,22 @@ function todayItems(date){
   for(const x of role)if(!sports.has(x.sport)&&!(x.sport==='gym'&&gymCancelledOn(date)))out.push({kind:'role',sport:x.sport,name:x.label,meta:'podle plánu týdne'});
   return out;
 }
+// A finished session already rated (RPE in Intervals.icu, a coach note that
+// names it, the only session of a rated day, or rated here) shows a tick.
+function sessionRated(x){
+  const a=x.a||{},rpe=Number(a.rpe??a.icu_rpe??a.payload?.icu_rpe??a.payload?.rpe),name=String(x.name||'Trénink');
+  if(rpe>=1&&rpe<=10)return true;
+  if(state.ratedSessions?.has(x.date+'|'+name))return true;
+  const notes=(state.reflections?.[x.date]||[]).filter(r=>r.rpe!=null||r.notes);
+  return notes.some(r=>String(r.notes||'').startsWith(name+':'))||x.daySessions===1&&notes.some(r=>r.rpe!=null);
+}
 // Walks are everyday movement, not training: they get no rating.
 function isWalkActivity(a){return !activitySport(a)&&/walk|hike|chůze|procház|túra/i.test(String(a?.type||'')+' '+String(a?.name||''))}
 function todayItemHtml(x){
   const actions=x.kind==='planned'&&/^planned:/.test(String(x.p?.id||''))?'<button class="btn" data-today="move" data-id="'+esc(x.p.id)+'" data-name="'+esc(x.name)+'">Přesunout</button>':
     x.kind==='role'&&x.sport!=='gym'?'<button class="btn primary" data-today="generate" data-sport="'+x.sport+'">Generovat</button>':
     (x.kind==='gymplan'||x.kind==='role'&&x.sport==='gym')&&!(statusPausesTraining()&&(state.todayPick||pragueToday())>=pragueToday())?'<button class="btn primary" data-today="gym">▶ Začít</button>':
-    x.kind==='done'&&!isWalkActivity(x.a)?'<button class="btn" data-today="rate" data-name="'+esc(x.name||'Trénink')+'">Hodnocení</button>':'';
+    x.kind==='done'&&!isWalkActivity(x.a)?(sessionRated(x)?'<span class="today-rated">✓ ohodnoceno</span>':'<button class="btn" data-today="rate" data-name="'+esc(x.name||'Trénink')+'">Hodnocení</button>'):'';
   return '<div class="today-item '+x.kind+'"><span class="today-icon">'+(SPORT_ICON[x.sport]||'•')+'</span><div><strong>'+esc(x.name)+'</strong><small>'+(x.kind==='done'?'✓ hotovo · ':x.kind==='planned'?'plán · ':x.kind==='role'?'návrh · ':'')+esc(x.meta||'')+'</small></div>'+actions+'</div>';
 }
 function renderToday(){
@@ -2198,6 +2210,8 @@ function renderToday(){
   const days=(hubDays()||state.week?.days||[]).map(d=>d.date);if(!state.todayPick||!days.includes(state.todayPick))state.todayPick=days.includes(date)?date:days[0];
   const strip=days.map(d=>{const items=todayItems(d),icons=[...new Set(items.map(x=>x.sport).filter(Boolean))].slice(0,3).map(s=>SPORT_ICON[s]).join('');return '<button type="button" class="strip-day'+(d===state.todayPick?' active':'')+(d===pragueToday()?' today':'')+'" data-strip="'+d+'"><span>'+esc(new Intl.DateTimeFormat('cs-CZ',{weekday:'short'}).format(new Date(d+'T12:00:00Z')))+'</span><b>'+Number(d.slice(8))+'</b><i>'+(icons||'·')+'</i></button>';}).join('');
   const pick=state.todayPick,pickItems=todayItems(pick);
+  // The coach's notes of the picked day decide which sessions are rated.
+  if(pick&&pick<=pragueToday()&&!state.reflections?.[pick]&&!reflectionDays.has(pick)){reflectionDays.add(pick);loadReflections(pick).then(()=>{if(state.todayPick===pick&&state.reflections?.[pick]?.length)renderToday();});}
   // The timeline may sit in this screen: park it back in Přehled before the
   // screen is rebuilt, or the rebuild would delete it.
   const parked=$('dayTimeline');if(parked&&el.contains(parked))$('dailyPulse')?.after(parked);
@@ -2539,7 +2553,7 @@ async function generateWeekProposals(items){
   const revision=statusCoachingRevision,b=$('proposeWeek'),done={ok:0,failed:[]};
   b.disabled=true;state.proposals=state.proposals||{};state.proposalsBusy=true;
   try{
-    let n=0;for(const x of items){if(revision!==statusCoachingRevision)return done;n++;$('plannerStatus').textContent='Připravuji '+n+' / '+items.length+'…';const key=proposalKey(x.date,x.sport,x.slot);state.proposals[key]={status:'busy'};renderWeekHub();
+    let n=0;for(const x of items){if(revision!==statusCoachingRevision)return done;n++;$('plannerStatus').textContent='Připravuji '+n+' / '+items.length+'…';const key=proposalKey(x.date,x.sport,x.slot);state.proposals[key]={status:'busy',existing:x.existing};renderWeekHub();renderDeploySteps();
       let result=null;
       for(let attempt=0;attempt<2&&!result;attempt++){
         try{result=await proposalFor(x);}
@@ -2547,12 +2561,13 @@ async function generateWeekProposals(items){
       }
       if(revision!==statusCoachingRevision)return done;
       state.proposals[key]=result;if(result.error)done.failed.push(x);else done.ok++;
-      renderWeekHub();
+      renderWeekHub();queueProposalPush();
     }
-    const open=Object.values(state.proposals).filter(p=>p.workout&&!p.scheduled&&!p.existing).length;
-    $('plannerStatus').innerHTML='Hotovo · připraveno '+done.ok+(done.failed.length?' · nepovedlo se '+done.failed.length+' <button type="button" class="btn" id="proposeRetry">Zkusit znovu</button>':'')+(open?' <button type="button" class="btn" id="proposeAddAll">Přidat vše do Intervals.icu ('+open+')</button>':'');
+    const open=Object.values(state.proposals).filter(proposalWaiting).length;
+    $('plannerStatus').innerHTML='Hotovo · připraveno '+done.ok+(done.failed.length?' · nepovedlo se '+done.failed.length+' <button type="button" class="btn" id="proposeRetry">Zkusit znovu</button>':'')+(open?' <button type="button" class="btn" id="proposeAddAll">Zapsat do Intervals.icu hned ('+open+')</button>':'');
     const all=$('proposeAddAll');if(all)all.onclick=addAllProposals;
     const again=$('proposeRetry');if(again)again.onclick=()=>generateWeekProposals(done.failed);
+    renderDeploySteps();
     return done;
   }finally{b.disabled=false;state.proposalsBusy=false;}
 }
@@ -2563,19 +2578,63 @@ async function scheduleProposal(key){
   catch(error){pr.scheduled=false;settlePendingAdd(pending,false);throw error;}
   return true;
 }
-async function addAllProposals(){
-  const keys=Object.keys(state.proposals||{}).filter(k=>state.proposals[k].workout&&!state.proposals[k].scheduled&&!state.proposals[k].existing);
-  if(!keys.length||!window.confirm('Přidat '+keys.length+' navržené tréninky do Intervals.icu?'))return;
-  let ok=0;for(const k of keys){try{if(await scheduleProposal(k))ok++;}catch(error){toast('Zápis selhal: '+error.message);}}
-  toast(ok+' tréninků je v Intervals.icu.');$('plannerStatus').textContent='✓ '+ok+' v Intervals.icu';
+// ---- Approved proposals go to Intervals.icu by themselves, in the same 15 s
+// as the other plan changes (moves, deletes). Until then "Nezapisovat" keeps
+// one out; leaving the page sends the rest at once.
+let proposalPushTimer=null;
+function proposalWaiting(p){return Boolean((p?.workout||p?.gymPreview)&&!p.existing&&!p.scheduled&&!p.skip&&!p.deploying);}
+function queueProposalPush(){
+  clearTimeout(proposalPushTimer);
+  const waiting=Object.values(state.proposals||{}).filter(proposalWaiting),now=Date.now();
+  for(const p of waiting)p.pushAt??=now+INTERVALS_DELAY_MAX_MS;
+  if(waiting.length)proposalPushTimer=setTimeout(()=>pushApprovedProposals(),Math.max(0,Math.min(...waiting.map(p=>p.pushAt))-now));
+  renderDeploySteps();
 }
+async function deployProposal(key){
+  const pr=state.proposals[key];
+  if(pr.gymPreview){
+    const [date]=key.split('|'),plan=pr.gymPreview.plan||{},pending=showPendingAdd({id:'gym',name:plan.planName||'Gym'},date,'gym');
+    try{const r=await jsonFetch('/app/api/gym/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:pr.gymPreview.draftId}),keepalive:true});pr.scheduled=true;settlePendingAdd(pending,true);if(r.intervals?.status==='error')toast('Gym je uložený, zápis do Intervals.icu selhal: '+r.intervals.message);}
+    catch(error){settlePendingAdd(pending,false);throw error;}
+    return true;
+  }
+  return scheduleProposal(key);
+}
+async function pushApprovedProposals(all=false){
+  clearTimeout(proposalPushTimer);
+  if(statusPausesTraining()){for(const p of Object.values(state.proposals||{}))if(proposalWaiting(p))p.skip=true;renderWeekHub();return renderDeploySteps();}
+  const keys=Object.keys(state.proposals||{}).filter(k=>proposalWaiting(state.proposals[k])&&(all||state.proposals[k].pushAt<=Date.now()+250));
+  for(const k of keys){const pr=state.proposals[k];pr.deploying=true;renderDeploySteps();
+    try{await deployProposal(k);}catch(error){pr.skip=true;pr.deployError=error.message;toast('Zápis do Intervals.icu selhal: '+error.message);}
+    finally{pr.deploying=false;}
+  }
+  renderWeekHub();queueProposalPush();
+}
+async function addAllProposals(){await pushApprovedProposals(true);const live=Object.values(state.proposals||{}).filter(p=>p.scheduled&&!p.existing).length;$('plannerStatus').textContent='✓ '+live+' v Intervals.icu';}
+window.addEventListener('pagehide',()=>{if(Object.values(state.proposals||{}).some(proposalWaiting))pushApprovedProposals(true);});
+// Where a plan stands: generated, approved, in Intervals.icu. Shown under the
+// week plan and in the assistant's answer, updated as it goes.
+function deployStepsHtml(keys=null){
+  const list=(keys?keys.map(k=>state.proposals?.[k]).filter(Boolean):Object.values(state.proposals||{})).filter(p=>!p.existing&&!p.item?.existing);if(!list.length)return '';
+  const busy=list.filter(p=>p.status==='busy').length,ready=list.filter(p=>p.workout||p.gymPreview).length,failed=list.filter(p=>p.error).length;
+  const waiting=list.filter(proposalWaiting).length,deploying=list.filter(p=>p.deploying).length,live=list.filter(p=>p.scheduled).length,kept=list.filter(p=>p.skip&&!p.scheduled).length;
+  const step=(cls,label,detail)=>'<li class="'+cls+'"><b>'+label+'</b>'+(detail?'<small>'+esc(detail)+'</small>':'')+'</li>';
+  return '<ol class="deploy-steps" role="status" aria-live="polite">'+
+    (busy?step('active','Generuji',ready+' z '+list.length):step(ready?'done':'fail',ready?'✓ Vygenerováno':'Vygenerováno',ready+' z '+list.length+(failed?' · '+failed+' se nepovedlo':'')))+
+    step(ready?'done':'',ready?'✓ Schváleno':'Schváleno',ready?'tebou v asistentovi':'')+
+    (waiting||deploying?step('active','Nasazuji',deploying?'zapisuji do Intervals.icu…':'do Intervals.icu do 15 s · '+waiting):live?step('done','✓ Nasazeno',live+' v Intervals.icu'+(kept?' · '+kept+' nezapsáno':'')):step(kept?'fail':'','Nasazeno',kept?kept+' nezapsáno':''))+
+  '</ol>';
+}
+function renderDeploySteps(){document.querySelectorAll('[data-deploy-steps]').forEach(el=>{el.innerHTML=deployStepsHtml(el.dataset.deploySteps?el.dataset.deploySteps.split(','):null);});}
 function installProposals(){
   $('proposeWeek').onclick=proposeWeek;
+  if(!document.querySelector('#hubWeek [data-deploy-steps],[data-deploy-steps].hub-deploy'))$('plannerStatus').insertAdjacentHTML('afterend','<div class="hub-deploy" data-deploy-steps></div>');
   $('hubWeek').addEventListener('click',async e=>{
     const b=e.target.closest('[data-proposal]');if(!b)return;e.stopPropagation();
     const key=proposalKey(b.dataset.date,b.dataset.sport||'gym',b.dataset.slot),pr=state.proposals?.[key];
     if(b.dataset.proposal==='retry'&&pr?.item){await generateWeekProposals([pr.item]);return}
-    if(b.dataset.proposal==='add'){if(!window.confirm('Přidat „'+pr.workout.name+'“ na '+longDate(b.dataset.date)+' do Intervals.icu?'))return;b.disabled=true;try{await scheduleProposal(key);toast(pr.workout.name+' je v Intervals.icu.');}catch(error){toast('Zápis selhal: '+error.message);b.disabled=false;renderWeekHub();}}
+    if(b.dataset.proposal==='keep'&&pr){pr.skip=true;renderWeekHub();queueProposalPush();return;}
+    if(b.dataset.proposal==='add'&&pr){b.disabled=true;pr.skip=false;pr.deployError=null;try{pr.deploying=true;renderDeploySteps();await deployProposal(key);toast((pr.workout?.name||'Gym')+' je v Intervals.icu.');}catch(error){toast('Zápis selhal: '+error.message);b.disabled=false;}finally{pr.deploying=false;renderWeekHub();renderDeploySteps();}}
     if(b.dataset.proposal==='open'){state.generatedVariant=0;await openDailyRecommendation({date:b.dataset.date,sport:b.dataset.sport,generated:{...pr.result,existing:pr.existing},title:'Návrh na '+longDate(b.dataset.date)});}
     if(b.dataset.proposal==='gym'){if(pr?.gymPreview)openGymPreview(b.dataset.date,pr);else openGymDay(b.dataset.date);}
   },true);
@@ -3061,6 +3120,7 @@ function openRatingSheet({date=pragueToday(),name=null}={}){
           $('rateResult').innerHTML='<div class="coach-note"><small>💬 Kouč</small><p>'+esc(res.reflection.text)+'</p></div>';
         }
         btn.textContent='✓ Uloženo';
+        state.ratedSessions=(state.ratedSessions||new Set()).add(date+'|'+String(pick||'Trénink'));try{renderToday();}catch{}
       }catch(error){toast(error.message);btn.disabled=false;btn.textContent='Uložit hodnocení';}
     };
   });
@@ -3372,7 +3432,15 @@ function renderCoachActionCards(actions=[]){
       if(a.type==='status'){state.athleteState=r.result;state.coachAdvice=null;renderAthleteStatus();await refreshStatusCoaching();}
       else if(a.type==='gym_swap'){applyGymSwapToScreen(a,r.result);scheduleCoachRefresh();}
       else if(a.type==='week_sport'){state.hubWeek=mondayOf(a.date);state.hubWeekData=null;await loadWeekPlan(true);renderPlanner();await renderWeekHub();const link=document.createElement('button');link.type='button';link.className='btn';link.textContent='Otevřít plán týdne';link.onclick=()=>{$('assistantDialog').close();activate('workouts');$('hubWeek').scrollIntoView({behavior:'smooth'});};card.append(link);}
-      else if(a.type==='workout'&&r.result){$('assistantDialog').close();if(a.sport==='gym')openGymPreview(a.date,{gymPreview:r.result});else{activate('workouts');await openDailyRecommendation({date:a.date,sport:a.sport,generated:r.result,title:'Návrh asistenta · '+longDate(a.date)});}}
+      else if(a.type==='workout'&&r.result){
+        // Approved here: it goes to Intervals.icu by itself, like the week's proposals.
+        state.proposals=state.proposals||{};let slot=0;while(state.proposals[proposalKey(a.date,a.sport,slot)])slot++;
+        const key=proposalKey(a.date,a.sport,slot),pr=state.proposals[key]=a.sport==='gym'?{gym:new Set((r.result.plan?.rows||[]).map(x=>x?.[1]).filter(Boolean)).size,gymPreview:r.result}:{workout:r.result.workout,result:r.result};
+        card.insertAdjacentHTML('beforeend','<div data-deploy-steps="'+esc(key)+'"></div><div class="select-row"><button type="button" class="btn" data-coach-open>Detail</button><button type="button" class="btn" data-coach-keep>Nezapisovat</button></div>');
+        card.querySelector('[data-coach-open]').onclick=async()=>{$('assistantDialog').close();if(a.sport==='gym')openGymPreview(a.date,pr);else{activate('workouts');await openDailyRecommendation({date:a.date,sport:a.sport,generated:r.result,title:'Návrh asistenta · '+longDate(a.date)});}};
+        card.querySelector('[data-coach-keep]').onclick=e=>{pr.skip=true;e.target.remove();queueProposalPush();renderWeekHub();};
+        queueProposalPush();renderWeekHub();
+      }
       else{state.hubWeekData=null;await refreshAfterPlanChange();}
     }}catch(error){$('assistantStatus').textContent=error.message;b.disabled=false;}});
 }
@@ -3439,19 +3507,20 @@ function renderAssistantWeekProposal(r){
     try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+r.start,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p.prefs)});state.hubWeek=r.start;renderPlanner();
       const done=await generateWeekProposals(items);
       // The proposal is answered: the list and its buttons give way to the result.
-      $('weekProposalCards').innerHTML='<div class="notice week-proposal-done"><strong>✓ Plán týdne je uložený.</strong><p>Připraveno '+done.ok+' z '+items.length+' tréninků'+(done.failed.length?', '+done.failed.length+' se nepovedlo – zkus je znovu':'')+'. Do Intervals.icu se nic nezapsalo; návrhy zkontroluješ v plánu týdne.</p><div class="assistant-week-tools"><button class="btn primary" type="button" id="showWeekProposals">Otevřít plán týdne</button>'+(done.failed.length?'<button class="btn" type="button" id="retryWeekProposals">Zkusit znovu ('+done.failed.length+')</button>':'')+'</div></div>';
+      $('weekProposalCards').innerHTML='<div class="notice week-proposal-done"><strong>✓ Plán týdne je schválený.</strong><p>Připraveno '+done.ok+' z '+items.length+' tréninků'+(done.failed.length?', '+done.failed.length+' se nepovedlo – zkus je znovu':'')+'. Do Intervals.icu se zapíšou samy do 15 s; v plánu týdne můžeš kterýkoli zastavit tlačítkem Nezapisovat.</p><div data-deploy-steps></div><div class="assistant-week-tools"><button class="btn primary" type="button" id="showWeekProposals">Otevřít plán týdne</button>'+(done.failed.length?'<button class="btn" type="button" id="retryWeekProposals">Zkusit znovu ('+done.failed.length+')</button>':'')+'</div></div>';
       $('showWeekProposals').onclick=()=>{$('assistantDialog').close();activate('workouts');openWorkouts();$('hubWeek').scrollIntoView({behavior:'smooth',block:'start'});};
       if($('retryWeekProposals'))$('retryWeekProposals').onclick=async()=>{$('retryWeekProposals').disabled=true;const again=await generateWeekProposals(done.failed);$('retryWeekProposals')?.remove();appendCoachTurn('assistant','Znovu připraveno '+again.ok+' z '+done.failed.length+'.');};
-      appendCoachTurn('assistant',done.failed.length?'Připravil jsem '+done.ok+' z '+items.length+' tréninků. '+done.failed.length+' se nepovedlo, server byl přetížený – můžeš je zkusit znovu.':'Konkrétní návrhy jsou připravené v plánu týdne. Před zápisem do kalendáře je můžeš zkontrolovat.');
+      renderDeploySteps();
+      appendCoachTurn('assistant',done.failed.length?'Připravil jsem '+done.ok+' z '+items.length+' tréninků. '+done.failed.length+' se nepovedlo, server byl přetížený – můžeš je zkusit znovu.':'Tréninky jsou připravené a do 15 s je zapíšu do Intervals.icu. Průběh vidíš tady i v plánu týdne.');
     }catch(error){$('assistantStatus').textContent=error.message;tools.querySelectorAll('button').forEach(x=>x.disabled=false);button.textContent='Připravit tyto tréninky';}};
   $('discussWeekProposal').onclick=()=>discussWithAssistant('Chci probrat kompromis k návrhu pro týden '+r.start+'. '+(items.length?'Navržené aktivity: '+items.map(x=>x.date+' · '+HUB_SPORTS[x.sport]+' · '+hm(x.minutes)).join('; ')+'. ':'')+'Navrhni mírnější variantu, která zohlední regeneraci, dostupný čas a můj cíl. Pokud potřebuješ něco upřesnit, zeptej se.',{appContext:{view:'workouts',date:r.start,weekStart:r.start,sport:null,exercise:null}});
   if($('detailExistingWeek'))$('detailExistingWeek').onclick=async()=>{const button=$('detailExistingWeek');button.disabled=true;try{const week=await hubWeekData(),detail=[];for(const d of week.days||[]){if(d.date<pragueToday())continue;for(const a of d.daily?.training?.planned||[]){const sport=activitySport(a);if(!['ride','run','gym'].includes(sport))continue;detail.push({date:d.date,sport,slot:detail.filter(x=>x.date===d.date&&x.sport===sport).length,minutes:Math.round((a.durationHours||1)*60),environment:sport==='gym'?'indoor':'auto',existing:a.id});}}if(detail.length){await generateWeekProposals(detail);appendCoachTurn('assistant','Podrobnosti k naplánovaným tréninkům jsou připravené v plánu týdne.');}else $('assistantStatus').textContent='V tomto týdnu nejsou zbývající plánované tréninky.';}catch(error){$('assistantStatus').textContent=error.message;}finally{button.disabled=false;}};
 }
 function openGymPreview(date,pr){
   const g=pr.gymPreview,plan=g.plan;
-  openSheet('Návrh gymu · '+longDate(date),'<h3>'+esc(plan.planName)+'</h3><p>'+esc(plan.rationale)+'</p><div class="gym-preview-rows">'+(plan.rows||[]).map(row=>'<div><b>'+esc(row[1])+'</b><span>'+esc(row[0])+' · '+esc(row[3]||'podle RPE')+' kg × '+esc(row[4])+'</span></div>').join('')+'</div>'+(pr.existing?'<p class="small">Jde o rozpracování existujícího tréninku. Změny můžeš provést v gymu.</p><button class="btn" id="openPreviewGym">Otevřít gym</button>':pr.scheduled?'<p>✓ Plán je uložený.</p>':'<button class="btn primary" id="confirmGymPreview">Uložit tento gym plán</button>'),body=>{
+  openSheet('Návrh gymu · '+longDate(date),'<h3>'+esc(plan.planName)+'</h3><p>'+esc(plan.rationale)+'</p><div class="gym-preview-rows">'+(plan.rows||[]).map(row=>'<div><b>'+esc(row[1])+'</b><span>'+esc(row[0])+' · '+esc(row[3]||'podle RPE')+' kg × '+esc(row[4])+'</span></div>').join('')+'</div>'+(pr.existing?'<p class="small">Jde o rozpracování existujícího tréninku. Změny můžeš provést v gymu.</p><button class="btn" id="openPreviewGym">Otevřít gym</button>':pr.scheduled?'<p>✓ Plán je uložený i v Intervals.icu.</p>':proposalWaiting(pr)?'<p class="small">Schváleno · do Intervals.icu se zapíše samo do 15 s.</p><button class="btn primary" id="confirmGymPreview">Uložit hned</button>':'<button class="btn primary" id="confirmGymPreview">Uložit tento gym plán</button>'),body=>{
     if($('openPreviewGym'))$('openPreviewGym').onclick=()=>{closeSheet();openGymDay(date)};
-    if($('confirmGymPreview'))$('confirmGymPreview').onclick=async()=>{const b=$('confirmGymPreview');b.disabled=true;try{const r=await jsonFetch('/app/api/gym/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:g.draftId})});pr.scheduled=true;closeSheet();toast(r.intervals?.status==='error'?'Gym je uložený, zápis do Intervals selhal: '+r.intervals.message:'Gym plán uložený.');await renderWeekHub();}catch(error){toast(error.message);b.disabled=false;}};
+    if($('confirmGymPreview'))$('confirmGymPreview').onclick=async()=>{const b=$('confirmGymPreview');b.disabled=true;try{const r=await jsonFetch('/app/api/gym/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:g.draftId})});pr.scheduled=true;closeSheet();renderDeploySteps();toast(r.intervals?.status==='error'?'Gym je uložený, zápis do Intervals selhal: '+r.intervals.message:'Gym plán uložený.');await renderWeekHub();}catch(error){toast(error.message);b.disabled=false;}};
   });
 }
 function installAdaptivePlanning(){
