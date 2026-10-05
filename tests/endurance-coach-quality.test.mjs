@@ -88,3 +88,20 @@ test("a plan for weeks, a month or up to the race is a training block", async ()
   for (const m of ["Udělej mi plán na 8 týdnů do závodu", "Připrav mi rozpis na měsíc", "Plán do závodu"]) assert.equal(assistantTask(m), "block", m);
   for (const m of ["Naplánuj mi tento týden", "Plán na 2 týdny", "Kolik mám dát na bench?"]) assert.equal(assistantTask(m), "planning", m);
 });
+
+test("the week plan is a recovery week only after a heavy week or three solid weeks, never because little is planned yet", async () => {
+  const { recoveryWeek, weekLoadsBefore } = await import("../src/week-planner.js");
+  const roles = planWeekRoles([["gym"], ["ride"], ["ride"], [], ["gym"], ["ride"], ["ride", "gym"]]);
+  // The real week 41: CTL 66.8, last week 283 TSS, 131 TSS done and planned on Monday.
+  const days = [{ date: "2026-10-05", done: 0, planned: 0, sports: ["gym"] }, { date: "2026-10-06", done: 0, planned: 64, sports: ["ride"] }, { date: "2026-10-07", done: 0, planned: 26, sports: ["ride"] }, { date: "2026-10-10", done: 0, planned: 41, sports: ["ride"] }];
+  const week41 = weekTargets({ roles, ctl: 66.8, lastWeekLoad: 283, days, today: "2026-10-05", weekStart: "2026-10-05" });
+  assert.equal(week41.recovery, false);
+  assert.equal(week41.target, Math.round(468 * 1.05));
+  assert.equal(weekTargets({ roles, ctl: 66.8, lastWeekLoad: 600, days, today: "2026-10-05", weekStart: "2026-10-05" }).recoveryReason, "heavy_last_week");
+  assert.equal(weekTargets({ roles, ctl: 66.8, lastWeekLoad: 480, weekLoads: [480, 470, 500], days, today: "2026-10-05", weekStart: "2026-10-05" }).recoveryReason, "three_weeks");
+  // After the recovery week the series starts again.
+  assert.equal(recoveryWeek({ base: 468, weekLoads: [330, 480, 500] }).recovery, false);
+  // Loads per week from the wellness, last week first.
+  const wellness = Array.from({ length: 21 }, (_, i) => ({ id: new Date(Date.parse("2026-09-14T12:00:00Z") + i * 86400000).toISOString().slice(0, 10), ctlLoad: i < 7 ? 10 : i < 14 ? 20 : 30 }));
+  assert.deepEqual(weekLoadsBefore(wellness, "2026-10-05"), [210, 140, 70]);
+});

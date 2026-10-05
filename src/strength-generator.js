@@ -491,7 +491,10 @@ export function generateStrengthPlan(context, options = {}) {
   // The gateway explicitly marks its read-only deployment diagnostic; ordinary
   // gym requests and previews still obey the athlete's status.
   if(policy.paused&&!options.diagnosticPreview)throw new Error(policy.headline+'. '+policy.guidance[0]);
-  const deload = options.noDeload ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date);
+  // The shared recovery week decides when it is known; four solid gym weeks
+  // in a row are the fallback for athletes without Intervals.icu loads.
+  const shared = context?.recoveryWeek;
+  const deload = options.noDeload ? null : shared?.recovery ? { shared: true, reason: "Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7." } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date);
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);

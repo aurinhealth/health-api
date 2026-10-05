@@ -1,5 +1,5 @@
 import { availabilityOn, parseTimeWindow } from './training-availability.js';
-import { planWeekRoles, weekTargets } from './week-planner.js';
+import { planWeekRoles, weekTargets, weekLoadsBefore } from './week-planner.js';
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
@@ -113,7 +113,7 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   const wellness = (fitness.wellness || []).filter(w => w.id <= today).at(-1), ctl = Number(wellness?.ctl) || null;
   const loads = existing.map(d => ({ date: d.date, done: Number(d.daily?.training?.actualTss) || (d.daily?.training?.completed || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), planned: (d.daily?.training?.planned || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), sports: sessionsOn(d).map(sportOf) }));
   const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 ? 'red' : 'green' });
-  let targets = weekTargets({ roles, ctl, days: loads, today, weekStart: start, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) });
+  let targets = weekTargets({ roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) });
   if (!ctl) targets = { status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: x.sport === 'run' ? 30 : 60, tss: 25 }))) };
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };

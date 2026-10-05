@@ -1,6 +1,7 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { qualityDomain } from './session-intensity.js';
+import { recoveryWeek as recoveryWeek_, weekLoadsBefore } from './week-planner.js';
 import { pragueToday } from "./prague-date.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
@@ -269,8 +270,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const eventDays=focus?.event?.date?diffDays(focus.event.date,targetDate):null;
   const eventPhase=eventDays==null||eventDays<0?null:eventDays===0?"race":eventDays===1?"openers":eventDays<=7?"taper":eventDays<=84?"build":"base";
   const tapering=["race","openers","taper"].includes(eventPhase);
-  const recoveryWeek=!tapering&&(namedRecovery||(ctl!=null&&ctl>0&&lastWeekLoad>=ctl*7*1.25)||(plannedAhead&&lastWeekLoad>=(sport==="run"?100:150)&&thisWeekLoad<lastWeekLoad*.7));
-  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":ctl>0&&lastWeekLoad>=ctl*7*1.25?"Regenerační týden: minulý týden "+lastWeekLoad+" TSS je "+Math.round(lastWeekLoad/(ctl*7)*100)+" % udržovací zátěže (CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.":"Tento týden je regenerační: plánovaná a odjetá zátěž "+thisWeekLoad+" TSS je "+Math.round(thisWeekLoad/Math.max(lastWeekLoad,1)*100)+" % minulého týdne ("+lastWeekLoad+" TSS).");
+  // The same rule as the week plan and the gym (all sports from the Intervals.icu
+  // wellness; this sport's rides when the wellness has no loads).
+  const wellnessLoads=weekLoadsBefore(fitness?.wellness,monday),weekLoads=wellnessLoads.length?wellnessLoads:[lastWeekLoad];
+  const rule=recoveryWeek_({base:ctl!=null&&ctl>0?ctl*7:null,weekLoads});
+  const recoveryWeek=!tapering&&(namedRecovery||rule.recovery);
+  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":rule.reason==="heavy_last_week"?"Regenerační týden: minulý týden "+weekLoads[0]+" TSS je "+Math.round(weekLoads[0]/(ctl*7)*100)+" % udržovací zátěže (CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.":"Regenerační týden: tři týdny v řadě nad udržovací zátěží ("+weekLoads.slice(0,3).reverse().join(", ")+" TSS při CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.");
   const phase=txt(goal?.phase||preferences.phase||(tapering?eventPhase:recoveryWeek?"recovery":eventPhase||"auto"));
   const eventName=focus?.event?.name?"„"+focus.event.name+"“":"závod";
   const plural=(count,one,few,many)=>count+" "+(count===1?one:count>=2&&count<=4?few:many);

@@ -56,7 +56,7 @@ import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip, weekLoadsBefore } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
@@ -336,7 +336,7 @@ async function computeWeekTargets(env,ctx,start,prefs){
   for(const d of days)if(gymDays.has(d.date))d.sports.push('gym');
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekWeather(prefs.location,start).catch(()=>({}));
-  return capWeekTargets(weekTargets({roles:planWeekRoles(prefs.days),ctl,lastWeekLoad,days,today,weekStart:start}),prefs,[],weather);
+  return capWeekTargets(weekTargets({roles:planWeekRoles(prefs.days),ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),days,today,weekStart:start}),prefs,[],weather);
 }
 const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
 
@@ -1111,6 +1111,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ? requestedStart
       : pragueWeekStart();
     const dates = Array.from({length:7}, (_, i) => shiftDate(start, i));
+    // Seven days of analysis, food and recommendations are the slowest read of
+    // the app; it is cached for two minutes and dropped by any change the user
+    // makes (the cache version), so a new ride still shows up soon.
+    const week = await cached(env, ctx, 'week-api:' + start, async () => {
     await ensureGymPlans(env.DB);
     const cancelledGym=new Set((await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all()).results.map(r=>r.workout_date));
     // Same calorie target as the day view: one Google Health read covers the week.
@@ -1125,20 +1129,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       foodUrl.searchParams.set("date", date);
       const recommendUrl = new URL("/food/recommend", request.url);
       recommendUrl.searchParams.set("date", date);
+      // Meal recommendations (the costliest part) only for today and later:
+      // nothing is eaten on a past day any more.
       const [dailyResponse, foodResponse, recommendResponse] = await Promise.all([
         app.fetch(new Request(dailyUrl, {method:"GET",headers:internalAuth}), env, ctx),
         app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx),
-        app.fetch(new Request(recommendUrl, {method:"GET",headers:internalAuth}), env, ctx)
+        date >= pragueToday() ? app.fetch(new Request(recommendUrl, {method:"GET",headers:internalAuth}), env, ctx) : null
       ]);
       return {
         date,
         gymCancelled:cancelledGym.has(date),
         daily: applyEnergyBudget(await dailyResponse.json(), profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
         food: await foodResponse.json(),
-        recommendations: await recommendResponse.json()
+        recommendations: recommendResponse ? await recommendResponse.json() : null
       };
     });
-    return Response.json({status:"ok",start,end:dates[6],days},{headers:{"Cache-Control":"no-store"}});
+    return {status:"ok",start,end:dates[6],days};
+    }, { ttl: 120 });
+    return Response.json(week,{headers:{"Cache-Control":"no-store"}});
   }
 
   const routes = {

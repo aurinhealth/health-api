@@ -38,13 +38,19 @@ test("the coach follows today's planned recovery ride and explains why", () => {
   assert.match(coach.rationale.join(" "), /naplánováno „Recovery“ \(60 min, IF 0\.5/);
 });
 
-test("a light week after a normal week is treated as a recovery week", () => {
+test("a light plan early in the week is not a recovery week; three solid weeks are", () => {
   const ride = (date, tss) => ({ name: "Ride", type: "Ride", durationHours: 2, tss });
+  // Last week 450 TSS at CTL 60 (107 % of maintenance), little planned yet:
+  // the coach used to call this a recovery week and lower the target.
   const w = week([["2026-09-21", [], [ride("2026-09-21", 150)]], ["2026-09-23", [], [ride("2026-09-23", 150)]], ["2026-09-25", [], [ride("2026-09-25", 150)]], ["2026-09-29", [], [ride("2026-09-29", 40)]], ["2026-10-01", [ride("2026-10-01", 50)]]]);
-  const coach = buildCyclingCoachV2({ date: "2026-09-30", week: w, fitness: { wellness: [{ id: "2026-09-30", ctl: 60, atl: 50 }] }, goal: null });
-  assert.equal(coach.week.recoveryWeek, true);
-  assert.equal(coach.constraints.phase, "recovery");
-  assert.match(coach.rationale[0], /regenerační/);
+  const light = buildCyclingCoachV2({ date: "2026-09-30", week: w, fitness: { wellness: [{ id: "2026-09-30", ctl: 60, atl: 50 }] }, goal: null });
+  assert.equal(light.week.recoveryWeek, false);
+  // Three weeks in a row at maintenance (CTL 60 × 7 = 420) or more: 3 + 1.
+  const days = Array.from({ length: 21 }, (_, i) => ({ id: new Date(Date.parse("2026-09-07T12:00:00Z") + i * 86400000).toISOString().slice(0, 10), ctl: 60, atl: 60, ctlLoad: 64 }));
+  const block = buildCyclingCoachV2({ date: "2026-09-30", week: w, fitness: { wellness: [...days, { id: "2026-09-30", ctl: 60, atl: 50 }] }, goal: null });
+  assert.equal(block.week.recoveryWeek, true);
+  assert.equal(block.constraints.phase, "recovery");
+  assert.match(block.rationale[0], /tři týdny v řadě nad udržovací zátěží \(448, 448, 448 TSS/);
 });
 
 test("the explanation lists why, how, fuelling and a step table in watts", () => {

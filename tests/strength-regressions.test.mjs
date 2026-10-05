@@ -515,3 +515,17 @@ test("after four solid weeks the fifth is a deload week, then training goes on",
   if (bench) assert.equal(bench.kg, 20);
   assert.ok(plan.rows.every(r => r[11] !== "TRUE"));
 });
+
+test("the gym deloads in the shared recovery week; its own four-week count is only a fallback", async () => {
+  const session = (date) => Array.from({ length: 15 }, (_, i) => ({ workout_date: date, exercise: "DB bench press", type: "WORK", completed: 1, set_no: i + 1, actual_kg: 20, actual_reps: 10, rpe: 8 }));
+  const solid = ["2026-09-07", "2026-09-10", "2026-09-14", "2026-09-17", "2026-09-21", "2026-09-24", "2026-09-28", "2026-10-01"].flatMap(session);
+  const base = { date: "2026-10-05", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: [] } };
+  const shared = generateStrengthPlan({ ...base, recoveryWeek: { recovery: true, reason: "three_weeks", known: true } }, { durationMinutes: 60 });
+  assert.match(shared.planName, /odlehčený týden/);
+  assert.match(shared.rationale, /Regenerační týden pro celý trénink \(po třech týdnech/);
+  // Known loads and no recovery week: four solid gym weeks do not deload on their own.
+  const normal = generateStrengthPlan({ ...base, strength: { recentCompletedSets: solid }, recoveryWeek: { recovery: false, known: true } }, { durationMinutes: 60 });
+  assert.doesNotMatch(normal.planName, /odlehčený/);
+  const fallback = generateStrengthPlan({ ...base, strength: { recentCompletedSets: solid } }, { durationMinutes: 60 });
+  assert.match(fallback.planName, /odlehčený týden/);
+});

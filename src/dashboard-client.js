@@ -3,6 +3,8 @@ let coachRefreshRunning=false;
 // Plan edits not yet in Intervals.icu (see "Plan changes" below); declared first
 // because the week can render before that part of the file runs.
 const plannedQueue=new Map(),pendingAdds=new Map();
+// Week requests in flight (see fetchWeek), declared early for the first load.
+const weekRequests=new Map();
 let statusCoachingRevision=0;
 let planDataRevision=0;
 let coachRefreshTimer;
@@ -41,6 +43,8 @@ function mondayOf(date){const d=date.split('-').map(Number),x=new Date(Date.UTC(
 function dateLabel(d){return new Intl.DateTimeFormat("cs-CZ",{day:"2-digit",month:"2-digit"}).format(new Date(d+"T12:00:00Z"))}
 function longDate(d){return new Intl.DateTimeFormat("cs-CZ",{weekday:"long",day:"numeric",month:"numeric"}).format(new Date(d+"T12:00:00Z"))}
 // Rounded first, so 359.6 min is "6h 0m" and never "5h 60m".
+// Form (TSB) with a word and a decimal near zero: a bare "0" read like a missing value.
+function formText(tsb){if(!measured(tsb))return '—';const v=Number(tsb),word=v>=15?'velmi svěží':v>=5?'svěží':v>-10?'vyrovnaná':v>-25?'únava':'velká únava';return fmt(v,Math.abs(v)<10?1:0)+' <small class="form-word">'+word+'</small>';}
 function hm(min){if(!Number.isFinite(Number(min)))return "—";const m=Math.round(Number(min));return Math.floor(m/60)+"h "+(m%60)+"m"}
 function isNutritionItem(x){const n=String(x?.name||"").trim(),t=String(x?.type||"").trim();return /nutrition/i.test(n)||/^nutrition$/i.test(t)}
 function scoreClass(v){return v>=80?"":" "+(v>=60?"mid":"low")}
@@ -206,8 +210,8 @@ function renderOverview(){
   const days=state.week?.days||[];
   $("overviewWeekPlan").innerHTML=days.map(trainingDayMarkup).join("");
   const fw=(state.fitness?.wellness||[]).filter(r=>r.id<=selectedHistoryDate),latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
-  $("oFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
-  $("oForm").innerHTML=(Number.isFinite(Number(latest.tsb))?fmt(latest.tsb):"—")+trendArrow(latest.tsb,prev.tsb,false,"");
+  $("oFitness").innerHTML=(measured(latest.ctl)?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
+  $("oForm").innerHTML=formText(latest.tsb)+trendArrow(latest.tsb,prev.tsb,false,"");
   const wr=(d.weight?.records||[]).filter(x=>x.value_numeric!=null&&String(x.sample_time).slice(0,10)<=selectedHistoryDate).sort((a,b)=>String(a.sample_time).localeCompare(String(b.sample_time)));
   const currentW=wr.length?Number(wr[wr.length-1].value_numeric):selectedHistoryDate===pragueToday()?Number(d.weight?.current):NaN;
   const startW=wr[0];
@@ -240,9 +244,9 @@ function renderTraining(){
   const matched=days.flatMap(x=>(x.daily?.training?.matched||[]).map(z=>({...z,date:x.date})));
   $("trainingWeekOverview").innerHTML=days.map(trainingDayMarkup).join("");
   const latest=fw[fw.length-1]||{},prev=fw[fw.length-8]||{};
-  $("tFitness").innerHTML=(Number.isFinite(Number(latest.ctl))?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
-  $("tFatigue").innerHTML=(Number.isFinite(Number(latest.atl))?fmt(latest.atl):"—")+trendArrow(latest.atl,prev.atl,true,"");
-  $("tForm").innerHTML=(Number.isFinite(Number(latest.tsb))?fmt(latest.tsb):"—")+trendArrow(latest.tsb,prev.tsb,false,"");
+  $("tFitness").innerHTML=(measured(latest.ctl)?fmt(latest.ctl):"—")+trendArrow(latest.ctl,prev.ctl,false,"");
+  $("tFatigue").innerHTML=(measured(latest.atl)?fmt(latest.atl):"—")+trendArrow(latest.atl,prev.atl,true,"");
+  $("tForm").innerHTML=formText(latest.tsb)+trendArrow(latest.tsb,prev.tsb,false,"");
   $("tRamp").innerHTML=(Number.isFinite(Number(latest.rampRate))?fmt(latest.rampRate,1):"—")+trendArrow(latest.rampRate,prev.rampRate,false,"");
   renderPmcChart();
   const form=num(latest.tsb),ramp=num(latest.rampRate);
@@ -635,9 +639,9 @@ function renderLoadedData(key){
 async function load(){
   const revision=++dashboardLoadRevision,statusRevision=statusCoachingRevision,date=selectedHistoryDate;
   $('topStatus').textContent='Načítám…';
-  const jobs=[['athleteState','/app/api/athlete-state'],['daily','/app/api/daily?date='+date],['coaches','/app/api/coaches?date='+date],['fitness','/app/api/fitness?days=90'],['week','/app/api/week?start='+weekStart],['weight','/app/api/weight'],['activities','/app/api/activities'],['nutrition','/app/api/nutrition?start=2026-01-01&end='+dateShift(pragueToday(),1)],['sleep','/app/api/sleep?start='+dateShift(pragueToday(),-365)+'&end='+dateShift(pragueToday(),1)],['gym','/app/api/gym?date='+gymDay()]];
+  const jobs=[['athleteState','/app/api/athlete-state'],['daily','/app/api/daily?date='+date],['coaches','/app/api/coaches?date='+date],['fitness','/app/api/fitness?days=90'],['week','/app/api/week?start='+weekStart],['weight','/app/api/weight'],['activities','/app/api/activities'],['nutrition','/app/api/nutrition?start='+dateShift(pragueToday(),-365)+'&end='+dateShift(pragueToday(),1)],['sleep','/app/api/sleep?start='+dateShift(pragueToday(),-365)+'&end='+dateShift(pragueToday(),1)],['gym','/app/api/gym?date='+gymDay()]];
   const results=await Promise.allSettled(jobs.map(async([key,url])=>{
-    const result=await jsonFetch(url);
+    const result=key==='week'?await fetchWeek(weekStart):await jsonFetch(url);
     if(revision!==dashboardLoadRevision||date!==selectedHistoryDate)return;
     if(['athleteState','coaches'].includes(key)&&statusRevision!==statusCoachingRevision)return;
     state[key]=key==='athleteState'?result.state:result;renderLoadedData(key);
@@ -1473,10 +1477,16 @@ async function loadWeather(){
   }catch(error){state.weather={};state.weatherError=error.message;state.weatherFailed={key,at:Date.now()};}
 }
 async function loadWeekPlan(force=false){const start=state.hubWeek||pragueMonday();if(state.weekPlan&&!force&&state.weekPlan.start===start)return state.weekPlan;try{state.weekPlan=await jsonFetch('/app/api/week-plan?start='+start);}catch{if(state.weekPlan)return state.weekPlan;state.weekPlan={start,prefs:{days:[[],[],[],[],[],[],[]],location:{name:'Kutná Hora',latitude:49.9484,longitude:15.2682}},roles:Array.from({length:7},(_,i)=>({weekday:i,items:[]}))};}return state.weekPlan;}
+// One request per week at a time: the dashboard and the workouts hub ask for
+// the same week when the app opens, and the week is the slowest read.
+function fetchWeek(start){
+  if(!weekRequests.has(start)){const request=jsonFetch('/app/api/week?start='+start).finally(()=>setTimeout(()=>weekRequests.delete(start),1500));weekRequests.set(start,request);}
+  return weekRequests.get(start);
+}
 async function hubWeekData(){
   if(state.hubWeek===weekStart&&state.week?.days)return state.week;
   if(state.hubWeekData?.start===state.hubWeek)return state.hubWeekData;
-  state.hubWeekData=await jsonFetch('/app/api/week?start='+state.hubWeek);return state.hubWeekData;
+  state.hubWeekData=await fetchWeek(state.hubWeek);return state.hubWeekData;
 }
 // Targets for the chips come from the server, the same numbers the generator uses.
 function chipTarget(date,sport,slot=0){return (state.weekPlan?.targets?.items||[]).find(x=>x.date===date&&x.sport===sport&&(x.slot||0)===slot)||null}
@@ -1491,7 +1501,7 @@ function planChips(i,date){
 }
 function weekTargetText(){
   const t=state.weekPlan?.targets;if(!t||t.status!=='ok')return '';
-  return (t.recovery?'Regenerační týden · cíl ≈ '+t.target+' TSS (70 % z udržovacích '+t.base+', minulý týden '+t.lastWeekLoad+' TSS)':'Cíl týdne ≈ '+t.target+' TSS (udržení kondice CTL '+t.ctl+' × 7 + 5 %)')+' · hotovo a v plánu '+t.committed+' TSS'+(t.shortfall?' · do cíle chybí ~'+t.shortfall+' TSS, přidej další den':'');
+  return (t.recovery?'Regenerační týden '+(t.recoveryReason==='three_weeks'?'po třech týdnech nad udržovací zátěží':'po náročném týdnu ('+t.lastWeekLoad+' TSS)')+' · platí i pro posilovnu · cíl ≈ '+t.target+' TSS (70 % z udržovacích '+t.base+')':'Cíl týdne ≈ '+t.target+' TSS (udržení kondice CTL '+t.ctl+' × 7 + 5 %)')+' · hotovo a v plánu '+t.committed+' TSS'+(t.shortfall?' · do cíle chybí ~'+t.shortfall+' TSS, přidej další den':'');
 }
 // IF from load and length (TSS = h × IF² × 100); gym load has no IF.
 function intensityOf(tss,minutes){const t=num(tss),h=num(minutes)/60;return t>0&&h>0?Math.sqrt(t/(h*100)):null}
@@ -1724,7 +1734,7 @@ async function restoreCancelledGym(date){
 function takePlanned(days,eventId){for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===String(eventId));if(i>=0)return list.splice(i,1)[0];}return null}
 async function refreshAfterPlanChange(){
   const revision=++planDataRevision;
-  const results=await Promise.allSettled([jsonFetch('/app/api/week?start='+weekStart),jsonFetch('/app/api/daily?date='+selectedHistoryDate),jsonFetch('/app/api/gym?date='+gymDay())]);
+  const results=await Promise.allSettled([fetchWeek(weekStart),jsonFetch('/app/api/daily?date='+selectedHistoryDate),jsonFetch('/app/api/gym?date='+gymDay())]);
   if(revision!==planDataRevision)return;
   if(results[0].status==='fulfilled'){state.week=results[0].value;applyPendingPlanned(state.week.days);}
   if(results[1].status==='fulfilled')state.daily=results[1].value;

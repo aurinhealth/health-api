@@ -149,6 +149,17 @@ export async function buildStrengthContext(env, requestedDate = null) {
     : null;
   const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } , weightTrend: await d1WeightTrend(env,date) };
   context.sports={recentActivities:activities.filter(x=>x.date<=date).sort((a,b)=>String(b.start).localeCompare(String(a.start)))};
+  // One recovery week for everything: the gym deloads in the week the plan
+  // and the ride/run coach treat as a recovery week (src/week-planner.js).
+  try {
+    const { recoveryWeek, weekLoadsBefore } = await import("./week-planner.js");
+    const monday = new Date(Date.parse(date + "T12:00:00Z") - ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+    const oldestWellness = new Date(Date.parse(monday + "T12:00:00Z") - 22 * 86400000).toISOString().slice(0, 10);
+    const wellness = await intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`);
+    const rows = Array.isArray(wellness) ? wellness : [], ctl = Number([...rows].reverse().find(r => Number(r.ctl) > 0)?.ctl) || null;
+    const weekLoads = weekLoadsBefore(rows, monday);
+    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
+  } catch { context.recoveryWeek = { recovery: false, reason: null, known: false }; }
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
   try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "" }; } catch { context.profile = { sex: "" }; }
