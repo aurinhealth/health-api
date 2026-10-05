@@ -480,4 +480,25 @@ body.sheet-open{overflow:hidden}
 /* Doporučené tréninky stands out next to Vygenerovat */
 #openRecommendations{background:linear-gradient(135deg,#7b4fe0,#9b6bff);border-color:#a98bff;color:#fff;box-shadow:0 6px 18px rgba(123,79,224,.35)}
 #openRecommendations:hover,#openRecommendations:focus-visible{background:linear-gradient(135deg,#8a5ef0,#ad84ff);outline:none}
+
+.apple-steps{display:grid;gap:10px;margin:10px 0;padding-left:20px;font-size:13px;line-height:1.55;color:#c9d2de}
+.apple-steps a{color:#c6acff}
+.apple-steps .pill{margin-left:4px}
+
+/* Chip: length menu and outdoor/indoor next to the sport */
+.planner-chip .chip-line{flex-basis:100%;display:flex;gap:4px;align-items:stretch;flex-wrap:wrap;margin-top:2px}
+.planner-chip .chip-line .chip-suggest{flex:1 1 120px;margin:0;flex-basis:auto}
+.planner-chip .chip-time{margin:0;padding:4px 6px;border:1px solid #3f3560;border-radius:6px;background:#141126;color:#e9e2ff;font-size:10.5px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+.planner-chip .chip-time.chosen{border-color:#b393ff;color:#fff}
+.planner-chip .chip-env{margin:0 0 0 2px;padding:1px 6px;border:1px solid #3a4456;border-radius:999px;background:#121822;color:#c9d2de;font-size:10px;font-weight:700}
+.planner-chip .chip-env.indoor{border-color:#5a6fa0;color:#bcd0ff;background:#141c2e}
+.planner-chip .chip-env.chosen{box-shadow:0 0 0 1px #b393ff}
+.planner-chip .chip-time:hover,.planner-chip .chip-env:hover,.planner-chip .chip-time:focus-visible,.planner-chip .chip-env:focus-visible{color:#fff;border-color:#b393ff;outline:none}
+.chip-menu{position:fixed;z-index:70;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:6px;min-width:170px;border:1px solid #4a3f66;border-radius:10px;background:#16131f;box-shadow:0 14px 40px #000a}
+.chip-menu button{padding:7px 8px;border:1px solid #2f2945;border-radius:7px;background:#1d1830;color:#e8e4f3;font:inherit;font-size:12px;font-weight:650;text-align:left;cursor:pointer}
+.chip-menu button:first-child{grid-column:1/-1}
+.chip-menu button[aria-checked="true"]{background:#3a2c5c;border-color:#b393ff;color:#fff}
+.chip-menu button:hover,.chip-menu button:focus-visible{border-color:#b393ff;outline:none}
+.hub-plan .planner-chip{position:relative;padding-right:22px}
+.hub-plan .planner-chip [data-chip-remove]{position:absolute;top:5px;right:5px;margin:0}
 `;

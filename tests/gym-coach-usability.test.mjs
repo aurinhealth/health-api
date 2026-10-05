@@ -107,3 +107,10 @@ test('delayed table saves retain newer edits and recover after a network failure
   assert.equal(a.state.gym.values[7][5],'195');assert.equal(a.state.gym.values[8][5],'40');
   assert.equal(requests.at(-1).fullValues[7][5],'195');assert.equal(requests.at(-1).fullValues[8][5],'40');
 });
+
+test('a 30 minute strength session still fits with warm-up, rests and a buffer',()=>{
+  for(const focus of [undefined,'upper','lower']){
+    const plan=generateStrengthPlan({date:'2026-10-04',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},recovery:{}},{durationMinutes:30,focus});
+    assert.ok(plan.timing.totalSeconds<=1800);assert.ok(plan.rows.some(r=>r[0]==='WORK'));
+  }
+});
