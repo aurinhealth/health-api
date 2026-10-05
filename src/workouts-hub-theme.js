@@ -88,7 +88,7 @@ export const workoutsHubTheme = `
 .load-gauge{display:block;width:100%;max-width:260px;margin:0 auto}
 .load-status{text-align:center;font-weight:800;margin:4px 0 8px;color:#3fda9c}.load-status.detraining{color:#64d2ff}.load-status.maintaining{color:#c6acff}.load-status.peaking{color:#ffc15c}.load-status.overtraining{color:#ff6478}.load-status.calibrating{color:#9ca6b5}
 .spark-bars{width:100%;height:60px;display:block;margin:6px 0}
-.load-muscles{display:flex;flex-wrap:wrap;gap:5px}.load-muscles .pill{font-size:10px}
+.load-muscles{display:flex;flex-wrap:wrap;gap:5px}.load-muscles .pill{font-size:10px}.load-muscles .small{flex-basis:100%;color:#9ca6b5}.load-muscles .pill.load-overtraining{border-color:#ff647866;color:#ffb3bd}.load-muscles .pill.load-detraining{border-color:#64d2ff55;color:#a9e6ff}
 .load-overtraining{color:#ff9aa7}.load-detraining{color:#9fdcff}.load-productive{color:#8ff0ca}
 .focus-bar{display:flex;height:14px;border-radius:8px;overflow:hidden;background:#252b36;margin:6px 0 10px}
 .focus-bar i{display:block;height:100%}
@@ -159,7 +159,7 @@ export const workoutsHubTheme = `
   .fresh-list{grid-template-columns:1fr 1fr;column-gap:14px}
   .fresh-row{grid-template-columns:minmax(0,1fr) auto!important;row-gap:3px}.fresh-row .fresh-bar{grid-column:1/-1;grid-row:2}.fresh-row span:first-child{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fresh-row strong{white-space:nowrap}
   .fresh-list>p{grid-column:1/-1}
-  .pr-table th:nth-child(4),.pr-table td:nth-child(4){display:none}
+  .pr-table td,.pr-table th{padding:6px 5px}
   .pr-badge{grid-template-columns:32px 1fr}.pr-badge span{width:32px;height:32px}
   .activity-summary-card .activity-numbers{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px!important}
   .activity-summary-card .activity-numbers strong{font-size:13px!important}
@@ -440,4 +440,34 @@ body.sheet-open{overflow:hidden}
   .planner-actions>.btn{padding:8px 6px;font-size:12px}
   .recommend-target .btn{margin-left:0}
 }
+
+/* Workout card: where, when and the numbers next to the button */
+.workout-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+.env-toggle{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px;border:1px solid var(--line);border-radius:10px;background:#0e131b}
+.env-toggle .btn{padding:7px 6px;font-size:12px;border:0;border-radius:8px;background:transparent}
+.env-toggle .btn.primary{background:#2a3446;color:#fff;box-shadow:inset 0 0 0 1px #4b5a73}
+.env-toggle .btn:disabled{opacity:.45;cursor:not-allowed}
+.schedule-day-label{display:grid;gap:4px}
+.schedule-day{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px;font:inherit}
+.workout-side .schedule-workout{width:100%}
+.workout-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:0}
+.workout-facts>div{background:#121925;border:1px solid #232c3a;border-radius:9px;padding:7px 9px;min-width:0}
+.workout-facts dt{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8f9cac}
+.workout-facts dd{margin:2px 0 0;font-weight:700;font-variant-numeric:tabular-nums;font-size:13px;overflow-wrap:anywhere}
+.env-notes{margin:0 0 8px;padding-left:18px;color:#b7c1cf;font-size:12px;line-height:1.5}
+
+/* Personal records: period switch, FTP and pace tiles, trend arrows */
+.pr-period{display:flex;gap:4px;flex-wrap:wrap}
+.pr-period .btn{padding:5px 9px;font-size:11px}
+.pr-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:10px 0}
+.pr-tile{display:grid;gap:3px;background:#141a26;border:1px solid #262f3e;border-radius:12px;padding:10px 12px}
+.pr-tile strong{font-size:22px;font-variant-numeric:tabular-nums}
+.pr-tile small{color:#8f9cac;font-size:11px}
+.trend{display:inline-flex;align-items:center;gap:3px;width:max-content;padding:2px 7px;border-radius:999px;font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;background:#1c2330;color:#9ca6b5}
+.trend.up{background:#123227;color:#5be3a7}
+.trend.down{background:#3a1820;color:#ff8a9a}
+.trend.flat{color:#c3cbd8}
+.pr-table td{font-variant-numeric:tabular-nums}
+.pr-extra{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0;color:#9ca6b5;font-size:12px}
+.pr-extra b{color:#e8edf5}
 `;

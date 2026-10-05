@@ -84,3 +84,21 @@ test("heart rate recovery and intervals from Intervals.icu data", () => {
   assert.equal(heartRateRecovery(time.slice(0, 20), hr.slice(0, 20), 160), null);
   assert.deepEqual(activityIntervals({ icu_intervals: [{ type: "WORK", moving_time: 240, average_watts: 310.4, average_heartrate: 165 }] })[0].watts, 310);
 });
+
+test("record trends: best in the period against the best before it, or the first session", async () => {
+  const { recordTrends } = await import("../src/fitness-insights.js");
+  const set = (d, kg, reps = 8) => ({ workout_date: ago(d), exercise: "Lat pulldown", actual_kg: kg, actual_reps: reps });
+  const t = recordTrends({ today, sets: [set(400, 35), set(200, 40), set(60, 42.5), set(10, 47.5), set(3, 45)], activities: [
+    { type: "Ride", date: ago(300), icu_ftp: 240 }, { type: "Ride", date: ago(100), icu_ftp: 250 }, { type: "Ride", date: ago(5), icu_ftp: 262 },
+    { type: "Run", date: ago(150), distance: 5000, moving_time: 1500 }, { type: "Run", date: ago(20), distance: 10000, moving_time: 2800 }, { type: "Run", date: ago(8), distance: 3000, moving_time: 700 }] });
+  const lat = t.strength[0];
+  assert.deepEqual(lat.best, { kg: 47.5, reps: 8, date: ago(10) });
+  // 12 weeks: 47.5 against 40 before (the 42.5 was 60 days ago, inside the period).
+  assert.deepEqual([lat.change["12w"].delta, lat.change["12w"].from, lat.change["12w"].basis], [7.5, 40, "before"]);
+  assert.deepEqual([lat.change.all.delta, lat.change.all.from, lat.change.all.basis], [12.5, 35, "first"]);
+  // FTP: the value now against the one in force when the period started.
+  assert.deepEqual([t.ftp.value, t.ftp.change["12w"].from, t.ftp.change["12w"].delta, t.ftp.change.all.delta], [262, 250, 12, 22]);
+  // Pace: lower is better; runs under 5 km do not count.
+  assert.deepEqual([t.runPace.change["12w"].value, t.runPace.change["12w"].from, t.runPace.change["12w"].delta], [280, 300, -20]);
+  assert.equal(t.periods["12w"].start, ago(84));
+});

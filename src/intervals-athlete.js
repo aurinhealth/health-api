@@ -6,6 +6,15 @@ import { getTrainingProfile } from "./training-profile.js";
 import { powerZones, hrZones, paceZones } from "./training-zones.js";
 const n = v => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null;
 
+// On a trainer most riders hold a few per cent less than outdoors. Without an
+// indoor FTP of the athlete's own, indoor watts use 95 % of FTP.
+export const INDOOR_FTP_FACTOR = .95;
+export function rideFtpFor(t = {}, environment = "outdoor") {
+  if (environment !== "indoor" || !t.ftp) return { ftp: t.ftp || null, estimated: false };
+  if (t.indoorFtp) return { ftp: t.indoorFtp, estimated: false };
+  return { ftp: Math.round(t.ftp * INDOOR_FTP_FACTOR), estimated: true };
+}
+
 export async function athleteThresholds(env, fetchImpl = fetch) {
   const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, source: null, intervalsFtp: null, latestRideFtp: null };
   if (env.INTERVALS_API_KEY) {

@@ -17,6 +17,7 @@ import { powerZones, hrZones, paceZones, POWER_ZONE_MODELS, HR_ZONE_MODELS, PACE
 import { fitnessInsights } from "../src/fitness-insights.js";
 import { sampleActivityStreams, activityIntervals, heartRateRecovery } from "../src/activity-detail.js";
 import { createD1 } from "../tests/helpers/d1.mjs";
+import { stepRows } from "../src/workout-explanation.js";
 const plannerText = await readFile(new URL("../src/week-planner.js", import.meta.url), "utf8");
 const availabilityText = await readFile(new URL('../src/training-availability.js',import.meta.url),'utf8');
 const adaptiveWeekText = await readFile(new URL('../src/adaptive-week.js',import.meta.url),'utf8');
@@ -58,7 +59,7 @@ const zones = (z1, z2, z3, z4, z5) => [z1, z2, z3, z4, z5].map(m => m * 60);
 const pastActivities = Array.from({ length: 6 }, (_, w) => {
   const base = day(-7 * (6 - w), MON);
   return [
-    { type: "Ride", name: "Sweet Spot 3×12", date: day(1, base), tss: 82, moving_time: 4500, distance: 38000, total_elevation_gain: 320, icu_weighted_avg_watts: 228 + w * 2, payload: { icu_hr_zone_times: zones(12, 25, 20, 16, 2) } },
+    { type: "Ride", name: "Sweet Spot 3×12", date: day(1, base), tss: 82, icu_ftp: 248 + w * 2, moving_time: 4500, distance: 38000, total_elevation_gain: 320, icu_weighted_avg_watts: 228 + w * 2, payload: { icu_hr_zone_times: zones(12, 25, 20, 16, 2) } },
     { type: "Ride", name: "VO₂ 5×4", date: day(3, base), tss: 88, moving_time: 4200, distance: 34000, total_elevation_gain: 280, icu_weighted_avg_watts: 236, payload: { icu_hr_zone_times: zones(18, 22, 8, 10, 12) } },
     { type: "Run", name: "Lehký běh", date: day(4, base), tss: 45, moving_time: 2900, distance: 9000 + w * 300, total_elevation_gain: 60, payload: { icu_hr_zone_times: zones(10, 34, 4, 0, 0) } },
     { type: "Ride", name: "Long Endurance", date: day(6, base), tss: 170 + w * 8, moving_time: 11400 + w * 600, distance: 92000 + w * 4000, total_elevation_gain: 1100 + w * 90, icu_weighted_avg_watts: 196, payload: { icu_hr_zone_times: zones(70, 95, 18, 4, 0) } }
@@ -90,7 +91,8 @@ async function search(params) {
   if (!filters.system) filters.preferredSystem = kind === "long_endurance" ? "endurance" : kind === "vo2" ? "vo2max" : kind;
   const context = { readiness: coach.readiness.status, hardBikeDaysRolling7d: coach.load.hardBikeDaysRolling7d, phase: params.get("phase") || "" };
   const r = await searchWorkoutLibrary(db, filters, context);
-  return { ...r, athlete: { ftp: 260, indoorFtp: 260, runThresholdPace: 285 }, rankingContext: { ...context, tsb: coach.readiness.tsb }, coachPick: { system: filters.preferredSystem || null, durationMinutes: duration ? null : coach.constraints.availableMinutes }, date: T };
+  for (const w of r.workouts) { let structure = []; try { structure = JSON.parse(w.structure_json || "[]"); } catch {} w.steps = sport === "run" ? stepRows(structure, { environment: w.environment, sport: "run", thresholdPace: 285, zones: paceZones({}, 285) }) : stepRows(structure, { environment: w.environment, ftp: w.environment === "indoor" ? 247 : 260, zones: powerZones({}, 260) }); }
+  return { ...r, athlete: { ftp: 260, indoorFtp: 247, indoorFtpEstimated: true, runThresholdPace: 285 }, rankingContext: { ...context, tsb: coach.readiness.tsb }, coachPick: { system: filters.preferredSystem || null, durationMinutes: duration ? null : coach.constraints.availableMinutes }, date: T };
 }
 const CTL = wellness.at(-1).ctl, LAST_WEEK = 420;
 const sportOf = t => /weight|strength|gym/i.test(t) ? "gym" : /ride/i.test(t) ? "ride" : /run/i.test(t) ? "run" : null;
@@ -137,6 +139,8 @@ function gymPlansForWeek() {
 async function staticResponses() {
   const searches = {};
   for (const sport of ["ride", "run"]) searches[sport] = await search(new URLSearchParams({ sport, environment: "outdoor" }));
+  // Every focus tab and both places, so filters and outdoor/indoor work offline.
+  for (const sport of ["ride", "run"]) for (const system of ["", "recovery", "endurance", "tempo", ...(sport === "ride" ? ["sweet_spot"] : []), "threshold", "vo2max", "anaerobic", "sprint"]) for (const environment of ["outdoor", "indoor"]) searches[sport + "|" + system + "|" + environment] = await search(new URLSearchParams({ sport, environment, ...(system ? { system } : {}) }));
   const generated = {};
   for (const sport of ["ride", "run"]) for (const offset of [0, 1, 2, 3, 4, 5, 6]) generated[sport + "|" + day(offset)] = await generate({ sport, date: day(offset), environment: "outdoor" });
   return {
@@ -208,13 +212,14 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
  if(p==='/app/api/gym/confirm')return ok({status:'ok',intervals:{status:'ok'}});
  if(p==='/app/api/week'){const w=DATA.weeks[url.searchParams.get('start')]||DATA.weeks[Object.keys(DATA.weeks)[1]];return ok({...w,days:w.days.map(d=>({...d,gymCancelled:Boolean(gymCancelled[d.date])}))});}
  if(p==='/app/api/daily'){const d=url.searchParams.get('date')||T;return ok(Object.values(DATA.weeks).flatMap(w=>w.days).find(day=>day.date===d)?.daily||DATA[p]);}
- if(p==='/app/api/workouts/search')return ok(DATA.searches[url.searchParams.get('sport')==='run'?'run':'ride']);
+ if(p==='/app/api/workouts/search'){const q=url.searchParams,sport=q.get('sport')==='run'?'run':'ride';return ok(DATA.searches[sport+'|'+(q.get('system')||'')+'|'+(q.get('environment')==='indoor'?'indoor':'outdoor')]||DATA.searches[sport]);}
+ if(p==='/app/api/workouts/render'){const q=url.searchParams,env=q.get('environment')==='indoor'?'indoor':'outdoor',hit=Object.entries(DATA.searches).filter(([k])=>k.endsWith('|'+env)).flatMap(([,r])=>r.workouts.map(w=>({w,a:r.athlete}))).find(x=>x.w.id===q.get('id'));return hit?ok({status:'ok',workout:hit.w,athlete:hit.a}):new Response(JSON.stringify({message:'Workout nebyl nalezen.'}),{status:404,headers:{'Content-Type':'application/json'}});}
  if(p==='/app/api/workouts/generate'){const g=DATA.generated[(body.sport==='run'?'run':'ride')+'|'+body.date]||Object.values(DATA.generated)[0];return ok(g);}
  if(p==='/app/api/planned/move'||p==='/app/api/planned/delete'){const id=String(body.eventId).replace(/^planned:/,'');let item=null;for(const w of Object.values(DATA.weeks))for(const d of w.days){const t=d.daily.training,i=t.planned.findIndex(x=>String(x.id).replace(/^planned:/,'')===id);if(i>=0)item=t.planned.splice(i,1)[0];}
   if(p.endsWith('/move')&&item){for(const w of Object.values(DATA.weeks))for(const d of w.days)if(d.date===body.date)d.daily.training.planned.push({...item,start:body.date});}
   return ok({status:'ok',eventId:id,date:body.date});}
  if(p==='/app/api/workouts/feedback')return ok({status:'ok',completedPercent:96,intervals:{status:'ok'}});
- if(p==='/app/api/workouts/schedule'){const w=[...(DATA.searches.ride?.workouts||[]),...(DATA.searches.run?.workouts||[])].find(x=>x.id===body.workoutId)||{name:'Workout',duration_minutes:60},id='planned:s'+Date.now();for(const wk of Object.values(DATA.weeks))for(const d of wk.days)if(d.date===body.date)d.daily.training.planned.push({id,name:w.name,type:w.sport==='run'?'Run':'Ride',durationHours:w.duration_minutes/60,tss:w.target_load,start:body.date});return ok({status:'ok',workout:{id:w.id,name:w.name},date:body.date,eventId:id});}
+ if(p==='/app/api/workouts/schedule'){const w=[...(DATA.searches.ride?.workouts||[]),...(DATA.searches.run?.workouts||[])].find(x=>x.id===body.workoutId)||{name:'Workout',duration_minutes:60},id='planned:s'+Date.now();for(const wk of Object.values(DATA.weeks))for(const d of wk.days)if(d.date===body.date)d.daily.training.planned.push({id,name:w.name,type:(body.environment==='indoor'?'Virtual':'')+(w.sport==='run'?'Run':'Ride'),durationHours:w.duration_minutes/60,tss:w.target_load,start:body.date});return ok({status:'ok',workout:{id:w.id,name:w.name},date:body.date,eventId:id});}
  if(p==='/app/api/gym'){const d=(m==='POST'?body.date:url.searchParams.get('date'))||T;if(body.action==='cancel'){gymCancelled[d]=true;for(const w of Object.values(DATA.weeks))for(const day of w.days)if(day.date===d)day.daily.training.planned=day.daily.training.planned.filter(a=>!/weight|strength/i.test(a.type));}if(body.action==='restore'||body.action==='uncancel')delete gymCancelled[d];if(m==='POST'&&body.values)gymByDay[d]=body.fullValues||body.values;return ok({status:'ok',date:d,values:gymCancelled[d]?[]:gymByDay[d]||[],history:gymHistory,videoLinks:[],stored:!gymCancelled[d]&&Boolean(gymByDay[d]),cancelled:Boolean(gymCancelled[d]),recoverable:Boolean(gymCancelled[d]&&gymByDay[d]),message:body.action==='cancel'?'Posilovna je zrušená.':'Plán obnoven.'});}
  if(p==='/app/api/gym/generate'&&body.preview){const d=body.date||T,rows=GYM_WEEK[d]?.values?.slice(7)||[['WORK','Lat pulldown','1','40','10','','','','FALSE','','']];return ok({status:'ok',preview:true,draftId:1,plan:{date:d,planName:'Sandbox gym',rationale:'Náhled bez zápisu.',rows}});}
  if(p==='/app/api/gym/generate'&&!body.focusMuscles?.length&&GYM_WEEK[body.date||T]){const d=body.date||T;gymByDay[d]=GYM_WEEK[d].values;return ok({status:'ok',rationale:GYM_WEEK[d].rationale});}

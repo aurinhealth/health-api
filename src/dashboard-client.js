@@ -436,6 +436,36 @@ function renderWorkoutCapabilities(capabilities={}){
   if(rows.every(x=>!num(x.attempts))){el.innerHTML='<div class="notice" style="grid-column:1/-1">Zatím nekalibrováno: všechny systémy začínají na úrovni 3 z 10. Úroveň se začne upravovat po prvních odjetých workoutech z knihovny, ke kterým doplníš RPE. Do té doby trenér vybírá obtížnost opatrně.</div>';return}
   el.innerHTML=rows.map(x=>'<div class="capability-card"><span class="label">'+esc(capabilityLabel(x.k))+'</span><strong>'+fmt(x.level,1)+' <span class="small">/ 10</span></strong><div class="capability-bar"><i style="width:'+Math.min(100,num(x.level)*10)+'%"></i></div><div class="small">jistota '+Math.round(num(x.confidence,.2)*100)+' % · '+num(x.attempts)+' '+(num(x.attempts)===1?'hodnocení':num(x.attempts)>=2&&num(x.attempts)<=4?'hodnocení':'hodnocení')+'</div></div>').join("");
 }
+// The day a card schedules to: the next two weeks, the chosen day first.
+function scheduleDayOptions(selected){
+  const today=pragueToday(),pick=selected&&selected>=today?selected:today;
+  return Array.from({length:14},(_,i)=>dateShift(today,i)).map(d=>'<option value="'+d+'"'+(d===pick?' selected':'')+'>'+esc(dayShort(d))+'</option>').join('');
+}
+function dayShort(d){return new Intl.DateTimeFormat('cs-CZ',{weekday:'short',day:'numeric',month:'numeric'}).format(new Date(d+'T12:00:00Z'))}
+// One library workout: the ride itself on the left; where, when and the key
+// numbers next to the button on the right.
+function workoutCardHtml(w,i,athlete){
+  const reason=(w.reasons||[]).slice(0,4).join(" · "),run=w.sport==='run',env=w.environment==='indoor'?'indoor':'outdoor',day=$("workoutScheduleDate")?.value||pragueToday();
+  const ftp=run?null:(env==='indoor'?athlete.indoorFtp:athlete.ftp)||athlete.ftp||null;
+  const facts=[['Délka',hm(num(w.duration_minutes))],['Load',Math.round(num(w.target_load))+' TSS'],['IF',fmt(w.intensity_factor,2).toFixed(2).replace('.',',')],['Obtížnost',fmt(w.difficulty,1)+' / 10'],['Tvoje úroveň',fmt(w.capability_level,1)+' / 10'],...(run?[]:[['Kadence',w.cadence||'dle bloku']]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])];
+  const steps=run?stepTableHtml(w.steps||[],null,{sport:'run',pace:athlete.runThresholdPace}):stepTableHtml(w.steps||[],ftp);
+  return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+steps+'</details><p>'+esc(w.description||"")+'</p>'+(w.environment_notes?.length?'<ul class="env-notes">'+w.environment_notes.slice(0,2).map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul>':'')+'<div class="reason">'+esc(reason||"Seřazeno podle cíle, tvé úrovně a aktuálního kontextu.")+'</div></div>'+
+    '<aside class="workout-side"><div class="env-toggle" role="group" aria-label="Kde trénink pojedeš">'+['outdoor','indoor'].map(e=>'<button type="button" class="btn'+(e===env?' primary':'')+'" data-workout-env="'+e+'" aria-pressed="'+(e===env)+'"'+(e==='outdoor'&&Number(w.indoor_only)?' disabled title="Tento trénink je jen na trenažér"':'')+'>'+(e==='outdoor'?(run?'🌳 Venku':'🌤 Outdoor'):(run?'🏃 Pás':'🏠 Indoor'))+'</button>').join('')+'</div>'+
+    '<label class="schedule-day-label"><span class="small">Den</span><select class="schedule-day" aria-label="Den, na který trénink přidat">'+scheduleDayOptions(day)+'</select></label><button class="btn primary schedule-workout" type="button" data-id="'+esc(w.id)+'">Přidat na '+esc(dayShort(day>=pragueToday()?day:pragueToday()))+'</button>'+
+    '<dl class="workout-facts">'+facts.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl></aside></article>';
+}
+// Outdoor ↔ indoor for one card: the server renders the workout for that
+// place (indoor watts from indoor FTP, outdoor ranges and warm-up).
+async function switchWorkoutEnvironment(card,environment){
+  const id=card.dataset.workoutId,list=state.workoutLibrary?.workouts||[],at=list.findIndex(x=>x.id===id);if(at<0)return;
+  card.querySelectorAll('[data-workout-env]').forEach(b=>b.disabled=true);
+  try{const r=await jsonFetch('/app/api/workouts/render?id='+encodeURIComponent(id)+'&environment='+environment+'&sport='+workoutSport());
+    const day=card.querySelector('.schedule-day')?.value;list[at]={...list[at],...r.workout,suitability:list[at].suitability,reasons:list[at].reasons,capability_level:list[at].capability_level};
+    const athlete={...(state.workoutLibrary.athlete||{}),...(r.athlete||{})},i=[...card.parentNode.children].indexOf(card);
+    card.outerHTML=workoutCardHtml(list[at],i,athlete);
+    const fresh=$('workoutResults').querySelector('[data-workout-id="'+CSS.escape(id)+'"] .schedule-day');if(fresh&&day){fresh.value=day;fresh.dispatchEvent(new Event('change',{bubbles:true}));}
+  }catch(error){toast('Převod se nepovedl: '+error.message);card.querySelectorAll('[data-workout-env]').forEach(b=>b.disabled=false);}
+}
 function renderWorkoutLibrary(result){
   renderWorkoutCapabilities(result.capabilities||{});
   const ctx=result.rankingContext||{},context=$("workoutRankingContext");
@@ -445,10 +475,7 @@ function renderWorkoutLibrary(result){
   if(!rows.length){el.innerHTML='<div class="notice">Pro tuto kombinaci filtrů jsem nenašel vhodný workout. Zvětši toleranci délky nebo zruš limit obtížnosti.</div>';return}
   // A short list first; the rest on request.
   const shown=state.workoutShowAll?rows:rows.slice(0,5);
-  el.innerHTML=shown.map((w,i)=>{
-    const reason=(w.reasons||[]).slice(0,4).join(" · ");
-    return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div><div class="workout-meta"><span class="pill">'+num(w.duration_minutes)+' min</span><span class="pill">load '+Math.round(num(w.target_load))+'</span><span class="pill">IF '+fmt(w.intensity_factor,2)+'</span><span class="pill">obtížnost '+fmt(w.difficulty,1)+'</span><span class="pill">tvoje úroveň '+fmt(w.capability_level,1)+'</span>'+(w.sport==='run'?'':'<span class="pill">'+esc(w.cadence||"kadence dle bloku")+'</span>')+'</div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+(()=>{const a=result.athlete||{};if(w.sport==='run')return stepTableHtml(w.steps||[],null,{sport:'run',pace:a.runThresholdPace});const ftp=a[w.environment==='indoor'&&a.indoorFtp?'indoorFtp':'ftp']||null;return stepTableHtml(w.steps||[],ftp)})()+'</details><p>'+esc(w.description||"")+'</p><div class="reason">'+esc(reason||"Seřazeno podle cíle, tvé úrovně a aktuálního kontextu.")+'</div></div><div><details class="workout-details"><summary>Intervalový předpis</summary><div class="workout-structure">'+esc(w.intervals_description||"")+'</div></details><button class="btn primary schedule-workout" data-id="'+esc(w.id)+'" style="width:100%;margin-top:10px">Přidat na vybraný den</button></div></article>'
-  }).join("")+(rows.length>shown.length?'<button class="btn more-results" type="button" id="moreWorkouts">Zobrazit další ('+(rows.length-shown.length)+')</button>':'');
+  el.innerHTML=shown.map((w,i)=>workoutCardHtml(w,i,result.athlete||{})).join("")+(rows.length>shown.length?'<button class="btn more-results" type="button" id="moreWorkouts">Zobrazit další ('+(rows.length-shown.length)+')</button>':'');
   const more=$('moreWorkouts');if(more)more.onclick=()=>{state.workoutShowAll=true;renderWorkoutLibrary(result)};
 }
 // Completion comes from the activity paired in Intervals.icu; the athlete adds RPE and a note.
@@ -481,7 +508,7 @@ async function loadWorkoutLibrary(){
 async function scheduleLibraryWorkout(id,dateOverride=null,environment=null){
   const date=dateOverride||$("workoutScheduleDate")?.value;if(!date){toast("Vyber datum.");return}
   const row=[...(state.workoutLibrary?.workouts||[]),state.generated?.workout,...(state.generated?.alternatives||[])].find(x=>x&&x.id===id),name=row?.name||id;
-  if(!window.confirm('Přidat „'+name+'“ na '+date+' do Intervals.icu?'))return;
+  if(!window.confirm('Přidat „'+name+'“ na '+longDate(date)+(environment?' ('+(environment==='indoor'?'indoor':'outdoor')+')':'')+' do Intervals.icu?'))return;
   const pending=showPendingAdd(row||{id,name},date,row?.sport||workoutSport());
   try{const r=await jsonFetch("/app/api/workouts/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({workoutId:id,date,confirm:true,environment:environment||$("workoutEnvironment")?.value||"outdoor"})});settlePendingAdd(pending,r.status!=='already_scheduled',r.eventId);toast(r.status==='already_scheduled'?'Workout už je na tento den naplánovaný.':r.workout.name+' je na '+longDate(r.date)+' i v Intervals.icu.')}
   catch(e){settlePendingAdd(pending,false);toast("Zápis do Intervals.icu selhal: "+e.message)}
@@ -589,7 +616,8 @@ $("searchWorkouts").onclick=loadWorkoutLibrary;
 document.querySelectorAll('.sport-switch [data-sport]').forEach(b=>b.onclick=()=>{setWorkoutSport(b.dataset.sport);if(state.workoutSport==='gym')loadGym().catch(e=>toast(e.message));else loadScheduledWorkouts()});
 {let saved='ride';try{saved=localStorage.getItem('pfdWorkoutSport')||'ride'}catch{}setWorkoutSport(saved);}
 $("generateWorkoutBtn").onclick=()=>generateWorkoutForDay(0);{const d=$("generateDate");if(d){d.value=pragueToday();d.min=pragueToday();}}
-$("workoutResults").addEventListener("click",e=>{const b=e.target.closest(".schedule-workout");if(b)scheduleLibraryWorkout(b.dataset.id);});
+$("workoutResults").addEventListener("click",e=>{const card=e.target.closest(".workout-result");const env=e.target.closest("[data-workout-env]");if(env&&card&&env.getAttribute('aria-pressed')!=='true'){switchWorkoutEnvironment(card,env.dataset.workoutEnv);return}const b=e.target.closest(".schedule-workout");if(b){const w=(state.workoutLibrary?.workouts||[]).find(x=>x.id===b.dataset.id);scheduleLibraryWorkout(b.dataset.id,card?.querySelector('.schedule-day')?.value||null,w?.environment||null);}});
+$("workoutResults").addEventListener("change",e=>{const sel=e.target.closest(".schedule-day");if(!sel)return;const b=sel.closest(".workout-side")?.querySelector(".schedule-workout");if(b)b.textContent='Přidat na '+dayShort(sel.value);});
 $("scheduledWorkouts").addEventListener("submit",e=>{if(e.target.matches('.workout-feedback')){e.preventDefault();saveWorkoutFeedback(e.target)}});
 ["workoutSystem","workoutDurationTolerance","workoutDifficulty","workoutPhase","workoutScheduleDate","workoutEnvironment"].forEach(id=>{const el=$(id);if(el)el.onchange=()=>{if($('recommendDialog')?.open)loadWorkoutLibrary()}});
 $('refresh').onclick=async()=>{
@@ -1704,26 +1732,48 @@ function loadGauge(o){
   return '<svg class="load-gauge" viewBox="0 0 200 118" role="img" aria-label="Svalová zátěž '+o.acute+', optimum '+o.range[0]+'–'+o.range[1]+'"><path d="'+arc(0,max,80)+'" stroke="#2a3140" stroke-width="12" fill="none" stroke-linecap="round"/><path d="'+arc(o.range[0],o.range[1],80)+'" stroke="#3fda9c" stroke-width="12" fill="none"/><circle cx="'+mx.toFixed(1)+'" cy="'+my.toFixed(1)+'" r="9" fill="#64d2ff" stroke="#0d1119" stroke-width="3"/><text x="100" y="96" text-anchor="middle" fill="#f6f7fb" font-size="34" font-weight="800">'+o.acute+'</text><text x="100" y="114" text-anchor="middle" fill="#9ca6b5" font-size="10">7 dní · optimum '+o.range[0]+'–'+o.range[1]+'</text></svg>';
 }
 function sparkBars(series,color){const max=Math.max(1,...series.map(x=>x.load));return '<svg class="spark-bars" viewBox="0 0 420 60" preserveAspectRatio="none" role="img" aria-label="Svalová zátěž za 42 dní">'+series.map((x,i)=>'<rect x="'+(i*10)+'" y="'+(58-x.load/max*54).toFixed(1)+'" width="7" height="'+(x.load/max*54).toFixed(1)+'" rx="2" fill="'+color+'"><title>'+esc(dateLabel(x.date))+' · '+x.load+'</title></rect>').join('')+'</svg>'}
-const RECORD_ICONS={e1rm:['1','Odhad 1RM','kg'],heaviest:['⚖','Nejvyšší váha','kg'],setVolume:['▤','Objem série','kg'],sessionVolume:['Σ','Objem tréninku','kg'],setReps:['×','Nejvíc opakování','opak.']};
+// Records with their progress over a chosen period: 12 weeks (default, one
+// training block), this year, or since the first data in the app.
+const PR_PERIODS=[['12w','12 týdnů'],['year','Letos'],['all','Od začátku']];
+function prPeriod(){try{const v=localStorage.getItem('pfd-pr-period');if(PR_PERIODS.some(([k])=>k===v))return v;}catch{}return '12w'}
+function trendBadge(change,{unit='',lowerIsBetter=false,format=v=>fmt(Math.abs(v),1).toString().replace('.',',')}={}){
+  if(!change)return '<span class="trend none" title="V tomto období žádný záznam">—</span>';
+  const d=change.delta,good=lowerIsBetter?d<0:d>0,arrow=d>0?'↑':d<0?'↓':'=',sign=d>0?'+':d<0?'−':'';
+  const from=(lowerIsBetter?fmtPaceText(change.from):String(change.from).replace('.',',')+(unit?' '+unit:''))+' ('+dateLabel(change.fromDate)+(change.basis==='first'?', první záznam':'')+')';
+  return '<span class="trend '+(d===0?'flat':good?'up':'down')+'" title="Proti '+esc(from)+'">'+arrow+(d?' '+sign+format(d)+(unit?' '+unit:''):'')+'</span>';
+}
+function fmtPaceText(sec){sec=Math.round(Math.abs(Number(sec)));return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0')}
+function recordsCardHtml(rec){
+  const t=rec.trends||{},period=prPeriod(),cardio=rec.cardio||{};
+  const tiles=[];
+  if(t.ftp)tiles.push('<div class="pr-tile"><span class="label">FTP</span><strong>'+fmt(t.ftp.value)+' W</strong>'+trendBadge(t.ftp.change?.[period],{unit:'W',format:v=>fmt(Math.abs(v))})+'<small>z Intervals.icu · '+esc(dateLabel(t.ftp.date))+'</small></div>');
+  const pace=t.runPace?.change?.[period];
+  if(t.runPace)tiles.push('<div class="pr-tile"><span class="label">Tempo · běh 5 km+</span><strong>'+fmtPaceText(pace?pace.value:t.runPace.best.value)+' /km</strong>'+trendBadge(pace,{lowerIsBetter:true,format:v=>fmtPaceText(v)})+'<small>'+(pace?'nejlepší v období · '+esc(dateLabel(pace.date)):'rekord · '+esc(dateLabel(t.runPace.best.date)))+'</small></div>');
+  const extra=[['longestRide','Nejdelší jízda'],['mostElevation','Nejvíc převýšení'],['longestRun','Nejdelší běh']].filter(([k])=>cardio[k]).map(([k,label])=>'<span>'+esc(label)+' <b>'+fmt(cardio[k].value,1)+' '+esc(cardio[k].unit)+'</b> · '+esc(dateLabel(cardio[k].date))+'</span>').join('');
+  const rows=(t.strength||[]).slice(0,10);
+  return '<article class="card insight-records"><div class="detail-heading"><div><div class="label">Personal Records</div><h3>Osobní rekordy</h3></div><div class="pr-period" role="group" aria-label="Porovnat za období">'+PR_PERIODS.map(([k,label])=>'<button type="button" class="btn'+(k===period?' primary':'')+'" data-pr-period="'+k+'" aria-pressed="'+(k===period)+'">'+label+'</button>').join('')+'</div></div>'+
+    (tiles.length?'<div class="pr-tiles">'+tiles.join('')+'</div>':'')+
+    (rows.length?'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Max. váha</th><th>Datum</th><th>Změna</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+esc(x.exercise)+'</td><td>'+String(fmt(x.best.kg,1)).replace('.',',')+' kg <span class="small">× '+x.best.reps+'</span></td><td>'+esc(dateLabel(x.best.date))+'</td><td>'+trendBadge(x.change?.[period],{unit:'kg'})+'</td></tr>').join('')+'</tbody></table></div>':'<p class="small">Zatím žádné odcvičené série s váhou.</p>')+
+    (extra?'<div class="pr-extra">'+extra+'</div>':'')+
+    '<p class="small">Změna = nejlepší výkon v období proti nejlepšímu před ním (FTP: dnešní proti platnému na začátku období). Když starší data chybí, porovnávám s prvním záznamem v období. U tempa je šipka dolů zlepšení.</p></article>';
+}
 function renderFitnessInsights(){
   const box=$('fitnessInsights'),r=state.insights;if(!box)return;
   if(!r||r.status!=='ok'){box.innerHTML='<div class="notice">'+esc(r?.message||'Načítám svaly, zátěž a rekordy…')+'</div>';return}
   const fresh=r.muscles.freshness,load=r.muscles.load.overall,cf=r.cardioFocus,rec=r.records;
   const calibrated=Object.entries(fresh).filter(([,x])=>x.freshness!=null).sort((a,b)=>a[1].freshness-b[1].freshness);
   const overall=calibrated.length?Math.round(calibrated.reduce((s,[,x])=>s+x.freshness,0)/calibrated.length):null;
-  const recent=rec.strength.flatMap(x=>x.recent.map(k=>({k,x}))).slice(0,6);
-  const pace=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
-  const cardio=[['longestRide','🚴','Nejdelší jízda'],['mostElevation','⛰','Nejvíc převýšení'],['bestRidePower','⚡','Nejvyšší NP (20 min+)'],['longestRun','🏃','Nejdelší běh'],['fastestRun5k','⏱','Nejrychlejší běh 5 km+']].filter(([k])=>rec.cardio[k]);
   box.innerHTML='<div class="insight-grid">'+
     '<article class="card insight-fresh"><div class="detail-heading"><div><div class="label">Muscle Freshness</div><h3>Zotavení svalů</h3></div><span class="pill">'+(overall==null?'Kalibruji':'Celkem '+overall+' %')+'</span></div><div class="fresh-layout"><div id="freshMap"></div><div class="fresh-list">'+(calibrated.length?calibrated.map(([m,x])=>'<div class="fresh-row"><span>'+esc(MUSCLE_LABELS[m])+'</span><span class="fresh-bar"><i style="width:'+x.freshness+'%;background:'+freshColor(x)+'"></i></span><strong>'+x.freshness+' %</strong><small>'+FRESH_LABEL[x.status]+'</small></div>').join(''):'<p class="small">Každá partie potřebuje aspoň 3 tréninkové dny se zátěží.</p>')+(Object.values(fresh).some(x=>x.freshness==null)?'<p class="small">Šedé partie se kalibrují: '+Object.entries(fresh).filter(([,x])=>x.freshness==null).map(([m])=>MUSCLE_LABELS[m]).join(', ')+'.</p>':'')+'</div></div><div class="fresh-legend"><span><i style="background:#3fda9c"></i>Zotavené ≥ 75 %</span><span><i style="background:#ffa64d"></i>Unavené 35–75 %</span><span><i style="background:#ff6478"></i>Vyčerpané &lt; 35 %</span><span><i style="background:#4a5361"></i>Kalibruji</span></div></article>'+
-    '<article class="card insight-load"><div class="label">Muscular Load</div><h3>Svalová zátěž</h3>'+loadGauge(load)+'<div class="load-status '+esc(load.status)+'">'+esc(LOAD_LABEL[load.status])+'</div><p class="small">Zátěž za 7 dní proti průměrnému týdnu za 6 týdnů (poměr '+fmt(load.ratio,2)+'). Počítá se ze sérií v posilovně (váha opakování, únavnost cviku, RPE) a z kola a běhu (TSS na zapojené svaly).'+(load.status==='calibrating'?' Pro stav potřebuji aspoň 10 tréninkových dní za 6 týdnů.':'')+'</p>'+sparkBars(load.series,'#a978ff')+'<div class="load-muscles">'+Object.entries(r.muscles.load.perMuscle).filter(([,x])=>x.status!=='calibrating').map(([m,x])=>'<span class="pill load-'+x.status+'">'+esc(MUSCLE_LABELS[m])+' · '+esc(LOAD_LABEL[x.status])+'</span>').join('')+'</div></article>'+
+    '<article class="card insight-load"><div class="label">Muscular Load</div><h3>Svalová zátěž</h3>'+loadGauge(load)+'<div class="load-status '+esc(load.status)+'">'+esc(LOAD_LABEL[load.status])+'</div><p class="small">Zátěž za 7 dní proti průměrnému týdnu za 6 týdnů (poměr '+fmt(load.ratio,2)+'). Počítá se ze sérií v posilovně (váha opakování, únavnost cviku, RPE) a z kola a běhu (TSS na zapojené svaly).'+(load.status==='calibrating'?' Pro stav potřebuji aspoň 10 tréninkových dní za 6 týdnů.':'')+'</p>'+sparkBars(load.series,'#a978ff')+(()=>{const off=Object.entries(r.muscles.load.perMuscle).filter(([,x])=>x.status==='detraining'||x.status==='overtraining');return off.length?'<div class="load-muscles"><span class="small">Mimo produktivní pásmo:</span>'+off.map(([m,x])=>'<span class="pill load-'+x.status+'">'+esc(MUSCLE_LABELS[m])+' · '+(x.status==='overtraining'?'přetížené':'podtrénované')+'</span>').join('')+'</div>':''})()+'</article>'+
     '<article class="card insight-cardio"><div class="label">Cardio Focus · '+cf.days+' dní</div><h3>Kam míří kardio trénink</h3>'+(cf.points?'<div class="focus-bar"><i class="low" style="width:'+cf.percent.low+'%"></i><i class="high" style="width:'+cf.percent.high+'%"></i><i class="anaerobic" style="width:'+cf.percent.anaerobic+'%"></i></div><div class="focus-legend"><div><b>'+cf.percent.low+' %</b><span><i class="low"></i>Lehká aerobní · Z1–Z2</span></div><div><b>'+cf.percent.high+' %</b><span><i class="high"></i>Tvrdá aerobní · Z3–Z4</span></div><div><b>'+cf.percent.anaerobic+' %</b><span><i class="anaerobic"></i>Anaerobní · Z5+</span></div></div><div class="focus-weeks">'+cf.weeks.map((w,i)=>{const t=w.low+w.high+w.anaerobic||1;return '<div><span class="focus-week" style="--h:'+Math.min(100,t/Math.max(1,...cf.weeks.map(x=>x.low+x.high+x.anaerobic))*100)+'%"><i class="anaerobic" style="height:'+w.anaerobic/t*100+'%"></i><i class="high" style="height:'+w.high/t*100+'%"></i><i class="low" style="height:'+w.low/t*100+'%"></i></span><small>'+(i===3?'tento týden':(3-i)+' týd. zpět')+'</small></div>'}).join('')+'</div><p class="small">'+cf.activities+' aktivit · '+hm(cf.minutes)+' v zónách · '+fmt(cf.points)+' kardio bodů. Čas v zóně se násobí její intenzitou, takže krátké tvrdé intervaly váží víc než dlouhá lehká jízda.</p>':'<div class="data-gap">Aktivity za '+cf.days+' dní nemají časy v zónách.</div>')+'</article>'+
-    '<article class="card insight-records"><div class="label">Personal Records</div><h3>Osobní rekordy</h3>'+(recent.length?'<div class="pr-badges">'+recent.map(({k,x})=>{const [icon,label,unit]=RECORD_ICONS[k];return '<div class="pr-badge pr-'+k+'"><span>'+icon+'</span><strong>'+fmt(x[k].value,k==='e1rm'?1:0)+' '+unit+'</strong><small>'+esc(label)+'<br>'+esc(x.exercise)+' · '+esc(dateLabel(x[k].date))+'</small></div>'}).join('')+'</div>':'<p class="small">Za posledních 14 dní žádný nový rekord.</p>')+'<div class="scroll"><table class="pr-table"><thead><tr><th>Cvik</th><th>Odhad 1RM</th><th>Nejvyšší váha</th><th>Objem tréninku</th></tr></thead><tbody>'+rec.strength.slice(0,8).map(x=>'<tr><td>'+esc(x.exercise)+'</td><td>'+(x.e1rm?fmt(x.e1rm.value,1)+' kg':'—')+'</td><td>'+(x.heaviest?fmt(x.heaviest.value)+' kg × '+x.heaviest.reps:'—')+'</td><td>'+(x.sessionVolume?fmt(x.sessionVolume.value)+' kg':'—')+'</td></tr>').join('')+'</tbody></table></div>'+(cardio.length?'<div class="pr-cardio">'+cardio.map(([k,icon,label])=>{const v=rec.cardio[k];return '<div><span>'+icon+'</span><strong>'+(k==='fastestRun5k'?pace(v.value)+' /km':fmt(v.value,1)+' '+v.unit)+'</strong><small>'+esc(label)+' · '+esc(dateLabel(v.date))+'</small></div>'}).join('')+'</div>':'')+'<p class="small">1RM podle Epleyho ze sérií do 12 opakování. Kardio rekordy ze souhrnů aktivit za poslední rok.</p></article>'+
+    recordsCardHtml(rec)+
   '</div>';
   const map=$('freshMap');map.appendChild($('muscleMapTemplate').content.cloneNode(true));paintMuscleMap(map,fresh);
   // The gym builder figure shows the same freshness behind the selection.
   const builder=document.querySelector('#workoutsGym .gym-figures');if(builder){paintMuscleMap(builder,fresh);if(!$('gymFreshLegend'))builder.insertAdjacentHTML('afterend','<div class="fresh-legend" id="gymFreshLegend"><span><i style="background:#3fda9c"></i>Zotavené</span><span><i style="background:#ffa64d"></i>Unavené</span><span><i style="background:#ff6478"></i>Vyčerpané</span><span><i style="background:#4a5361"></i>Kalibruji</span></div>');}
 }
+document.addEventListener('click',e=>{const b=e.target.closest('[data-pr-period]');if(!b)return;try{localStorage.setItem('pfd-pr-period',b.dataset.prPeriod);}catch{}const card=b.closest('.insight-records');if(card&&state.insights?.records)card.outerHTML=recordsCardHtml(state.insights.records);});
 async function loadInsights(){try{state.insights=await jsonFetch('/app/api/fitness-insights');}catch(error){state.insights={status:'error',message:'Svaly a rekordy se nepodařilo načíst: '+error.message};}renderFitnessInsights();}
 
 // Day timeline: sleep, activities, planned workouts and meals in one order.
