@@ -78,6 +78,7 @@ import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-manage
 import legacyHealthApi, { googleToken } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
+import { isStaging, markStaging } from "./staging.js";
 import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, generateTechnique, exerciseInUse } from "./exercise-technique.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout } from "./dashboard-auth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
@@ -112,7 +113,7 @@ async function forEachUser(env, providers, fn) {
   return results;
 }
 
-export default {
+const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
@@ -193,6 +194,14 @@ export default {
     }
     if (!user) return unauthorizedResponse();
     return app.fetch(request, env, ctx);
+  }
+};
+
+export default {
+  scheduled: worker.scheduled,
+  async fetch(request, env, ctx) {
+    const response = await worker.fetch(request, env, ctx);
+    return isStaging(env) ? markStaging(response) : response;
   }
 };
 

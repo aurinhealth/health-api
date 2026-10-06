@@ -25,6 +25,14 @@ function googleFetch(token) {
 }
 const callback = (query, cookie = "pfd_google_login=s1.n1.verifier") => new Request("https://petrfitnessdata.eu/auth/google/callback?" + query, { headers: { Cookie: cookie } });
 
+test("a client id pasted with spaces still reaches Google intact", async () => {
+  const padded = { ...freshEnv(), GOOGLE_CLIENT_ID: " client-123 \n", GOOGLE_CLIENT_SECRET: " secret " };
+  const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), padded, "/auth/google");
+  assert.equal(new URL(response.headers.get("Location")).searchParams.get("client_id"), "client-123");
+  const missing = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), { ...padded, GOOGLE_CLIENT_ID: "   " }, "/auth/google");
+  assert.equal(missing.status, 503);
+});
+
 test("Google login routes are public", () => {
   assert.equal(isPublicPath("/auth/google"), true);
   assert.equal(isPublicPath("/auth/google/callback"), true);

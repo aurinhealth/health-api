@@ -1,0 +1,122 @@
+name: Deploy staging
+
+# The test copy at https://staging.petrfitnessdata.eu runs
+# the newest push of any open pull request (or a branch picked by hand), with
+# its own database, so a change can be tried before it is merged and goes live.
+on:
+  workflow_dispatch:
+    inputs:
+      refresh_data:
+        description: "Copy my data from the live app again (replaces what the staging copy has)"
+        type: boolean
+        default: false
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "public/**"
+      - "wrangler.jsonc"
+      - "migrations/**"
+      - "staging/**"
+      - "scripts/copy-owner-data.mjs"
+      - ".github/workflows/deploy-staging.yml"
+
+permissions:
+  contents: read
+
+# One staging copy: deploys run one at a time and only the newest waiting one
+# runs next, so a data copy in progress is never cut off.
+concurrency:
+  group: staging
+  cancel-in-progress: false
+
+env:
+  STAGING_URL: https://staging.petrfitnessdata.eu
+  LIVE_DATABASE_ID: 07caba2e-ba9a-4191-8a2e-e2fd4c5082cd
+  STAGING_DATABASE_ID: 6fbc690b-c776-42c9-b052-8f4ee44669fd
+
+jobs:
+  deploy:
+    # Pull requests from forks never get the Cloudflare secrets.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check syntax
+        run: npm run check
+
+      - name: Run tests
+        run: npm test
+
+      # Tables that predate the migrations; a no-op once they exist.
+      - name: Prepare staging database structure
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute health-data-staging --remote --env staging --file staging/schema.sql
+
+      - name: Apply D1 migrations (staging database)
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply health-data-staging --remote --env staging
+
+      - name: Deploy staging Worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --env staging
+          workingDirectory: .
+
+      - name: Wait for the staging copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "$STAGING_URL/app/api/me" || true)"
+            if [ "$code" = "401" ]; then break; fi
+            echo "Waiting for staging (HTTP $code, attempt $attempt)"; sleep 10
+          done
+          [ "$code" = "401" ] || { echo "Staging did not come up"; exit 1; }
+          page="$(curl -fsS "$STAGING_URL/app")"
+          grep -q "TEST · staging" <<< "$page" || { echo "Staging badge missing"; exit 1; }
+          echo "Staging: $STAGING_URL/app (${GITHUB_HEAD_REF:-$GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" >> "$GITHUB_STEP_SUMMARY"
+
+      # The owner's own data from the live app, once (the live database is
+      # only read). Later runs skip it unless started by hand with refresh_data.
+      - name: Copy my data from the live app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SOURCE_DATABASE_ID: ${{ env.LIVE_DATABASE_ID }}
+          TARGET_DATABASE_ID: ${{ env.STAGING_DATABASE_ID }}
+          OWNER_EMAIL: chelseafc.czsk@gmail.com
+          REFRESH: ${{ inputs.refresh_data && 'true' || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/owner-data"
+          trap 'rm -rf "$out"' EXIT
+          node scripts/copy-owner-data.mjs "$out"
+          shopt -s nullglob
+          for file in "$out"/*.sql; do
+            echo "Importing $(basename "$file")"
+            if ! npx --yes wrangler@4 d1 execute health-data-staging --remote --env staging --file "$file" > "$out/import.log" 2>&1; then
+              # The full output may quote copied data and this repository's
+              # logs are public, so only the error codes are shown.
+              grep -oE "SQLITE_[A-Z_]+|code: [0-9]+|HTTP [0-9]+|Authentication error" "$out/import.log" | sort -u || true
+              exit 1
+            fi
+          done

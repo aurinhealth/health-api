@@ -3,8 +3,11 @@ import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 
 // "Sign in with Google" for the dashboard. Only identity scopes are requested;
 // health data access stays in the separate /oauth/google connector flow.
+// APP_ORIGIN lets the staging copy send Google back to itself.
 const ORIGIN = "https://petrfitnessdata.eu";
-export const GOOGLE_LOGIN_REDIRECT_URI = ORIGIN + "/auth/google/callback";
+export function googleLoginRedirectUri(env) {
+  return (env?.APP_ORIGIN || ORIGIN) + "/auth/google/callback";
+}
 const STATE_COOKIE = "pfd_google_login";
 const STATE_SECONDS = 600;
 const GOOGLE_ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
@@ -14,9 +17,15 @@ let cachedJwks = null;
 let cachedJwksAt = 0;
 
 export async function handleGoogleLogin(request, env, pathname) {
-  if (pathname === "/auth/google" && request.method === "GET") return startLogin(env);
-  if (pathname === "/auth/google/callback" && request.method === "GET") return finishLogin(request, env);
+  if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env));
+  if (pathname === "/auth/google/callback" && request.method === "GET") return finishLogin(request, googleClientEnv(env));
   return null;
+}
+
+// Values pasted into the Cloudflare dashboard easily pick up a stray space,
+// which Google answers with "OAuth client was not found".
+function googleClientEnv(env) {
+  return { ...env, GOOGLE_CLIENT_ID: String(env.GOOGLE_CLIENT_ID || "").trim(), GOOGLE_CLIENT_SECRET: String(env.GOOGLE_CLIENT_SECRET || "").trim() };
 }
 
 function configured(env) {
@@ -29,7 +38,7 @@ async function startLogin(env) {
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
-  u.searchParams.set("redirect_uri", GOOGLE_LOGIN_REDIRECT_URI);
+  u.searchParams.set("redirect_uri", googleLoginRedirectUri(env));
   u.searchParams.set("response_type", "code");
   u.searchParams.set("scope", "openid email");
   u.searchParams.set("state", state);
@@ -53,7 +62,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: GOOGLE_LOGIN_REDIRECT_URI, grant_type: "authorization_code", code_verifier: verifier })
+    body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleLoginRedirectUri(env), grant_type: "authorization_code", code_verifier: verifier })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.id_token) return page("Přihlášení selhalo", "Google nevrátil identitu účtu.", 502);

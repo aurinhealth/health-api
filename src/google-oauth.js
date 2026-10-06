@@ -3,7 +3,7 @@ import { HEALTH_SCOPES, EXTRA_SCOPES } from './google-scopes.js';
 const GOOGLE_OAUTH_ORIGIN = "https://petrfitnessdata.eu";
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
-    const origin = GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
+    const origin = env.APP_ORIGIN || GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
     // ?extra=1 adds the optional scopes on top of what was already granted.
@@ -15,7 +15,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
   const url = new URL(request.url); const code=url.searchParams.get("code"); const state=url.searchParams.get("state"); const cookie=request.headers.get("Cookie")||""; const m=cookie.match(/(?:^|;\s*)pfd_google_oauth_state=([^;]+)/);
   if (!code || !state || !m || decodeURIComponent(m[1]) !== state) return html("Google OAuth failed","Invalid or missing OAuth state. Start again from /oauth/google.",400);
   if (url.searchParams.get("error")) return html("Google OAuth cancelled", esc(url.searchParams.get("error")),400);
-  const redirectUri=GOOGLE_OAUTH_ORIGIN+"/oauth/google/callback";
+  const redirectUri=(env.APP_ORIGIN||GOOGLE_OAUTH_ORIGIN)+"/oauth/google/callback";
   const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:redirectUri,grant_type:"authorization_code"})});
   const data=await response.json();
   if (!response.ok || !data.refresh_token) return html("Google OAuth token exchange failed","Google nevrátil oprávnění pro automatickou synchronizaci. Zkus obnovit souhlas v Nastavení.",502);
