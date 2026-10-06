@@ -13,9 +13,9 @@ const round = (v, d = 0) => Math.round(v * 10 ** d) / 10 ** d;
 
 export const MUSCLES = Object.keys(FOCUS_GROUPS);
 // Small muscles recover faster than large ones (time constant in days).
-const RECOVERY_DAYS = { quads: 1.7, hamstrings: 1.7, hips: 1.6, chest: 1.5, upper_back: 1.4, lats: 1.4, calves: 1.2, front_delts: 1.1, side_delts: 1.0, rear_delts: 1.0, biceps: 1.0, triceps: 1.0, abs: 0.9, obliques: 0.9 };
+const RECOVERY_DAYS = { quads: 1.7, hamstrings: 1.7, hips: 1.6, chest: 1.5, upper_back: 1.4, lats: 1.4, calves: 1.2, front_delts: 1.1, side_delts: 1.0, rear_delts: 1.0, biceps: 1.0, triceps: 1.0, abs: 0.9, obliques: 0.9, forearms: 0.9, traps: 1.0, lower_back: 1.3 };
 // Primary muscle of the exercise catalog → body-map groups.
-const PRIMARY = { chest: ["chest"], back: ["upper_back", "lats"], shoulders: ["front_delts", "side_delts"], quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["hips"], biceps: ["biceps"], triceps: ["triceps"], core: ["abs", "obliques"], adductors: ["hips"], abductors: ["hips"], calves: ["calves"] };
+const PRIMARY = { chest: ["chest"], back: ["upper_back", "lats"], shoulders: ["front_delts", "side_delts"], quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["hips"], biceps: ["biceps"], triceps: ["triceps"], core: ["abs", "obliques"], adductors: ["hips"], abductors: ["hips"], calves: ["calves"], forearms: ["forearms"], traps: ["traps"], lower_back: ["lower_back"] };
 // Secondary muscles by movement pattern (share of the set's load).
 const SECONDARY = { push: { triceps: .5, front_delts: .4 }, horizontal_push: { front_delts: .3 }, push_vertical: { triceps: .4, side_delts: .3 }, pull: { biceps: .45, rear_delts: .4 }, pull_vertical: { biceps: .4 }, quad: { hips: .5 }, unilateral_quad: { hips: .6, hamstrings: .2 }, hinge: { hips: .6, upper_back: .2 }, hip_extension: { hamstrings: .3 }, lunge: { quads: .6, hamstrings: .2 }, glute_press: { quads: .5, hamstrings: .3 }, glute_kickback: { hamstrings: .2 } };
 // Cardio: share of the activity's training load per muscle group.

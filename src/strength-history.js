@@ -1,7 +1,6 @@
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { strengthSetOptions,strengthOptionNote } from './gym-set-options.js';
 
-const TZ = "Europe/Prague";
 const SHEET_NAME = "Dnešní trénink";
 const VISIBLE_HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
 const LEGACY_HEADER_ROW = [...VISIBLE_HEADER_ROW, "Náhrada cviku", "Provedení"];
@@ -270,6 +269,19 @@ export async function importStrengthHistory(db, workout) {
   }
 
   return { status: "ok", workoutDate: date, setsImported: imported, source: "manual" };
+}
+
+// A day saved from the dashboard keeps its completed sets as manual:<date>:1…n.
+// When saved sets are taken out of the day, the keys after the new count go
+// too, so the history keeps no set the athlete removed.
+export async function removeManualSets(db, date, keep, upTo) {
+  await ensureStrengthTable(db);
+  let removed = 0;
+  for (let i = Math.max(0, Number(keep) || 0) + 1; i <= Number(upTo); i++) {
+    const result = await db.prepare("DELETE FROM strength_sets WHERE user_id = ? AND workout_date = ? AND source_key = ?").bind(db.userId, date, `manual:${date}:${i}`).run();
+    removed += result.meta?.changes || 0;
+  }
+  return removed;
 }
 
 export async function getStrengthHistory(db, limit = 100) {

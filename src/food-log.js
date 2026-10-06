@@ -1,22 +1,27 @@
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
 import { searchPersonalFoods } from "./personal-foods.js";
+import { pragueToday } from "./prague-date.js";
 
-const n = (v, fallback = null) => Number.isFinite(Number(v)) ? Number(v) : fallback;
+// null and "" are missing values, not 0: ChatGPT sends "servings": null, and
+// that used to log 0.01 of a portion.
+const n = (v, fallback = null) => v == null || v === "" ? fallback : Number.isFinite(Number(v)) ? Number(v) : fallback;
 const text = v => v == null ? "" : String(v).trim();
 
+// ---- One food diary -----------------------------------------------------------
+// ChatGPT (MCP) and the coach inbox log into the app's own diary (food_logs),
+// so a meal shows up in the app and counts once. Eaten food has no status, like
+// every meal logged in the app; a planned ("planned") or cancelled one stays out
+// of the app's totals. The meal, salt, grams, brand and barcode live in the
+// note, as the app keeps them.
+export const EATEN_FOOD = "(status IS NULL OR status='eaten')";
+let diaryReady = false;
 export async function ensureFoodLogTable(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS food_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, meal_time TEXT, meal_type TEXT, recipe_page INTEGER, recipe_name TEXT, cookbook_page INTEGER, servings REAL NOT NULL DEFAULT 1, calories REAL, protein_g REAL, carbs_g REAL, fat_g REAL, status TEXT NOT NULL DEFAULT 'eaten', source TEXT NOT NULL DEFAULT 'cookbook', note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
-  for (const column of [
-    ["fiber_g","REAL"],
-    ["salt_g","REAL"],
-    ["amount_g","REAL"],
-    ["brand","TEXT"],
-    ["barcode","TEXT"]
-  ]) {
-    try { await db.prepare(`ALTER TABLE food_log ADD COLUMN ${column[0]} ${column[1]}`).run(); } catch (_) {}
-  }
-  await db.prepare("CREATE INDEX IF NOT EXISTS idx_food_log_user_0 ON food_log(user_id, date)").run();
+  if (diaryReady) return;
+  await db.prepare("CREATE TABLE IF NOT EXISTS food_logs (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, consumed_date TEXT NOT NULL, consumed_at TEXT, cookbook_page INTEGER, recipe_title TEXT, servings REAL NOT NULL DEFAULT (1), kcal REAL NOT NULL DEFAULT (0), protein_g REAL NOT NULL DEFAULT (0), carbs_g REAL NOT NULL DEFAULT (0), fat_g REAL NOT NULL DEFAULT (0), fiber_g REAL NOT NULL DEFAULT (0), source TEXT NOT NULL DEFAULT ('manual'), note TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), status TEXT)").run();
+  // A database from before migration 0007 has no status column yet.
+  try { await db.prepare("ALTER TABLE food_logs ADD COLUMN status TEXT").run(); } catch (_) {}
+  diaryReady = true;
 }
 
 function recipeId(recipe) {
@@ -38,6 +43,38 @@ function nutritionFromRecipe(recipe) {
 function publicRecipe(recipe, requestedPage = null) {
   return { id:recipeId(recipe), name:text(recipe?.name || recipe?.title || recipe?.recipe_name) || null, page:n(recipe?.page), requested_page:requestedPage, ...nutritionFromRecipe(recipe), ingredients:recipe?.ingredients || null, description:recipe?.description || null, raw:recipe };
 }
+const DIARY_MEALS = [[/break|snída|snida/i, "breakfast"], [/lunch|oběd|obed/i, "lunch"], [/dinner|supper|večeř|veceř|vecer/i, "dinner"], [/snack|svač|svac/i, null]];
+// The app's meal for a free-text meal type ("oběd", "snack") and time.
+function diaryMealType(type, time) {
+  const value = text(type);
+  if (["breakfast", "snack_am", "lunch", "snack_pm", "dinner"].includes(value)) return value;
+  const hit = DIARY_MEALS.find(([re]) => re.test(value));
+  if (!hit) return null;
+  if (hit[1]) return hit[1];
+  const hour = Number(String(time || "").match(/^(\d{1,2}):/)?.[1]);
+  return Number.isFinite(hour) && hour < 12 ? "snack_am" : "snack_pm";
+}
+function noteOf(row) { try { const note = JSON.parse(row?.note || "{}"); return note && typeof note === "object" && !Array.isArray(note) ? note : { text: String(row.note) }; } catch { return row?.note ? { text: String(row.note) } : {}; } }
+function consumedAt(date, time) {
+  const t = String(time || "").match(/^(\d{1,2}):(\d{2})/);
+  if (t) return date + "T" + t[1].padStart(2, "0") + ":" + t[2] + ":00";
+  return date === pragueToday() ? new Date().toISOString() : date + "T12:00:00";
+}
+// "HH:MM" in Prague from the app's consumed_at (local, or UTC with Z).
+function pragueTime(value) {
+  const t = String(value || "");
+  if (!/T\d{2}:\d{2}/.test(t)) return null;
+  if (!/Z$|[+-]\d{2}:?\d{2}$/.test(t)) return t.slice(11, 16);
+  const d = new Date(t);
+  return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : null;
+}
+// A diary row in the shape the ChatGPT tools have always returned.
+function toEntry(row) {
+  const note = noteOf(row);
+  return { id: row.id, date: row.consumed_date, meal_time: pragueTime(row.consumed_at), meal_type: note.mealType || null, recipe_page: row.cookbook_page ?? null, recipe_name: row.recipe_title, cookbook_page: row.cookbook_page ?? null, servings: row.servings, calories: row.kcal, protein_g: row.protein_g, carbs_g: row.carbs_g, fat_g: row.fat_g, fiber_g: row.fiber_g, salt_g: note.salt_g ?? null, amount_g: note.amount_g ?? null, brand: note.brand || null, barcode: note.barcode || null, status: row.status || "eaten", source: row.source, note: note.text || note.legacyNote || null, created_at: row.created_at };
+}
+const compactNote = note => JSON.stringify(Object.fromEntries(Object.entries(note).filter(([, v]) => v != null && v !== "")));
+
 export async function searchCookbookRecipes({ page, name, limit = 10 } = {}) {
   const data = await getCookbook();
   const recipes = Array.isArray(data?.recipes) ? data.recipes : [];
@@ -104,17 +141,25 @@ export async function logResolvedFood(db, input = {}) {
 
 export async function logFood(db, input = {}) {
   await ensureFoodLogTable(db);
-  const date=text(input.date) || new Date().toISOString().slice(0,10), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
+  const date=text(input.date) || pragueToday(), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
   const sourceText = text(input.source).toLowerCase();
-  const useCookbook = sourceText === "" || sourceText === "cookbook" || input.page != null || input.recipeId;
+  // Own nutrition values make it a manual entry: a loose name match must not
+  // turn "Tvaroh, 200 kcal" into "Zapečené palačinky s tvarohem".
+  const ownValues = [input.calories, input.protein_g, input.carbs_g, input.fat_g].some(v => v != null && v !== "");
+  const useCookbook = input.page != null || input.recipeId || sourceText === "cookbook" || (sourceText === "" && !ownValues);
   const recipe = useCookbook && (input.page != null || input.name || input.recipeId) ? await getCookbookRecipe({page:input.page,name:useCookbook ? input.name : null,recipeId:input.recipeId}) : null;
   if (!recipe && input.calories == null && input.protein_g == null && input.carbs_g == null && input.fat_g == null) throw new Error("Recipe not found and no nutrition values were supplied");
   const calories=n(input.calories,recipe?.calories), protein=n(input.protein_g,recipe?.protein_g), carbs=n(input.carbs_g,recipe?.carbs_g), fat=n(input.fat_g,recipe?.fat_g);
-  const result=await db.prepare("INSERT INTO food_log (user_id, date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,fiber_g,salt_g,amount_g,brand,barcode,status,source,note) VALUES (?, ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId, 
-    date,text(input.meal_time || input.mealTime)||null,text(input.meal_type || input.mealType)||null,recipe?.page ?? n(input.page),recipe?.name || text(input.name)||null,recipe?.page ?? n(input.page),servings,
-    calories==null?null:calories*servings,protein==null?null:protein*servings,carbs==null?null:carbs*servings,fat==null?null:fat*servings,n(input.fiber_g, null)==null?null:n(input.fiber_g)*servings,n(input.salt_g, null)==null?null:n(input.salt_g)*servings,n(input.amount_g ?? input.grams, null),text(input.brand)||null,normalizeBarcode(input.barcode)||null,status,text(input.source)||"cookbook",text(input.note)||null
+  const each = (v, scale = servings) => v == null ? null : v * scale;
+  const page = recipe?.page ?? n(input.page), meal = diaryMealType(input.meal_type || input.mealType, input.meal_time || input.mealTime);
+  const note = compactNote({ mealType: meal, salt_g: each(n(input.salt_g, null)), amount_g: n(input.amount_g ?? input.grams, null), brand: text(input.brand) || null, barcode: normalizeBarcode(input.barcode) || null, text: text(input.note) || null });
+  const result=await db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId,
+    date,consumedAt(date,input.meal_time||input.mealTime),page,recipe?.name||text(input.name)||"Jídlo",servings,
+    each(calories)??0,each(protein)??0,each(carbs)??0,each(fat)??0,each(n(input.fiber_g,null))??0,
+    text(input.source)||(recipe?"cookbook":"manual"),note,status==="eaten"?null:status
   ).run();
-  return {status:"ok",id:result.meta?.last_row_id ?? null,date,entryStatus:status,servings,recipe,nutrition:{calories:calories==null?null:calories*servings,protein_g:protein==null?null:protein*servings,carbs_g:carbs==null?null:carbs*servings,fat_g:fat==null?null:fat*servings,fiber_g:n(input.fiber_g,null)==null?null:n(input.fiber_g)*servings,salt_g:n(input.salt_g,null)==null?null:n(input.salt_g)*servings}};
+  const nutrition={calories:each(calories),protein_g:each(protein),carbs_g:each(carbs),fat_g:each(fat),fiber_g:each(n(input.fiber_g,null)),salt_g:each(n(input.salt_g,null))};
+  return {status:"ok",id:result.meta?.last_row_id ?? null,date,entryStatus:status,servings,recipe,nutrition};
 }
 export function remainingNutrition(nutritionPlan, eaten = {}) {
   const target=nutritionPlan||{};
@@ -126,64 +171,59 @@ export function remainingNutrition(nutritionPlan, eaten = {}) {
   };
 }
 
+async function diaryRow(db, id) {
+  const key = n(id); if (!key) throw new Error("Missing food log id");
+  const row = await db.prepare("SELECT * FROM food_logs WHERE user_id = ? AND id=?").bind(db.userId, key).first();
+  if (!row) throw new Error("Food log entry not found");
+  return row;
+}
 export async function consumePlannedFood(db, input = {}) {
   await ensureFoodLogTable(db);
-  const id=n(input.id);
-  if (!id) throw new Error("Missing food log id");
-  const row=await db.prepare("SELECT * FROM food_log WHERE user_id = ? AND id=?").bind(db.userId, id).first();
-  if (!row) throw new Error("Food log entry not found");
+  const row = await diaryRow(db, input.id), id = row.id;
   if (row.status !== "planned") throw new Error("Only planned food can be consumed with this action");
   const currentServings=Math.max(0,n(row.servings,1));
   const requested=input.servings == null ? currentServings : Math.max(0.01,n(input.servings));
   if (requested > currentServings + 1e-9) throw new Error("Consumed servings exceed planned servings");
+  const when = row.consumed_date === pragueToday() ? new Date().toISOString() : row.consumed_at;
   if (Math.abs(requested-currentServings) < 1e-9) {
-    await db.prepare("UPDATE food_log SET status='eaten' WHERE user_id = ? AND id=?").bind(db.userId, id).run();
+    await db.prepare("UPDATE food_logs SET status=NULL, consumed_at=? WHERE user_id = ? AND id=?").bind(when, db.userId, id).run();
     return {status:"ok",mode:"promoted",id,consumedId:id,remainingPlannedServings:0};
   }
-  const factor=requested/currentServings;
-  const remaining=currentServings-requested;
-  const result=await db.prepare("UPDATE food_log SET servings=?, calories=?, protein_g=?, carbs_g=?, fat_g=?, fiber_g=?, salt_g=?, amount_g=? WHERE id=? AND user_id=?").bind(
-    remaining,
-    n(row.calories,0)* (1-factor), n(row.protein_g,0)*(1-factor), n(row.carbs_g,0)*(1-factor), n(row.fat_g,0)*(1-factor),
-    row.fiber_g==null?null:n(row.fiber_g,0)*(1-factor), row.salt_g==null?null:n(row.salt_g,0)*(1-factor), row.amount_g==null?null:n(row.amount_g,0)*(1-factor), id, db.userId
-  ).run();
-  const per={calories:n(row.calories,0)*factor,protein_g:n(row.protein_g,0)*factor,carbs_g:n(row.carbs_g,0)*factor,fat_g:n(row.fat_g,0)*factor,fiber_g:row.fiber_g==null?null:n(row.fiber_g,0)*factor,salt_g:row.salt_g==null?null:n(row.salt_g,0)*factor};
-  const ins=await db.prepare("INSERT INTO food_log (user_id, date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,fiber_g,salt_g,amount_g,brand,barcode,status,source,note) VALUES (?, ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(db.userId, 
-    row.date,row.meal_time,row.meal_type,row.recipe_page,row.recipe_name,row.cookbook_page,requested,per.calories,per.protein_g,per.carbs_g,per.fat_g,per.fiber_g,per.salt_g,row.amount_g==null?null:n(row.amount_g,0)*factor,row.brand,row.barcode,"eaten",row.source,row.note
-  ).run();
+  const factor=requested/currentServings, remaining=currentServings-requested, part=k=>n(row[k],0)*factor, rest=k=>n(row[k],0)*(1-factor);
+  await db.prepare("UPDATE food_logs SET servings=?, kcal=?, protein_g=?, carbs_g=?, fat_g=?, fiber_g=? WHERE id=? AND user_id=?").bind(remaining,rest("kcal"),rest("protein_g"),rest("carbs_g"),rest("fat_g"),rest("fiber_g"),id,db.userId).run();
+  const ins=await db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note,status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)").bind(db.userId,
+    row.consumed_date,when,row.cookbook_page,row.recipe_title,requested,part("kcal"),part("protein_g"),part("carbs_g"),part("fat_g"),part("fiber_g"),row.source,row.note).run();
   return {status:"ok",mode:"split",plannedId:id,consumedId:ins.meta?.last_row_id??null,remainingPlannedServings:remaining};
 }
 
 export async function updateFoodEntry(db, input = {}) {
   await ensureFoodLogTable(db);
-  const id=n(input.id); if(!id) throw new Error("Missing food log id");
-  const row=await db.prepare("SELECT * FROM food_log WHERE user_id = ? AND id=?").bind(db.userId, id).first();
-  if(!row) throw new Error("Food log entry not found");
-  const servings=Math.max(0.01,n(input.servings,row.servings));
-  const baseCalories=input.calories!=null?n(input.calories):n(row.calories)/Math.max(0.01,n(row.servings,1));
-  const baseProtein=input.protein_g!=null?n(input.protein_g):n(row.protein_g)/Math.max(0.01,n(row.servings,1));
-  const baseCarbs=input.carbs_g!=null?n(input.carbs_g):n(row.carbs_g)/Math.max(0.01,n(row.servings,1));
-  const baseFat=input.fat_g!=null?n(input.fat_g):n(row.fat_g)/Math.max(0.01,n(row.servings,1));
-  const fiber=input.fiber_g!=null?n(input.fiber_g):row.fiber_g==null?null:n(row.fiber_g)/Math.max(0.01,n(row.servings,1));
-  const salt=input.salt_g!=null?n(input.salt_g):row.salt_g==null?null:n(row.salt_g)/Math.max(0.01,n(row.servings,1));
-  await db.prepare("UPDATE food_log SET meal_time=?,meal_type=?,servings=?,calories=?,protein_g=?,carbs_g=?,fat_g=?,fiber_g=?,salt_g=?,status=?,note=? WHERE id=? AND user_id=?").bind(
-    text(input.meal_time??input.mealTime??row.meal_time)||null,text(input.meal_type??input.mealType??row.meal_type)||null,servings,
-    baseCalories*servings,baseProtein*servings,baseCarbs*servings,baseFat*servings,fiber==null?null:fiber*servings,salt==null?null:salt*servings,
-    normalizeStatus(input.status??row.status),text(input.note??row.note)||null,id,db.userId
+  const row = await diaryRow(db, input.id), id = row.id, old = Math.max(0.01, n(row.servings, 1));
+  const servings=Math.max(0.01,n(input.servings,old));
+  const base = (k, rowKey) => input[k] != null && input[k] !== "" ? n(input[k], 0) : n(row[rowKey], 0) / old;
+  const note = noteOf(row), meal = input.meal_type ?? input.mealType;
+  if (meal != null) note.mealType = diaryMealType(meal, input.meal_time ?? input.mealTime) || note.mealType;
+  if (input.salt_g != null && input.salt_g !== "") note.salt_g = n(input.salt_g, 0) * servings;
+  if (input.note != null) note.text = text(input.note) || null;
+  const time = input.meal_time ?? input.mealTime, status = normalizeStatus(input.status ?? row.status ?? "eaten");
+  await db.prepare("UPDATE food_logs SET consumed_at=?,servings=?,kcal=?,protein_g=?,carbs_g=?,fat_g=?,fiber_g=?,status=?,note=? WHERE id=? AND user_id=?").bind(
+    time ? consumedAt(row.consumed_date, time) : row.consumed_at, servings,
+    base("calories","kcal")*servings, base("protein_g","protein_g")*servings, base("carbs_g","carbs_g")*servings, base("fat_g","fat_g")*servings, base("fiber_g","fiber_g")*servings,
+    status === "eaten" ? null : status, compactNote(note), id, db.userId
   ).run();
   return {status:"ok",id};
 }
 
 export async function cancelFoodEntry(db, id) {
   await ensureFoodLogTable(db); const key=n(id); if(!key) throw new Error("Missing food log id");
-  const result=await db.prepare("UPDATE food_log SET status='cancelled' WHERE user_id = ? AND id=?").bind(db.userId, key).run();
+  const result=await db.prepare("UPDATE food_logs SET status='cancelled' WHERE user_id = ? AND id=?").bind(db.userId, key).run();
   return {status:"ok",id:key,cancelled:!!result.meta?.changes};
 }
 
 export async function getFoodDay(db,date) {
-  await ensureFoodLogTable(db); const day=text(date)||new Date().toISOString().slice(0,10);
-  const rows=await db.prepare("SELECT id,date,meal_time,meal_type,recipe_page,recipe_name,cookbook_page,servings,calories,protein_g,carbs_g,fat_g,fiber_g,salt_g,amount_g,brand,barcode,status,source,note,created_at FROM food_log WHERE user_id = ? AND date=? ORDER BY COALESCE(meal_time,created_at),id").bind(db.userId, day).all();
-  const all=rows.results||[],eaten=all.filter(r=>r.status==="eaten"),planned=all.filter(r=>r.status==="planned");
+  await ensureFoodLogTable(db); const day=text(date)||pragueToday();
+  const rows=await db.prepare("SELECT * FROM food_logs WHERE user_id = ? AND consumed_date=? ORDER BY consumed_at,id").bind(db.userId, day).all();
+  const all=(rows.results||[]).map(toEntry),eaten=all.filter(r=>r.status==="eaten"),planned=all.filter(r=>r.status==="planned");
   const sum=list=>["calories","protein_g","carbs_g","fat_g","fiber_g","salt_g"].reduce((o,k)=>{o[k]=Math.round(list.reduce((s,r)=>s+n(r[k],0),0));return o;},{});
   return {status:"ok",date:day,entries:all,totals:{eaten:sum(eaten),planned:sum(planned),all:sum(all.filter(r=>r.status!=="cancelled"))}};
 }
@@ -193,7 +233,6 @@ export function recommendFood({day,nutritionPlan,entries}) {
   const remaining=remainingNutrition(target,eaten);
   const planned=(entries?.entries||[]).filter(r=>r.status==="planned");
   const plannedFoodOptions=planned.map(r=>{
-    const ratio=Math.max(0.01,n(r.servings,1));
     const kcal=n(r.calories,0), protein=n(r.protein_g,0), carbs=n(r.carbs_g,0), fat=n(r.fat_g,0);
     const proteinFit=Math.min(protein/Math.max(remaining.protein_g,1),1);
     const calorieFit=Math.min(kcal/Math.max(remaining.calories,1),1);
@@ -245,15 +284,15 @@ export function recommendFood({day,nutritionPlan,entries}) {
 export async function getFoodFavorites(db, limit=20) {
   await ensureFoodLogTable(db);
   const safe=Math.max(1,Math.min(50,Number(limit)||20));
-  const rows=await db.prepare(`SELECT COALESCE(barcode,'') barcode, COALESCE(recipe_name,'') name, COALESCE(brand,'') brand,
+  const rows=await db.prepare(`SELECT '' barcode, recipe_title name, '' brand,
       COUNT(*) count, MAX(created_at) lastUsed,
-      ROUND(AVG(NULLIF(calories,0)),0) calories,
+      ROUND(AVG(NULLIF(kcal,0)),0) calories,
       ROUND(AVG(NULLIF(protein_g,0)),1) protein_g,
       ROUND(AVG(NULLIF(carbs_g,0)),1) carbs_g,
       ROUND(AVG(NULLIF(fat_g,0)),1) fat_g
-    FROM food_log
-    WHERE user_id = ? AND status='eaten' AND date>=date('now','-60 day') AND (recipe_name IS NOT NULL OR barcode IS NOT NULL)
-    GROUP BY barcode, recipe_name, brand
+    FROM food_logs
+    WHERE user_id = ? AND ${EATEN_FOOD} AND consumed_date>=date('now','-60 day') AND recipe_title IS NOT NULL
+    GROUP BY recipe_title
     ORDER BY count DESC, lastUsed DESC
     LIMIT ?`).bind(db.userId, safe).all();
   return {status:"ok",limit:safe,days:60,foods:rows.results||[]};

@@ -1,5 +1,8 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
+import { qualityDomain } from './session-intensity.js';
+import { recoveryWeek as recoveryWeek_, weekLoadsBefore } from './week-planner.js';
+import { pragueToday } from "./prague-date.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -22,14 +25,14 @@ const RUN_NAME_RE=/\b(run|running|běh|beh|jog)\b/i;
 function isRide(a){const type=typeOf(a);if(RUN_TYPE_RE.test(type)||OTHER_TYPE_RE.test(type)||(!type&&RUN_NAME_RE.test(String(a?.name||""))))return false;return BIKE_RE.test(type+" "+String(a?.name||""))}
 function isRun(a){const type=typeOf(a);if(type)return RUN_TYPE_RE.test(type);return RUN_NAME_RE.test(String(a?.name||""))}
 function isHardRun(a){
-  if(RUN_HARD_RE.test(String(a?.name||"")+" "+String(a?.tags||""))) return true;
+  if(RUN_HARD_RE.test(String(a?.name||"")+" "+String(a?.tags||""))||qualityDomain(String(a?.name||"")+" "+String(a?.tags||""),"run")) return true;
   const intensity=n(a?.payload?.icu_intensity);
   if(intensity&&intensity>=88) return true;
   const hours=n(a?.durationHours,0);
   return n(a?.tss,0)>=50&&hours>0&&hours<=1.5&&n(a?.tss,0)/hours>=75;
 }
 function isHard(a){
-  if(HARD_RE.test(String(a?.name||"")+" "+String(a?.tags||""))) return true;
+  if(HARD_RE.test(String(a?.name||"")+" "+String(a?.tags||""))||qualityDomain(String(a?.name||"")+" "+String(a?.tags||""),"ride")) return true;
   const np=n(a?.normalizedPower??a?.payload?.icu_weighted_average_watts),ftp=n(a?.ftp??a?.payload?.icu_ftp);
   if(np&&ftp&&np/ftp>=0.86) return true;
   return n(a?.tss,0)>=100&&n(a?.durationHours,0)<=1.75;
@@ -45,6 +48,17 @@ function allWeekActivities(week){
 function latestWellness(fitness,date){
   const rows=Array.isArray(fitness?.wellness)?fitness.wellness:[];
   return rows.filter(row=>{const age=diffDays(date,row.id);return age!=null&&age>=0&&age<=2}).at(-1)||{};
+}
+// Today's HRV or resting heart rate against the athlete's own 4-week
+// average from the Intervals.icu wellness (Google Health is synced there):
+// what is low for one athlete is normal for another.
+export function wellnessTrend(fitness,date,key){
+  const rows=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).map(r=>({age:diffDays(date,r.id),value:n(r[key])})).filter(r=>r.age!=null&&r.age>=0&&r.value!=null&&r.value>0);
+  const today=rows.filter(r=>r.age<=1).sort((a,b)=>a.age-b.age)[0];
+  const past=rows.filter(r=>r.age>=2&&r.age<=29).map(r=>r.value);
+  if(!today||past.length<5)return null;
+  const baseline=past.reduce((a,b)=>a+b,0)/past.length;
+  return {today:today.value,baseline:Math.round(baseline*10)/10,deltaPct:Math.round((today.value/baseline-1)*1000)/10,delta:Math.round((today.value-baseline)*10)/10};
 }
 function latestSleepMinutes(health,date){
   const candidates=[];
@@ -71,8 +85,9 @@ function recentLowerGym(gym,date,lookbackDays=2){
 }
 function classifyDomain(a){
   const s=txt(a?.name)+" "+txt(a?.tags);
-  if(/vo2|anaerob|sprint/.test(s)) return "high";
-  if(/threshold|sweet.?spot|tempo/.test(s)) return "moderate";
+  const domain=qualityDomain(s,"ride");
+  if(domain) return domain;
+  if(/tempo/.test(s)) return "moderate";
   return "low";
 }
 function runTemplate(kind,minutes){
@@ -84,7 +99,9 @@ function runTemplate(kind,minutes){
     sweet_spot:{name:"Sub-threshold",kind:"sweet_spot",target:"95–97 % prahového tempa",structure:["12 min rozklus","5×6 min, mezi 1 min klus","8 min výklus"]},
     threshold:{name:"Prahové úseky",kind:"threshold",target:"97–101 % prahového tempa",structure:["12 min rozklus","4×8 min, mezi 2 min klus","8 min výklus"]},
     vo2:{name:"VO₂max úseky",kind:"vo2",target:"104–108 % prahového tempa",structure:["12 min rozklus + 4 rovinky","5×4 min, mezi 3 min klus","8 min výklus"]},
-    long_endurance:{name:"Dlouhý běh",kind:"long_endurance",target:"80–86 % prahového tempa",structure:["10 min rozklus","souvisle lehce, kopce podle úsilí"]}
+    long_endurance:{name:"Dlouhý běh",kind:"long_endurance",target:"80–86 % prahového tempa",structure:["10 min rozklus","souvisle lehce, kopce podle úsilí"]},
+    openers:{name:"Aktivace před závodem",kind:"openers",target:"lehce, krátce závodní tempo",structure:["15 min lehce","4× 20 s rovinky v závodním tempu, mezi 1 min klus","5 min výklus"]},
+    race:{name:"Závod",kind:"race",target:"rozklus 10–15 min + 3 krátká zrychlení před startem",structure:["10–15 min rozklus","3× 15 s zrychlení","start"]}
   };
   return {...(templates[kind]||templates.endurance),durationMinutes:m};
 }
@@ -98,7 +115,9 @@ function workoutTemplate(kind,minutes,cadence="85–95 rpm",sport="ride"){
     sweet_spot:{name:"Sweet Spot",kind:"sweet_spot",target:"88–94 % FTP",structure:["15 min rozjezd","3×10–12 min @ 88–94 %, mezi 5 min lehce","10 min vyjetí"],cadence},
     threshold:{name:"Threshold",kind:"threshold",target:"95–100 % FTP",structure:["15 min rozjezd","3×10 min @ 95–100 %, mezi 5 min lehce","10 min vyjetí"],cadence},
     vo2:{name:"VO₂max",kind:"vo2",target:"108–116 % FTP",structure:["15 min rozjezd + 3 krátké aktivace","5×4 min @ 108–116 %, mezi 4 min lehce","10–15 min vyjetí"],cadence:"90–100 rpm"},
-    long_endurance:{name:"Long Endurance",kind:"long_endurance",target:"60–72 % FTP",structure:["15 min lehce","souvislá Z2; kopce bez závodění","10–15 min vyjetí"],cadence}
+    long_endurance:{name:"Long Endurance",kind:"long_endurance",target:"60–72 % FTP",structure:["15 min lehce","souvislá Z2; kopce bez závodění","10–15 min vyjetí"],cadence},
+    openers:{name:"Aktivace před závodem",kind:"openers",target:"Z2 s krátkými úseky 105–115 % FTP",structure:["15 min lehce","3× 1 min @ 105–115 %, mezi 2 min lehce","3× 10 s sprint","10 min vyjetí"],cadence},
+    race:{name:"Závod",kind:"race",target:"rozjetí 15–20 min s 2–3 krátkými zrychleními před startem",structure:["15–20 min rozjetí Z2","2–3× 30 s @ 105 % FTP","start"],cadence}
   };
   const t=templates[kind]||templates.endurance;
   return {...t,durationMinutes:m};
@@ -118,7 +137,7 @@ export const CYCLING_COACH_V2_META={
 // How long the athlete can train today when no time was given: from fitness
 // (CTL ≈ average daily load), then sleep, form (TSB), readiness, a recovery
 // week and a comeback after a break.
-function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport}){
+function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport,taper=false}){
   const run=sport==="run",reasons=[];
   let m;
   if(ctl==null){m=run?45:75;reasons.push("kondici (CTL) zatím neznám, beru "+m+" min");}
@@ -138,6 +157,7 @@ function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,
   if(readiness==="red")apply(.7,"nízká připravenost");
   else if(readiness==="yellow")apply(.9,"střední připravenost");
   if(recoveryWeek)apply(.7,"regenerační týden");
+  if(taper)apply(.6,"ladění formy před závodem");
   if(returning)apply(.7,"návrat po pauze");
   return {minutes:clamp(m,run?20:30,run?150:300),reasons};
 }
@@ -146,6 +166,8 @@ function sessionMinutesFor(kind,capacity,sport){
   const run=sport==="run",step=run?5:15,round=m=>Math.max(step,Math.round(m/step)*step),reasons=[...capacity.reasons];
   let m=capacity.minutes;
   if(kind==="recovery"){m=clamp(m*.5,run?20:30,run?40:60);reasons.push("regenerace je krátká");}
+  else if(kind==="openers"){m=run?30:45;reasons.push("aktivace před závodem je krátká");}
+  else if(kind==="race"){m=run?20:30;reasons.push("jen rozjetí před startem");}
   else if(["tempo","sweet_spot","threshold","vo2"].includes(kind)){
     const [lo,hi]=run?[40,80]:[60,120];
     if(m<lo||m>hi)reasons.push("kvalitní trénink držím na "+lo+"–"+hi+" min");
@@ -160,18 +182,19 @@ const WORDS={
   run:{hard3:"už byly nejméně 3 náročné běhy v aktuálním týdnu",hard2:"rozpočet kvalitních běhů je už téměř vyčerpaný",today:"dnes už proběhl běh",none:"V datech nevidím žádný nedávný běh – začínám lehkým během; kvalitu přidám, až bude běhání zase pravidelné.",off:d=>"Posledních "+d+" dní bez běhu – návrat přes lehký běh se sníženou obtížností; šlachy a klouby si na běh zvykají pomaleji než srdce.",two:"Dva kvalitní běhy v týdnu už byly – dnes lehký objem.",recent:"Kvalita byla před méně než 48 h – dnes lehký běh na zotavení.",safe:"Připravenost není ideální pro kvalitu – lehký běh je bezpečná volba.",gym:"chránit kvalitu běhu po lower-body gymu",labels:{sweet_spot:"Sub-threshold",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}}
 };
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
-  const W=WORDS[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard;
-  const targetDate=isoDate(date)||new Date().toISOString().slice(0,10);
+  const W=WORDS[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
+  const targetDate=isoDate(date)||pragueToday();
   const weekActivities=allWeekActivities(week);
   const completedAll=weekActivities.filter(a=>a.completed&&isSport(a));
   const completed=completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=0&&d<=6;});
   const planned=weekActivities.filter(a=>{if(!a.planned||!isSport(a))return false;const d=diffDays(a.date,targetDate);return d!=null&&d>=0&&d<=14;});
   const wellness=latestWellness(fitness,targetDate);
   const ctl=n(wellness.ctl),atl=n(wellness.atl),tsb=n(wellness.tsb,ctl!=null&&atl!=null?ctl-atl:null),ramp=n(wellness.rampRate??wellness.ramp_rate);
-  const sleepMinutes=latestSleepMinutes(health,targetDate);
+  const wellnessSleep=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).filter(r=>{const age=diffDays(targetDate,r.id);return age!=null&&age>=0&&age<=1&&n(r.sleepSecs)>7200;}).sort((a,b)=>String(b.id).localeCompare(String(a.id)))[0];
+  const sleepMinutes=latestSleepMinutes(health,targetDate)??(wellnessSleep?Math.round(n(wellnessSleep.sleepSecs)/60):null);
   const lowerGym=recentLowerGym(gym,targetDate,2);
   const todayCompleted=completed.filter(a=>isoDate(a.date)===targetDate);
   const hard7=completed.filter(hardOf).length;
@@ -181,11 +204,20 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   let score=100; const readinessReasons=[];
   if(tsb!=null){
-    if(tsb<=-30){score-=25;readinessReasons.push("forma/únava je hluboko v záporných hodnotách");}
+    if(tsb<=-30){score-=30;readinessReasons.push("forma/únava je hluboko v záporných hodnotách");}
     else if(tsb<=-20){score-=16;readinessReasons.push("výrazná kumulovaná únava");}
     else if(tsb<=-10){score-=7;readinessReasons.push("mírná kumulovaná únava");}
   }
   if(ramp!=null&&ramp>8){score-=10;readinessReasons.push("rychlý růst tréninkové zátěže");}
+  // Body signals against the athlete's own baseline: a drop in HRV or a rise
+  // in resting heart rate says the body has not absorbed the load yet.
+  const hrv=wellnessTrend(fitness,targetDate,"hrv"),rhr=wellnessTrend(fitness,targetDate,"restingHR");
+  if(hrv&&hrv.deltaPct<=-20){score-=22;readinessReasons.push("HRV "+Math.round(hrv.today)+" ms je o "+Math.round(-hrv.deltaPct)+" % pod tvým průměrem ("+Math.round(hrv.baseline)+")");}
+  else if(hrv&&hrv.deltaPct<=-10){score-=10;readinessReasons.push("HRV o "+Math.round(-hrv.deltaPct)+" % pod tvým průměrem");}
+  if(rhr&&rhr.delta>=7){score-=18;readinessReasons.push("klidový tep "+Math.round(rhr.today)+" je o "+Math.round(rhr.delta)+" tepů nad tvým průměrem");}
+  else if(rhr&&rhr.delta>=4){score-=8;readinessReasons.push("klidový tep o "+Math.round(rhr.delta)+" tepy nad průměrem");}
+  // Both at once is a strong sign of fatigue or a coming illness.
+  if(hrv&&rhr&&hrv.deltaPct<=-10&&rhr.delta>=4){score-=8;readinessReasons.push("HRV i klidový tep zároveň ukazují na výraznou únavu");}
   if(sleepMinutes!=null){
     if(sleepMinutes<360){score-=18;readinessReasons.push("spánek pod 6 h");}
     else if(sleepMinutes<420){score-=8;readinessReasons.push("spánek pod 7 h");}
@@ -229,13 +261,27 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const lastWeekLoad=Math.round(rides.filter(a=>a.completed&&inWeek(a,shiftIso(monday,-7))).reduce((s,a)=>s+loadOf(a),0));
   const namedRecovery=rides.some(a=>inWeek(a,monday)&&/recovery week|deload|regenera[čc]n[íi] t[ýy]den|odpo[čc]inkov/i.test(String(a.name||"")+" "+String(a.description||"")));
   // Same rule as the calendar's week targets: after a week ≥ 125 % of maintenance (CTL × 7).
-  // A half-finished week is not a recovery week just because little is done yet.
-  // Or a light week that is actually planned: sessions planned after this day and the whole week under 70 % of the last.
-  const plannedAhead=planned.some(a=>diffDays(a.date,targetDate)>0&&inWeek(a,monday));
-  const recoveryWeek=namedRecovery||(ctl!=null&&ctl>0&&lastWeekLoad>=ctl*7*1.25)||(plannedAhead&&lastWeekLoad>=(sport==="run"?100:150)&&thisWeekLoad<lastWeekLoad*.7);
-  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":ctl>0&&lastWeekLoad>=ctl*7*1.25?"Regenerační týden: minulý týden "+lastWeekLoad+" TSS je "+Math.round(lastWeekLoad/(ctl*7)*100)+" % udržovací zátěže (CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.":"Tento týden je regenerační: plánovaná a odjetá zátěž "+thisWeekLoad+" TSS je "+Math.round(thisWeekLoad/Math.max(lastWeekLoad,1)*100)+" % minulého týdne ("+lastWeekLoad+" TSS).");
-  const phase=txt(goal?.phase||preferences.phase||(recoveryWeek?"recovery":"auto"));
+  // Periodization from the main event in the settings: base more than 12
+  // weeks out, build in the last 12, taper in the final week, openers the day
+  // before and the race itself. A lighter taper week is not a recovery week.
+  const eventDays=focus?.event?.date?diffDays(focus.event.date,targetDate):null;
+  const eventPhase=eventDays==null||eventDays<0?null:eventDays===0?"race":eventDays===1?"openers":eventDays<=7?"taper":eventDays<=84?"build":"base";
+  const tapering=["race","openers","taper"].includes(eventPhase);
+  // The same rule as the week plan and the gym (all sports from the Intervals.icu
+  // wellness; this sport's rides when the wellness has no loads).
+  const wellnessLoads=weekLoadsBefore(fitness?.wellness,monday),weekLoads=wellnessLoads.length?wellnessLoads:[lastWeekLoad];
+  const rule=recoveryWeek_({base:ctl!=null&&ctl>0?ctl*7:null,weekLoads});
+  const recoveryWeek=!tapering&&(namedRecovery||rule.recovery);
+  if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":rule.reason==="heavy_last_week"?"Regenerační týden: minulý týden "+weekLoads[0]+" TSS je "+Math.round(weekLoads[0]/(ctl*7)*100)+" % udržovací zátěže (CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.":"Regenerační týden: tři týdny v řadě nad udržovací zátěží ("+weekLoads.slice(0,3).reverse().join(", ")+" TSS při CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.");
+  const phase=txt(goal?.phase||preferences.phase||(tapering?eventPhase:recoveryWeek?"recovery":eventPhase||"auto"));
+  const eventName=focus?.event?.name?"„"+focus.event.name+"“":"závod";
+  const plural=(count,one,few,many)=>count+" "+(count===1?one:count>=2&&count<=4?few:many);
+  const toEvent=eventName==="závod"?"závodu":eventName;
+  if(eventPhase&&!goal?.phase&&!preferences.phase)rationale.push(eventPhase==="race"?"Dnes je "+eventName+".":eventPhase==="openers"?"Zítra je "+eventName+" – dnes jen krátká aktivace.":eventPhase==="taper"?"Do "+toEvent+" zbývá "+plural(eventDays,"den","dny","dní")+": ladění formy, objem jde dolů a intenzita zůstává krátká.":eventPhase==="build"?"Do "+toEvent+" zbývá "+plural(Math.round(eventDays/7),"týden","týdny","týdnů")+": fáze rozvoje, kvalita míří na závodní intenzitu.":"Do "+toEvent+" zbývá "+plural(Math.round(eventDays/7),"týden","týdny","týdnů")+": základní fáze, stavíme aerobní základ a sweet spot.");
 
+  const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
+  const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
+  const qualityOk=(lastHard==null||lastHard>=2)&&!(lastRide!=null&&lastRide>=7);
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
   const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
@@ -243,6 +289,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     kind=KIND_OF[plannedInfo.system]||"endurance";
     rationale.push("V Intervals.icu máš na tento den naplánováno „"+(plannedToday.name||"trénink")+"“"+(plannedInfo.minutes?" ("+plannedInfo.minutes+" min"+(plannedInfo.intensityFactor?", IF "+plannedInfo.intensityFactor.toFixed(2):"")+")":"")+" – doporučení se drží plánu.");
   }
+  else if(phase==="race") kind="race";
+  else if(phase==="openers") kind="openers";
   else if(/vo2|anaerob/.test(planText)) kind="vo2";
   else if(/threshold/.test(planText)) kind="threshold";
   else if(/sweet/.test(planText)) kind="sweet_spot";
@@ -251,16 +299,19 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(/^long/.test(txt(goal?.focus))) kind="long_endurance";
   else if(/^recovery/.test(txt(goal?.focus))) kind="recovery";
   else if(/^endurance/.test(txt(goal?.focus))) kind="endurance";
-  else if(!autoLength&&requestedMinutes>=longMinutes) kind="long_endurance";
-  else if(phase==="build"&&hard7<2) kind=domains.high<domains.moderate*0.35?"vo2":"threshold";
-  else if(phase==="base"&&hard7<2&&domains.moderate<domains.low*0.45) kind=sport==="run"?"threshold":"sweet_spot";
+  else if(!autoLength&&requestedMinutes>=longMinutes&&phase!=="taper") kind="long_endurance";
+  // An explicit phase picks the quality, but never 48 h after the last one or after a break.
+  else if(phase==="build"&&hard7<2&&qualityOk) kind=domains.high<domains.moderate*0.35?"vo2":"threshold";
+  else if(phase==="base"&&hard7<2&&qualityOk&&domains.moderate<domains.low*0.45) kind=sport==="run"?"threshold":"sweet_spot";
   else if(!recoveryWeek){
     // Nothing planned and no phase set: decide from the recent rides.
-    const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
-    const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
     if(lastRide==null||lastRide>=7){
       kind="endurance";returning=true;
       rationale.push(lastRide==null?W.none:W.off(lastRide));
+    } else if(phase==="taper"){
+      // One short, sharp session keeps the form; everything else is easy and shorter.
+      if(readiness==="green"&&hard7===0&&eventDays>=3){kind="vo2";rationale.push("Krátká ostrá intenzita udrží formu, objem je nižší.");}
+      else kind="endurance";
     } else if(readiness==="green"&&hard7===0){
       // The quality system trained longest ago (by feedback), in phase order.
       const order=sport==="run"?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
@@ -277,7 +328,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   }
 
   const adaptations=[];
-  if(readiness==="red"){
+  if(["race","openers"].includes(kind)){
+    if(readiness==="red")adaptations.push("nízká připravenost před závodem: aktivaci zkrať a hlavně odpočívej");
+  } else if(readiness==="red"){
     // A planned easy day stays easy; anything harder drops to endurance or recovery.
     if(kind!=="recovery")kind=score<40?"recovery":"endurance";
     adaptations.push("vysoká únava: zrušit intenzitu");
@@ -297,12 +350,28 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   let capacity=null;
   if(autoLength){
-    capacity=capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport});
+    capacity=capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport,taper:phase==="taper"});
     // An easy day with room for more becomes a long ride/run – any day of the week.
     if(kind==="endurance"&&capacity.minutes>=longMinutes){kind="long_endurance";rationale.push(sport==="run"?"Máš kapacitu na dlouhý běh – staví vytrvalost bez intenzity.":"Máš kapacitu na dlouhou aerobní jízdu – staví vytrvalost bez intenzity.");}
     const len=sessionMinutesFor(kind,capacity,sport);
     requestedMinutes=clamp(len.minutes,minLen,maxLen);
     rationale.push("Délka "+requestedMinutes+" min: "+len.reasons.join("; ")+". Když chceš jinou, zadej čas na trénink.");
+  }
+  else if(!plannedInfo?.minutes){
+    // The time the athlete has is a limit, not a target: an easy day, a
+    // quality session or the taper does not fill three free hours.
+    const before=requestedMinutes,cap={recovery:run?40:60,openers:run?30:45,race:run?20:30}[kind]??(["tempo","sweet_spot","threshold","vo2"].includes(kind)?(run?80:120):null);
+    if(phase==="taper"&&kind!=="openers"&&kind!=="race")requestedMinutes=Math.max(minLen,Math.round(requestedMinutes*.65/5)*5);
+    if(cap!=null)requestedMinutes=Math.min(requestedMinutes,cap);
+    if(requestedMinutes<before)rationale.push("Délka "+requestedMinutes+" min z dostupných "+before+" min: "+(phase==="taper"?"ladění formy zkracuje objem":kind==="recovery"?"regenerace má být krátká":"kvalita nepotřebuje víc času")+".");
+  }
+  // Running load grows slowly: tendons and joints adapt later than the heart
+  // and lungs. Without a race, no run is more than 10 % longer than the
+  // longest one of the last two weeks (30 min after a break).
+  if(run&&kind!=="race"&&!plannedInfo?.minutes){
+    const longest=Math.max(0,...completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=1&&d<=14;}).map(a=>n(a.durationHours,0)*60));
+    const limit=Math.max(30,Math.round(longest*1.1/5)*5);
+    if(requestedMinutes>limit){rationale.push(longest?"Nejdelší běh za poslední 2 týdny měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).":"Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.");requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }
   const session=workoutTemplate(kind,requestedMinutes,cadence,sport);
   const capabilitySystem=kind==="long_endurance"?"endurance":kind==="vo2"?"vo2max":kind;
@@ -328,7 +397,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     ...CYCLING_COACH_V2_META,
     sport,
     date:targetDate,
-    readiness:{score,status:readiness,reasons:readinessReasons,sleepMinutes,ctl,atl,tsb,rampRate:ramp,manualReadiness:manualReadiness??null},
+    readiness:{score,status:readiness,reasons:readinessReasons,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},

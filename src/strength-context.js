@@ -1,4 +1,5 @@
 import { getAthleteState } from './athlete-state.js';
+import { isQualityName } from './session-intensity.js';
 const TZ = "Europe/Prague";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
@@ -63,7 +64,7 @@ export function isIntensity(a) {
   if (typeof a?.intensity === "boolean") return a.intensity;
   if (typeof a?.is_intensity === "boolean") return a.is_intensity;
   const semantic = semanticIntensityText(a);
-  return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic);
+  return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic) || isQualityName(semantic);
 }
 function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), intensity: isIntensity(a) }; }
 function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), intensity: isIntensity(e), payload: e }; }
@@ -91,6 +92,13 @@ export async function d1Recovery(env, startDate, endDate) {
     if (!r) continue;
     let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {}
     out[type] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
+    // HRV and resting heart rate only mean something against the athlete's
+    // own average: 4 weeks before the latest value.
+    if (/hrv|variability|resting/i.test(type)) {
+      const from28 = new Date(Date.parse(String(t).slice(0, 10) + "T12:00:00Z") - 28 * 86400000).toISOString().slice(0, 10) + "T00:00:00";
+      const avg = await env.DB.prepare(`SELECT AVG(value_numeric) AS v, COUNT(value_numeric) AS c FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND data_type = ? AND COALESCE(sample_time, start_time) >= ? AND COALESCE(sample_time, start_time) < ?`).bind(env.USER_ID, type, from28, String(t).slice(0, 10) + "T00:00:00").first().catch(() => null);
+      if (avg?.c >= 5 && Number(avg.v) > 0) out[type][0].baseline = Math.round(Number(avg.v) * 10) / 10;
+    }
   }
   return out;
 }
@@ -128,7 +136,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   let recovery;
   try { recovery = await d1Recovery(env, localDate(-7), localDate(1)); } catch (e) { throw new Error(`strength_context.recovery_d1: ${e.message}`); }
   let strengthHistory;
-  try { const { getStrengthHistory } = await import("./strength-history.js"); strengthHistory = await getStrengthHistory(env.DB, 150); } catch (e) { throw new Error(`strength_context.strength_d1: ${e.message}`); }
+  try { const { getStrengthHistory } = await import("./strength-history.js"); strengthHistory = await getStrengthHistory(env.DB, 500); } catch (e) { throw new Error(`strength_context.strength_d1: ${e.message}`); }
   const activities = (Array.isArray(activitiesRaw) ? activitiesRaw : []).map(activityInfo), events = (Array.isArray(eventsRaw) ? eventsRaw : []).map(eventInfo);
   const rides = activities.filter(x => x.cycling), plannedRides = events.filter(x => x.cycling && n(x.durationHours) > 0 && n(x.durationHours) <= 8);
   const recent = rides.filter(x => x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), planned = plannedRides.filter(x => x.date >= date).sort((a,b) => String(a.start).localeCompare(String(b.start)));
@@ -141,6 +149,17 @@ export async function buildStrengthContext(env, requestedDate = null) {
     : null;
   const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } , weightTrend: await d1WeightTrend(env,date) };
   context.sports={recentActivities:activities.filter(x=>x.date<=date).sort((a,b)=>String(b.start).localeCompare(String(a.start)))};
+  // One recovery week for everything: the gym deloads in the week the plan
+  // and the ride/run coach treat as a recovery week (src/week-planner.js).
+  try {
+    const { recoveryWeek, weekLoadsBefore } = await import("./week-planner.js");
+    const monday = new Date(Date.parse(date + "T12:00:00Z") - ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+    const oldestWellness = new Date(Date.parse(monday + "T12:00:00Z") - 22 * 86400000).toISOString().slice(0, 10);
+    const wellness = await intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`);
+    const rows = Array.isArray(wellness) ? wellness : [], ctl = Number([...rows].reverse().find(r => Number(r.ctl) > 0)?.ctl) || null;
+    const weekLoads = weekLoadsBefore(rows, monday);
+    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
+  } catch { context.recoveryWeek = { recovery: false, reason: null, known: false }; }
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
   try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "" }; } catch { context.profile = { sex: "" }; }

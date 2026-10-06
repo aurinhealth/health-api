@@ -10,7 +10,7 @@ function context(extra = {}) {
   const ctx = vm.createContext({ Math, Number, String, Date, state: {}, HUB_SPORTS: { ride: '🚴 Kolo', run: '🏃 Běh', gym: '🏋️ Gym' },
     dateShift: (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); },
     renderPlanner() {}, renderWeekHub() {}, ...extra });
-  vm.runInContext(source.match(/function esc\(v\)\{.*\}/)[0] + ';' + source.match(/function num\(v,d=0\)\{.*\}/)[0] + ';' + source.match(/function fmt\(v,d=0\)\{.*\}/)[0] + ';' + source.match(/function hm\(min\)\{.*\}/)[0], ctx);
+  vm.runInContext(source.match(/function esc\(v\)\{.*\}/)[0] + ';' + source.match(/function num\(v,d=0\)\{.*\}/)[0] + ';' + source.match(/function fmt\(v,d=0\)\{.*\}/)[0] + ';' + source.match(/function dec\(v,d=1\)\{.*\}/)[0] + ';' + source.match(/function cz\(v,d=1\)\{.*\}/)[0] + ';' + source.match(/function hm\(min\)\{.*\}/)[0], ctx);
   vm.runInContext(slice('function intensityOf(', 'async function renderWeekHub('), ctx);
   return ctx;
 }

@@ -1,10 +1,11 @@
 import { trainingStatus } from './training-status.js';
 import { todayGymContext } from './coach-gym-adjustment.js';
+import { isQualityName } from './session-intensity.js';
 const n=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const txt=v=>String(v||'');
 const isBike=x=>/ride|cycling|bike|kolo/i.test(txt(x?.name)+' '+txt(x?.type));
 const isGym=x=>/weight|strength|weights|posil|gym/i.test(txt(x?.name)+' '+txt(x?.type));
-const isHard=x=>/threshold|vo2|interval|sweet spot|tempo/i.test(txt(x?.name));
+const isHard=x=>/threshold|vo2|interval|sweet spot|tempo/i.test(txt(x?.name))||isQualityName(x?.name);
 function sleepFacts(sessions,date){
   const rows=sessions.filter(s=>n(s.durationMin)>=180&&(!date||!s.date||s.date<=date)).sort((a,b)=>txt(b.endTime||b.date).localeCompare(txt(a.endTime||a.date))).slice(0,7);
   const last=rows[0],fresh=!date||!last?.date||last.date===date;
@@ -21,7 +22,7 @@ function morningSummary({date,sleep,fitness,yesterday,planned,policy}){
   const facts=[],previous=yesterday?.training?.completed||[];
   if(sleep.last!=null){
     const delta=sleep.avg==null?null:Math.round(sleep.last-sleep.avg);
-    facts.push('Spánek '+Math.floor(sleep.last/60)+' h '+Math.round(sleep.last%60)+' min'+(delta!=null&&Math.abs(delta)>=30?' ('+Math.abs(delta)+' min '+(delta<0?'méně':'více')+' než poslední průměr)':'')+'.');
+    facts.push('Spánek '+Math.floor(Math.round(sleep.last)/60)+' h '+Math.round(sleep.last)%60+' min'+(delta!=null&&Math.abs(delta)>=30?' ('+Math.abs(delta)+' min '+(delta<0?'méně':'více')+' než poslední průměr)':'')+'.');
   }
   const load=previous.map(a=>n(a.tss)).filter(v=>v!=null),minutes=previous.reduce((sum,a)=>sum+(n(a.durationHours)||0)*60,0);
   if(previous.length)facts.push('Včera '+previous.length+' '+(previous.length===1?'aktivita':'aktivity')+(minutes>0?' · '+Math.round(minutes)+' min':'')+(load.length?' · '+Math.round(load.reduce((a,b)=>a+b,0))+' TSS':'')+'.');

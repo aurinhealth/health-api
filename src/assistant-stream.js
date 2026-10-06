@@ -18,14 +18,16 @@ export function partialCoachAnswer(json){
 
 export async function readOpenAIStream(response,onText){
   if(!response.body)throw new Error('AI nevrátila odpověď.');
-  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',completed=null;
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',completed=null,text='';
   const parse=block=>{
     const lines=block.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart());if(!lines.length)return;
     const data=lines.join('\n');if(data==='[DONE]')return;
     const event=JSON.parse(data);
-    if(event.type==='response.output_text.delta')onText(event.delta||'');
+    if(event.type==='response.output_text.delta'){text+=event.delta||'';onText(event.delta||'');}
     if(event.type==='response.completed')completed=event.response;
-    if(['error','response.failed','response.incomplete'].includes(event.type))throw new Error('AI odpověď se nepodařilo dokončit. Zkus to znovu.');
+    // Cut off at max_output_tokens: the part that arrived is kept and marked.
+    if(event.type==='response.incomplete')completed={...event.response,status:'incomplete'};
+    if(['error','response.failed'].includes(event.type))throw new Error('AI odpověď se nepodařilo dokončit. Zkus to znovu.');
   };
   try{
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let match;
@@ -34,7 +36,7 @@ export async function readOpenAIStream(response,onText){
     }
     if(buffer.trim())parse(buffer);
     if(!completed)throw new Error('Spojení s AI se přerušilo. Zkus to znovu.');
-    return completed;
+    return {...completed,streamedText:text};
   }finally{reader.releaseLock();}
 }
 

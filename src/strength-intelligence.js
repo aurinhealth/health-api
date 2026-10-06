@@ -82,7 +82,15 @@ export const EXERCISE_INTELLIGENCE = {
   "Smith machine split squat": { muscle: "glutes", pattern: "lunge", equipment: "smith", unilateral: true, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB Bulgarian split squat", "DB reverse lunge"] },
   "Smith machine hip thrust": { muscle: "glutes", pattern: "hip_extension", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["Barbell hip thrust", "Hip thrust"] },
   "Smith machine incline press": { muscle: "chest", pattern: "incline_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["DB incline press"] },
-  "Barbell overhead press": { muscle: "shoulders", pattern: "vertical_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["DB shoulder press", "Shoulder press Prime"] }
+  "Barbell overhead press": { muscle: "shoulders", pattern: "vertical_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["DB shoulder press", "Shoulder press Prime"] },
+  "DB wrist curl": { muscle: "forearms", pattern: "wrist_flexion", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.25, variants: ["Cable reverse curl", "DB reverse wrist curl"] },
+  "DB reverse wrist curl": { muscle: "forearms", pattern: "wrist_extension", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.25, variants: ["Cable reverse curl", "DB wrist curl"] },
+  "Cable reverse curl": { muscle: "forearms", pattern: "reverse_curl", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["DB reverse wrist curl", "Hammer curl"] },
+  "DB shrug": { muscle: "traps", pattern: "shrug", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 0.35, variants: ["Barbell shrug", "Smith machine shrug"] },
+  "Barbell shrug": { muscle: "traps", pattern: "shrug", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.45, variants: ["DB shrug", "Smith machine shrug"] },
+  "Smith machine shrug": { muscle: "traps", pattern: "shrug", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Barbell shrug", "DB shrug"] },
+  "Cable upright row": { muscle: "traps", pattern: "upright_row", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.4, variants: ["DB shrug"] },
+  "Barbell good morning": { muscle: "lower_back", pattern: "hip_hinge", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.9, variants: ["Roman chair"] },
 
 };
 
@@ -132,10 +140,6 @@ function loadRule(meta) {
   if (meta.loadUnit === LOAD_UNITS.BARBELL_KG) return LOAD_RULES.BARBELL;
   if (meta.loadUnit === LOAD_UNITS.MACHINE_TOTAL_KG || meta.loadUnit === LOAD_UNITS.MACHINE_PER_SIDE_KG) return LOAD_RULES.PLATE_LOADED;
   return LOAD_RULES.PLATE_LOADED;
-}
-
-function practicalStep(meta) {
-  return loadRule(meta).step;
 }
 
 function roundToStep(value, step, min = 0, max = null) {
@@ -197,54 +201,69 @@ function selectReference(rows, targetReps) {
   )[0];
 }
 
-function recentPerformanceReferences(rows, targetReps, maxSessions = 5) {
-  const usable = (rows || []).filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null);
-  const dates = [...new Set(usable.map(r => String(r.workout_date || "").slice(0, 10)).filter(Boolean))]
-    .sort((a, b) => b.localeCompare(a))
-    .slice(0, maxSessions);
-  return dates.map((date, index) => {
-    const sessionRows = usable.filter(r => String(r.workout_date || "").slice(0, 10) === date);
-    const ref = [...sessionRows].sort((a, b) =>
-      scoreHistoryRow(b, targetReps) - scoreHistoryRow(a, targetReps) ||
-      Number(b.actual_reps || 0) - Number(a.actual_reps || 0) ||
-      Number(b.set_no || 0) - Number(a.set_no || 0)
-    )[0];
-    return ref ? { ref, weight: Math.max(0.4, 1 - index * 0.15) } : null;
-  }).filter(Boolean);
+// Double progression from the latest session: all work sets at the top of the
+// rep range (or an easy RPE) earn the next load step, a missed range or a
+// near-maximal set takes a step back, anything else keeps the load and aims
+// for more reps. The change is at least one real step of the equipment, so
+// rounding never swallows it, and older sessions only count for the trend.
+function stepDown(value, step, min = 0) { return Math.max(min, Math.floor(value / step + 1e-9) * step); }
+export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, today = null) {
+  const sessions = new Map();
+  for (const r of rows || []) {
+    const kg = n(r.actual_kg), reps = n(r.actual_reps), date = dateKey(r.workout_date);
+    if (kg == null || reps == null || !date) continue;
+    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, rpe: normalizeRpe(r.rpe) });
+  }
+  const dates = [...sessions.keys()].sort((a, b) => b.localeCompare(a));
+  if (!dates.length) return null;
+  const range = parseRepRange(targetReps), meta = EXERCISE_INTELLIGENCE[normalizeExerciseName(exercise)], rule = loadRule(meta), step = rule.step;
+  const latest = sessions.get(dates[0]);
+  // The working load is the heaviest one that reached the bottom of the range.
+  const inRange = latest.filter(s => !range || s.reps >= range.min);
+  const topKg = Math.max(...(inRange.length ? inRange : latest).map(s => s.kg));
+  const atTop = latest.filter(s => s.kg === topKg);
+  const minReps = Math.min(...atTop.map(s => s.reps));
+  const rpes = atTop.map(s => s.rpe).filter(x => x != null), maxRpe = rpes.length ? Math.max(...rpes) : null;
+  let decision = "hold", kg = topKg;
+  if ((range && minReps < range.min - 1) || (maxRpe != null && maxRpe >= 9.5)) {
+    decision = "decrease";
+    kg = Math.min(topKg - step, stepDown(topKg * 0.925, step, rule.min));
+  } else if ((range && minReps >= range.max && (maxRpe == null || maxRpe <= 9)) || (range && minReps >= range.min && maxRpe != null && maxRpe <= 7)) {
+    decision = "increase";
+    const easy = maxRpe != null && maxRpe <= 6.5 && (!range || minReps >= range.max);
+    kg = topKg + Math.max(step, stepDown(topKg * (easy ? 0.05 : 0.025), step));
+  }
+  // A poor recovery day keeps the load instead of adding to it.
+  if (decision === "increase" && loadFactor < 0.9) { decision = "hold"; kg = topKg; }
+  // After three weeks without the exercise, start a little lighter.
+  const gap = today ? (Date.parse(dateKey(today) + "T12:00:00Z") - Date.parse(dates[0] + "T12:00:00Z")) / 86400000 : 0;
+  if (gap > 21 && decision !== "decrease") { decision = "return"; kg = Math.min(topKg, stepDown(topKg * 0.9, step, rule.min) || topKg); }
+  kg = resolveLoad(exercise, kg);
+  // Stagnation: the same load for the last three sessions without more reps.
+  const previous = dates.slice(1, 3).map(d => sessions.get(d));
+  const stalled = decision === "hold" && previous.length === 2 && previous.every(p => Math.max(...p.map(s => s.kg)) === topKg && Math.min(...p.filter(s => s.kg === topKg).map(s => s.reps)) >= minReps);
+  return { kg, decision, stalled, topKg, minReps, maxRpe, sets: atTop.length, date: dates[0], sessions: dates.length, range };
 }
 
-function estimateFromOwnHistory(own, exercise, targetReps, loadFactor) {
-  if (!own.length) return null;
-  const performances = recentPerformanceReferences(own, targetReps, 5);
-  if (!performances.length) return null;
-
-  let weightedKg = 0, totalWeight = 0;
-  for (const { ref, weight } of performances) {
-    const adjusted = n(ref.actual_kg) * progressionMultiplier(n(ref.actual_reps), normalizeRpe(ref.rpe), targetReps);
-    weightedKg += adjusted * weight;
-    totalWeight += weight;
-  }
-  let kg = totalWeight ? weightedKg / totalWeight : n(performances[0].ref.actual_kg);
-  kg *= recoveryMultiplier(loadFactor);
-
-  const latest = performances[0].ref;
-  const rounded = resolveLoad(exercise, kg);
-  const latestKg = n(latest.actual_kg);
-  const confidence = clamp(0.72 + Math.min(performances.length, 5) * 0.055, 0.72, 1);
+function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = null) {
+  const result = progressionDecision(own, exercise, targetReps, loadFactor, today);
+  if (!result) return null;
+  const confidence = clamp(0.72 + Math.min(result.sessions, 5) * 0.055, 0.72, 1);
   return {
-    kg: rounded, source: "own-history", confidence,
-    referenceExercise: exercise, referenceKg: latestKg,
-    referenceReps: n(latest.actual_reps), referenceRpe: normalizeRpe(latest.rpe),
-    referenceDate: latest.workout_date, performanceCount: performances.length,
-    deltaPct: latestKg ? Math.round((rounded / latestKg - 1) * 1000) / 10 : 0
+    kg: result.kg, source: "own-history", confidence,
+    referenceExercise: exercise, referenceKg: result.topKg,
+    referenceReps: result.minReps, referenceRpe: result.maxRpe,
+    referenceDate: result.date, performanceCount: Math.min(result.sessions, 5),
+    progression: result.decision, stalled: result.stalled, referenceSets: result.sets,
+    deltaPct: result.topKg ? Math.round((result.kg / result.topKg - 1) * 1000) / 10 : 0
   };
 }
 
-export function estimateStartingLoad({ exercise, history = [], targetReps = "8–15", fallbackKg = null, loadFactor = 1 }) {
+export function estimateStartingLoad({ exercise, history = [], targetReps = "8–15", fallbackKg = null, loadFactor = 1, today = null }) {
   exercise = normalizeExerciseName(exercise);
   const def = EXERCISE_INTELLIGENCE[exercise];
   if (!def) return { kg: fallbackKg, source: fallbackKg == null ? "unknown" : "fallback", confidence: fallbackKg == null ? 0 : 0.2 };
-  const ownEstimate = estimateFromOwnHistory(completedRowsForExercise(history, exercise), exercise, targetReps, loadFactor);
+  const ownEstimate = estimateFromOwnHistory(completedRowsForExercise(history, exercise), exercise, targetReps, loadFactor, today);
   if (ownEstimate) return ownEstimate;
   const candidates = [];
   for (const name of Object.keys(EXERCISE_INTELLIGENCE)) {

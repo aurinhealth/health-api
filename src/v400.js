@@ -25,7 +25,6 @@ function durationHours(p){
 function textFor(p){return `${p?.type||""} ${p?.activity_type||""} ${p?.category||""} ${p?.name||p?.title||""} ${p?.description||""} ${p?.exercise?.exerciseType||""} ${p?.exercise?.displayName||""}`.toLowerCase();}
 function isRide(p){return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textFor(p));}
 function isIntensity(p){return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(textFor(p));}
-function recipeMinutes(r){return n(String(r?.time||"").match(/\d+/)?.[0],60);}
 function calories(r){return n(r?.kcal);}
 function macros(r){return {protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g)};}
 
@@ -115,7 +114,7 @@ async function training(env,date){
 function macroTargets(weight,target,ctx){const kg=weight;const p=Math.round(kg*PROTEIN_PER_KG),f=Math.round(kg*FAT_PER_KG);const ckg=ctx.endurance?ENDURANCE_CARB_PER_KG:ctx.training?TRAINING_CARB_PER_KG:REST_CARB_PER_KG;const floor=Math.round(kg*ckg);const derived=Math.round(Math.max(0,(target-p*4-f*9)/4));return {protein_g:p,carbs_g:Math.max(floor,derived),fat_g:f};}
 function score(r,need,ctx,slot){const m=macros(r),k=calories(r);if(!k)return -1e6;let s=0;if(need.kcal>0){const ratio=k/need.kcal;s+=50-Math.abs(1-ratio)*50;if(k<=need.kcal)s+=20;else s-=Math.min(70,(k-need.kcal)*.35);}else s-=Math.min(100,k*.5);const fatEx=Math.max(0,m.fat_g-need.fat_g);s-=Math.min(55,fatEx*1.8);if(need.carbs_g>0)s+=Math.min(ctx.endurance?35:24,(m.carbs_g/need.carbs_g)*(ctx.endurance?35:24));if(need.protein_g>0)s+=Math.min(20,(m.protein_g/need.protein_g)*20);if(slot==="pre")s+=m.carbs_g*0.35;if(slot==="post")s+=m.carbs_g*0.35+m.protein_g*0.2;if(r.meal_prep)s+=4;if(r.level==="Easy")s+=3;return s;}
 function pickRecipes(cookbook,need,ctx,slot,count=3){return cookbook.filter(r=>calories(r)>0).map(r=>({...r,_score:score(r,need,ctx,slot)})).sort((a,b)=>b._score-a._score).slice(0,count).map(({_score,...r})=>({...r,recommendation_score:round(_score,1),slot}));}
-async function foodTotals(env,date){const r=await env.DB.prepare(`SELECT COALESCE(SUM(kcal),0) kcal,COALESCE(SUM(protein_g),0) protein_g,COALESCE(SUM(carbs_g),0) carbs_g,COALESCE(SUM(fat_g),0) fat_g,COALESCE(SUM(fiber_g),0) fiber_g FROM food_logs WHERE user_id = ? AND consumed_date=?`).bind(env.USER_ID, date).first();return {kcal:n(r?.kcal),protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g),fiber_g:n(r?.fiber_g)};}
+async function foodTotals(env,date){const r=await env.DB.prepare(`SELECT COALESCE(SUM(kcal),0) kcal,COALESCE(SUM(protein_g),0) protein_g,COALESCE(SUM(carbs_g),0) carbs_g,COALESCE(SUM(fat_g),0) fat_g,COALESCE(SUM(fiber_g),0) fiber_g FROM food_logs WHERE user_id = ? AND consumed_date=? AND (status IS NULL OR status='eaten')`).bind(env.USER_ID, date).first();return {kcal:n(r?.kcal),protein_g:n(r?.protein_g),carbs_g:n(r?.carbs_g),fat_g:n(r?.fat_g),fiber_g:n(r?.fiber_g)};}
 
 async function dayPlan(env,url){
   const date=url.searchParams.get("date")||localDate();

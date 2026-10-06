@@ -14,7 +14,9 @@ export function sportMuscleLoad(context){
     else if(/row|vesl/.test(type))muscles=['quads','hamstrings','back','upper_back','lats','biceps'];
     if(!muscles.length)continue;
     const minutes=Number(a.durationHours)*60||Number(a.durationMinutes)||Number(a.moving_time)/60||0;
-    const dose=Math.min(2,Math.max(Number(a.tss)/80||0,minutes/90))*(days<=1?1:.5);
+    // Cycling is concentric work with little muscle damage; it counts at 70 %.
+    const concentric=/ride|cycl|bike|kolo/.test(type)&&!/run|beh|hike|walk/.test(type)?.7:1;
+    const dose=Math.min(2,Math.max(Number(a.tss)/80||0,minutes/90))*(days<=1?1:.5)*concentric;
     for(const muscle of muscles)load.set(muscle,Math.min(3,(load.get(muscle)||0)+dose));
   }
   return load;

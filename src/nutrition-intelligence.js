@@ -45,7 +45,6 @@ function estimatePlannedRideCalories(ride) {
   const hours = n(ride.durationHours);
   if (!hours) return 0;
   const watts = n(ride.normalizedPower || ride.averagePower);
-  const ftp = 260;
   if (watts > 0) return Math.round((watts * hours * 3600 / 4184) / 0.23);
   // Practical planning estimate for an 88 kg rider when future power is absent.
   const kcalPerHour = ride.intensity ? 600 : 500;
@@ -79,17 +78,21 @@ function estimateStrengthCalories(weightKg, minutes) {
 }
 
 export function buildNutritionPlan(context, options = {}) {
-  const weightKg = n(options.weightKg, n(context?.weightKg, 88));
+  const weightTrend = options.weightTrend || context?.weightTrend || null;
+  // The athlete's own latest weight; 88 kg (the owner's calibration) only
+  // when nothing is known, so protein and carbs fit every user.
+  const weightKg = n(options.weightKg, n(context?.weightKg, n(weightTrend?.latestKg, 88)));
   const defaults = { ...NUTRITION_DEFAULTS, ...(options.defaults || {}) };
   const dayType = classifyDay(context);
-  const weightTrend = options.weightTrend || context?.weightTrend || null;
   const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend);
   const next = context?.cycling?.nextRide || null;
   const durationHours = n(next?.durationHours);
   const plannedRideCarbs = durationHours >= defaults.rideFuelingThresholdHours
     ? Math.round(durationHours * activityCarbsPerHour(next))
     : 0;
-  const protein = Math.round(Math.max(defaults.proteinGrams, weightKg * defaults.proteinPerKg));
+  // A known weight sets protein per kg; the fixed 176 g is only the fallback.
+  const weightKnown = [options.weightKg, context?.weightKg, weightTrend?.latestKg].some(v => Number(v) > 0);
+  const protein = Math.round(weightKnown ? weightKg * defaults.proteinPerKg : Math.max(defaults.proteinGrams, weightKg * defaults.proteinPerKg));
   const fatMin = Math.round(weightKg * defaults.fatMinimumPerKg);
   const carbPerKg = dayType === "long"
     ? defaults.carbPerKgLong
@@ -97,13 +100,11 @@ export function buildNutritionPlan(context, options = {}) {
       ? defaults.carbPerKgHard
       : defaults.carbPerKgEasy;
   const carbs = Math.round(weightKg * carbPerKg);
-  const fuelingCalories = plannedRideCarbs * 4;
   const fatFromMacros = Math.round(fatMin);
   const minimumMacroCalories = protein * 4 + carbs * 4 + fatFromMacros * 9;
   const calorieTarget = Math.max(adaptiveBase.target, defaults.calorieTarget, minimumMacroCalories);
   const carbsFromCalories = Math.max(0, (calorieTarget - protein * 4 - fatFromMacros * 9) / 4);
   const dailyCarbs = Math.round(Math.max(carbs, carbsFromCalories));
-  const caloriesFromMacros = protein * 4 + dailyCarbs * 4 + fatFromMacros * 9;
   const preRideCarbs = plannedRideCarbs ? Math.round(Math.min(1.0 * weightKg, Math.max(60, durationHours * 0.5 * activityCarbsPerHour(next)))) : 0;
   const strengthPlan = options?.strengthPlan || context?.strength?.plannedWorkout || null;
   const strengthMinutes = Number(options?.strengthMinutes || estimateStrengthMinutes(strengthPlan));
@@ -164,3 +165,23 @@ export function buildNutritionPlan(context, options = {}) {
 }
 
 // Deployment marker: nutrition endpoint requires the current Worker revision.
+
+// ChatGPT plans meals against the number the app shows. The app's day target
+// (profile, training and the Google Health energy budget) replaces the
+// estimate above; protein and fat follow the app, carbohydrates fill the rest.
+export function withAppTarget(plan, daily) {
+  const target = Math.round(Number(daily?.nutrition?.calorieTarget));
+  if (!plan || !(target > 0)) return plan;
+  const m = daily.nutrition.macros || {}, own = plan.macros || {};
+  const pick = (...values) => values.filter(v => v != null && v !== "").map(Number).find(v => Number.isFinite(v) && v >= 0);
+  const protein = Math.round(pick(m.protein_g, m.proteinGrams, own.proteinGrams) ?? 0);
+  const fat = Math.round(pick(m.fat_g, m.fatGrams, own.fatGrams) ?? 0);
+  const carbs = Math.max(0, Math.round((target - protein * 4 - fat * 9) / 4));
+  return {
+    ...plan,
+    calorieTarget: target,
+    estimatedCalorieTarget: plan.calorieTarget,
+    targetSource: daily.nutrition.energyBudget ? "app (Google Health energy budget)" : "app",
+    macros: { proteinGrams: protein, carbsGrams: carbs, fatGrams: fat, caloriesFromMacros: protein * 4 + carbs * 4 + fat * 9 }
+  };
+}

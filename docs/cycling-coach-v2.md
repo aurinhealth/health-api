@@ -30,6 +30,34 @@ The model is the explanation and planning layer, not the sole safety mechanism. 
 
 Default quality budget: no more than two genuinely hard cycling days in a rolling seven-day window unless future race-specific logic explicitly justifies otherwise.
 
+A session counts as hard by its name (`src/session-intensity.js`): threshold, práh, sweet spot, VO₂, over-unders, Billat 30-30, Norský 4×4, Seiler, Rønnestad 30/15, Tabata, cruise intervals, repeats such as "5×6 min" outside an easy session. Tempo makes a run hard, not a ride. The same rule is used by the daily summary and the gym.
+
+## Readiness
+
+The score starts at 100 and drops for:
+
+- form (TSB ≤ −30 / ≤ −20 / ≤ −10: −30 / −16 / −7),
+- a fast ramp (> 8: −10),
+- sleep (under 6 h / 7 h: −18 / −8), from Google Health or the Intervals.icu wellness,
+- HRV against the athlete's own 4-week average (20 % / 10 % lower: −22 / −10) and resting HR (7 / 4 beats higher: −18 / −8); both at once another −8,
+- hard days this week, lower-body gym in 48 h, a session already done today.
+
+Under 55 is red (no intensity), under 75 yellow (no VO₂/threshold/sweet spot).
+
+## Season phase
+
+With a main event in the settings (`focus.event`), the phase follows the days left:
+
+| Days to the event | Phase |
+|---|---|
+| more than 84 | base: aerobic base and sweet spot |
+| 8–84 | build: race-specific quality |
+| 2–7 | taper: volume −35 to −40 %, one short sharp session if fresh, not counted as a recovery week |
+| 1 | openers: 45 min ride / 30 min run with short race-pace efforts |
+| 0 | race: warm-up only, also on a low-readiness day |
+
+An explicit `goal.phase` wins. The phase never prescribes quality within 48 h of the last one or after a week off.
+
 ## Inputs already connected
 
 The existing `/app/api/assistant` endpoint now feeds the coach:
@@ -86,6 +114,8 @@ Then the session type sets the final length:
 - **Easy day:** when the estimate reaches the long-session length (bike 150 min, run 90 min), the day becomes a long ride or run. This applies on any day of the week.
 - **Quality:** bike 60–120 min, run 40–80 min.
 - **Recovery:** half the estimate (bike 30–60 min, run 20–40 min).
+
+The time the athlete entered is a limit, not a target: recovery stays at most 60 min (run 40), quality at most 120 min (run 80), and the taper shortens it to about 65 %. A run is never more than 10 % longer than the longest run of the last two weeks (30 min after a break).
 
 Without CTL the estimate starts at 75 min (bike) or 45 min (run). The reasons appear as the last line of `rationale` ("Délka 95 min: kondice CTL 55 ≈ 77 TSS…").
 

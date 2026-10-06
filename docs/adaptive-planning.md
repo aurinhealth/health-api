@@ -12,7 +12,7 @@ Denní přehled výživy umožňuje přímo vybrat nápoj, zapsat šest obvyklý
 
 ## Návrhy a revize
 
-Vygenerovat tréninky (vedle tlačítka je „i“ s vysvětlením) připraví revizi existujícího týdne a návrhy pro prázdné dny. Plánovač funguje i bez CTL nebo API klíče; AI revize je volitelná. Akce Připravit konkrétní tréninky uloží sportovní rozvrh pouze pro tento týden a vytvoří náhledy workoutů. Gym se uloží až po potvrzení konkrétního náhledu, nikoli při pouhém návrhu.
+Vygenerovat tréninky (vedle tlačítka je „i“ s vysvětlením) připraví revizi existujícího týdne a návrhy pro prázdné dny. Plánovač funguje i bez CTL nebo API klíče; AI revize je volitelná. Akce Připravit konkrétní tréninky je schválení: uloží sportovní rozvrh pouze pro tento týden, připraví konkrétní workouty i gym a ty se do Intervals.icu zapíšou samy do 15 s, stejně jako přesuny a mazání (při zavření stránky hned). Do té doby jde kterýkoli zastavit tlačítkem Nezapisovat u kartičky. Průběh Vygenerováno → Schváleno → Nasazeno je vidět pod plánem týdne i v odpovědi asistenta. Trénink potvrzený v asistentovi jde stejnou cestou. Přidání workoutu z knihovny tlačítkem Naplánovat se už znovu nepotvrzuje; dotaz zůstal jen u mazání a rušení.
 
 Rozpracovat plánované vytvoří konkrétní alternativy pro již naplánované sporty, aniž by přidávalo další událost do stejného dne. Změny existujícího plánu lze probrat s asistentem nebo provést běžným ovládáním kalendáře.
 
@@ -21,6 +21,8 @@ Předpověď Open-Meteo se načítá i na serveru. Pro kolo se od listopadu do �
 ## Plán týdne a Doporučené tréninky
 
 Sporty se do dnů přetahují (nebo na mobilu ťuknutím vyberou a ťuknutím na den položí); jeden den může mít až čtyři tréninky, třeba kolo i gym nebo dvakrát kolo (druhý trénink stejného sportu je lehký a má vlastní cíl). Gym položený na den, kde byl dřív zrušený, se tam znovu počítá. Přesunutá kartička s sebou nebere návrh vytvořený pro původní den. Návrh dne (např. „2h 0m · ~98 TSS · IF 0,70 · Vytrvalost“) se u kartiček ukáže až po 5 s bez změny plánu, aby přesouvání nezahlcovalo kalendář.
+
+Běh roste pomalu: týdenní objem běhu (hotové, naplánované i navržené běhy) je nejvýš o 10 % nad větším z minulého týdne a průměru posledních 4 týdnů; 60 min týdně jde vždy. Návrhy běhu se podle toho zkrátí a záhlaví týdne to řekne.
 
 Zátěž zůstává v TSS: je to Load z Intervals.icu, ze kterého se počítá CTL/ATL. Vedle ní se ukazuje IF (intensity factor, TSS = h × IF² × 100), aby bylo vidět, jak tvrdý trénink je, nejen jak velký.
 
@@ -36,16 +38,26 @@ Změny se v týdenním přehledu ukážou hned. Zbytek aplikace (Dnes, Trénink,
 
 ## Stav a asistent
 
+Ohodnocený trénink (RPE v Intervals.icu, poznámka kouče k němu, nebo hodnocení právě uložené) má v Dnes místo tlačítka Hodnocení „✓ ohodnoceno“.
+
 V Dnes lze přepnout Active, Sick, Injured nebo On break a doplnit poznámku. Stav je uložený na serveru pro daného uživatele. Neaktivní stav pozastaví generování, nové kalendářní zápisy a noční gym automatizaci. Kalendář ani historie se přepnutím stavu nemažou.
 
 Po načtení nebo změně denních dat se vyhodnotí více signálů regenerace. Kombinace krátkého spánku, horší HRV, vyššího klidového tepu nebo nízké formy může nabídnout On break. Jediné špatné číslo stav nemění a z naměřených dat se neurčuje Sick ani Injured. Nabídku lze přijmout, odmítnout pro daný den nebo probrat kompromis.
 
-Plovoucí asistent uchovává posledních 12 zpráv a výslovné preference. Preference jsou vidět v Nastavení a lze je odstranit. Každá navržená změna stavu, přesun nebo vynechání tréninku má samostatné potvrzení/odmítnutí. Server kontroluje vlastníka návrhu a před změnou existujícího tréninku znovu ověří aktuální událost v Intervals.icu. Návrh jiné aktivity nejprve vytvoří náhled; zápis do kalendáře vyžaduje další potvrzení.
+Plovoucí asistent ukládá rozhovory jako chaty (D1, tabulky `assistant_chats` a `assistant_messages`). Trenér vidí jen posledních 12 zpráv aktuálního chatu; „＋ Nový“ začne čistý chat a po 6 hodinách bez zprávy se nový chat začne sám. Seznam „☰ Chaty“ umí otevřít nebo smazat starší chat; chaty bez zprávy 90 dní se mažou. Výslovné preference platí napříč chaty, jsou vidět v Nastavení a lze je odstranit. Každá navržená změna stavu, přesun nebo vynechání tréninku má samostatné potvrzení/odmítnutí. Server kontroluje vlastníka návrhu a před změnou existujícího tréninku znovu ověří aktuální událost v Intervals.icu. Návrh jiné aktivity nejprve vytvoří náhled; zápis do kalendáře vyžaduje další potvrzení.
 
 ## AI modely a data
 
-`OPENAI_LIGHT_MODEL` (výchozí `gpt-6-luna`) slouží pro jednoduché úlohy, jídlo, krátké odpovědi a stručné hodnocení. `OPENAI_MODEL` (výchozí `gpt-6-sol`) slouží pro plánování a revizi týdne s reasoning `medium`; analýza bloku používá `high` a až 84 dní uložených aktivit plus dostupnou fitness historii. Chybějící či nesynchronizované záznamy zůstávají chybějícími daty. Modely lze změnit serverovou konfigurací. Požadavky používají Responses API s `store:false`.
+`OPENAI_LIGHT_MODEL` (výchozí `gpt-6-luna`) odpovídá na rychlé a jednoduché dotazy („Jaké mám FTP?“, „Kolik mám dnes bílkovin?“, „Co mám zítra za trénink?“ – se stejnými daty jako trenér), na small talk, jídlo a stručná hodnocení. `OPENAI_MODEL` (výchozí `gpt-6-sol`) dostane vše, co chce úvahu: plánování, úpravy, revizi týdne, rozhodnutí („Mám dnes jít na intervaly?“), doporučení a analýzu bloku (až 84 dní aktivit). Reasoning je u obou `low`, aby složitá odpověď nebrala zbytečně tokeny; `OPENAI_REASONING_EFFORT` ho pro hlavní model může zvýšit. Chybějící či nesynchronizované záznamy zůstávají chybějícími daty. Modely lze změnit serverovou konfigurací. Požadavky používají Responses API s `store:false`.
 
 Oficiální dokumentace: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna), [GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol).
 
 Nové tabulky `week_plan_overrides` a `athlete_state` vznikají při použití funkcí a jsou zahrnuté do ochrany osobních tabulek. Všechny dotazy filtrují `user_id`; změna nevyžaduje převod ani mazání historických dat.
+
+## Detail tréninku v týdnu
+
+Klik na trénink v týdenním přehledu otevře jeho detail. Naplánované kolo nebo běh vypadá jako karta doporučeného tréninku: profil výkonu, délka, TSS, IF, FTP a rozpis kroků (z workoutu knihovny, ze kterého vznikl, jinak z workout_doc nebo textu události v Intervals.icu; `src/planned-detail.js`, `/app/api/workouts/planned`). Gym ukáže postavu se zvýrazněnými partiemi podle počtu sérií a krátký seznam cviků. Akce u naplánovaného: Přesunout, Vyměnit za jiný (nový trénink z doporučení nahradí původní) a Zrušit. U hotového je porovnání s plánem (délka, TSS, IF a celkové hodnocení) a celý záznam aktivity: čísla, trasa, výkon, tep a intervaly; u posilovny plán proti zapsaným sériím a postava podle odcvičených sérií. Kartička týdenního plánu se pro sport, který už má v daný den naplánovaný nebo hotový trénink, nezobrazuje.
+
+## Technika cviků
+
+V režimu tréninku otevře „📖 Technika a video“ kartu cviku: nastavení, provedení, kde má být cvik cítit a co nemá bolet (`src/exercise-feel.js`), časté chyby, dýchání a ukázkové video (`src/exercise-technique-data.js`, videa dohledaná vyhledáváním). Každý cvik katalogu musí mít kartu i „Kde to cítit“ (hlídá test). Cvik mimo katalog, který má sportovec v plánu nebo historii, dostane kartu jednou od AI (lehký model s vyhledáním videa) a uloží se do tabulky `exercise_techniques`, takže se příště čte ze serveru. Vlastní odkaz na video se ukládá ke cviku (tabulka `exercise_videos`) a nahradí ukázku; odkaz mimo YouTube se otevře v prohlížeči. AI trenér zůstává dostupný tlačítkem „✦ AI“.

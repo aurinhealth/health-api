@@ -61,7 +61,7 @@ test('manual weekly review asks the model for concise, structured actions with a
     const r=await askCoach({OPENAI_API_KEY:'test'},WEEK_REVIEW_REQUEST,context,{task:'planning',actions:true,concise:true});
     assert.equal(calls[0].text.format.name,'coach_reply');
     assert.match(calls[0].instructions,/nejvýše 90 slov/);
-    assert.match(calls[0].input,/remainingPlanned/);assert.match(calls[0].input,/athleteFeedback/);
+    assert.match(JSON.stringify(calls[0].input),/remainingPlanned/);assert.match(JSON.stringify(calls[0].input),/athleteFeedback/);
     assert.equal(validateCoachActions(r.actions,context,today)[0].type,'rest');
   }finally{globalThis.fetch=original;}
 });

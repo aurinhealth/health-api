@@ -160,28 +160,56 @@ export function roleFor(prefs, date, sport, options = {}) {
   return planWeekRoles(prefs?.days || [], options)[weekday].items.find(x => x.sport === sport) || null;
 }
 
+// ---- One recovery week for the whole app -----------------------------------
+// The week plan, the ride/run coach and the gym share it: a recovery week
+// follows a week at 125 % of maintenance (CTL × 7) or more, or three weeks in a
+// row at maintenance or more (3 + 1). A light plan alone never makes one: early
+// in the week little is planned yet, and a lower target would only lower the
+// plan further. Loads are Intervals.icu's daily training load (all sports),
+// last week first.
+export function recoveryWeek({ base, weekLoads = [] }) {
+  const loads = (weekLoads || []).map(Number).filter(Number.isFinite);
+  if (!(Number(base) > 0) || !loads.length) return { recovery: false, reason: null };
+  if (loads[0] >= base * 1.25) return { recovery: true, reason: "heavy_last_week" };
+  if (loads.length >= 3 && loads.slice(0, 3).every(w => w >= base)) return { recovery: true, reason: "three_weeks" };
+  return { recovery: false, reason: null };
+}
+// Training load of the three weeks before `weekStart` from Intervals.icu
+// wellness rows (last week first); a week with too few rows ends the series.
+export function weekLoadsBefore(wellness, weekStart) {
+  const shift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  const rows = (wellness || []).filter(r => r?.id && r.id < weekStart);
+  const loads = [];
+  for (let k = 1; k <= 3; k++) {
+    const from = shift(weekStart, -7 * k), to = shift(weekStart, -7 * k + 7), week = rows.filter(r => r.id >= from && r.id < to);
+    if (week.length < 5) break;
+    loads.push(Math.round(week.reduce((sum, r) => sum + (Number(r.ctlLoad ?? r.atlLoad) || 0), 0)));
+  }
+  return loads;
+}
+
 // ---- Load targets for the week --------------------------------------------
 // One calculation for the calendar chips and the generator, so both say the
-// same thing. Maintenance is CTL × 7; after a week well above it (≥ 125 %)
-// this one is a recovery week at 70 %. What is already done or planned in
+// same thing. Maintenance is CTL × 7; a recovery week (see recoveryWeek) is
+// at 70 %. What is already done or planned in
 // Intervals.icu counts first; the rest is spread over the open plan chips,
 // within sensible limits per role, so one session never carries the week.
 // Load is TSS (what Intervals.icu calls Load and builds CTL/ATL from); the
 // intensity factor (IF) of the role says how hard it is: TSS = h × IF² × 100.
 const ROLE_IF = { recovery: .55, endurance: .68, long: .68, quality: .82 };
+// Running IF is pace against threshold pace: an easy run is ~0.78, not the
+// 0.68 of an easy ride, so the same load means a shorter run.
+const RUN_IF = { recovery: .7, endurance: .78, long: .78, quality: .9 };
 const ROLE_RANGE = { recovery: [.35, .6], endurance: [.8, 1.6], long: [1.4, 2.6], quality: [1, 1.5] };
 const GYM_TSS = { gym_full: 35, gym_upper: 25 };
 const SPORT_MINUTES = { ride: [30, 300], run: [20, 150] };
 const round5 = v => Math.round(v / 5) * 5;
 
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [], today, weekStart } = {}) {
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
-  const dateAt = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
-  const weekLoad = days.reduce((s, d) => s + (Number(d.done) || 0) + (d.date >= today ? Number(d.planned) || 0 : 0), 0);
-  const plannedAhead = days.some(d => d.date > today && Number(d.planned) > 0 && d.date <= dateAt(6));
-  const recovery = Number(lastWeekLoad) >= base * 1.25 || (plannedAhead && Number(lastWeekLoad) >= 150 && weekLoad < Number(lastWeekLoad) * .7);
+  const rule = recoveryWeek({ base, weekLoads: weekLoads?.length ? weekLoads : [Number(lastWeekLoad) || 0] }), recovery = rule.recovery;
   const target = Math.round(base * (recovery ? .7 : 1.05));
   const dateOf = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
   const info = date => days.find(d => d.date === date) || { done: 0, planned: 0, sports: [] };
@@ -201,11 +229,33 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, days = [
     if (x.sport === "gym") return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: GYM_TSS[x.role] || 30, minutes: (x.role === "gym_upper" ? 60 : 70) - (recovery ? 10 : 0) };
     const [lo, hi] = ROLE_RANGE[x.role] || [.8, 1.6], cap = recovery ? .85 : 1;
     const tss = Math.round(Math.max(lo * fitness * cap, Math.min(hi * fitness * cap, shares ? remaining * (x.share || 1) / shares : 0)));
-    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = ROLE_IF[x.role] || .68;
+    const [min, max] = SPORT_MINUTES[x.sport] || [30, 300], intensity = (x.sport === "run" ? RUN_IF : ROLE_IF)[x.role] || .68;
     const minutes = Math.max(min, Math.min(max, round5(tss / (intensity * intensity * 100) * 60)));
     return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes, intensity };
   });
   const assigned = items.reduce((s, x) => s + x.tss, 0), shortfall = Math.max(0, target - committed - assigned);
-  return { status: "ok", ctl: Math.round(fitness), base, target, recovery, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
+  return { status: "ok", ctl: Math.round(fitness), base, target, recovery, recoveryReason: rule.reason, weekLoads: weekLoads || null, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
+}
+// Running grows slowly: tendons and bones adapt later than heart and lungs.
+// A week's running (done, planned and proposed together) stays within 10 %
+// above the more of last week and the 4-week average; 60 min is always
+// allowed for a fresh start. `history` is days with completed activities.
+export const RUN_FLOOR_MINUTES = 60;
+const dayShift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+export const isRunActivity = a => /run/i.test(String(a?.type || a?.sport || "")) && !/walk/i.test(String(a?.type || ""));
+const runMinutes = list => (list || []).filter(isRunActivity).reduce((n, a) => n + (Number(a.durationHours) || 0) * 60, 0);
+export function weeklyRunCap(history = [], weekStart) {
+  const weeks = [1, 2, 3, 4].map(k => { const from = dayShift(weekStart, -7 * k), to = dayShift(weekStart, -7 * (k - 1)); return Math.round((history || []).filter(d => d.date >= from && d.date < to).reduce((n, d) => n + runMinutes(d.daily?.training?.completed), 0)); });
+  const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
+  return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks };
+}
+// Proposed runs share what is left under the cap (at least 20 min each).
+export function capRunVolume(targets, runCap, committed = 0) {
+  if (!runCap || targets?.status !== "ok") return targets;
+  const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
+  const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
+  if (!runs.length || proposed <= room) return { ...targets, runCap: info };
+  const items = targets.items.map(x => { if (x.sport !== "run") return x; const minutes = Math.max(20, round5(x.minutes * room / proposed)), intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true }; });
+  return { ...targets, items, runCap: { ...info, proposed: items.filter(x => x.sport === "run").reduce((n, x) => n + x.minutes, 0), limited: true } };
 }
 export function targetFor(targets, date, sport) { return (targets?.items || []).find(x => x.date === date && x.sport === sport) || null; }

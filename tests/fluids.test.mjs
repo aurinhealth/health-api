@@ -70,7 +70,7 @@ test("drinks logged as food count automatically; alcohol and foods in grams do n
   assert.equal(drinkFromFoodEntry({ id: 4, recipe_title: "Jogurt", note: note({ amount: 150, unit: "g" }) }), null);
 
   const raw = createD1();
-  raw.sqlite.exec("CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, recipe_title TEXT, note TEXT)");
+  raw.sqlite.exec("CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, recipe_title TEXT, note TEXT, status TEXT)");
   raw.sqlite.prepare("INSERT INTO food_logs (user_id, consumed_date, consumed_at, recipe_title, note) VALUES (7, '2026-10-03', '2026-10-03T15:00:00', 'Monster Energy', ?)").run(note({ amount: 500, unit: "ml" }));
   raw.sqlite.prepare("INSERT INTO food_logs (user_id, consumed_date, consumed_at, recipe_title, note) VALUES (8, '2026-10-03', '2026-10-03T15:00:00', 'Cola', ?)").run(note({ amount: 330, unit: "ml" }));
   const drinks = await foodDrinks(scopedDb(raw, 7), 7, "2026-10-03");

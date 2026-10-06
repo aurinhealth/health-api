@@ -4,14 +4,15 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function latestRecovery(recovery,keyMatchers){
   let best=null;
   for(const [key,value] of Object.entries(recovery||{})){
-    const k=String(key).toLowerCase();
+    // Google Health types use hyphens ("daily-heart-rate-variability").
+    const k=String(key).toLowerCase().replace(/-/g,"_");
     if(!keyMatchers.some(m=>k.includes(m))) continue;
     const arr=Array.isArray(value)?value:[];
     for(const row of arr){
       const t=String(row.sampleTime||row.startTime||"");
       const v=n(row.value??row.minutes??row.durationMinutes,NaN);
       if(!Number.isFinite(v)) continue;
-      if(!best||t>best.time) best={value:v,time:t,unit:row.unit||null};
+      if(!best||t>best.time) best={value:v,time:t,unit:row.unit||null,baseline:Number(row.baseline)>0?Number(row.baseline):null};
     }
   }
   return best;
@@ -19,17 +20,19 @@ function latestRecovery(recovery,keyMatchers){
 function recoveryMetrics(context){
   const sleep=latestRecovery(context?.recovery,["sleep"]);
   const hrv=latestRecovery(context?.recovery,["hrv","heart_rate_variability"]);
-  const rhr=latestRecovery(context?.recovery,["resting","heart_rate"]);
+  const rhr=latestRecovery(context?.recovery,["resting"]);
   let score=100;
   if(sleep?.value!=null){ if(sleep.value<330) score-=18; else if(sleep.value<390) score-=8; else if(sleep.value>=450) score+=3; }
-  if(hrv?.value!=null){ if(hrv.value<70) score-=10; else if(hrv.value<85) score-=5; }
-  if(rhr?.value!=null){ if(rhr.value>=60) score-=10; else if(rhr.value>=55) score-=5; }
+  // Against the athlete's own 4-week average; without it a single value says
+  // nothing (an HRV of 45 is normal for one athlete and low for another).
+  if(hrv?.value!=null&&hrv.baseline){ const drop=1-hrv.value/hrv.baseline; if(drop>=.2) score-=15; else if(drop>=.1) score-=7; }
+  if(rhr?.value!=null&&rhr.baseline){ const rise=rhr.value-rhr.baseline; if(rise>=7) score-=12; else if(rise>=4) score-=6; }
   const tss=n(context?.cycling?.recentRideTss), hours=n(context?.cycling?.recentRideHours);
   if(tss>=900) score-=10; else if(tss>=750) score-=6; else if(tss>=600) score-=3;
   if(hours>=12) score-=5; else if(hours>=9) score-=3;
   const hard=(context?.cycling?.recentActivities||[]).slice(0,4).filter(x=>x?.intensity).length;
   if(hard>=3) score-=7; else if(hard>=2) score-=4;
-  return {score:Math.round(clamp(score,0,100)),sleepMinutes:sleep?.value??null,hrv:hrv?.value??null,restingHr:rhr?.value??null};
+  return {score:Math.round(clamp(score,0,100)),sleepMinutes:sleep?.value??null,hrv:hrv?.value??null,hrvBaseline:hrv?.baseline??null,restingHr:rhr?.value??null,restingHrBaseline:rhr?.baseline??null};
 }
 function calculateLegReadiness(context,recovery){
   let score=recovery.score;

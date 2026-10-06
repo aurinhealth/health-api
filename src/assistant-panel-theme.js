@@ -38,4 +38,17 @@ body.gym-mode-open dialog.assistant-dialog{z-index:150}.gm-assistant{font-size:1
   .assistant-dialog .coach-turn{padding:10px 12px;margin-right:16px}.assistant-dialog .coach-turn.user{margin-left:24px;margin-right:0}
 }
 @media(prefers-reduced-motion:reduce){.assistant-scroll{scroll-behavior:auto}.assistant-typing>span{animation:none;opacity:.7}}
+.assistant-head-actions{display:flex;gap:6px;align-items:center;flex:none}
+.assistant-panel-header .assistant-head-btn{width:auto;border-radius:18px;font-size:12px;padding:6px 11px;white-space:nowrap}
+.assistant-history{position:absolute;left:0;right:0;top:72px;bottom:0;z-index:5;background:#121a17;overflow:auto;padding:14px 16px;border-top:1px solid #2d3a40}
+.assistant-history-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.assistant-history ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.assistant-history li{display:flex;gap:6px;align-items:stretch;border:1px solid #2d3a40;border-radius:10px;background:#18221e}
+.assistant-history li.current{border-color:#7fd1a8}
+.assistant-chat-open{flex:1;min-width:0;display:grid;gap:2px;text-align:left;background:none;border:0;color:#eef4f0;font:inherit;padding:10px 12px;cursor:pointer}
+.assistant-chat-open span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}.assistant-chat-open small{color:#93a39b;font-size:12px}
+.assistant-chat-delete{background:none;border:0;color:#93a39b;padding:0 12px;cursor:pointer;font-size:14px}.assistant-chat-delete:hover{color:#ff8a8a}
+.assistant-history-note{margin-top:12px}
+@media(max-width:700px){.assistant-panel-header .assistant-head-btn{padding:6px 9px}.assistant-history{top:62px}}
+.assistant-new-note{margin:10px 4px 0;font-size:12px;color:#93a39b;text-align:center}
 `;

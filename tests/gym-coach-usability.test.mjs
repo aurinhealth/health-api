@@ -59,11 +59,24 @@ test('warmups accept effort below six, failure can be corrected and rest follows
   assert.equal(a.run('gymRestSeconds(cur,null)'),0);
 });
 
-test('saving the final crunch returns to an earlier missing set without repeating crunch',async()=>{
+test('saving the final set ends the workout and lists a skipped work set instead of jumping back',async()=>{
   const a=client([row('Leg press',1),row('Crunch',1,{done:true}),row('Crunch',2)]);
-  await a.run('openGymMode()');a.run('gymMode.pos=2;renderGymMode()');
-  await a.click('done');assert.equal(a.run('gymMode.pos'),0);assert.match(a.el.innerHTML,/<h2>Leg press<\/h2>/);
+  await a.run('openGymMode()');assert.equal(a.run('gymMode.pos'),2);
+  await a.click('done');assert.match(a.el.innerHTML,/Konec plánu/);assert.match(a.el.innerHTML,/Leg press · 1×/);assert.doesNotMatch(a.el.innerHTML,/<h2>Leg press/);
   assert.equal(a.state.gym.values[9][8],'TRUE');assert.equal(a.state.gym.values[7][8],'FALSE');
+  await a.click('resume');assert.match(a.el.innerHTML,/<h2>Leg press<\/h2>/);
+});
+
+test('skipped warm-ups are never offered again and do not block the finished workout',async()=>{
+  const warm=(name,n)=>{const r=row(name,n);r[0]='WARMUP';return r;};
+  const a=client([warm('Bench',1),warm('Bench',2),row('Bench',1),row('Bench',2),warm('Row',1),row('Row',1)]);
+  await a.run('openGymMode()');assert.equal(a.run('gymMode.pos'),0);
+  await a.click('next');await a.click('next');await a.click('done');assert.equal(a.run('gymMode.pos'),3);
+  assert.match(a.el.innerHTML,/1 \/ 4 sérií/);
+  await a.click('done');assert.equal(a.run('gymSets()[gymMode.pos].r[1]'),'Row');
+  await a.click('next');await a.click('done');
+  assert.match(a.el.innerHTML,/Trénink hotový/);assert.doesNotMatch(a.el.innerHTML,/Přeskočené/);
+  await a.click('close');await a.run('openGymMode()');assert.match(a.el.innerHTML,/Trénink hotový/);
 });
 
 test('controls do not trigger swipes and vertical scrolling leaves the current set unchanged',async()=>{
@@ -113,4 +126,63 @@ test('a 30 minute strength session still fits with warm-up, rests and a buffer',
     const plan=generateStrengthPlan({date:'2026-10-04',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},recovery:{}},{durationMinutes:30,focus});
     assert.ok(plan.timing.totalSeconds<=1800);assert.ok(plan.rows.some(r=>r[0]==='WORK'));
   }
+});
+
+test('workout mode swaps, adds and removes exercises and sets; saved sets stay and drafts follow their rows',async()=>{
+  const done=row('Bench',1,{done:true});done[5]='60';done[6]='8';
+  const a=client([done,row('Bench',2),row('Bench',3),row('Row',1),row('Row',2)]);
+  a.context.gymExerciseCatalog=[];
+  const save=[];a.context.jsonFetch=async(url,options)=>{if(String(url).includes('/alternatives'))return {alternatives:[{name:'Chest flat press Prime',muscle:'Hrudník',reps:'8–12',kg:40,note:'Prime stroj'}]};save.push(JSON.parse(options.body));return {};};
+  await a.run('openGymMode()');assert.equal(a.run('gymSets()[gymMode.pos].r[2]'),'2');
+  a.run('gymMode.kg=62.5;rememberGymDraft()');
+  await a.click('edit');assert.match(a.el.innerHTML,/Upravit trénink/);assert.match(a.el.innerHTML,/Vyměnit cvik/);
+  // One more set: the draft stays on its set, the new one is numbered after the others.
+  await a.click('add-set');
+  assert.deepEqual(a.state.gym.values.slice(7).filter(r=>r[1]==='Bench').map(r=>r[2]),['1','2','3','4']);
+  assert.equal(a.run('gymSets()[gymMode.pos].r[2]'),'2');assert.equal(a.run('gymMode.kg'),62.5);
+  // Saved through the full save, so the history follows the plan.
+  assert.ok(save.at(-1).fullValues&&Array.isArray(save.at(-1).values));
+  // An open set goes at once; the workout continues on the next open set.
+  await a.click('edit');await a.click('remove-set');
+  assert.equal(a.state.gym.values.slice(7).filter(r=>r[1]==='Bench').length,3);
+  assert.equal(a.run('gymSets()[gymMode.pos].r[1]'),'Bench');assert.equal(a.run('gymSetDone(gymSets()[gymMode.pos])'),false);
+  // Swap: the open Bench sets become the machine press, the saved set stays Bench.
+  await a.click('edit');await a.click('swap');assert.match(a.el.innerHTML,/Chest flat press Prime/);
+  a.context.event={target:{closest:()=>({dataset:{gmAlt:'0'}})}};await a.run("$('gymMode').onclick(event)");
+  const plan=a.state.gym.values.slice(7);
+  assert.deepEqual(plan.map(r=>r[1]),['Bench','Chest flat press Prime','Chest flat press Prime','Row','Row']);
+  assert.equal(plan[0][8],'TRUE');assert.equal(plan[1][3],'40');assert.match(plan[1][9],/místo Bench/);
+  assert.equal(a.run('gymSets()[gymMode.pos].r[1]'),'Chest flat press Prime');
+  // Removing an exercise asks first and keeps saved sets.
+  await a.click('edit');await a.click('remove-exercise');assert.match(a.el.innerHTML,/Opravdu vynechat zbývající série \(2\)/);
+  await a.click('remove-exercise');
+  assert.deepEqual(a.state.gym.values.slice(7).map(r=>r[1]),['Bench','Row','Row']);
+  assert.equal(a.run('gymSets()[gymMode.pos].r[1]'),'Row');
+  // A saved set is removed only after a second tap.
+  a.run('gymMode.pos=0;gymMode.forIdx=null;renderGymMode()');await a.click('edit');await a.click('remove-set');
+  assert.match(a.el.innerHTML,/Opravdu smazat uloženou sérii/);assert.equal(a.state.gym.values.slice(7).length,3);
+  await a.click('remove-set');assert.deepEqual(a.state.gym.values.slice(7).map(r=>r[1]),['Row','Row']);
+});
+
+test('the coach prescribes failure and supersets; the athlete only logs the effort',async()=>{
+  const last=row('Curl',2,{group:'A'});last[9]='Biceps [Pauza 75 s]; poslední série do technického selhání, jen při čistém provedení';last[11]='TRUE';
+  const a=client([row('Curl',1,{group:'A'}),row('Triceps',1,{group:'A'}),last,row('Triceps',2,{group:'A'})]);
+  await a.run('openGymMode()');
+  assert.doesNotMatch(a.el.innerHTML,/type="checkbox"|<select/);
+  assert.match(a.el.innerHTML,/Supersérie A s cvikem Triceps/);assert.doesNotMatch(a.el.innerHTML,/do technického selhání/);
+  await a.click('next');await a.click('next');assert.match(a.el.innerHTML,/Trenér: tuhle sérii do technického selhání/);
+  // Not reaching failure is logged as it was; RPE 10 records the failure.
+  a.context.event={target:{closest:()=>({dataset:{gmRpe:'9'}})}};await a.run("$('gymMode').onclick(event)");
+  await a.click('done');assert.equal(a.state.gym.values[9][7],'9');assert.equal(a.state.gym.values[9][11],'FALSE');
+  a.run('gymMode.pos=0;gymMode.forIdx=null;renderGymMode()');
+  a.context.event={target:{closest:()=>({dataset:{gmRpe:'10'}})}};await a.run("$('gymMode').onclick(event)");
+  await a.click('done');assert.equal(a.state.gym.values[7][7],'10');assert.equal(a.state.gym.values[7][11],'TRUE');
+});
+
+test('a finished exercise swapped later corrects its name, saved weights and reps stay',()=>{
+  const a=client([]);
+  const done=n=>{const r=row('Low row',n,{done:true});r[5]='50';r[6]='10';return r;};
+  const result=a.run("swapGymExercise").call(null,[done(1),done(2),row('Leg press',1)],'Low row',{name:'Standing rowing machine',reps:'8–12',kg:45});
+  assert.deepEqual(result.rows.map(r=>r[1]+':'+r[5]),['Standing rowing machine:50','Standing rowing machine:50','Leg press:']);
+  assert.equal(a.run("swapGymExercise").call(null,[done(1)],'Low row',{name:'Low row'}),null);
 });

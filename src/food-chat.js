@@ -8,11 +8,16 @@ import { searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
 const MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 const MAX_ITEMS = 8;
 
-// A sentence about eating or drinking, not a training request.
+// A sentence about what was eaten or drunk, not a question or a training
+// request: "Mám sníst banán před jízdou?" or "Měl jsem dnes jet intervaly"
+// go to the coach. Only the past tense logs ("Měl jsem snickers a kafe").
+const FOOD_QUESTION = /^(?:mám|mam|můžu|muzu|mohu|smím|co|kolik|jak|je|jsou|stačí|staci|měl[a]? bych|mel[a]? bych|potřebuj\p{L}*)(?!\p{L})/u;
+const FOOD_PAST = /(?<!\p{L})(?:měl[a]? jsem|mel[a]? jsem|snědl[a]?|jedl[a]? jsem|dal[a]? jsem si|vypil[a]?|(?:jsem|jsme) (?:si )?(?:měl[a]?|snědl[a]?|jedl[a]?|dal[a]?|vypil[a]?)|zapiš (?:si )?(?:jídlo|že))(?!\p{L})/u;
+const NOT_FOOD = /trénin|workout|jízd\p{L}*|(?<!\p{L})kol(?:[aeou]m?|o)(?!\p{L})|interval|běh|běž|gym|posil|cvič|spán|spal/u;
 export function isFoodLogMessage(message) {
-  const t = String(message || "").toLowerCase();
-  return /\b(měl[a]? jsem|snědl[a]? jsem|snědl[a]?|dal[a]? jsem si|vypil[a]? jsem|vypil[a]?|jedl[a]? jsem|k snídani|ke snídani|k obědu|k večeři|na svačinu|zapiš (si )?(jídlo|že)|sníst)\b/.test(t)
-    && !/\b(trénink|workout|jízd[auy]|kolo|běh|gym|posilovn)/.test(t);
+  const t = String(message || "").toLowerCase().trim();
+  if (!t || t.includes("?") || FOOD_QUESTION.test(t)) return false;
+  return FOOD_PAST.test(t) && !NOT_FOOD.test(t);
 }
 
 export const FOOD_PARSE_SCHEMA = {
