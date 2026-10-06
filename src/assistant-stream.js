@@ -27,7 +27,7 @@ export async function readOpenAIStream(response,onText){
     if(event.type==='response.completed')completed=event.response;
     // Cut off at max_output_tokens: the part that arrived is kept and marked.
     if(event.type==='response.incomplete')completed={...event.response,status:'incomplete'};
-    if(['error','response.failed'].includes(event.type))throw new Error('AI odpověď se nepodařilo dokončit. Zkus to znovu.');
+    if(['error','response.failed'].includes(event.type)){const failure=new Error(String(event.error?.message||event.response?.error?.message||event.message||'odpověď selhala'));failure.ai=true;throw failure;}
   };
   try{
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let match;
@@ -48,7 +48,8 @@ export function assistantStreamResponse(work){
     async start(controller){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
       try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}));send({type:'done',result});}
-      catch(error){console.error('Streaming assistant failed',error.message);send({type:'error',message:'AI odpověď se nepodařilo dokončit. Zkus to znovu.'});}
+      catch(error){console.error('Streaming assistant failed',error.message);// What the AI service said is shown (wrong model, key, quota); internal errors are not.
+        send({type:'error',message:'AI odpověď se nepodařilo dokončit'+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+'. Zkus to znovu.'});}
       finally{if(!cancelled)controller.close();}
     },cancel(){cancelled=true;}
   });
