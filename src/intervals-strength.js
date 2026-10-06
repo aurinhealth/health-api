@@ -92,6 +92,12 @@ export async function writeStrengthPlanToIntervals(env, plan, options = {}) {
   if (!result || result.type !== "WeightTraining") {
     throw new Error(`Intervals.icu returned an unexpected strength event: ${JSON.stringify(result)}`);
   }
+  // The local copy of the event, so the week shows the session now and not after the next sync.
+  if (result.id != null && env.DB?.prepare) {
+    const start = result.start_date_local || event.start_date_local;
+    await env.DB.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,end_time,payload_json) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET sample_time=excluded.sample_time,start_time=excluded.start_time,end_time=excluded.end_time,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP")
+      .bind(env.USER_ID ?? env.DB.userId, "intervals", "planned-workout", "planned:" + result.id, start, start, result.end_date_local || null, JSON.stringify({ ...event, ...result })).run().catch(() => {});
+  }
   return {
     status: "ok",
     externalId: event.external_id,

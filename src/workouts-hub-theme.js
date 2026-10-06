@@ -117,6 +117,16 @@ export const workoutsHubTheme = `
 .coach-note{padding:10px 12px;margin-bottom:10px;border-radius:12px;background:#1a1f2c;border:1px solid #2e3546}.coach-note p{margin:4px 0 0}.coach-note small{color:#a99bff;font-size:11px}
 .coach-ask{display:grid;gap:6px;margin:6px 0 10px}.coach-ask textarea{width:100%;background:#0d1119;color:#eef1f7;border:1px solid #333b49;border-radius:10px;padding:9px;font:inherit;resize:vertical}
 #rateRpe button.active,#coachRpe button.active{background:#7e50e5;border-color:#a16fff;color:#fff}
+.food-ai-card{display:grid;gap:8px;margin:10px 0;padding:14px 16px;border:1px solid #3b3260;border-radius:14px;background:linear-gradient(160deg,#1b1630,#141821 70%)}
+.fac-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.fac-badge{padding:3px 9px;border-radius:999px;background:#2c2350;color:#d4c6ff;font-size:11.5px;font-weight:700}
+.fac-conf{display:inline-flex;align-items:center;gap:3px;color:#b9c3cf;font-size:11.5px}.fac-conf i{width:7px;height:7px;border-radius:50%;background:#333c48}.fac-conf i:last-of-type{margin-right:4px}
+.fac-conf.conf-3 i.on{background:#3fda9c}.fac-conf.conf-2 i.on{background:#e9c46a}.fac-conf.conf-1 i.on{background:#ff8a80}
+.fac-name{font-size:15px;line-height:1.3;color:#f3f5fa}.fac-meta{margin-top:-6px;color:#9ca6b5;font-size:12px}.fac-meta:empty{display:none}
+.fac-values{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.fac-values small{grid-column:1/-1;color:#8f9dac;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em}
+.fac-values div{display:grid;gap:1px;padding:8px 6px;border:1px solid #2a323d;border-radius:10px;background:#11161d;text-align:center}.fac-values b{font-size:16px}.fac-values span{color:#9ca6b5;font-size:10.5px}
+.fac-note{margin:0;padding:8px 10px;border-radius:9px;background:#2a2412;color:#f1dca0;font-size:12.5px;line-height:1.45}
+.fac-sources{display:flex;flex-wrap:wrap;gap:6px}.fac-sources a{padding:4px 10px;border:1px solid #344050;border-radius:999px;background:#11161d;color:#bcd4ff;font-size:12px;text-decoration:none}.fac-sources a:hover{border-color:#6f8fc9}
 .food-draft-row{display:grid;grid-template-columns:minmax(0,1fr) auto 80px;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #2a3140}.food-draft-row small{display:block;color:#9ca6b5;font-size:11px}.food-draft-row input{width:76px;background:#0d1119;color:#fff;border:1px solid #333b49;border-radius:8px;padding:5px 7px}.food-draft-row>span{text-align:right;font-variant-numeric:tabular-nums}
 .food-draft-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin-top:10px}.food-draft-foot input,.food-draft-foot select{display:block;background:#0d1119;color:#fff;border:1px solid #333b49;border-radius:8px;padding:6px 8px}
 .coach-note-inline{margin:6px 0 0;font-size:12px;line-height:1.55;color:#c9d2de;max-width:780px}
@@ -537,6 +547,11 @@ body.sheet-open{overflow:hidden}
 .training-plan summary{cursor:pointer;color:#c9d2de;font-size:13px;margin:4px 0}
 .training-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.training-move{margin-top:12px}
 .gym-detail{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:16px;align-items:start;margin:6px 0}
+.hub-item.editable{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}.hub-item.editable.dragging{opacity:.55;outline:2px dashed #a77bff;outline-offset:2px}
+.gym-focus-details.card{margin-top:12px;padding:0}.gym-focus-details>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding:14px 16px;cursor:pointer;list-style:none}.gym-focus-details>summary::-webkit-details-marker{display:none}
+.gym-focus-details>summary::after{content:'▾';margin-left:auto;color:#9ca6b5}.gym-focus-details[open]>summary::after{content:'▴'}.gym-focus-details>summary span{font-size:15px;font-weight:700}.gym-focus-details>summary small{color:#9ca6b5;font-size:12px}
+.gym-focus-details .gym-focus-builder{margin:0;padding:4px 16px 16px;border:0}.gym-focus-day{display:flex;align-items:center;gap:8px;padding:0 16px 6px}.gym-week-hint{margin:10px 2px;color:#9ca6b5}
+.gs-mode{width:100%;margin:2px 0 12px;padding:11px;font-size:15px}
 .gym-table-tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:10px}
 .gym-table-details{margin-top:14px}.gym-table-details summary{cursor:pointer;color:#9ca6b5;font-size:13px;margin-bottom:10px}
 .gym-session{display:grid;gap:12px;margin:6px 0}

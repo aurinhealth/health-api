@@ -1099,7 +1099,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!r.ok)throw new Error('Gym plán se nepodařilo uložit.');
       const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime:draft.startTime||'00:00'}).catch(error=>({status:'error',message:error.message}));
       await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(env.USER_ID,row.id).run();
-      return Response.json({status:'ok',intervals,message:'Gym plán je uložený.'},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',intervals,eventId:intervals?.eventId!=null?'planned:'+intervals.eventId:null,message:'Gym plán je uložený.'},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
   // Technique card of one exercise (text and video), plus the athlete's own video link.
