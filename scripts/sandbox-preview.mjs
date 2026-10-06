@@ -7,6 +7,7 @@
 import http from "node:http";
 import { readFile, writeFile } from "node:fs/promises";
 import { dashboardPage } from "../src/dashboard.js";
+import { englishScript } from "../src/i18n.js";
 import { gymExerciseCatalog, gymAlternatives } from "../src/gym-catalog.js";
 import { FOCUS_GROUPS, generateStrengthPlan } from "../src/strength-generator.js";
 import { planValues } from "../src/gym-plan-store.js";
@@ -290,6 +291,7 @@ if (buildIndex > 0) {
   http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     if (url.pathname === "/app" || url.pathname === "/") { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }); res.end(await page({ inline: true })); return; }
+    if (url.pathname === "/app/i18n-en.js") { res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" }); res.end(await englishScript().text()); return; }
     res.writeHead(404); res.end();
   }).listen(port, "127.0.0.1", () => console.log("Sandbox: http://127.0.0.1:" + port + "/app"));
 }

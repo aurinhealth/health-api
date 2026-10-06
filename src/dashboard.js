@@ -5,6 +5,7 @@ import {workoutsHubTheme} from './workouts-hub-theme.js';
 import {assistantPanelTheme} from './assistant-panel-theme.js';
 import {designSystem,themeBoot,themeSwitch} from './design-system.js';
 import {ICON_PATHS,icon} from './icons.js';
+import {langBoot} from './i18n.js';
 export function dashboardPage() {
   const html = `<!doctype html>
 <html lang="cs">
@@ -14,6 +15,7 @@ export function dashboardPage() {
 <meta name="theme-color" content="#0d131a" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#fbfcfd" media="(prefers-color-scheme: light)">
 ${themeBoot}
+${langBoot}
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/manifest.webmanifest">
