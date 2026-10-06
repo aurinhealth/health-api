@@ -29,7 +29,7 @@ entrypoint.js → sheets-gateway.js → v400.js → v323fix.js → v323.js → i
 - `v323.js`: `/food/recommend` (doporučení jídel k osobnímu cíli) a kontext tréninku k `/analysis/energy`.
 - `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, deník jídla, cron.
 
-Vzhled dashboardu: barvy rozhraní jsou tokeny v `src/design-system.js` (načítá se jako poslední vrstva CSS), ikony jsou jedna SVG sada v `src/icons.js`. Barvy dat v grafech (makra, fáze spánku, zóny) zůstávají u grafů.
+Vzhled dashboardu: barvy rozhraní jsou tokeny v `src/design-system.js` (načítá se jako poslední vrstva CSS), ikony jsou jedna SVG sada v `src/icons.js`. Ostatní odstíny se z tokenů míchají, např. `color-mix(in srgb,var(--text) 12%,var(--bg))`; barvu natvrdo pro plochy, čáry a šedé texty test `tests/design-tokens.test.mjs` nepustí. Barvy dat v grafech (makra, fáze spánku, zóny) zůstávají u grafů.
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `sheets-gateway.js`, ne do vrstev `v*.js`. Ty se postupně ruší.
 

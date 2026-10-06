@@ -1,13 +1,21 @@
 // Loadwise design system: the one place for UI colour tokens and shared component rules.
 // It is loaded after every theme layer, so a token changed here changes the whole app.
 // Chart data colours (macros, sleep stages, zones) stay with the charts.
-// A light theme will only redefine the tokens in :root.
+// A light theme will only redefine the tokens in :root. Theme layers use tokens or color-mix()
+// of tokens, never a raw colour (tests/design-tokens.test.mjs).
 export const designSystem = `
 :root{
+  color-scheme:dark;
+  /* Surfaces and text. Other neutral shades are mixes of --text over --bg, so a light theme
+     only has to swap these two (plus the surfaces) for every grey in the app to follow. */
+  --bg:#0b0e12;--sidebar:#0b0e12;--panel:#151a20;--panel2:#20262f;--line:#2c333e;
+  --text:#f6f7fb;--muted:#a3afbf;
+  /* Status and accent hues; tints are mixes of a hue with --bg (surfaces) or --text (light text). */
+  --ok:#83e9c3;--warn:#ffc15c;--bad:#ff6478;--cyan:#7ec8ff;--sky:#64d2ff;--blue:#60a5fa;
+  --green:#3fda9c;--amber:#f59e0b;--violet:#9b6bff;--lilac:#b393ff;
   --primary:#83e9c3;--primary-rgb:131,233,195;--primary-ink:#0f241c;--primary-text:#a2f4d6;
   --primary-surface:#1d302b;--primary-line:#2d4b40;
-  --accent:var(--primary);--accent2:var(--primary-text);--ok:#83e9c3;
-  --muted:#a3afbf;
+  --accent:var(--primary);--accent2:var(--primary-text);
 }
 body{background:var(--bg)}
 .brand span{text-transform:none;letter-spacing:0;font-size:12px}
