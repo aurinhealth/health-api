@@ -121,7 +121,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     // Static pages stay independent of storage availability.
-    if (STATIC_PATHS.has(url.pathname) && request.method === 'GET') return staticRoute(url);
+    if (STATIC_PATHS.has(url.pathname) && request.method === 'GET') return staticRoute(url, request);
     try { await ensureTenancy(env.DB, env, { request }); }
     catch (error) {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
@@ -188,15 +188,15 @@ export default {
   }
 };
 
-function staticRoute(url) {
+function staticRoute(url, request) {
   if (url.pathname === "/mcp/health") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
   if (url.pathname === "/app") return dashboardPage();
   if (url.pathname === "/app/i18n-en.js") return englishScript();
   if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-store" } });
-  if (url.pathname === "/") return overviewPage();
-  if (url.pathname === "/privacy") return privacyPage();
-  if (url.pathname === "/terms") return termsPage();
-  if (url.pathname === "/support") return supportPage();
+  if (url.pathname === "/") return overviewPage(request);
+  if (url.pathname === "/privacy") return privacyPage(request);
+  if (url.pathname === "/terms") return termsPage(request);
+  if (url.pathname === "/support") return supportPage(request);
   if (url.pathname === "/logo.svg") return logoResponse();
   return Response.json({name:"Loadwise",short_name:"Loadwise",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
 }

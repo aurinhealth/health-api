@@ -40,7 +40,9 @@ export const themeBoot = `<script>(function(){try{var m=document.cookie.match(/(
 // Vzhled switch: Světlý / Tmavý, showing the theme in use. Without a choice the device decides;
 // picking the device's own theme clears the choice. The app wires it in dashboard-client.js,
 // the public pages with themeSwitchScript.
-export const themeSwitch = () => `<div class="theme-switch" role="radiogroup" aria-label="Vzhled"><button type="button" role="radio" data-theme-choice="light" aria-label="Světlý vzhled" title="Světlý">${icon('today')}</button><button type="button" role="radio" data-theme-choice="dark" aria-label="Tmavý vzhled" title="Tmavý">${icon('moon')}</button></div>`;
+const SWITCH_TEXT = {cs: ['Vzhled', 'Světlý vzhled', 'Světlý', 'Tmavý vzhled', 'Tmavý'], en: ['Appearance', 'Light appearance', 'Light', 'Dark appearance', 'Dark']};
+export const themeSwitch = (lang = 'cs') => { const [group, lightLabel, light, darkLabel, dark] = SWITCH_TEXT[lang] || SWITCH_TEXT.cs;
+  return `<div class="theme-switch" role="radiogroup" aria-label="${group}"><button type="button" role="radio" data-theme-choice="light" aria-label="${lightLabel}" title="${light}">${icon('today')}</button><button type="button" role="radio" data-theme-choice="dark" aria-label="${darkLabel}" title="${dark}">${icon('moon')}</button></div>`; };
 
 export const themeSwitchScript = `<script>(function(){
 var root=document.documentElement,media=matchMedia('(prefers-color-scheme: light)');
@@ -58,6 +60,7 @@ export const themeSwitchCss = `
 .theme-switch button:hover{color:var(--text)}
 .theme-switch button[aria-checked=true]{background:var(--primary-surface);color:var(--primary-text)}
 .theme-switch .icon{width:16px;height:16px}
+.lang-switch button{width:auto;min-width:30px;padding:0 7px;font-size:12px;font-weight:650;line-height:1;letter-spacing:.02em}
 `;
 
 export const designSystem = themeTokens + themeSwitchCss + `

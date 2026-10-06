@@ -167,12 +167,26 @@ section{padding:110px 0}
 }
 `;
 
-function shot(file, alt, {eager=false, width=600, height=1299}={}) {
-  const load = eager ? 'fetchpriority="high"' : 'loading="lazy"';
-  return ['dark','light'].map(theme => `<img class="shot-${theme}" src="/site/${file}-${theme}.webp" alt="${alt}" width="${width}" height="${height}" decoding="async" ${load}>`).join('');
+// Language: ?lang= in the link, then the lw-lang cookie (shared with the app), then the
+// browser's first language (Czech or Slovak → cs, anything else → en). The switch in the top
+// bar sets the cookie, or clears it when you pick the browser's own language.
+export function siteLang(request) {
+  const url = new URL(request.url), asked = url.searchParams.get('lang');
+  if (asked === 'cs' || asked === 'en') return asked;
+  const cookie = /(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get('cookie') || '');
+  return cookie ? cookie[1] : deviceLang(request);
+}
+function deviceLang(request) {
+  const first = (request.headers.get('accept-language') || 'cs').split(',')[0].trim().toLowerCase();
+  return /^(cs|sk)\b/.test(first) ? 'cs' : 'en';
+}
+
+function shot(file, alt, lang, {eager=false, width=600, height=1299}={}) {
+  const load = eager ? 'fetchpriority="high"' : 'loading="lazy"', suffix = lang === 'en' ? '-en' : '';
+  return ['dark','light'].map(theme => `<img class="shot-${theme}" src="/site/${file}${suffix}-${theme}.webp" alt="${alt}" width="${width}" height="${height}" decoding="async" ${load}>`).join('');
 }
 // The screen starts below a status-bar strip, so the camera cut-out never covers the app.
-const phone = (name, alt, opts) => `<div class="phone"><div class="screen">${shot('phone-'+name, alt, opts)}</div></div>`;
+const phone = (name, alt, lang, opts) => `<div class="phone"><div class="screen">${shot('phone-'+name, alt, lang, opts)}</div></div>`;
 const check = text => `<li>${icon('check')}<span>${text}</span></li>`;
 
 const revealScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
@@ -180,9 +194,16 @@ if(!('IntersectionObserver' in window)){r.classList.remove('js');return;}
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});})();</script>`;
 
-function sitePage({title, description, lang='cs', body, index=true}) {
+const langSwitch = lang => `<div class="theme-switch lang-switch" role="radiogroup" aria-label="${lang === 'en' ? 'Language' : 'Jazyk'}">${[['cs','CZ','Čeština'],['en','EN','English']].map(([code, label, name]) => `<button type="button" role="radio" data-lang-choice="${code}" lang="${code}" aria-label="${name}" aria-checked="${code === lang}">${label}</button>`).join('')}</div>`;
+const langSwitchScript = `<script>(function(){document.addEventListener('click',function(e){var b=e.target.closest('[data-lang-choice]');if(!b)return;
+var c=b.dataset.langChoice,dev=document.documentElement.dataset.deviceLang;
+document.cookie=c===dev?'lw-lang=; path=/; max-age=0; samesite=lax':'lw-lang='+c+'; path=/; max-age=31536000; samesite=lax';
+var u=new URL(location.href);u.searchParams.delete('lang');location.replace(u.pathname+u.search+u.hash);});})();</script>`;
+
+function sitePage({title, description, lang, device, path, body, index=true}) {
+  const t = (cs, en) => lang === 'en' ? en : cs;
   const html = `<!doctype html>
-<html lang="${lang}">
+<html lang="${lang}" data-device-lang="${device}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -193,85 +214,98 @@ ${themeBoot}
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}">
-<meta property="og:image" content="${ORIGIN}/site/today-dark.webp">
+<meta property="og:image" content="${ORIGIN}/site/today${lang === 'en' ? '-en' : ''}-dark.webp">
+<meta property="og:locale" content="${t('cs_CZ', 'en_US')}">
+<link rel="alternate" hreflang="cs" href="${ORIGIN}${path}?lang=cs">
+<link rel="alternate" hreflang="en" href="${ORIGIN}${path}?lang=en">
+<link rel="alternate" hreflang="x-default" href="${ORIGIN}${path}">
 ${index ? '' : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <style>${themeTokens}${themeSwitchCss}${siteCss}</style>
 </head>
 <body>
-<header class="site-head"><nav class="pill-nav" aria-label="Hlavní">
+<header class="site-head"><nav class="pill-nav" aria-label="${t('Hlavní', 'Main')}">
 <a class="logo" href="/"><img src="/logo.svg" alt="" width="24" height="24"><span>Loadwise</span></a>
-<div class="links"><a href="/#funkce">Funkce</a><a href="/#asistent">Asistent</a><a href="/#jak">Jak to funguje</a><a href="/#soukromi">Soukromí</a></div>
-${themeSwitch()}<a class="btn solid" href="/app">Přihlásit se</a>
+<div class="links"><a href="/#funkce">${t('Funkce', 'Features')}</a><a href="/#asistent">${t('Asistent', 'Assistant')}</a><a href="/#jak">${t('Jak to funguje', 'How it works')}</a><a href="/#soukromi">${t('Soukromí', 'Privacy')}</a></div>
+${langSwitch(lang)}${themeSwitch(lang)}<a class="btn solid" href="/app">${t('Přihlásit se', 'Sign in')}</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <span>© Loadwise · petrfitnessdata.eu</span>
-<nav aria-label="Dokumenty"><a href="/privacy">Ochrana soukromí</a><a href="/terms">Podmínky</a><a href="/support">Podpora</a></nav>
+<nav aria-label="${t('Dokumenty', 'Documents')}"><a href="/privacy">${t('Ochrana soukromí', 'Privacy Policy')}</a><a href="/terms">${t('Podmínky', 'Terms')}</a><a href="/support">${t('Podpora', 'Support')}</a></nav>
 </div></footer>
-${themeSwitchScript}${revealScript}
+${themeSwitchScript}${langSwitchScript}${revealScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'cache-control':'public, max-age=3600'}});
+  // The same URL serves both languages, so caches must key on the cookie and the browser language.
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'vary':'Cookie, Accept-Language', 'cache-control':'private, max-age=0, must-revalidate'}});
 }
 
-export function overviewPage() {
-  return sitePage({
-    title: 'Loadwise · trénink, regenerace a výživa na jednom místě',
-    description: 'Loadwise spojí tréninky z Intervals.icu, spánek a zdraví z Google Health a jídlo do jednoho denního přehledu a podle toho poradí, co dnes trénovat a kolik jíst.',
+// Pages take the request (to pick the language) or nothing (Czech, for tests and previews).
+function pageLang(request) {
+  return request ? {lang: siteLang(request), device: deviceLang(request)} : {lang: 'cs', device: 'cs'};
+}
+
+export function overviewPage(request) {
+  const {lang, device} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
+  const ph = (name, alt, opts) => phone(name, alt, lang, opts);
+  return sitePage({lang, device, path: '/',
+    title: t('Loadwise · trénink, regenerace a výživa na jednom místě', 'Loadwise · training, recovery and nutrition in one place'),
+    description: t('Loadwise spojí tréninky z Intervals.icu, spánek a zdraví z Google Health a jídlo do jednoho denního přehledu a podle toho poradí, co dnes trénovat a kolik jíst.',
+      'Loadwise brings workouts from Intervals.icu, sleep and health from Google Health, and food into one daily view, then tells you what to train today and how much to eat.'),
     body: `<main>
 <div class="hero">
 <div class="wrap">
-<h1>Trénuj podle toho, <span>jak se dnes máš.</span></h1>
-<p class="sub">Loadwise spojí tréninky, spánek a jídlo do jednoho přehledu a každý den ti poradí, kolik zvládneš, kolik sníst a kdy ubrat.</p>
-<div class="hero-cta"><a class="btn primary big" href="/app">Přihlásit se</a><small>Zatím jen na pozvánku</small></div>
+<h1>${t('Trénuj podle toho, <span>jak se dnes máš.</span>', 'Train for how <span>you feel today.</span>')}</h1>
+<p class="sub">${t('Loadwise spojí tréninky, spánek a jídlo do jednoho přehledu a každý den ti poradí, kolik zvládneš, kolik sníst a kdy ubrat.', 'Loadwise brings your workouts, sleep and food into one view and tells you every day how much you can handle, how much to eat and when to back off.')}</p>
+<div class="hero-cta"><a class="btn primary big" href="/app">${t('Přihlásit se', 'Sign in')}</a><small>${t('Zatím jen na pozvánku', 'Invite only for now')}</small></div>
 </div>
 <div class="stage reveal">
-<div class="laptop">${shot('today', 'Loadwise na počítači: obrazovka Dnes se spánkem, námahou, kaloriemi, pitím a tréninky', {eager:true, width:1440, height:900})}</div>
+<div class="laptop">${shot('today', t('Loadwise na počítači: obrazovka Dnes se spánkem, námahou, kaloriemi, pitím a tréninky', 'Loadwise on a computer: the Today screen with sleep, strain, calories, hydration and workouts'), lang, {eager:true, width:1440, height:900})}</div>
 <div class="laptop-base"></div>
-${phone('today', 'Loadwise v telefonu: obrazovka Dnes', {eager:true})}
+${ph('today', t('Loadwise v telefonu: obrazovka Dnes', 'Loadwise on a phone: the Today screen'), {eager:true})}
 </div>
 </div>
 
-<div class="works wrap reveal"><p>Propojeno s</p><div class="names"><span>Intervals.icu</span><span>Google Health</span></div></div>
+<div class="works wrap reveal"><p>${t('Propojeno s', 'Works with')}</p><div class="names"><span>Intervals.icu</span><span>Google Health</span></div></div>
 
 <section id="funkce"><div class="wrap">
-<div class="head reveal"><h2>Ráno víš, na čem jsi.</h2><p>Tělo posílá signály celý den. Loadwise z nich udělá pár jasných čísel a jedno doporučení.</p></div>
+<div class="head reveal"><h2>${t('Ráno víš, na čem jsi.', 'Know where you stand every morning.')}</h2><p>${t('Tělo posílá signály celý den. Loadwise z nich udělá pár jasných čísel a jedno doporučení.', 'Your body sends signals all day. Loadwise turns them into a few clear numbers and one recommendation.')}</p></div>
 <div class="tiles">
-<div class="tile load reveal"><h3>Zátěž</h3><p>Kondice, únava a forma z každého tréninku. Uvidíš, jestli rosteš, nebo jen sbíráš únavu.</p>${phone('training', 'Obrazovka Trénink: kondice, únava a forma')}</div>
-<div class="tile sleep reveal"><h3>Spánek</h3><p>Kolik jsi spal, jaký máš spánkový dluh a jak pravidelně chodíš spát.</p>${phone('recovery', 'Obrazovka Zdraví: spánek a regenerace')}</div>
-<div class="tile recovery reveal"><h3>Regenerace</h3><p>HRV a klidový tep proti tvému normálu. Když tělo nestíhá, řekne ti to dřív než výkon.</p>${phone('today', 'Obrazovka Dnes: denní signály')}</div>
+<div class="tile load reveal"><h3>${t('Zátěž', 'Load')}</h3><p>${t('Kondice, únava a forma z každého tréninku. Uvidíš, jestli rosteš, nebo jen sbíráš únavu.', 'Fitness, fatigue and form from every workout. See whether you are getting stronger or just piling up fatigue.')}</p>${ph('training', t('Obrazovka Trénink: kondice, únava a forma', 'The Training screen: fitness, fatigue and form'))}</div>
+<div class="tile sleep reveal"><h3>${t('Spánek', 'Sleep')}</h3><p>${t('Kolik jsi spal, jaký máš spánkový dluh a jak pravidelně chodíš spát.', 'How long you slept, how much sleep debt you carry and how regular your bedtime is.')}</p>${ph('recovery', t('Obrazovka Zdraví: spánek a regenerace', 'The Health screen: sleep and recovery'))}</div>
+<div class="tile recovery reveal"><h3>${t('Regenerace', 'Recovery')}</h3><p>${t('HRV a klidový tep proti tvému normálu. Když tělo nestíhá, řekne ti to dřív než výkon.', 'HRV and resting heart rate against your normal. When your body is not keeping up, you hear it before your performance drops.')}</p>${ph('today', t('Obrazovka Dnes: denní signály', 'The Today screen: daily signals'))}</div>
 </div>
-<div class="wide food reveal"><div class="text"><h3>Víš, kolik sníst.</h3><p>Cíl kalorií a maker se řídí tím, co tě dnes čeká. Jídlo zapíšeš z fotky, čárového kódu nebo pár slovy.</p><ul>${check('Kalorie a makra podle tréninku')}${check('Zápis z fotky, kódu i textu')}${check('Pití jedním klepnutím')}</ul></div>${phone('nutrition', 'Obrazovka Výživa: snědeno, zbývá, makra a pití')}</div>
-<div class="wide plan reveal"><div class="text"><h3>Plán, který se přizpůsobí.</h3><p>Tréninky na kolo, běh i posilovnu na celý týden, podle toho, kolik máš kdy času a jak se cítíš.</p><ul>${check('Týdenní plán na klik')}${check('Posilovna se sériemi a technikou')}${check('Synchronizace s Intervals.icu')}</ul></div>${phone('workouts', 'Obrazovka Plán: plán tréninků na týden')}</div>
+<div class="wide food reveal"><div class="text"><h3>${t('Víš, kolik sníst.', 'Know how much to eat.')}</h3><p>${t('Cíl kalorií a maker se řídí tím, co tě dnes čeká. Jídlo zapíšeš z fotky, čárového kódu nebo pár slovy.', 'Your calorie and macro targets follow what your day holds. Log food from a photo, a barcode or a few words.')}</p><ul>${check(t('Kalorie a makra podle tréninku', 'Calories and macros that follow your training'))}${check(t('Zápis z fotky, kódu i textu', 'Log from a photo, barcode or text'))}${check(t('Pití jedním klepnutím', 'Drinks in one tap'))}</ul></div>${ph('nutrition', t('Obrazovka Výživa: snědeno, zbývá, makra a pití', 'The Nutrition screen: eaten, remaining, macros and drinks'))}</div>
+<div class="wide plan reveal"><div class="text"><h3>${t('Plán, který se přizpůsobí.', 'A plan that adapts.')}</h3><p>${t('Tréninky na kolo, běh i posilovnu na celý týden, podle toho, kolik máš kdy času a jak se cítíš.', 'Rides, runs and gym sessions for the whole week, built around the time you have and how you feel.')}</p><ul>${check(t('Týdenní plán na klik', 'A weekly plan in one click'))}${check(t('Posilovna se sériemi a technikou', 'Gym sessions with sets and technique'))}${check(t('Synchronizace s Intervals.icu', 'Synced with Intervals.icu'))}</ul></div>${ph('workouts', t('Obrazovka Plán: plán tréninků na týden', 'The Plan screen: the week of workouts'))}</div>
 </div></section>
 
 <section id="asistent" class="ai"><div class="wrap">
-<div class="head reveal"><h2><span>Ptej se.</span> Asistent zná tvoje data.</h2><p>Osobní trenér, který vidí tvůj spánek, tréninky i jídlo a radí podle nich, ne obecně.</p></div>
+<div class="head reveal"><h2>${t('<span>Ptej se.</span> Asistent zná tvoje data.', '<span>Just ask.</span> The assistant knows your data.')}</h2><p>${t('Osobní trenér, který vidí tvůj spánek, tréninky i jídlo a radí podle nich, ne obecně.', 'A personal coach that sees your sleep, workouts and food and gives advice based on them, not generic tips.')}</p></div>
 <div class="ai-grid">
-<div class="ai-col reveal"><div class="ai-card">${icon('chat')}<h3>Odpovědi z tvých dat</h3><p>„Jak mám jet trénink, když jsem spal 6 hodin?“ Odpověď vychází z tvých čísel.</p></div><div class="ai-card">${icon('check')}<h3>Návrhy na jedno klepnutí</h3><p>Každou úpravu tréninku nebo jídla potvrdíš, odmítneš nebo probereš.</p></div></div>
-<div class="reveal">${phone('coach', 'Osobní asistent v aplikaci: Co dnes upravíme?')}</div>
-<div class="ai-col reveal"><div class="ai-card">${icon('calendar')}<h3>Celý týden v kontextu</h3><p>Probere s tebou den i týden a přeplánuje, co je potřeba.</p></div><div class="ai-card">${icon('spark')}<h3>Revize dne</h3><p>Projde s tebou celý den a navrhne, co upravit.</p></div></div>
+<div class="ai-col reveal"><div class="ai-card">${icon('chat')}<h3>${t('Odpovědi z tvých dat', 'Answers from your data')}</h3><p>${t('„Jak mám jet trénink, když jsem spal 6 hodin?“ Odpověď vychází z tvých čísel.', '“How should I ride today after 6 hours of sleep?” The answer comes from your numbers.')}</p></div><div class="ai-card">${icon('check')}<h3>${t('Návrhy na jedno klepnutí', 'One-tap suggestions')}</h3><p>${t('Každou úpravu tréninku nebo jídla potvrdíš, odmítneš nebo probereš.', 'Confirm, reject or discuss every change to a workout or meal.')}</p></div></div>
+<div class="reveal">${ph('coach', t('Osobní asistent v aplikaci: Co dnes upravíme?', 'The personal assistant in the app: What shall we adjust today?'))}</div>
+<div class="ai-col reveal"><div class="ai-card">${icon('calendar')}<h3>${t('Celý týden v kontextu', 'The whole week in context')}</h3><p>${t('Probere s tebou den i týden a přeplánuje, co je potřeba.', 'It goes through the day and the week with you and replans what needs it.')}</p></div><div class="ai-card">${icon('spark')}<h3>${t('Revize dne', 'Day review')}</h3><p>${t('Projde s tebou celý den a navrhne, co upravit.', 'It walks through your whole day and suggests what to change.')}</p></div></div>
 </div>
 </div></section>
 
 <section id="jak"><div class="wrap">
-<div class="head reveal"><h2>Za pár minut připraveno.</h2></div>
+<div class="head reveal"><h2>${t('Za pár minut připraveno.', 'Ready in a few minutes.')}</h2></div>
 <div class="steps">
-<div class="step reveal"><b>1</b><h3>Přihlas se Googlem</h3><p>Účet vznikne s pozvánkou, žádné nové heslo.</p></div>
-<div class="step reveal"><b>2</b><h3>Propoj svoje služby</h3><p>Intervals.icu pro tréninky, Google Health pro spánek, zdraví a jídlo. Jen to, co sám povolíš.</p></div>
-<div class="step reveal"><b>3</b><h3>Ráno otevři Dnes</h3><p>Jak na tom jsi, co tě čeká a kolik dnes sníst.</p></div>
+<div class="step reveal"><b>1</b><h3>${t('Přihlas se Googlem', 'Sign in with Google')}</h3><p>${t('Účet vznikne s pozvánkou, žádné nové heslo.', 'Your account comes with the invitation, no new password.')}</p></div>
+<div class="step reveal"><b>2</b><h3>${t('Propoj svoje služby', 'Connect your services')}</h3><p>${t('Intervals.icu pro tréninky, Google Health pro spánek, zdraví a jídlo. Jen to, co sám povolíš.', 'Intervals.icu for workouts, Google Health for sleep, health and food. Only what you allow.')}</p></div>
+<div class="step reveal"><b>3</b><h3>${t('Ráno otevři Dnes', 'Open Today in the morning')}</h3><p>${t('Jak na tom jsi, co tě čeká a kolik dnes sníst.', 'How you are doing, what is ahead and how much to eat today.')}</p></div>
 </div>
 </div></section>
 
 <section id="soukromi"><div class="wrap">
-<div class="head reveal"><h2>Tvoje data slouží jen tobě.</h2></div>
+<div class="head reveal"><h2>${t('Tvoje data slouží jen tobě.', 'Your data works only for you.')}</h2></div>
 <div class="privacy">
-<div class="card reveal"><h3>Co Loadwise s daty dělá</h3><ul>
-${check('Čte jen data ze služeb, ke kterým mu sám dáš přístup.')}
-${check('Používá je jen pro funkce, které si vyžádáš: přehled, plán a výživu.')}
-${check('Data neprodává a nepoužívá k reklamě.')}
-${check('Do Google Health zapisuje jen jídlo a pití, které si sám zapíšeš.')}
-</ul><p style="margin-top:20px"><a href="/privacy">Celé zásady ochrany soukromí</a></p></div>
+<div class="card reveal"><h3>${t('Co Loadwise s daty dělá', 'What Loadwise does with your data')}</h3><ul>
+${check(t('Čte jen data ze služeb, ke kterým mu sám dáš přístup.', 'It reads data only from the services you give it access to.'))}
+${check(t('Používá je jen pro funkce, které si vyžádáš: přehled, plán a výživu.', 'It uses them only for the features you ask for: your overview, plan and nutrition.'))}
+${check(t('Data neprodává a nepoužívá k reklamě.', 'It does not sell your data or use it for advertising.'))}
+${check(t('Do Google Health zapisuje jen jídlo a pití, které si sám zapíšeš.', 'It writes to Google Health only the food and drinks you log yourself.'))}
+</ul><p style="margin-top:20px"><a href="/privacy">${t('Celé zásady ochrany soukromí', 'Full privacy policy')}</a></p></div>
 <div class="card reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Loadwise (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -280,24 +314,39 @@ ${check('Do Google Health zapisuje jen jídlo a pití, které si sám zapíšeš
 </div></section>
 
 <section class="final"><div class="wrap reveal">
-<h2>Máš pozvánku?</h2>
-<p>Loadwise je zatím jen pro pozvané. Přihlas se Google účtem, na který pozvánka přišla.</p>
-<a class="btn primary big" href="/app">Přihlásit se</a>
+<h2>${t('Máš pozvánku?', 'Got an invitation?')}</h2>
+<p>${t('Loadwise je zatím jen pro pozvané. Přihlas se Google účtem, na který pozvánka přišla.', 'Loadwise is invite only for now. Sign in with the Google account the invitation was sent to.')}</p>
+<a class="btn primary big" href="/app">${t('Přihlásit se', 'Sign in')}</a>
 </div></section>
 </main>`
   });
 }
 
-const doc = (title, html) => sitePage({title: `${title} · Loadwise`, description: `${title} for Loadwise (petrfitnessdata.eu).`, lang: 'en', body: `<main class="wrap doc"><h1>${title}</h1>${html}</main>`});
-
-export function privacyPage() {
-  return doc('Privacy Policy', `<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) is a personal training service for training, recovery and nutrition.</p><h2>What data the service may access</h2><p>When authorized by the account owner, the service may access fitness and training information from connected Google services and other configured services. This can include training history, planned workouts, cycling context, recovery metrics, nutrition information, and other fitness data needed for the requested workflows.</p><h2>How Google data is used</h2><p>Google user data is used only to provide the training and nutrition workflows requested by the account owner, such as processing authorized fitness data, reading authorized nutrition logs, and adding nutrition logs that the account owner asks the service to record. The service does not sell Google user data and does not use it for advertising.</p><h2>Storage and sharing</h2><p>Data may be processed and stored in the private health-api backend, its configured database, and connected services such as Intervals.icu and Google Health. Data may be transmitted between these configured services when necessary to provide the requested functionality. The service does not intentionally disclose personal data to unrelated third parties.</p><h2>Security</h2><p>OAuth credentials and API secrets are intended to be stored as private service secrets rather than in the source code repository. Access to the service is controlled by the configured authentication mechanisms.</p><h2>Changes</h2><p>This policy may be updated when the service or its data practices change. The current version is published on this page.</p><h2>Contact</h2><p>For support or privacy questions, use the <a href="/support">Support</a> page.</p>`);
+// Policy pages. The English text is the reference version (Google verification reads it);
+// the Czech one says the same.
+function doc(request, path, title, html) {
+  const {lang, device} = pageLang(request), pick = x => lang === 'en' ? x.en : x.cs;
+  return sitePage({lang, device, path, title: `${pick(title)} · Loadwise`, description: lang === 'en' ? `${title.en} for Loadwise (petrfitnessdata.eu).` : `${title.cs} pro Loadwise (petrfitnessdata.eu).`,
+    body: `<main class="wrap doc"><h1>${pick(title)}</h1>${pick(html)}</main>`});
 }
 
-export function termsPage() {
-  return doc('Terms of Use', `<p>Loadwise is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.</p>`);
+export function privacyPage(request) {
+  return doc(request, '/privacy', {cs: 'Zásady ochrany soukromí', en: 'Privacy Policy'}, {
+    en: `<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) is a personal training service for training, recovery and nutrition.</p><h2>What data the service may access</h2><p>When authorized by the account owner, the service may access fitness and training information from connected Google services and other configured services. This can include training history, planned workouts, cycling context, recovery metrics, nutrition information, and other fitness data needed for the requested workflows.</p><h2>How Google data is used</h2><p>Google user data is used only to provide the training and nutrition workflows requested by the account owner, such as processing authorized fitness data, reading authorized nutrition logs, and adding nutrition logs that the account owner asks the service to record. The service does not sell Google user data and does not use it for advertising.</p><h2>Storage and sharing</h2><p>Data may be processed and stored in the private health-api backend, its configured database, and connected services such as Intervals.icu and Google Health. Data may be transmitted between these configured services when necessary to provide the requested functionality. The service does not intentionally disclose personal data to unrelated third parties.</p><h2>Security</h2><p>OAuth credentials and API secrets are intended to be stored as private service secrets rather than in the source code repository. Access to the service is controlled by the configured authentication mechanisms.</p><h2>Changes</h2><p>This policy may be updated when the service or its data practices change. The current version is published on this page.</p><h2>Contact</h2><p>For support or privacy questions, use the <a href="/support">Support</a> page.</p>`,
+    cs: `<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) je osobní služba pro trénink, regeneraci a výživu.</p><h2>K jakým datům může služba přistupovat</h2><p>S povolením majitele účtu může služba číst údaje o kondici a tréninku z propojených služeb Google a dalších nastavených služeb. Patří sem historie tréninků, plánované tréninky, cyklistický kontext, údaje o regeneraci, výživě a další data o kondici potřebná pro funkce, které si majitel účtu vyžádá.</p><h2>Jak se používají data z Googlu</h2><p>Data uživatelů z Googlu slouží jen k tréninkovým a výživovým funkcím, které si majitel účtu vyžádá, například ke zpracování povolených dat o kondici, čtení povolených záznamů o jídle a přidávání záznamů o jídle, které si majitel účtu nechá zapsat. Služba data uživatelů z Googlu neprodává a nepoužívá je k reklamě.</p><h2>Uložení a sdílení</h2><p>Data se mohou zpracovávat a ukládat v soukromém backendu health-api, v jeho databázi a v propojených službách, jako jsou Intervals.icu a Google Health. Mezi těmito službami se data přenášejí jen tehdy, když je to pro požadovanou funkci potřeba. Služba osobní data záměrně nepředává nesouvisejícím třetím stranám.</p><h2>Zabezpečení</h2><p>Přihlašovací údaje OAuth a klíče API se ukládají jako soukromá tajemství služby, ne do repozitáře se zdrojovým kódem. Přístup ke službě řídí nastavené přihlašování.</p><h2>Změny</h2><p>Zásady se mohou změnit, když se změní služba nebo způsob práce s daty. Aktuální verze je vždy na této stránce.</p><h2>Kontakt</h2><p>S dotazy k podpoře nebo soukromí použij stránku <a href="/support">Podpora</a>.</p><p class="muted">Závazné je anglické znění: <a href="/privacy?lang=en">Privacy Policy</a>.</p>`
+  });
 }
 
-export function supportPage() {
-  return doc('Support', `<p>Support for Loadwise is provided through the project repository and its maintainer. Include the affected tool name, approximate time, and non-sensitive error message when reporting a problem. Never include API keys, OAuth refresh tokens, or other secrets in a support request.</p>`);
+export function termsPage(request) {
+  return doc(request, '/terms', {cs: 'Podmínky použití', en: 'Terms of Use'}, {
+    en: `<p>Loadwise is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.</p>`,
+    cs: `<p>Loadwise slouží k organizaci a plánování osobního tréninku. Za správnost propojených dat a za rozhodnutí, jestli je vygenerovaný trénink pro tebe vhodný, odpovídáš ty. Aplikace neposkytuje lékařskou diagnózu ani pomoc v nouzi. Používání aplikace vyžaduje přístup k propojené službě health-api.</p><p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
+  });
+}
+
+export function supportPage(request) {
+  return doc(request, '/support', {cs: 'Podpora', en: 'Support'}, {
+    en: `<p>Support for Loadwise is provided through the project repository and its maintainer. Include the affected tool name, approximate time, and non-sensitive error message when reporting a problem. Never include API keys, OAuth refresh tokens, or other secrets in a support request.</p>`,
+    cs: `<p>Podporu pro Loadwise zajišťuje repozitář projektu a jeho správce. Když hlásíš problém, uveď dotčený nástroj, přibližný čas a chybovou hlášku bez citlivých údajů. Nikdy do žádosti o podporu nevkládej klíče API, obnovovací tokeny OAuth ani jiná tajemství.</p>`
+  });
 }
