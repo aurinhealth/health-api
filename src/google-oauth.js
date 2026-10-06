@@ -24,5 +24,5 @@ export async function handleGoogleOAuth(request, env, pathname) {
   await saveConnectionSecret(env,'google_scopes',String(data.scope||HEALTH_SCOPES.join(' ')));
   return new Response(null,{status:302,headers:{Location:'/app#settings','Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
 }
-function html(title,body,status){return new Response("<!doctype html><html><head><meta charset=\"utf-8\"><title>Petr Fitness Data</title></head><body style=\"font-family:system-ui;max-width:760px;margin:50px auto;padding:24px;line-height:1.5\"><h1>"+esc(title)+"</h1>"+body+"</body></html>",{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","Referrer-Policy":"no-referrer"}});}
+function html(title,body,status){return new Response("<!doctype html><html><head><meta charset=\"utf-8\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:760px;margin:50px auto;padding:24px;line-height:1.5\"><h1>"+esc(title)+"</h1>"+body+"</body></html>",{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","Referrer-Policy":"no-referrer"}});}
 function esc(value){return String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll("\"","&quot;");}

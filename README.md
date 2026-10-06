@@ -1,6 +1,6 @@
 # health-api
 
-Cloudflare Worker za aplikací **Petr Fitness Data** (`https://petrfitnessdata.eu`): dashboard (`/app`), trenér cyklistiky, běhu a posilovny, výživa a deník jídla, MCP server pro ChatGPT a automatizace z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
+Cloudflare Worker za aplikací **Loadwise** (`https://petrfitnessdata.eu`): dashboard (`/app`), trenér cyklistiky, běhu a posilovny, výživa a deník jídla, MCP server pro ChatGPT a automatizace z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
 
 ## Lokálně
 
@@ -28,6 +28,8 @@ entrypoint.js → sheets-gateway.js → v400.js → v323fix.js → v323.js → i
 - `v323fix.js`: opravuje klasifikaci plánovaných tréninků z Intervals.icu pro všechny cesty pod sebou.
 - `v323.js`: `/food/recommend` (doporučení jídel k osobnímu cíli) a kontext tréninku k `/analysis/energy`.
 - `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, deník jídla, cron.
+
+Vzhled dashboardu: barvy rozhraní jsou tokeny v `src/design-system.js` (načítá se jako poslední vrstva CSS), ikony jsou jedna SVG sada v `src/icons.js`. Barvy dat v grafech (makra, fáze spánku, zóny) zůstávají u grafů.
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `sheets-gateway.js`, ne do vrstev `v*.js`. Ty se postupně ruší.
 

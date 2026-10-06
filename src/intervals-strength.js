@@ -58,7 +58,7 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
     plan.rationale ? `Proč tenhle trénink: ${plan.rationale}` : "",
     formatRows(plan.rows || []),
     calories ? `Odhad výdeje: ${calories} kcal · ${durationMinutes} min` : "",
-    "Vygenerováno v Petr Fitness Data"
+    "Vygenerováno v Loadwise"
   ].filter(Boolean).join("\n\n");
 
   return {

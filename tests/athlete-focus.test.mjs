@@ -43,8 +43,8 @@ test("the coach's role and direction follow the main sport and goal", () => {
 test("the dashboard has the settings card, the strain ring, week browsing and no rating for walks", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(client, /<h3>Hlavní sport a cíl<\/h3>/);
-  assert.match(client, /miniRing\('Strain'/);
-  assert.doesNotMatch(client, /miniRing\('Zátěž'/);
+  assert.match(client, /miniRing\('Námaha'/);
+  assert.doesNotMatch(client, /miniRing\('(Strain|Zátěž)'/);
   assert.match(client, /data-week-step="-1"/);
   assert.match(client, /x\.kind==='done'&&!isWalkActivity\(x\.a\)/);
   // The strain helpers, run as the dashboard runs them.

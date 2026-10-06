@@ -181,7 +181,7 @@ jobs:
           page="$(curl -fsS "https://petrfitnessdata.eu/app")"
           anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/daily")"
           [ "$anonymous" = "401" ] || { echo "Dashboard API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
-          python -c 'import sys; s=sys.stdin.read(); assert "Petr Fitness Data" in s; assert "Gym" in s; assert "Recovery & Health" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
+          python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "Gym" in s; assert "Recovery & Health" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
           curl -fsS "https://petrfitnessdata.eu/app/dashboard-client.js?deployment=$GITHUB_SHA" -o /tmp/dashboard-client.js
           node --check /tmp/dashboard-client.js
           daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/daily")"

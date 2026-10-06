@@ -70,7 +70,7 @@ function activityReview(a,matched){
   const p=a.payload||{},np=n(p.icu_normalized_watts||p.icu_weighted_average_watts),ftp=n(p.icu_ftp),analysis=[];
   if(plan&&n(plan.durationHours)>0&&h!=null)analysis.push({label:'Délka proti plánu',text:Math.round(h*60)+' / '+Math.round(n(plan.durationHours)*60)+' min. Délka sama nepotvrzuje provedení intervalů.'});
   if(np>0&&ftp>0)analysis.push({label:'Intenzita',text:'IF '+(np/ftp).toFixed(2)+' · NP '+Math.round(np)+' W · FTP '+Math.round(ftp)+' W.'});
-  return {id:'review-'+a.id,title:isBike(a)?'Kolo · hodnocení jízdy':'Gym · dokončený trénink',headline:a.name||'Dokončená aktivita',phase:'after',status:'tracking',actions,analysis,confidence:'medium'};
+  return {id:'review-'+a.id,title:isBike(a)?'Kolo · hodnocení jízdy':'Posilovna · dokončený trénink',headline:a.name||'Dokončená aktivita',phase:'after',status:'tracking',actions,analysis,confidence:'medium'};
 }
 export function buildCoachCouncil(input){
   const date=input.date||input.daily?.date,daily=input.daily||{},training=daily.training||{},completed=training.completed||[],matched=training.matched||[],used=new Set(),policy=trainingStatus(input.athleteState);
