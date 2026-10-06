@@ -11,7 +11,9 @@ export function dashboardPage() {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0d131a">
+<meta name="theme-color" content="#0d131a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#fbfcfd" media="(prefers-color-scheme: light)">
+<script>(function(){try{var m=document.cookie.match(/(?:^|; )lw-theme=(light|dark)/);if(m)document.documentElement.dataset.theme=m[1];}catch(e){}})();</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -60,7 +62,7 @@ body{background:var(--bg);font-size:14px;letter-spacing:-.01em}.shell{grid-templ
 <main class="main">
 <header class="topbar">
   <div><div class="top-title" id="topTitle">Dnes</div><div class="top-sub">Loadwise</div></div>
-  <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><button class="btn" id="refresh">Refresh</button></div>
+  <div class="actions"><button class="btn" id="previousDay" aria-label="Předchozí den" title="Předchozí den">←</button><input type="date" id="viewDate" aria-label="Zobrazený den"><button class="btn" id="nextDay" aria-label="Následující den" title="Následující den">→</button><span class="status-dot"></span><span class="status-label small" id="topStatus">Live</span><div class="theme-switch" role="radiogroup" aria-label="Vzhled"><button type="button" role="radio" data-theme-choice="system" aria-label="Vzhled dle zařízení" title="Dle zařízení">${icon('device')}</button><button type="button" role="radio" data-theme-choice="light" aria-label="Světlý vzhled" title="Světlý">${icon('today')}</button><button type="button" role="radio" data-theme-choice="dark" aria-label="Tmavý vzhled" title="Tmavý">${icon('moon')}</button></div><button class="btn" id="refresh">Refresh</button></div>
 </header>
 <div class="content">
 <section id="today" class="view active" aria-label="Dnes"></section>
@@ -184,7 +186,7 @@ body{background:var(--bg);font-size:14px;letter-spacing:-.01em}.shell{grid-templ
 <div id="toast" class="toast"></div>
 <style>${experienceTheme}${mobileTheme}${gymFocusTheme}${workoutsHubTheme}${assistantPanelTheme}${designSystem}</style>
 <script>window.LW_ICONS=${JSON.stringify(ICON_PATHS)};</script>
-<script src="/app/dashboard-client.js?v=20261006-tokens" defer></script>
+<script src="/app/dashboard-client.js?v=20261006-theme2" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

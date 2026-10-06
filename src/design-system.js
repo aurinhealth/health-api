@@ -1,13 +1,24 @@
 // Loadwise design system: the one place for UI colour tokens and shared component rules.
 // It is loaded after every theme layer, so a token changed here changes the whole app.
 // Chart data colours (macros, sleep stages, zones) stay with the charts.
-// A light theme will only redefine the tokens in :root. Theme layers use tokens or color-mix()
-// of tokens, never a raw colour (tests/design-tokens.test.mjs).
+// Theme layers use tokens or color-mix() of tokens, never a raw colour for a surface, line or grey
+// (tests/design-tokens.test.mjs), so the light theme below only redefines the tokens.
+// Theme choice: the lw-theme cookie (light | dark) sets <html data-theme>; without it the
+// system setting decides.
+const LIGHT = `
+  color-scheme:light;
+  --bg:#fbfcfd;--sidebar:#f3f5f8;--panel:#ffffff;--panel2:#eef1f5;--line:#d9dee6;
+  --text:#121821;--muted:#596474;
+  --ok:#0f8f66;--warn:#a86a00;--bad:#d42f47;--cyan:#0a76b8;--sky:#0784a8;--blue:#2563eb;
+  --green:#0f8a5c;--amber:#b86e00;--violet:#7444d6;--lilac:#8657e0;
+  --primary:#0f8f66;--primary-rgb:15,143,102;--primary-ink:#ffffff;--primary-text:#0a6b4c;
+  --primary-surface:#ddf3ea;--primary-line:#a9dcc8;
+`;
 export const designSystem = `
 :root{
   color-scheme:dark;
-  /* Surfaces and text. Other neutral shades are mixes of --text over --bg, so a light theme
-     only has to swap these two (plus the surfaces) for every grey in the app to follow. */
+  /* Surfaces and text. Other neutral shades are mixes of --text over --bg, so the light theme
+     only swaps these (plus the surfaces) and every grey in the app follows. */
   --bg:#0b0e12;--sidebar:#0b0e12;--panel:#151a20;--panel2:#20262f;--line:#2c333e;
   --text:#f6f7fb;--muted:#a3afbf;
   /* Status and accent hues; tints are mixes of a hue with --bg (surfaces) or --text (light text). */
@@ -17,6 +28,8 @@ export const designSystem = `
   --primary-surface:#1d302b;--primary-line:#2d4b40;
   --accent:var(--primary);--accent2:var(--primary-text);
 }
+:root[data-theme="light"]{${LIGHT}}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]){${LIGHT}}}
 body{background:var(--bg)}
 .brand span{text-transform:none;letter-spacing:0;font-size:12px}
 /* The day timeline scrolls inside its card; the fade says there is more below. */
@@ -27,6 +40,17 @@ body{background:var(--bg)}
 .plan-day.today,.day.today,.hub-day.today{border-color:var(--primary);box-shadow:inset 0 0 0 1px rgba(var(--primary-rgb),.2)}
 .fab{color:var(--primary-ink)}
 :focus-visible{outline-color:var(--primary)}
+
+/* Vzhled: light / dark switch in the top bar and in Nastavení. */
+.theme-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+.theme-switch button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:999px;background:none;color:var(--muted);cursor:pointer}
+.theme-switch button:hover{color:var(--text)}
+.theme-switch button[aria-checked=true]{background:var(--primary-surface);color:var(--primary-text)}
+.theme-switch .icon{width:16px;height:16px}
+.theme-card{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.theme-card h3{margin:0 0 4px}.theme-card p{margin:0}
+.theme-choices{display:flex;gap:6px;flex-wrap:wrap}
+.theme-choices .btn.selected{background:var(--primary-surface);border-color:var(--primary-line);color:var(--primary-text)}
 
 /* Icons: one inline SVG set, sized to the text next to it. */
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}

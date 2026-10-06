@@ -22,7 +22,7 @@ function themeBound(hex){
 test('theme layers take surface, line and text colours from tokens',()=>{
   const found=[];
   for(const file of LAYERS){
-    const src=readFileSync(new URL('../src/'+file,import.meta.url),'utf8').replace(/:root\{[^}]*\}/g,'').replace(/content="[^"]*"/g,'');
+    const src=readFileSync(new URL('../src/'+file,import.meta.url),'utf8').replace(/:root[^{]*\{[^}]*\}/g,'').replace(/content="[^"]*"/g,'').replace(/const LIGHT = `[^`]*`/,'');
     for(const m of src.matchAll(/#[0-9a-fA-F]{3,8}\b/g))if([4,5,7,9].includes(m[0].length)&&themeBound(m[0]))found.push(file+' '+m[0]);
   }
   assert.deepEqual(found,[],'use var(--token) or color-mix(in srgb,var(--text) N%,var(--bg)) instead of these colours');
@@ -33,4 +33,14 @@ test('the design system defines every token the layers mix from, once',async()=>
   const roots=html.match(/:root\{[^}]*\}/g)||[];
   assert.equal(roots.length,1,'all colour tokens live in design-system.js');
   for(const name of new Set([...html.matchAll(/color-mix\(in srgb,var\(--([a-z0-9-]+)\)/g)].map(m=>m[1]))) assert.match(roots[0],new RegExp('--'+name+':'),name);
+});
+
+test('light theme follows the lw-theme cookie or the system setting',async()=>{
+  const html=await dashboardPage().text(),client=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
+  const head=html.slice(0,html.indexOf('<style>'));
+  assert.match(head,/lw-theme=\(light\|dark\)/,'theme is applied before the first paint');
+  assert.match(html,/:root\[data-theme="light"\]\{[^}]*--bg:/);
+  assert.match(html,/@media \(prefers-color-scheme:light\)\{:root:not\(\[data-theme="dark"\]\)\{[^}]*--bg:/);
+  for(const choice of ['system','light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'),'top bar switch: '+choice);
+  for(const choice of ['system','light','dark'])assert.match(client,new RegExp('data-theme-choice="'+choice+'"'));
 });
