@@ -9,6 +9,10 @@
     }
   ],
   "compatibility_date": "2026-09-15",
+  // Screenshots for the overview page on /. A request matching a file here never reaches the Worker.
+  "assets": {
+    "directory": "./public"
+  },
   // Same as Workers Logs in the Cloudflare dashboard, so a deploy keeps it.
   "observability": {
     "enabled": true,

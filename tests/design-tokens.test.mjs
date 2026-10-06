@@ -6,7 +6,7 @@ import {dashboardPage} from '../src/dashboard.js';
 // Surfaces, lines and text greys must come from tokens (or color-mix() of tokens), otherwise a
 // light theme cannot change them. Saturated mid-tone colours (chart data, accents) work on both
 // backgrounds and may stay; black stays for shadows and masks, white for text on a coloured fill.
-const LAYERS=['dashboard.js','dashboard-client.js','experience-theme.js','mobile-theme.js','gym-focus-view.js','workouts-hub-theme.js','assistant-panel-theme.js','design-system.js'];
+const LAYERS=['dashboard.js','dashboard-client.js','experience-theme.js','mobile-theme.js','gym-focus-view.js','workouts-hub-theme.js','assistant-panel-theme.js','design-system.js','site-pages.js'];
 
 const lin=c=>{c/=255;return c<=0.04045?c/12.92:((c+0.055)/1.055)**2.4;};
 function oklab(r,g,b){const R=lin(r),G=lin(g),B=lin(b);const l=Math.cbrt(0.4122214708*R+0.5363325363*G+0.0514459929*B),m=Math.cbrt(0.2119034982*R+0.6806995451*G+0.1073969566*B),s=Math.cbrt(0.0883024619*R+0.2817188376*G+0.6299787005*B);return [0.2104542553*l+0.7936177850*m-0.0040720468*s,1.9779984951*l-2.4285922050*m+0.4505937099*s,0.0259040371*l+0.7827717662*m-0.8086757660*s];}

@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "src/**"
+      - "public/**"
       - "wrangler.jsonc"
       - "migrations/**"
       - ".github/workflows/deploy-worker.yml"
@@ -183,6 +184,10 @@ jobs:
           [ "$anonymous" = "401" ] || { echo "Dashboard API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
           python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "Gym" in s; assert "Recovery & Health" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
           curl -fsS "https://petrfitnessdata.eu/app/dashboard-client.js?deployment=$GITHUB_SHA" -o /tmp/dashboard-client.js
+          home="$(curl -fsS "https://petrfitnessdata.eu/")"
+          python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "Google Health data disclosure" in s; assert "href=\"/privacy\"" in s' <<< "$home"
+          shot_type="$(curl -fsS -o /dev/null -w '%{content_type}' "https://petrfitnessdata.eu/site/today-dark.webp")"
+          [ "$shot_type" = "image/webp" ] || { echo "Overview screenshot not served, got $shot_type"; exit 1; }
           node --check /tmp/dashboard-client.js
           daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/daily")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"' <<< "$daily"

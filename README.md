@@ -31,6 +31,8 @@ entrypoint.js → sheets-gateway.js → v400.js → v323fix.js → v323.js → i
 
 Vzhled dashboardu: barvy rozhraní jsou tokeny v `src/design-system.js` (načítá se jako poslední vrstva CSS), ikony jsou jedna SVG sada v `src/icons.js`. Ostatní odstíny se z tokenů míchají, např. `color-mix(in srgb,var(--text) 12%,var(--bg))`; barvu natvrdo pro plochy, čáry a šedé texty test `tests/design-tokens.test.mjs` nepustí. Světlý vzhled jen předefinuje tokeny (`:root[data-theme="light"]` a stejná sada pro systémové nastavení). Volbu Systém / Světlý / Tmavý z horní lišty nebo Nastavení drží cookie `lw-theme`, kterou stránka čte ještě před vykreslením. Barvy dat v grafech (makra, fáze spánku, zóny) zůstávají u grafů.
 
+Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`. Berou stejné tokeny a přepínač vzhledu jako aplikace. Snímky obrazovek jsou v `public/site/` (statické soubory Workeru, každý ve světlé i tmavé verzi) a vznikají ze sandboxu `scripts/sandbox-preview.mjs`. Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
+
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `sheets-gateway.js`, ne do vrstev `v*.js`. Ty se postupně ruší.
 
 Kalorický cíl, který vidí uživatel, je vyšší ze dvou hodnot (`applyEnergyBudget` v `energy-budget.js`): očekávaný den z profilu (`nutrition.calorieTarget` z `/analysis/daily`) a průběžný rozpočet z aktivní energie naměřené Google Health. Ráno tak cíl neleží na minimu a během aktivního dne roste.

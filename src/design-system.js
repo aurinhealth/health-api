@@ -1,3 +1,4 @@
+import {icon} from './icons.js';
 // Loadwise design system: the one place for UI colour tokens and shared component rules.
 // It is loaded after every theme layer, so a token changed here changes the whole app.
 // Chart data colours (macros, sleep stages, zones) stay with the charts.
@@ -14,7 +15,8 @@ const LIGHT = `
   --primary:#0f8f66;--primary-rgb:15,143,102;--primary-ink:#ffffff;--primary-text:#0a6b4c;
   --primary-surface:#ddf3ea;--primary-line:#a9dcc8;
 `;
-export const designSystem = `
+// Shared by the app (/app) and the public pages (/, /privacy, …).
+export const themeTokens = `
 :root{
   color-scheme:dark;
   /* Surfaces and text. Other neutral shades are mixes of --text over --bg, so the light theme
@@ -30,6 +32,33 @@ export const designSystem = `
 }
 :root[data-theme="light"]{${LIGHT}}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){${LIGHT}}}
+`;
+
+// Runs in <head> before the first paint, so a saved choice never flashes the other theme.
+export const themeBoot = `<script>(function(){try{var m=document.cookie.match(/(?:^|; )lw-theme=(light|dark)/);if(m)document.documentElement.dataset.theme=m[1];}catch(e){}})();</script>`;
+
+// Vzhled switch: Dle zařízení / Světlý / Tmavý. The app wires it in dashboard-client.js,
+// the public pages with themeSwitchScript.
+export const themeSwitch = () => `<div class="theme-switch" role="radiogroup" aria-label="Vzhled"><button type="button" role="radio" data-theme-choice="system" aria-label="Vzhled dle zařízení" title="Dle zařízení">${icon('device')}</button><button type="button" role="radio" data-theme-choice="light" aria-label="Světlý vzhled" title="Světlý">${icon('today')}</button><button type="button" role="radio" data-theme-choice="dark" aria-label="Tmavý vzhled" title="Tmavý">${icon('moon')}</button></div>`;
+
+export const themeSwitchScript = `<script>(function(){
+var root=document.documentElement,media=matchMedia('(prefers-color-scheme: light)');
+function choice(){return root.dataset.theme||'system';}
+function sync(){document.querySelectorAll('[data-theme-choice]').forEach(function(b){b.setAttribute('aria-checked',String(b.dataset.themeChoice===choice()));});}
+document.addEventListener('click',function(e){var b=e.target.closest('[data-theme-choice]');if(!b)return;var c=b.dataset.themeChoice;
+if(c==='system'){delete root.dataset.theme;document.cookie='lw-theme=; path=/; max-age=0; samesite=lax';}
+else{root.dataset.theme=c;document.cookie='lw-theme='+c+'; path=/; max-age=31536000; samesite=lax';}sync();});
+media.addEventListener('change',sync);sync();})();</script>`;
+
+export const themeSwitchCss = `
+.theme-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
+.theme-switch button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:999px;background:none;color:var(--muted);cursor:pointer}
+.theme-switch button:hover{color:var(--text)}
+.theme-switch button[aria-checked=true]{background:var(--primary-surface);color:var(--primary-text)}
+.theme-switch .icon{width:16px;height:16px}
+`;
+
+export const designSystem = themeTokens + themeSwitchCss + `
 body{background:var(--bg)}
 .brand span{text-transform:none;letter-spacing:0;font-size:12px}
 /* The day timeline scrolls inside its card; the fade says there is more below. */
@@ -41,12 +70,7 @@ body{background:var(--bg)}
 .fab{color:var(--primary-ink)}
 :focus-visible{outline-color:var(--primary)}
 
-/* Vzhled: light / dark switch in the top bar and in Nastavení. */
-.theme-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}
-.theme-switch button{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:999px;background:none;color:var(--muted);cursor:pointer}
-.theme-switch button:hover{color:var(--text)}
-.theme-switch button[aria-checked=true]{background:var(--primary-surface);color:var(--primary-text)}
-.theme-switch .icon{width:16px;height:16px}
+/* Vzhled: the switch itself is themeSwitchCss; this is its card in Nastavení. */
 .theme-card{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px}
 .theme-card h3{margin:0 0 4px}.theme-card p{margin:0}
 .theme-choices{display:flex;gap:6px;flex-wrap:wrap}
