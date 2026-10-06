@@ -138,7 +138,7 @@ test('passing remarks are not remembered and preferences are saved after the ans
 });
 
 test('a reply cut off by the token limit keeps its answer and never shows raw JSON',async()=>{
-  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,actions:[]});
+  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[]});
   assert.doesNotMatch(coachAnswerText('{"actions":[{"type":"rest"',{actions:true}).answer,/[{}]/);
   assert.equal(coachAnswerText('Obyčejný text',{actions:true}).answer,'Obyčejný text');
   const original=globalThis.fetch,calls=[];
@@ -175,4 +175,10 @@ test('the panel shows only open proposals from today and this chat; streaming re
   assert.match(client,/pendingAnswer=answer;if\(Date\.now\(\)-paintedAt>=100\)paint\(\);/);
   const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
   assert.match(entry,/UPDATE coach_inbox SET status='expired' WHERE user_id=\? AND status='draft' AND created_at<\?/);
+});
+
+test('the coach picks at most two known pictures for an answer',()=>{
+  const r=coachAnswerText(JSON.stringify({answer:'Forma roste.',visuals:['form','bogus','sleep','zones'],actions:[]}),{actions:true});
+  assert.deepEqual(r.visuals,['form','sleep']);
+  assert.deepEqual(coachAnswerText('Obyčejný text',{actions:true}).visuals,[]);
 });

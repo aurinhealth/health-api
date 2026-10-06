@@ -3430,6 +3430,7 @@ async function sendAssistantMessage(message,{retry=false,appContext=captureAssis
     if(revision!==statusCoachingRevision){streamedTurn?.remove();appendCoachTurn('assistant','Stav se mezitím změnil. Pošli požadavek znovu pro aktuální doporučení.');return;}
     if(r.kind==='food_draft'){renderFoodDraft(message,r);scrollAssistant();return;}
     if(streamedTurn){streamedTurn.querySelector('.coach-message').innerHTML=coachRichText(r.answer);streamedTurn.classList.remove('streaming');scrollAssistant(true);}else appendCoachTurn('assistant',r.answer);rememberCoachTurn('assistant',r.answer);
+    if(r.visuals?.length){await renderCoachVisuals(streamedTurn||$('assistantConversation').lastElementChild,r.visuals);scrollAssistant();}
     if(r.actions?.length){renderCoachActionCards(r.actions,streamedTurn);scrollAssistant();}
     $('assistantStatus').textContent=r.memorySaved?'Preference uložena. Najdeš ji v Nastavení.':'Návrh potvrdíš nebo upravíš zprávou.';
     if(r.memorySaved){state.athleteState.memories=[...new Set([...(state.athleteState.memories||[]),r.memorySaved])];renderCoachMemories();}
@@ -3442,6 +3443,38 @@ async function sendAssistantMessage(message,{retry=false,appContext=captureAssis
     button.onclick=()=>{if(assistantBusy)return;notice.remove();streamedTurn?.remove();sendAssistantMessage(message,{retry:true,appContext});};notice.append(button);
     $('assistantConversation').append(notice);$('assistantStatus').textContent='Zprávu se nepodařilo vyřídit.';scrollAssistant(true);
   }finally{assistantBusy=false;updateAssistantComposer();renderAssistantContext();}
+}
+// Pictures under an answer, drawn from the athlete's own data (the coach
+// only picks which): form, recovery, sleep, nutrition, week, training, zones.
+function miniLine(values,color='#8fd3b6',h=36){
+  const v=values.map(Number).filter(Number.isFinite);if(v.length<2)return '';
+  const min=Math.min(...v),max=Math.max(...v),span=max-min||1,pts=v.map((x,i)=>(i/(v.length-1)*100).toFixed(1)+','+(h-2-(x-min)/span*(h-4)).toFixed(1)).join(' ');
+  return '<svg class="cv-line" viewBox="0 0 100 '+h+'" preserveAspectRatio="none" aria-hidden="true"><polyline points="'+pts+'" fill="none" stroke="'+color+'" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>';
+}
+function cvBar(label,value,target,unit=''){const pct=target>0?Math.min(100,Math.round(value/target*100)):0;return '<div class="cv-bar"><span>'+esc(label)+'</span><i><b style="width:'+pct+'%"></b></i><small>'+esc(fmt(value)+(target>0?' / '+fmt(target):'')+unit)+'</small></div>';}
+function cvTile(title,body){return body?'<div class="coach-vis"><div class="cv-title">'+esc(title)+'</div>'+body+'</div>':'';}
+// A third item true means the value is already HTML (formText).
+function cvStats(items){return '<div class="cv-stats">'+items.filter(([,v])=>v!=null&&v!=='').map(([k,v,html])=>'<div><span>'+esc(k)+'</span><strong>'+(html?v:esc(v))+'</strong></div>').join('')+'</div>';}
+const COACH_VISUAL={
+  form(){const w=(state.fitness?.wellness||[]).filter(r=>measured(r.ctl));const last=w.at(-1);if(!last)return '';const tsb=measured(last.tsb)?Number(last.tsb):Number(last.ctl)-Number(last.atl);
+    return cvTile('Kondice · únava · forma',cvStats([['Kondice (CTL)',fmt(last.ctl)],['Únava (ATL)',fmt(last.atl)],['Forma',formText(tsb),true]])+miniLine(w.slice(-42).map(r=>measured(r.tsb)?r.tsb:r.ctl-r.atl),'#b393ff')+'<small class="cv-note">Forma za 6 týdnů</small>');},
+  recovery(){const w=vitalWellness().slice(-28),hrv=w.filter(r=>measured(r.hrv)),rhr=w.filter(r=>measured(r.restingHR));if(!hrv.length&&!rhr.length)return '';const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+    return cvTile('Regenerace',cvStats([['HRV',hrv.length?fmt(hrv.at(-1).hrv)+' ms':null],['průměr 4 týdny',hrv.length?fmt(avg(hrv.map(r=>Number(r.hrv))))+' ms':null],['Klidový tep',rhr.length?fmt(rhr.at(-1).restingHR)+' bpm':null]])+miniLine(hrv.slice(-14).map(r=>r.hrv),'#8fd3b6')+(hrv.length?'<small class="cv-note">HRV za 14 dní</small>':''));},
+  sleep(){const nights=primarySleepSessions(state.sleep?.sessions).slice(0,7).reverse();if(!nights.length)return '';const max=Math.max(480,...nights.map(n=>num(n.durationMin)));
+    return cvTile('Spánek',cvStats([['Poslední noc',hm(nights.at(-1).durationMin)],['Průměr 7 nocí',hm(nights.reduce((s,n)=>s+num(n.durationMin),0)/nights.length)]])+'<div class="cv-cols">'+nights.map(n=>'<i title="'+esc(hm(n.durationMin))+'" style="height:'+Math.round(num(n.durationMin)/max*100)+'%"></i>').join('')+'</div>');},
+  nutrition(){const n=state.daily?.nutrition||{},t=n.foodLog?.totals||{},m=n.macros||{};if(!measured(n.calorieTarget))return '';
+    return cvTile('Jídlo dnes',cvBar('Energie',num(t.kcal),num(n.calorieTarget),' kcal')+cvBar('Bílkoviny',num(t.protein_g),num(m.protein_g),' g')+cvBar('Sacharidy',num(t.carbs_g),num(m.carbs_g),' g')+cvBar('Tuky',num(t.fat_g),num(m.fat_g),' g'));},
+  week(){const t=state.weekPlan?.targets;if(!t||t.status!=='ok')return '';return cvTile(t.recovery?'Týden · regenerační':'Zátěž týdne',cvBar('TSS',num(t.committed),num(t.target))+(t.runCap?.limited?'<small class="cv-note">Běh nejvýš '+esc(hm(t.runCap.cap))+'</small>':''));},
+  training(){const items=todayItems(pragueToday()).filter(x=>x.kind!=='role'||x.sport);if(!items.length)return cvTile('Dnes','<p class="small">Dnes nic v plánu.</p>');
+    return cvTile('Dnes',items.map(x=>'<div class="cv-item"><span>'+(SPORT_ICON[x.sport]||'•')+'</span><b>'+esc(x.name)+'</b><small>'+esc((x.kind==='done'?'✓ hotovo':x.kind==='role'?'návrh':'plán')+(x.meta?' · '+x.meta:''))+'</small></div>').join(''));},
+  zones(){const d=state.trainingProfile;if(!d)return null;const ftp=d.resolved?.ftp,z=(d.powerZones||[]).filter(x=>x.wattsLow!=null);if(!ftp)return cvTile('Zóny','<p class="small">FTP zatím není nastavené.</p>');
+    return cvTile('FTP '+fmt(ftp)+' W',z.map(x=>'<div class="cv-zone"><b>Z'+x.zone+'</b><span>'+esc(String(x.name||'').replace(/^Z\d+\s*/,''))+'</span><small>'+fmt(x.wattsLow)+(x.wattsHigh!=null?'–'+fmt(x.wattsHigh):'+')+' W</small></div>').join(''));}
+};
+async function renderCoachVisuals(turn,kinds=[]){
+  if(!turn||!kinds.length)return;
+  if(kinds.includes('zones')&&!state.trainingProfile)state.trainingProfile=await jsonFetch('/app/api/training-profile').catch(()=>null);
+  const html=kinds.map(k=>{try{return COACH_VISUAL[k]?.()||'';}catch{return '';}}).join('');
+  if(html)turn.insertAdjacentHTML('beforeend','<div class="coach-visuals">'+html+'</div>');
 }
 // Proposals sit inside the assistant's own answer: one visual card each (the
 // workout's profile, a gym's exercises on the body figure), answered by

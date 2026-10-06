@@ -58,4 +58,12 @@ body.gym-mode-open dialog.assistant-dialog{z-index:150}.gm-assistant{font-size:1
 .coach-visual .gym-compact{margin:0;padding-left:18px;font-size:12px}.coach-visual .gym-compact li{margin:3px 0}
 .coach-visual .workout-facts{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:12px}.coach-visual .workout-facts div{display:flex;gap:4px}.coach-visual .workout-facts dd{margin:0;font-weight:700}
 .coach-replies{display:flex;flex-wrap:wrap;gap:6px}.coach-reply-hint{margin:0;color:#93a39b}
+.coach-visuals{display:grid;gap:8px;margin-top:10px}.coach-vis{padding:10px 12px;border:1px solid #33463d;border-radius:12px;background:#15201b}
+.cv-title{font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#93a39b;margin-bottom:6px}
+.cv-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px}.cv-stats span{display:block;font-size:11px;color:#93a39b}.cv-stats strong{font-size:15px}
+.cv-line{display:block;width:100%;height:36px;margin-top:6px}.cv-note{display:block;font-size:10px;color:#7f8f87}
+.cv-bar{display:grid;grid-template-columns:72px 1fr auto;gap:8px;align-items:center;font-size:12px;margin:4px 0}.cv-bar i{height:7px;border-radius:4px;background:#26332d;overflow:hidden}.cv-bar b{display:block;height:100%;background:#7fd6a6;border-radius:4px}.cv-bar small{color:#93a39b;white-space:nowrap}
+.cv-cols{display:flex;align-items:flex-end;gap:5px;height:48px;margin-top:8px}.cv-cols i{flex:1;background:#6b8fd6;border-radius:3px 3px 0 0;min-height:3px}
+.cv-item{display:grid;grid-template-columns:22px 1fr;gap:2px 6px;margin:4px 0;font-size:13px}.cv-item small{grid-column:2;color:#93a39b;font-size:11px}
+.cv-zone{display:grid;grid-template-columns:28px 1fr auto;gap:6px;font-size:12px;padding:2px 0}.cv-zone small{color:#c6d4cc}
 `;
