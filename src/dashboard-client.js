@@ -3253,7 +3253,7 @@ function captureAssistantContext(){
 function renderAssistantContext(context=captureAssistantContext()){
   const el=$('assistantContext');if(!el)return;
   const names={today:'Den',workouts:'Tréninky',training:'Historie',health:'Zdraví',nutrition:'Výživa',settings:'Nastavení'};
-  el.textContent=(context.sport?HUB_SPORTS[context.sport]:names[context.view])+' · '+longDate(context.date)+(context.exercise?' · '+context.exercise:'');
+  el.textContent='Otevřeno: '+(context.sport?'Workouty · '+HUB_SPORTS[context.sport]:names[context.view])+' · '+longDate(context.date)+(context.exercise?' · '+context.exercise:'');
   const quick=$('assistantQuickActions');if(!quick)return;
   const items=[context.sport==='gym'?['Upravit tento gym','Prober otevřený gym na '+context.date+(context.exercise?', právě jsem u cviku '+context.exercise:'')+'. Doporučil bys něco upravit podle uloženého plánu a aktuální regenerace?']:['Probrat tento den','Prober plán na vybraný den '+context.date+' a jeho návaznost na regeneraci.'],['Probrat týden','Prober otevřený týden od '+context.weekStart+'. Zohledni moje zvolené sporty, časové možnosti a regeneraci.'],['Moje regenerace','Zhodnoť moji aktuální regeneraci a navrhni, jak jí přizpůsobit nejbližší trénink.']];
   quick.innerHTML=items.map((x,i)=>'<button class="assistant-quick" type="button" data-assistant-quick="'+i+'"'+(assistantBusy?' disabled':'')+'>'+esc(x[0])+'</button>').join('');

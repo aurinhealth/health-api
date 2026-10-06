@@ -262,7 +262,7 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
       ...(format ? {text:{format}} : {})
     })
   });
-  if(!response.ok){const error=await response.json().catch(()=>({}));throw new Error(error.error?.message||'AI služba není dostupná.');}
+  if(!response.ok){const error=await response.json().catch(()=>({})),failure=new Error('OpenAI '+response.status+': '+(error.error?.message||'AI služba není dostupná.'));failure.ai=true;throw failure;}
   const data=onText?await readOpenAIStream(response,onText):await response.json();
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
