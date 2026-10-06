@@ -51,4 +51,11 @@ body.gym-mode-open dialog.assistant-dialog{z-index:150}.gm-assistant{font-size:1
 .assistant-history-note{margin-top:12px}
 @media(max-width:700px){.assistant-panel-header .assistant-head-btn{padding:6px 9px}.assistant-history{top:62px}}
 .assistant-new-note{margin:10px 4px 0;font-size:12px;color:#93a39b;text-align:center}
+.coach-proposals{margin-top:12px;display:grid;gap:10px}
+.coach-turn .coach-action{margin:0;border:1px solid #40564c;border-radius:12px}
+.coach-visual{margin-top:10px}.coach-visual.gym-detail{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}.coach-visual .gym-detail-figure{max-width:200px;margin:0 auto}.coach-visual .gym-detail-figure svg{width:100%;height:auto;max-height:150px}
+.coach-visual .gym-detail-figure p,.coach-visual .gym-figure-legend{display:none}
+.coach-visual .gym-compact{margin:0;padding-left:18px;font-size:12px}.coach-visual .gym-compact li{margin:3px 0}
+.coach-visual .workout-facts{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:12px}.coach-visual .workout-facts div{display:flex;gap:4px}.coach-visual .workout-facts dd{margin:0;font-weight:700}
+.coach-replies{display:flex;flex-wrap:wrap;gap:6px}.coach-reply-hint{margin:0;color:#93a39b}
 `;

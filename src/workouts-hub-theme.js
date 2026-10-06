@@ -537,6 +537,8 @@ body.sheet-open{overflow:hidden}
 .training-plan summary{cursor:pointer;color:#c9d2de;font-size:13px;margin:4px 0}
 .training-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.training-move{margin-top:12px}
 .gym-detail{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:16px;align-items:start;margin:6px 0}
+.gym-done-edit{margin:12px 0;padding:12px;border:1px solid #2b3442;border-radius:12px}.gym-done-edit h4{margin:0 0 8px}.gym-done-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.gym-done-list span{display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border:1px solid #333b49;border-radius:16px;font-size:12px}.gym-done-list .btn{padding:2px 8px;min-height:0;font-size:11px}
+.done-exercise-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}.done-exercise-form label{display:grid;gap:4px;font-size:12px}.done-exercise-form input{width:100%;min-width:0;padding:10px;border-radius:10px;border:1px solid #435365;background:#161b25;color:#fff;font-size:16px}
 .gym-detail-figure .muscle-map{max-width:260px;margin:0}.gym-detail-figure .gym-figure svg{max-height:240px}
 .gym-figure-legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:#9ca6b5;margin-top:4px}.gym-figure-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
 .gym-compact{list-style:none;margin:0;padding:0;display:grid;gap:6px;counter-reset:ex}

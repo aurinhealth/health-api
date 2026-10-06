@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
+const chatHtml=app=>{const c=app.nodes.get('assistantConversation');return c.innerHTML+c.children.map(x=>x.innerHTML).join('');};
 function client({inbox=Promise.resolve(),reply=async()=>Response.json({answer:'Můžeme zkrátit trénink.',actions:[]})}={}){
   const nodes=new Map(),requests=[],toasts=[];
   class Element {
@@ -31,19 +32,21 @@ function client({inbox=Promise.resolve(),reply=async()=>Response.json({answer:'M
   const button=kind=>{
     if(kind==='week'){context.proposal={start:'2026-10-05',proposal:{items:[{date:'2026-10-06',sport:'ride',minutes:60}]}};run('renderAssistantWeekProposal(proposal)');return nodes.get('discussWeekProposal');}
     if(kind==='recovery'){state.coachAdvice={headline:'Regenerace',reasons:['Málo spánku.'],message:'Zvaž pauzu.'};run('renderAthleteStatus()');return nodes.get('adviceDiscuss');}
-    context.actions=[{type:'workout',sport:'gym',date:'2026-10-06',minutes:45,reason:'Slabší regenerace.'}];run('renderCoachActionCards(actions)');return nodes.get('coachActionCards').children.find(x=>x.dataset?.coachFeedback==='0');
+    // A proposal is answered in the chat: "Jinou variantu" is the compromise.
+    context.actions=[{type:'workout',sport:'gym',date:'2026-10-06',minutes:45,reason:'Slabší regenerace.'}];run("appendCoachTurn('assistant','Navrhuji gym.')");run('renderCoachActionCards(actions)');return nodes.get('assistantConversation').lastElementChild.children.find(x=>x.dataset?.coachReply==='1');
   };
-  return {nodes,requests,toasts,state,run,button};
+  return {nodes,requests,toasts,state,run,button,context};
 }
 
 for(const kind of ['week','recovery','action'])test(kind+' compromise click sends a complete user message and shows the answer',async()=>{
   const app=client();await app.button(kind).onclick();
-  assert.equal(app.nodes.get('assistantDialog').open,true);
+  // The chat's own reply chips are used inside the already open chat.
+  if(kind!=='action')assert.equal(app.nodes.get('assistantDialog').open,true);
   assert.equal(app.requests.length,1);assert.equal(app.requests[0].url,'/app/api/assistant');
-  assert.match(app.requests[0].message,/Chci probrat kompromis/);
-  assert.match(app.requests[0].message,kind==='week'?/2026-10-06 · Kolo · 60 min/:kind==='recovery'?/Málo spánku/:/Gym.*Slabší regenerace/);
-  assert.equal(app.state.athleteState.conversation[0].role,'user');
-  assert.equal(app.state.athleteState.conversation[0].content,app.requests[0].message);
+  if(kind==='action')assert.equal(app.requests[0].message,'Jinou variantu');
+  else{assert.match(app.requests[0].message,/Chci probrat kompromis/);assert.match(app.requests[0].message,kind==='week'?/2026-10-06 · Kolo · 60 min/:/Málo spánku/);}
+  const said=app.state.athleteState.conversation.filter(t=>t.role==='user');
+  assert.equal(said.at(-1).content,app.requests[0].message);
   assert.match(app.nodes.get('assistantConversation').innerHTML,/<strong>Ty<\/strong>/);
   assert.match(app.nodes.get('assistantConversation').innerHTML,/Můžeme zkrátit trénink/);
   assert.equal(app.nodes.get('assistantMessage').value,'');
@@ -101,17 +104,30 @@ test('quick gym help opens above workout mode and sends the current exercise',as
 test('slow inbox refresh cannot replace action cards from the latest reply',async()=>{
   let finish;const inbox=new Promise(resolve=>{finish=resolve;}),app=client({inbox,reply:async()=>Response.json({answer:'Navrhuji gym.',actions:[{type:'week_sport',date:'2026-10-11',sport:'gym',reason:'Vedle kola.'}]})});
   await app.run('openFloatingAssistant()');await app.run("sendAssistantMessage('Přidej gym')");finish();await new Promise(setImmediate);
-  assert.equal(app.requests.length,1);assert.match(app.nodes.get('coachActionCards').innerHTML,/Přidat Gym do týdne/);
+  assert.equal(app.requests.length,1);assert.match(chatHtml(app),/Přidat Gym do týdne/);
 });
 
 test('browser consumes streamed progress and answer frames before final proposal cards',async()=>{
   const frames=[{type:'start'},{type:'progress',message:'Načítám plán'},{type:'answer',answer:'Navrhuji gym.'},{type:'done',result:{answer:'Navrhuji gym.',actions:[{type:'week_sport',date:'2026-10-11',sport:'gym',reason:'Vedle kola.'}]}}];
   const app=client({reply:async()=>new Response(frames.map(f=>JSON.stringify(f)).join('\n')+'\n',{headers:{'Content-Type':'application/x-ndjson'}})});await app.run("sendAssistantMessage('Přidej gym')");
-  assert.equal(app.state.athleteState.conversation.at(-1).content,'Navrhuji gym.');assert.match(app.nodes.get('coachActionCards').innerHTML,/Přidat Gym do týdne/);
+  assert.equal(app.state.athleteState.conversation.at(-1).content,'Navrhuji gym.');assert.match(chatHtml(app),/Přidat Gym do týdne/);
 });
 
 test('a generator tab left selected is not the topic: the assistant talks about the day',async()=>{
   const app=client();app.state.workoutSport='gym';app.state.gymDate='2026-10-11';app.state.view='workouts';
   await app.run("sendAssistantMessage('Jaké mám FTP?')");
   assert.equal(app.requests[0].appContext.sport,null);
+});
+
+test('"ok, potvrzuji" confirms the open proposals without asking the AI; "nechci" rejects them',async()=>{
+  const app=client({reply:async()=>Response.json({answer:'Navrhuji gym.',actions:[{type:'week_sport',date:'2026-10-11',sport:'gym',reason:'Vedle kola.',draftId:7}]})});
+  await app.run("sendAssistantMessage('Přidej gym')");
+  assert.match(chatHtml(app),/Přidat Gym do týdne/);assert.match(chatHtml(app),/Potvrzuji/);
+  app.context.decisions=[];app.run("decideCoachAction=async(a,d)=>{decisions.push(d);return {message:'Gym je v týdnu.'};}");
+  await app.run("sendAssistantMessage('Ok, potvrzuji')");
+  assert.equal(app.requests.length,1);assert.deepEqual([...app.context.decisions],['confirm']);
+  assert.match(chatHtml(app),/✓ Gym je v týdnu/);
+  // Without open proposals the same words go to the AI.
+  await app.run("sendAssistantMessage('ok')");assert.equal(app.requests.length,2);
+  assert.equal(app.run("coachReplyDecision('nechci')"),'reject');assert.equal(app.run("coachReplyDecision('chci delší trénink')"),null);
 });

@@ -639,6 +639,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       onProgress('Kontroluji návrhy pro aplikaci…');
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
       const actions=validateCoachActions(answer.actions,coachCtx,date),proposals=[];await ensureCoachInboxTable(env.DB);
+      // A proposed workout is prepared right away, so the chat shows it (profile,
+      // exercises) and confirming plans exactly this one.
+      for(const a of actions)if(a.type==='workout'){onProgress('Připravuji náhled tréninku…');a.preview=await workoutPreview(env,ctx,a).catch(error=>{console.error('Workout preview failed',error.message);return null;});}
       await saveMemory();
       // The chat keeps a one-line summary of the proposals, so later turns can refer to them.
       const note=actionsNote(actions),chatId=await remember(answer.answer+(note?'\n\n'+note:''));
@@ -695,11 +698,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           result={date:a.date,prefs:await addWeekSport(env.DB,a.date,a.sport)};
         }
         else if(a.type==='workout'){
-          const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
-          // The library workout named in the answer, at the proposed length; without one the coach picks.
-          const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:{};
-          const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:'auto',preview:true,...exact})}),env,ctx,internalUrl,{signedIn:true});
-          result=await response.json();if(!response.ok||result.status!=='ok')throw new Error(result.message||'Trénink se nepodařilo připravit.');
+          // The workout the chat showed is the one that gets planned.
+          result=a.preview||await workoutPreview(env,ctx,a);
         }else{
           const id=a.eventId.replace(/^planned:/,''),event=await env.DB.prepare("SELECT start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
           const payload=event?JSON.parse(event.payload_json||'{}'):null;
@@ -1201,6 +1201,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   return new Response(response.body, { status: response.status, headers });
 }
 
+// The concrete workout of a proposed 'workout' action (library workout or
+// gym plan, not yet in the calendar); a gym plan carries the muscles of its exercises.
+async function workoutPreview(env,ctx,a){
+  const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
+  // The library workout named in the answer, at the proposed length; without one the coach picks.
+  const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:{};
+  const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:'auto',preview:true,...exact})}),env,ctx,internalUrl,{signedIn:true});
+  const result=await response.json();if(!response.ok||result.status!=='ok')throw new Error(result.message||'Trénink se nepodařilo připravit.');
+  if(a.sport==='gym'&&result.plan?.rows)result.muscles=Object.fromEntries([...new Set(result.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
+  return result;
+}
 // Workout library: search, generate, schedule, feedback, capabilities.
 async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
   if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
