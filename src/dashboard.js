@@ -186,7 +186,7 @@ body{background:var(--bg);font-size:14px;letter-spacing:-.01em}.shell{grid-templ
 <div id="toast" class="toast"></div>
 <style>${experienceTheme}${mobileTheme}${gymFocusTheme}${workoutsHubTheme}${assistantPanelTheme}${designSystem}</style>
 <script>window.LW_ICONS=${JSON.stringify(ICON_PATHS)};</script>
-<script src="/app/dashboard-client.js?v=20261006-theme2" defer></script>
+<script src="/app/dashboard-client.js?v=20261006-theme3" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

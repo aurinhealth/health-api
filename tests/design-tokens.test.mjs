@@ -41,6 +41,7 @@ test('light theme follows the lw-theme cookie or the system setting',async()=>{
   assert.match(head,/lw-theme=\(light\|dark\)/,'theme is applied before the first paint');
   assert.match(html,/:root\[data-theme="light"\]\{[^}]*--bg:/);
   assert.match(html,/@media \(prefers-color-scheme:light\)\{:root:not\(\[data-theme="dark"\]\)\{[^}]*--bg:/);
-  for(const choice of ['system','light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'),'top bar switch: '+choice);
-  for(const choice of ['system','light','dark'])assert.match(client,new RegExp('data-theme-choice="'+choice+'"'));
+  for(const choice of ['light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'),'top bar switch: '+choice);
+  for(const choice of ['light','dark'])assert.match(client,new RegExp('data-theme-choice="'+choice+'"'));
+  assert.doesNotMatch(html+client,/data-theme-choice="system"/,'the device decides without a choice; there is no separate option for it');
 });

@@ -37,16 +37,18 @@ export const themeTokens = `
 // Runs in <head> before the first paint, so a saved choice never flashes the other theme.
 export const themeBoot = `<script>(function(){try{var m=document.cookie.match(/(?:^|; )lw-theme=(light|dark)/);if(m)document.documentElement.dataset.theme=m[1];}catch(e){}})();</script>`;
 
-// Vzhled switch: Dle zařízení / Světlý / Tmavý. The app wires it in dashboard-client.js,
+// Vzhled switch: Světlý / Tmavý, showing the theme in use. Without a choice the device decides;
+// picking the device's own theme clears the choice. The app wires it in dashboard-client.js,
 // the public pages with themeSwitchScript.
-export const themeSwitch = () => `<div class="theme-switch" role="radiogroup" aria-label="Vzhled"><button type="button" role="radio" data-theme-choice="system" aria-label="Vzhled dle zařízení" title="Dle zařízení">${icon('device')}</button><button type="button" role="radio" data-theme-choice="light" aria-label="Světlý vzhled" title="Světlý">${icon('today')}</button><button type="button" role="radio" data-theme-choice="dark" aria-label="Tmavý vzhled" title="Tmavý">${icon('moon')}</button></div>`;
+export const themeSwitch = () => `<div class="theme-switch" role="radiogroup" aria-label="Vzhled"><button type="button" role="radio" data-theme-choice="light" aria-label="Světlý vzhled" title="Světlý">${icon('today')}</button><button type="button" role="radio" data-theme-choice="dark" aria-label="Tmavý vzhled" title="Tmavý">${icon('moon')}</button></div>`;
 
 export const themeSwitchScript = `<script>(function(){
 var root=document.documentElement,media=matchMedia('(prefers-color-scheme: light)');
-function choice(){return root.dataset.theme||'system';}
+function sys(){return media.matches?'light':'dark';}
+function choice(){return root.dataset.theme||sys();}
 function sync(){document.querySelectorAll('[data-theme-choice]').forEach(function(b){b.setAttribute('aria-checked',String(b.dataset.themeChoice===choice()));});}
 document.addEventListener('click',function(e){var b=e.target.closest('[data-theme-choice]');if(!b)return;var c=b.dataset.themeChoice;
-if(c==='system'){delete root.dataset.theme;document.cookie='lw-theme=; path=/; max-age=0; samesite=lax';}
+if(c===sys()){delete root.dataset.theme;document.cookie='lw-theme=; path=/; max-age=0; samesite=lax';}
 else{root.dataset.theme=c;document.cookie='lw-theme='+c+'; path=/; max-age=31536000; samesite=lax';}sync();});
 media.addEventListener('change',sync);sync();})();</script>`;
 

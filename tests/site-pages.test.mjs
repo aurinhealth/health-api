@@ -17,12 +17,13 @@ test('public pages follow the Vzhled switch like the app',async()=>{
     const html=await page().text(),head=html.slice(0,html.indexOf('<style>'));
     assert.match(head,/lw-theme=\(light\|dark\)/);
     assert.equal((html.match(/:root\{[^}]*\}/g)||[]).length,1);
-    for(const choice of ['system','light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'));
+    for(const choice of ['light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'));
+    assert.doesNotMatch(html,/data-theme-choice="system"/);
   }
 });
 
 test('every screenshot the overview shows exists in both themes',async()=>{
-  const html=await overviewPage().text(),names=[...html.matchAll(/src="\/site\/([a-z]+)-dark\.webp"/g)].map(m=>m[1]);
+  const html=await overviewPage().text(),names=[...new Set([...html.matchAll(/src="\/site\/([a-z-]+)-dark\.webp"/g)].map(m=>m[1]))];
   assert.ok(names.length>=5);
   for(const name of names)for(const theme of ['dark','light'])assert.ok(existsSync(new URL(`../public/site/${name}-${theme}.webp`,import.meta.url)),`${name}-${theme}`);
 });

@@ -1,101 +1,184 @@
 // Public pages: the Loadwise overview on / and the policy pages. They share the app's colour
 // tokens and Vzhled switch, so the site and the app look like one product in both themes.
-// Screenshots live in public/site/ (Workers static assets), one per theme.
+// Screenshots live in public/site/ (Workers static assets), one per theme: phone-*.webp from the
+// sandbox at 390×844 @2x, today-*.webp from the desktop app.
 import {themeTokens,themeBoot,themeSwitch,themeSwitchScript,themeSwitchCss} from './design-system.js';
 import {icon} from './icons.js';
 
 const ORIGIN = 'https://petrfitnessdata.eu';
 
+// Soft tinted surfaces: a hue mixed into the page background, so tiles work in both themes.
+const tint = (hue, top, bottom) => `linear-gradient(170deg,color-mix(in srgb,var(--${hue}) ${top}%,var(--bg)),color-mix(in srgb,var(--${hue}) ${bottom}%,var(--bg)))`;
+
 const siteCss = `
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--primary-text)}
+img{max-width:100%}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
-.site-head{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-.site-head .wrap{display:flex;align-items:center;gap:20px;height:64px}
-.logo{display:flex;align-items:center;gap:10px;color:var(--text);text-decoration:none;font-weight:750;font-size:18px;letter-spacing:-.02em}
-.logo img{width:30px;height:30px;border-radius:8px}
-.site-nav{display:flex;gap:22px;margin-left:12px}
-.site-nav a{color:var(--muted);text-decoration:none;font-size:15px;font-weight:550}.site-nav a:hover{color:var(--text)}
-.head-end{display:flex;align-items:center;gap:10px;margin-left:auto}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 16px;border:1px solid var(--line);border-radius:11px;background:var(--panel);color:var(--text);font-weight:650;font-size:15px;text-decoration:none;white-space:nowrap}
-.btn:hover{border-color:color-mix(in srgb,var(--text) 30%,var(--bg))}
-.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
-.btn.primary:hover{filter:brightness(1.06)}
-.btn.big{padding:13px 20px;font-size:16px;border-radius:13px}
-:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
-.eyebrow{color:var(--primary-text);font-size:13px;font-weight:750;letter-spacing:.12em;text-transform:uppercase}
-h1,h2,h3{letter-spacing:-.03em;line-height:1.15;margin:0}
-.lead{color:var(--muted);font-size:19px;max-width:640px}
-.hero{padding:72px 0 0;background:radial-gradient(ellipse 70% 60% at 50% 0,rgba(var(--primary-rgb),.16),transparent 70%)}
-.hero h1{font-size:clamp(36px,5.4vw,60px);max-width:820px;margin:14px 0 18px}
-.hero-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:28px 0 0}
-.invite{color:var(--muted);font-size:14px}
-.frame{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel);box-shadow:0 30px 80px color-mix(in srgb,#000 22%,transparent)}
-.frame img{display:block;width:100%;height:auto}
-.hero .frame{margin-top:56px;border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom:0}
-:root[data-theme="light"] .shot-dark,:root:not([data-theme="light"]) .shot-light{display:none}
-@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .shot-dark{display:none}:root:not([data-theme="dark"]) .shot-light{display:block}}
-section{padding:96px 0;border-top:1px solid var(--line)}
-.hero{border-top:0}
-.section-head{max-width:680px;margin-bottom:48px}
-.section-head h2{font-size:clamp(28px,3.6vw,40px);margin:10px 0 12px}
-.section-head p{color:var(--muted);font-size:18px;margin:0}
-.feature{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:56px;align-items:center;margin-bottom:88px}
-.feature:last-of-type{margin-bottom:0}
-.feature.flip{grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr)}
-.feature.flip .feature-text{order:2}
-.feature h3{font-size:28px;margin:14px 0 12px}
-.feature p{color:var(--muted);font-size:17px;margin:0 0 14px}
-.feature ul{margin:0;padding:0;list-style:none;display:grid;gap:8px}
-.feature li{display:flex;gap:10px;align-items:baseline;font-size:15px}
-.feature li .icon{color:var(--primary-text);width:16px;height:16px;vertical-align:-.15em}
-.badge{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--primary-surface);color:var(--primary-text)}
-.badge .icon{width:22px;height:22px}
-.feature .frame.tall{max-width:340px;justify-self:center}
-.extras{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:88px}
-.card{padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}
-.card h3{font-size:19px;margin:14px 0 8px}.card p{color:var(--muted);margin:0;font-size:15px}
-.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;counter-reset:step}
-.steps .card::before{counter-increment:step;content:counter(step);display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--primary);color:var(--primary-ink);font-weight:750}
-.privacy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
-.privacy ul{margin:12px 0 0;padding-left:20px;color:var(--muted)}.privacy li{margin:6px 0}
-.privacy .card[lang="en"] p{margin:0 0 12px}
-.cta{text-align:center;padding:96px 0}
-.cta h2{font-size:clamp(28px,3.6vw,40px);margin:0 0 12px}
-.cta p{color:var(--muted);font-size:18px;margin:0 auto 28px;max-width:560px}
-.site-foot{border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:14px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+h1,h2,h3{margin:0;letter-spacing:-.035em;line-height:1.05;font-weight:700}
+p{margin:0}
+.muted{color:var(--muted)}
+:focus-visible{outline:2px solid var(--primary);outline-offset:3px}
+
+/* Floating pill navigation. */
+.site-head{position:sticky;top:12px;z-index:20;display:flex;justify-content:center;padding:0 16px;margin-top:12px;pointer-events:none}
+.pill-nav{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 16px;border:1px solid color-mix(in srgb,var(--line) 70%,transparent);border-radius:999px;background:color-mix(in srgb,var(--panel) 78%,transparent);backdrop-filter:saturate(1.6) blur(18px);-webkit-backdrop-filter:saturate(1.6) blur(18px);box-shadow:0 8px 30px color-mix(in srgb,#000 10%,transparent)}
+.logo{display:flex;align-items:center;gap:8px;color:var(--text);text-decoration:none;font-weight:700;font-size:16px;letter-spacing:-.02em;margin-right:10px}
+.logo img{width:24px;height:24px;border-radius:7px}
+.pill-nav .links{display:flex;gap:2px;margin-right:6px}
+.pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:550}
+.pill-nav .links a:hover{color:var(--text);background:color-mix(in srgb,var(--text) 6%,transparent)}
+.pill-nav .theme-switch{border-color:transparent;background:color-mix(in srgb,var(--text) 6%,transparent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:9px 16px;border:0;border-radius:999px;background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--text);font-weight:600;font-size:14px;text-decoration:none;white-space:nowrap;transition:transform .15s ease,filter .15s ease}
+.btn:hover{transform:translateY(-1px)}
+.btn.solid{background:var(--text);color:var(--bg)}
+.btn.primary{background:var(--primary);color:var(--primary-ink)}
+.btn.big{padding:14px 26px;font-size:17px}
+
+/* Hero. */
+.hero{position:relative;text-align:center;padding:88px 0 0;margin-top:-76px;padding-top:164px;background:radial-gradient(60% 50% at 20% 10%,color-mix(in srgb,var(--sky) 22%,transparent),transparent 70%),radial-gradient(55% 45% at 85% 5%,color-mix(in srgb,var(--primary) 22%,transparent),transparent 70%),radial-gradient(50% 40% at 50% 60%,color-mix(in srgb,var(--violet) 10%,transparent),transparent 70%)}
+.hero h1{font-size:clamp(44px,8vw,92px);max-width:980px;margin:0 auto;letter-spacing:-.045em;line-height:.98}
+.hero h1 span{color:var(--muted)}
+.hero .sub{font-size:clamp(18px,2vw,22px);color:var(--muted);max-width:640px;margin:24px auto 0}
+.hero-cta{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:34px}
+.hero-cta small{color:var(--muted);font-size:14px}
+.stage{position:relative;max-width:1080px;margin:72px auto 0;padding:0 24px 0}
+.laptop{position:relative;border-radius:22px 22px 0 0;padding:12px 12px 0;background:#000;box-shadow:0 0 0 1px color-mix(in srgb,var(--text) 14%,transparent),0 40px 100px color-mix(in srgb,#000 30%,transparent)}
+.laptop img{display:block;width:100%;height:auto;border-radius:10px 10px 0 0}
+.laptop-base{height:16px;margin:0 -4%;border-radius:0 0 18px 18px;background:linear-gradient(color-mix(in srgb,var(--text) 30%,var(--bg)),color-mix(in srgb,var(--text) 14%,var(--bg)));box-shadow:0 20px 40px color-mix(in srgb,#000 20%,transparent)}
+.stage .phone{position:absolute;right:-8px;bottom:-40px;width:clamp(150px,22%,240px)}
+
+/* Phone mockup. */
+.phone{position:relative;aspect-ratio:390/844;padding:9px;border-radius:44px;background:#000;box-shadow:0 0 0 1px color-mix(in srgb,var(--text) 18%,transparent),0 30px 70px color-mix(in srgb,#000 28%,transparent)}
+.phone .screen{height:100%;padding-top:12%;border-radius:36px;overflow:hidden;background:var(--bg)}
+.phone img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}
+.phone::before{content:"";position:absolute;z-index:1;top:17px;left:50%;width:28%;height:22px;transform:translateX(-50%);border-radius:999px;background:#000}
+
+/* Theme-specific screenshots. */
+:root[data-theme="light"] .shot-dark,:root:not([data-theme="light"]) .shot-light{display:none!important}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .shot-dark{display:none!important}:root:not([data-theme="dark"]) .shot-light{display:block!important}}
+
+.works{padding:120px 0 40px;text-align:center}
+.works p{font-size:15px;color:var(--muted);font-weight:600}
+.works .names{display:flex;justify-content:center;flex-wrap:wrap;gap:12px 44px;margin-top:16px;font-size:22px;font-weight:700;letter-spacing:-.02em;color:color-mix(in srgb,var(--text) 70%,var(--bg))}
+
+section{padding:110px 0}
+.head{text-align:center;max-width:760px;margin:0 auto 56px}
+.head h2{font-size:clamp(36px,5.4vw,64px)}
+.head p{font-size:clamp(17px,1.8vw,21px);color:var(--muted);margin-top:16px}
+
+/* Bento tiles. */
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.tile{position:relative;overflow:hidden;border-radius:30px;padding:36px 32px 0;min-height:600px;display:flex;flex-direction:column}
+.tile h3{font-size:34px}
+.tile p{color:var(--muted);margin-top:10px;font-size:17px;max-width:30ch}
+.tile .phone{width:min(78%,280px);margin:36px auto -120px}
+.tile.load{background:${tint('amber',16,5)}}
+.tile.sleep{background:${tint('violet',18,6)}}
+.tile.recovery{background:${tint('green',18,5)}}
+.wide{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:center;gap:40px;margin-top:20px;padding:0 64px;min-height:560px;border-radius:30px;overflow:hidden}
+.wide h3{font-size:clamp(34px,4.4vw,52px)}
+.wide p{color:var(--muted);font-size:19px;margin-top:16px;max-width:34ch}
+.wide ul{list-style:none;padding:0;margin:24px 0 0;display:grid;gap:10px}
+.wide li{display:flex;gap:10px;align-items:center;font-size:16px;font-weight:550}
+.wide li .icon{color:var(--primary-text)}
+.wide .phone{width:min(100%,290px);justify-self:center;margin:56px 0 -150px}
+.wide.food{background:${tint('lilac',16,5)}}
+.wide.plan{background:${tint('sky',16,5)}}
+.wide.plan .text{order:2}
+
+/* Assistant: a spotlight band with a glow, in either theme. */
+.ai{overflow:hidden;background:radial-gradient(50% 60% at 50% 100%,color-mix(in srgb,var(--primary) 20%,transparent),transparent 70%),radial-gradient(40% 40% at 12% 20%,color-mix(in srgb,var(--violet) 16%,transparent),transparent 70%),radial-gradient(40% 40% at 88% 30%,color-mix(in srgb,var(--sky) 14%,transparent),transparent 70%),color-mix(in srgb,var(--panel2) 55%,var(--bg))}
+.ai .head h2 span{color:var(--muted)}
+.ai-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:28px;align-items:center}
+.ai .phone{width:300px}
+.ai-card{padding:26px;border-radius:24px;background:color-mix(in srgb,var(--text) 6%,transparent);border:1px solid color-mix(in srgb,var(--text) 10%,transparent)}
+.ai-card+.ai-card{margin-top:20px}
+.ai-card .icon{width:24px;height:24px;color:var(--primary-text)}
+.ai-card h3{font-size:22px;margin:14px 0 8px;letter-spacing:-.02em}
+.ai-card p{color:var(--muted);font-size:16px}
+
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.step{padding:32px;border-radius:26px;background:var(--panel);border:1px solid var(--line)}
+.step b{display:block;font-size:56px;font-weight:700;letter-spacing:-.05em;line-height:1;background:linear-gradient(135deg,var(--primary),var(--sky));-webkit-background-clip:text;background-clip:text;color:transparent}
+.step h3{font-size:24px;margin:22px 0 8px;letter-spacing:-.02em}
+.step p{color:var(--muted);font-size:16px}
+
+.privacy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+.privacy .card{padding:32px;border-radius:26px;background:var(--panel);border:1px solid var(--line)}
+.privacy h3{font-size:22px;letter-spacing:-.02em;margin-bottom:14px}
+.privacy ul{margin:0;padding:0;list-style:none;display:grid;gap:12px}
+.privacy li{display:flex;gap:10px;color:var(--muted);font-size:16px}
+.privacy li .icon{color:var(--primary-text);margin-top:3px}
+.privacy .card[lang="en"] p{color:var(--muted);font-size:15px;margin-bottom:12px}
+
+.final{text-align:center;padding:140px 0 150px;background:radial-gradient(50% 60% at 50% 100%,color-mix(in srgb,var(--primary) 16%,transparent),transparent 70%)}
+.final h2{font-size:clamp(40px,6.4vw,76px)}
+.final p{color:var(--muted);font-size:20px;margin:18px auto 34px;max-width:520px}
+
+.site-foot{border-top:1px solid var(--line);padding:30px 0 40px;color:var(--muted);font-size:14px}
 .site-foot .wrap{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
-.site-foot nav{display:flex;gap:18px;margin-left:auto}
+.site-foot nav{display:flex;gap:20px;margin-left:auto}
 .site-foot a{color:var(--muted);text-decoration:none}.site-foot a:hover{color:var(--text)}
-.doc{max-width:760px;padding:56px 24px 80px}
-.doc h1{font-size:40px;margin:0 0 20px}.doc h2{font-size:22px;margin:36px 0 10px}
-.doc p{color:color-mix(in srgb,var(--text) 82%,var(--bg))}
-@media (max-width:900px){
-  .site-nav{display:none}
-  .feature,.feature.flip{grid-template-columns:1fr;gap:28px;margin-bottom:64px}
-  .feature.flip .feature-text{order:0}
-  .extras,.steps,.privacy{grid-template-columns:1fr}
-  .extras{margin-top:64px}
-  section{padding:64px 0}
+
+.doc{max-width:760px;padding:72px 24px 96px}
+.doc h1{font-size:48px;margin:0 0 24px}.doc h2{font-size:24px;margin:40px 0 10px;letter-spacing:-.02em}
+.doc p{color:color-mix(in srgb,var(--text) 82%,var(--bg));margin-bottom:12px}
+
+/* Content fades up as it scrolls in; only with JS and without reduced motion. */
+@media (prefers-reduced-motion:no-preference){
+  .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}
+  .js .reveal.in{opacity:1;transform:none}
+}
+
+@media (max-width:980px){
+  .pill-nav .links{display:none}
+  .tiles{grid-template-columns:1fr}
+  .tile{min-height:0}
+  .tile .phone{width:min(70%,280px);margin-bottom:-160px}
+  .tile{padding-bottom:0;height:640px}
+  .wide,.wide.plan{grid-template-columns:1fr;padding:40px 28px 0;gap:0}
+  .wide.plan .text{order:0}
+  .wide .phone{margin:40px auto -170px;width:min(70%,280px)}
+  .wide{height:720px}
+  .ai-grid{grid-template-columns:1fr;justify-items:center}
+  .ai-col{width:100%;max-width:520px}
+  .steps,.privacy{grid-template-columns:1fr}
+  section{padding:80px 0}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
-  .head-end .btn{padding:8px 12px;font-size:14px}
-  .head-end .btn .label-long{display:none}
-  .hero{padding-top:44px}.lead{font-size:17px}
-  .hero .frame{margin-top:36px}
+  .pill-nav{padding-left:12px}
+  .logo span{display:none}
+  .hero{padding-top:128px}
+  .stage{margin-top:48px;padding:0 4px}
+  .laptop{padding:6px 6px 0;border-radius:14px 14px 0 0}
+  .stage .phone{right:6px;bottom:-30px;width:34%;padding:5px;border-radius:24px}
+  .works{padding-top:96px}
+  .stage .phone .screen{border-radius:20px}
+  .stage .phone::before{top:9px;height:11px}
+  .tile{padding:28px 24px 0;height:600px}
+  .tile h3{font-size:30px}
+  .works .names{font-size:18px;gap:10px 28px}
+  .ai .phone{width:250px}
   .site-foot nav{margin-left:0}
 }
 `;
 
-function shot(name, alt, {eager=false, width=1100, height=742}={}) {
+function shot(file, alt, {eager=false, width=600, height=1299}={}) {
   const load = eager ? 'fetchpriority="high"' : 'loading="lazy"';
-  return `<img class="shot-dark" src="/site/${name}-dark.webp" alt="${alt}" width="${width}" height="${height}" decoding="async" ${load}><img class="shot-light" src="/site/${name}-light.webp" alt="${alt}" width="${width}" height="${height}" decoding="async" ${load}>`;
+  return ['dark','light'].map(theme => `<img class="shot-${theme}" src="/site/${file}-${theme}.webp" alt="${alt}" width="${width}" height="${height}" decoding="async" ${load}>`).join('');
 }
-
+// The screen starts below a status-bar strip, so the camera cut-out never covers the app.
+const phone = (name, alt, opts) => `<div class="phone"><div class="screen">${shot('phone-'+name, alt, opts)}</div></div>`;
 const check = text => `<li>${icon('check')}<span>${text}</span></li>`;
+
+const revealScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
+if(!('IntersectionObserver' in window)){r.classList.remove('js');return;}
+var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
+document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});})();</script>`;
 
 function sitePage({title, description, lang='cs', body, index=true}) {
   const html = `<!doctype html>
@@ -116,17 +199,17 @@ ${index ? '' : '<meta name="robots" content="noindex">'}
 <style>${themeTokens}${themeSwitchCss}${siteCss}</style>
 </head>
 <body>
-<header class="site-head"><div class="wrap">
-<a class="logo" href="/"><img src="/logo.svg" alt="" width="30" height="30">Loadwise</a>
-<nav class="site-nav" aria-label="Sekce"><a href="/#funkce">Funkce</a><a href="/#jak">Jak to funguje</a><a href="/#soukromi">Soukromí</a></nav>
-<div class="head-end">${themeSwitch()}<a class="btn primary" href="/app"><span>Otevřít<span class="label-long"> aplikaci</span></span></a></div>
-</div></header>
+<header class="site-head"><nav class="pill-nav" aria-label="Hlavní">
+<a class="logo" href="/"><img src="/logo.svg" alt="" width="24" height="24"><span>Loadwise</span></a>
+<div class="links"><a href="/#funkce">Funkce</a><a href="/#asistent">Asistent</a><a href="/#jak">Jak to funguje</a><a href="/#soukromi">Soukromí</a></div>
+${themeSwitch()}<a class="btn solid" href="/app">Přihlásit se</a>
+</nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <span>© Loadwise · petrfitnessdata.eu</span>
 <nav aria-label="Dokumenty"><a href="/privacy">Ochrana soukromí</a><a href="/terms">Podmínky</a><a href="/support">Podpora</a></nav>
 </div></footer>
-${themeSwitchScript}
+${themeSwitchScript}${revealScript}
 </body></html>`;
   return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'cache-control':'public, max-age=3600'}});
 }
@@ -136,70 +219,67 @@ export function overviewPage() {
     title: 'Loadwise · trénink, regenerace a výživa na jednom místě',
     description: 'Loadwise spojí tréninky z Intervals.icu, spánek a zdraví z Google Health a jídlo do jednoho denního přehledu a podle toho poradí, co dnes trénovat a kolik jíst.',
     body: `<main>
-<div class="hero"><div class="wrap">
-<div class="eyebrow">Trénink · regenerace · výživa</div>
-<h1>Trénink, který počítá s tím, jak se dnes máš.</h1>
-<p class="lead">Loadwise spojí tvoje tréninky, spánek a jídlo do jednoho denního přehledu. Podle toho poradí, co dnes odjet nebo odcvičit, kolik sníst a kdy ubrat.</p>
-<div class="hero-actions"><a class="btn primary big" href="/app">Přihlásit se</a><a class="btn big" href="#funkce">Co umí</a><span class="invite">Zatím jen na pozvánku.</span></div>
-<div class="frame">${shot('today', 'Obrazovka Dnes: spánek, námaha, kalorie, pití, dnešní tréninky a časová osa dne', {eager:true, width:1440, height:900})}</div>
-</div></div>
+<div class="hero">
+<div class="wrap">
+<h1>Trénuj podle toho, <span>jak se dnes máš.</span></h1>
+<p class="sub">Loadwise spojí tréninky, spánek a jídlo do jednoho přehledu a každý den ti poradí, kolik zvládneš, kolik sníst a kdy ubrat.</p>
+<div class="hero-cta"><a class="btn primary big" href="/app">Přihlásit se</a><small>Zatím jen na pozvánku</small></div>
+</div>
+<div class="stage reveal">
+<div class="laptop">${shot('today', 'Loadwise na počítači: obrazovka Dnes se spánkem, námahou, kaloriemi, pitím a tréninky', {eager:true, width:1440, height:900})}</div>
+<div class="laptop-base"></div>
+${phone('today', 'Loadwise v telefonu: obrazovka Dnes', {eager:true})}
+</div>
+</div>
+
+<div class="works wrap reveal"><p>Propojeno s</p><div class="names"><span>Intervals.icu</span><span>Google Health</span><span>Google Sheets</span></div></div>
 
 <section id="funkce"><div class="wrap">
-<div class="section-head"><div class="eyebrow">Funkce</div><h2>Všechno, co ovlivňuje výkon, na jednom místě</h2><p>Místo pěti aplikací jedna obrazovka, která ví, co máš za sebou a co tě čeká.</p></div>
+<div class="head reveal"><h2>Ráno víš, na čem jsi.</h2><p>Tělo posílá signály celý den. Loadwise z nich udělá pár jasných čísel a jedno doporučení.</p></div>
+<div class="tiles">
+<div class="tile load reveal"><h3>Zátěž</h3><p>Kondice, únava a forma z každého tréninku. Uvidíš, jestli rosteš, nebo jen sbíráš únavu.</p>${phone('training', 'Obrazovka Trénink: kondice, únava a forma')}</div>
+<div class="tile sleep reveal"><h3>Spánek</h3><p>Kolik jsi spal, jaký máš spánkový dluh a jak pravidelně chodíš spát.</p>${phone('recovery', 'Obrazovka Zdraví: spánek a regenerace')}</div>
+<div class="tile recovery reveal"><h3>Regenerace</h3><p>HRV a klidový tep proti tvému normálu. Když tělo nestíhá, řekne ti to dřív než výkon.</p>${phone('today', 'Obrazovka Dnes: denní signály')}</div>
+</div>
+<div class="wide food reveal"><div class="text"><h3>Víš, kolik sníst.</h3><p>Cíl kalorií a maker se řídí tím, co tě dnes čeká. Jídlo zapíšeš z fotky, čárového kódu nebo pár slovy.</p><ul>${check('Kalorie a makra podle tréninku')}${check('Zápis z fotky, kódu i textu')}${check('Pití jedním klepnutím')}</ul></div>${phone('nutrition', 'Obrazovka Výživa: snědeno, zbývá, makra a pití')}</div>
+<div class="wide plan reveal"><div class="text"><h3>Plán, který se přizpůsobí.</h3><p>Tréninky na kolo, běh i posilovnu na celý týden, podle toho, kolik máš kdy času a jak se cítíš.</p><ul>${check('Týdenní plán na klik')}${check('Posilovna se sériemi a technikou')}${check('Synchronizace s Intervals.icu')}</ul></div>${phone('workouts', 'Obrazovka Plán: plán tréninků na týden')}</div>
+</div></section>
 
-<div class="feature"><div class="feature-text"><span class="badge">${icon('training')}</span><h3>Forma, únava a kondice</h3>
-<p>Tréninky z Intervals.icu se propisují do kondice, únavy a formy. Hned vidíš, jestli se zlepšuješ, nebo jen sbíráš únavu.</p>
-<ul>${check('Kondice, únava a forma v čase')}${check('Svaly, rekordy a historie posilovny')}${check('Týdenní zátěž proti plánu')}</ul></div>
-<div class="frame">${shot('training', 'Obrazovka Trénink: kondice, únava, forma a graf jejich vývoje')}</div></div>
-
-<div class="feature flip"><div class="feature-text"><span class="badge">${icon('apple')}</span><h3>Kolik jíst podle toho, co děláš</h3>
-<p>Denní cíl kalorií a maker se řídí tím, jaký trénink tě dnes čeká. Jídlo zapíšeš z fotky, čárového kódu nebo pár slovy, pití jedním klepnutím.</p>
-<ul>${check('Kalorie a makra podle tréninku')}${check('Zápis jídla z fotky, kódu i textu')}${check('Co dál dnes sníst, aby to sedělo')}</ul></div>
-<div class="frame">${shot('nutrition', 'Obrazovka Výživa: snědeno, zbývá, makra, pití a jídla dne')}</div></div>
-
-<div class="feature"><div class="feature-text"><span class="badge">${icon('heart')}</span><h3>Spánek a regenerace</h3>
-<p>Spánek, HRV, klidový tep a hmotnost z Google Health porovná s tvým třicetidenním průměrem. Když tělo nestíhá, řekne ti to dřív, než to poznáš na výkonu.</p>
-<ul>${check('Spánek, spánkový dluh a rytmus')}${check('HRV a klidový tep proti tvému normálu')}${check('Doporučení, jak dnes trénovat')}</ul></div>
-<div class="frame">${shot('recovery', 'Obrazovka Zdraví: spánkové a regenerační skóre, HRV a klidový tep')}</div></div>
-
-<div class="feature flip"><div class="feature-text"><span class="badge">${icon('spark')}</span><h3>Asistent, který zná tvůj plán</h3>
-<p>Zeptej se, jak jet trénink po krátké noci, nebo ať ti přeplánuje týden. Vidí tvoje data, takže neradí obecně. Každý návrh můžeš potvrdit, odmítnout nebo probrat.</p>
-<ul>${check('Rady podle tvých dat, ne obecné tipy')}${check('Úpravy tréninku a jídelníčku na klik')}${check('Chaty k jednotlivým dnům a týdnům')}</ul></div>
-<div class="frame tall">${shot('coach', 'Osobní asistent v aplikaci: Co dnes upravíme?', {width:430, height:710})}</div></div>
-
-<div class="extras">
-<div class="card"><span class="badge">${icon('calendar')}</span><h3>Plán na týden</h3><p>Vygeneruje tréninky na kolo, běh i posilovnu podle toho, kolik máš kdy času.</p></div>
-<div class="card"><span class="badge">${icon('gym')}</span><h3>Posilovna krok za krokem</h3><p>Série, váhy a technika cviků při tréninku, mapa zapojených svalů po něm.</p></div>
-<div class="card"><span class="badge">${icon('device')}</span><h3>Na počítači i v mobilu</h3><p>Funguje v prohlížeči a dá se přidat na plochu telefonu jako aplikace.</p></div>
+<section id="asistent" class="ai"><div class="wrap">
+<div class="head reveal"><h2><span>Ptej se.</span> Asistent zná tvoje data.</h2><p>Osobní trenér, který vidí tvůj spánek, tréninky i jídlo a radí podle nich, ne obecně.</p></div>
+<div class="ai-grid">
+<div class="ai-col reveal"><div class="ai-card">${icon('chat')}<h3>Odpovědi z tvých dat</h3><p>„Jak mám jet trénink, když jsem spal 6 hodin?“ Odpověď vychází z tvých čísel.</p></div><div class="ai-card">${icon('check')}<h3>Návrhy na jedno klepnutí</h3><p>Každou úpravu tréninku nebo jídla potvrdíš, odmítneš nebo probereš.</p></div></div>
+<div class="reveal">${phone('coach', 'Osobní asistent v aplikaci: Co dnes upravíme?')}</div>
+<div class="ai-col reveal"><div class="ai-card">${icon('calendar')}<h3>Celý týden v kontextu</h3><p>Probere s tebou den i týden a přeplánuje, co je potřeba.</p></div><div class="ai-card">${icon('spark')}<h3>Revize dne</h3><p>Projde s tebou celý den a navrhne, co upravit.</p></div></div>
 </div>
 </div></section>
 
 <section id="jak"><div class="wrap">
-<div class="section-head"><div class="eyebrow">Jak to funguje</div><h2>Tři kroky a máš přehled</h2></div>
+<div class="head reveal"><h2>Za pár minut připraveno.</h2></div>
 <div class="steps">
-<div class="card"><h3>Přihlas se Googlem</h3><p>Účet vznikne s pozvánkou, žádné nové heslo.</p></div>
-<div class="card"><h3>Propoj svoje služby</h3><p>Intervals.icu pro tréninky a Google Health pro spánek, zdraví a jídlo. Jen to, co sám povolíš.</p></div>
-<div class="card"><h3>Ráno otevři Dnes</h3><p>Uvidíš, jak jsi na tom, co tě čeká a kolik dnes sníst.</p></div>
+<div class="step reveal"><b>1</b><h3>Přihlas se Googlem</h3><p>Účet vznikne s pozvánkou, žádné nové heslo.</p></div>
+<div class="step reveal"><b>2</b><h3>Propoj svoje služby</h3><p>Intervals.icu pro tréninky, Google Health pro spánek, zdraví a jídlo. Jen to, co sám povolíš.</p></div>
+<div class="step reveal"><b>3</b><h3>Ráno otevři Dnes</h3><p>Jak na tom jsi, co tě čeká a kolik dnes sníst.</p></div>
 </div>
 </div></section>
 
 <section id="soukromi"><div class="wrap">
-<div class="section-head"><div class="eyebrow">Data a soukromí</div><h2>Tvoje data slouží jen tobě</h2></div>
+<div class="head reveal"><h2>Tvoje data slouží jen tobě.</h2></div>
 <div class="privacy">
-<div class="card"><h3>Co Loadwise s daty dělá</h3><ul>
-<li>Čte jen data ze služeb, ke kterým mu sám dáš přístup.</li>
-<li>Používá je jen pro funkce, které si vyžádáš: přehled, plán a výživu.</li>
-<li>Data neprodává a nepoužívá k reklamě.</li>
-<li>Do Google Health zapisuje jen jídlo a pití, které si sám zapíšeš.</li>
-</ul><p style="margin:16px 0 0"><a href="/privacy">Celé zásady ochrany soukromí</a></p></div>
-<div class="card" lang="en"><h3>Google Health data disclosure</h3>
+<div class="card reveal"><h3>Co Loadwise s daty dělá</h3><ul>
+${check('Čte jen data ze služeb, ke kterým mu sám dáš přístup.')}
+${check('Používá je jen pro funkce, které si vyžádáš: přehled, plán a výživu.')}
+${check('Data neprodává a nepoužívá k reklamě.')}
+${check('Do Google Health zapisuje jen jídlo a pití, které si sám zapíšeš.')}
+</ul><p style="margin-top:20px"><a href="/privacy">Celé zásady ochrany soukromí</a></p></div>
+<div class="card reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Loadwise (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
 <p style="margin:0">The service can process training and fitness data from connected services, including Google data and Google Sheets data that the account owner has authorized, in order to provide these requested workflows.</p></div>
 </div>
 </div></section>
 
-<section class="cta"><div class="wrap">
+<section class="final"><div class="wrap reveal">
 <h2>Máš pozvánku?</h2>
 <p>Loadwise je zatím jen pro pozvané. Přihlas se Google účtem, na který pozvánka přišla.</p>
 <a class="btn primary big" href="/app">Přihlásit se</a>
