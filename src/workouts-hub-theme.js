@@ -538,6 +538,38 @@ body.sheet-open{overflow:hidden}
 .training-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.training-move{margin-top:12px}
 .gym-detail{display:grid;grid-template-columns:minmax(0,260px) minmax(0,1fr);gap:16px;align-items:start;margin:6px 0}
 .gym-table-tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:10px}
+.gym-table-details{margin-top:14px}.gym-table-details summary{cursor:pointer;color:#9ca6b5;font-size:13px;margin-bottom:10px}
+.gym-session{display:grid;gap:12px;margin:6px 0}
+.gs-top{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr);gap:14px;align-items:center}
+.gs-top .gym-detail-figure .muscle-map{max-width:210px;margin:0 auto}.gs-top .gym-figure-legend{flex-wrap:wrap}
+.gs-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
+.gs-stats div{display:grid;gap:2px;padding:10px 12px;border:1px solid #2a323d;border-radius:10px;background:#121820}.gs-stats b{font-size:20px;line-height:1.1}.gs-stats span{font-size:11px;color:#9ca6b5}
+.gs-list{display:grid;gap:10px}
+.gs-ex{padding:10px 12px;border:1px solid #2a323d;border-radius:12px;background:#121820}
+.gs-ex header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.gs-num{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#2a2342;color:#c9b6ff;font-size:12px;font-weight:700}
+.gs-name{flex:1;display:grid;min-width:0}.gs-name b{font-size:14px;line-height:1.25}.gs-name small{color:#9ca6b5;font-size:11px}
+.gs-ex-actions{flex:none;display:flex;gap:6px}.gs-ex-actions .btn{min-height:30px;padding:5px 9px;font-size:12px}
+.gs-set{display:grid;grid-template-columns:24px minmax(0,1fr);gap:4px 10px;align-items:center;padding:6px 0;border-top:1px solid #222a35;font-size:13px}
+.gs-set.log{grid-template-columns:24px minmax(0,1fr) auto 16px}
+.gs-head{padding:2px 0 0;border-top:0;color:#8f9dac;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+.gs-tag{display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:#1d2530;color:#c9d2de;font-size:11px;font-weight:700}
+.gs-set.warm .gs-tag{background:#2b2618;color:#e9c46a}.gs-set.warm .gs-plan{color:#a9b2bf}
+.gs-plan{min-width:0}.gs-actual{display:flex;align-items:center;gap:5px}.gs-actual i{font-style:normal;color:#8f9dac;font-size:12px}
+.gs-in{width:58px;min-width:0;padding:5px 6px;border:1px solid #344050;border-radius:7px;background:#0d1218;color:#eef2f7;font:inherit;font-size:13px;text-align:center}
+.gs-in:focus{outline:2px solid #a77bff;outline-offset:1px}
+.gs-ok{color:#7fd1a8;font-weight:700;text-align:center}
+.gs-badge{grid-column:2/-1;justify-self:start;padding:1px 7px;border:1px solid #5a4126;border-radius:999px;color:#ffb86b;font-size:10.5px}
+.gs-record{margin:6px 0 4px;padding:6px 10px;border-radius:8px;background:#2a2412;color:#ffd77a;font-size:12.5px;font-weight:600}.gs-record small{color:#c9b67a;font-weight:400}
+.gs-ex-tools{display:flex;gap:6px;margin-top:8px}.gs-ex-tools .btn{min-height:28px;padding:4px 10px;font-size:12px}
+.gs-swap{display:grid;gap:6px;margin-top:8px}
+.gs-tools{display:flex;flex-wrap:wrap;gap:8px}
+.gs-ai{display:grid;gap:8px;padding:10px 12px;border:1px solid #3b3260;border-radius:12px;background:#17142a}.gs-ai label{color:#cbbcff;font-size:12.5px;font-weight:600}
+.gs-ai div{display:flex;gap:8px}.gs-ai input{flex:1;min-width:0;padding:8px 10px;border:1px solid #3b3260;border-radius:8px;background:#0f0d1c;color:#eee;font:inherit}.gs-ai-note{margin:0;color:#d7ccff}
+.gs-confirm{position:sticky;bottom:-18px;display:grid;gap:4px;margin-top:12px;padding:12px 0 8px;background:linear-gradient(180deg,#14182100,#141821 28%)}.gs-confirm .btn{width:100%;padding:12px;font-size:15px}.gs-confirm p{margin:0;text-align:center}
+.tech-back{margin-bottom:10px}
+.planner-chip .proposal-open{display:block;margin:4px 0 0;padding:0;border:0;background:none;color:inherit;font:inherit;font-size:11px;text-align:left;cursor:pointer;text-decoration:underline dotted #9f86e8}
+@media(max-width:560px){.gs-top{grid-template-columns:1fr;gap:10px}.gs-top .gym-detail-figure .muscle-map{max-width:250px}.gs-top .gym-detail-figure p{text-align:center;margin:6px 0 0}.gs-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.gs-stats div{padding:8px}.gs-in{width:50px}.gs-ex{padding:9px 10px}}
 .gym-done-edit{margin:12px 0;padding:12px;border:1px solid #2b3442;border-radius:12px}.gym-done-edit h4{margin:0 0 8px}.gym-done-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.gym-done-list span{display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border:1px solid #333b49;border-radius:16px;font-size:12px}.gym-done-list .btn{padding:2px 8px;min-height:0;font-size:11px}
 .done-exercise-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}.done-exercise-form label{display:grid;gap:4px;font-size:12px}.done-exercise-form input{width:100%;min-width:0;padding:10px;border-radius:10px;border:1px solid #435365;background:#161b25;color:#fff;font-size:16px}
 .gym-detail-figure .muscle-map{max-width:260px;margin:0}.gym-detail-figure .gym-figure svg{max-height:240px}

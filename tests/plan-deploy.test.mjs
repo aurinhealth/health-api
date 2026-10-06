@@ -21,7 +21,7 @@ function deployClient(proposals) {
   return { context, state, calls, timers, listeners, run: code => vm.runInContext(code, context) };
 }
 
-test('approved proposals go to Intervals.icu by themselves within 15 s, gym plans included', async () => {
+test('rides and runs go to Intervals.icu by themselves within 15 s; a gym proposal waits for its confirmation', async () => {
   const app = deployClient({
     '2026-10-06|ride': { workout: { id: 'w1', name: 'Sweet Spot' } },
     '2026-10-08|gym': { gym: 5, gymPreview: { draftId: 7, plan: { planName: 'Upper Body' } } },
@@ -32,13 +32,14 @@ test('approved proposals go to Intervals.icu by themselves within 15 s, gym plan
   assert.equal(app.timers.at(-1).ms, 15000);
   const waiting = app.run('deployStepsHtml()');
   assert.match(waiting, /✓ Vygenerováno<\/b><small>2 z 3 · 1 se nepovedlo/);
-  assert.match(waiting, /✓ Schváleno/);
-  assert.match(waiting, /Nasazuji<\/b><small>do Intervals\.icu do 15 s · 2/);
+  assert.match(waiting, /Ke schválení<\/b><small>1 gym · otevři návrh a potvrď/);
+  assert.match(waiting, /Nasazuji<\/b><small>do Intervals\.icu do 15 s · 1/);
+  assert.equal(app.run("proposalWaiting(state.proposals['2026-10-08|gym'])"), false);
   // An alternative to an already planned session is never sent.
   assert.equal(app.run("proposalWaiting(state.proposals['2026-10-09|run'])"), false);
   await app.run('pushApprovedProposals(true)');
-  assert.deepEqual(app.calls, ['schedule 2026-10-06|ride', '/app/api/gym/confirm {"draftId":7}']);
-  assert.match(app.run('deployStepsHtml()'), /✓ Nasazeno<\/b><small>2 v Intervals\.icu/);
+  assert.deepEqual(app.calls, ['schedule 2026-10-06|ride']);
+  assert.match(app.run('deployStepsHtml()'), /✓ Nasazeno<\/b><small>1 v Intervals\.icu/);
 });
 
 test('"Nezapisovat" keeps a proposal out; leaving the page sends the rest at once', async () => {
