@@ -600,8 +600,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const preferences=body.preferences&&typeof body.preferences==='object'?body.preferences:{};
     const reply=async (onAnswer,onProgress=()=>{})=>{
       let inputs={},coachCtx={date,now:pragueNow()},selected=null,focus=null;
+      onProgress('Trenér připravuje odpověď…');
       if(task!=='simple'){
-        onProgress('Načítám plán a aktuální regeneraci…');
         ctx.waitUntil(reconcileWorkoutLibraryCompletions(env,ctx,internalAuth).catch(error=>console.error('Assistant reconciliation failed',error.message)));
         const [loaded,capabilities,athleteFeedback,notes,prefs,blockHistory,thresholds,earlierProposals]=await Promise.all([
           loadCoachInputs(env,ctx,internalAuth,date),getCapabilities(env.DB),recentWorkoutFeedback(env.DB,shiftDate(date,-28)),listReflections(env.DB,{limit:5}).catch(()=>[]),
@@ -634,7 +634,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         phase:coachCtx.cyclingCoachV2?.constraints?.phase
       }):{workouts:[]}:{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
-      onProgress('Trenér připravuje odpověď…');
       const contextMs=Date.now()-started,answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer});
       onProgress('Kontroluji návrhy pro aplikaci…');
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
