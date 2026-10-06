@@ -86,7 +86,7 @@ test('a gym message captures the selected day and exercise from the application'
 
 test('retry keeps the original context when the athlete changes screens',async()=>{
   let calls=0;const app=client({reply:async()=>{if(++calls===1)throw Error('Spojení přerušeno');return Response.json({answer:'Hotovo',actions:[]});}});
-  app.state.view='workouts';app.state.workoutSport='gym';app.state.gymDate='2026-10-11';
+  app.state.view='workouts';app.state.openDetail={date:'2026-10-11',sport:'gym'};
   await app.run("sendAssistantMessage('Uprav to')");app.state.view='today';
   const retry=app.nodes.get('assistantConversation').children.find(x=>x.className==='assistant-retry');retry.children.find(x=>x.textContent==='Zkusit znovu').onclick();await new Promise(setImmediate);
   assert.deepEqual(app.requests[1].appContext,app.requests[0].appContext);assert.equal(app.requests[1].appContext.date,'2026-10-11');
@@ -108,4 +108,10 @@ test('browser consumes streamed progress and answer frames before final proposal
   const frames=[{type:'start'},{type:'progress',message:'Načítám plán'},{type:'answer',answer:'Navrhuji gym.'},{type:'done',result:{answer:'Navrhuji gym.',actions:[{type:'week_sport',date:'2026-10-11',sport:'gym',reason:'Vedle kola.'}]}}];
   const app=client({reply:async()=>new Response(frames.map(f=>JSON.stringify(f)).join('\n')+'\n',{headers:{'Content-Type':'application/x-ndjson'}})});await app.run("sendAssistantMessage('Přidej gym')");
   assert.equal(app.state.athleteState.conversation.at(-1).content,'Navrhuji gym.');assert.match(app.nodes.get('coachActionCards').innerHTML,/Přidat Gym do týdne/);
+});
+
+test('a generator tab left selected is not the topic: the assistant talks about the day',async()=>{
+  const app=client();app.state.workoutSport='gym';app.state.gymDate='2026-10-11';app.state.view='workouts';
+  await app.run("sendAssistantMessage('Jaké mám FTP?')");
+  assert.equal(app.requests[0].appContext.sport,null);
 });

@@ -1918,6 +1918,7 @@ async function cancelGymDay(date,button){
   }catch(error){toast(error.message);button.disabled=false;}
 }
 async function openTrainingDetail(entry){
+  state.openDetail={date:entry.date,sport:entry.sport||'gym'};
   const {kind,date,sport='gym'}=entry,today=pragueToday(),title=HUB_SPORTS[sport]+' · '+longDate(date),current=()=>$('sheetTitle')?.textContent===title&&!$('sheet').hidden;
   // A planned strength event opens like the gym day: figure, exercises, its changes.
   if(kind==='gym'||kind==='planned'&&sport==='gym'){
@@ -2156,7 +2157,7 @@ installFitnessInsights();
 // ---- Phone layer: "Dnes" home, quick-add button, bottom sheets, gym workout mode ----
 const isPhone=()=>window.matchMedia('(max-width:700px)').matches;
 let sheetCloseTimer;
-function closeSheet(){const s=$('sheet');if(!s||s.hidden)return;s.classList.remove('open');document.body.classList.remove('sheet-open');sheetCloseTimer=setTimeout(()=>{s.hidden=true;$('sheetBody').innerHTML='';},180);}
+function closeSheet(){state.openDetail=null;const s=$('sheet');if(!s||s.hidden)return;s.classList.remove('open');document.body.classList.remove('sheet-open');sheetCloseTimer=setTimeout(()=>{s.hidden=true;$('sheetBody').innerHTML='';},180);}
 function openSheet(title,body,onMount,panelClass=''){
   if(!$('sheet'))document.body.insertAdjacentHTML('beforeend','<div id="sheet" class="sheet" hidden><div class="sheet-backdrop" data-sheet-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"><div class="sheet-handle" data-sheet-close></div><div class="sheet-head"><h3 id="sheetTitle"></h3><button type="button" class="btn" data-sheet-close aria-label="Zavřít">✕</button></div><div id="sheetBody"></div></section></div>');
   clearTimeout(sheetCloseTimer);const s=$('sheet');s.className='sheet '+panelClass;$('sheetTitle').textContent=title;$('sheetBody').innerHTML=body;s.hidden=false;s.querySelector('.sheet-panel').scrollTop=0;document.body.classList.add('sheet-open');requestAnimationFrame(()=>s.classList.add('open'));
@@ -3243,17 +3244,21 @@ function openAthleteStatus(){
     body.querySelector('form').onsubmit=e=>{e.preventDefault();const status=body.querySelector('[name=status]:checked').value;saveAthleteStatus(status,$('athleteStatusNote').value,status==='active'?null:until());};
   },'status-sheet');
 }
+// What the assistant talks about: what is really open (workout mode, a
+// training's detail), otherwise the day itself. A tab left selected in the
+// generators says nothing about the question.
 function captureAssistantContext(){
-  const view=gymMode?'workouts':document.querySelector('.view.active')?.id||'today';
-  const sport=view==='workouts'?state.workoutSport||'ride':null;
-  const date=sport==='gym'?gymDay():view==='workouts'?$('generateDate')?.value||pragueToday():view==='today'?state.todayPick||pragueToday():selectedHistoryDate;
-  const exercise=sport==='gym'&&gymMode&&!gymMode.finished?gymSets()[gymMode.pos]?.r[1]:null;
-  return {view,date,weekStart:view==='workouts'?state.hubWeek||mondayOf(date):mondayOf(date),sport,exercise:exercise||null};
+  if(gymMode&&!$('gymMode')?.hidden){const date=gymDay(),exercise=!gymMode.finished?gymSets()[gymMode.pos]?.r[1]:null;return {view:'workouts',date,weekStart:mondayOf(date),sport:'gym',exercise:exercise||null};}
+  const detail=state.openDetail&&!$('sheet')?.hidden?state.openDetail:null;
+  if(detail)return {view:'workouts',date:detail.date,weekStart:mondayOf(detail.date),sport:detail.sport||null,exercise:null};
+  const active=document.querySelector('.view.active')?.id||'today',view=active==='workouts'?'today':active;
+  const date=active==='today'?state.todayPick||pragueToday():['training','health','nutrition'].includes(active)?selectedHistoryDate:pragueToday();
+  return {view,date,weekStart:active==='workouts'?state.hubWeek||mondayOf(date):mondayOf(date),sport:null,exercise:null};
 }
 function renderAssistantContext(context=captureAssistantContext()){
   const el=$('assistantContext');if(!el)return;
   const names={today:'Den',workouts:'Tréninky',training:'Historie',health:'Zdraví',nutrition:'Výživa',settings:'Nastavení'};
-  el.textContent='Otevřeno: '+(context.sport?'Workouty · '+HUB_SPORTS[context.sport]:names[context.view])+' · '+longDate(context.date)+(context.exercise?' · '+context.exercise:'');
+  el.textContent=(context.sport?HUB_SPORTS[context.sport]:names[context.view])+' · '+(context.date===pragueToday()?'dnes':longDate(context.date))+(context.exercise?' · '+context.exercise:'');
   const quick=$('assistantQuickActions');if(!quick)return;
   const items=[context.sport==='gym'?['Upravit tento gym','Prober otevřený gym na '+context.date+(context.exercise?', právě jsem u cviku '+context.exercise:'')+'. Doporučil bys něco upravit podle uloženého plánu a aktuální regenerace?']:['Probrat tento den','Prober plán na vybraný den '+context.date+' a jeho návaznost na regeneraci.'],['Probrat týden','Prober otevřený týden od '+context.weekStart+'. Zohledni moje zvolené sporty, časové možnosti a regeneraci.'],['Moje regenerace','Zhodnoť moji aktuální regeneraci a navrhni, jak jí přizpůsobit nejbližší trénink.']];
   quick.innerHTML=items.map((x,i)=>'<button class="assistant-quick" type="button" data-assistant-quick="'+i+'"'+(assistantBusy?' disabled':'')+'>'+esc(x[0])+'</button>').join('');
