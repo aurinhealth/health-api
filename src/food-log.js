@@ -55,6 +55,11 @@ function diaryMealType(type, time) {
   return Number.isFinite(hour) && hour < 12 ? "snack_am" : "snack_pm";
 }
 function noteOf(row) { try { const note = JSON.parse(row?.note || "{}"); return note && typeof note === "object" && !Array.isArray(note) ? note : { text: String(row.note) }; } catch { return row?.note ? { text: String(row.note) } : {}; } }
+// When a meal is logged for another day than today, it gets its slot's usual time.
+export const MEAL_DEFAULT_TIMES = { breakfast: "07:00", snack_am: "10:00", lunch: "12:00", snack_pm: "16:00", dinner: "19:00" };
+export function mealConsumedAt(date, mealType) {
+  return date === pragueToday() ? null : date + "T" + (MEAL_DEFAULT_TIMES[mealType] || "12:00") + ":00";
+}
 function consumedAt(date, time) {
   const t = String(time || "").match(/^(\d{1,2}):(\d{2})/);
   if (t) return date + "T" + t[1].padStart(2, "0") + ":" + t[2] + ":00";

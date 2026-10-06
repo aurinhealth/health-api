@@ -51,6 +51,27 @@ export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch
   return { status: "ok", eventId: id, date, name: event.name || null, gymPlanMoved: gym.moved };
 }
 
+// Outdoors or on the trainer: Intervals.icu tells them apart by the event type
+// (Ride / VirtualRide, Run / VirtualRun). A workout scheduled from the library
+// keeps the environment on its link, so its steps are drawn for that place.
+export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = fetch) {
+  const id = eventIdOf(eventId);
+  if (!id) throw new Error("Neplatný plánovaný trénink.");
+  if (!["indoor", "outdoor"].includes(environment)) throw new Error("Vyber venku, nebo uvnitř.");
+  const row = await plannedRow(env.DB, id);
+  let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
+  if (isStrengthEvent(payload)) throw new Error("Prostředí jde změnit jen u kola a běhu.");
+  const run = /run/i.test(String(payload.type || ""));
+  const type = run ? (environment === "indoor" ? "VirtualRun" : "Run") : (environment === "indoor" ? "VirtualRide" : "Ride");
+  const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ type }) });
+  if (!response.ok) throw new Error("Intervals.icu změnu odmítlo (HTTP " + response.status + ").");
+  const updated = await response.json().catch(() => ({}));
+  const event = { ...payload, ...updated, type: updated.type || type, indoor: environment === "indoor" };
+  if (row) await env.DB.prepare("UPDATE health_datapoints SET payload_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(JSON.stringify(event), env.DB.userId, row.id).run();
+  await env.DB.prepare("UPDATE workout_schedule_links SET environment=? WHERE user_id=? AND intervals_event_id=?").bind(environment, env.DB.userId, id).run().catch(() => {});
+  return { status: "ok", eventId: id, environment, type: event.type, name: event.name || null };
+}
+
 export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error("Neplatný plánovaný trénink.");

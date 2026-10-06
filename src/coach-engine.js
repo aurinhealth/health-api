@@ -1,6 +1,7 @@
 import { trainingStatus } from './training-status.js';
 import { todayGymContext } from './coach-gym-adjustment.js';
 import { isQualityName } from './session-intensity.js';
+import { parseIntervalsDescription } from './planned-detail.js';
 const n=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const txt=v=>String(v||'');
 const isBike=x=>/ride|cycling|bike|kolo/i.test(txt(x?.name)+' '+txt(x?.type));
@@ -32,10 +33,50 @@ function morningSummary({date,sleep,fitness,yesterday,planned,policy}){
   const next=policy.paused?policy.guidance[0]:low?'Dnes drž rezervu: u posilování uber sérii, u vytrvalosti zvol lehké tempo. Před těžkou jednotkou doplň, jak se cítíš.':heavy?'Po včerejší velké zátěži začni klidně; podle pocitu uprav objem a nech rezervu.':planned.length?'Dnešní plán můžeš držet; při rozcvičení ověř, že se cítíš dobře.':'Dnes máš prostor pro regeneraci; další aktivitu přizpůsob chuti a dostupnému času.';
   return {date,headline:policy.paused?policy.label+' · dnešní přehled':low?'Dnes s větší rezervou':heavy?'Navazujeme na náročný včerejšek':'Jak dnes začít',text:facts.join(' '),recommendation:next};
 }
+const dec=(v,d=1)=>String(Math.round(v*10**d)/10**d).replace('.',',');
+const pctRange=(lo,hi)=>hi!=null&&hi!==lo?Math.round(lo)+'–'+Math.round(hi)+' % FTP':Math.round(lo)+' % FTP';
+const wattRange=(lo,hi,ftp)=>ftp?' ('+(hi!=null&&hi!==lo?Math.round(lo/100*ftp)+'–'+Math.round(hi/100*ftp):Math.round(lo/100*ftp))+' W)':'';
+const stepLow=s=>n(s.powerLow??s.powerStart??s.power),stepHigh=s=>n(s.powerHigh??s.powerEnd);
+// What the session is for, in one sentence the rider can act on.
+function ridePurpose(ride){
+  const name=txt(ride.name).toLowerCase()+' '+txt(ride.description).toLowerCase();
+  if(/recovery|regener|easy spin|lehce/.test(name))return 'Cíl: prokrvit nohy a urychlit regeneraci. Tep i výkon drž nízko, žádné úseky navíc.';
+  if(/vo2|vo₂/.test(name))return 'Cíl: VO₂max. Krátké tvrdé úseky naplno udržitelného výkonu, mezi nimi opravdu lehce.';
+  if(/threshold|práh|prah|ftp/.test(name))return 'Cíl: posunout FTP. Bloky drž na hraně udržitelného výkonu, ne nad ní.';
+  if(/sweet ?spot/.test(name))return 'Cíl: zvednout FTP s menší únavou než u prahu. Stabilní výkon, plynulá kadence.';
+  if(/tempo/.test(name))return 'Cíl: svalová vytrvalost v tempu. Výkon drž rovnoměrně, bez výkyvů do prahu.';
+  if(/long|dlouh/.test(name))return 'Cíl: aerobní základ a vytrvalost na dlouhé trati. Začni lehce a jez od první hodiny.';
+  return 'Cíl: aerobní základ. Tempo, ve kterém zvládneš mluvit v celých větách.';
+}
+// The main set and the cadence work, read from the Intervals.icu workout text.
+function rideStructure(ride,ftp){
+  let blocks=[];try{blocks=parseIntervalsDescription(ride.description||'');}catch{blocks=[];}
+  const out=[],repeat=blocks.filter(b=>b.steps&&n(b.repeats)>1).sort((a,b)=>Math.max(...b.steps.map(x=>stepLow(x)||0))-Math.max(...a.steps.map(x=>stepLow(x)||0)))[0];
+  const work=repeat&&[...repeat.steps].sort((a,b)=>(stepLow(b)||0)-(stepLow(a)||0))[0],rest=work&&repeat.steps.find(x=>x!==work);
+  // A repeat is a set of intervals only when its work part is clearly above the easy part.
+  const intervals=work&&stepLow(work)!=null&&(stepLow(work)>=76||rest&&stepLow(rest)!=null&&stepLow(work)-stepLow(rest)>=10);
+  if(intervals){
+    out.push('Hlavní část: '+repeat.repeats+'× '+dec(work.durationMinutes,0)+' min · '+pctRange(stepLow(work),stepHigh(work))+wattRange(stepLow(work),stepHigh(work),ftp)+(rest?', mezi úseky '+dec(rest.durationMinutes,0)+' min lehce':'')+'.');
+  }else{
+    // Steady ride: the power range of everything between warm-up and cool-down.
+    const main=(blocks.length>2?blocks.slice(1,-1):blocks).flatMap(b=>b.steps||[b]).filter(x=>stepLow(x)!=null),minutes=main.reduce((sum,x)=>sum+n(x.durationMinutes),0)*(main.length?1:0);
+    const lo=main.length?Math.min(...main.map(stepLow)):null,hi=main.length?Math.max(...main.map(x=>stepHigh(x)??stepLow(x))):null;
+    const repeats=blocks.filter(b=>b.steps).reduce((m,b)=>m+(n(b.repeats)||1)*b.steps.reduce((x,y)=>x+n(y.durationMinutes),0)-b.steps.reduce((x,y)=>x+n(y.durationMinutes),0),0);
+    if(lo!=null&&minutes+repeats>=10)out.push('Hlavní část: '+dec(minutes+repeats,0)+' min rovnoměrně · '+pctRange(lo,hi)+wattRange(lo,hi,ftp)+'.');
+  }
+  const steps=blocks.flatMap(b=>b.steps?b.steps.map(x=>({...x,repeats:n(b.repeats)||1})):[{...b,repeats:1}]),cad=steps.find(x=>x.cadence&&/^\d/.test(String(x.cadence))&&Number(String(x.cadence).split('–')[0])>=95);
+  if(cad)out.push('Kadence: '+(cad.repeats>1?cad.repeats+'× ':'')+dec(cad.durationMinutes,0)+' min na '+cad.cadence+' rpm. Točíš rychleji, netlačíš víc – výkon zůstává lehký.');
+  return out;
+}
 function bikeCoach(c,ride){
-  const low=c.sleep.last!=null&&c.sleep.last<360||n(c.fitness.tsb)!=null&&n(c.fitness.tsb)<-25,hard=isHard(ride);
-  return {id:'cycling',title:sportTitle('Vytrvalostní trenér',c.focus),phase:'before',status:low?'caution':'ready',headline:ride.name||'Dnešní jízda',
-    actions:[low&&hard?'Slabší regenerace: zvaž lehkou variantu bez intervalů; rozhodni podle pocitu při rozjetí.':hard?'Drž předepsané pracovní bloky a mezi nimi lehce regeneruj.':'Drž rovnoměrné vytrvalostní tempo, bez přidaných intenzivních úseků.'],confidence:ride.name?'high':'medium'};
+  const low=c.sleep.last!=null&&c.sleep.last<360||n(c.fitness.tsb)!=null&&n(c.fitness.tsb)<-25,hard=isHard(ride),t=c.thresholds||{};
+  const indoor=/virtual|indoor|trainer|zwift|trenaž/i.test(txt(ride.type)+' '+txt(ride.name)),ftp=indoor?(n(t.indoorFtp)||(n(t.ftp)?Math.round(n(t.ftp)*.95):null)):n(t.ftp);
+  const minutes=Math.round((n(ride.durationHours)||0)*60),tss=n(ride.tss),intensity=tss&&minutes?Math.sqrt(tss/(minutes/60*100)):null;
+  const actions=[low&&hard?'Slabší regenerace: zvaž lehkou variantu bez intervalů; rozhodni podle pocitu při rozjetí.':hard?'Drž předepsané pracovní bloky a mezi nimi lehce regeneruj.':low?'Po slabší noci jeď spíš ve spodní části pásma a délku zkrať, pokud se nohy nerozjedou.':'Drž rovnoměrné vytrvalostní tempo, bez přidaných intenzivních úseků.'];
+  actions.push(ridePurpose(ride),...rideStructure(ride,ftp));
+  if(!hard&&n(t.lthr))actions.push('Tep drž do ~'+Math.round(n(t.lthr)*.89)+' bpm (horní hranice Z2 z tvého prahového tepu '+Math.round(n(t.lthr))+' bpm).');
+  if(minutes||tss)actions.push('Plán: '+[minutes?minutes+' min':null,tss?'TSS '+Math.round(tss):null,intensity?'IF '+dec(intensity,2):null,ftp?(indoor?'indoor FTP ':'FTP ')+ftp+' W':null].filter(Boolean).join(' · ')+'.');
+  return {id:'cycling',title:sportTitle('Vytrvalostní trenér',c.focus),phase:'before',status:low?'caution':'ready',headline:ride.name||'Dnešní jízda',actions,confidence:ride.name?'high':'medium'};
 }
 function gymCoach(c,workout){
   const low=c.sleep.last!=null&&c.sleep.last<360,hardRide=c.training.planned.some(a=>isBike(a)&&isHard(a)),actions=[];
@@ -79,11 +120,11 @@ export function buildCoachCouncil(input){
     const found=completed.find(a=>!used.has(a.id)&&(p.id!=null&&String(a.pairedEventId||a.plannedEventId)===String(p.id)||txt(p.name).trim()&&txt(p.name).trim().toLowerCase()===txt(a.name).trim().toLowerCase()));
     if(found){used.add(found.id);return false;}return true;
   });
-  const c={...daily,training:{...training,planned,completed:[]},sleep:sleepFacts(input.sleepSessions||[],date),fitness:input.fitness||{},food:daily.nutrition?.foodLog?.totals||{},focus:input.focus,todayGym:input.gym?todayGymContext(input.gym,date):null};
+  const c={...daily,training:{...training,planned,completed:[]},sleep:sleepFacts(input.sleepSessions||[],date),fitness:input.fitness||{},food:daily.nutrition?.foodLog?.totals||{},focus:input.focus,todayGym:input.gym?todayGymContext(input.gym,date):null,thresholds:input.thresholds||null};
   const coaches=[],bike=planned.find(isBike),gym=planned.find(isGym);
   if(policy.paused)coaches.push({id:'athlete-status',title:'Aktuální stav',status:'recovery',headline:policy.headline,phase:'rest',confidence:'high',actions:[policy.guidance[0],...(policy.note?['Tvoje omezení: '+policy.note]:[])]});
   else{if(bike)coaches.push(bikeCoach(c,bike));if(gym)coaches.push(gymCoach(c,gym));}
   const reviews=completed.filter(a=>isBike(a)||isGym(a)).map(a=>activityReview(a,matched)),fuel=nutritionCoach(c,completed.filter(a=>isBike(a)||isGym(a)),policy.paused);
   if(fuel)coaches.push(fuel);
-  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
+  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:input.ahead?null:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
 }

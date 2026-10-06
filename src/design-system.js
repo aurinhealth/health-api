@@ -37,6 +37,10 @@ body{background:var(--bg)}
 .subtabs button[aria-selected=true]{background:var(--primary-surface);border-color:var(--primary-line);color:var(--primary-text)}
 [data-tab-hidden]{display:none!important}
 
+/* Planned ride or run: outdoors or on the trainer. */
+.env-toggle{display:flex;align-items:center;gap:6px;margin:12px 0}.env-toggle .small{margin-right:4px}
+.env-toggle .btn.selected{background:var(--primary-surface);border-color:var(--primary-line);color:var(--primary-text)}
+
 /* Výživa: the right column holds the meals and what to eat next. */
 .meal-column{display:grid;gap:14px;align-content:start;min-width:0}
 .meal-column>.card{margin:0}

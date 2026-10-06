@@ -105,7 +105,8 @@ export function structureMinutes(structure) {
 export function plannedEventWorkout(event = {}) {
   const type = String(event.type || ''), text = (type + ' ' + String(event.name || '')).toLowerCase();
   const sport = /run|běh/.test(text) ? 'run' : 'ride';
-  const environment = /virtual|indoor|trainer|treadmill|pás|zwift/.test(text) || event.indoor === true ? 'indoor' : 'outdoor';
+  // A place the athlete picked in the app wins over the event's type and name.
+  const environment = event.indoor === true ? 'indoor' : event.indoor === false ? 'outdoor' : /virtual|indoor|trainer|treadmill|pás|zwift/.test(text) ? 'indoor' : 'outdoor';
   let structure = structureFromWorkoutDoc(event.workout_doc);
   if (!structure.length) structure = parseIntervalsDescription(event.description);
   const minutes = n(event.moving_time) ? n(event.moving_time) / 60 : structureMinutes(structure) || null;

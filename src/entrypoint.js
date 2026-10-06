@@ -50,7 +50,7 @@ import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory, parseStrengthSheet, removeManualSets } from "./strength-history.js";
-import { searchCookbookRecipes, logFood } from "./food-log.js";
+import { searchCookbookRecipes, logFood, mealConsumedAt } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
@@ -60,7 +60,7 @@ import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, 
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
-import { movePlannedEvent, deletePlannedEvent, isStrengthEvent } from "./planned-events.js";
+import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile } from "./training-profile.js";
@@ -526,13 +526,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
   }
   // Planned workouts: move (drag between days) or delete, in Intervals.icu and locally.
-  if(url.pathname==='/app/api/planned/move'||url.pathname==='/app/api/planned/delete'){
+  if(url.pathname==='/app/api/planned/move'||url.pathname==='/app/api/planned/delete'||url.pathname==='/app/api/planned/environment'){
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
     try{
       const body=await request.json().catch(()=>({}));
       if(url.pathname.endsWith('/move')&&String(body.date||'')<pragueToday())return Response.json({status:'error',message:'Trénink jde přesunout jen na dnešek nebo pozdější den.'},{status:400});
+      if(url.pathname.endsWith('/environment')){const result=await setPlannedEnvironment(env,body);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
@@ -556,7 +557,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
     const validDay=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))&&String(v)<=pragueToday();
     try{
-      if(request.method==='GET'){const date=url.searchParams.get('date');return Response.json({status:'ok',reflections:await listReflections(env.DB,{date:validDay(date)?date:null,limit:10})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='GET'){const date=url.searchParams.get('date');
+        // A day ahead has no notes yet; only a missing date lists the latest ones.
+        if(date&&!validDay(date))return Response.json({status:'ok',reflections:[]},{headers:{'Cache-Control':'no-store'}});
+        return Response.json({status:'ok',reflections:await listReflections(env.DB,{date:date||null,limit:10})},{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='POST'){
         if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
         const body=await request.json().catch(()=>({})),date=validDay(body.date)?body.date:pragueToday();
@@ -846,7 +850,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:'Doplň energii i všechna tři makra pro zvolený základ tabulky.'},{status:400});
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
       const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,consumed_at:mealConsumedAt(body.date,body.mealType)||undefined,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error('Uložení selhalo.');
       let personal=null,warning=null;
       if(p.source!=='composed'){try{personal=await savePersonalFood(env.DB,p);}catch(error){warning='Jídlo je zapsané, ale potravinu pro příště se nepodařilo uložit: '+error.message;}}
@@ -888,17 +892,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   if(url.pathname==='/app/api/coaches'&&request.method==='GET'){
     try{
-      const requestedDate=url.searchParams.get('date'),date=validTrainingDay(requestedDate)&&requestedDate<=pragueToday()?requestedDate:pragueToday(),oldest=shiftDate(date,-14);
+      // Up to two weeks ahead: the advisers then talk about the planned day.
+      const requestedDate=url.searchParams.get('date'),date=validTrainingDay(requestedDate)&&requestedDate<=shiftDate(pragueToday(),14)?requestedDate:pragueToday(),ahead=date>pragueToday(),oldest=shiftDate(date,-14);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const fitnessJob=env.INTERVALS_API_KEY?fetch('https://intervals.icu/api/v1/athlete/0/wellness?oldest='+oldest+'&newest='+date,{headers:{Authorization:'Basic '+btoa('API_KEY:'+env.INTERVALS_API_KEY),Accept:'application/json'}}).then(r=>r.ok?r.json():[]).catch(()=>[]):[];
-      const [daily,yesterday,sleepData,rows,profile,athleteState,gym]=await Promise.all([
+      const [daily,yesterday,sleepData,rows,profile,athleteState,gym,thresholds]=await Promise.all([
         read('/analysis/daily?date='+date),read('/analysis/daily?date='+shiftDate(date,-1)),
         read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)).then(d=>withIntervalsSleep(env,d,oldest,shiftDate(date,1))),fitnessJob,dashboardProfile(env),
-        date===pragueToday()?getAthleteState(env.DB):{status:'active',note:'',statusUntil:null},readGymPlan(env.DB,date).catch(()=>null)
+        date>=pragueToday()?getAthleteState(env.DB):{status:'active',note:'',statusUntil:null},readGymPlan(env.DB,date).catch(()=>null),
+        cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null)
       ]);
       const latest=Array.isArray(rows)&&rows.length?rows.filter(r=>String(r.id||'')<=date).at(-1)||{}:{};
       const fitness={...latest,tsb:latest.ctl!=null&&latest.atl!=null?Number(latest.ctl)-Number(latest.atl):null};
-      const council=buildCoachCouncil({date,daily,yesterday,fitness,sleepSessions:sleepData.sessions||[],athleteState,focus:athleteFocus(profile,date),gym});
+      const council=buildCoachCouncil({date,daily,yesterday,fitness,sleepSessions:sleepData.sessions||[],athleteState,focus:athleteFocus(profile,date),gym,thresholds,ahead});
       // Performance streams belong to a requested detailed review, not every
       // page load or background refresh.
       if(url.searchParams.get('details')==='1')await Promise.all((daily.training?.completed||[]).filter(a=>/^(Ride|VirtualRide|EBikeRide|Cycling|MountainBikeRide|GravelRide)$/i.test(a.type||'')).slice(0,2).map(async a=>{
