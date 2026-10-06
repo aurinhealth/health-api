@@ -8,18 +8,13 @@
 // EN_TEMPLATES (numbers become {n}), then word patterns (weekdays, units).
 // Anything without a translation stays Czech.
 import {EN, EN_TEMPLATES, EN_PATTERNS} from './i18n-en.js';
+import {assetVersion, scriptCacheControl} from './asset-version.js';
 
 export const LANGS = ['cs', 'en'];
 
-// Runs in <head> before the first paint. In English the page stays hidden
-// until the first translation pass (or a short timeout), so Czech never flashes.
-export const langBoot = `<script>(function(){try{var r=document.documentElement,m=document.cookie.match(/(?:^|; )lw-lang=(cs|en)/),
-d=((navigator.languages&&navigator.languages[0])||navigator.language||'cs').toLowerCase(),dev=/^(cs|sk)\\b/.test(d)?'cs':'en',l=m?m[1]:dev;
-r.lang=l;r.dataset.deviceLang=dev;if(l==='en'){r.classList.add('i18n-wait');setTimeout(function(){r.classList.remove('i18n-wait');},1500);
-var s=document.createElement('script');s.src='/app/i18n-en.js?v=${EN_VERSION()}';document.head.appendChild(s);}}catch(e){}})();</script>
-<style>.i18n-wait body{visibility:hidden}</style>`;
-
-function EN_VERSION() { return [EN, EN_TEMPLATES, EN_PATTERNS].map(x => Object.keys(x).length).join('-'); }
+let englishBody = null;
+function englishScriptBody() { return englishBody ??= `window.LW_EN=${JSON.stringify(EN)};window.LW_EN_TPL=${JSON.stringify(EN_TEMPLATES)};window.LW_EN_PATTERNS=${JSON.stringify(EN_PATTERNS)};${translator}`; }
+function EN_VERSION() { return assetVersion(englishScriptBody()); }
 
 // The translator, served with the dictionary. It skips what people typed
 // (the text inside textareas, contenteditable) and anything marked data-no-i18n;
@@ -45,9 +40,16 @@ function start(){walk(document.body);root.classList.remove('i18n-wait');
 if(document.body)start();else document.addEventListener('DOMContentLoaded',start);
 })();`;
 
-export function englishScript() {
-  const body = `window.LW_EN=${JSON.stringify(EN)};window.LW_EN_TPL=${JSON.stringify(EN_TEMPLATES)};window.LW_EN_PATTERNS=${JSON.stringify(EN_PATTERNS)};${translator}`;
-  return new Response(body, {status:200, headers:{'content-type':'text/javascript; charset=utf-8', 'cache-control':'public, max-age=86400'}});
+// Runs in <head> before the first paint. In English the page stays hidden
+// until the first translation pass (or a short timeout), so Czech never flashes.
+export const langBoot = `<script>(function(){try{var r=document.documentElement,m=document.cookie.match(/(?:^|; )lw-lang=(cs|en)/),
+d=((navigator.languages&&navigator.languages[0])||navigator.language||'cs').toLowerCase(),dev=/^(cs|sk)\\b/.test(d)?'cs':'en',l=m?m[1]:dev;
+r.lang=l;r.dataset.deviceLang=dev;if(l==='en'){r.classList.add('i18n-wait');setTimeout(function(){r.classList.remove('i18n-wait');},1500);
+var s=document.createElement('script');s.src='/app/i18n-en.js?v=${EN_VERSION()}';document.head.appendChild(s);}}catch(e){}})();</script>
+<style>.i18n-wait body{visibility:hidden}</style>`;
+
+export function englishScript(url) {
+  return new Response(englishScriptBody(), {status:200, headers:{'content-type':'text/javascript; charset=utf-8', 'cache-control':scriptCacheControl(url, EN_VERSION())}});
 }
 
 // For AI replies: the assistant answers in the interface language.

@@ -5,6 +5,7 @@
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { trainingStatus } from './training-status.js';
+import { dateFormat } from "./date-format.js";
 
 const DAY = 86400000;
 const n = v => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -25,7 +26,7 @@ export function pragueLocal(value) {
   if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) return s.slice(0, 16);
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s.slice(0, 16);
-  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value]));
+  const p = Object.fromEntries(dateFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
 }
 

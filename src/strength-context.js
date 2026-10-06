@@ -1,12 +1,13 @@
 import { getAthleteState } from './athlete-state.js';
 import { isQualityName } from './session-intensity.js';
+import { dateFormat } from "./date-format.js";
 const TZ = "Europe/Prague";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
 
 function localDate(offsetDays = 0) {
   const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const parts = dateFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
   const y = Number(parts.find(x => x.type === "year").value);
   const m = Number(parts.find(x => x.type === "month").value);
   const d = Number(parts.find(x => x.type === "day").value);
@@ -17,7 +18,7 @@ async function d1WeightTrend(env, endDate) {
   try {
     const end = String(endDate || localDate()).slice(0,10);
     const start = localDate(-35);
-    const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND lower(data_type) LIKE '%weight%' AND (sample_time >= ? OR start_time >= ?) AND (sample_time <= ? OR start_time <= ?) ORDER BY COALESCE(sample_time,start_time)`)
+    const rows = await env.DB.prepare(`SELECT data_type, sample_time, start_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('weight', 'weight-written') AND (sample_time >= ? OR start_time >= ?) AND (sample_time <= ? OR start_time <= ?) ORDER BY COALESCE(sample_time,start_time)`)
       .bind(env.USER_ID, `${start}T00:00:00`,`${start}T00:00:00`,`${end}T23:59:59`,`${end}T23:59:59`).all();
     const points=[];
     for(const row of rows.results||[]){

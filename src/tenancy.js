@@ -52,12 +52,36 @@ export function ownerEmail(env) {
   return normalizeEmail(env.OWNER_EMAIL);
 }
 
+// Handlers make sure their tables exist (CREATE … IF NOT EXISTS) on every
+// request. Each is a write that D1 runs on the primary, one at a time, so once a
+// statement has succeeded on this database in this isolate it is not sent again.
+const IDEMPOTENT_SCHEMA = /^\s*CREATE\s+(UNIQUE\s+)?(TABLE|INDEX)\s+IF\s+NOT\s+EXISTS\b/i;
+const schemaDoneByDb = new WeakMap();
+const REAL = Symbol("statement");
+function schemaStatement(statement, sql, schemaDone) {
+  return {
+    [REAL]: statement,
+    bind: (...values) => schemaStatement(statement.bind(...values), sql, schemaDone),
+    async run() {
+      if (schemaDone.has(sql)) return { success: true, results: [], meta: { changes: 0 } };
+      const result = await statement.run();
+      schemaDone.add(sql);
+      return result;
+    },
+    first: (...args) => statement.first(...args),
+    all: (...args) => statement.all(...args),
+    raw: (...args) => statement.raw(...args)
+  };
+}
+
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
 export function scopedDb(db, userId) {
   if (!db) return db;
   const id = Number(userId);
   if (!Number.isInteger(id) || id <= 0) throw new Error("A user id is required for database access");
+  if (!schemaDoneByDb.has(db)) schemaDoneByDb.set(db, new Set());
+  const schemaDone = schemaDoneByDb.get(db);
   const check = query => {
     const sql = String(query);
     if (/^\s*(CREATE|ALTER|DROP|PRAGMA)\b/i.test(sql)) return;
@@ -67,8 +91,8 @@ export function scopedDb(db, userId) {
   };
   return {
     userId: id,
-    prepare(query) { check(query); return db.prepare(query); },
-    batch(statements) { return db.batch(statements); },
+    prepare(query) { check(query); const statement = db.prepare(query); return IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement; },
+    batch(statements) { return db.batch(statements.map(s => s?.[REAL] || s)); },
     exec(query) { check(query); return db.exec(query); },
     dump() { throw new Error("dump is not available on a user-scoped database"); }
   };

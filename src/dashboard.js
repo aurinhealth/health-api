@@ -6,7 +6,7 @@ import {assistantPanelTheme} from './assistant-panel-theme.js';
 import {designSystem,themeBoot,themeSwitch} from './design-system.js';
 import {ICON_PATHS,icon} from './icons.js';
 import {langBoot} from './i18n.js';
-export function dashboardPage() {
+export function dashboardPage({clientVersion='dev'}={}) {
   const html = `<!doctype html>
 <html lang="cs">
 <head>
@@ -188,7 +188,7 @@ body{background:var(--bg);font-size:14px;letter-spacing:-.01em}.shell{grid-templ
 <div id="toast" class="toast"></div>
 <style>${experienceTheme}${mobileTheme}${gymFocusTheme}${workoutsHubTheme}${assistantPanelTheme}${designSystem}</style>
 <script>window.LW_ICONS=${JSON.stringify(ICON_PATHS)};</script>
-<script src="/app/dashboard-client.js?v=20261006-theme3" defer></script>
+<script src="/app/dashboard-client.js?v=${clientVersion}" defer></script>
 </body></html>`;
   return new Response(html,{status:200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
 }

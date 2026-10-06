@@ -1,10 +1,11 @@
+import { dateFormat } from "./date-format.js";
 // Durable, user-scoped outbox. Local food writes never depend on Google being
 // online. Known Google records are patched, not recreated, on edits.
 const BASE='https://health.googleapis.com/v4/';
 const COLLECTION='users/me/dataTypes/nutrition-log/dataPoints';
 const RESOURCE=/^users\/[^/]+\/dataTypes\/nutrition-log\/dataPoints\/[^/?#]+$/;
 const MEALS={breakfast:'BREAKFAST',snack_am:'SNACK',snack_pm:'SNACK',snack:'SNACK',lunch:'LUNCH',dinner:'DINNER'};
-const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const today=()=>dateFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 async function ensure(db){await db.prepare(`CREATE TABLE IF NOT EXISTS food_google_exports (
   user_id INTEGER NOT NULL,entry_id INTEGER NOT NULL,desired_json TEXT,revision INTEGER NOT NULL DEFAULT 1,
   remote_name TEXT,operation_name TEXT,operation_revision INTEGER,operation_kind TEXT,status TEXT NOT NULL DEFAULT 'queued',message TEXT,

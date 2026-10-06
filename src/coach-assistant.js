@@ -8,6 +8,7 @@ import { readOpenAIStream,partialCoachAnswer } from './assistant-stream.js';
 import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { replyLanguageNote } from './i18n.js';
+import { dateFormat } from "./date-format.js";
 
 export const coachInstructions = `Jsi elitní trenér vytrvalostní cyklistiky a silové přípravy. Přemýšlej s úrovní detailu, disciplíny a plánování, jakou by sportovec očekával od špičkového WorldTour performance staffu včetně týmů typu UAE Team Emirates-XRG. Nejsi zaměstnanec týmu UAE ani jiného týmu. Nikdy netvrď, že UAE zastupuješ, že máš přístup k jejich interním datům nebo že znáš jejich neveřejné algoritmy.
 
@@ -59,7 +60,7 @@ appContext popisuje právě otevřenou obrazovku: date je vybraný den, weekStar
 Návrh nikdy sám neukládej ani neodesílej do Intervals.icu. Uživatel musí mít možnost návrh zkontrolovat před zápisem.`;
 
 // "2026-10-05 19:09" in Prague: the coach knows what is left of the day.
-export const pragueNow=(at=new Date())=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(at);
+export const pragueNow=(at=new Date())=>dateFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(at);
 const WEEKDAYS=['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'];
 export const weekdayOf=date=>WEEKDAYS[new Date(String(date)+'T12:00:00Z').getUTCDay()]||null;
 const shiftDay=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);

@@ -2,6 +2,7 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
 import { searchPersonalFoods } from "./personal-foods.js";
 import { pragueToday } from "./prague-date.js";
+import { dateFormat } from "./date-format.js";
 
 // null and "" are missing values, not 0: ChatGPT sends "servings": null, and
 // that used to log 0.01 of a portion.
@@ -71,7 +72,7 @@ function pragueTime(value) {
   if (!/T\d{2}:\d{2}/.test(t)) return null;
   if (!/Z$|[+-]\d{2}:?\d{2}$/.test(t)) return t.slice(11, 16);
   const d = new Date(t);
-  return Number.isFinite(d.getTime()) ? new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : null;
+  return Number.isFinite(d.getTime()) ? dateFormat("en-GB", { timeZone: "Europe/Prague", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : null;
 }
 // A diary row in the shape the ChatGPT tools have always returned.
 function toEntry(row) {

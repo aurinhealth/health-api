@@ -434,6 +434,7 @@ export const EN = {
 "Načítám čtečku etikety…": "Loading label reader…",
 "Načítám čtečku…": "Loading reader…",
 "Načítám…": "Loading…",
+"Aktualizuji…": "Updating…",
 "Nebo opiš číslo EAN": "Or type the EAN number",
 "Nech trenéra sestavit trénink podle týdne a únavy.": "Let the coach build a workout based on your week and fatigue.",
 "Nech vybrané alespoň jedno jídlo.": "Keep at least one meal selected.",

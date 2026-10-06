@@ -8,6 +8,7 @@
 // is never overwritten, while today's steps can grow through the day.
 
 import { heartRateFromSamples } from "./index.js";
+import { dateFormat } from "./date-format.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -23,7 +24,7 @@ const DAILY = {
 const ROUND = { restingHR: 0, hrv: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0, avgSleepingHR: 0 };
 const TOLERANCE = { steps: 1, sleepSecs: 60 };
 
-const pragueDay = iso => /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? String(iso) : new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
+const pragueDay = iso => /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? String(iso) : dateFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
 // Google sample times are stored as RFC 3339 UTC without milliseconds.
 const utc = iso => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "Z");
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };

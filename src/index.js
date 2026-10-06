@@ -6,6 +6,7 @@ import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight } from "./weight-sync.js";
 import { healthScopes } from "./google-scopes.js";
+import { dateFormat } from "./date-format.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -257,13 +258,13 @@ const CONFIG = {
 
 // The current Prague wall-clock time with its UTC offset (CET or CEST).
 function pragueNow() {
-  const p = Object.fromEntries(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZoneName: "longOffset" }).formatToParts(new Date()).map(x => [x.type, x.value]));
+  const p = Object.fromEntries(dateFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZoneName: "longOffset" }).formatToParts(new Date()).map(x => [x.type, x.value]));
   const offset = String(p.timeZoneName || "").replace("GMT", "") || "+00:00", [, sign, h, m] = offset.match(/([+-])(\d{2}):(\d{2})/) || [, "+", "00", "00"];
   return { at: `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${offset}`, offsetSeconds: (sign === "-" ? -1 : 1) * (Number(h) * 3600 + Number(m) * 60) };
 }
 
 function pragueDate() {
-  const parts = new Intl.DateTimeFormat(
+  const parts = dateFormat(
     "en-GB",
     {
       timeZone: "Europe/Prague",
@@ -2854,7 +2855,7 @@ async function foodRecommend(env, url) {
   const cookbookData=await getCookbook();
   const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
 
-  const localHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
+  const localHour=Number(dateFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
   const completed=new Set([hasBreakfast&&'BREAKFAST',hasLunch&&'LUNCH',hasSnack&&'SNACK',hasDinner&&'DINNER'].filter(Boolean));
   const slots=nextUnloggedMeals(completed,date===pragueDate()?localHour:0).map(meal=>[meal.type,meal.label]);
 

@@ -9,10 +9,11 @@
 // of what was written keeps a slow Google sync from causing a second write.
 
 import { grantedExtras } from "./google-scopes.js";
+import { dateFormat } from "./date-format.js";
 
 const TOLERANCE_KG = 0.05;
 export const WEIGHT_SYNC_DAYS = 14;
-const pragueDay = iso => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
+const pragueDay = iso => dateFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
 const kg = v => { const x = Number(v); return x >= 30 && x <= 300 ? Math.round(x * 10) / 10 : null; };
 const same = (a, b) => a != null && b != null && Math.abs(a - b) < TOLERANCE_KG;
 

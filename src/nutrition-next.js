@@ -1,3 +1,4 @@
+import { dateFormat } from "./date-format.js";
 const MEALS = [
   {type:"BREAKFAST",label:"Snídaně",from:0,to:10},
   {type:"LUNCH",label:"Oběd",from:10,to:15},
@@ -27,7 +28,7 @@ export function completedMealTypes(entries) {
     else if(entry.consumed_at){
       const date=new Date(entry.consumed_at);
       if(!Number.isNaN(date.getTime())){
-        const hour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(date));
+        const hour=Number(dateFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(date));
         completed.add(hour<10?'BREAKFAST':hour<15?'LUNCH':hour<18?'SNACK':'DINNER');
       }
     }

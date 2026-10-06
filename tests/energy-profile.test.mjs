@@ -131,5 +131,5 @@ test("the dashboard works without connections", () => {
   assert.doesNotMatch(entry, /status:"onboarding"/);
   assert.match(entry, /source:"none",connected:false/);
   assert.match(client, /id="onboardingSkip"/);
-  assert.match(client, /if\(!me\.missingProviders\?\.length\|\|onboardingSkipped\(\)\)load\(\)/);
+  assert.match(client, /const open=!me\.missingProviders\?\.length\|\|onboardingSkipped\(\);/);
 });

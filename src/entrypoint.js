@@ -48,6 +48,9 @@ import { lookupFoodWithAI } from "./food-ai.js";
 import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
+import { assetVersion, scriptCacheControl } from "./asset-version.js";
+
+const CLIENT_VERSION = assetVersion(dashboardClient);
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory, parseStrengthPlan, removeManualSets } from "./strength-history.js";
 import { searchCookbookRecipes, logFood, mealConsumedAt } from "./food-log.js";
@@ -81,8 +84,13 @@ import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, 
 import { pragueToday } from './prague-date.js';
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
+import { dateFormat } from "./date-format.js";
 
 const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
+
+// A month of Google Health samples summed per day: thousands of rows that only a
+// sync changes (every five minutes, or the Obnovit button, which drops the cache).
+const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:" + date, () => googleDashboard(env.DB, date), { ttl: 120 });
 
 // Requests that read or preview only and so keep the cache.
 const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats)/;
@@ -190,9 +198,9 @@ export default {
 
 function staticRoute(url, request) {
   if (url.pathname === "/mcp/health") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
-  if (url.pathname === "/app") return dashboardPage();
-  if (url.pathname === "/app/i18n-en.js") return englishScript();
-  if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": "no-store" } });
+  if (url.pathname === "/app") return dashboardPage({ clientVersion: CLIENT_VERSION });
+  if (url.pathname === "/app/i18n-en.js") return englishScript(url);
+  if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": scriptCacheControl(url, CLIENT_VERSION) } });
   if (url.pathname === "/") return overviewPage(request);
   if (url.pathname === "/privacy") return privacyPage(request);
   if (url.pathname === "/terms") return termsPage(request);
@@ -361,7 +369,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
     app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
     cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>Response.json(d)),internal('/app/api/gym?date='+date),
     app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-7),shiftDate(date,1))).then(d=>Response.json(d)),
-    googleDashboard(env.DB,date).catch(()=>({}))
+    googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
   // The three weeks are the heavy part (every day's analysis, food and
   // recommendations). One week at a time, cached and shared by every day of
@@ -428,7 +436,7 @@ async function recentCoachProposals(env){
 }
 // Midnight of a Prague day as a UTC timestamp in SQLite's format.
 function pragueDayStartUtc(date){
-  for(const hours of [1,2]){const at=new Date(Date.parse(date+'T00:00:00Z')-hours*3600e3);if(new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(at)==='00')return at.toISOString().slice(0,19).replace('T',' ');}
+  for(const hours of [1,2]){const at=new Date(Date.parse(date+'T00:00:00Z')-hours*3600e3);if(dateFormat('sv-SE',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(at)==='00')return at.toISOString().slice(0,19).replace('T',' ');}
   return date+' 00:00:00';
 }
 
@@ -526,7 +534,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
     const date=url.searchParams.get('date')||pragueToday();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>pragueToday())return Response.json({message:'Neplatné datum.'},{status:400});
-    return Response.json(await googleDashboard(env.DB,date),{headers:{'Cache-Control':'no-store'}});
+    return Response.json(await googleHealthFor(env,ctx,date),{headers:{'Cache-Control':'no-store'}});
   }
   // Planned workouts: move (drag between days) or delete, in Intervals.icu and locally.
   if(url.pathname==='/app/api/planned/move'||url.pathname==='/app/api/planned/delete'||url.pathname==='/app/api/planned/environment'){
@@ -1196,7 +1204,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const gymPlans=new Map(((await env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all().catch(()=>({results:[]}))).results||[]).map(r=>{let v=[];try{v=JSON.parse(r.values_json);}catch{}const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);return [r.workout_date,rows.length?{name:String(v[2]?.[3]||'').slice(0,120),exercises:new Set(rows.map(x=>x[1])).size,sets:rows.filter(x=>String(x[0]||'WORK').toUpperCase()==='WORK').length}:null];}).filter(([,p])=>p));
     // Same calorie target as the day view: one Google Health read covers the week.
     const profile = await dashboardProfile(env);
-    const health = profile ? await googleDashboard(env.DB, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
+    const health = profile ? await googleHealthFor(env, ctx, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
     // D1 runs one query at a time: three days at once keep its queue short
     // (all seven at once overloaded it when several weeks were asked together).
     const days = await mapLimit(dates, 3, async date => {
@@ -1249,7 +1257,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   const internal = new URL(target, request.url);
   for (const [key, value] of url.searchParams) internal.searchParams.set(key, value);
   const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
-  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),profile=await dashboardProfile(env);if(profile)applyEnergyBudget(daily,profile,await googleDashboard(env.DB,date));}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
+  if(url.pathname==='/app/api/daily'&&response.ok){const daily=await response.json();try{const date=url.searchParams.get('date')||pragueToday(),profile=await dashboardProfile(env);if(profile)applyEnergyBudget(daily,profile,await googleHealthFor(env,ctx,date));}catch(e){console.error('Energy budget unavailable',e.message);}return Response.json(daily,{headers:{'Cache-Control':'no-store'}});}
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, headers });
@@ -1475,7 +1483,7 @@ async function handlePlannedCaloriesAutomation(request, rawEnv) {
   try {
     const body=await request.json().catch(()=>({}));
     const users=await forEachUser(rawEnv,["intervals"],async env=>{
-      const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE user_id=? AND LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).bind(env.USER_ID).first().catch(()=>null);
+      const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type IN ('weight','weight-written') AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).bind(env.USER_ID).first().catch(()=>null);
       const thresholds=await athleteThresholds(env).catch(()=>({}));
       const weightKg=Number(row?.value_numeric);
       return syncPlannedEventCalories(env,{oldest:body?.oldest,newest:body?.newest,weightKg:Number.isFinite(weightKg)&&weightKg>30?weightKg:undefined,ftp:thresholds.ftp||undefined});
@@ -1496,7 +1504,7 @@ async function handleNutritionNotesAutomation(request, rawEnv) {
       if (remove) return deleteDailyNutritionNotes(env,{oldest,newest});
       let weightKg=Number(body?.weightKg);
       if(!Number.isFinite(weightKg)){
-        const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE user_id=? AND LOWER(data_type) LIKE '%weight%' AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).bind(env.USER_ID).first();
+        const row=await env.DB.prepare(`SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type IN ('weight','weight-written') AND value_numeric IS NOT NULL ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1`).bind(env.USER_ID).first();
         weightKg=Number(row?.value_numeric);
       }
       if(!Number.isFinite(weightKg)||weightKg<=0) weightKg=88;
@@ -1510,7 +1518,7 @@ async function handleNutritionNotesAutomation(request, rawEnv) {
 
 function pragueWeekStart() {
   const now = new Date();
-  const parts = new Intl.DateTimeFormat("en-GB", {timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit",weekday:"short"}).formatToParts(now);
+  const parts = dateFormat("en-GB", {timeZone:"Europe/Prague",year:"numeric",month:"2-digit",day:"2-digit",weekday:"short"}).formatToParts(now);
   const y = Number(parts.find(x=>x.type==="year").value);
   const m = Number(parts.find(x=>x.type==="month").value);
   const d = Number(parts.find(x=>x.type==="day").value);

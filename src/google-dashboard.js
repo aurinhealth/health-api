@@ -1,5 +1,6 @@
+import { dateFormat } from "./date-format.js";
 const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
-const day=t=>{if(!t)return null;if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;const d=new Date(t);return Number.isFinite(+d)?new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(d):null;};
+const day=t=>{if(!t)return null;if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;const d=new Date(t);return Number.isFinite(+d)?dateFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(d):null;};
 export function googleHealthSummary(rows,today){
   const days=new Map(),coverage={};
   for(const row of rows){let p;try{p=JSON.parse(row.payload_json||'{}');}catch{continue;}

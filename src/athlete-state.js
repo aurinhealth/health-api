@@ -2,9 +2,10 @@ import { reflectionSignals } from './coach-reflection.js';
 
 import { ATHLETE_STATUSES } from './training-status.js';
 import { validDay } from './training-availability.js';
+import { dateFormat } from "./date-format.js";
 export { ATHLETE_STATUSES } from './training-status.js';
 const clean = v => String(v || '').trim().slice(0, 500);
-const pragueDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const pragueDay=()=>dateFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 // statusUntil is the first calendar day on which the status no longer applies.
 export function effectiveAthleteState(state,date=pragueDay()){
   return state.statusUntil&&validDay(state.statusUntil)&&state.statusUntil<=date

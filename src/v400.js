@@ -1,5 +1,6 @@
 import core from "./v323fix.js";
 import { getCookbook } from "./cookbook.js";
+import { dateFormat } from "./date-format.js";
 
 const VERSION = "final-5-cookbook-v4.0.0";
 const TZ = "Europe/Prague";
@@ -13,7 +14,7 @@ const PRE_RIDE_CARB_PER_KG = 1.0;
 const POST_RIDE_CARB_PER_KG = 1.0;
 const POST_RIDE_PROTEIN_PER_KG = 0.3;
 
-function localDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date()); }
+function localDate() { return dateFormat("en-CA", { timeZone: TZ }).format(new Date()); }
 function n(v, d=0) { const x=Number(v); return Number.isFinite(x)?x:d; }
 function round(v,p=0){ const m=10**p; return Math.round(n(v)*m)/m; }
 function durationHours(p){

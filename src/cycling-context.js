@@ -1,9 +1,10 @@
+import { dateFormat } from "./date-format.js";
 const TZ = "Europe/Prague";
 const DEFAULT_LAT = 50.0;
 const DEFAULT_LON = 15.3;
 
 function localDate() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
+  return dateFormat("en-CA", { timeZone: TZ }).format(new Date());
 }
 
 function seasonFor(date) {

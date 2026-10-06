@@ -19,6 +19,7 @@ import { getWeekPlan } from './week-planner.js';
 import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
 import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveFoodProduct, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
 import { pragueToday } from "./prague-date.js";
+import { dateFormat } from "./date-format.js";
 
 
 export default {
@@ -106,7 +107,7 @@ function authorizeStrength(request, env) {
 
 
 // The strength plan of a day from D1 (gym_plans).
-function pragueDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
+function pragueDate() { return dateFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 async function fetchTodayValues(env, date = null) {
   const plan = await readGymPlan(env.DB, date || pragueDate());
   return { range: "d1:gym_plans/" + plan.date, values: plan.values, videoLinks: [], stored: plan.stored };
