@@ -5,7 +5,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
     const origin = GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-    u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code"); // Google Sheets access is only needed for the owner's legacy strength sheet.
+    u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
     // ?extra=1 adds the optional scopes on top of what was already granted.
     const extra = new URL(request.url).searchParams.get("extra") === "1";
     u.searchParams.set("scope", [...HEALTH_SCOPES, ...(extra ? Object.values(EXTRA_SCOPES) : [])].join(" ")); if (extra) u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);

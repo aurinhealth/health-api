@@ -1,7 +1,7 @@
 import app from "./v400.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { getStrengthHistory, parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
+import { getStrengthHistory, parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
 import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { readGymPlan, writeStrengthPlanToDb, syncGymPlanHistory } from "./gym-plan-store.js";
@@ -25,19 +25,15 @@ export default {
   async scheduled(controller, env, ctx) { return app.scheduled(controller, env, ctx); },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.pathname === "/test/google-sheets-auth") return SHEETS_RETIRED();
     if (url.pathname.startsWith("/strength/")) {
       const auth = authorizeStrength(request, env);
       if (auth) return auth;
     }
-    if (url.pathname === "/strength/sheet/today" && request.method === "GET") return readTodaySheet(env, url);
-    if (url.pathname === "/strength/sheet/write" && request.method === "POST") return SHEETS_RETIRED();
-    if (url.pathname === "/strength/sheet/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
-    if (url.pathname === "/strength/sheet/simplify" && request.method === "POST") return SHEETS_RETIRED();
+    if (url.pathname === "/strength/today" && request.method === "GET") return readTodayPlan(env, url);
+    if (url.pathname === "/strength/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url, ctx);
     if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
     if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
-    if (url.pathname === "/strength/sheets/maintenance" && request.method === "POST") return maintainStrengthSheetsRoute(env, request);
     if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
     if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
     if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
@@ -109,16 +105,14 @@ function authorizeStrength(request, env) {
 }
 
 
-// The strength plan of a day from D1 (gym_plans). The name stays from the
-// Google Sheets era; Sheets are no longer read or written.
+// The strength plan of a day from D1 (gym_plans).
 function pragueDate() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 async function fetchTodayValues(env, date = null) {
   const plan = await readGymPlan(env.DB, date || pragueDate());
   return { range: "d1:gym_plans/" + plan.date, values: plan.values, videoLinks: [], stored: plan.stored };
 }
-const SHEETS_RETIRED = () => Response.json({ status: "gone", message: "Google Sheets se už nepoužívá – silový plán je v databázi aplikace." }, { status: 410 });
 
-async function readTodaySheet(env, url) {
+async function readTodayPlan(env, url) {
   try {
     const date = url.searchParams.get("date");
     const data = await fetchTodayValues(env, /^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) ? date : null);
@@ -172,13 +166,13 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
     if (String(body?.action || "").toLowerCase() === "regenerate") {
       try {
         const today = await fetchTodayValues(env, context.date);
-        const parsedToday = parseStrengthSheet(today.values);
+        const parsedToday = parseStrengthPlan(today.values);
         const currentExercises = [...new Set((parsedToday.rows || [])
           .filter(r => r.type === "WORK" && r.exercise)
           .map(r => String(r.exercise)))];
         options.excludeExercises = [...new Set([...options.excludeExercises, ...currentExercises])];
       } catch (_) {
-        // Regeneration can still proceed from context if today's sheet cannot
+        // Regeneration can still proceed from context if today's plan cannot
         // be read; the normal generation path will handle the result.
       }
     }
@@ -239,17 +233,6 @@ async function importStrengthHistoryRoute(env, request) {
   }
 }
 
-async function maintainStrengthSheetsRoute(env, request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    if (body?.historyImport?.date && Array.isArray(body.historyImport.sets)) await importStrengthHistory(env.DB, body.historyImport);
-    // Nothing to maintain any more: plans and history are in D1.
-    return Response.json({ status: "ok", storage: "d1", skipped: "Google Sheets se už nepoužívá." });
-  } catch (error) {
-    return Response.json({ status: "error", step: "strength_sheet_maintenance", message: error.message }, { status: 500 });
-  }
-}
-
 async function strengthHistory(env, url) {
   try {
     const limit = url.searchParams.get("limit") || "100";
@@ -269,7 +252,7 @@ async function analyzeStrengthRoute(env, request) {
   try {
     const body = await request.json().catch(() => ({}));
     const data = await fetchTodayValues(env);
-    const parsed = parseStrengthSheet(data.values);
+    const parsed = parseStrengthPlan(data.values);
     const { parsed: _p, ...sync } = await syncGymPlanHistory(env.DB, data.values);
     const history = await getStrengthHistory(env.DB, 300);
     const analysis = analyzeCompletedWorkout(parsed, history);
@@ -300,8 +283,8 @@ async function nutritionPlanRoute(env, request, ctx) {
     let strengthPlan = body?.strengthPlan || null;
     if (!strengthPlan) {
       try {
-        const sheet = await fetchTodayValues(env, date);
-        const parsed = parseStrengthSheet(sheet.values);
+        const plan = await fetchTodayValues(env, date);
+        const parsed = parseStrengthPlan(plan.values);
         if (!date || parsed.date === date) {
           const rows = (parsed.rows || []).map(r => [
             r.type, r.exercise, r.setNo == null ? "" : String(r.setNo),
@@ -313,7 +296,7 @@ async function nutritionPlanRoute(env, request, ctx) {
           }
         }
       } catch (_) {
-        // Nutrition remains available even if the optional sheet read fails.
+        // Nutrition remains available even if the optional plan read fails.
       }
     }
 
@@ -441,8 +424,8 @@ async function substituteRoute(env, request) {
     if (!EXERCISES[from] && !EXERCISE_INTELLIGENCE[from]) return Response.json({ status: "error", message: `Original exercise is not in the active catalogue: ${from}` }, { status: 400 });
 
     const data = await fetchTodayValues(env);
-    const parsed = parseStrengthSheet(data.values);
-    if (!parsed.date) return Response.json({ status: "error", message: "Workout date not found in sheet" }, { status: 400 });
+    const parsed = parseStrengthPlan(data.values);
+    if (!parsed.date) return Response.json({ status: "error", message: "Workout date not found in the plan" }, { status: 400 });
     const history = await getStrengthHistory(env.DB, 300);
     const context = await buildStrengthContext(env, parsed.date);
     const factor = Number(context?.cycling ? 1 : 1);
@@ -450,7 +433,7 @@ async function substituteRoute(env, request) {
     const estimate = estimateStartingLoad({ exercise: target, history, targetReps: def.reps, fallbackKg: def.baseKg, loadFactor: factor });
 
     const sourceRows = parsed.rows.filter(r => r.exercise === from);
-    if (!sourceRows.length) return Response.json({ status: "error", message: `Exercise not found in today's sheet: ${from}` }, { status: 404 });
+    if (!sourceRows.length) return Response.json({ status: "error", message: `Exercise not found in today's plan: ${from}` }, { status: 404 });
     const sourceWork = sourceRows.filter(r => r.type === "WORK");
     const firstIndex = parsed.rows.findIndex(r => r.exercise === from);
     const before = parsed.rows.slice(0, firstIndex).filter(r => r.exercise !== from);

@@ -8,7 +8,7 @@ const req = (headers = {}) => new Request("https://petrfitnessdata.eu/app/api/da
 const future = () => Math.floor(Date.now() / 1000) + 60;
 
 test("personal data routes are not public", () => {
-  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/profile", "/app/api/food/log", "/app/api/inbox", "/app/api/me", "/app/api/admin/users", "/health/sleep", "/health/db", "/sync/google", "/sync/intervals", "/daily/plan", "/food/resolve", "/auth-test", "/test/intervals", "/test/google-sheets-auth", "/strength/history"]) {
+  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/profile", "/app/api/food/log", "/app/api/inbox", "/app/api/me", "/app/api/admin/users", "/health/sleep", "/health/db", "/sync/google", "/sync/intervals", "/daily/plan", "/food/resolve", "/auth-test", "/test/intervals", "/strength/history"]) {
     assert.equal(isPublicPath(path), false, path);
   }
 });

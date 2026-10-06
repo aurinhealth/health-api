@@ -18,13 +18,13 @@ function legacyDb() {
     CREATE TABLE sync_status (sync_name TEXT PRIMARY KEY, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, details_json TEXT, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE connection_credentials (provider TEXT PRIMARY KEY, encrypted TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE dashboard_profile (id INTEGER PRIMARY KEY, profile_json TEXT NOT NULL);
-    CREATE TABLE strength_sets (id INTEGER PRIMARY KEY AUTOINCREMENT, workout_date TEXT NOT NULL, sheet_row INTEGER NOT NULL, type TEXT NOT NULL, exercise TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL DEFAULT 'google-sheet', source_key TEXT NOT NULL UNIQUE);
+    CREATE TABLE strength_sets (id INTEGER PRIMARY KEY AUTOINCREMENT, workout_date TEXT NOT NULL, plan_row INTEGER NOT NULL, type TEXT NOT NULL, exercise TEXT NOT NULL, completed INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL DEFAULT 'plan', source_key TEXT NOT NULL UNIQUE);
     INSERT INTO health_datapoints(source_family, data_type, external_id, value_numeric) VALUES ('intervals','activity','activity:1',10), ('google-wearables','weight','w1',88);
     INSERT INTO gym_plans(workout_date, values_json) VALUES ('2026-09-30','[]');
     INSERT INTO sync_status(sync_name, status) VALUES ('google','idle');
     INSERT INTO connection_credentials VALUES ('intervals','enc','2026-09-30');
     INSERT INTO dashboard_profile VALUES (1,'{}');
-    INSERT INTO strength_sets(workout_date, sheet_row, type, exercise, completed, source_key) VALUES ('2026-09-29',2,'WORK','Squat',1,'2026-09-29:2');
+    INSERT INTO strength_sets(workout_date, plan_row, type, exercise, completed, source_key) VALUES ('2026-09-29',2,'WORK','Squat',1,'2026-09-29:2');
   `);
   return db;
 }
@@ -44,11 +44,11 @@ test("the upgrade assigns every existing row to the owner and switches to per-us
   // A second user can now hold the same natural keys.
   await db.prepare("INSERT INTO health_datapoints(user_id, source_family, data_type, external_id) VALUES (99,'intervals','activity','activity:1')").run();
   await db.prepare("INSERT INTO gym_plans(user_id, workout_date, values_json) VALUES (99,'2026-09-30','[]')").run();
-  await db.prepare("INSERT INTO strength_sets(user_id, workout_date, sheet_row, type, exercise, source_key) VALUES (99,'2026-09-29',2,'WORK','Squat','2026-09-29:2')").run();
+  await db.prepare("INSERT INTO strength_sets(user_id, workout_date, plan_row, type, exercise, source_key) VALUES (99,'2026-09-29',2,'WORK','Squat','2026-09-29:2')").run();
   // Per-user uniqueness still holds and defaults survive the rebuild.
   await assert.rejects(db.prepare("INSERT INTO gym_plans(user_id, workout_date, values_json) VALUES (99,'2026-09-30','[]')").run());
   const inserted = await db.prepare("SELECT source FROM strength_sets WHERE user_id=99").first();
-  assert.equal(inserted.source, "google-sheet");
+  assert.equal(inserted.source, "plan");
   assert.ok((await db.prepare("SELECT updated_at FROM health_datapoints WHERE user_id=99").first()).updated_at);
   const indexes = (await db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='health_datapoints'").all()).results.map(r => r.name);
   assert.ok(indexes.includes("idx_health_datapoints_user_0"));

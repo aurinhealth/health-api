@@ -1,7 +1,7 @@
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { strengthSetOptions,strengthOptionNote } from './gym-set-options.js';
 
-const SHEET_NAME = "Dnešní trénink";
+const PLAN_TITLE = "Dnešní trénink";
 const VISIBLE_HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
 const LEGACY_HEADER_ROW = [...VISIBLE_HEADER_ROW, "Náhrada cviku", "Provedení"];
 
@@ -59,10 +59,10 @@ function getHeader(values) {
   return { index: -1, legacy: false };
 }
 
-export function parseStrengthSheet(values) {
+export function parseStrengthPlan(values) {
   if (!Array.isArray(values)) throw new Error("Sheet values must be a 2D array");
   const header = getHeader(values);
-  if (header.index < 0) throw new Error(`Strength header row not found in ${SHEET_NAME}`);
+  if (header.index < 0) throw new Error(`Strength header row not found in ${PLAN_TITLE}`);
 
   const date = getSheetDate(values);
   const rows = [];
@@ -76,7 +76,7 @@ export function parseStrengthSheet(values) {
     if (!/^(WARMUP|WORK)$/i.test(type)) continue;
 
     rows.push({
-      sheetRow: i + 1,
+      planRow: i + 1,
       date,
       type: type.toUpperCase(),
       exercise,
@@ -96,7 +96,7 @@ export function parseStrengthSheet(values) {
   }
 
   return {
-    sheet: SHEET_NAME,
+    title: PLAN_TITLE,
     date,
     headerRow: header.index + 1,
     legacyLayout: header.legacy,
@@ -112,7 +112,7 @@ export async function ensureStrengthTable(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       workout_date TEXT NOT NULL,
-      sheet_row INTEGER NOT NULL,
+      plan_row INTEGER NOT NULL,
       type TEXT NOT NULL,
       exercise TEXT NOT NULL,
       set_no REAL,
@@ -126,7 +126,7 @@ export async function ensureStrengthTable(db) {
       video TEXT,
       replacement TEXT,
       execution TEXT,
-      source TEXT NOT NULL DEFAULT 'google-sheet',
+      source TEXT NOT NULL DEFAULT 'plan',
       source_key TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -150,8 +150,8 @@ async function purgeLegacyTestRows(db) {
   return Number(result.meta?.changes || 0);
 }
 
-export async function syncStrengthSheet(db, values) {
-  const parsed = parseStrengthSheet(values);
+export async function syncStrengthPlan(db, values) {
+  const parsed = parseStrengthPlan(values);
   await ensureStrengthTable(db);
   const purgedTestRows = await purgeLegacyTestRows(db);
 
@@ -161,17 +161,17 @@ export async function syncStrengthSheet(db, values) {
   let completed = 0;
 
   for (const row of parsed.rows) {
-    const sourceKey = `${parsed.date}:${row.sheetRow}`;
+    const sourceKey = `${parsed.date}:${row.planRow}`;
     const performance = row.completed ? resolveStrengthPerformance(row) : row;
     await db.prepare(`
       INSERT INTO strength_sets (user_id, 
-        workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
+        workout_date, plan_row, type, exercise, set_no, planned_kg, planned_reps,
         actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
         source, source_key, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'google-sheet', ?, CURRENT_TIMESTAMP)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'plan', ?, CURRENT_TIMESTAMP)
       ON CONFLICT(user_id, source_key) DO UPDATE SET
         workout_date=excluded.workout_date,
-        sheet_row=excluded.sheet_row,
+        plan_row=excluded.plan_row,
         type=excluded.type,
         exercise=excluded.exercise,
         set_no=excluded.set_no,
@@ -188,7 +188,7 @@ export async function syncStrengthSheet(db, values) {
         updated_at=CURRENT_TIMESTAMP
     `).bind(db.userId, 
       parsed.date,
-      row.sheetRow,
+      row.planRow,
       row.type,
       row.exercise,
       row.setNo,
@@ -243,13 +243,13 @@ export async function importStrengthHistory(db, workout) {
 
     await db.prepare(`
       INSERT INTO strength_sets (user_id, 
-        workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
+        workout_date, plan_row, type, exercise, set_no, planned_kg, planned_reps,
         actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
         source, source_key, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, '', '', '', 'manual', ?, CURRENT_TIMESTAMP)
       ON CONFLICT(user_id, source_key) DO UPDATE SET
         workout_date=excluded.workout_date,
-        sheet_row=excluded.sheet_row,
+        plan_row=excluded.plan_row,
         type=excluded.type,
         exercise=excluded.exercise,
         set_no=excluded.set_no,
@@ -288,12 +288,12 @@ export async function getStrengthHistory(db, limit = 100) {
   await ensureStrengthTable(db);
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
   const result = await db.prepare(`
-    SELECT workout_date, sheet_row, type, exercise, set_no, planned_kg, planned_reps,
+    SELECT workout_date, plan_row, type, exercise, set_no, planned_kg, planned_reps,
            actual_kg, actual_reps, rpe, completed, note, replacement, execution,
            source, updated_at
     FROM strength_sets
     WHERE user_id = ? AND completed = 1 AND type = 'WORK'
-    ORDER BY workout_date DESC, sheet_row ASC
+    ORDER BY workout_date DESC, plan_row ASC
     LIMIT ?
   `).bind(db.userId, safeLimit).all();
   return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));

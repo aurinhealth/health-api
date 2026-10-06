@@ -1,6 +1,5 @@
-name: Strength sheet maintenance
-# Periodic Intervals and nutrition sync. The strength plan lives in D1, so
-# there is no Google Sheet to maintain any more.
+name: Periodic sync
+# Periodic Intervals and nutrition sync.
 
 on:
   workflow_dispatch:

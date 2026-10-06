@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { isIntensity } from "../src/strength-context.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
-import { parseStrengthSheet } from "../src/strength-history.js";
+import { parseStrengthPlan } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
 import { FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles } from "../src/strength-generator.js";
 import { gymFocusView } from "../src/gym-focus-view.js";
@@ -97,7 +97,7 @@ test("sheet parser canonicalizes historical exercise names", () => {
     ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"],
     ["WORK", "Prime flat chest press", "1", "40", "8–12", "40", "10", "7", "TRUE", "", ""]
   ];
-  const parsed = parseStrengthSheet(values);
+  const parsed = parseStrengthPlan(values);
   assert.equal(parsed.rows[0].exercise, "Chest flat press Prime");
 });
 
@@ -204,7 +204,7 @@ test("generator treats aliased recent leg curl as the same exercise", () => {
 
 test("sync guard accepts blank actuals stored with planned weight", () => {
   const completed = [{
-    sheetRow: 10,
+    planRow: 10,
     type: "WORK",
     exercise: "DB curl",
     setNo: 1,
@@ -215,7 +215,7 @@ test("sync guard accepts blank actuals stored with planned weight", () => {
     rpe: null
   }];
   const dbRows = [{
-    sheet_row: 10,
+    plan_row: 10,
     type: "WORK",
     exercise: "DB curl",
     set_no: 1,
@@ -231,7 +231,7 @@ test("sync guard accepts blank actuals stored with planned weight", () => {
 
 test("sync guard rejects mismatched completed row", () => {
   const completed = [{
-    sheetRow: 10,
+    planRow: 10,
     type: "WORK",
     exercise: "DB curl",
     setNo: 1,
@@ -242,7 +242,7 @@ test("sync guard rejects mismatched completed row", () => {
     rpe: 8
   }];
   const dbRows = [{
-    sheet_row: 10,
+    plan_row: 10,
     type: "WORK",
     exercise: "DB curl",
     set_no: 1,
@@ -322,7 +322,7 @@ test("generated plan survives sheet serialization round-trip", () => {
     ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"],
     ...plan.rows.map(row => row.slice(0, 11))
   ];
-  const parsed = parseStrengthSheet(values);
+  const parsed = parseStrengthPlan(values);
   const workRows = plan.rows.filter(row => row[0] === "WORK");
   assert.equal(parsed.date, plan.date);
   assert.equal(parsed.rows.filter(row => row.type === "WORK").length, workRows.length);

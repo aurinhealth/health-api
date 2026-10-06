@@ -102,24 +102,24 @@ export async function d1Recovery(env, startDate, endDate) {
   }
   return out;
 }
-// The day's strength plan from D1 (gym_plans); Google Sheets is no longer used.
+// The day's strength plan from D1 (gym_plans).
 async function readStrengthPlan(env, date) {
   const { readGymPlan } = await import("./gym-plan-store.js");
-  const { parseStrengthSheet } = await import("./strength-history.js");
+  const { parseStrengthPlan } = await import("./strength-history.js");
   const plan = await readGymPlan(env.DB, date);
-  return { status: "ok", source: "d1", stored: plan.stored, parsed: parseStrengthSheet(plan.values) };
+  return { status: "ok", source: "d1", stored: plan.stored, parsed: parseStrengthPlan(plan.values) };
 }
 // Gym plans for the days around the date (not the date itself): the exercises
 // not yet done there, so two sessions in one week get different exercises.
 export async function plannedGymSessions(env, date, span = 4) {
   const { ensureGymPlans } = await import("./gym-plan-store.js");
-  const { parseStrengthSheet } = await import("./strength-history.js");
+  const { parseStrengthPlan } = await import("./strength-history.js");
   await ensureGymPlans(env.DB);
   const shift = d => new Date(Date.parse(date + "T12:00:00Z") + d * 86400000).toISOString().slice(0, 10);
   const rows = (await env.DB.prepare("SELECT workout_date, values_json FROM gym_plans WHERE user_id = ? AND workout_date >= ? AND workout_date <= ? AND workout_date != ?").bind(env.USER_ID, shift(-span), shift(span), date).all()).results || [];
   const sessions = [];
   for (const r of rows) {
-    let parsed; try { parsed = parseStrengthSheet(JSON.parse(r.values_json)); } catch { continue; }
+    let parsed; try { parsed = parseStrengthPlan(JSON.parse(r.values_json)); } catch { continue; }
     const exercises = [...new Set((parsed.rows || []).filter(x => x.type === "WORK" && !x.completed).map(x => x.exercise))];
     if (exercises.length && !(await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?').bind(env.USER_ID, r.workout_date).first())) sessions.push({ date: r.workout_date, exercises });
   }
@@ -128,8 +128,8 @@ export async function plannedGymSessions(env, date, span = 4) {
 export async function buildStrengthContext(env, requestedDate = null) {
   const date = requestedDate || localDate();
   const oldest = localDate(-DEFAULT_ACTIVITY_DAYS + 1), newest = localDate(DEFAULT_PLANNED_DAYS);
-  let sheetSync;
-  try { sheetSync = await readStrengthPlan(env, date); } catch (e) { throw new Error(`strength_context.plan_d1: ${e.message}`); }
+  let planRead;
+  try { planRead = await readStrengthPlan(env, date); } catch (e) { throw new Error(`strength_context.plan_d1: ${e.message}`); }
   let activitiesRaw, eventsRaw;
   try { [activitiesRaw, eventsRaw] = await Promise.all([intervalsGet(env, `/athlete/0/activities?oldest=${oldest}&newest=${newest}`), intervalsGet(env, `/athlete/0/events?oldest=${date}&newest=${newest}`)]); }
   catch (e) { throw new Error(`strength_context.intervals: ${e.message}`); }
@@ -141,13 +141,13 @@ export async function buildStrengthContext(env, requestedDate = null) {
   const rides = activities.filter(x => x.cycling), plannedRides = events.filter(x => x.cycling && n(x.durationHours) > 0 && n(x.durationHours) <= 8);
   const recent = rides.filter(x => x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), planned = plannedRides.filter(x => x.date >= date).sort((a,b) => String(a.start).localeCompare(String(b.start)));
   const { buildNutritionPlan } = await import("./nutrition-intelligence.js");
-  const plannedStrengthRows = sheetSync?.parsed?.date === date
-    ? (sheetSync.parsed.rows || []).filter(row => String(row.type || "").toUpperCase() === "WORK")
+  const plannedStrengthRows = planRead?.parsed?.date === date
+    ? (planRead.parsed.rows || []).filter(row => String(row.type || "").toUpperCase() === "WORK")
     : [];
   const plannedStrengthWorkout = plannedStrengthRows.length
     ? { date, rows: plannedStrengthRows.map(row => [row.type, row.exercise, row.setNo, row.plannedKg, row.plannedReps]) }
     : null;
-  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, sheetSync } , weightTrend: await d1WeightTrend(env,date) };
+  const context = { status: "ok", source: "live", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, planRead } , weightTrend: await d1WeightTrend(env,date) };
   context.sports={recentActivities:activities.filter(x=>x.date<=date).sort((a,b)=>String(b.start).localeCompare(String(a.start)))};
   // One recovery week for everything: the gym deloads in the week the plan
   // and the ride/run coach treat as a recovery week (src/week-planner.js).

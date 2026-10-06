@@ -7,6 +7,7 @@ test('the overview keeps what Google verification reads on the homepage',async()
   const html=await overviewPage().text();
   assert.match(html,/<title>Loadwise/);
   assert.match(html,/Google Health data disclosure/);
+  for(const page of [overviewPage,privacyPage,termsPage,supportPage])assert.doesNotMatch(await page().text(),/sheet/i,'Google Sheets is gone; the public pages must not mention it');
   assert.match(html,/may read fitness, health-metric, sleep, and nutrition data from Google Health/);
   assert.match(html,/add nutrition logs to Google Health when you ask/);
   for(const href of ['/privacy','/terms','/support','/app'])assert.match(html,new RegExp('href="'+href+'"'),href);

@@ -144,7 +144,7 @@ test("ChatGPT gets the app's calorie target: same kcal, app protein and fat, car
   assert.equal(partial.macros.proteinGrams, own.macros.proteinGrams);
   assert.equal(partial.macros.fatGrams, own.macros.fatGrams);
   // Every nutrition route ChatGPT calls goes through the app target.
-  const gateway = readFileSync(new URL("../src/sheets-gateway.js", import.meta.url), "utf8");
+  const gateway = readFileSync(new URL("../src/strength-gateway.js", import.meta.url), "utf8");
   assert.equal((gateway.match(/buildNutritionPlan\(/g) || []).length, 1);
   assert.equal((gateway.match(/await nutritionFor\(/g) || []).length, 6);
 });

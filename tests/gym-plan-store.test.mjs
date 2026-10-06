@@ -5,7 +5,7 @@ import { scopedDb } from "../src/tenancy.js";
 import { readGymPlan, writeStrengthPlanToDb, syncGymPlanHistory, planValues, cancelGymPlan, restoreGymPlan, saveGymPlan } from "../src/gym-plan-store.js";
 import { nightlyGymSkip } from '../src/week-planner.js';
 import { plannedGymSessions } from '../src/strength-context.js';
-import { parseStrengthSheet, importStrengthHistory, getStrengthHistory } from "../src/strength-history.js";
+import { parseStrengthPlan, importStrengthHistory, getStrengthHistory } from "../src/strength-history.js";
 
 const plan = { date: "2026-10-01", planName: "Horní tělo", rationale: "Kolo zítra", loadFactor: 0.95, rows: [
   ["WARMUP", "Bench press", "1", "40", "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video"],
@@ -17,13 +17,13 @@ test("a generated plan is stored in D1 and reads back in the dashboard layout", 
   const raw = createD1(), db = scopedDb(raw, 1);
   const empty = await readGymPlan(db, "2026-10-01");
   assert.equal(empty.stored, false);
-  assert.equal(parseStrengthSheet(empty.values).rows.length, 0);
+  assert.equal(parseStrengthPlan(empty.values).rows.length, 0);
   const r = await writeStrengthPlanToDb(db, plan);
   assert.deepEqual([r.status, r.storage, r.rowsWritten], ["ok", "d1", 3]);
   const back = await readGymPlan(db, "2026-10-01");
   assert.equal(back.stored, true);
   assert.equal(back.values[2][1], "2026-10-01");
-  const parsed = parseStrengthSheet(back.values);
+  const parsed = parseStrengthPlan(back.values);
   assert.equal(parsed.date, "2026-10-01");
   assert.equal(parsed.rows.length, 3);
   assert.match(back.values[7][10], /^https:\/\/www\.youtube\.com\/results/);
@@ -54,7 +54,7 @@ test('cancellation hides a pending gym plan, preserves history and survives auto
   await saveGymPlan(db,plan.date,values);
   const cancelled=await readGymPlan(db,plan.date);
   assert.equal(cancelled.cancelled,true);assert.equal(cancelled.stored,false);assert.equal(cancelled.recoverable,true);
-  assert.equal(parseStrengthSheet(cancelled.values).rows.length,0);
+  assert.equal(parseStrengthPlan(cancelled.values).rows.length,0);
   assert.deepEqual(JSON.parse(raw.sqlite.prepare('SELECT values_json FROM gym_plans WHERE user_id=1').get().values_json),values);
   assert.equal((await getStrengthHistory(db,50)).length,1);
   assert.equal((await readGymPlan(other,plan.date)).cancelled,false);

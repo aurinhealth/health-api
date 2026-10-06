@@ -1,7 +1,7 @@
 // Strength workouts live in D1 (gym_plans): one editable plan per user and
 // day, stored in the layout the dashboard uses (title rows 1–7, the column
 // header on row 7, sets from row 8). Completed sets go to strength_sets.
-import { parseStrengthSheet, importStrengthHistory } from "./strength-history.js";
+import { parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
 import { strengthSetOptions } from './gym-set-options.js';
 
 export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie"];
@@ -107,7 +107,7 @@ export async function writeStrengthPlanToDb(db, body) {
 // Completed sets of a stored plan into the history, with the same keys the
 // dashboard uses when it saves (manual:<date>:<n>), so nothing is counted twice.
 export async function syncGymPlanHistory(db, values) {
-  const parsed = parseStrengthSheet(values);
+  const parsed = parseStrengthPlan(values);
   if (!parsed.date) return { status: "ok", completedRows: 0, parsed };
   const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset }));
   if (sets.length) await importStrengthHistory(db, { date: parsed.date, sets });

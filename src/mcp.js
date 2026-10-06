@@ -1,4 +1,4 @@
-import healthApp from "./sheets-gateway.js";
+import healthApp from "./strength-gateway.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
 import { verifyAccessToken } from "./oauth.js";
 import { searchWorkoutLibrary, getCapabilities, scheduleWorkoutInIntervals, recordWorkoutFeedback } from "./workout-library.js";
@@ -17,7 +17,7 @@ export const TOOLS = [
 
   { name:"getStrengthContext", title:"Get strength training context", description:"Read integrated training context for a date, including cycling load, recovery data, and strength history.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getStrengthHistory", title:"Get completed strength history", description:"Read completed strength-training sets from D1.", inputSchema:{type:"object",properties:{limit:{type:"integer",minimum:1,maximum:500,default:100}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
-  { name:"getTodayStrengthSheet", title:"Read today's strength workout", description:"Read today's strength workout plan stored in the app database (D1).", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
+  { name:"getTodayStrengthWorkout", title:"Read today's strength workout", description:"Read today's strength workout plan stored in the app database (D1).", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getNutritionPlan", title:"Get daily nutrition plan", description:"Build the daily nutrition plan from the shared cycling, recovery, and strength context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getDailyDecision", title:"Get adaptive daily decision", description:"Combine recovery, cycling load, strength readiness, nutrition, and upcoming rides into one daily decision context.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"getDailyPlan", title:"Get unified daily plan", description:"Return one actionable plan combining cycling, strength, nutrition, food, recovery, and meal timing for the day.", inputSchema:{type:"object",properties:{date:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
@@ -35,7 +35,7 @@ export const TOOLS = [
   { name:"updateFoodEntry", title:"Update food entry", description:"Correct a food log entry's time, portions, nutrition values, status, or note.", inputSchema:{type:"object",required:["id"],properties:{id:{type:"integer"},mealTime:{type:"string"},mealType:{type:"string"},servings:{type:"number"},calories:{type:"number"},protein_g:{type:"number"},carbs_g:{type:"number"},fat_g:{type:"number"},fiber_g:{type:"number"},salt_g:{type:"number"},status:{type:"string",enum:["eaten","planned","cancelled"]},note:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
   { name:"cancelFoodEntry", title:"Cancel food entry", description:"Soft-cancel a food log entry so it no longer contributes to daily totals.", inputSchema:{type:"object",required:["id"],properties:{id:{type:"integer"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
   { name:"generateStrengthPlan", title:"Generate today's strength workout", description:"Generate an adaptive strength workout and save it as the day's plan in the app database unless preview=true.", inputSchema:{type:"object",properties:{date:{type:"string"},preview:{type:"boolean",default:false},focus:{type:"string",enum:["upper","lower","full"]},forceProtectLegs:{type:"boolean"},durationMinutes:{type:"integer",minimum:20,maximum:120},maxExercises:{type:"integer",minimum:2,maximum:8},excludeExercises:{type:"array",items:{type:"string"}}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
-  { name:"syncStrengthSheet", title:"Sync completed strength sets", description:"Save the completed sets of today's workout plan into the strength history.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
+  { name:"syncStrengthPlan", title:"Sync completed strength sets", description:"Save the completed sets of today's workout plan into the strength history.", inputSchema:{type:"object",properties:{}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
   { name:"analyzeStrengthWorkout", title:"Analyze completed strength workout", description:"Sync and analyze the completed strength workout.", inputSchema:{type:"object",properties:{command:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
   { name:"findStrengthAlternatives", title:"Find exercise alternatives", description:"Find suitable strength-exercise alternatives.", inputSchema:{type:"object",properties:{exercise:{type:"string"},muscle:{type:"string"}}}, annotations:{readOnlyHint:true,destructiveHint:false,openWorldHint:false}},
   { name:"substituteStrengthExercise", title:"Substitute today's exercise", description:"Replace an exercise in today's workout plan.", inputSchema:{type:"object",required:["from"],properties:{from:{type:"string"},to:{type:"string"},muscle:{type:"string"}}}, annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}}
@@ -82,7 +82,7 @@ function demoTool(name,args){
  if(name==="scheduleCyclingWorkout")return{status:"ok",demo:true,workout:{id:args.workoutId||"demo",name:"Demo workout"},date:args.date||date};
  if(name==="recordCyclingWorkoutFeedback")return{status:"ok",demo:true,system:"vo2max",before:5.5,after:5.65};
  if(name==="getStrengthHistory")return{status:"ok",demo:true,count:0,rows:[]};
- if(name==="getTodayStrengthSheet")return{status:"ok",demo:true,sheet:"Dnešní trénink",workoutDate:date};
+ if(name==="getTodayStrengthWorkout")return{status:"ok",demo:true,title:"Dnešní trénink",workoutDate:date};
  if(name==="findStrengthAlternatives")return{status:"ok",demo:true,exercise:args.exercise||null,alternatives:[]};
  if(name==="searchCookbook")return{status:"ok",demo:true,count:0,recipes:[]};
  if(name==="getCookbookRecipe")return{status:"ok",demo:true,recipe:null};
@@ -127,7 +127,7 @@ async function callHealthApi(request,env,toolName,args){
   getStrengthContext:()=>`/strength/context${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
   getCyclingContext:()=>`/cycling/context?${new URLSearchParams(Object.entries({date:args.date,lat:args.lat,lon:args.lon,ride_type:args.rideType,duration_minutes:args.durationMinutes,start_time:args.startTime}).filter(([,v])=>v!=null&&v!=="" )).toString()}`,
   getStrengthHistory:()=>`/strength/history?limit=${encodeURIComponent(String(args.limit??100))}`,
-  getTodayStrengthSheet:()=>"/strength/sheet/today",
+  getTodayStrengthWorkout:()=>"/strength/today",
   getNutritionPlan:()=>"/nutrition/plan",
   getDailyDecision:()=>"/decision/daily",
   getDailyPlan:()=>`/daily/plan${args.date?`?date=${encodeURIComponent(String(args.date))}`:""}`,
@@ -145,13 +145,13 @@ async function callHealthApi(request,env,toolName,args){
   updateFoodEntry:()=>"/nutrition/food/update",
   cancelFoodEntry:()=>"/nutrition/food/cancel",
   generateStrengthPlan:()=>"/strength/generate-plan",
-  syncStrengthSheet:()=>"/strength/sync",
+  syncStrengthPlan:()=>"/strength/sync",
   analyzeStrengthWorkout:()=>"/strength/analyze",
   findStrengthAlternatives:()=>"/strength/alternatives",
   substituteStrengthExercise:()=>"/strength/substitute"
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
- const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthSheet","getWeeklyReview","getDailyPlan","getFoodFavorites","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
+ const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthWorkout","getWeeklyReview","getDailyPlan","getFoodFavorites","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
  const headers=new Headers({Accept:"application/json"});
  const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
  if(!internalKey)throw new Error("Strength API authentication is not configured");

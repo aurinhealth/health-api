@@ -394,7 +394,7 @@ export async function googleToken(env, scopes = healthScopes(env)) {
         client_secret: env.GOOGLE_CLIENT_SECRET,
         refresh_token: env.GOOGLE_REFRESH_TOKEN,
         grant_type: "refresh_token",
-        // Health rejects the Sheets ("wise") scope on a shared refresh token.
+        // Health rejects unrelated scopes on a shared refresh token.
         // Request only previously consented scopes for one API at a time.
         scope: scopes.join(" ")
       })
@@ -1459,15 +1459,11 @@ async function syncIntervalsEvents(env) {
 async function syncIntervals(env,options={}) {
   const [activities,planned]=await Promise.all([syncIntervalsActivities(env,options),syncIntervalsEvents(env)]);
 
-  // Activities are stored in D1 only; the legacy Google Sheet mirror is gone.
-  const historySheet = null;
-
   return Response.json({
     status: "ok",
     source: "intervals.icu",
     activities,
-    planned,
-    historySheet
+    planned
   });
 }
 

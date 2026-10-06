@@ -1,4 +1,4 @@
-import app from "./sheets-gateway.js";
+import app from "./strength-gateway.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { trainingStatus } from './training-status.js';
 import { handleMcpCompat } from "./mcp-compat.js";
@@ -49,7 +49,7 @@ import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, f
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
-import { importStrengthHistory, getStrengthHistory, parseStrengthSheet, removeManualSets } from "./strength-history.js";
+import { importStrengthHistory, getStrengthHistory, parseStrengthPlan, removeManualSets } from "./strength-history.js";
 import { searchCookbookRecipes, logFood, mealConsumedAt } from "./food-log.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -546,7 +546,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const body=await request.json().catch(()=>({})),date=/^\d{4}-\d{2}-\d{2}$/.test(String(body.date||''))?body.date:pragueToday();
       const [inputs,gym,prefs,feedback,notes]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),readGymPlan(env.DB,date).catch(()=>null),getWeekPlan(env.DB,date).catch(()=>null),recentWorkoutFeedback(env.DB,shiftDate(date,-21)).catch(()=>[]),listReflections(env.DB,{limit:3}).catch(()=>[])]);
-      const gymRows=gym?.stored?parseStrengthSheet(gym.values).rows||[]:[];
+      const gymRows=gym?.stored?parseStrengthPlan(gym.values).rows||[]:[];
       const input=buildReviewInput({date,today:pragueToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text}))});
       const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date)});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
@@ -1092,7 +1092,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const storedValues = Array.isArray(body?.fullValues) ? body.fullValues : values;
       await env.DB.prepare(`INSERT INTO gym_plans(user_id,workout_date,values_json,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id,workout_date) DO UPDATE SET values_json=excluded.values_json,updated_at=CURRENT_TIMESTAMP`).bind(env.USER_ID,date,JSON.stringify(storedValues)).run();
       const history=await getStrengthHistory(env.DB,500);
-      return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,sheetSaved:false,message:sets.length?"Workout uložen do interní databáze.":"Změny plánu jsou uložené; dokončené série označ Hotovo."},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",storage:"d1",values:storedValues,history,historySaved:historyResult,message:sets.length?"Workout uložen do interní databáze.":"Změny plánu jsou uložené; dokončené série označ Hotovo."},{headers:{"Cache-Control":"no-store"}});
       } catch(error) {
         console.error("Gym save failed", error);
         return Response.json({status:"error",message:"Gym save: "+(error?.message||"unknown error")},{status:500,headers:{"Cache-Control":"no-store"}});
@@ -1117,7 +1117,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error('Na tento den již existuje gym plán. Otevři jej a uprav ho.');
       const prefs=await getWeekPlan(env.DB,plan.date),budget=trainingBudget(prefs,plan.date,draft.minutes);
       if(budget<draft.minutes)throw new Error('Časové možnosti se změnily. Připrav nový návrh.');
-      const r=await app.fetch(new Request('https://internal/strength/sheet/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
+      const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
       if(!r.ok)throw new Error('Gym plán se nepodařilo uložit.');
       const intervals=await writeStrengthPlanToIntervals(env,plan,{durationMinutes:draft.minutes,startTime:draft.startTime||'00:00'}).catch(error=>({status:'error',message:error.message}));
       await env.DB.prepare("UPDATE coach_inbox SET status='confirmed',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(env.USER_ID,row.id).run();
@@ -1400,7 +1400,6 @@ async function handleStrengthAutomation(request, env, ctx) {
       focus_lower: "/strength/generate-plan",
       substitute: "/strength/substitute",
       import_history: "/strength/history/import",
-      sheet_maintenance: "/strength/sheets/maintenance",
       sync: "/strength/sync"
     };
     const route = routes[action];
