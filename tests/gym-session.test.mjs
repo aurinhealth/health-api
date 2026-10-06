@@ -27,7 +27,9 @@ test('a done session lists warm-ups and work sets with what was lifted, and its 
   assert.match(html, /gs-tag" title="Rozcvička">R</);
   assert.equal((html.match(/data-gs-col="5"/g) || []).length, 4);
   assert.match(html, /🏆 Osobní rekord · nejtěžší váha 45 kg × 8 <small>dosud 42,5 kg/);
-  assert.match(html, /<b>2<\/b><span>odcvičených sérií/);
+  assert.match(html, /<span>Odcvičeno<\/span><b>2 \/ 3 sérií/);
+  assert.match(html, /<span>Rozcvička<\/span><b>1 série/);
+  assert.match(html, /gs-prs"><b>🏆 Nový osobní rekord<\/b><ul><li><span>Bench<\/span><strong>45 kg × 8<\/strong><small>dosud max 42,5 kg/);
   assert.match(html, /data-gs="video" data-name="Row"/);
   assert.doesNotMatch(html, /data-gs="swap"/);
   assert.doesNotMatch(html, /data-gs-ai/);

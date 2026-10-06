@@ -65,7 +65,7 @@ import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { syncPlannedEventCalories } from "./intervals-calories.js";
-import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans } from "./gym-plan-store.js";
+import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
 import { applyGymSwap } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
 import { assistantStreamResponse } from './assistant-stream.js';
@@ -1018,6 +1018,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body = await request.json().catch(() => ({}));
       const date = body?.date || pragueToday();
       if(!/^\d{4}-\d{2}-\d{2}$/.test(String(date)))return Response.json({message:'Neplatné datum.'},{status:400});
+      // A saved plan without its Intervals.icu event, dragged to another day in the week.
+      if(body.action==='move'){
+        const to=String(body.to||'');
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(to)||to<pragueToday())return Response.json({message:'Gym jde přesunout jen na dnešek nebo pozdější den.'},{status:400});
+        const moved=await moveGymPlan(env.DB,date,to);
+        if(!moved.moved)return Response.json({message:'Gym se nepodařilo přesunout: cílový den už má gym plán, nebo jsou v tréninku zapsané série.'},{status:409});
+        return Response.json({status:'ok',date:to,message:'Gym je přesunutý.'},{headers:{'Cache-Control':'no-store'}});
+      }
       if(body.action==='cancel'){
         const rows=(await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,date,shiftDate(date,1)).all()).results||[];
         for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await deletePlannedEvent(env,{eventId:row.external_id});}
@@ -1167,6 +1175,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const week = await cached(env, ctx, 'week-api:' + start, async () => {
     await ensureGymPlans(env.DB);
     const cancelledGym=new Set((await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all()).results.map(r=>r.workout_date));
+    // Gym plans saved for the week (generated, confirmed or built by hand), so a
+    // day shows its plan even before or without an Intervals.icu event.
+    const gymPlans=new Map(((await env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,dates[6]).all().catch(()=>({results:[]}))).results||[]).map(r=>{let v=[];try{v=JSON.parse(r.values_json);}catch{}const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);return [r.workout_date,rows.length?{name:String(v[2]?.[3]||'').slice(0,120),exercises:new Set(rows.map(x=>x[1])).size,sets:rows.filter(x=>String(x[0]||'WORK').toUpperCase()==='WORK').length}:null];}).filter(([,p])=>p));
     // Same calorie target as the day view: one Google Health read covers the week.
     const profile = await dashboardProfile(env);
     const health = profile ? await googleDashboard(env.DB, dates[6]).catch(error => { console.error("Energy budget unavailable", error.message); return null; }) : null;
@@ -1189,6 +1200,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return {
         date,
         gymCancelled:cancelledGym.has(date),
+        gymPlan:cancelledGym.has(date)?null:gymPlans.get(date)||null,
         daily: applyEnergyBudget(await dailyResponse.json(), profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
         food: await foodResponse.json(),
         recommendations: recommendResponse ? await recommendResponse.json() : null

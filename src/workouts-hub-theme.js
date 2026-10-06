@@ -555,10 +555,15 @@ body.sheet-open{overflow:hidden}
 .gym-table-tools{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-bottom:10px}
 .gym-table-details{margin-top:14px}.gym-table-details summary{cursor:pointer;color:#9ca6b5;font-size:13px;margin-bottom:10px}
 .gym-session{display:grid;gap:12px;margin:6px 0}
-.gs-top{display:grid;grid-template-columns:minmax(0,210px) minmax(0,1fr);gap:14px;align-items:center}
-.gs-top .gym-detail-figure .muscle-map{max-width:210px;margin:0 auto}.gs-top .gym-figure-legend{flex-wrap:wrap}
-.gs-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px}
-.gs-stats div{display:grid;gap:2px;padding:10px 12px;border:1px solid #2a323d;border-radius:10px;background:#121820}.gs-stats b{font-size:20px;line-height:1.1}.gs-stats span{font-size:11px;color:#9ca6b5}
+.gs-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px}
+.gs-stats div{display:grid;gap:3px;padding:9px 12px;border:1px solid #2a323d;border-radius:10px;background:#121820}.gs-stats span{color:#9ca6b5;font-size:11px}.gs-stats b{font-size:17px;line-height:1.15}
+.gs-prs{padding:10px 12px;border:1px solid #5a4a1c;border-radius:12px;background:linear-gradient(160deg,#2c2510,#1a1710)}.gs-prs>b{color:#ffd77a;font-size:14px}
+.gs-prs ul{display:grid;gap:4px;margin:8px 0 0;padding:0;list-style:none}.gs-prs li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;align-items:baseline;font-size:13px}.gs-prs li span{color:#f3e7c4}.gs-prs li strong{color:#ffd77a}.gs-prs li small{grid-column:1/-1;color:#bfae7c;font-size:11px}
+.gs-top{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:16px;align-items:center}
+.gs-top .gym-detail-figure .muscle-map{max-width:220px;margin:0 auto}
+.gs-muscles{display:grid;gap:10px}.gs-mg{display:grid;gap:5px}.gs-mg-h{display:flex;align-items:center;gap:6px;color:#9ca6b5;font-size:11px;text-transform:uppercase;letter-spacing:.05em}.gs-mg-h i{width:9px;height:9px;border-radius:3px}
+.gs-mg-list{display:flex;flex-wrap:wrap;gap:5px}.gs-mg-list span{padding:3px 9px;border:1px solid #3a3358;border-radius:999px;background:#1a1628;color:#e6defc;font-size:12px}
+.gs-mg:nth-child(2) .gs-mg-list span{border-color:#322c4a;background:#16141f;color:#cfc6ea}.gs-mg:nth-child(3) .gs-mg-list span{border-color:#2a2738;background:#131219;color:#a9a2c2}
 .gs-list{display:grid;gap:10px}
 .gs-ex{padding:10px 12px;border:1px solid #2a323d;border-radius:12px;background:#121820}
 .gs-ex header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
@@ -584,7 +589,7 @@ body.sheet-open{overflow:hidden}
 .gs-confirm{position:sticky;bottom:-18px;display:grid;gap:4px;margin-top:12px;padding:12px 0 8px;background:linear-gradient(180deg,#14182100,#141821 28%)}.gs-confirm .btn{width:100%;padding:12px;font-size:15px}.gs-confirm p{margin:0;text-align:center}
 .tech-back{margin-bottom:10px}
 .planner-chip .proposal-open{display:block;margin:4px 0 0;padding:0;border:0;background:none;color:inherit;font:inherit;font-size:11px;text-align:left;cursor:pointer;text-decoration:underline dotted #9f86e8}
-@media(max-width:560px){.gs-top{grid-template-columns:1fr;gap:10px}.gs-top .gym-detail-figure .muscle-map{max-width:250px}.gs-top .gym-detail-figure p{text-align:center;margin:6px 0 0}.gs-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.gs-stats div{padding:8px}.gs-in{width:50px}.gs-ex{padding:9px 10px}}
+@media(max-width:560px){.gs-top{grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:12px}.gs-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.gs-stats div{padding:8px}.gs-in{width:50px}.gs-ex{padding:9px 10px}}
 .gym-done-edit{margin:12px 0;padding:12px;border:1px solid #2b3442;border-radius:12px}.gym-done-edit h4{margin:0 0 8px}.gym-done-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.gym-done-list span{display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 10px;border:1px solid #333b49;border-radius:16px;font-size:12px}.gym-done-list .btn{padding:2px 8px;min-height:0;font-size:11px}
 .done-exercise-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:12px}.done-exercise-form label{display:grid;gap:4px;font-size:12px}.done-exercise-form input{width:100%;min-width:0;padding:10px;border-radius:10px;border:1px solid #435365;background:#161b25;color:#fff;font-size:16px}
 .gym-detail-figure .muscle-map{max-width:260px;margin:0}.gym-detail-figure .gym-figure svg{max-height:240px}

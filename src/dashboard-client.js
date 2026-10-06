@@ -416,7 +416,7 @@ async function generateFocusedGym(){
     const result=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:gymDay(),focusMuscles:[...selectedGymMuscles],durationMinutes:Number($('gymFocusDuration').value)})});
     await loadGym();
     $('gymFocusStatus').textContent=result.rationale||'Cílený plán je připraven.';
-    toast('Cílený plán vygenerován');state.hubWeekData=null;renderWeekHub();openTrainingDetail({kind:'gym',date:day,sport:'gym'});
+    toast('Cílený plán vygenerován');reloadWeek();openTrainingDetail({kind:'gym',date:day,sport:'gym'});
   }catch(error){$('gymFocusStatus').textContent='Generování selhalo: '+error.message;toast(error.message)}
   finally{button.disabled=false;button.textContent='Generovat pro vybrané partie';}
 }
@@ -1590,8 +1590,10 @@ async function renderWeekHub(){
     for(const a of completed){const sport=activitySport(a);if(!sport)continue;sports.add(sport);cover(sport);doneTss+=num(a.tss);items.push('<div class="hub-item done"'+detail({kind:'done',date:d.date,sport,item:a,plan:(t.matched||[]).find(m=>String(m.actualId)===String(a.id))?.planned||null})+'>✓ '+esc(HUB_SPORTS[sport])+' · '+esc(a.name||'')+activityEnvironmentBadge(a,sport)+'<span class="meta">'+hm(num(a.durationHours)*60)+(measured(a.tss)?' · TSS '+fmt(a.tss)+ifText(a.tss,num(a.durationHours)*60,sport):'')+'</span></div>');}
     if(gym.some(g=>g.date===d.date)&&!sports.has('gym')){sports.add('gym');cover('gym');const g=gym.find(x=>x.date===d.date);items.push('<div class="hub-item done"'+detail({kind:'gym',date:d.date,done:true,sets:gym.find(x=>x.date===d.date).sets})+'>✓ '+HUB_SPORTS.gym+'<span class="meta">'+new Set(g.sets.map(r=>r.exercise)).size+' cviků · '+g.sets.length+' sérií</span></div>');}
     const paired=new Set((t.matched||[]).map(m=>String(m.planned?.id||'')));
-    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);cover(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''))&&!p.pending;items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+detail({kind:'planned',date:d.date,sport,item:p,editable})+(editable?' draggable="true" data-event-id="'+esc(p.id)+'" data-name="'+esc(p.name||'Plán')+'" title="Klikni pro detail a úpravy, nebo přetáhni na jiný den"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+activityEnvironmentBadge(p,sport)+'<span class="meta">'+(p.pending?'ukládám do Intervals…':'plán')+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss)+ifText(p.tss,num(p.durationHours)*60,sport):'')+'</span></div>');}
-    if(d.date===gymDay()&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){sports.add('gym');cover('gym');items.push('<div class="hub-item planned"'+detail({kind:'gym',date:d.date,done:false})+'>'+HUB_SPORTS.gym+' · '+(d.date===today?'plán na dnes':'plán připraven')+'</div>');}
+    for(const p of (t.planned||[]).filter(x=>!isNutritionItem(x)&&!paired.has(String(x.id||'')))){const sport=activitySport(p);if(!sport)continue;sports.add(sport);cover(sport);plannedTss+=num(p.tss);const editable=/^planned:/.test(String(p.id||''))&&!p.pending;items.push('<div class="hub-item planned'+(editable?' editable':'')+'"'+detail({kind:'planned',date:d.date,sport,item:p,editable})+(editable?' draggable="true" data-event-id="'+esc(p.id)+'" data-sport="'+sport+'" data-name="'+esc(p.name||'Plán')+'" title="Klikni pro detail a úpravy, nebo přetáhni na jiný den"':'')+'>'+esc(HUB_SPORTS[sport])+' · '+esc(p.name||'Plán')+activityEnvironmentBadge(p,sport)+'<span class="meta">'+(p.pending?'ukládám do Intervals…':'plán')+(p.durationHours?' · '+hm(num(p.durationHours)*60):'')+(measured(p.tss)?' · TSS '+fmt(p.tss)+ifText(p.tss,num(p.durationHours)*60,sport):'')+'</span></div>');}
+    // A saved gym plan without its Intervals.icu event is a planned session too.
+    const openGym=d.date===gymDay()&&!state.gym?.cancelled&&(state.gym?.values||[]).slice(7).filter(r=>r?.[1]),gymPlan=openGym?.length?{name:state.gym.values[2]?.[3]||'',exercises:new Set(openGym.map(r=>r[1])).size,sets:openGym.filter(gymRowWork).length}:d.gymPlan;
+    if(gymPlan&&!sports.has('gym')&&!d.gymCancelled&&d.date>=today){sports.add('gym');cover('gym');items.push('<div class="hub-item planned editable"'+detail({kind:'gym',date:d.date,done:false})+' draggable="true" data-gym-date="'+d.date+'" data-sport="gym" data-name="Gym" title="Klikni pro cviky, nebo přetáhni na jiný den">'+HUB_SPORTS.gym+' · '+esc(gymPlan.name||(d.date===today?'plán na dnes':'plán'))+'<span class="meta">'+czPlural(gymPlan.exercises,'cvik','cviky','cviků')+' · '+czPlural(gymPlan.sets,'série','série','sérií')+'</span></div>');}
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
     // A chip whose training is already planned or done gives way to the training itself.
@@ -1769,6 +1771,8 @@ async function restoreCancelledGym(date){
   catch(error){toast('Gym se na '+longDate(date)+' nepodařilo vrátit: '+error.message);for(const day of [...(state.week?.days||[]),...(state.hubWeekData?.days||[])])if(day.date===date)day.gymCancelled=true;renderWeekHub();}
 }
 function takePlanned(days,eventId){for(const d of days){const list=d.daily?.training?.planned||[],i=list.findIndex(x=>String(x.id)===String(eventId));if(i>=0)return list.splice(i,1)[0];}return null}
+// The shown week again from the server (the current week lives in state.week).
+async function reloadWeek(){state.hubWeekData=null;if(state.hubWeek===weekStart)await refreshAfterPlanChange().catch(()=>{});await renderWeekHub();}
 async function refreshAfterPlanChange(){
   const revision=++planDataRevision;
   const results=await Promise.allSettled([fetchWeek(weekStart),jsonFetch('/app/api/daily?date='+selectedHistoryDate),jsonFetch('/app/api/gym?date='+gymDay())]);
@@ -1893,12 +1897,13 @@ function gymCompareHtml(values,done,history=[]){
 }
 // Body figure of a gym session: every muscle the sets load, brighter for more sets.
 function gymMuscleLoad(muscles,sets){const load={};for(const {exercise,count} of sets)for(const [m,w] of Object.entries(muscles?.[exercise]||{}))load[m]=(load[m]||0)+num(w)*count;return load;}
-function gymMuscleFigure(load){
+function gymMuscleFigure(load,bare=false){
   const max=Math.max(0,...Object.values(load)),tpl=$('muscleMapTemplate');if(!tpl||!max)return '';
   const box=document.createElement('div');box.append(tpl.content.cloneNode(true));
   const one=v=>cz(v,1);
   box.querySelectorAll('[data-muscle]').forEach(el=>{const v=load[el.dataset.muscle]||0,r=v/max;el.style.setProperty('--fresh-fill',r>=.6?'#a77bff':r>=.3?'#7a5cc4':r>0?'#4f437a':'#2b323c');const t=document.createElementNS('http://www.w3.org/2000/svg','title');t.textContent=(MUSCLE_LABELS[el.dataset.muscle]||el.dataset.muscle)+(v?' · '+one(v)+' sérií':' · bez zátěže');el.appendChild(t);});
   const main=Object.entries(load).sort((a,b)=>b[1]-a[1]).filter(([,v])=>v/max>=.3).slice(0,6).map(([m])=>MUSCLE_LABELS[m]||m);
+  if(bare)return '<div class="gym-detail-figure">'+box.innerHTML+'</div>';
   return '<div class="gym-detail-figure">'+box.innerHTML+'<div class="gym-figure-legend"><span><i style="background:#a77bff"></i>hlavně</span><span><i style="background:#7a5cc4"></i>středně</span><span><i style="background:#4f437a"></i>doplňkově</span></div>'+(main.length?'<p class="small">Hlavně: '+esc(main.join(', '))+'</p>':'')+'</div>';
 }
 // The day's exercises in a few lines: sets × reps and the weight.
@@ -1933,7 +1938,10 @@ function gymSessionHtml(s){
   if(!ex.length)return '<div class="gym-session"><p class="small">Pro tento den zatím nejsou žádné cviky.</p>'+add+'</div>';
   const rows=s.rows.filter(r=>r?.[1]),work=rows.filter(gymRowWork),warm=rows.length-work.length,did=work.filter(gymRowDone).length,nRec=Object.keys(recs).length;
   const load=gymMuscleLoad(s.muscles,ex.map(e=>({exercise:e.name,count:e.sets.filter(x=>gymRowWork(x.r)&&(!done||gymRowDone(x.r))).length})));
-  const stats=[[ex.length,ex.length===1?'cvik':ex.length<5?'cviky':'cviků'],[done?did:work.length,done?'odcvičených sérií':'pracovních sérií'],...(warm?[[warm,'rozcvičkových']]:[]),...(nRec?[['🏆 '+nRec,nRec===1?'osobní rekord':'osobní rekordy']]:[])];
+  const stats=[...(s.facts||[]),['Cviky',ex.length],[done?'Odcvičeno':'Série',done?did+' / '+work.length+' sérií':work.length+' pracovních'],...(warm?[['Rozcvička',warm+' '+(warm===1?'série':warm<5?'série':'sérií')]]:[])];
+  const max=Math.max(0,...Object.values(load)),groups=[['Hlavně','#a77bff',.6,1.01],['Středně','#7a5cc4',.3,.6],['Doplňkově','#4f437a',0.0001,.3]].map(([label,color,lo,hi])=>[label,color,Object.entries(load).filter(([,v])=>max&&v/max>=lo&&v/max<hi).sort((a,b)=>b[1]-a[1]).map(([m])=>MUSCLE_LABELS[m]||m)]).filter(g=>g[2].length);
+  const muscles=groups.length?'<div class="gs-muscles">'+groups.map(([label,color,list])=>'<div class="gs-mg"><span class="gs-mg-h"><i style="background:'+color+'"></i>'+label+'</span><div class="gs-mg-list">'+list.map(m=>'<span>'+esc(m)+'</span>').join('')+'</div></div>').join('')+'</div>':'';
+  const prs=nRec?'<div class="gs-prs"><b>🏆 '+(nRec===1?'Nový osobní rekord':nRec<5?nRec+' nové osobní rekordy':nRec+' nových osobních rekordů')+'</b><ul>'+Object.entries(recs).map(([name,r])=>'<li><span>'+esc(name)+'</span><strong>'+esc(gsKg(r.kg)+' kg × '+r.reps)+'</strong><small>'+(r.kind==='weight'?'dosud max '+esc(gsKg(Math.round(r.before*10)/10))+' kg':'odhad 1RM '+esc(gsKg(Math.round(r.value*10)/10))+' kg')+'</small></li>').join('')+'</ul></div>':'';
   const input=(i,col,v,ph,label)=>'<input class="gs-in" data-gs-row="'+i+'" data-gs-col="'+col+'" inputmode="decimal" value="'+esc(gsKg(v))+'" placeholder="'+esc(ph)+'" aria-label="'+esc(label)+'">';
   const set=(e,{r,i},n)=>{const warmup=!gymRowWork(r),ok=gymRowDone(r),plan=gsKg(r[3])||r[4]?(gsKg(r[3])?gsKg(r[3])+' kg':'dle RPE')+' × '+(r[4]||'—'):'—',what=e.name+(warmup?' rozcvička':' série '+n);
     const failure=!warmup&&(gymPrescribedFailure(r)||ok&&gymFailureValue(r[11]));
@@ -1951,7 +1959,7 @@ function gymSessionHtml(s){
       e.sets.map(x=>set(e,x,gymRowWork(x.r)?++n:0)).join('')+swap(e)+
       (s.editable?'<div class="gs-ex-tools"><button type="button" class="btn" data-gs="add-set"'+name+'>+ série</button>'+(e.sets.length>1?'<button type="button" class="btn" data-gs="remove-set"'+name+'>− série</button>':'')+'</div>':'')+'</section>';};
   const ai=s.editable&&!done&&!rows.some(gymRowDone)?'<form class="gs-ai" data-gs-ai><label for="gsAi'+s.uid+'">✦ Upravit s AI trenérem</label><div><input id="gsAi'+s.uid+'" maxlength="300" placeholder="Např. bez nohou, kratší o 15 min, víc zad"'+(s.aiBusy?' disabled':'')+'><button class="btn" type="submit"'+(s.aiBusy?' disabled':'')+'>'+(s.aiBusy?'Upravuji…':'Upravit')+'</button></div>'+(s.aiNote?'<p class="small gs-ai-note" role="status">'+esc(s.aiNote)+'</p>':'')+'</form>':'';
-  return '<div class="gym-session"><div class="gs-top">'+gymMuscleFigure(load)+'<div class="gs-stats">'+stats.map(([v,l])=>'<div><b>'+esc(v)+'</b><span>'+esc(l)+'</span></div>').join('')+'</div></div><div class="gs-list">'+ex.map(card).join('')+'</div>'+add+ai+(done&&s.editable?'<p class="small">Zapsané série se uloží samy a propíší se do historie i osobních rekordů.</p>':'')+'</div>';
+  return '<div class="gym-session"><div class="gs-stats">'+stats.map(([l,v])=>'<div><span>'+esc(l)+'</span><b>'+esc(v)+'</b></div>').join('')+'</div>'+prs+'<div class="gs-top">'+gymMuscleFigure(load,true)+muscles+'</div><div class="gs-list">'+ex.map(card).join('')+'</div>'+add+ai+(done&&s.editable?'<p class="small">Zapsané série se uloží samy a propíší se do historie i osobních rekordů.</p>':'')+'</div>';
 }
 // Missing muscles of exercises added or swapped in (the figure).
 async function gymMusclesFor(rows,muscles){const miss=[...new Set((rows||[]).map(r=>r?.[1]).filter(n=>n&&!muscles[n]))];if(!miss.length)return false;try{Object.assign(muscles,(await jsonFetch('/app/api/gym/muscles?names='+encodeURIComponent(JSON.stringify(miss)))).muscles||{});return true;}catch{return false;}}
@@ -1967,7 +1975,7 @@ let gymSessionUid=0;
 function mountGymSession(host,src){
   const view={swap:null,swapList:null,aiBusy:false,aiNote:'',uid:++gymSessionUid},stored=!src.draft;let timer=null;
   const data=()=>stored?{rows:(state.gym?.values||[]).slice(7),muscles:state.gym?.muscles||(state.gym&&(state.gym.muscles={}))||{},history:state.gym?.history||[]}:{rows:src.draft.rows,muscles:src.draft.muscles,history:state.gym?.history||[]};
-  const render=()=>{const d=data();host.innerHTML=gymSessionHtml({...view,rows:d.rows,muscles:d.muscles,mode:src.mode,date:src.date,editable:src.editable,records:stored?gymDayRecords(d.rows,d.history,src.date):{}});};
+  const render=()=>{const d=data();host.innerHTML=gymSessionHtml({...view,rows:d.rows,muscles:d.muscles,mode:src.mode,date:src.date,editable:src.editable,facts:src.facts,records:stored?gymDayRecords(d.rows,d.history,src.date):{}});};
   const ready=async()=>{if(stored&&gymDay()!==src.date){state.gymDate=src.date;await loadGym();}};
   const change=async fn=>{
     if(stored){await ready();clearTimeout(timer);if(!await editGymPlan(fn))return;}
@@ -2040,15 +2048,15 @@ async function openTrainingDetail(entry){
       // Saved sets without the day's plan (older imports) are shown as they are.
       const fresh=(state.gym?.history||[]).filter(r=>String(r.workout_date||'').slice(0,10)===date);
       const legacy=!stored&&fresh.length?fresh.map(r=>['WORK',r.exercise,String(r.set_no??''),gsKg(r.planned_kg),String(r.planned_reps??''),gsKg(r.actual_kg),String(r.actual_reps??''),'','TRUE','','',r.toFailure?'TRUE':'FALSE',r.superset||'']):null;
-      const facts=event?trainingFacts(event,'gym'):kind==='done'&&entry.item?trainingFacts(entry.item,'gym'):'';
-      const head='<div class="eyebrow">'+(finished?'Odcvičeno · plán a skutečnost':'Naplánovaný gym')+'</div>'+(name?'<h4 class="training-name">'+esc(name)+'</h4>':'')+facts+(!finished&&stored?'<button type="button" class="btn primary gs-mode" data-td="gym-mode">▶ Režim tréninku</button>':'');
+      const minutes=num((event||entry.item)?.durationHours)*60,facts=minutes>0?[['Délka',hm(minutes)]]:[];
+      const head='<div class="eyebrow">'+(finished?'Odcvičeno · plán a skutečnost':'Naplánovaný gym')+'</div>'+(name?'<h4 class="training-name">'+esc(name)+'</h4>':'')+(!finished&&stored?'<button type="button" class="btn primary gs-mode" data-td="gym-mode">▶ Režim tréninku</button>':'');
       // Workout mode and cancelling belong to the session itself; moving is a drag in the week.
       const actions='<div class="training-actions">'+(!finished&&date>=today&&(stored||event)?'<button type="button" class="btn sheet-danger" data-td="gym-cancel">Zrušit trénink</button>':'')+'</div>'+(!finished&&date>=today?'<p class="small">Na jiný den ho přesuneš tažením v týdnu (na mobilu podrž a táhni).</p>':'');
       if(!stored&&!legacy&&event?.description)$('sheetBody').innerHTML=head+'<h4>Plán</h4>'+workoutPlanHtml(event.description)+actions;
       else{
         $('sheetBody').innerHTML=head+'<div class="gs-host"></div>'+actions;const host=$('sheetBody').querySelector('.gs-host'),back=()=>openTrainingDetail(entry);
-        if(legacy){host.innerHTML=gymSessionHtml({rows:legacy,muscles:state.gym?.muscles||{},mode:'done',date,editable:false,records:gymDayRecords(legacy,state.gym?.history||[],date)});host.onclick=e=>{const b=e.target.closest('[data-gs="video"]');if(b)openTechnique(b.dataset.name,back);};}
-        else mountGymSession(host,{mode:finished?'done':'plan',date,editable:finished||date>=today,back,changed:()=>{state.hubWeekData=null;renderWeekHub();}});
+        if(legacy){host.innerHTML=gymSessionHtml({rows:legacy,muscles:state.gym?.muscles||{},mode:'done',date,editable:false,facts,records:gymDayRecords(legacy,state.gym?.history||[],date)});host.onclick=e=>{const b=e.target.closest('[data-gs="video"]');if(b)openTechnique(b.dataset.name,back);};}
+        else mountGymSession(host,{mode:finished?'done':'plan',date,editable:finished||date>=today,facts,back,changed:()=>reloadWeek()});
       }
     }catch(error){$('sheetBody').innerHTML='<p>'+esc(error.message)+'</p>';}
     $('sheetBody').onclick=async e=>{
@@ -2085,6 +2093,27 @@ async function openTrainingDetail(entry){
     catch(error){if(box())box().innerHTML='<p class="small">'+esc(error.message)+'</p>';}
   }
 }
+// A session dragged to another day. A gym takes its plan chip along, so the
+// old day does not get a new gym generated in its place.
+function moveHubItem(item,to){
+  const from=item.closest('[data-hub-day]')?.dataset.hubDay;if(!from||from===to)return;
+  if(item.dataset.sport==='gym')followGymChip(from,to);
+  if(item.dataset.gymDate)return moveLocalGym(from,to);
+  movePlanned(item.dataset.eventId,to,item.dataset.name);
+}
+function followGymChip(from,to){
+  const start=state.weekPlan?.start||state.hubWeek,days=state.weekPlan?.prefs?.days;if(!start||!days)return;
+  const a=weekdayOf(from),b=weekdayOf(to);if(dateShift(start,a)!==from||dateShift(start,b)!==to)return;
+  const i=days[a].indexOf('gym');if(i<0||days[b].includes('gym'))return;
+  if(state.proposals){const pa=state.proposals[proposalKey(from,'gym',0)];delete state.proposals[proposalKey(from,'gym',0)];if(pa)state.proposals[proposalKey(to,'gym',0)]=pa;}
+  plannerPlace('gym',b,a,i,0);
+}
+async function moveLocalGym(from,to){
+  try{await jsonFetch('/app/api/gym',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:from,action:'move',to})});
+    if(gymDay()===from)state.gymDate=to;toast('Gym je na '+longDate(to)+'.');}
+  catch(error){toast(error.message);}
+  await reloadWeek();
+}
 function installPlannedEditing(){
   const week=$('hubWeek');let dragged=null;
   // The week re-renders on a drop, so the dragged node may never see dragend:
@@ -2093,7 +2122,7 @@ function installPlannedEditing(){
   week.addEventListener('dragend',()=>{dragged?.classList.remove('dragging');dragged=null;week.querySelectorAll('.drop-target').forEach(d=>d.classList.remove('drop-target'));});
   week.addEventListener('dragover',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day||day.dataset.hubDay<pragueToday())return;e.preventDefault();e.dataTransfer.dropEffect='move';week.querySelectorAll('.drop-target').forEach(d=>{if(d!==day)d.classList.remove('drop-target')});day.classList.add('drop-target');});
   week.addEventListener('dragleave',e=>{const day=e.target.closest('[data-hub-day]');if(day&&!day.contains(e.relatedTarget))day.classList.remove('drop-target');});
-  week.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day)return;e.preventDefault();day.classList.remove('drop-target');const item=dragged;dragged=null;if(item.closest('[data-hub-day]')===day)return;movePlanned(item.dataset.eventId,day.dataset.hubDay,item.dataset.name);});
+  week.addEventListener('drop',e=>{const day=e.target.closest('[data-hub-day]');if(!dragged||!day)return;e.preventDefault();day.classList.remove('drop-target');const item=dragged;dragged=null;if(item.closest('[data-hub-day]')===day)return;moveHubItem(item,day.dataset.hubDay);});
   // Phones have no drag and drop: hold a planned session for a moment, then
   // drag it to another day (the page does not scroll while it is held).
   let hold=null,suppressClickUntil=0;
@@ -2107,7 +2136,7 @@ function installPlannedEditing(){
     if(t.clientY<90)window.scrollBy(0,-14);else if(t.clientY>innerHeight-110)window.scrollBy(0,14);},{passive:false});
   const endHold=(e,cancelled)=>{if(!hold)return;const h=hold;hold=null;clearTimeout(h.timer);h.item.classList.remove('dragging');clearTargets();if(!h.active)return;
     suppressClickUntil=Date.now()+600;if(e.cancelable)e.preventDefault();if(cancelled)return;
-    const day=dayAt(e.changedTouches[0]);if(day&&h.item.closest('[data-hub-day]')!==day)movePlanned(h.item.dataset.eventId,day.dataset.hubDay,h.item.dataset.name);};
+    const day=dayAt(e.changedTouches[0]);if(day&&h.item.closest('[data-hub-day]')!==day)moveHubItem(h.item,day.dataset.hubDay);};
   week.addEventListener('touchend',e=>endHold(e));week.addEventListener('touchcancel',e=>endHold(e,true));
   week.addEventListener('contextmenu',e=>{if(e.target.closest('.hub-item.editable')&&(hold||Date.now()<suppressClickUntil))e.preventDefault();});
   const open=item=>{const entry=state.hubDetails?.[Number(item.dataset.detail)];if(entry)openTrainingDetail(entry);};
@@ -2678,7 +2707,7 @@ async function planGymChip(x){
     settlePendingAdd(pending,true,r.eventId||null);if(r.intervals?.status==='error')toast('Gym je v plánu, zápis do Intervals.icu selhal: '+r.intervals.message);
     if(gymDay()===x.date)loadGym().catch(()=>{});
     return {...result,scheduled:true};}
-  catch(error){settlePendingAdd(pending,false);throw error;}
+  catch(error){settlePendingAdd(pending,false);if(/již existuje gym plán/.test(error.message))return {...result,scheduled:true};throw error;}
 }
 // Gym chips in the week (today and later) once the plan has been quiet for 5 s.
 let autoGymRunning=false;
@@ -2688,7 +2717,7 @@ async function autoPlanGym(list){
   autoGymRunning=true;
   try{for(const x of todo){if(state.proposals[x.key])continue;state.proposals[x.key]={status:'busy'};renderWeekHub();
       try{state.proposals[x.key]=await planGymChip(x);}catch(error){state.proposals[x.key]={error:friendlyProposalError(error.message),item:x};}}}
-  finally{autoGymRunning=false;state.hubWeekData=null;renderWeekHub();}
+  finally{autoGymRunning=false;reloadWeek();}
 }
 async function proposalFor(x){
   if(x.sport==='gym')return planGymChip(x);
@@ -3747,17 +3776,17 @@ function renderAssistantWeekProposal(r){
 function openGymPreview(date,pr){
   const g=pr.gymPreview,plan=g.plan||{},draft=pr.draft||(pr.draft={rows:(plan.rows||[]).map(r=>r.slice()),muscles:{...(g.muscles||{})}}),open=gymProposalOpen(pr);
   const minutes=plan.timing?.estimatedMinutes||plan.timing?.requestedMinutes;
-  const head='<div class="eyebrow">'+(pr.scheduled?'✓ Potvrzeno · je v plánu':pr.existing?'Rozpis naplánovaného gymu':'Návrh · čeká na potvrzení')+'</div><h4 class="training-name">'+esc(plan.planName||'Gym')+'</h4>'+(minutes?'<div class="training-facts"><div><span>Délka</span><strong>~'+esc(hm(minutes))+'</strong></div></div>':'')+(plan.rationale?'<p class="small">'+esc(plan.rationale)+'</p>':'');
+  const head='<div class="eyebrow">'+(pr.scheduled?'✓ Potvrzeno · je v plánu':pr.existing?'Rozpis naplánovaného gymu':'Návrh · čeká na potvrzení')+'</div><h4 class="training-name">'+esc(plan.planName||'Gym')+'</h4>'+(plan.rationale?'<p class="small">'+esc(plan.rationale)+'</p>':'');
   const foot=open?'<div class="gs-confirm"><button type="button" class="btn primary" id="confirmGymPreview">✓ Potvrdit trénink</button><p class="small">Zapíše se do plánu i do Intervals.icu.</p></div>':pr.existing?'<p class="small">Jde o rozpis už naplánovaného gymu. Úpravy dělej v jeho detailu.</p>':'';
   openSheet('Gym · '+longDate(date),head+'<div class="gs-host"></div>'+foot,body=>{
     const host=body.querySelector('.gs-host');
-    mountGymSession(host,{mode:'draft',date,editable:open,draft,back:()=>openGymPreview(date,pr)});
+    mountGymSession(host,{mode:'draft',date,editable:open,draft,facts:minutes?[['Délka','~'+hm(minutes)]]:[],back:()=>openGymPreview(date,pr)});
     const b=$('confirmGymPreview');if(!b)return;
     b.onclick=async()=>{b.disabled=true;b.textContent='Ukládám…';const pending=showPendingAdd({id:'gym',name:plan.planName||'Gym'},date,'gym');
       try{const r=await jsonFetch('/app/api/gym/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({draftId:g.draftId,rows:draft.rows})});
         pr.scheduled=true;pr.gym=new Set(draft.rows.map(x=>x[1])).size;settlePendingAdd(pending,true);closeSheet();renderDeploySteps();if(!Object.values(state.proposals||{}).some(gymProposalOpen))document.querySelector('.gym-confirm-hint')?.remove();
         toast(r.intervals?.status==='error'?'Gym je v plánu, zápis do Intervals.icu selhal: '+r.intervals.message:'Gym je v plánu.');
-        state.hubWeekData=null;if(gymDay()===date)loadGym().catch(()=>{});await renderWeekHub();}
+        if(gymDay()===date)loadGym().catch(()=>{});await reloadWeek();}
       catch(error){settlePendingAdd(pending,false);toast(error.message);b.disabled=false;b.textContent='✓ Potvrdit trénink';}};
   },'training-detail');
 }
