@@ -24,7 +24,7 @@ import {athleteFocus} from './athlete-focus.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
-import {gymExerciseCatalog,gymAlternatives} from './gym-catalog.js';
+import {gymExerciseCatalog,gymAlternatives,gymLoadEstimate} from './gym-catalog.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport,pragueNow} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
@@ -489,6 +489,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const [plan,history]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[])]);
     const inPlan=[...new Set((plan?.values||[]).slice(7).map(r=>r?.[1]).filter(Boolean))];
     return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan)},{headers:{'Cache-Control':'no-store'}});
+  }
+  // Loads for exercises added by hand, or a plan's sets left without a weight.
+  if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
+    let names=[];try{names=JSON.parse(url.searchParams.get('names')||'[]');}catch{}
+    const list=(Array.isArray(names)?names:[]).slice(0,30).map(n=>String(n).slice(0,120)).filter(Boolean);
+    const history=await getStrengthHistory(env.DB,500).catch(()=>[]);
+    return Response.json({status:'ok',estimates:Object.fromEntries(list.map(name=>[name,gymLoadEstimate(name,history)]).filter(([,e])=>e))},{headers:{'Cache-Control':'no-store'}});
   }
   // Muscles of exercises added to a proposal (its body figure).
   if(url.pathname==='/app/api/gym/muscles'&&request.method==='GET'){

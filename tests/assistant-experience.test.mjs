@@ -38,6 +38,7 @@ test('confirmed exercise swap preserves logged sets, options and unrelated edits
   const values=applyGymSwap(changed,action),context=todayGymContext({values},date);
   assert.deepEqual(values.at(-1),changed.at(-1));assert.deepEqual(values.slice(0,7),changed.slice(0,7));
   assert.equal(context.exercises[0].name,'DB shoulder press');assert.equal(context.exercises[0].sets[0].superset,'A');assert.equal(context.exercises[0].sets[0].toFailure,true);
+  // Nothing done before that relates to it: no guessed weight.
   assert.equal(context.exercises[0].sets[0].kg,null);assert.equal(action.kg,null);
   changed[7][8]='TRUE';assert.throws(()=>applyGymSwap(changed,action),/mezitím/);
   assert.throws(()=>prepareGymSwap(gym,'Low row','Lat pulldown','Náhrada'),/Rozcvičený/);

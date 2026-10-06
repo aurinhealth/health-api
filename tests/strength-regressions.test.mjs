@@ -565,3 +565,16 @@ test("grip and traps take a turn among the small muscles once the others had the
   const plan = generateStrengthPlan({ ...fresh, strength: { recentCompletedSets: sets } }, { durationMinutes: 75 });
   assert.ok(plan.rows.some(r => small.test(r[1])), plan.rows.map(r => r[1]).join(", "));
 });
+
+test("a variant of a lifted exercise gets a load, an unrelated new one does not", async () => {
+  const { gymLoadEstimate } = await import("../src/gym-catalog.js");
+  const set = (exercise, kg, reps) => ({ workout_date: "2026-10-01", type: "WORK", exercise, actual_kg: kg, actual_reps: reps, rpe: 8, completed: 1, set_no: 1 });
+  const history = [set("Barbell back squat", 80, 8), set("DB bench press", 25, 8)];
+  // Smith squat from the free-bar squat, a little lighter.
+  assert.deepEqual(gymLoadEstimate("Smith machine squat", history), { kg: 72.5, source: "cross-exercise-estimate", reference: "Barbell back squat" });
+  // A dumbbell (per hand) carries over to the barbell twice.
+  assert.equal(gymLoadEstimate("Barbell bench press", history).kg, 50);
+  // A leg press is not a heavier squat, and a never-trained muscle has nothing to go by.
+  assert.equal(gymLoadEstimate("Pivot leg press", history), null);
+  assert.equal(gymLoadEstimate("Hip thrust", history), null);
+});

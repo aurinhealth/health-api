@@ -95,11 +95,19 @@ export function gymExerciseCatalog(){
 // What can take the place of an exercise in the plan: the same muscle,
 // possible in the gym, the most similar first, with the load from the
 // athlete's own history (or a similar exercise) when there is one.
+// The load for an exercise put into a plan by hand or by the AI coach, from
+// the athlete's own history of it or of a variant (barbell squat → Smith
+// squat). An exercise unlike anything done before stays without a weight.
+export function gymLoadEstimate(exercise,history=[]){
+  const name=normalizeExerciseName(exercise),def=EXERCISES[name];if(!def)return null;
+  const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null});
+  return estimate.kg==null?null:{kg:estimate.kg,source:estimate.source,reference:estimate.referenceExercise||null};
+}
 export function gymAlternatives(exercise,history=[],exclude=[]){
   const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
   if(!EXERCISE_INTELLIGENCE[name])return [];
   return findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)).slice(0,8).map(a=>{
-    const def=EXERCISES[a.name],estimate=estimateStartingLoad({exercise:a.name,history,targetReps:def.reps,fallbackKg:null});
+    const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||{kg:null,source:'no-reference'};
     return {name:a.name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
   });
 }

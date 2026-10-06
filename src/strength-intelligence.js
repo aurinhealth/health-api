@@ -115,11 +115,29 @@ function scoreSimilarity(from, to) {
   return score;
 }
 
+// A variant of the same movement: listed as one, or the same muscle and pattern.
+function relatedExercises(from, to) {
+  const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
+  if (!a || !b) return false;
+  return (a.variants || []).includes(to) || (b.variants || []).includes(from) || (a.muscle === b.muscle && a.pattern === b.pattern);
+}
+// How a weight carries over between equipment, on the cautious side: a barbell
+// holds about twice one dumbbell, a machine stack a bit less than that; another
+// tool of the same kind (Smith instead of a free bar, another machine) a tenth
+// less. Cable stacks and per-side machines differ too much to compare.
+const UNIT_TRANSFER = {
+  [LOAD_UNITS.PER_HAND_KG + ">" + LOAD_UNITS.BARBELL_KG]: 2.0, [LOAD_UNITS.BARBELL_KG + ">" + LOAD_UNITS.PER_HAND_KG]: 0.4,
+  [LOAD_UNITS.PER_HAND_KG + ">" + LOAD_UNITS.MACHINE_TOTAL_KG]: 1.8, [LOAD_UNITS.MACHINE_TOTAL_KG + ">" + LOAD_UNITS.PER_HAND_KG]: 0.45,
+  [LOAD_UNITS.BARBELL_KG + ">" + LOAD_UNITS.MACHINE_TOTAL_KG]: 0.9, [LOAD_UNITS.MACHINE_TOTAL_KG + ">" + LOAD_UNITS.BARBELL_KG]: 0.9
+};
 function transferFactor(from, to) {
   const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
-  if (!a || !b) return null;
-  if (a.loadUnit === b.loadUnit && a.equipment === b.equipment && a.pattern === b.pattern) return 1;
-  return null;
+  if (!a || !b || !relatedExercises(from, to) || a.loadUnit === LOAD_UNITS.BODYWEIGHT || b.loadUnit === LOAD_UNITS.BODYWEIGHT) return null;
+  if (a.loadUnit === b.loadUnit) return a.equipment === b.equipment && a.pattern === b.pattern ? 1 : 0.9;
+  // Across load units only a listed variant (DB bench â†’ barbell bench), not any
+  // exercise of the muscle (a leg press is not a heavier squat).
+  const variant = (a.variants || []).includes(to) || (b.variants || []).includes(from);
+  return variant ? UNIT_TRANSFER[a.loadUnit + ">" + b.loadUnit] ?? null : null;
 }
 
 export const LOAD_RULES = {
@@ -275,7 +293,8 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     if (kg == null) continue;
     const similarity = scoreSimilarity(name, exercise);
     const factor = transferFactor(name, exercise);
-    if (similarity < 0.85 || factor == null) continue;
+    // Only a variant of the same movement says anything about this one.
+    if (factor == null || similarity < 0.75 && !(EXERCISE_INTELLIGENCE[name].variants || []).includes(exercise) && !(EXERCISE_INTELLIGENCE[exercise].variants || []).includes(name)) continue;
     candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor, date: ref.workout_date });
   }
   candidates.sort((a, b) => b.similarity - a.similarity || String(b.date).localeCompare(String(a.date)));

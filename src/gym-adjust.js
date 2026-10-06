@@ -2,7 +2,7 @@
 // rows a proposal is confirmed with: only exercises from the gym's catalog
 // (or already in the plan), the plan's own columns, no logged results.
 import { callOpenAI, lightModel } from './coach-assistant.js';
-import { gymExerciseCatalog } from './gym-catalog.js';
+import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
 import { GYM_PLAN_COLUMNS } from './gym-plan-store.js';
 
 const MAX_ROWS = 80, MAX_EXERCISES = 14, MAX_SETS = 8;
@@ -61,13 +61,24 @@ export function rowsFromModel(exercises, original, catalog) {
   return rows;
 }
 
+// Work sets left without a weight get an estimate from the athlete's history of
+// the exercise or a variant; a warm-up before them half and three quarters of it.
+export function fillGymLoads(rows, history = []) {
+  const cache = new Map(), estimate = name => { if (!cache.has(name)) cache.set(name, gymLoadEstimate(name, history)); return cache.get(name); };
+  for (const r of rows) if (r[0] === 'WORK' && r[3] === '' && estimate(r[1])) r[3] = kgText(estimate(r[1]).kg);
+  for (const name of new Set(rows.filter(r => r[0] === 'WARMUP' && r[3] === '').map(r => r[1]))) {
+    const work = rows.find(r => r[1] === name && r[0] === 'WORK' && r[3] !== ''), warm = rows.filter(r => r[1] === name && r[0] === 'WARMUP');
+    if (work) warm.forEach((r, i) => { if (r[3] === '') r[3] = kgText(Number(work[3].replace(',', '.')) * (warm.length > 1 && i === warm.length - 1 ? .75 : .5)); });
+  }
+  return rows;
+}
 export async function adjustGymPlan(env, { rows, request, history = [] }) {
   const items = gymExerciseCatalog(), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
   const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent });
   const r = await callOpenAI(env, { instructions: ADJUST_INSTRUCTIONS, input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
-  const data = JSON.parse(r.text), out = rowsFromModel(data.exercises, rows, catalog);
+  const data = JSON.parse(r.text), out = fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history);
   if (!out.length) throw new Error('Úpravu se nepodařilo připravit, zkus ji napsat jinak.');
   return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };
 }

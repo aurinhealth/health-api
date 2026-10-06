@@ -386,7 +386,10 @@ async function openGymExercisePicker(){
   try{gymExerciseCatalog=(await jsonFetch('/app/api/gym/exercises')).exercises||[];gymExerciseIndex=0;renderGymExerciseChoices();}
   catch(error){$('gymExerciseHint').textContent='Katalog cviků se nepodařilo načíst: '+error.message;}
 }
-function chooseGymExercise(index){const item=visibleGymExercises[index];if(!item)return;const pick=state.gymPick;state.gymPick=null;$('gymExerciseDialog').close();if(pick)return pick(item);if(gymMode&&!$('gymMode')?.hidden)return editGymFromMode((rows,row)=>addGymExercise(rows,item,row?.[1]));gymPlanEdit('add-exercise',0,item);}
+// The coach's estimated load for exercises without a weight (own history, a
+// similar exercise, or the catalogue's starting load).
+async function gymEstimates(names){if(!names.length)return {};try{return (await jsonFetch('/app/api/gym/estimate?names='+encodeURIComponent(JSON.stringify(names)))).estimates||{};}catch{return {};}}
+async function chooseGymExercise(index){const found=visibleGymExercises[index];if(!found)return;const pick=state.gymPick;state.gymPick=null;$('gymExerciseDialog').close();const item={...found,kg:(await gymEstimates([found.name]))[found.name]?.kg??null};if(pick)return pick(item);if(gymMode&&!$('gymMode')?.hidden)return editGymFromMode((rows,row)=>addGymExercise(rows,item,row?.[1]));gymPlanEdit('add-exercise',0,item);}
 function renderGym(){const values=state.gym?.values||[];const rows=values.slice(7).filter(r=>r.some(v=>String(v??"").trim()!==""));$("gymMeta").textContent=(values[2]?.[1]||"Silový trénink")+" · "+(gymDay()===pragueToday()?"dnes":longDate(gymDay()));$("gymNotice").textContent=rows.length?czPlural(rows.filter(r=>String(r[0]||"")==="WORK").length,"pracovní série","pracovní série","pracovních sérií")+" · plán i výsledky jsou v interní databázi":"Dnešní plán je prázdný. Přidej cvik nebo vygeneruj plán.";const start=values.slice(7).findIndex(r=>r.some(v=>String(v??"").trim()!==""));const actualRows=start<0?[]:values.slice(7+start);$("gymRows").innerHTML=actualRows.map((r,i)=>{const idx=i+(start<0?0:start),type=r[0]||"",exercise=r[1]||"";const rawVideo=state.gym?.videoLinks?.[idx+7]||r[10]||"";const formula=String(rawVideo);const formulaUrl=formula.match(/HYPERLINK\(\s*"([^"]+)"/i)?.[1]||"";const video=/^https?:\/\//i.test(formula)?formula:formulaUrl||("https://www.youtube.com/results?search_query="+encodeURIComponent(String(exercise||"")+" exercise technique"));const prev=actualRows[i-1]||[],next=actualRows[i+1]||[],kind=String(type).toUpperCase()==='WARMUP'?'WARMUP':'WORK';return '<tr data-row="'+idx+'" data-type="'+kind+'" class="'+(prev[1]===exercise?'':'gym-first ')+(next[1]===exercise?'':'gym-last')+'"><td><span class="gym-type">'+esc(type)+'</span></td><td><strong>'+esc(exercise)+'</strong></td><td>'+esc(r[2]||"")+'</td><td>'+esc(r[3]||"")+'</td><td>'+esc(r[4]||"")+'</td><td><input data-col="5" value="'+esc(r[5]||"")+'" inputmode="decimal"></td><td><input data-col="6" value="'+esc(r[6]||"")+'" inputmode="numeric"></td><td><input data-col="7" value="'+esc(r[7]||"")+'" inputmode="decimal"></td><td><input data-col="8" type="checkbox" '+(String(r[8]).toUpperCase()==="TRUE"||r[8]===true?"checked":"")+'></td>'+gymOptionsCell(r)+'<td class="gym-video-cell"><a href="'+esc(video)+'" target="_blank" rel="noopener noreferrer">▶ Video</a></td><td class="gym-actions-cell"><button class="btn gym-action" data-action="add-set" data-idx="'+idx+'">+ série</button> <button class="btn gym-action" data-action="remove-set" data-idx="'+idx+'">− série</button> '+(prev[1]===exercise?'':'<button class="btn gym-action" data-action="swap" data-idx="'+idx+'">⇄ cvik</button> <button class="btn gym-action" data-action="remove-exercise" data-idx="'+idx+'">🗑 cvik</button>')+'</td></tr>'}).join("")||'<tr><td colspan="12" class="muted">Žádný plán.</td></tr>'}
 // The gym plan of the chosen day (today unless another day is picked).
 function gymDay(){return state.gymDate||pragueToday()}
@@ -2006,6 +2009,16 @@ function mountGymSession(host,src){
     catch(error){view.aiNote=error.message;}finally{view.aiBusy=false;render();}
   };
   render();
+  if(src.editable&&src.mode!=='done'&&src.date>=pragueToday())fillMissingLoads();
+  async function fillMissingLoads(){
+    const names=[...new Set(data().rows.filter(r=>r?.[1]&&gymRowWork(r)&&!gymRowDone(r)&&!String(r[3]??'').trim()).map(r=>r[1]))];if(!names.length)return;
+    const est=await gymEstimates(names),found=names.filter(n=>est[n]?.kg!=null);if(!found.length)return;
+    const kg=v=>String(Math.round(v*2)/2).replace('.',',');
+    await change(rows=>{let n=0;for(const r of rows)if(found.includes(r[1])&&gymRowWork(r)&&!gymRowDone(r)&&!String(r[3]??'').trim()){r[3]=kg(est[r[1]].kg);n++;}
+      for(const name of found){const warm=rows.filter(r=>r[1]===name&&!gymRowWork(r)&&!String(r[3]??'').trim());warm.forEach((r,i)=>{r[3]=kg(est[name].kg*(warm.length>1&&i===warm.length-1?.75:.5));});}
+      return n?{rows}:null;});
+    toast('Doplnil jsem odhad váhy podle tvé historie: '+found.map(n=>n+(est[n].reference&&est[n].reference!==n?' (z '+est[n].reference+')':'')).join(', ')+'.');
+  }
   return render;
 }
 // A planned ride or run drawn like a recommended workout: profile, numbers, steps.
@@ -2448,7 +2461,8 @@ function removeGymExercise(rows,name){const open=rows.filter(r=>r[1]===name&&!gy
 function addGymExercise(rows,exercise,after){
   const item=gymExerciseCatalog.find(item=>item.name===exercise?.name);
   if(!item||rows.some(r=>r[1]===item.name))return null;
-  const fresh=Array.from({length:Math.max(1,Number(item.sets)||3)},()=>['WORK',item.name,'',lastGymKg(item.name),String(item.reps||'10'),'','','','FALSE',item.note||'','','FALSE','']);
+  const kg=lastGymKg(item.name)||(exercise?.kg!=null?String(exercise.kg).replace('.',','):'');
+  const fresh=Array.from({length:Math.max(1,Number(item.sets)||3)},()=>['WORK',item.name,'',kg,String(item.reps||'10'),'','','','FALSE',item.note||'','','FALSE','']);
   const last=after?rows.map(r=>r[1]).lastIndexOf(after):-1;rows.splice(last<0?rows.length:last+1,0,...fresh);return {rows};
 }
 // Another exercise for the same muscle in place of the open sets; with every

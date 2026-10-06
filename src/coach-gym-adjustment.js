@@ -1,6 +1,7 @@
 import { parseStrengthSheet } from './strength-history.js';
 import { EXERCISES } from './strength-generator.js';
-import { findExerciseAlternatives,estimateStartingLoad } from './strength-intelligence.js';
+import { findExerciseAlternatives } from './strength-intelligence.js';
+import { gymLoadEstimate } from './gym-catalog.js';
 import { availableAt } from './gym-equipment.js';
 
 export function todayGymContext(gym,date){
@@ -20,8 +21,8 @@ export function prepareGymSwap(gym,fromExercise,toExercise,reason){
   if(parsed.rows.some(r=>r.exercise===toExercise))throw new Error('Náhradní cvik už v plánu je.');
   if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error('Rozcvičený nebo rozepsaný cvik nelze nahradit.');
   const work=source.filter(r=>r.type==='WORK');if(!work.length)throw new Error('Cvik nemá pracovní série.');
-  const estimate=estimateStartingLoad({exercise:toExercise,history:gym.history||[],targetReps:def.reps,fallbackKg:null});
-  // No guessed weight when this athlete has no suitable reference.
+  // The generator's estimate: own history, a similar exercise, or the catalogue's start.
+  const estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null};
   const kg=estimate.kg??'',video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique');
   const rows=[];
   if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(Math.round(kg*factor*2)/2),reps,'','','','FALSE','[WARMUP]',video,'FALSE','']);}
