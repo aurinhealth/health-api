@@ -5,7 +5,6 @@ const SERVER_INFO = { name: "health-api-strength-coach", title: "Health API Stre
 
 export async function handleMcpCompat(request, env) {
   const protocol = request.headers.get("MCP-Protocol-Version");
-  const origin = new URL(request.url).origin;
 
   if (request.method === "POST" && protocol === MODERN) {
     const message = await request.clone().json().catch(() => null);
@@ -31,20 +30,14 @@ export async function handleMcpCompat(request, env) {
     headers.delete("MCP-Protocol-Version");
     const legacyRequest = new Request(request, { headers });
     const response = await handleMcp(legacyRequest, env);
-    return normalizeToolResult(response, origin, true);
+    return normalizeToolResult(response, true);
   }
 
   const response = await handleMcp(request, env);
-  return normalizeToolResult(response, origin);
+  return normalizeToolResult(response);
 }
 
-async function normalizeToolResult(response, origin, modern = false) {
-  if (response.status === 401) {
-    const headers = new Headers(response.headers);
-    headers.set("WWW-Authenticate", `Bearer realm="health-api-mcp", resource_metadata="${origin}/.well-known/oauth-protected-resource", scope="strength:read strength:write"`);
-    return new Response(response.body, { status: response.status, headers });
-  }
-
+async function normalizeToolResult(response, modern = false) {
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) return response;
 

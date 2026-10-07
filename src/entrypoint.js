@@ -2,7 +2,6 @@ import app from "./strength-gateway.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { trainingStatus } from './training-status.js';
 import { handleMcpCompat } from "./mcp-compat.js";
-import { handleOAuthCompat } from "./oauth-compat.js";
 import { syncDailyNutritionNotes, deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
@@ -166,8 +165,6 @@ const worker = {
     if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
     if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, rawEnv);
     if (url.pathname === "/automation/planned-calories") return handlePlannedCaloriesAutomation(request, rawEnv);
-    const oauthResponse = await handleOAuthCompat(request, env, url.pathname);
-    if (oauthResponse) return oauthResponse;
     if (url.pathname === "/mcp") return handleMcpCompat(request, env);
     if (url.pathname === "/.well-known/openai-apps-challenge" && request.method === "GET") {
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });

@@ -14,7 +14,7 @@ test("personal data routes are not public", () => {
 });
 
 test("static pages, Google login and self-authenticating routes stay public", () => {
-  for (const path of ["/", "/app", "/app/dashboard-client.js", "/app/logout", "/auth/google", "/mcp", "/mcp/health", "/token", "/authorize", "/.well-known/oauth-authorization-server", "/oauth/google/callback", "/automation/strength"]) {
+  for (const path of ["/", "/app", "/app/dashboard-client.js", "/app/logout", "/auth/google", "/mcp", "/mcp/health", "/.well-known/openai-apps-challenge", "/oauth/google/callback", "/automation/strength"]) {
     assert.equal(isPublicPath(path), true, path);
   }
   assert.equal(isPublicPath("/app/login"), false);
