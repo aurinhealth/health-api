@@ -15,6 +15,8 @@ const LIGHT = `
   --primary:#0c7f5a;--primary-rgb:12,127,90;--primary-ink:#ffffff;--primary-text:#0a6b4c;
   --primary-surface:#ddf3ea;--primary-line:#a9dcc8;
   --ink-l:.5;
+  --card:var(--panel);--card-line:color-mix(in srgb,var(--muted) 20%,var(--bg));
+  --card-shadow:0 1px 2px rgba(16,24,40,.05);--btn:var(--panel);
 `;
 // Shared by the app (/app) and the public pages (/, /privacy, …).
 export const themeTokens = `
@@ -33,6 +35,9 @@ export const themeTokens = `
   /* Data-coloured text (.ink, colour in --c): the light theme caps its lightness so pastel
      chart hues stay readable on white; the dark theme keeps them as they are. */
   --ink-l:1;
+  /* Card surface: a light lift over the page in the dark theme, white with a hairline in the light one. */
+  --card:color-mix(in srgb,var(--muted) 7%,var(--bg));--card-line:color-mix(in srgb,var(--muted) 22%,var(--bg));
+  --card-shadow:none;--btn:color-mix(in srgb,var(--muted) 15%,var(--bg));
   /* Type scale. Theme layers take sizes under 15px from these tokens (tests/design-tokens.test.mjs):
      caption only for short uppercase labels, meta for dense chips, legends and calendar cells,
      small for secondary sentences, notes, table cells and buttons, body for running text. */
@@ -75,7 +80,9 @@ export const designSystem = themeTokens + themeSwitchCss + `
 /* Buttons used to inherit the 14px body; keep them at small instead of growing with running text. */
 button{font-size:var(--fs-small)}
 /* iOS zooms into any field under 16px when it gets focus. */
-@media (max-width:700px){input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}}
+@media (max-width:700px){input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}
+  /* At 16px the date in the top bar needs more than the old 114px, or its year is cut off. */
+  .topbar #viewDate{width:138px}}
 body{background:var(--bg)}
 .ink{color:var(--c);color:oklch(from var(--c) min(l,var(--ink-l)) c h)}
 svg .ink{fill:var(--c);fill:oklch(from var(--c) min(l,var(--ink-l)) c h)}
@@ -124,6 +131,53 @@ svg .ink{fill:var(--c);fill:oklch(from var(--c) min(l,var(--ink-l)) c h)}
 
 /* Nastavení: a save button is as wide as its label, not a whole grid cell. */
 .food-editor-grid>.btn.primary{justify-self:start;align-self:end;width:auto;min-height:0;height:auto;padding:10px 18px}
+
+/* One look for the same thing everywhere (thread "Grafika webu", 2026-10-07). */
+/* Cards: every panel, tile and ring tile sits on the same surface. */
+.card,.metric-tile,.coach-council,.mini-ring,.plan-day,.day,.section-hero,.hero.section-hero,.weekbar.section-hero,.recovery-command{background:var(--card);border-color:var(--card-line);box-shadow:var(--card-shadow)}
+@media(min-width:701px){.recovery-indices .score-caption{white-space:nowrap}}
+/* Stat cards (Denní signály, Výkonnostní kapacita, Zdraví): label, number with its change chip,
+   and one line under it. Subgrid keeps those three rows level across cards in a row, so a chip
+   that wraps in one card does not push the line under the next card's number. */
+.quick-grid>.card,#training>.grid>.card,#healthTiles>.metric-tile{display:grid;grid-row:span 3;grid-template-rows:subgrid;row-gap:6px;align-content:start}
+.quick-grid>.card>*,#training>.grid>.card>*,#healthTiles>.metric-tile>*{margin:0}
+.quick-grid .value,#training>.grid .value,#healthTiles .metric-number{display:flex;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:4px 10px}
+/* Number blocks with a caption, a number and a note (Osobní trend, Spánkový rytmus): the numbers
+   stay on one line even when one caption wraps. */
+.detail-stats>div,.experience-stats>div{display:grid;grid-row:span 3;grid-template-rows:subgrid;row-gap:4px;align-content:start}
+.experience-stats>div{grid-row:span 2}
+.detail-stats>div>*,.experience-stats>div>*{margin:0;align-self:start}
+@media(min-width:701px){
+  #nutrition .daygrid>.day{display:grid;grid-row:span 4;grid-template-rows:subgrid;row-gap:8px;align-content:start}
+  #nutrition .daygrid>.day>*{margin:0}
+}
+.daygrid .dayhead{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.daygrid .dayhead>span{display:inline-flex;padding:2px 8px;border-radius:999px;font-size:var(--fs-meta);font-weight:700;line-height:1.45}
+.daygrid .day .macro-line{display:grid;gap:1px;justify-content:start}
+.quick-grid .value .trend,#training>.grid .value .trend,#healthTiles .metric-number .delta-badge{margin:0}
+/* Change chips: same pill, arrow and size wherever a value is compared with something. */
+/* On a narrow card the basis wraps under the number inside the chip instead of overflowing it. */
+.trend,.delta-badge{display:inline-block;max-width:100%;padding:2px 9px;border-radius:12px;font-size:var(--fs-small);font-weight:700;line-height:1.45;letter-spacing:normal;word-spacing:normal;white-space:normal;text-align:left;font-variant-numeric:tabular-nums}
+.trend:not(.up):not(.down),.delta-badge.flat{background:color-mix(in srgb,var(--text) 8%,var(--bg));color:color-mix(in srgb,var(--muted) 60%,var(--text))}
+.nowrap{white-space:nowrap}
+/* Buttons: one height, radius and weight; .primary is the one green action on a screen. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border-radius:10px;font-weight:650;line-height:1.2;vertical-align:middle;background:var(--btn)}
+.topbar .actions{align-items:center}
+.topbar .actions>.btn{height:40px;min-height:40px}
+/* Den timeline: full "Zapsat váhu" on a computer, a short "Váha" on a phone. */
+.tl-short{display:none}
+@media(max-width:700px){.tl-short{display:inline}}
+.hydration-custom .btn.primary{background:var(--primary);color:var(--primary-ink);border-radius:10px}
+.ml-add{background:var(--primary-surface);color:var(--primary-text);box-shadow:inset 0 0 0 1px var(--primary-line);font-size:22px}
+.ml-add:hover{background:var(--primary);color:var(--primary-ink)}
+#ownFoodLibraryButtons{align-items:center}#ownFoodLibraryButtons>.btn{margin:0}
+/* Plán: "Přidat vlastní trénink" sits next to the sport switch instead of above the hero card. */
+#workouts .section-hero>div:first-child{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px}
+#workouts .section-hero>div:first-child>*{flex-basis:100%}
+#workouts .section-hero>div:first-child>.sport-switch,#workouts .section-hero>div:first-child>#addManualWorkout{flex-basis:auto;margin-top:12px}
+@media(max-width:700px){#workouts .section-hero>div:first-child>.sport-switch{flex-basis:100%}#workouts .section-hero .sport-switch .btn{flex:1 1 auto;white-space:nowrap}#workouts .section-hero>div:first-child>#addManualWorkout{margin-top:8px}}
+/* Výživa: a day's "2470 / 2650 kcal" stays on one line, so the macro rows line up across days. */
+.daygrid .day .value.day-kcal{font-size:20px;white-space:nowrap}.day-kcal small{font-size:var(--fs-small);font-weight:600;color:var(--muted)}
 
 /* Floating buttons: the end of every page can scroll clear of them. */
 .content{padding-bottom:110px}

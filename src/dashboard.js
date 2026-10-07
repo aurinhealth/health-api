@@ -73,8 +73,8 @@ body{background:var(--bg);font-size:var(--fs-body);letter-spacing:-.01em}.shell{
 <section id="overview" class="view">
   <div class="readiness-hero"><div><div class="readiness-kicker">Performance readiness · <span id="overviewDate">—</span></div><h1 id="readinessTitle">Dnešní připravenost</h1><p id="readinessInsight">Načítám dnešní signály.</p><div id="readinessFocus" class="focus-chip">Dnešní priorita</div></div><div class="readiness-score"><div id="readinessOrb" class="score-orb"><div><strong id="readinessScore">—</strong><span>recovery</span></div></div><div id="readinessCaption" class="score-caption">čekám na spánek</div></div><div class="readiness-metrics"><div id="readinessDials" class="dial-row"></div></div></div>
   <div class="section">Denní signály</div><div class="quick-grid">
-    <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div id="oWeightMeta" class="small">aktuálně</div></div>
-    <div class="card"><div class="label">Spánek</div><div id="oSleep" class="value">—</div><div id="oSleepMeta" class="small">recovery vs. 30 dní</div></div>
+    <div class="card"><div class="label">Hmotnost</div><div id="oWeight" class="value">—</div><div id="oWeightMeta" class="small">&nbsp;</div></div>
+    <div class="card"><div class="label">Spánek</div><div id="oSleep" class="value">—</div><div id="oSleepMeta" class="small">&nbsp;</div></div>
     <div class="card"><div class="label">Fitness</div><div id="oFitness" class="value">—</div><div class="small">CTL · Intervals.icu</div></div>
     <div class="card"><div class="label">Form</div><div id="oForm" class="value">—</div><div class="small">TSB · dnes</div></div>
   </div>
@@ -86,12 +86,12 @@ body{background:var(--bg);font-size:var(--fs-body);letter-spacing:-.01em}.shell{
 </section>
 
 <section id="training" class="view">
-  <div class="weekbar section-hero"><div><div class="eyebrow">Zátěž a výkon</div><div class="section" style="margin:2px 0">Tréninkový týden</div><div id="trainingRange" class="small"></div></div><div class="select-row"><select id="trainingWeekSelect"></select><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Tento týden</button><button class="btn" id="nextWeek">→</button></div></div></div>
+  <div class="weekbar section-hero"><div><div class="eyebrow">Zátěž a výkon</div><h1>Tréninkový týden</h1><div id="trainingRange" class="small"></div></div><div class="select-row"><select id="trainingWeekSelect"></select><div class="weeknav"><button class="btn" id="prevWeek">←</button><button class="btn" id="thisWeek">Tento týden</button><button class="btn" id="nextWeek">→</button></div></div></div>
   <div class="section">Výkonnostní kapacita</div><div class="grid" style="margin-top:12px">
     <div class="card"><div class="label">Fitness</div><div id="tFitness" class="value">—</div><div class="small">CTL · 42denní trend</div></div>
     <div class="card"><div class="label">Fatigue</div><div id="tFatigue" class="value">—</div><div class="small">ATL · 7denní trend</div></div>
     <div class="card"><div class="label">Form</div><div id="tForm" class="value">—</div><div class="small">TSB = kondice − únava</div></div>
-    <div class="card"><div class="label">Nárůst kondice</div><div id="tRamp" class="value">—</div><div class="small">změna kondice za týden</div></div>
+    <div class="card"><div class="label">Nárůst kondice</div><div id="tRamp" class="value">—</div><div class="small">Změna kondice za týden</div></div>
   </div>
   <div class="section" id="trainingInsightsAnchor">Vývoj v čase</div>
   <div class="card" style="margin-top:12px"><div class="weekbar"><h3>Kondice · únava · forma</h3><div class="range-tabs" id="pmcRange" role="group" aria-label="Období grafu zátěže" data-value="14"><button type="button" class="btn selected" data-value="14" aria-pressed="true">14 dní</button><button type="button" class="btn" data-value="30" aria-pressed="false">30 dní</button><button type="button" class="btn" data-value="90" aria-pressed="false">90 dní</button></div></div><svg id="pmcChart" class="chart" style="height:420px" viewBox="0 0 1000 420"></svg><div id="pmcInsight" class="notice" style="margin-top:10px"></div></div>

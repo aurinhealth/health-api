@@ -94,20 +94,21 @@ section{padding:110px 0}
 .ai .head h2 span{color:var(--muted)}
 .ai-grid{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:28px;align-items:center}
 .ai .phone{width:300px}
-.ai-card{padding:26px;border-radius:24px;background:color-mix(in srgb,var(--text) 6%,transparent);border:1px solid color-mix(in srgb,var(--text) 10%,transparent)}
+/* Small cards (assistant, steps, privacy) share one surface, radius and hairline in both themes. */
+.ai-card{padding:26px;border-radius:24px;background:var(--panel);border:1px solid var(--line);box-shadow:0 1px 2px color-mix(in srgb,#000 5%,transparent)}
 .ai-card+.ai-card{margin-top:20px}
 .ai-card .icon{width:24px;height:24px;color:var(--primary-text)}
 .ai-card h3{font-size:22px;margin:14px 0 8px;letter-spacing:-.02em}
 .ai-card p{color:var(--muted);font-size:16px}
 
 .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
-.step{padding:32px;border-radius:26px;background:var(--panel);border:1px solid var(--line)}
+.step{padding:32px;border-radius:24px;background:var(--panel);border:1px solid var(--line);box-shadow:0 1px 2px color-mix(in srgb,#000 5%,transparent)}
 .step b{display:block;font-size:56px;font-weight:700;letter-spacing:-.05em;line-height:1;background:linear-gradient(135deg,var(--primary),var(--sky));-webkit-background-clip:text;background-clip:text;color:transparent}
 .step h3{font-size:24px;margin:22px 0 8px;letter-spacing:-.02em}
 .step p{color:var(--muted);font-size:16px}
 
 .privacy{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
-.privacy .card{padding:32px;border-radius:26px;background:var(--panel);border:1px solid var(--line)}
+.privacy .card{padding:32px;border-radius:24px;background:var(--panel);border:1px solid var(--line);box-shadow:0 1px 2px color-mix(in srgb,#000 5%,transparent)}
 .privacy h3{font-size:22px;letter-spacing:-.02em;margin-bottom:14px}
 .privacy ul{margin:0;padding:0;list-style:none;display:grid;gap:12px}
 .privacy li{display:flex;gap:10px;color:var(--muted);font-size:16px}
