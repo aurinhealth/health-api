@@ -3,6 +3,7 @@ import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
 import {pragueToday} from './prague-date.js';
 import {trainingHistory,starterPlan} from './training-history.js';
+import {latestStoredWeight} from './athlete-weight.js';
 export async function ensureOnboarding(db){
   await db.prepare('CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT \'{}\')').run();
   await db.prepare('CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY(user_id,id))').run();
@@ -21,9 +22,9 @@ export async function onboardingStatus(env){
   const [row,saved,suggestions,weight,tracked]=await Promise.all([
     db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first(),
     db.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(db.userId).first(),readSuggestions(db,db.userId),
-    db.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type IN ('weight','weight-written') AND value_numeric>0 ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1").bind(db.userId).first(),hasRecentActivityData(db)]);
+    latestStoredWeight(db),hasRecentActivityData(db)]);
   const history=await trainingHistory(db),savedProfile=JSON.parse(saved?.profile_json||'{}');
-  const profile=effectiveProfile(savedProfile,{...suggestions,mainSport:history.mainSport});
+  const profile=effectiveProfile(savedProfile,suggestions);
   if(!profile.goal)profile.goal='maintain';
   const baseline=energyBaseline(profile,weight?.value_numeric,{activityTracked:tracked});
   const training=await trainingSetup(db);
@@ -50,7 +51,7 @@ export async function completeOnboarding(env,input={}){
   const oldTraining=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
   const profile=normalizeProfile({...previous,...input.profile,goal:input.profile?.goal||previous.goal||'maintain'}),training=normalizeTraining({...JSON.parse(oldTraining?.training_json||'{}'),...input.training});
   const supplied=input.weightKg!=null&&input.weightKg!=='';
-  const previousWeight=await db.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type IN ('weight','weight-written') AND value_numeric>0 ORDER BY COALESCE(sample_time,start_time) DESC LIMIT 1").bind(db.userId).first();
+  const previousWeight=await latestStoredWeight(db);
   const weight=supplied?Number(input.weightKg):previousWeight?.value_numeric;
   if(supplied&&(!Number.isFinite(weight)||weight<35||weight>250))throw new Error('Zadej platnou hmotnost od 35 do 250 kg.');
   const history=await trainingHistory(db);

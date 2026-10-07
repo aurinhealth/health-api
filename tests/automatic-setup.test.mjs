@@ -37,11 +37,11 @@ test('all setup details can be skipped without invented weight or calorie target
  assert.equal((await a.prepare('SELECT COUNT(*) n FROM week_plan_preferences WHERE user_id=?').bind(1).first()).n,0);
  assert.equal((await a.prepare('SELECT COUNT(*) n FROM health_datapoints WHERE user_id=?').bind(1).first()).n,0);
 });
-test('automatic focus and experience update after imports, while explicit choices and Plan budgets keep precedence',async()=>{
+test('imports update experience and Plan budgets while sport focus stays general until explicitly chosen',async()=>{
  const {raw,a}=db(),env={DB:a,USER_ID:1};await completeOnboarding(env);
  assert.equal((await loadEffectiveProfile(a,1)).mainSport,'general');
  for(let week=0;week<12;week++)for(let day=1;day<=4;day++)activity(raw,{days:week*7+day});
- assert.equal((await loadEffectiveProfile(a,1)).mainSport,'cycling');assert.equal((await trainingSetup(a)).experience,'experienced');assert.equal((await getWeekPlan(a)).automatic.source,'history');
+ assert.equal((await loadEffectiveProfile(a,1)).mainSport,'general');assert.equal((await trainingSetup(a)).experience,'experienced');assert.equal((await getWeekPlan(a)).automatic.source,'history');
  await completeOnboarding(env,{profile:{mainSport:'running'},training:{experience:'regular'}});
  assert.equal((await loadEffectiveProfile(a,1)).mainSport,'running');assert.equal((await trainingSetup(a)).experience,'regular');
  await saveWeekPlan(a,{availability:Array.from({length:7},()=>({minutes:20}))});

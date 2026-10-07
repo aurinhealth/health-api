@@ -92,7 +92,7 @@ export function calibratedMaxHeartRate(observed, age) {
 export async function intervalsRestingHeartRate(env, fetchImpl = fetch, now = Date.now()) {
   if (!env.INTERVALS_API_KEY) return null;
   const oldest = new Date(now - 30 * DAY_MS).toISOString().slice(0, 10), newest = new Date(now).toISOString().slice(0, 10);
-  const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
+  const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { signal: AbortSignal.timeout(8000), headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
   if (!response.ok) return null;
   const rows = await response.json().catch(() => []);
   const values = (Array.isArray(rows) ? rows : []).map(r => Number(r?.restingHR)).filter(v => v >= 25 && v <= 120);
@@ -177,6 +177,5 @@ export async function loadEffectiveProfile(db, userId) {
   const parsed = id => { try { return JSON.parse(rows.find(r => Number(r.id) === id)?.profile_json || "null"); } catch { return null; } };
   const saved = parsed(1), suggested = parsed(2);
   if(!saved&&!suggested)return null;
-  const history=await trainingHistory(db,userId);
-  return effectiveProfile(saved,{...suggested,mainSport:history.mainSport});
+  return effectiveProfile(saved,suggested);
 }

@@ -3,14 +3,19 @@ async function ensure(db){
 }
 export async function dashboardSyncStatus(db,name='dashboard_recent'){
   await ensure(db);
+  // waitUntil may be stopped by the runtime without a final status write.
+  // Recover abandoned app imports without expiring Google's batched queue.
+  await db.prepare("UPDATE sync_status SET status='error',finished_at=datetime('now') WHERE user_id=? AND status='running' AND (sync_name LIKE 'initial_%' OR sync_name='dashboard_recent') AND updated_at<datetime('now','-5 minutes')").bind(db.userId).run();
   const row=await db.prepare("SELECT status,details_json,updated_at FROM sync_status WHERE user_id=? AND sync_name=?").bind(db.userId,name).first();
   const google=await db.prepare("SELECT status FROM sync_status WHERE user_id=? AND sync_name='google'").bind(db.userId).first();
 
   let details={};try{details=JSON.parse(row?.details_json||'{}');}catch{/* Keep status visible. */}
-  const initial=(await db.prepare("SELECT status FROM sync_status WHERE user_id=? AND sync_name LIKE 'initial_%'").bind(db.userId).all()).results||[];
-  const running=google?.status==='running'||initial.some(r=>r.status==='running');
+  const initial=(await db.prepare("SELECT sync_name,status,details_json FROM sync_status WHERE user_id=? AND sync_name LIKE 'initial_%'").bind(db.userId).all()).results||[];
+  const running=row?.status==='running'||google?.status==='running'||initial.some(r=>r.status==='running');
   const partial=google?.status==='partial'||google?.status==='error'||initial.some(r=>r.status==='partial'||r.status==='error');
-  return {...details,status:running?'running':partial?'partial':row?.status||(initial.length?'done':'idle'),googleStatus:google?.status||null,updatedAt:row?.updated_at||null};
+  const results=[...(details.results||[])];
+  for(const run of initial){if(run.sync_name===name)continue;try{results.push(...(JSON.parse(run.details_json||'{}').results||[]));}catch{/* Older import without details. */}}
+  return {...details,results,status:running?'running':partial?'partial':row?.status||(initial.length?'done':'idle'),googleStatus:google?.status||null,updatedAt:row?.updated_at||null};
 }
 export async function startDashboardSync(db,ctx,work,name='dashboard_recent'){
   await ensure(db);const runId=crypto.randomUUID(),startedAt=new Date().toISOString();

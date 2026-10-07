@@ -1,3 +1,4 @@
+import {initialImport,recentDashboardImport} from './account-sync.js';
 import {reportFood} from './shared-foods.js';
 import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup} from './onboarding.js';
 import {subscriptionStatus,markAiIntroSeen,assertAIAccess} from './subscription.js';
@@ -125,24 +126,6 @@ async function forEachUser(env, providers, fn) {
   return results;
 }
 
-async function initialImport(env,ctx){
-  const providers=env.CONNECTED_PROVIDERS||[];if(!providers.length)return {status:'idle'};
-  const runs=[];
-  // Separate claims prevent a second connector from being lost during the first import.
-  for(const provider of providers){
-    const name='initial_'+provider;
-    await dashboardSyncStatus(env.DB);
-    const old=await env.DB.prepare('SELECT status FROM sync_status WHERE user_id=? AND sync_name=?').bind(env.USER_ID,name).first();
-    if(old?.status==='done')continue;
-    runs.push(await startDashboardSync(env.DB,ctx,async()=>{
-      const response=await legacyHealthApi.fetch(new Request('https://internal/sync/'+provider,{method:'POST'}),env,ctx);
-      const data=await response.json();if(!response.ok)throw new Error(L('Import se nepodařilo zahájit.', 'The import couldn\'t be started.'));
-      await refreshSuggestions(env,{googleToken,force:true}).catch(()=>null);await bumpCacheVersion(env.DB);await retryWorkoutExports(env);
-      return [{source:provider,status:provider==='google'?'queued':'done',importStatus:data.status}];
-    },name));
-  }
-  return {status:runs.length?'running':'done'};
-}
 
 const worker = {
   async scheduled(controller, env, ctx) {
@@ -1149,26 +1132,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     if(missingProviders(env).length===2)return Response.json({status:'idle',message:L('Žádná služba není propojená.', 'No service is connected.')});
     await initialImport(env,ctx);
-    const run=await startDashboardSync(env.DB,ctx,async()=>{
-      const providers=env.CONNECTED_PROVIDERS||[],jobs=[];
-      const collect=async(source,path)=>{
-        try{const response=await legacyHealthApi.fetch(new Request('https://internal'+path,{method:'POST',headers:internalAuth}),env,ctx),data=await response.json();return {source,status:response.ok?data.status||'ok':'error'};}
-        catch(error){console.error('Recent sync failed',source,error.message);return {source,status:'error'};}
-      };
-      if(providers.includes('google'))jobs.push(collect('google','/sync/google/recent'));
-      if(providers.includes('intervals'))jobs.push(collect('intervals','/sync/intervals/recent'));
-      const results=await Promise.all(jobs);
-      results.push(...await retryWorkoutExports(env));
-      results.push(await collect('matching','/sync/match'));
-      if(providers.includes('intervals')&&providers.includes('google')){
-        const outgoing=await Promise.allSettled([
-          syncWeights(env,{googleToken}),
-          syncWellnessToIntervals(env,{sleepSessions:(from,to)=>legacyHealthApi.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(to,1)),env,ctx).then(r=>r.json()).then(d=>d.sessions||[])})
-        ]);
-        outgoing.forEach((r,i)=>results.push({source:i?'wellness':'weight',status:r.status==='fulfilled'?'ok':'error'}));
-      }
-      return results;
-    });
+    const run=await startDashboardSync(env.DB,ctx,()=>recentDashboardImport(env,ctx));
     return Response.json({...run,status:'accepted'},{status:202,headers:{'Cache-Control':'no-store'}});
   }
 

@@ -9,7 +9,8 @@ import { sleepSessionFromRow } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
-import { writeIntervalsWeight } from "./weight-sync.js";
+import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
+import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
 import { dateFormat } from "./date-format.js";
 import { activityKindOf, pragueLocal } from "./coach-reflection.js";
@@ -470,6 +471,7 @@ async function intervalsGet(
     "https://intervals.icu/api/v1" +
     path,
     {
+      signal: AbortSignal.timeout(15000),
       headers: {
         "Authorization":
           intervalsAuth(env),
@@ -495,8 +497,7 @@ async function intervalsGet(
     throw new Error(
       "Intervals.icu HTTP " +
       response.status +
-      ": " +
-      JSON.stringify(data)
+      " (import)"
     );
   }
 
@@ -559,12 +560,18 @@ async function savePoint(
   endTime = null,
   externalId = null
 ) {
+  const id = externalId || payload.name || `${type}:${sampleTime || startTime || crypto.randomUUID()}`;
+  await pointStatement(env, source, type, payload, value, unit, sampleTime, startTime, endTime, id).run();
+  return id;
+}
+
+function pointStatement(env, source, type, payload, value = null, unit = null, sampleTime = null, startTime = null, endTime = null, externalId = null) {
   const id =
     externalId ||
     payload.name ||
     `${type}:${sampleTime || startTime || crypto.randomUUID()}`;
 
-  await env.DB
+  return env.DB
     .prepare(
       `INSERT INTO health_datapoints (
         user_id,
@@ -605,10 +612,7 @@ async function savePoint(
       value,
       unit,
       JSON.stringify(payload)
-    )
-    .run();
-
-  return id;
+    );
 }
 
 
@@ -1348,13 +1352,19 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}
       `/athlete/0/activities?oldest=${oldest}&newest=${newest}`
     );
 
+  if (!Array.isArray(activities)) throw new Error('Invalid Intervals activity response');
+  const statements = [];
+  const previous = activities.some(a => a?._note && !a.name && !a.type)
+    ? (await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND start_time>=?").bind(env.USER_ID,oldest).all()).results || [] : [];
+  const existingById = new Map(previous.map(row => [row.external_id, row]));
+
   let saved = 0;
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
-      const existing = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind(env.USER_ID,"activity:"+id).first();
+      const existing = existingById.get("activity:"+id);
       if (existing?.payload_json) {
         try {
           const previous=JSON.parse(existing.payload_json);
@@ -1363,7 +1373,7 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}
       }
     }
 
-    await savePoint(
+    statements.push(pointStatement(
       env,
       "intervals",
       "activity",
@@ -1381,10 +1391,14 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}
       activityStart(a),
       activityEnd(a),
       `activity:${id}`
-    );
+    ));
 
     saved++;
   }
+
+  // A year of activities must not turn into hundreds of sequential D1 calls
+  // inside a background request with a limited lifetime.
+  for (let i = 0; i < statements.length; i += 50) await env.DB.batch(statements.slice(i, i + 50));
 
   // Counts only: the activities themselves are health data, and this result
   // ends up in the public GitHub Actions log of the periodic sync.
@@ -1419,11 +1433,12 @@ async function syncIntervalsEvents(env) {
   if (!Array.isArray(events)) throw new Error('Invalid Intervals event response');
   const previous=(await env.DB.prepare("SELECT external_id,start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,oldest,rangeEnd).all()).results||[];
 
-  await env.DB.prepare(
+  const replace = env.DB.prepare(
     `DELETE FROM health_datapoints
      WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'planned-workout'
        AND start_time >= ? AND start_time < ?`
-  ).bind(env.USER_ID, oldest, rangeEnd).run();
+  ).bind(env.USER_ID, oldest, rangeEnd);
+  const statements = [];
 
   let saved = 0;
 
@@ -1448,7 +1463,7 @@ async function syncIntervalsEvents(env) {
       e.end_date ||
       null;
 
-    await savePoint(
+    statements.push(pointStatement(
       env,
       "intervals",
       "planned-workout",
@@ -1459,10 +1474,13 @@ async function syncIntervalsEvents(env) {
       start,
       end,
       `planned:${id}`
-    );
+    ));
 
     saved++;
   }
+
+  // Replace atomically so a storage failure preserves the previous calendar.
+  await env.DB.batch([replace, ...statements]);
 
   await reconcileCancelledGymPlans(env.DB, previous, events, dateDaysAgo(0));
   return {
@@ -1482,14 +1500,15 @@ async function syncIntervalsEvents(env) {
 // INTERVALS SYNC
 // ======================================================
 async function syncIntervals(env,options={}) {
-  const [activities,planned]=await Promise.all([syncIntervalsActivities(env,options),syncIntervalsEvents(env)]);
-
-  return Response.json({
-    status: "ok",
-    source: "intervals.icu",
-    activities,
-    planned
-  });
+  const names = ['activities', 'planned', 'weight'];
+  const settled = await Promise.allSettled([
+    syncIntervalsActivities(env,options), syncIntervalsEvents(env),
+    importIntervalsWeights(env,{days:options.activityDays ? CONFIG.weightDays : CONFIG.activityDays})
+  ]);
+  const parts = Object.fromEntries(settled.map((result,i) => [names[i], result.status === 'fulfilled'
+    ? result.value : {status:'error',message:result.reason?.message || 'Import failed'}]));
+  const failures = settled.filter(r => r.status === 'rejected').length;
+  return Response.json({status:failures === names.length ? 'error' : failures ? 'partial' : 'ok',source:'intervals.icu',...parts});
 }
 
 
@@ -2137,11 +2156,7 @@ async function energyForDate(env, date) {
     ORDER BY start_time
   `).bind(env.USER_ID, date, nextDate).all();
 
-  const weight = await env.DB.prepare(`
-    SELECT value_numeric, sample_time FROM health_datapoints
-    WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
-    ORDER BY sample_time DESC, id DESC LIMIT 1
-  `).bind(env.USER_ID).first();
+  const weight = await latestStoredWeight(env.DB, env.USER_ID);
   const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
   // Sport is estimated from the profile only when no source tracks activities.
   const activityTracked = await hasRecentActivityData(env.DB,env.USER_ID);

@@ -63,10 +63,11 @@ const intervalsAuth = env => ({ Authorization: intervalsAuthorization(env.INTERV
 
 // Weight per day from Intervals.icu wellness.
 export async function intervalsWeights(env, oldest, newest, fetchImpl = fetch) {
-  const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: intervalsAuth(env) });
+  const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: intervalsAuth(env), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error("Intervals wellness HTTP " + response.status);
   const rows = await response.json();
-  return Object.fromEntries((Array.isArray(rows) ? rows : []).map(r => [r.id, kg(r.weight)]).filter(([id, v]) => id && v != null));
+  if (!Array.isArray(rows)) throw new Error('Invalid Intervals wellness response');
+  return Object.fromEntries(rows.map(r => [r.id, kg(r.weight)]).filter(([id, v]) => /^\d{4}-\d{2}-\d{2}$/.test(id) && id >= oldest && id <= newest && v != null));
 }
 
 export async function writeIntervalsWeight(env, date, value, fetchImpl = fetch) {
@@ -86,11 +87,25 @@ export async function writeGoogleWeight(token, date, value, fetchImpl = fetch) {
   return body;
 }
 
-async function saveAppWeight(db, userId, date, value) {
+function appWeightStatement(db, userId, date, value) {
   const at = date + "T12:00:00+02:00";
-  await db.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json)
+  return db.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json)
     VALUES (?, 'intervals', 'weight', ?, ?, ?, ?, ?, 'kg', ?) ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET value_numeric = excluded.value_numeric, payload_json = excluded.payload_json`)
-    .bind(userId, "intervals-weight:" + date, at, at, at, value, JSON.stringify({ value_kg: value, source: "intervals" })).run();
+    .bind(userId, "intervals-weight:" + date, at, at, at, value, JSON.stringify({ value_kg: value, source: "intervals" }));
+}
+
+async function storeIntervalsWeights(env, weights) {
+  const statements = Object.entries(weights).map(([date, value]) => appWeightStatement(env.DB, env.USER_ID, date, value));
+  for (let i = 0; i < statements.length; i += 50) await env.DB.batch(statements.slice(i, i + 50));
+}
+
+// Read-only import: connecting a service must make its weights usable right
+// away, independently of activity/calendar access or outbound Google writes.
+export async function importIntervalsWeights(env, { days = 365, fetchImpl = fetch, now = Date.now() } = {}) {
+  const newest = pragueDay(new Date(now).toISOString()), oldest = pragueDay(new Date(now - (days - 1) * 86400000).toISOString());
+  const weights = await intervalsWeights(env, oldest, newest, fetchImpl);
+  await storeIntervalsWeights(env, weights);
+  return { weights_found: Object.keys(weights).length, weights_saved: Object.keys(weights).length };
 }
 
 // One sync pass for one user over the last WEIGHT_SYNC_DAYS days.
@@ -102,6 +117,9 @@ export async function syncWeights(env, { googleToken, fetchImpl = fetch, now = D
   const stored = await storedWeights(env.DB, env.USER_ID, oldest);
   const written = await writtenLedger(env.DB, env.USER_ID, oldest);
   const intervals = await intervalsWeights(env, oldest, newest, fetchImpl);
+  // Persist before attempting writes elsewhere: a Google outage must never
+  // delay the weight used by nutrition and the athlete profile.
+  await storeIntervalsWeights(env, intervals);
   const googleWritable = googleConnected && grantedExtras(env).weightWrite;
   const actions = planWeightSync({ ...stored, intervals, written }, { googleConnected, intervalsConnected, googleWritable });
   let token = null;
@@ -110,7 +128,7 @@ export async function syncWeights(env, { googleToken, fetchImpl = fetch, now = D
     try {
       if (action.target === "intervals") await writeIntervalsWeight(env, action.date, action.kg, fetchImpl);
       if (action.target === "google") await writeGoogleWeight(token ||= await googleToken(env), action.date, action.kg, fetchImpl);
-      if (action.target === "app") await saveAppWeight(env.DB, env.USER_ID, action.date, action.kg);
+      // The app copy was saved above even if the ledger already had an entry.
       await remember(env.DB, env.USER_ID, action.target, action.date, action.kg);
       done.push(action);
     } catch (error) { console.error("Weight sync failed", action.target, action.date, error.message); }

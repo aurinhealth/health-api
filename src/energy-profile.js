@@ -13,7 +13,7 @@ export const ACTIVITY_LEVELS = {
   heavy: { factor: 1.6, label: "Fyzicky náročná práce" }
 };
 
-// Hours of sport per week, used only when no activity source is connected.
+// Hours of sport per week, used when no recent activity data is available.
 export const SPORT_HOURS = { "0": 0, "1-3": 2, "3-6": 4.5, "6-10": 8, "10+": 12 };
 
 // Weekly weight change; 7700 kcal per kg.
@@ -83,7 +83,8 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     return { ready: false, source: null, missing, weightKg: weight > 0 ? weight : null };
   }
   const bmr = restingMetabolicRate(p, weight);
-  const sportDaily = activityTracked ? 0 : (SPORT_HOURS[p.sportHours]??0) * weight * SPORT_KCAL_PER_KG_HOUR / 7;
+  const sportHours = Object.hasOwn(SPORT_HOURS, p.sportHours) ? SPORT_HOURS[p.sportHours] : p.weeklyHours ?? 0;
+  const sportDaily = activityTracked ? 0 : sportHours * weight * SPORT_KCAL_PER_KG_HOUR / 7;
   return {
     ready: true,
     source: "profile",
@@ -150,10 +151,11 @@ export const MISSING_LABELS = bilingual({ weight: "váha", sex: "pohlaví", age:
 // The user's own values, with what the app worked out itself (height,
 // activity, resting and maximum heart rate, birth date) filling only the
 // empty fields. A birth date sets the age.
-export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax", "birthDate", "mainSport"];
+export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax", "birthDate"];
 export function effectiveProfile(saved, suggested) {
   const profile = { ...(saved || {}) };
   for (const key of SUGGESTED_FIELDS) if ((profile[key] == null || profile[key] === "") && suggested?.[key]) profile[key] = suggested[key];
+  profile.mainSport = normalizeFocus(profile).mainSport;
   if (ageFrom(profile.birthDate) != null) profile.age = ageFrom(profile.birthDate);
   return profile;
 }

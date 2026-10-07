@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 
 export function createD1() {
   const sqlite = new DatabaseSync(":memory:");
+  let batchTail = Promise.resolve();
   const statement = (sql, args = []) => ({
     sql, args,
     bind: (...values) => statement(sql, values),
@@ -13,14 +14,20 @@ export function createD1() {
   return {
     sqlite,
     prepare: sql => statement(sql),
-    async batch(statements) {
-      sqlite.exec("BEGIN");
-      try {
-        const results = [];
-        for (const s of statements) results.push(await s.run());
-        sqlite.exec("COMMIT");
-        return results;
-      } catch (error) { sqlite.exec("ROLLBACK"); throw error; }
+    batch(statements) {
+      // D1 serializes transactions; simultaneous connector batches must not
+      // try to BEGIN two transactions on this single SQLite connection.
+      const work = batchTail.then(async () => {
+        sqlite.exec("BEGIN");
+        try {
+          const results = [];
+          for (const s of statements) results.push(await s.run());
+          sqlite.exec("COMMIT");
+          return results;
+        } catch (error) { sqlite.exec("ROLLBACK"); throw error; }
+      });
+      batchTail = work.catch(() => {});
+      return work;
     },
     async exec(sql) { sqlite.exec(sql); return { count: 1 }; }
   };

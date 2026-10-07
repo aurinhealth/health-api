@@ -38,6 +38,12 @@ Základ cíle je osobní (`energy-profile.js`): klidový metabolismus podle Miff
 
 Věk se počítá z data narození v profilu, takže se aktualizuje sám.
 
+Pokud nejsou dostupné nedávné aktivity, výživa použije odhad sportu z profilu: zvolený rozsah „sport za týden“, případně „Čas na trénink · h týdně“ u hlavního sportu. Klidový tep není podmínkou kalorického cíle. Výpočty a průvodce berou poslední skutečné vážení ze všech uložených zdrojů podle času měření; technický záznam o odeslání váhy do služby není vážení.
+
+Hlavní sport, sportovní cíl a závod jsou volitelné. Výchozí zaměření je všeobecná kondice (General fitness), i pokud historie obsahuje převážně jeden sport. Uživatelova vlastní volba sportu a cíle specializuje trenéry a doporučení; tato pole nejsou podmínkou energetických výpočtů nebo používání aplikace.
+
+První import Intervals.icu načítá samostatně aktivity, kalendář a váhu z wellness za poslední rok. Obnovit načte i váhu za posledních 30 dní při propojení samotného Intervals.icu. Váha se ukládá přímo v aplikaci, i pokud zápis do Google Health není dostupný. Jedna neúspěšná část importu neblokuje ostatní; stav importu uvede neúspěšnou část a dostupná data se zobrazí i po částečném importu. Roční historie aktivit se ukládá dávkově; nahrazení kalendáře je atomické.
+
 **Regenerace, spánek a zátěž** počítá jeden model v `src/recovery-model.js` pro dashboard i trenéry (HRV jako lnRMSSD, klidový tep a spánek proti osobní 60denní baseline; potřeba spánku podle NSF; celodenní zátěž z tepových zón Google Health jako TRIMP). Klient nese jeho přesnou kopii: po změně modulu spusť `node scripts/sync-recovery-model.mjs`, test `tests/recovery-model.test.mjs` hlídá shodu. Metody a zdroje ke každé funkci jsou v `docs/methodology.md`. Jestli index regenerace u konkrétního sportovce sedí na průběh tréninků, ukáže `GET /app/api/recovery-validation` (přes více sportovců `scripts/recovery-validation-rmcorr.mjs`).
 
 **Apple Health** nemá webové API. Data z iPhonu a Apple Watch přicházejí přes Intervals.icu (aplikace IntervalsWellnessSync, Intervals Companion nebo Health Sync zapisují wellness do Intervals) nebo přes aplikaci Google Health na iPhonu (import z Apple Health). Noci, které Google Health nemá, doplní `/app/api/sleep` a trenér z wellness Intervals.icu (`intervals-sleep.js`: délka a skóre spánku, bez fází). Návod je v Nastavení u připojení.

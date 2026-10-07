@@ -9,15 +9,18 @@ import { reflectionInstructions } from "../src/coach-reflection.js";
 
 test("the main sport and goal are kept only with known values", () => {
   assert.deepEqual(normalizeFocus({ mainSport: "chess", sportGoal: "  FTP   300 W ", eventName: "x".repeat(200), eventDate: "2026-13-40", weeklyHours: 99 }),
-    { mainSport: "", sportGoal: "FTP 300 W", eventName: "x".repeat(120), eventDate: "", weeklyHours: null });
+    { mainSport: "general", sportGoal: "FTP 300 W", eventName: "x".repeat(120), eventDate: "", weeklyHours: null });
   const p = normalizeProfile({ mainSport: "running", eventDate: "2026-11-15", weeklyHours: "7.3" });
   assert.equal(p.mainSport, "running");
   assert.equal(p.eventDate, "2026-11-15");
   assert.equal(p.weeklyHours, 7.5);
 });
 
-test("without a focus the prompts stay as they are", () => {
-  assert.equal(athleteFocus({}, "2026-10-03"), null);
+test("without a focus all coaches use general fitness", () => {
+  const focus=athleteFocus({}, "2026-10-03");
+  assert.equal(focus.sport,'general');
+  assert.equal(focus.goal,null);
+  for(const base of [coachInstructions,reviewInstructions,reflectionInstructions])assert.match(withFocus(base,focus),/^Jsi profesionální trenér kondice \(vytrvalost i síla\)\./);
   assert.equal(withFocus(coachInstructions, null), coachInstructions);
 });
 
@@ -36,8 +39,19 @@ test("the coach's role and direction follow the main sport and goal", () => {
   }
   // A goal without a sport keeps the general role; a past race is left out.
   const general = withFocus(reviewInstructions, athleteFocus({ sportGoal: "zhubnout", eventDate: "2026-09-01" }, "2026-10-03"));
-  assert.match(general, /^Jsi trenér vytrvalostního sportovce/);
+  assert.match(general, /^Jsi profesionální trenér kondice/);
   assert.doesNotMatch(general, /Hlavní závod/);
+});
+
+test('the daily general fitness suggestion balances strength and endurance without selecting cycling by default',()=>{
+  const client=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
+  const source=client.slice(client.indexOf('function dailySport(){'),client.indexOf('function renderDailySports('));
+  const state={gym:{history:[]}},saved={};
+  const choose=new Function('state','savedProfile','pragueToday','activitySport','HUB_SPORTS','uiText',source+'return dailySport;')(state,()=>saved,()=> '2026-10-07',()=>null,{ride:'kolo',run:'běh',gym:'síla'},cs=>cs);
+  assert.equal(choose().sport,'gym');
+  state.gym.history=[{workout_date:'2026-10-06'}];assert.equal(choose().sport,'run');
+  saved.mainSport='cycling';assert.equal(choose().sport,'ride');
+  saved.mainSport='running';assert.equal(choose().sport,'run');
 });
 
 test("the dashboard has the settings card, the strain ring, week browsing and no rating for walks", () => {

@@ -13,13 +13,15 @@ se kalorický cíl nevymýšlí a zůstává nedostupný. Výchozí hmotnostní 
 udržování. Ruční odhad sportu není povinný. „Automaticky“ je dostupné až se
 skutečnou nedávnou historií obsahující délku aktivit, nikoli jen propojením.
 
-Hlavní sport je nejčastější druh dokončené aktivity za 56 dní; při rovnosti,
-bez aktivit nebo nepodporovaném dominantním sportu jde o všeobecnou kondici.
+Výchozí hlavní sport je všeobecná kondice (General fitness). Sport, sportovní
+cíl a závod jsou volitelné a neblokují fungování ani energetické výpočty.
+Specializaci zapne až vlastní volba uživatele. Historie dál sleduje nejčastější
+druh aktivity za 56 dní jako informaci o tréninku, ale nemění hlavní sport.
 Zkušenost je opatrný odhad pravidelnosti za 84 dní: alespoň 2 tréninky týdně
 a 6 aktivních týdnů znamená pravidelně sportujícího; alespoň 4 týdně a 10
 aktivních týdnů vyšší pravidelnost. Jinak začátečník. Jde o produktovou
 heuristiku, ne ověření technické zdatnosti nebo let zkušeností. Ruční volba má
-přednost. Automatické hodnoty se po importu znovu odvozují a nezafixují se
+přednost. Automatická zkušenost a objem se po importu znovu odvozují a nezafixují se
 v osobním profilu. Aktivita z více zdrojů se započítá jednou. Sportovní cíl
 může zůstat prázdný. FTP, tempo a zóny jsou volitelné.
 
