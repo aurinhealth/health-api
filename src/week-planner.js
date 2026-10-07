@@ -1,6 +1,7 @@
 import { readGymPlan } from "./gym-plan-store.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
 import { getAthleteState } from './athlete-state.js';
+import {trainingHistory,starterPlan} from './training-history.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
@@ -40,7 +41,7 @@ export function sanitizeWeekPlan(input = {}) {
     : DEFAULT_LOCATION;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
   if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error('Počet aktivit musí být 0 až 14.');
-  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days) };
+  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}) };
 }
 
 // The athlete's own length or place for one plan chip, keyed "weekday|sport|slot"
@@ -63,6 +64,17 @@ export async function getWeekPlan(db, date = null) {
   await ensure(db);
   const row = await db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first();
   let defaults; try { defaults = sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { defaults = sanitizeWeekPlan({}); }
+  // Onboarding does not collect availability. Until the athlete saves a time
+  // budget in Plan, use current history or the documented starting template.
+  if(defaults.availabilityMode==='auto'||defaults.availability.every(day=>day.minutes==null)){
+    const setup=await db.prepare('SELECT completed_at,training_json FROM user_setup WHERE user_id=?').bind(db.userId).first().catch(()=>null);
+    if(setup?.completed_at){
+      let training={};try{training=JSON.parse(setup.training_json||'{}');}catch{}
+      const history=await trainingHistory(db),experience=training.experience&&training.experience!=='auto'?training.experience:history.experience;
+      const automatic=starterPlan(history,experience);
+      defaults={...defaults,availability:automatic.availability,availabilityMode:'auto',weeklyActivities:defaults.weeklyActivities??automatic.weeklyActivities,automatic};
+    }
+  }
   if (!date) return defaults;
   await ensureWeekOverrides(db);
   const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();

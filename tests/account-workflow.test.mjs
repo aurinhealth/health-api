@@ -18,9 +18,10 @@ function setup(){const raw=createD1();raw.sqlite.exec(schema);const a=scopedDb(r
 const input=()=>({profile:{sex:'male',age:30,height:180,activity:'light',sportHours:'3-6',goal:'maintain',mainSport:'cycling',sportGoal:'Zlepšit kondici'},weightKg:80,training:{experience:'beginner',equipment:'dumbbells',limitations:'',availability:Array.from({length:7},()=>({minutes:60}))}});
 const food={name:'Test jogurt',brand:'Test',calories_100g:100,protein_100g:5,carbs_100g:11,fat_100g:4,nutrition_basis:'g'};
 const recipe={name:'Jogurtová svačina',servings:2,ingredients:[{name:'Jogurt',quantity:200,unit:'g',calories:200,protein_g:10,carbs_g:22,fat_g:8}]};
-test('account setup works without providers, persists per account and refuses an incomplete profile',async()=>{
+test('account setup works without providers, persists per account and allows skipping missing calorie data',async()=>{
  const {a,b,env}=setup();assert.equal((await onboardingStatus(env)).completed,false);
- const invalid=input();invalid.profile.sex='';await assert.rejects(completeOnboarding(env,invalid),/Doplň údaje/);assert.equal((await onboardingStatus(env)).completed,false);
+ const partial=input();partial.profile.sex='';const skipped=await completeOnboarding(env,partial);assert.equal(skipped.completed,true);assert.equal(skipped.baseline.ready,false);assert.ok(skipped.baseline.missing.includes('sex'));
+ await assert.rejects(completeOnboarding(env,{weightKg:500}),/hmotnost/);
  const result=await completeOnboarding(env,input());assert.equal(result.baseline.ready,true);assert.ok(result.baseline.sportDaily>0);
  assert.equal((await onboardingStatus(env)).completed,true);assert.equal((await onboardingStatus({...env,DB:b,USER_ID:2})).completed,false);
  await completeOnboarding(env,input());assert.equal((await a.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=? AND source_family='manual'").bind(1).first()).n,1);

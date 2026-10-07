@@ -49,7 +49,8 @@ test("an incomplete profile lists what is missing; the owner keeps the calibrati
 });
 
 test("without a connected source, weekly sport is part of the estimate", () => {
-  assert.deepEqual(energyBaseline(woman, 60, { activityTracked: false }).missing, ["sportHours"]);
+  assert.deepEqual(energyBaseline(woman, 60, { activityTracked: false }).missing, []);
+  assert.equal(energyBaseline(woman, 60, { activityTracked: false }).sportDaily, 0);
   const b = energyBaseline({ ...woman, sportHours: "3-6" }, 60, { activityTracked: false });
   assert.equal(b.sportDaily, Math.round(4.5 * 60 * 6 / 7));
   // With a connected source, tracked activities count instead.
@@ -131,6 +132,6 @@ test("the dashboard works without connections", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.doesNotMatch(entry, /status:"onboarding"/);
   assert.match(entry, /source:"none",connected:false/);
-  assert.match(client, /Pokračovat s ručními záznamy/);
+  assert.match(client, /Přeskočit a otevřít aplikaci/);
   assert.match(client, /me\.onboarding\?\.completed===true/);
 });

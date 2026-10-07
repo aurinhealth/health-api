@@ -162,7 +162,7 @@ test("feedback changes only the reviewer's capability", async () => {
   const result = await recordWorkoutFeedback(alice, { workoutId: "pfd-thr-3x12-90", scheduledDate: "2026-10-01", completedPercent: 100, rpe: 6 });
   assert.ok(result.after > result.before);
   assert.equal((await getCapabilities(alice)).threshold.level, result.after);
-  assert.equal((await getCapabilities(bob)).threshold.level, 3);
+  assert.equal((await getCapabilities(bob)).threshold.level, 1);
   await assert.rejects(recordWorkoutFeedback(alice, { workoutId: "pfd-thr-3x12-90", scheduledDate: "2026-10-01", rpe: 6 }), /už má uložené/);
 });
 

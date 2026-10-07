@@ -10,6 +10,7 @@
 import { effectiveProfile, ageFrom } from "./energy-profile.js";
 import { grantedExtras, birthdayScopes } from "./google-scopes.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
+import {trainingHistory} from './training-history.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -131,7 +132,8 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
   const current = await readSuggestions(env.DB, env.USER_ID);
   // A newly granted permission refreshes right away instead of the next day.
   const permissions = JSON.stringify(grantedExtras(env));
-  if (!force && current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return current;
+  const history=await trainingHistory(env.DB,env.USER_ID,{now});
+  if (!force && current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return {...current,mainSport:history.mainSport,trainingHistory:history};
   const averageSteps = await averageDailySteps(env.DB, env.USER_ID, now).catch(() => null);
   const rhr = await averageRestingHeartRate(env.DB, env.USER_ID, now).catch(() => null)
     ?? await intervalsRestingHeartRate(env, fetchImpl, now).catch(() => null);
@@ -152,6 +154,8 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
   try { savedProfile = JSON.parse(saved?.profile_json || "null"); } catch { savedProfile = null; }
   const { hrmax, source: hrmaxSource } = calibratedMaxHeartRate(observed, effectiveProfile(savedProfile, { birthDate }).age);
   const next = {
+    mainSport:history.mainSport,
+    trainingHistory:history,
     height,
     activity: activityFromSteps(averageSteps),
     averageSteps,
@@ -172,5 +176,7 @@ export async function loadEffectiveProfile(db, userId) {
   const rows = (await db.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = ? AND id IN (1, 2)").bind(userId).all().catch(() => ({ results: [] }))).results || [];
   const parsed = id => { try { return JSON.parse(rows.find(r => Number(r.id) === id)?.profile_json || "null"); } catch { return null; } };
   const saved = parsed(1), suggested = parsed(2);
-  return saved || suggested ? effectiveProfile(saved, suggested) : null;
+  if(!saved&&!suggested)return null;
+  const history=await trainingHistory(db,userId);
+  return effectiveProfile(saved,{...suggested,mainSport:history.mainSport});
 }

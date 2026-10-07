@@ -55,7 +55,7 @@ export function normalizeProfile(p = {}) {
     hrmax: inRange(p.hrmax, 100, 230),
     rhr: inRange(p.rhr, 25, 120),
     activity: Object.hasOwn(ACTIVITY_LEVELS, p.activity) ? p.activity : "",
-    sportHours: Object.hasOwn(SPORT_HOURS, p.sportHours) ? p.sportHours : "",
+    sportHours: p.sportHours==='auto'||Object.hasOwn(SPORT_HOURS, p.sportHours) ? p.sportHours : "",
     goal: Object.hasOwn(GOALS, p.goal) ? p.goal : "",
     targetWeight: inRange(p.targetWeight, 35, 250),
     ...normalizeFocus(p)
@@ -74,7 +74,6 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   const missing = [];
   if (!(weight > 0)) missing.push("weight");
   for (const key of ["sex", "age", "height", "activity", "goal"]) if (!p[key]) missing.push(key);
-  if (!activityTracked && !p.sportHours) missing.push("sportHours");
   const goal = GOALS[p.goal] || GOALS["lose_0.5"];
   if (missing.length) {
     // The owner keeps the calibrated baseline until the profile is complete;
@@ -83,7 +82,7 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
     return { ready: false, source: null, missing, weightKg: weight > 0 ? weight : null };
   }
   const bmr = restingMetabolicRate(p, weight);
-  const sportDaily = activityTracked ? 0 : SPORT_HOURS[p.sportHours] * weight * SPORT_KCAL_PER_KG_HOUR / 7;
+  const sportDaily = activityTracked ? 0 : (SPORT_HOURS[p.sportHours]??0) * weight * SPORT_KCAL_PER_KG_HOUR / 7;
   return {
     ready: true,
     source: "profile",
@@ -138,7 +137,7 @@ export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "datum na
 // The user's own values, with what the app worked out itself (height,
 // activity, resting and maximum heart rate, birth date) filling only the
 // empty fields. A birth date sets the age.
-export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax", "birthDate"];
+export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax", "birthDate", "mainSport"];
 export function effectiveProfile(saved, suggested) {
   const profile = { ...(saved || {}) };
   for (const key of SUGGESTED_FIELDS) if ((profile[key] == null || profile[key] === "") && suggested?.[key]) profile[key] = suggested[key];

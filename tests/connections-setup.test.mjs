@@ -142,14 +142,14 @@ test("connecting Google from the setup window returns to it; cancelling there is
   assert.equal(connectReturnUrl("setup", "unknown"), "/app#setup");
 });
 
-test("the setup window uses the service cards, returns from the providers and ends with the calorie target", () => {
+test("the setup window keeps provider cards and lets prefilled profiles bypass extra setup steps", () => {
   assert.match(entry, /missingProviders:missingProviders\(env\),onboarding,ai\}/);
   assert.match(client, /providers\.map\(p=>serviceCardHtml\(p,'setup'\)\)/);
   assert.match(client, /wireIntervalsKey\(\$\('setupBody'\)/);
   // The provider pages return to the step the user left.
   assert.match(client, /'return='\+back/);
-  assert.match(client, /await renderSetupDone\(\$\('setupBody'\)\)/);
-  assert.match(client, /\$\('restartSetup'\)\.onclick=\(\)=>showAccountSetup\(\)/);
+  assert.match(client, /if\(!edit&&setup\.baseline\.ready\)return finish\(\)/);
+  assert.match(client, /\$\('restartSetup'\)\.onclick=\(\)=>showAccountSetup\(\{edit:true\}\)/);
 });
 
 test("data kept on the device belongs to the signed-in account", async () => {

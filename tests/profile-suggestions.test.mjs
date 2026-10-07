@@ -60,9 +60,9 @@ test("suggestions are stored once a day and never override saved values", async 
   assert.deepEqual([s.height, s.activity, s.averageSteps], [165, "light", 6400]);
   await refreshSuggestions(env, { ...deps, now: NOW + 3600000 });
   assert.equal(calls, 1);
-  assert.deepEqual(effectiveProfile({ height: 170, activity: "" }, s), { height: 170, activity: "light" });
+  assert.deepEqual(effectiveProfile({ height: 170, activity: "" }, s), { height: 170, activity: "light",mainSport:'general' });
   d.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify({ sex: "female", age: 30, goal: "maintain" }));
-  assert.deepEqual(await loadEffectiveProfile(d, 7), { sex: "female", age: 30, goal: "maintain", height: 165, activity: "light" });
+  assert.deepEqual(await loadEffectiveProfile(d, 7), { sex: "female", age: 30, goal: "maintain", height: 165, activity: "light",mainSport:'general' });
 });
 
 test("with height and activity from Google, only sex, age and goal are asked", async () => {

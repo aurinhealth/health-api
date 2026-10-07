@@ -1,5 +1,5 @@
 import {reportFood} from './shared-foods.js';
-import {onboardingStatus,completeOnboarding,trainingSetup} from './onboarding.js';
+import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup} from './onboarding.js';
 import {subscriptionStatus,assertAIAccess} from './subscription.js';
 import {listRecipes,saveRecipe,deleteRecipe,searchRecipes} from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
@@ -533,11 +533,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai},{headers:{"Cache-Control":"no-store"}});
   }
   if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json(await subscriptionStatus(env),{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/training-setup'){
+    if(request.method==='GET')return Response.json({status:'ok',training:await trainingSetup(env.DB)},{headers:{'Cache-Control':'no-store'}});
+    if(request.method==='PATCH'){
+      if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+      try{const training=await updateTrainingSetup(env.DB,await request.json());await bumpCacheVersion(env.DB);return Response.json({status:'ok',training});}catch(error){return Response.json({message:error.message},{status:400});}
+    }
+  }
   if(url.pathname==='/app/api/onboarding'){
     if(request.method==='GET')return Response.json(await onboardingStatus(env),{headers:{'Cache-Control':'no-store'}});
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
-      try{const result=await completeOnboarding(env,await request.json());const prefs=await getWeekPlan(env.DB);await saveWeekPlan(env.DB,{...prefs,availability:result.training.availability});await bumpCacheVersion(env.DB);const sync=await initialImport(env,ctx);return Response.json({...result,sync});}
+      try{const result=await completeOnboarding(env,await request.json());await bumpCacheVersion(env.DB);const sync=await initialImport(env,ctx);return Response.json({...result,sync});}
       catch(error){return Response.json({message:error.message},{status:400});}
     }
   }

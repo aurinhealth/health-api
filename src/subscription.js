@@ -9,7 +9,7 @@ export const SUBSCRIPTION_FEATURES = [
   {name:'AI hodnocení dne, týdne a odcvičeného tréninku', ai:true},
   {name:'Rozpoznání jídla a etikety z fotky pomocí AI', ai:true},
   {name:'AI zápis jídla vlastními slovy a webové dohledání potravin', ai:true},
-  {name:'Nové návody na cviky vytvořené pomocí AI', ai:true}
+  {name:'AI doplnění chybějící techniky cviku mimo katalog', ai:true}
 ];
 export async function subscriptionStatus(env) {
   const enforced = env.AI_PAYWALL_ENABLED === 'true';
