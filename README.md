@@ -17,23 +17,20 @@ Na produkci se nasazuje jen přes GitHub Actions (`.github/workflows/deploy-work
 
 ## Jak teče požadavek
 
-`src/entrypoint.js` je vstupní bod Workeru. Řeší přihlášení (`dashboard-auth.js`), uživatele (`tenancy.js`), dashboard API (`/app/api/*`), MCP (`/mcp`) a automatizace (`/automation/*`). Co nezpracuje sám, posílá dál vrstvami, z nichž každá přepisuje pár cest a zbytek předá níž:
+`src/entrypoint.js` je vstupní bod Workeru. Řeší přihlášení (`dashboard-auth.js`), uživatele (`tenancy.js`), dashboard API (`/app/api/*`), MCP (`/mcp`) a automatizace (`/automation/*`). Co nezpracuje sám, posílá dál:
 
 ```
-entrypoint.js → strength-gateway.js → v400.js → v323fix.js → v323.js → index.js
+entrypoint.js → strength-gateway.js → index.js
 ```
 
-- `strength-gateway.js`: síla, výživa, denní plán, rozhodnutí dne (`/strength/*`, `/nutrition/*`, `/daily/plan`, …).
-- `v400.js`: `/analysis/energy`, `/analysis/day-plan`, `/food/day-plan`.
-- `v323fix.js`: opravuje klasifikaci plánovaných tréninků z Intervals.icu pro všechny cesty pod sebou.
-- `v323.js`: `/food/recommend` (doporučení jídel k osobnímu cíli) a kontext tréninku k `/analysis/energy`.
-- `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, deník jídla, cron.
+- `strength-gateway.js`: síla, výživa, denní plán, rozhodnutí dne (`/strength/*`, `/nutrition/*`, `/daily/plan`, …) a `/food/recommend` (návrhy jídel k osobnímu cíli z `food-recommend.js`).
+- `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, `/analysis/energy`, deník jídla, cron.
 
 Vzhled dashboardu: barvy rozhraní jsou tokeny v `src/design-system.js` (načítá se jako poslední vrstva CSS), ikony jsou jedna SVG sada v `src/icons.js`. Ostatní odstíny se z tokenů míchají, např. `color-mix(in srgb,var(--text) 12%,var(--bg))`; barvu natvrdo pro plochy, čáry a šedé texty test `tests/design-tokens.test.mjs` nepustí. Světlý vzhled jen předefinuje tokeny (`:root[data-theme="light"]` a stejná sada pro systémové nastavení). Bez volby se vzhled řídí nastavením zařízení. Přepínač Světlý / Tmavý v horní liště nebo Nastavení ho přepíše přes cookie `lw-theme`, kterou stránka čte ještě před vykreslením; volba stejného vzhledu, jaký má zařízení, cookie smaže. Barvy dat v grafech (makra, fáze spánku, zóny) zůstávají u grafů.
 
 Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`. Berou stejné tokeny a přepínač vzhledu jako aplikace. Snímky obrazovek jsou v `public/site/` (statické soubory Workeru, každý ve světlé i tmavé verzi) (`phone-*` z mobilu 390×844 @2x, `today-*` z počítače) a vznikají ze sandboxu `scripts/sandbox-preview.mjs`. Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
 
-Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `strength-gateway.js`, ne do vrstev `v*.js`. Ty se postupně ruší.
+Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `strength-gateway.js`.
 
 Kalorický cíl, který vidí uživatel, je vyšší ze dvou hodnot (`applyEnergyBudget` v `energy-budget.js`): očekávaný den z profilu (`nutrition.calorieTarget` z `/analysis/daily`) a průběžný rozpočet z aktivní energie naměřené Google Health. Ráno tak cíl neleží na minimu a během aktivního dne roste.
 

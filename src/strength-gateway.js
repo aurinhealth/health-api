@@ -1,4 +1,5 @@
-import app from "./v400.js";
+import app from "./index.js";
+import { foodRecommend } from "./food-recommend.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { getStrengthHistory, parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
@@ -57,6 +58,7 @@ export default {
     if (url.pathname === "/nutrition/food/update" && request.method === "POST") return updateFoodRoute(env, request);
     if (url.pathname === "/nutrition/food/cancel" && request.method === "POST") return cancelFoodRoute(env, request);
     if (url.pathname === "/cycling/context" && request.method === "GET") return cyclingContextRoute(env, url);
+    if (url.pathname === "/food/recommend") return foodRecommend(env, url);
     return app.fetch(request, env, ctx);
   }
 };

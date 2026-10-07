@@ -3,7 +3,6 @@ import { getCookbook } from "./cookbook.js";
 import { completedMealTypes, nextUnloggedMeals } from "./nutrition-next.js";
 import { dateFormat } from "./date-format.js";
 
-const V323 = "final-5-cookbook-v3.2.3";
 const PROTEIN_PER_KG = 2.0;
 const FAT_PER_KG = 0.8;
 const ENDURANCE_CARB_PER_KG = 5.0;
@@ -32,11 +31,19 @@ function durationHours(payload, start = null, end = null) {
   return duration || null;
 }
 
+// Intervals.icu tags single workout steps with intensity=interval; that must
+// not make a whole Endurance/Z2 workout an interval session.
+function workoutText(payload) {
+  const description = String(payload.description || "");
+  const enduranceNamed = /\b(endurance|z1|z2|recovery|easy)\b/.test(String(payload.name || payload.title || "").toLowerCase());
+  return enduranceNamed ? description.replace(/\s*intensity\s*=\s*interval\b/gi, "") : description;
+}
+
 function plannedInfo(row) {
   const payload = JSON.parse(row.payload_json || "{}");
   const type = payload.type || payload.activity_type || payload.category || "";
   const name = payload.name || payload.title || payload.description || "";
-  const text = `${type} ${name} ${payload.description || ""}`.toLowerCase();
+  const text = `${type} ${name} ${workoutText(payload)}`.toLowerCase();
   const cycling = ["ride", "bike", "cycling", "cycle", "gravel", "mountain bike", "mtb", "road cycling", "indoor cycling"]
     .some(x => text.includes(x));
   const intensity = [
@@ -199,7 +206,9 @@ function recommendationReason(recipe, remaining, context, maxMinutes) {
   return reasons.slice(0, 3).join(", ");
 }
 
-async function foodRecommendV323(env, url) {
+// Meal suggestions for the week view: the next unlogged meals fitted to what is
+// left of the personal target from index.js (/analysis/energy).
+export async function foodRecommend(env, url) {
   const date = url.searchParams.get("date") || dateFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
   const [energyResponse, foodResponse] = await Promise.all([
     legacy.fetch(new Request(new URL(`/analysis/energy?date=${encodeURIComponent(date)}`, url).toString()), env),
@@ -310,7 +319,6 @@ async function foodRecommendV323(env, url) {
 
   return Response.json({
     status: "ok",
-    version: V323,
     date,
     foodTotals: food.totals,
     calorieTarget,
@@ -328,39 +336,3 @@ async function foodRecommendV323(env, url) {
     storeAlternatives
   });
 }
-
-async function analysisEnergyV323(env, url) {
-  const date = url.searchParams.get("date") || dateFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
-  const response = await legacy.fetch(new Request(new URL(`/analysis/energy?date=${encodeURIComponent(date)}`, url).toString()), env);
-  const data = await response.json();
-  const context = await loadTrainingContext(env, date);
-  // TDEE and the target come from index.js, which already prices planned
-  // rides by intensity and uses the personal baseline.
-  return Response.json({
-    ...data,
-    version: V323,
-    final: {
-      ...data.final,
-      estimatedPlannedRideCalories: context.plannedRideCalories,
-      plannedRideHours: context.plannedRideHours,
-      plannedEnduranceRideHours: context.plannedEnduranceRideHours
-    },
-    trainingContext: context
-  });
-}
-
-export default {
-  async scheduled(controller, env, ctx) {
-    return legacy.scheduled(controller, env, ctx);
-  },
-
-  async fetch(request, env) {
-    const url = new URL(request.url);
-    if (url.pathname === "/") {
-      return Response.json({ status: "ok", service: "health-api", version: V323 });
-    }
-    if (url.pathname === "/food/recommend") return await foodRecommendV323(env, url);
-    if (url.pathname === "/analysis/energy") return await analysisEnergyV323(env, url);
-    return legacy.fetch(request, env);
-  }
-};
