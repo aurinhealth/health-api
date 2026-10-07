@@ -1,6 +1,7 @@
 {
   "name": "health-api",
-  "main": "src/entrypoint.js",
+  // main.js is entrypoint.js behind HTTPS and security headers (web-security.js).
+  "main": "src/main.js",
   "rules": [
     {
       "type": "Text",
@@ -9,6 +10,12 @@
     }
   ],
   "compatibility_date": "2026-09-15",
+  // Local development of an environment with a route (wrangler dev --env staging)
+  // shows the Worker the route's address; https, as in production, so the
+  // HTTPS redirect in web-security.js does not send the page back to itself.
+  "dev": {
+    "upstream_protocol": "https"
+  },
   // Screenshots for the overview page on /. A request matching a file here never reaches the Worker.
   "assets": {
     "directory": "./public"

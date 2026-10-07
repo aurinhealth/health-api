@@ -21,6 +21,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # The repository and its Actions logs are public, so the steps below print
+      # only a summary (status and counts) of each response, never the body.
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts
+          sparse-checkout-cone-mode: true
+
       - name: Request GitHub OIDC token
         id: oidc
         shell: bash
@@ -48,11 +56,12 @@ jobs:
             code="${response##*$'\n'}"
             body="${response%$'\n'*}"
             if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
-              printf '%s\n' "$body"
+              node scripts/ci-summary.mjs <<< "$body"
               break
             fi
             if [ "$attempt" -eq 3 ]; then
-              printf '%s\n' "$body"
+              echo "HTTP $code"
+              node scripts/ci-summary.mjs <<< "$body"
               exit 1
             fi
             sleep $((attempt * 20))
@@ -68,9 +77,9 @@ jobs:
           response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://petrfitnessdata.eu/automation/planned-calories" || true)"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
-          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { printf '%s\n' "$body"; exit 1; }
-          printf '%s\n' "$body"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d' <<< "$body"
+          node scripts/ci-summary.mjs <<< "$body"
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { echo "HTTP $code"; exit 1; }
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status"))' <<< "$body"
 
       # The daily "Nutrition — date" notes are no longer written to Intervals.icu;
       # this removes any that are left from today on.
@@ -84,11 +93,11 @@ jobs:
           response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/automation/nutrition-notes" || true)"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
+          node scripts/ci-summary.mjs <<< "$body"
           if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
-            printf '%s\n' "$body"
-            python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d' <<< "$body"
+            python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status"))' <<< "$body"
           else
-            printf '%s\n' "$body"
+            echo "HTTP $code"
             exit 1
           fi
 

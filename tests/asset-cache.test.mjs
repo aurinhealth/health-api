@@ -32,6 +32,7 @@ test("switching the day does not read the whole history again", () => {
   assert.match(client, /const DAY_INDEPENDENT=\['athleteState','fitness','weight','activities','nutrition','sleep'\]/);
   assert.match(client, /markDataChanged\(path\)/);
   // The saved day on this device goes away with the session.
-  assert.match(client, /async function logout\(\)\{forgetDashboard\(\);/);
-  assert.match(client, /function showLoginGate\(\)\{if\(\$\("loginGate"\)\)return;forgetDashboard\(\);/);
+  assert.match(client, /async function logout\(\)\{forgetAccount\(\);/);
+  assert.match(client, /function showLoginGate\(\)\{if\(\$\("loginGate"\)\)return;forgetAccount\(\);/);
+  assert.match(client, /function forgetAccount\(\)\{forgetDashboard\(\);/);
 });

@@ -102,5 +102,6 @@ jobs:
           )"
           response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/automation/strength")"
           code="${response##*$'\n'}"
-          printf '%s\n' "${response%$'\n'*}" | head -c 4000
+          # Public log: a summary only, never the plan itself.
+          node scripts/ci-summary.mjs <<< "${response%$'\n'*}"
           [ "$code" -ge 200 ] && [ "$code" -lt 300 ] || { echo "HTTP $code"; exit 1; }

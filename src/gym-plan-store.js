@@ -90,8 +90,12 @@ export function planValues(body = {}) {
     const r = Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => row?.[i] == null ? "" : row[i]);
     const options=strengthSetOptions({toFailure:r[11],superset:r[12]});
     r[11]=options.toFailure?'TRUE':'FALSE';r[12]=options.superset;
-    // Sheet-era hyperlink formulas and placeholders become a plain link.
-    if (!/^https?:\/\//i.test(String(r[10])) && r[1]) r[10] = String(r[10]).match(/HYPERLINK\(\s*"([^"]+)"/i)?.[1] || videoUrl(r[1]);
+    // Sheet-era hyperlink formulas and placeholders become a plain link; only
+    // http(s), so a javascript: link never reaches the Video button.
+    if (!/^https?:\/\//i.test(String(r[10])) && r[1]) {
+      const link = String(r[10]).match(/HYPERLINK\(\s*"([^"]+)"/i)?.[1] || "";
+      r[10] = /^https?:\/\//i.test(link) ? link : videoUrl(r[1]);
+    }
     return r;
   });
   return [...header, ...sets];

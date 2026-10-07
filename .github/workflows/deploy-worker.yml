@@ -121,10 +121,12 @@ jobs:
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
           if [ "$code" != "200" ]; then
+            # The repository and its Actions logs are public: a summary of the
+            # response and the Worker's outcome and exceptions, never the plan
+            # itself, the request headers or the Worker's own log lines.
             echo "HTTP $code"
-            printf '%s\n' "$body" | head -c 4000
+            node scripts/ci-summary.mjs <<< "$body"
             sleep 5
-            # Outcome, timing, exceptions and logs only; headers are not printed.
             python - "$RUNNER_TEMP/tail.jsonl" <<'PY' || true
           import json, sys, re
           text = open(sys.argv[1], encoding="utf-8", errors="ignore").read()
@@ -138,12 +140,12 @@ jobs:
                   i = m.start() + 1
           for e in events:
               req = (e.get("event") or {}).get("request") or {}
-              print(json.dumps({"url": str(req.get("url", "")).split("?")[0], "outcome": e.get("outcome"), "cpuTime": e.get("cpuTime"), "wallTime": e.get("wallTime"), "exceptions": e.get("exceptions"), "logs": [l.get("message") for l in e.get("logs") or []][-20:]}, ensure_ascii=False)[:3000])
+              print(json.dumps({"url": str(req.get("url", "")).split("?")[0], "outcome": e.get("outcome"), "cpuTime": e.get("cpuTime"), "wallTime": e.get("wallTime"), "exceptions": [str(x.get("name", "")) + ": " + str(x.get("message", ""))[:300] for x in e.get("exceptions") or []]}, ensure_ascii=False)[:3000])
           PY
             head -c 2000 "$RUNNER_TEMP/tail.err" || true
             exit 1
           fi
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert d.get("preview") is True, d; p=d.get("plan") or {}; assert p.get("rows"), p; assert p.get("loadEstimates") is not None, p' <<< "$body"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", "status="+str(d.get("status")); assert d.get("preview") is True, "not a preview"; p=d.get("plan") or {}; assert p.get("rows"), "plan has no rows"; assert p.get("loadEstimates") is not None, "plan has no load estimates"' <<< "$body"
 
       - name: Smoke test food resolution
         env:
@@ -153,7 +155,7 @@ jobs:
           set -euo pipefail
           body='{"name":"Milbona High Protein Pudding","brand":"Milbona","calories_100g":81,"protein_100g":10,"carbs_100g":6.4,"fat_100g":1.6,"fiber_100g":0.7,"salt_100g":0.28}'
           resolved="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" -X POST -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/food/resolve")"
-          python -c 'import json,sys; d=json.load(sys.stdin); p=d.get("product") or {}; assert d.get("status")=="ok",d; assert d.get("match")=="package_label",d; assert p.get("calories_100g")==81,p; assert p.get("protein_100g")==10,p; assert p.get("fiber_100g")==0.7,p; assert p.get("salt_100g")==0.28,p' <<< "$resolved"
+          python -c 'import json,sys; d=json.load(sys.stdin); p=d.get("product") or {}; assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("match")=="package_label","match="+str(d.get("match")); assert [p.get(k) for k in ("calories_100g","protein_100g","fiber_100g","salt_100g")]==[81,10,0.7,0.28],"label values differ"' <<< "$resolved"
 
       - name: Smoke test daily plan
         env:
@@ -162,7 +164,7 @@ jobs:
         run: |
           set -euo pipefail
           plan="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/daily/plan")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert "training" in d and "nutrition" in d and "food" in d and "meals" in d' <<< "$plan"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert "training" in d and "nutrition" in d and "food" in d and "meals" in d, "daily plan is missing a part"' <<< "$plan"
 
       - name: Smoke test Google Health nutrition
         env:
@@ -171,7 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           body="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok",d; assert d.get("data_type")=="nutrition-log",d' <<< "$body"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("data_type")=="nutrition-log","data_type="+str(d.get("data_type"))' <<< "$body"
 
       - name: Smoke test dashboard
         env:
@@ -198,7 +200,7 @@ jobs:
           activities="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/activities")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "activities" in d' <<< "$activities"
           week="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,d' <<< "$week"
+          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,"days="+str(len(d.get("days",[])))' <<< "$week"
 
       - name: Smoke test MCP endpoint
         shell: bash
