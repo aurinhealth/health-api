@@ -70,21 +70,28 @@ test('saving a workout asks no question; the click or the approval is the decisi
 });
 
 test('a rated session shows a tick instead of the Hodnocení button', () => {
-  const state = { reflections: {}, ratedSessions: new Set() };
-  const context = vm.createContext({uiText:cs=>cs, state, Number, String });
+  const state = { reflections: {}, ratedSessions: new Map() };
+  const context = vm.createContext({uiText:cs=>cs, state, Number, String, fmt:(v,d=0)=>Math.round(Number(v)*10**d)/10**d });
   vm.runInContext(slice('// A finished session already rated', '// Walks are everyday movement'), context);
+  const label = r => vm.runInContext('ratedLabel(r)', Object.assign(context, { r }));
   const rated = x => vm.runInContext('sessionRated(x)', Object.assign(context, { x }));
   const ride = { name: 'Sweet Spot', date: '2026-10-05', a: { name: 'Sweet Spot' }, daySessions: 2 };
   assert.equal(rated(ride), false);
-  assert.equal(rated({ ...ride, a: { payload: { icu_rpe: 6 } } }), true);
+  assert.equal(rated({ ...ride, a: { payload: { icu_rpe: 6 } } }), 6);
+  assert.equal(label(6), '✓ RPE 6');
+  assert.equal(label(true), '✓ ohodnoceno');
   state.reflections['2026-10-05'] = [{ rpe: 7, notes: 'Gym: těžké nohy' }];
   assert.equal(rated(ride), false);
   state.reflections['2026-10-05'].push({ rpe: 6, notes: 'Sweet Spot: dobré' });
-  assert.equal(rated(ride), true);
+  assert.equal(rated(ride), 6);
+  state.reflections['2026-10-05'].push({ rpe: null, notes: 'Run: lehké' });
+  assert.equal(rated({ ...ride, name: 'Run' }), true);
   // The only session of a day with a rating is that session.
   state.reflections['2026-10-04'] = [{ rpe: 5, notes: null }];
-  assert.equal(rated({ name: 'Run', date: '2026-10-04', a: {}, daySessions: 1 }), true);
-  state.ratedSessions.add('2026-10-03|Long ride');
-  assert.equal(rated({ name: 'Long ride', date: '2026-10-03', a: {}, daySessions: 3 }), true);
-  assert.match(source, /sessionRated\(x\)\?'<span class="today-rated">'\+uiText\('✓ ohodnoceno','✓ rated'\)\+'<\/span>'/);
+  assert.equal(rated({ name: 'Run', date: '2026-10-04', a: {}, daySessions: 1 }), 5);
+  state.ratedSessions.set('2026-10-03|Long ride', 8);
+  assert.equal(rated({ name: 'Long ride', date: '2026-10-03', a: {}, daySessions: 3 }), 8);
+  state.ratedSessions.set('2026-10-03|Gym', null);
+  assert.equal(rated({ name: 'Gym', date: '2026-10-03', a: {}, daySessions: 3 }), true);
+  assert.match(source, /'<span class="today-rated" data-no-i18n>'\+esc\(ratedLabel\(r\)\)\+'<\/span>'/);
 });

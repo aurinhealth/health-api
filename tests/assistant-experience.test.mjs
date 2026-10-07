@@ -66,6 +66,13 @@ test('morning summary combines fresh sleep, yesterday load and current form with
   const r=buildCoachCouncil({date,sleepSessions:[{date,durationMin:330}],fitness:{tsb:-28},yesterday:{training:{completed:[{name:'Ride',durationHours:3,tss:180}]}}});
   assert.match(r.morningSummary.text,/5 h 30 min/);assert.match(r.morningSummary.text,/180 TSS/);assert.match(r.morningSummary.recommendation,/rezervu/);
   assert.equal(buildCoachCouncil({date,sleepSessions:[{date:'2026-09-01',durationMin:480}]}).morningSummary,null);
+  // The client waits for last night's sleep and starts the card at the wake-up time.
+  assert.deepEqual(r.morningSummary.sleepSync,{tracked:true,today:true,wokeAt:null});
+  const woke=buildCoachCouncil({date,sleepSessions:[{endTime:date+'T05:40:00Z',durationMin:420}],fitness:{tsb:-5}}).morningSummary.sleepSync;
+  assert.deepEqual(woke,{tracked:true,today:true,wokeAt:date+'T05:40:00Z'});
+  const waiting=buildCoachCouncil({date,sleepSessions:[{date:'2026-10-03',durationMin:420}],fitness:{tsb:-5}}).morningSummary.sleepSync;
+  assert.deepEqual(waiting,{tracked:true,today:false,wokeAt:null});
+  assert.equal(buildCoachCouncil({date,fitness:{tsb:-5}}).morningSummary.sleepSync.tracked,false);
 });
 test('partial structured answer handles quotes, Unicode and unfinished escapes',()=>{
   assert.equal(partialCoachAnswer('{"answer":"Ahoj\\nZměň \\"cvik\\"'),'Ahoj\nZměň "cvik"');

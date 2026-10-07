@@ -7,7 +7,8 @@ import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
 import app from "./strength-gateway.js";
 import { buildCoachCouncil } from "./coach-engine.js";
-import { trainingStatus } from './training-status.js';
+import { buildRideReview } from "./ride-review.js";
+import { buildRunReview } from "./run-review.js";
 import { handleMcpCompat } from "./mcp-compat.js";
 import { deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
@@ -20,8 +21,7 @@ import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
-import {activityDetail} from './activity-detail.js';
-import {rideReviewSections} from './ride-analysis.js';
+import {activityDetail,rideIntervals} from './activity-detail.js';
 import {getCookbookRecipeByPage} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
@@ -76,6 +76,7 @@ import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { removePlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
+import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
 import { applyGymSwap } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
 import { assistantStreamResponse } from './assistant-stream.js';
@@ -401,6 +402,26 @@ const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+
 // around it, gym history, sleep and Google Health.
 // Cached for a few minutes per user and day; any change the user makes resets it.
 function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
+// The recorded intervals of a day's completed rides and runs, keyed by activity id (one
+// small Intervals.icu request per ride, cached).
+const isRideType=a=>/^(Ride|VirtualRide|EBikeRide|Cycling|MountainBikeRide|GravelRide|Run|VirtualRun|TrailRun|Treadmill)$/i.test(a?.type||'');
+async function rideDetailsFor(env,ctx,training){
+  return Object.fromEntries(await Promise.all((training?.completed||[]).filter(isRideType).slice(0,3).map(a=>{
+    const id=String(a.payload?.id||String(a.id).replace(/^activity:/,''));
+    return cached(env,ctx,'ride-intervals:'+id,()=>rideIntervals(env,id),{ttl:21600}).then(x=>[a.id,x],()=>[a.id,null]);
+  })));
+}
+// The same ride and run reviews the Today screen shows, compact, for the AI coach.
+async function rideReviewsForCoach(env,ctx,training,date,wellness,thresholds=null){
+  const rides=(training?.completed||[]).filter(isRideType).slice(0,3);if(!rides.length)return [];
+  const details=await rideDetailsFor(env,ctx,training).catch(()=>({})),rows=Array.isArray(wellness)?wellness:[],latest=rows.filter(r=>String(r.id||'')<=date).at(-1)||{};
+  const tsb=latest.ctl!=null&&latest.atl!=null?Number(latest.ctl)-Number(latest.atl):null;
+  return rides.map(a=>{
+    const plan=(training.matched||[]).find(m=>String(m.actualId)===String(a.id))?.planned||null;
+    const input={activity:a,detail:details[a.id],plan,wellness:rows,fitness:{tsb},date},r=/run|treadmill/i.test(a.type||'')?buildRunReview({...input,thresholdPace:thresholds?.runThresholdPace}):buildRideReview(input);
+    return {date,type:a.type||null,name:a.name||null,plan:plan?.name||null,verdict:r.verdict,target:r.target,blocks:r.table,findings:Object.fromEntries(r.sections.map(x=>[x.kind,x.items]))};
+  });
+}
 async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
@@ -459,12 +480,19 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
     workoutId?getWorkout(env.DB,workoutId).catch(()=>null):null,
     dashboardProfile(env).catch(()=>null)
   ]);
+  // The next two days' plan, so the coach knows whether tomorrow is a rest day or a hard session.
+  const nextDays=await Promise.all([1,2].map(async k=>{const d=shiftDate(date,k);
+    const [daily,gym]=await Promise.all([app.fetch(new Request('https://internal/analysis/daily?date='+d,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})),readGymPlan(env.DB,d).catch(()=>null)]);
+    const planned=(daily.training?.planned||[]).filter(p=>!/nutrition|note/i.test(String(p.category||''))).map(p=>({name:p.name||null,type:p.type||null,minutes:Number(p.durationHours)>0?Math.round(Number(p.durationHours)*60):null,tss:Number(p.tss)>0?Math.round(Number(p.tss)):null}));
+    const gymName=gym?.stored?String(gym.values?.[2]?.[3]||'Posilovna'):null;
+    if(gymName&&!planned.some(p=>/weight|strength|gym/i.test(String(p.type||''))))planned.push({name:gymName,type:'WeightTraining',minutes:null,tss:null});
+    return {date:d,planned,restDay:!planned.length};}));
   // One night per day: the longest session ending that day.
   const nights=new Map();for(const s of sleep.sessions||[]){const d=s.date||String(s.endTime||'').slice(0,10);if(d&&(!nights.has(d)||Number(s.durationMin)>Number(nights.get(d).durationMin)))nights.set(d,{date:d,durationMin:Number(s.durationMin)||null});}
   return {
     workout:workout?{id:workout.id,name:workout.name,system:workout.primary_system,sport:workout.sport,durationMinutes:workout.duration_minutes}:null,
     activities:dedupeActivities(activityRows.map(activityFromRow)),
-    wellness:fitness.wellness||[],sleep:[...nights.values()],food,recentFeedback,focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB)
+    wellness:fitness.wellness||[],sleep:[...nights.values()],food,recentFeedback,nextDays,focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB)
   };
 }
 
@@ -675,6 +703,25 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
+  // Recovery sessions (stretching) the athlete adds to a day from the coach's note.
+  if(url.pathname==='/app/api/recovery'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const day=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))&&!Number.isNaN(Date.parse(v+'T12:00:00Z'));
+    try{
+      if(request.method==='GET'){const from=day(url.searchParams.get('from'))?url.searchParams.get('from'):shiftDate(pragueToday(),-7),to=day(url.searchParams.get('to'))?url.searchParams.get('to'):shiftDate(pragueToday(),14);
+        return Response.json({status:'ok',sessions:await listRecovery(env.DB,{from,to})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      const body=await request.json().catch(()=>({}));
+      if(request.method==='POST'){
+        if(!day(body.date)||body.date<shiftDate(pragueToday(),-1)||body.date>shiftDate(pragueToday(),14))return Response.json({message:L('Vyber den od včerejška do dvou týdnů dopředu.', 'Choose a day from yesterday up to two weeks ahead.')},{status:400});
+        const sport=['ride','run','gym'].includes(body.sport)?body.sport:null;
+        return Response.json({status:'ok',session:await addRecovery(env.DB,{date:body.date,sport,focus:String(body.focus||'').slice(0,200),note:String(body.note||'').slice(0,1000)})},{headers:{'Cache-Control':'no-store'}});
+      }
+      const id=Number(body.id);if(!Number.isInteger(id)||id<1)return Response.json({message:L('Chybí záznam.', 'The entry is missing.')},{status:400});
+      if(request.method==='PATCH'){await updateRecovery(env.DB,id,{done:Boolean(body.done)});return Response.json({status:'ok'});}
+      if(request.method==='DELETE'){await updateRecovery(env.DB,id,{remove:true});return Response.json({status:'ok'});}
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
   // The coach's notes: listed per day; a POST asks for a note on a day now.
   if(url.pathname==='/app/api/coach/reflections'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -796,6 +843,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,thresholds,profile:inputs.profile,focus,sport:engineSport(focus,selected.appContext),now:pragueNow(),availabilityByDate:safety.availabilityByDate});
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek});
+        const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
+        const reviews=await rideReviewsForCoach(env,ctx,reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
+        if(reviews.length)coachCtx.completedRideReviews=reviews;
         if(blockHistory)Object.assign(coachCtx,{blockHistory,blockFitness:inputs.fitness.wellness||[],historyPeriod:{from:shiftDate(date,-84),to:date,source:'cached activities; missing records remain unknown'}});
       }else focus=await dashboardProfile(env).then(profile=>athleteFocus(profile,date)).catch(()=>null);
       Object.assign(coachCtx,{userInitiated:true,athleteState:athleteState.status,statusNote:athleteState.note,statusUntil:athleteState.statusUntil,preferenceMemory:memory?[...new Set([...(athleteState.memories||[]),memory])]:athleteState.memories,conversation});
@@ -1037,23 +1087,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const requestedDate=url.searchParams.get('date'),date=validTrainingDay(requestedDate)&&requestedDate<=shiftDate(pragueToday(),14)?requestedDate:pragueToday(),ahead=date>pragueToday(),oldest=shiftDate(date,-14);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const fitnessJob=env.INTERVALS_API_KEY?fetch('https://intervals.icu/api/v1/athlete/0/wellness?oldest='+oldest+'&newest='+date,{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'}}).then(r=>r.ok?r.json():[]).catch(()=>[]):[];
-      const [daily,yesterday,sleepData,rows,profile,athleteState,gym,thresholds]=await Promise.all([
-        read('/analysis/daily?date='+date),read('/analysis/daily?date='+shiftDate(date,-1)),
+      // A completed ride's intervals (one small Intervals.icu request, cached)
+      // let its review compare every step with the plan.
+      const dailyJob=read('/analysis/daily?date='+date);
+      const rideJob=dailyJob.then(d=>rideDetailsFor(env,ctx,d.training)).catch(()=>({}));
+      const [daily,yesterday,sleepData,rows,profile,athleteState,gym,thresholds,rideDetails]=await Promise.all([
+        dailyJob,read('/analysis/daily?date='+shiftDate(date,-1)),
         read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)).then(d=>withIntervalsSleep(env,d,oldest,shiftDate(date,1))),fitnessJob,dashboardProfile(env),
         date>=pragueToday()?getAthleteState(env.DB):{status:'active',note:'',statusUntil:null},readGymPlan(env.DB,date).catch(()=>null),
-        cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null)
+        cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),rideJob
       ]);
+      // The gym review compares logged sets with earlier sessions of the same exercises.
+      const strengthHistory=(gym?.values||[]).slice(7).some(r=>/^(true|1)$/i.test(String(r?.[8]??'')))?await getStrengthHistory(env.DB,500).catch(()=>[]):[];
       const latest=Array.isArray(rows)&&rows.length?rows.filter(r=>String(r.id||'')<=date).at(-1)||{}:{};
       const fitness={...latest,tsb:latest.ctl!=null&&latest.atl!=null?Number(latest.ctl)-Number(latest.atl):null};
-      const council=buildCoachCouncil({date,daily,yesterday,fitness,sleepSessions:sleepData.sessions||[],athleteState,focus:athleteFocus(profile,date),gym,thresholds,ahead});
-      // Performance streams belong to a requested detailed review, not every
-      // page load or background refresh.
-      if(url.searchParams.get('details')==='1')await Promise.all((daily.training?.completed||[]).filter(a=>/^(Ride|VirtualRide|EBikeRide|Cycling|MountainBikeRide|GravelRide)$/i.test(a.type||'')).slice(0,2).map(async a=>{
-        const response=await activityDetail(request,env,String(a.id).replace(/^activity:/,''),true);if(!response.ok)return;
-        const detail=await response.json(),review=council.reviews.find(r=>r.id==='review-'+a.id);if(!review)return;
-        const policy=trainingStatus(athleteState),sections=rideReviewSections(detail.analysis).filter(s=>s.label==='Tréninkový dopad a další krok'||s.label==='Intenzita a rovnoměrnost').slice(0,2);
-        review.analysis=sections.map(s=>policy.paused&&s.label==='Tréninkový dopad a další krok'?{...s,text:policy.guidance[0]}:s);
-      }));
+      const council=buildCoachCouncil({strengthHistory,date,daily,yesterday,fitness,sleepSessions:sleepData.sessions||[],athleteState,focus:athleteFocus(profile,date),gym,thresholds,ahead,rideDetails,wellness:Array.isArray(rows)?rows:[]});
       return Response.json({status:'ok',date,...council,athleteState:{status:athleteState.status,note:athleteState.note,statusUntil:athleteState.statusUntil}},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }

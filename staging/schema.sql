@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS "d1_migrations"(
 CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id));
 
 CREATE TABLE IF NOT EXISTS exercise_videos (user_id INTEGER NOT NULL, exercise TEXT NOT NULL, url TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, exercise));
+CREATE TABLE IF NOT EXISTS recovery_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, items_json TEXT NOT NULL, done_at TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS fluid_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,6 +205,7 @@ CREATE INDEX IF NOT EXISTS assistant_messages_chat ON assistant_messages(chat_id
 CREATE INDEX IF NOT EXISTS idx_coach_inbox_user_0 ON coach_inbox(user_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_coach_reflections_user_date ON coach_reflections(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_recovery_sessions_user_date ON recovery_sessions(user_id, date);
 
 CREATE INDEX IF NOT EXISTS idx_fluid_log_user_date ON fluid_log(user_id, date);
 

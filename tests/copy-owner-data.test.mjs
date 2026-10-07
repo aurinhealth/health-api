@@ -95,6 +95,17 @@ test("a finished copy is not repeated, a refresh replaces what staging has", asy
   assert.equal(staging.prepare("SELECT COUNT(*) AS n FROM health_datapoints").get().n, 12);
 });
 
+test("a refresh removes the old rows in small pieces, each in its own file", async () => {
+  const live = liveDatabase(), staging = stagingDatabase();
+  await copy(live, staging);
+  const result = await buildCopy({ query: sqliteQuery({ live, staging }), source: "live", target: "staging", ownerEmail: OWNER, refresh: true, deleteRows: 5 });
+  const deletes = result.files.filter(text => /DELETE FROM "health_datapoints"/.test(text));
+  assert.equal(deletes.length, 3);
+  for (const text of deletes) assert.equal((text.match(/DELETE FROM "health_datapoints"/g) || []).length, 1);
+  for (const text of result.files) staging.exec(text);
+  assert.equal(staging.prepare("SELECT COUNT(*) AS n FROM health_datapoints").get().n, 12);
+});
+
 test("an interrupted refresh is finished by the next run", async () => {
   const live = liveDatabase(), staging = stagingDatabase();
   await copy(live, staging);

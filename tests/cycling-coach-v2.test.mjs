@@ -68,7 +68,7 @@ test("coach context embeds v2 engine and keeps explicit non-affiliation",()=>{
     health:{},gym:{history:[]}
   });
   assert.equal(context.cyclingCoachV2.version,"cycling-coach-v2.0-predeploy");
-  assert.match(coachInstructions,/Nejsi zaměstnanec týmu UAE/);
+  assert.match(coachInstructions,/Nejsi zaměstnanec žádného profesionálního týmu/);
   assert.match(coachInstructions,/TrainerRoad, JOIN nebo Xert/);
 });
 

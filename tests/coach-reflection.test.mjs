@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { reflectionSignals, rulesReflection, createReflection, listReflections, activityFromRow, dedupeActivities, pragueLocal, reflectionInput } from "../src/coach-reflection.js";
+import { reflectionSignals, rulesReflection, createReflection, listReflections, activityFromRow, dedupeActivities, pragueLocal, reflectionInput, reflectionInstructions } from "../src/coach-reflection.js";
 
 const DATE = "2026-10-03";
 const day = i => new Date(Date.parse(DATE + "T12:00:00Z") - i * 86400000).toISOString().slice(0, 10);
@@ -103,13 +103,25 @@ test("the AI input is compact and keeps notes as data", () => {
   assert.ok(input.last14Days.every(a => a.date < DATE));
 });
 
+test("the coach sees the next two days' plan and suggests recovery that fits", () => {
+  const s = scenario(), nextDays = [{ date: "x1", planned: [], restDay: true }, { date: "x2", planned: [{ name: "Sweet Spot", type: "Ride", minutes: 90, tss: 95 }], restDay: false }, { date: "x3", planned: [], restDay: true }];
+  const input = reflectionInput({ ...s, signals: reflectionSignals(s), food: [], previous: [], nextDays });
+  assert.deepEqual(input.nextDays.map(d => d.restDay), [true, false]);
+  assert.match(reflectionInstructions, /zítra restDay, napiš, že má zítra volný den/);
+  assert.match(reflectionInstructions, /Nevymýšlej trénink, který v plánu není/);
+  assert.match(reflectionInstructions, /protažení nebo mobilita .*3–4 cviky/);
+  assert.match(reflectionInstructions, /Vybírej volně z celé škály/);
+  assert.match(reflectionInstructions, /masáž.*ledová lázeň, kompresní návleky/);
+  assert.match(reflectionInstructions, /Sauna, vířivka a ledová lázeň ne při nemoci/);
+});
+
 test("RPE feedback starts the coach's note in the background and the dashboard shows it", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(entry, /if\(reflect\)ctx\.waitUntil\(createReflection\(/);
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
   assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
-  assert.match(client, /cls:'coach',title:uiText\('Kouč','Coach'\)/);
+  assert.match(client, /x\.rating\?ratingCard\(x\)/);
   assert.match(client, /\$\('timelineCoach'\)\.onclick=\(\)=>openCoachSheet\(date\)/);
   assert.match(client, /awaitReflection\(body\.scheduledDate\)/);
 });

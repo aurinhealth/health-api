@@ -21,7 +21,7 @@ export const OWNER_TABLES = [
   "training_capabilities", "workout_feedback", "coach_reflections", "fluid_log",
   "workout_schedule_links", "training_profile", "week_plan_preferences",
   "week_plan_overrides", "athlete_state", "assistant_chats", "assistant_messages",
-  "exercise_videos"
+  "exercise_videos", "recovery_sessions"
 ];
 // Catalogues without personal data.
 export const SHARED_TABLES = ["shared_foods", "workout_library"];
@@ -31,6 +31,9 @@ export const SHARED_TABLES = ["shared_foods", "workout_library"];
 export const DONE_KEY = "owner_data_copied_at";
 
 const PAGE_ROWS = 5000;
+// A refresh removes the owner's old rows in pieces, each imported on its own:
+// one DELETE over a million rows runs past D1's time limit for a statement.
+const DELETE_ROWS = 25000;
 const MAX_STATEMENT_BYTES = 90_000;     // D1 allows 100 KB per statement
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // one import each
 
@@ -98,6 +101,11 @@ export class SqlFiles {
     this.current = [];
     this.currentBytes = 0;
   }
+  // Ends the current file, so what follows is imported separately.
+  cut() {
+    this.flushInsert();
+    this.endFile();
+  }
   finish() {
     this.flushInsert();
     this.endFile();
@@ -118,7 +126,7 @@ async function ownerId(query, db, email) {
 }
 
 // query(db, sql, params) answers { columns, rows } like D1's /raw endpoint.
-export async function buildCopy({ query, source, target, ownerEmail, refresh = false, log = () => {}, files = new SqlFiles(), pageRows = PAGE_ROWS }) {
+export async function buildCopy({ query, source, target, ownerEmail, refresh = false, log = () => {}, files = new SqlFiles(), pageRows = PAGE_ROWS, deleteRows = DELETE_ROWS }) {
   const email = String(ownerEmail || "").trim().toLowerCase();
   if (!email) throw new Error("OWNER_EMAIL is not set");
   const sourceOwner = await ownerId(query, source, email);
@@ -146,7 +154,13 @@ export async function buildCopy({ query, source, target, ownerEmail, refresh = f
       log(`${table.name}: not in both databases, skipped`);
       continue;
     }
-    if (refresh) files.statement(`DELETE FROM ${quoteName(table.name)}` + (table.owner ? ` WHERE user_id = ${targetOwner}` : ""));
+    if (refresh && table.owner) {
+      const have = Number((await query(target, `SELECT COUNT(*) FROM ${quoteName(table.name)} WHERE user_id = ?`, [targetOwner])).rows[0]?.[0]) || 0;
+      for (let left = have; left > 0; left -= deleteRows) {
+        files.statement(`DELETE FROM ${quoteName(table.name)} WHERE rowid IN (SELECT rowid FROM ${quoteName(table.name)} WHERE user_id = ${targetOwner} LIMIT ${deleteRows})`);
+        files.cut();
+      }
+    } else if (refresh) files.statement(`DELETE FROM ${quoteName(table.name)}`);
     const userAt = columns.indexOf("user_id");
     let last = null, copied = 0;
     for (;;) {

@@ -53,7 +53,7 @@ test("food for another day gets its meal's usual time, today keeps the time of l
 
 test("a day ahead has no coach notes and its timeline uses only notes of that day", () => {
   assert.match(entrypoint, /if\(date&&!validDay\(date\)\)return Response\.json\(\{status:'ok',reflections:\[\]\}/);
-  assert.match(client, /\(state\.reflections\?\.\[date\]\|\|\[\]\)\.filter\(r=>!r\.date\|\|r\.date===date\)/);
+  assert.match(client, /\(state\.reflections\?\.\[selectedHistoryDate\]\|\|\[\]\)\.filter\(r=>!r\.date\|\|r\.date===selectedHistoryDate\)/);
 });
 
 test("the endurance coach names the purpose, the steady watts, the cadence work and the heart-rate cap", () => {
