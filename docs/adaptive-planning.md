@@ -60,6 +60,12 @@ Nové tabulky `week_plan_overrides` a `athlete_state` vznikají při použití f
 
 ## Detail tréninku v týdnu
 
+Knihovna nabízí tři řazení: doporučený pestrý výběr, nejtěžší první a nejbližší délka. Max. obtížnost je vždy horní limit. Explicitní délka s tolerancí je povolené rozmezí (90 ±30 = 60–120 minut); uvnitř má přesná délka menší váhu, aby se nabízely i kratší a delší varianty. Doporučený výběr střídá rodiny, délky a umístění kvality mezi podobně vhodnými kandidáty (do 12 bodů od nejlepšího zbývajícího skóre), stále s ohledem na připravenost, odhad úrovně a kvalitní dny. Obsahuje také prahové bloky na konci, dvě stoupání se Z2 mezi nimi a závěrečné VO₂, nástupy nebo sprinty.
+
+„Odhad pro tento typ“ je interní odhad zvládnutelné obtížnosti, zvlášť pro každý systém. Bez hodnocení vychází ze zkušeností v profilu: začátečník 1, běžně 3, zkušený 4 z 10. Není to měření VO₂max nebo FTP. Zpřesňuje se po hodnocení odjetých workoutů, samotné spárování aktivity úroveň nezvyšuje.
+
+Předepsané intervaly mají výkonový cíl a kadenci v exportu do Intervals.icu pro indoor i outdoor. Venkovní převod nemění řízené 30s nástupy nebo mikrointervaly na maximální sprinty. Skutečné maximální úseky jsou výslovně označené `free` a exportují se jako `freeride` s pokynem naplno a bez pevného procenta FTP; orientační intenzita slouží jen pro profil a odhad zátěže. RPM se exportuje i jako rozsah, například `55-65rpm` pro silovou vytrvalost.
+
 Klik na trénink v týdenním přehledu otevře jeho detail. Naplánované kolo nebo běh vypadá jako karta doporučeného tréninku: profil výkonu, délka, TSS, IF, FTP a rozpis kroků (z workoutu knihovny, ze kterého vznikl, jinak z workout_doc nebo textu události v Intervals.icu; `src/planned-detail.js`, `/app/api/workouts/planned`). Gym ukáže postavu se zvýrazněnými partiemi podle počtu sérií a krátký seznam cviků. Akce u naplánovaného: Přesunout, Vyměnit za jiný (nový trénink z doporučení nahradí původní) a Zrušit. U hotového je porovnání s plánem (délka, TSS, IF a celkové hodnocení) a celý záznam aktivity: čísla, trasa, výkon, tep a intervaly; u posilovny plán proti zapsaným sériím a postava podle odcvičených sérií. Kartička týdenního plánu se pro sport, který už má v daný den naplánovaný nebo hotový trénink, nezobrazuje.
 
 ## Technika cviků

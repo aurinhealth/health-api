@@ -1,5 +1,5 @@
-// Sport-neutral structured workout model. Intensity is always a percentage of
-// the athlete's threshold: % FTP for cycling, % threshold pace for running.
+// Sport-neutral structured workout model. Prescribed intensity is a percentage
+// of threshold; power on free efforts is only an estimate for load and charts.
 // Steps: {durationMinutes, power, [powerStart, powerEnd, ramp], cadence, note, free}
 // Blocks: a step, or {repeats, steps:[...]}.
 
@@ -79,11 +79,12 @@ export function difficultyFromStructure(system, structure = [], sport = "ride") 
   const anchors = sport === "run" ? RUN_ANCHORS : ANCHORS;
   const a = anchors[system] || anchors.endurance;
   const steps = flattenSteps(structure);
+  const lateStart = Math.min(sport === "run" ? 60 : 90, Math.max(30, totalMinutes(structure) * .6));
   let work = 0, weighted = 0, rest = 0, elapsed = 0, lateWork = 0;
   const inWork = s => n(s.power, 0) >= a.lo;
   for (const s of steps) {
     const d = n(s.durationMinutes, 0), p = n(s.power, 0);
-    if (inWork(s)) { work += d; weighted += d * p; if (elapsed >= (sport === "run" ? 60 : 90)) lateWork += d; }
+    if (inWork(s)) { work += d; weighted += d * p; lateWork += Math.max(0, elapsed + d - Math.max(elapsed, lateStart)); }
     elapsed += d;
   }
   // Recovery between work steps inside interval blocks gives the density.
@@ -113,15 +114,15 @@ export function outdoorWidth(power, sport = "ride") {
   return sport === "run" ? (p >= 96 ? 2 : p >= 89 ? 3 : 4) : (p >= 106 ? 4 : p >= 76 ? 3 : 5);
 }
 function stepTarget(s, { sport, environment }) {
+  if (s.free) return "freeride";
   const unit = sport === "run" ? "% Pace" : "%";
   const width = environment === "outdoor" ? outdoorWidth(s.power, sport) : 0;
   if (s.ramp && n(s.powerStart) != null && n(s.powerEnd) != null) return "ramp " + Math.round(s.powerStart) + "-" + Math.round(s.powerEnd) + unit;
   const p = Math.round(n(s.power, 55));
-  if (s.free) return sport === "run" ? p + "% Pace" : p + "% max";
   return width ? (p - width) + "-" + (p + width) + unit : p + unit;
 }
 function stepLine(s, opts) {
-  const cadence = opts.sport === "ride" && s.cadence && opts.environment !== "outdoor" ? " " + String(s.cadence).replace(/[^0-9-]/g, "") + "rpm" : "";
+  const cadence = opts.sport === "ride" && s.cadence ? " " + String(s.cadence).replace(/[–—]/g, "-").replace(/[^0-9-]/g, "") + "rpm" : "";
   const note = s.note ? " " + s.note : "";
   return "- " + stepDuration(n(s.durationMinutes, 0)) + " " + stepTarget(s, opts) + cadence + note;
 }
@@ -138,15 +139,14 @@ export function intervalsText(structure = [], { sport = "ride", environment = "i
 }
 
 // Converts a (trainer-style) workout for riding or running outside: longer
-// warm-up, rounded step lengths, very short efforts become free efforts and
-// micro-intervals get a terrain hint. Indoor keeps the exact prescription.
+// warm-up, rounded step lengths and terrain hints for micro-intervals.
+// Only explicitly free efforts are all-out; % FTP does not determine intent.
 export function adaptStructure(structure = [], environment = "indoor", sport = "ride", system = null) {
   if (environment !== "outdoor") return structure;
   const roundStep = s => {
     const d = n(s.durationMinutes, 0);
     const rounded = d >= 3 ? Math.round(d * 2) / 2 : d >= 1 ? Math.round(d * 4) / 4 : Math.max(sec(10), Math.round(d * 12) / 12);
     const out = { ...s, durationMinutes: rounded };
-    if (sport !== "run" && (n(s.power, 0) >= 151 || (n(s.power, 0) >= 121 && d <= sec(30)))) { out.free = true; out.note = "sprint naplno, vyšší převod"; }
     return out;
   };
   const out = structure.map(block => Array.isArray(block.steps)
@@ -177,7 +177,7 @@ export function environmentNotes(environment, sport = "ride", system = null, tag
     ? ["Zvol rovinatou trasu; do kopců lehký převod, ať výkon nepřeleze horní hranici pásma.", "Rozsah výkonu je orientační – důležitější je nízké úsilí a klidný tep.", "Vyhni se skupinovým jízdám, kde se tempo snadno zvedne."]
     : ["Na trenažéru stačí ERG nebo konstantní odpor; hlídej, aby výkon nepřesáhl pásmo.", "Zajisti chlazení a pití – i lehká jízda indoor hodně potí."];
   return environment === "outdoor"
-    ? ["Venku drž rozsah výkonu místo přesné hodnoty; ERG není k dispozici.", "Intervaly nad prahem jeď do kopce nebo proti větru, regenerace po rovině.", "Krátké sprinty jeď naplno bez cílového výkonu."]
+    ? ["Venku drž rozsah výkonu místo přesné hodnoty; ERG není k dispozici.", "Intervaly nad prahem jeď do kopce nebo proti větru, regenerace po rovině.", system === "sprint" ? "Maximální sprinty jeď naplno bez cílového výkonu." : "Předepsané intervaly jeď kontrolovaně v cílovém pásmu; naplno jen úseky výslovně označené jako maximální."]
     : ["Na trenažéru použij ERG pro prahové a sweet-spot bloky; sprinty a 30/15 jeď v režimu odporu (level/slope).", "Kadence je součást předpisu; zajisti chlazení (ventilátor) a pití."];
 }
 

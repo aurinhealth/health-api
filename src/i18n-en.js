@@ -2,6 +2,31 @@
 // appear on the page; EN_TEMPLATES keys have every number replaced by {n}.
 // Generated from the rendered app with sample data, then reviewed.
 export const EN = {
+"Odhad úrovně podle typu": "Estimated level by workout type",
+"Odhad pro tento typ": "Estimated level for this type",
+"Vysvětlivka: typy tréninků": "Note: workout types",
+"Vysvětlivka: Odhad pro tento typ": "Note: estimated level for this type",
+"Doporučené · pestrý výběr": "Recommended · varied selection",
+"Nejtěžší první": "Hardest first",
+"Nejbližší délka": "Closest duration",
+"výchozí odhad · bez hodnocení": "initial estimate · no ratings",
+"naplno, bez cílového výkonu; výška profilu je orientační": "all-out, no power target; profile height is indicative",
+"Výchozí odhad podle zkušeností v profilu: začátečník 1, běžně 3, zkušený 4 z 10. Nejde o měření kondice. Odhad pro každý typ se zpřesňuje po odjetých workoutech s hodnocením RPE.": "Initial estimate from the experience in your profile: beginner 1, typical 3, experienced 4 out of 10. This is not a fitness measurement. Each type is refined after completed workouts with RPE feedback.",
+"Řazení od nejtěžších; vhodnost pro daný den je uvedena zvlášť.": "Hardest workouts first; suitability for the day is shown separately.",
+"Řazení od nejbližší délky.": "Closest duration first.",
+"Pestrý výběr podle vhodnosti: střídám struktury, délky a umístění intervalů.": "Varied selection by suitability: different structures, durations and interval placement.",
+"Interní stupnice náročnosti workoutu v daném typu tréninku: délka a intenzita pracovních úseků, poměr práce a pauz a práce v únavě. Není to RPE ani procento tvého maximálního výkonu.": "An internal difficulty scale within each workout type: work duration and intensity, work-to-rest ratio and efforts under fatigue. It is not RPE or a percentage of your maximal power.",
+"„Max. obtížnost“ je horní limit výběru. Pro nejtěžší workouty zvol řazení „Nejtěžší první“. Doporučený výběr zohledňuje také tvou odhadovanou úroveň a připravenost.": "Maximum difficulty is an upper limit. To see the hardest workouts first, choose Hardest first. The recommended selection also considers your estimated level and readiness.",
+"Odhad obtížnosti workoutů, které zvládáš v daném typu tréninku. 4/10 znamená odhad pro workouty kolem obtížnosti 4; není to VO₂max, FTP ani srovnání s ostatními sportovci.": "An estimate of the workout difficulty you can handle in each training type. 4/10 estimates workouts around difficulty 4; it is not VO2max, FTP or a comparison with other athletes.",
+"Bez hodnocení jde o výchozí odhad podle zkušeností v profilu: začátečník 1, běžně 3, zkušený 4. RPE a dokončení odjetých workoutů zpřesňují každý typ zvlášť. Samotné spárování aktivity úroveň nezvyšuje.": "Without ratings, this is an initial estimate from your profile: beginner 1, typical 3, experienced 4. RPE and completed workouts refine each type separately. Matching an activity alone does not increase the level.",
+"VO₂max, anaerobní a sprint": "VO2max, anaerobic and sprint",
+"VO₂max: cílem je vysoký příjem kyslíku. Typicky úseky 2–5 minut nebo husté série 30/30 či 40/20; krátké pauzy drží kyslíkovou spotřebu vysoko.": "VO2max: the goal is high oxygen uptake. Typically 2-5-minute efforts or dense 30/30 or 40/20 sets; short recoveries keep oxygen uptake high.",
+"Anaerobní: cílem je kapacita pro tvrdé nástupy, typicky 30–120 sekund s delší regenerací. Úseky mohou mít předepsaný výkon, 30s Wingate je naopak maximální úsilí.": "Anaerobic: capacity for hard attacks, typically 30-120 seconds with longer recovery. Efforts may have prescribed power; a 30-second Wingate is an all-out effort.",
+"Sprint: krátké maximální úseky přibližně 8–15 sekund s plnou regenerací, zaměřené na špičkový výkon a nervosvalovou koordinaci. Delší sprint má větší anaerobní podíl.": "Sprint: short all-out efforts of roughly 8-15 seconds with full recovery, targeting peak power and neuromuscular coordination. Longer sprints have a greater anaerobic contribution.",
+"Systémy se překrývají. Typ tréninku určuje cíl celé struktury a pauzy, ne jen výkonová zóna jednoho úseku. Maximální sprint nepředepisujeme jako pevné procento FTP.": "The systems overlap. Workout type depends on the goal of the full structure and recoveries, not just the power zone of one effort. Maximal sprints do not have a fixed FTP percentage target.",
+"Jak dobře workout sedí na vybraný den: typ, doporučená délka a load, obtížnost proti odhadované úrovni, připravenost a kvalitní dny v týdnu.": "How well a workout fits the selected day: type, suggested duration and load, difficulty relative to your estimated level, readiness and quality days this week.",
+"Procento je skóre shody, ne pravděpodobnost úspěchu. Doporučený výběr střídá podobně vhodné struktury a délky, proto nemusí být procenta sestupně. Řazení podle obtížnosti nebo délky zvolíš ve filtrech.": "The percentage is a match score, not a probability of success. Recommended selection alternates similarly suitable structures and durations, so percentages may not descend. Choose difficulty or duration ordering in the filters.",
+"Prázdné = délku doporučí trenér. Vyplněná délka s tolerancí vymezí povolené rozmezí: 90 ± 30 minut znamená 60–120 minut. Doporučený výběr nabízí různé délky v tomto rozmezí; pro přesnou délku zvol „Nejbližší délka“.": "Blank means the coach suggests a duration. A duration and tolerance define the allowed range: 90 ± 30 minutes means 60-120 minutes. Recommended selection offers different durations in that range; choose Closest duration for the nearest match.",
 "% cíle": "% of goal",
 "% denního cíle": "% of daily goal",
 "% prahového tempa": "% of threshold pace",
@@ -1725,6 +1750,7 @@ export const EN = {
 };
 
 export const EN_TEMPLATES = {
+"{n} / {n} · výchozí odhad": "{n} / {n} · initial estimate",
 "Cíl drží bezpečné minimum {n} kcal, takže hubnutí půjde pomaleji než zvolené tempo.": "The target stays at the safe minimum of {n} kcal, so weight loss will be slower than the chosen pace.",
 "Podle vývoje váhy ubírám {n} kcal denně.": "Based on your weight trend I take off {n} kcal a day.",
 "Podle vývoje váhy přidávám {n} kcal denně.": "Based on your weight trend I add {n} kcal a day.",

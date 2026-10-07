@@ -100,13 +100,13 @@ test("automatic activity matching does not claim interval completion", () => {
   assert.equal(result.attempts, 4);
 });
 
-test("indoor keeps exact targets; outdoor uses ranges, free sprints and a longer warm-up", () => {
+test("indoor keeps prescribed targets; genuine sprints are free indoors and outdoors", () => {
   const sprint = byId("pfd-sprint-10-8-75");
   const indoor = renderForEnvironment(sprint, "indoor"), outdoor = renderForEnvironment(sprint, "outdoor");
   assert.equal(indoor.intervals_type, "VirtualRide");
   assert.equal(outdoor.intervals_type, "Ride");
-  assert.match(indoor.intervals_description, /- 10s 200%/);
-  assert.match(outdoor.intervals_description, /- 10s 200% max/);
+  assert.match(indoor.intervals_description, /- 10s freeride 110-125rpm/);
+  assert.match(outdoor.intervals_description, /- 10s freeride 110-125rpm/);
   const threshold = renderForEnvironment(byId("pfd-thr-3x12-90"), "outdoor");
   assert.match(threshold.intervals_description, /12m 95-101%/);
   assert.equal(JSON.parse(threshold.structure_json)[0].durationMinutes, 15);

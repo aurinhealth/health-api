@@ -9,6 +9,7 @@ const WU15 = [step(15, 58, "90", "progresivně")];
 const CD10 = [step(10, 50, "90", "lehce")];
 const OPENERS = [step(12, 58, "90", "progresivně"), rep(3, [step(sec(30), 110, "100"), step(sec(90), 55)])];
 const easy = (minutes, power = 52) => step(minutes, power, "90", "lehce");
+const allOut = (seconds, estimate, cadence, note = "naplno, bez cílových wattů; ERG vypnout") => ({ ...step(sec(seconds), estimate, cadence, note), free: true });
 
 // Core interval sets. Each family returns the core blocks for one ladder level.
 const blocks = (reps, minutes, power, restMinutes, cadence, restPower = 55) => rep(reps, [step(minutes, power, cadence), easy(restMinutes, restPower)]);
@@ -51,6 +52,17 @@ const FAMILIES = [
   { key: "thr-hard-start", system: "threshold", secondary: "anaerobic", label: l => `Threshold s ostrým startem ${l[0]}×${l[1]}`, cadence: "90–100 rpm",
     levels: [[4, 5], [4, 6], [3, 8], [4, 8], [3, 10]],
     core: ([r, m]) => [rep(r, [step(sec(30), 130, "100-110", "nástup"), step(m - .5, 98, "90-95"), easy(5)])], desc: "Nástup nad VO₂ a pak držet práh – typická únik/stoupání situace." },
+  { key: "thr-late", system: "threshold", placement: "late", label: l => `Práh v závěru 2×${l[0]}`, cadence: "90–95 rpm",
+    levels: [[8], [10], [12], [15]], core: ([m]) => [blocks(2, m, 98, 3, "90-95")],
+    desc: "Nejprve souvislá Z2, potom prahové úseky v závěru. Nácvik závěrečného stoupání v únavě." },
+  { key: "thr-split", system: "threshold", placement: "split", label: l => `Dvě stoupání ${l[0]} + ${l[1]} min`, cadence: "90–95 rpm",
+    levels: [[8, 10], [10, 12], [12, 15], [15, 20]],
+    core: ([a, b]) => [rep(1, [step(a, 98, "90-95", "první stoupání"), easy(3)]), rep(1, [step(b, 100, "90-95", "druhé stoupání po Z2"), easy(3)])],
+    desc: "Dva prahové bloky oddělené delší jízdou v Z2. Druhé stoupání přijde až v druhé části tréninku." },
+  { key: "thr-race-finish", system: "threshold", placement: "split", label: l => `Závodní závěr ${l[0]} + ${l[1]} min`, cadence: "90–100 rpm",
+    levels: [[8, 10], [10, 12], [12, 15]],
+    core: ([a, b]) => [rep(1, [step(a, 96, "90-95", "kontrolovaný první blok"), easy(3)]), rep(1, [ramp(b, 98, 105, "90-100", "závěrečné stoupání, postupně zvyšuj"), easy(2)])],
+    desc: "Práh na začátku, Z2 uprostřed a stupňovaný závěrečný blok. Simulace závodního finiše bez maximálního sprintu." },
   // ---- VO2max ------------------------------------------------------------
   { key: "vo2", system: "vo2max", label: l => `VO₂ ${l[0]}×${l[1]}`, cadence: "95–105 rpm", warmup: OPENERS,
     levels: [[5, 2, 120], [6, 2, 120], [8, 2, 118], [5, 3, 115], [6, 3, 115], [4, 4, 112], [5, 4, 112], [6, 4, 110], [4, 5, 110], [5, 5, 108], [4, 6, 108], [5, 6, 106]],
@@ -69,6 +81,9 @@ const FAMILIES = [
   { key: "vo2-pyramid", system: "vo2max", label: l => `VO₂ pyramida ${l.join("-")}`, cadence: "95–105 rpm", warmup: OPENERS,
     levels: [[1, 2, 3, 2, 1], [1, 2, 3, 4, 3, 2, 1], [2, 3, 4, 4, 3, 2]],
     core: l => [rep(1, l.flatMap(m => [step(m, m <= 2 ? 118 : m === 3 ? 114 : 110, "95-105"), easy(m, 50)]))], desc: "Pyramida délek – mentálně snazší a pestrá VO₂ jednotka." },
+  { key: "vo2-late", system: "vo2max", placement: "late", label: l => `VO₂ závěrečná stoupání ${l[0]}×3`, cadence: "95–105 rpm", warmup: OPENERS,
+    levels: [[3], [4], [5]], core: ([r]) => [blocks(r, 3, 115, 3, "95-105", 50)],
+    desc: "Aerobní první část a tříminutová VO₂ stoupání až v závěru. Udrž stejný kontrolovaný výkon ve všech úsecích." },
   // ---- anaerobic ---------------------------------------------------------
   { key: "ana-1min", system: "anaerobic", secondary: "vo2max", label: l => `Anaerobní ${l[0]}×1 min`, cadence: "100–110 rpm", warmup: OPENERS,
     levels: [[6], [8], [10], [12]], core: ([r]) => [blocks(r, 1, 135, 3, "100-110", 50)], desc: "Minutové úseky nad VO₂ – anaerobní kapacita." },
@@ -77,13 +92,19 @@ const FAMILIES = [
   { key: "ana-45-15", system: "anaerobic", secondary: "vo2max", label: l => `Anaerobní 45/15 ${l[0]}×${l[1]}`, cadence: "100–110 rpm", warmup: OPENERS,
     levels: [[2, 6], [3, 6], [3, 8]], core: ([r, m]) => [rep(r, [...Array.from({ length: m }, () => [step(sec(45), 130, "100-110"), step(sec(15), 50)]).flat(), easy(6, 50)])],
     desc: "Téměř bez odpočinku nad prahem – závodní specifika pro krátká stoupání." },
+  { key: "ana-late-attacks", system: "anaerobic", placement: "late", label: l => `Závěrečné nástupy ${l[0]}×45 s`, cadence: "100–110 rpm", warmup: OPENERS,
+    levels: [[4], [6], [8]], core: ([r]) => [blocks(r, .75, 145, 4.25, "100-110", 50)],
+    desc: "45s nástupy v závěru s dlouhou regenerací. Anaerobní kapacita a opakovatelnost útoků, předepsaný výkon místo sprintu naplno." },
   // ---- sprint ------------------------------------------------------------
   { key: "sprint-10", system: "sprint", label: l => `Sprinty ${l[0]}×10 s`, cadence: "110–125 rpm", warmup: OPENERS,
-    levels: [[6], [8], [10], [12]], core: ([r]) => [rep(r, [step(sec(10), 200, "110-125", "naplno"), easy(4 + sec(50), 55)])], desc: "Neuromuskulární sprinty s plnou regenerací – kvalita před kvantitou." },
+    levels: [[6], [8], [10], [12]], core: ([r]) => [rep(r, [allOut(10, 200, "110-125"), easy(4 + sec(50), 55)])], desc: "Neuromuskulární sprinty s plnou regenerací – kvalita před kvantitou." },
   { key: "sprint-standing", system: "sprint", label: l => `Sprinty z místa ${l[0]}×15 s`, cadence: "start 50 → 110 rpm", warmup: OPENERS,
-    levels: [[6], [8], [10]], core: ([r]) => [rep(r, [step(sec(15), 190, "50-110", "z nízké rychlosti, těžký převod"), easy(5 - sec(15), 55)])], desc: "Rozjezdy z nízké rychlosti pro sílu a točivý moment." },
+    levels: [[6], [8], [10]], core: ([r]) => [rep(r, [allOut(15, 190, "50-110", "naplno z nízké rychlosti, těžký převod; ERG vypnout"), easy(5 - sec(15), 55)])], desc: "Rozjezdy z nízké rychlosti pro sílu a točivý moment." },
   { key: "sprint-20", system: "sprint", secondary: "anaerobic", label: l => `Sprinty ${l[0]}×20 s`, cadence: "105–120 rpm", warmup: OPENERS,
-    levels: [[5], [6], [8]], core: ([r]) => [rep(r, [step(sec(20), 170, "105-120", "naplno"), easy(5, 55)])], desc: "Delší sprint – finiš a nástupy." }
+    levels: [[5], [6], [8]], core: ([r]) => [rep(r, [allOut(20, 170, "105-120"), easy(5, 55)])], desc: "Delší sprint – finiš a nástupy; s 20s délkou roste i anaerobní podíl." },
+  { key: "sprint-late", system: "sprint", placement: "late", label: l => `Sprinty v závěru ${l[0]}×10 s`, cadence: "110–125 rpm", warmup: OPENERS,
+    levels: [[4], [6], [8]], core: ([r]) => [rep(r, [allOut(10, 200, "110-125", "maximální finiš, bez cílových wattů; ERG vypnout"), easy(4 + sec(50), 55)])],
+    desc: "Z2 a krátké maximální finiše v poslední části jízdy. Mezi sprinty plná regenerace, cílem je špičkový výkon." }
 ];
 
 const ENDURANCE = [
@@ -100,18 +121,22 @@ const ENDURANCE = [
 
 const TOTALS = { tempo: [60, 75, 90, 105, 120, 150, 180, 240], sweet_spot: [60, 75, 90, 105, 120, 150, 180, 240], threshold: [60, 75, 90, 105, 120, 150, 180], vo2max: [45, 60, 75, 90, 105, 120, 150, 180], anaerobic: [45, 60, 75, 90, 120], sprint: [45, 60, 75, 90, 120] };
 
-// Wraps a core set into a session of the requested length. Long sessions
-// (≥150 min) put the quality after a first aerobic block, like a real ride.
+// Families prescribe the placement of quality, including late race efforts
+// and separate climbs with an aerobic section between them.
 function session(core, total, family) {
   const warm = family.warmup || WU15;
   const used = totalMinutes([...warm, ...core, ...CD10]);
   const fill = Math.round((total - used) * 10) / 10;
   if (fill < 0 || (fill > 0 && fill < 3)) return null;
+  if (family.placement && fill < 15) return null;
   const structure = [...warm];
-  const early = total >= 150 ? Math.round(fill * .5) : 0;
+  const early = family.placement === "late" ? fill : family.placement === "split" ? 0 : total >= 150 ? Math.round(fill * .5) : 0;
   if (early > 0) structure.push(step(early, 67, "85-95", "aerobní blok"));
-  structure.push(...core);
-  if (fill - early > 0) structure.push(step(Math.round((fill - early) * 10) / 10, 65, "85-95", "aerobní dojezd"));
+  if (family.placement === "split") structure.push(core[0], step(fill, 67, "85-95", "Z2 mezi stoupáními"), ...core.slice(1));
+  else {
+    structure.push(...core);
+    if (fill - early > 0) structure.push(step(Math.round((fill - early) * 10) / 10, 65, "85-95", "aerobní dojezd"));
+  }
   structure.push(...CD10);
   return structure;
 }
@@ -126,8 +151,8 @@ function buildFamilyWorkouts() {
         if (!structure) continue;
         out.push(buildWorkout({
           id: `pfd-${f.key}-${level.join("x")}-${total}`, name: `${f.label(level)} · ${total} min`, system: f.system, secondarySystem: f.secondary || null,
-          structure, family: f.key, level: index + 1, cadence: f.cadence, tags: ["pfd-original", f.key, `${total}min`],
-          description: f.desc + (total >= 150 ? " Kvalita je vložená mezi aerobní bloky – vyžaduje palivo na cestu." : "")
+          structure, family: f.key, level: index + 1, cadence: f.cadence, tags: ["pfd-original", f.key, `${total}min`, ...(f.placement ? [f.placement + "-quality"] : [])],
+          description: f.desc + (total >= 150 && !f.placement ? " Kvalita je vložená mezi aerobní bloky – vyžaduje palivo na cestu." : "")
         }));
       }
     });
@@ -171,7 +196,7 @@ const RESEARCH = [
     citation: "Tabata I, et al. Effects of moderate-intensity endurance and high-intensity intermittent training on anaerobic capacity and VO2max. Med Sci Sports Exerc. 1996;28(10):1327–1330.",
     description: "8× 20 s na ~170 % VO₂max / 10 s pauza. Vhodné na trenažér v režimu odporu." },
   { id: "research-sit-4-6x30", name: "Sprint interval 6×30 s", system: "anaerobic", secondary: "sprint",
-    core: [rep(6, [step(sec(30), 175, "100-120", "naplno"), easy(4, 50)])],
+    core: [rep(6, [allOut(30, 175, "100-120"), easy(4, 50)])],
     citation: "Burgomaster KA, et al. Six sessions of sprint interval training increases muscle oxidative potential and cycle endurance capacity in humans. J Appl Physiol. 2005;98:1985–1990.",
     description: "4–6× 30 s naplno (Wingate) se 4 min pauzou – vysoká kvalita za krátký čas." }
 ];

@@ -73,6 +73,7 @@ export function parseWorkoutSearchFilters(params) {
     targetLoad: num("load") ?? num("targetLoad"),
     loadTolerance: num("loadTolerance"),
     maxDifficulty: num("maxDifficulty"),
+    sort: get("sort"),
     source: get("source"),
     limit: num("limit")
   };
@@ -90,8 +91,11 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const recentFamilies = new Set(context.recentFamilies || []);
   const source = filters.source ? String(filters.source) : null;
   const preferred = !system && filters.preferredSystem ? String(filters.preferredSystem) : null;
-  const reachable = 25 + (system ? 25 : preferred ? 15 : 0) + (duration != null ? 20 : 0) + (targetLoad != null ? 12 : 0) + 18;
-  return workouts.filter(w => (!system || w.primary_system === system || w.secondary_system === system)
+  // Within an explicit window, all lengths are legitimate choices. A coach's
+  // soft duration still carries more weight when generating the daily plan.
+  const durationWeight = softDuration ? 20 : 8;
+  const reachable = 25 + (system ? 25 : preferred ? 15 : 0) + (duration != null ? durationWeight : 0) + (targetLoad != null ? 12 : 0) + 18;
+  const ranked = workouts.filter(w => (!system || w.primary_system === system || w.secondary_system === system)
     && (duration == null || softDuration || Math.abs(n(w.duration_minutes, 0) - duration) <= durationTolerance)
     && (maxDifficulty == null || n(w.difficulty, 99) <= maxDifficulty)
     && (filters.environment !== "outdoor" || !n(w.indoor_only, 0))
@@ -104,7 +108,7 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
     if (preferred && w.primary_system === preferred) { score += 15; reasons.push("typ, který trenér na dnešek doporučuje"); }
     if (duration != null) {
       const diff = Math.abs(n(w.duration_minutes, 0) - duration), fit = clamp(1 - diff / Math.max(durationScale, 1), 0, 1);
-      score += 20 * fit; if (diff <= 5) reasons.push(softDuration ? "délka, kterou trenér pro dnešek doporučuje" : "téměř přesná délka"); else if (!softDuration) reasons.push("délka v toleranci");
+      score += durationWeight * fit; if (diff <= 5) reasons.push(softDuration ? "délka, kterou trenér pro dnešek doporučuje" : "téměř přesná délka"); else if (!softDuration) reasons.push("délka v toleranci");
     }
     if (targetLoad != null) {
       const diff = Math.abs(n(w.target_load, 0) - targetLoad), fit = clamp(1 - diff / Math.max(loadTolerance, 1), 0, 1); score += 12 * fit; if (diff <= 10) reasons.push("zátěž blízko cíli");
@@ -125,8 +129,40 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
     score += Math.min(3, Math.log10(1 + n(w.popularity, 0)) * 1.5);
     // The points available depend on the filters in use (no type or load
     // filter = fewer points), so the score is a share of the reachable maximum.
-    return { ...w, suitability: Math.round(clamp(score / reachable * 100, 0, 100)), score_points: Math.round(score), capability_level: n(capability.level, 3), challenge_gap: Math.round((n(w.difficulty, 5) - n(capability.level, 3)) * 10) / 10, reasons };
-  }).sort((a, b) => b.suitability - a.suitability || Math.abs((duration ?? a.duration_minutes) - a.duration_minutes) - Math.abs((duration ?? b.duration_minutes) - b.duration_minutes) || a.difficulty - b.difficulty || a.id.localeCompare(b.id));
+    return { ...w, suitability: Math.round(clamp(score / reachable * 100, 0, 100)), score_points: Math.round(score * 10) / 10, capability_level: n(capability.level, 3), capability_confidence: n(capability.confidence, .2), capability_attempts: n(capability.attempts, 0), challenge_gap: Math.round((n(w.difficulty, 5) - n(capability.level, 3)) * 10) / 10, reasons };
+  });
+  const durationGap = w => Math.abs((duration ?? w.duration_minutes) - w.duration_minutes);
+  return ranked.sort((a, b) => (filters.sort === "difficulty" ? b.difficulty - a.difficulty : filters.sort === "duration" ? durationGap(a) - durationGap(b) : 0)
+    || b.score_points - a.score_points || durationGap(a) - durationGap(b) || a.id.localeCompare(b.id));
+}
+
+// Present alternatives, rather than a ladder of almost identical workouts.
+// Variety only breaks ties among candidates within 12 points of the best
+// remaining match. Readiness and capability remain part of that score.
+export function diversifyWorkoutCandidates(ranked, filters = {}, limit = 30) {
+  if (filters.sort === "difficulty" || filters.sort === "duration") return ranked.slice(0, limit);
+  const remaining = [...ranked], chosen = [], families = new Map(), durations = new Map(), placements = new Map();
+  const placement = w => {
+    let tags = []; try { tags = JSON.parse(w.tags_json || "[]"); } catch {}
+    return tags.includes("late-quality") ? "late" : tags.includes("split-quality") ? "split" : "standard";
+  };
+  while (remaining.length && chosen.length < limit) {
+    const primary = filters.system && remaining.some(w => w.primary_system === filters.system);
+    const eligible = remaining.filter(w => !primary || w.primary_system === filters.system);
+    const best = Math.max(...eligible.map(w => w.score_points));
+    let winner = null, bestAdjusted = -Infinity;
+    for (const w of eligible) {
+      if (w.score_points < best - 12) continue;
+      const adjusted = w.score_points - 14 * (families.get(w.family || w.id) || 0)
+        - (filters.durationMinutes != null && !filters.durationSoft ? 4 * (durations.get(w.duration_minutes) || 0) : 0)
+        - 4 * (placements.get(placement(w)) || 0);
+      if (adjusted > bestAdjusted) { winner = w; bestAdjusted = adjusted; }
+    }
+    chosen.push(winner);
+    for (const [map, key] of [[families, winner.family || winner.id], [durations, winner.duration_minutes], [placements, placement(winner)]]) map.set(key, (map.get(key) || 0) + 1);
+    remaining.splice(remaining.indexOf(winner), 1);
+  }
+  return chosen;
 }
 
 async function recentFamilies(db, sport, days = 14) {
@@ -138,9 +174,13 @@ async function recentFamilies(db, sport, days = 14) {
 export async function searchWorkoutLibrary(db, filters = {}, context = {}) {
   const sport = sportOf(filters.sport), environment = environmentOf(filters.environment);
   const [workouts, capabilities, families] = await Promise.all([catalog(db, sport), getCapabilities(db, sport), recentFamilies(db, sport).catch(() => [])]);
-  const ranked = rankWorkoutCandidates(workouts, { ...filters, environment }, { ...context, recentFamilies: context.recentFamilies || families }, capabilities);
+  // The outdoor warm-up and rounded steps can change the actual duration.
+  // Apply the hard duration window to the workout the athlete will receive.
+  const candidates = workouts.map(w => renderForEnvironment(w, environment));
+  const ranked = rankWorkoutCandidates(candidates, { ...filters, environment }, { ...context, recentFamilies: context.recentFamilies || families }, capabilities);
   const limit = clamp(n(filters.limit, 30), 1, 100);
-  return { status: "ok", sport, environment, count: Math.min(limit, ranked.length), total: ranked.length, catalogSize: workouts.length, filters, capabilities, workouts: ranked.slice(0, limit).map(w => renderForEnvironment(w, environment)) };
+  const selected = diversifyWorkoutCandidates(ranked, filters, limit);
+  return { status: "ok", sport, environment, count: selected.length, total: ranked.length, catalogSize: workouts.length, filters, capabilities, sort: ["difficulty", "duration"].includes(filters.sort) ? filters.sort : "recommended", workouts: selected };
 }
 
 // "Generate a workout": the coach decides the energy system, duration and the

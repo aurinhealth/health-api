@@ -31,7 +31,7 @@ export function parseStepLine(line) {
     const token = raw.replace(/,$/, ''), lower = token.toLowerCase();
     if (minutes == null && durationToken(lower) != null) { minutes = durationToken(lower); continue; }
     if (lower === 'ramp') { ramp = true; continue; }
-    if (lower === 'freeride' || lower === 'free') { free = true; continue; }
+    if (lower === 'freeride' || lower === 'free' || lower === 'maxeffort') { free = true; continue; }
     const pct = lower.match(/^(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?%(?:ftp|lthr|pace)?$/);
     if (pct && low == null) { low = Number(pct[1]); high = pct[2] ? Number(pct[2]) : null; continue; }
     const zone = lower.match(/^z([1-7])(?:-z?([1-7]))?$/);
@@ -83,7 +83,7 @@ function docStep(s) {
   const minutes = n(s.duration) ? n(s.duration) / 60 : null;
   if (!minutes) return null;
   const { low, high } = docValue(s.power || s.pace || s.hr), step = { durationMinutes: Math.round(minutes * 100) / 100 };
-  if (low == null) step.free = true;
+  if (s.freeride || s.maxeffort || low == null) step.free = true;
   else if (s.ramp && high != null) Object.assign(step, { ramp: true, powerStart: low, powerEnd: high });
   else step.power = high != null ? Math.round((low + high) / 2) : low;
   const c = s.cadence;

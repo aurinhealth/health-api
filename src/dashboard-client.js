@@ -593,7 +593,7 @@ function workoutProfile(workout){
     const color=hi>=125?'#ed7393':hi>=105?'#f3a65a':hi>=85?'#e6c76b':hi>=70?'#60c4ba':'#52a8c9';
     const y1=76-from/190*64,y2=76-to/190*64;
     const shape=step.ramp?'<polygon points="'+x+',76 '+x+','+y1+' '+(x+width)+','+y2+' '+(x+width)+',76" fill="'+color+'"/>':'<rect x="'+x+'" y="'+y1+'" width="'+width+'" height="'+(76-y1)+'" fill="'+color+'"/>';
-    return '<g><title>'+fmt(duration,1)+' min · '+fmt(from)+'–'+fmt(to)+(workout.sport==='run'?' % prahového tempa':' % FTP')+'</title>'+shape+'</g>';
+    return '<g><title>'+fmt(duration,1)+' min · '+(step.free?'naplno, bez cílového výkonu; výška profilu je orientační':fmt(from)+'–'+fmt(to)+(workout.sport==='run'?' % prahového tempa':' % FTP'))+'</title>'+shape+'</g>';
   }).join('');
   return '<div class="workout-profile"><div class="workout-profile-head"><span>'+(workout.sport==='run'?'Profil tempa':'Profil výkonu')+'</span><strong>'+hm(total)+'</strong></div><svg role="img" aria-label="Profil cílového výkonu v čase" viewBox="0 0 1000 84" preserveAspectRatio="none"><path d="M0 42H1000 M0 76H1000" stroke="color-mix(in srgb,var(--muted) 39%,var(--bg))" stroke-width="1"/>'+bars+'</svg><div class="workout-profile-foot"><span>0 min</span><span>'+Math.round(total)+' min</span></div></div>';
 }
@@ -602,8 +602,8 @@ function renderWorkoutCapabilities(capabilities={}){
   const el=$("workoutCapabilities");if(!el)return;
   const order=workoutSport()==='run'?["endurance","tempo","threshold","vo2max","anaerobic","sprint","recovery"]:["endurance","tempo","sweet_spot","threshold","vo2max","anaerobic","sprint","recovery"];
   const rows=order.map(k=>({k,...(capabilities[k]||{level:3,confidence:.2,attempts:0})}));
-  if(rows.every(x=>!num(x.attempts))){el.innerHTML='<div class="notice" style="grid-column:1/-1">Zatím nekalibrováno: všechny systémy začínají na úrovni 3 z 10. Úroveň se začne upravovat po prvních odjetých workoutech z knihovny, ke kterým doplníš RPE. Do té doby trenér vybírá obtížnost opatrně.</div>';return}
-  el.innerHTML=rows.map(x=>'<div class="capability-card"><span class="label">'+esc(capabilityLabel(x.k))+'</span><strong>'+fmt(x.level,1)+' <span class="small">/ 10</span></strong><div class="capability-bar"><i style="width:'+Math.min(100,num(x.level)*10)+'%"></i></div><div class="small">jistota '+Math.round(num(x.confidence,.2)*100)+' % · '+num(x.attempts)+' '+(num(x.attempts)===1?'hodnocení':num(x.attempts)>=2&&num(x.attempts)<=4?'hodnocení':'hodnocení')+'</div></div>').join("");
+  const uncalibrated=rows.every(x=>!num(x.attempts))?'<div class="notice" style="grid-column:1/-1">Výchozí odhad podle zkušeností v profilu: začátečník 1, běžně 3, zkušený 4 z 10. Nejde o měření kondice. Odhad pro každý typ se zpřesňuje po odjetých workoutech s hodnocením RPE.</div>':'';
+  el.innerHTML=uncalibrated+rows.map(x=>'<div class="capability-card"><span class="label">'+esc(capabilityLabel(x.k))+'</span><strong>'+fmt(x.level,1)+' <span class="small">/ 10</span></strong><div class="capability-bar"><i style="width:'+Math.min(100,num(x.level)*10)+'%"></i></div><div class="small">'+(num(x.attempts)?'jistota '+Math.round(num(x.confidence,.2)*100)+' % · '+num(x.attempts)+' hodnocení':'výchozí odhad · bez hodnocení')+'</div></div>').join("");
 }
 // The day a card schedules to: the next two weeks, the chosen day first.
 function scheduleDayOptions(selected){
@@ -616,12 +616,12 @@ function dayShort(d){return new Intl.DateTimeFormat('cs-CZ',{weekday:'short',day
 function workoutCardHtml(w,i,athlete){
   const reason=(w.reasons||[]).slice(0,4).join(" · "),run=w.sport==='run',env=w.environment==='indoor'?'indoor':'outdoor',day=$("workoutScheduleDate")?.value||pragueToday();
   const ftp=run?null:(env==='indoor'?athlete.indoorFtp:athlete.ftp)||athlete.ftp||null;
-  const facts=[['Délka',hm(num(w.duration_minutes))],['Load',Math.round(num(w.target_load))+' TSS'],['IF',dec(w.intensity_factor,2)],['Obtížnost',fmt(w.difficulty,1)+' / 10'],['Tvoje úroveň',fmt(w.capability_level,1)+' / 10'],...(run?[]:[['Kadence',w.cadence||'dle bloku']]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])];
+  const facts=[['Délka',hm(num(w.duration_minutes))],['Load',Math.round(num(w.target_load))+' TSS'],['IF',dec(w.intensity_factor,2)],['Obtížnost',fmt(w.difficulty,1)+' / 10'],['Odhad pro tento typ',fmt(w.capability_level,1)+' / 10'+(!num(w.capability_attempts)?' · výchozí odhad':'')],...(run?[]:[['Kadence',w.cadence||'dle bloku']]),...(ftp?[[env==='indoor'?'Indoor FTP':'FTP',ftp+' W'+(env==='indoor'&&athlete.indoorFtpEstimated?' · odhad':'')]]:[])];
   const steps=run?stepTableHtml(w.steps||[],null,{sport:'run',pace:athlete.runThresholdPace}):stepTableHtml(w.steps||[],ftp);
   return '<article class="workout-result" data-workout-id="'+esc(w.id)+'"><div><div class="workout-result-head"><div><div class="eyebrow">#'+(i+1)+' · '+esc(capabilityLabel(w.primary_system))+'</div><h3 style="margin:3px 0">'+esc(w.name)+'</h3></div><div><div class="workout-score">'+num(w.suitability)+'%</div><div class="small">vhodnost</div></div></div>'+workoutProfile(w)+'<details class="explain-block"><summary>Rozpis kroků</summary>'+steps+'</details><p>'+esc(w.description||"")+'</p>'+(w.environment_notes?.length?'<ul class="env-notes">'+w.environment_notes.slice(0,2).map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul>':'')+'<div class="reason">'+esc(reason||"Seřazeno podle cíle, tvé úrovně a aktuálního kontextu.")+'</div></div>'+
     '<aside class="workout-side"><div class="env-toggle" role="group" aria-label="Kde trénink pojedeš">'+['outdoor','indoor'].map(e=>'<button type="button" class="btn'+(e===env?' primary':'')+'" data-workout-env="'+e+'" aria-pressed="'+(e===env)+'"'+(e==='outdoor'&&Number(w.indoor_only)?' disabled title="Tento trénink je jen na trenažér"':'')+'>'+(e==='outdoor'?(run?'🌳 Venku':'🌤 Outdoor'):(run?'🏃 Pás':'🏠 Indoor'))+'</button>').join('')+'</div>'+
     '<label class="schedule-day-label"><span class="small">Den</span><select class="schedule-day" aria-label="Den, na který trénink přidat">'+scheduleDayOptions(day)+'</select></label><button class="btn primary schedule-workout" type="button" data-id="'+esc(w.id)+'">Přidat na '+esc(dayShort(day>=pragueToday()?day:pragueToday()))+'</button>'+
-    '<dl class="workout-facts">'+facts.map(([k,v])=>'<div><dt>'+esc(k)+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl></aside></article>';
+    '<dl class="workout-facts">'+facts.map(([k,v])=>'<div><dt>'+esc(k)+(k==='Odhad pro tento typ'?' '+infoTip('capability',k):'')+'</dt><dd>'+esc(v)+'</dd></div>').join('')+'</dl></aside></article>';
 }
 // Outdoor ↔ indoor for one card: the server renders the workout for that
 // place (indoor watts from indoor FTP, outdoor ranges and warm-up).
@@ -640,6 +640,7 @@ function renderWorkoutLibrary(result){
   const ctx=result.rankingContext||{},context=$("workoutRankingContext");
   const readinessWord={green:'dobrá',yellow:'střední',red:'nízká'}[ctx.readiness]||'—',pick=result.coachPick||{};
   if(context)context.innerHTML='<strong>Podle čeho řadím:</strong> připravenost '+esc(readinessWord)+(Number.isFinite(Number(ctx.tsb))?' · forma (TSB) '+fmt(ctx.tsb,1):'')+' · kvalitní dny za 7 dní '+num(ctx.hardBikeDaysRolling7d)+(pick.system?' · trenér na dnešek doporučuje '+esc(capabilityLabel(pick.system))+(pick.durationMinutes?' kolem '+hm(pick.durationMinutes):''):'')+'.';
+  if(context)context.innerHTML+=' '+esc(result.sort==='difficulty'?'Řazení od nejtěžších; vhodnost pro daný den je uvedena zvlášť.':result.sort==='duration'?'Řazení od nejbližší délky.':'Pestrý výběr podle vhodnosti: střídám struktury, délky a umístění intervalů.');
   const el=$("workoutResults"),rows=result.workouts||[];
   if(!rows.length){el.innerHTML='<div class="notice">Pro tuto kombinaci filtrů jsem nenašel vhodný workout. Zvětši toleranci délky nebo zruš limit obtížnosti.</div>';return}
   // A short list first; the rest on request.
@@ -670,6 +671,7 @@ let workoutLibraryRequest=0;
 function librarySearchQuery(f){
   const p=new URLSearchParams();p.set("sport",f.sport);if(f.system)p.set("system",f.system);p.set("environment",f.environment||"outdoor");
   if(f.duration){p.set("duration",f.duration);if(f.tolerance)p.set("durationTolerance",f.tolerance);}if(f.load)p.set("load",f.load);if(f.difficulty)p.set("maxDifficulty",f.difficulty);if(f.phase)p.set("phase",f.phase);if(f.date)p.set("date",f.date);p.set("limit","15");
+  if(f.sort&&f.sort!=='recommended')p.set('sort',f.sort);
   return p.toString();
 }
 // Results kept for a few minutes: the dialog shows them at once, then refreshes quietly.
@@ -681,7 +683,7 @@ function fetchLibrary(query){
 }
 async function loadWorkoutLibrary(){
   const date=$("workoutScheduleDate");if(date&&!date.value)date.value=pragueToday();if(date)date.min=pragueToday();
-  const query=librarySearchQuery({sport:workoutSport(),system:$("workoutSystem")?.value,environment:$("workoutEnvironment")?.value,duration:$("workoutDuration")?.value,tolerance:$("workoutDurationTolerance")?.value,load:$("workoutLoad")?.value,difficulty:$("workoutDifficulty")?.value,phase:$("workoutPhase")?.value,date:date?.value});
+  const query=librarySearchQuery({sport:workoutSport(),system:$("workoutSystem")?.value,environment:$("workoutEnvironment")?.value,duration:$("workoutDuration")?.value,tolerance:$("workoutDurationTolerance")?.value,load:$("workoutLoad")?.value,difficulty:$("workoutDifficulty")?.value,sort:$("workoutSort")?.value,phase:$("workoutPhase")?.value,date:date?.value});
   state.workoutShowAll=false;const request=++workoutLibraryRequest;if(typeof renderRecommendChrome==='function')renderRecommendChrome();
   const ready=libraryCache.get(query)?.data;
   if(ready){state.workoutLibrary=ready;renderWorkoutLibrary(ready);}else $("workoutResults").innerHTML='<div class="small">Počítám vhodnost workoutů…</div>';
@@ -865,7 +867,7 @@ $("generateWorkoutBtn").onclick=()=>generateWorkoutForDay(0);{const d=$("generat
 $("workoutResults").addEventListener("click",e=>{const card=e.target.closest(".workout-result");const env=e.target.closest("[data-workout-env]");if(env&&card&&env.getAttribute('aria-pressed')!=='true'){switchWorkoutEnvironment(card,env.dataset.workoutEnv);return}const b=e.target.closest(".schedule-workout");if(b){const w=(state.workoutLibrary?.workouts||[]).find(x=>x.id===b.dataset.id);scheduleLibraryWorkout(b.dataset.id,card?.querySelector('.schedule-day')?.value||null,w?.environment||null);}});
 $("workoutResults").addEventListener("change",e=>{const sel=e.target.closest(".schedule-day");if(!sel)return;const b=sel.closest(".workout-side")?.querySelector(".schedule-workout");if(b)b.textContent='Přidat na '+dayShort(sel.value);});
 $("scheduledWorkouts").addEventListener("submit",e=>{if(e.target.matches('.workout-feedback')){e.preventDefault();saveWorkoutFeedback(e.target)}});
-["workoutSystem","workoutDurationTolerance","workoutDifficulty","workoutPhase","workoutScheduleDate","workoutEnvironment"].forEach(id=>{const el=$(id);if(el)el.onchange=()=>{if($('recommendDialog')?.open)loadWorkoutLibrary()}});
+["workoutSystem","workoutDurationTolerance","workoutDifficulty","workoutSort","workoutPhase","workoutScheduleDate","workoutEnvironment"].forEach(id=>{const el=$(id);if(el)el.onchange=()=>{if($('recommendDialog')?.open)loadWorkoutLibrary()}});
 $('refresh').onclick=async()=>{
   const b=$('refresh');b.disabled=true;b.textContent='Synchronizuji…';
   try{
@@ -1711,12 +1713,13 @@ function infoTip(key,label){return '<button type="button" class="info-tip" data-
 // Paragraphs are plain text; an {href,text} item becomes a link.
 function infoParagraphs(items){return items.map(p=>typeof p==='string'?'<p>'+esc(p)+'</p>':'<p><a href="'+esc(p.href)+'" target="_blank" rel="noopener noreferrer">'+esc(p.text)+'</a></p>').join('');}
 const INFO_TEXTS={
-  difficulty:['Obtížnost 1–10','Každý workout má obtížnost od 1 (velmi lehké, jen točení nohou) po 10 (maximum, co zvládneš). Počítá se z intenzity, délky a počtu tvrdých úseků.','Filtr „Max. obtížnost“ jen skryje těžší workouty. Bez limitu trenér sám cílí obtížnost kousek nad tvou aktuální úroveň, když jsi odpočatý, a pod ni, když jsi unavený.'],
+  difficulty:['Obtížnost 1–10','Interní stupnice náročnosti workoutu v daném typu tréninku: délka a intenzita pracovních úseků, poměr práce a pauz a práce v únavě. Není to RPE ani procento tvého maximálního výkonu.','„Max. obtížnost“ je horní limit výběru. Pro nejtěžší workouty zvol řazení „Nejtěžší první“. Doporučený výběr zohledňuje také tvou odhadovanou úroveň a připravenost.'],
   phase:['Fáze přípravy','Auto: trenér fázi odvodí z plánu a zátěže týdne.','Základ (Base): hodně vytrvalosti a tempa, buduje se motor.','Rozvoj (Build): víc prahových a VO₂max intervalů, blok před cílem.','Regenerace: týden bez intenzity, tělo vstřebá trénink.','Ladění (Taper): méně objemu a krátká intenzita před závodem, abys byl svěží.'],
-  capability:['Moje úroveň','Trenérův odhad tvé úrovně 1–10 v každém typu tréninku (vytrvalost, tempo, práh…). Podle ní volí, jak těžký workout ti dát, aby tě posunul a nepřetížil.','Každý začíná na 3 z 10 s nízkou jistotou. Úroveň se mění po odjetých workoutech z knihovny: dokončení se převezme z Intervals.icu, ty doplníš RPE. Lehce zvládnutý trénink úroveň zvedne, nedokončený ji sníží. Jistota roste s počtem hodnocení.'],
-  suitability:['Vhodnost','Jak dobře workout sedí na vybraný den: typ, který trenér doporučuje, délka, obtížnost proti tvé úrovni, únava a počet kvalitních dnů v týdnu, plus pestrost oproti nedávným tréninkům.','100 % = nejlepší možná shoda s danými filtry. Bez vyplněné délky řadím podle délky, kterou trenér na den doporučuje, ale žádnou délku nevyřazuji.'],
+  capability:['Odhad úrovně podle typu','Odhad obtížnosti workoutů, které zvládáš v daném typu tréninku. 4/10 znamená odhad pro workouty kolem obtížnosti 4; není to VO₂max, FTP ani srovnání s ostatními sportovci.','Bez hodnocení jde o výchozí odhad podle zkušeností v profilu: začátečník 1, běžně 3, zkušený 4. RPE a dokončení odjetých workoutů zpřesňují každý typ zvlášť. Samotné spárování aktivity úroveň nezvyšuje.'],
+  workoutSystems:['VO₂max, anaerobní a sprint','VO₂max: cílem je vysoký příjem kyslíku. Typicky úseky 2–5 minut nebo husté série 30/30 či 40/20; krátké pauzy drží kyslíkovou spotřebu vysoko.','Anaerobní: cílem je kapacita pro tvrdé nástupy, typicky 30–120 sekund s delší regenerací. Úseky mohou mít předepsaný výkon, 30s Wingate je naopak maximální úsilí.','Sprint: krátké maximální úseky přibližně 8–15 sekund s plnou regenerací, zaměřené na špičkový výkon a nervosvalovou koordinaci. Delší sprint má větší anaerobní podíl.','Systémy se překrývají. Typ tréninku určuje cíl celé struktury a pauzy, ne jen výkonová zóna jednoho úseku. Maximální sprint nepředepisujeme jako pevné procento FTP.'],
+  suitability:['Vhodnost','Jak dobře workout sedí na vybraný den: typ, doporučená délka a load, obtížnost proti odhadované úrovni, připravenost a kvalitní dny v týdnu.','Procento je skóre shody, ne pravděpodobnost úspěchu. Doporučený výběr střídá podobně vhodné struktury a délky, proto nemusí být procenta sestupně. Řazení podle obtížnosti nebo délky zvolíš ve filtrech.'],
   duration:['Čas na trénink','Nech prázdné a trenér určí nejvhodnější délku sám – podle plánu v Intervals.icu, kondice (CTL), formy (TSB), spánku a plánu týdne. Může to být 50 minut i 4 hodiny.','Vyplň jen tehdy, když máš opravdu časový limit.'],
-  libraryDuration:['Délka','Prázdné = délku doporučí trenér a seznam se podle ní jen seřadí. Když vyplníš délku, ukážu workouty v toleranci kolem ní.'],
+  libraryDuration:['Délka','Prázdné = délku doporučí trenér. Vyplněná délka s tolerancí vymezí povolené rozmezí: 90 ± 30 minut znamená 60–120 minut. Doporučený výběr nabízí různé délky v tomto rozmezí; pro přesnou délku zvol „Nejbližší délka“.'],
   load:['Load (TSS) a IF','Load je tréninková zátěž v TSS – stejné číslo, ze kterého Intervals.icu počítá kondici (CTL) a únavu (ATL). Spojuje délku a intenzitu: hodina přesně na FTP = 100 TSS.','IF (intensity factor) říká, jak tvrdě se jede vůči prahu: 0,55–0,65 regenerace, 0,65–0,75 vytrvalost, 0,75–0,85 tempo / sweet spot, 0,85–1,0 práh, nad 1,0 VO₂max a víc. Platí TSS = hodiny × IF² × 100, takže 2 h na IF 0,7 ≈ 98 TSS.','Ve filtru vyplň load jen tehdy, když chceš konkrétní zátěž – jinak ho neřeš.'],
   rpe:['RPE 1–10','Jak těžký trénink subjektivně byl: 1–2 velmi lehce, 3–4 lehce, 5–6 středně, 7–8 těžce, 9 velmi těžce, 10 maximum.','Uložím ho k aktivitě i do Intervals.icu. Pro trenéra je to nejdůležitější signál, jestli byl trénink přiměřený.'],
   feedback:['Naplánované tréninky','Jak velkou část tréninku jsi odjel, spočítám sám z aktivity spárované v Intervals.icu (zátěž nebo čas proti plánu).','Ty doplníš jen RPE a případně pocit. RPE se zapíše i k aktivitě v Intervals.icu.'],
@@ -3150,6 +3153,7 @@ function renderRecommendChrome(){
   $('recommendFocus').innerHTML=[['',ctx?.role==='quality'?'Kvalita · vybere trenér':'Doporučí trenér'],...REC_SYSTEMS[sport].map(k=>[k,capabilityLabel(k)])].map(([k,label])=>'<button type="button" class="btn focus-tab'+(sys===k?' primary':'')+'" data-rec-system="'+k+'" aria-pressed="'+(sys===k)+'">'+esc(label)+(ctx&&(ROLE_SYSTEM[ctx.role]??null)===k?' <small>★ návrh dne</small>':'')+'</button>').join('');
   const parts=[];const dur=$('workoutDuration').value,load=$('workoutLoad').value,diff=$('workoutDifficulty').value,phase=$('workoutPhase');
   parts.push(dur?dur+' min ± '+$('workoutDurationTolerance').value:'délka podle trenéra');if(load)parts.push('~'+load+' TSS');if(diff)parts.push('obtížnost ≤ '+diff);if(phase.value)parts.push(phase.selectedOptions[0].textContent);
+  if($('workoutSort')?.value!=='recommended')parts.push($('workoutSort')?.selectedOptions[0]?.textContent||'');
   parts.push($('workoutEnvironment').value==='indoor'?'indoor':'outdoor');if($('workoutScheduleDate').value)parts.push(dateLabel($('workoutScheduleDate').value));
   $('recommendFilterSummary').textContent=parts.join(' · ');
 }
@@ -3246,7 +3250,7 @@ function installRecommendations(){
   let open=false;try{open=localStorage.getItem('pfd-rec-filters')==='open';}catch{}
   const setFilters=v=>{$('recommendFilters').hidden=!v;$('toggleRecommendFilters').setAttribute('aria-expanded',String(v));$('toggleRecommendFilters').textContent=v?'⚙ Skrýt filtry':'⚙ Filtry';try{localStorage.setItem('pfd-rec-filters',v?'open':'closed');}catch{}};
   setFilters(open);$('toggleRecommendFilters').onclick=()=>setFilters($('recommendFilters').hidden);
-  $('resetRecommendFilters').onclick=()=>{for(const id of ['workoutDuration','workoutLoad'])$(id).value='';for(const id of ['workoutSystem','workoutDifficulty','workoutPhase'])$(id).value='';$('workoutDurationTolerance').value='15';loadWorkoutLibrary();};
+  $('resetRecommendFilters').onclick=()=>{for(const id of ['workoutDuration','workoutLoad'])$(id).value='';for(const id of ['workoutSystem','workoutDifficulty','workoutPhase'])$(id).value='';$('workoutSort').value='recommended';$('workoutDurationTolerance').value='15';loadWorkoutLibrary();};
   for(const id of ['workoutDuration','workoutLoad'])$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loadWorkoutLibrary();}});
   syncRecSportUi();
 }

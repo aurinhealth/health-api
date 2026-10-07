@@ -136,13 +136,14 @@ body{background:var(--bg);font-size:14px;letter-spacing:-.01em}.shell{grid-templ
       <div class="recommend-toolbar"><button class="btn" type="button" id="toggleRecommendFilters" aria-expanded="false" aria-controls="recommendFilters">⚙ Filtry</button><span class="small" id="recommendFilterSummary"></span></div>
       <div id="recommendFilters" class="recommend-filters" hidden>
         <div class="workout-filter-grid">
-          <label><span class="small">Typ</span><select id="workoutSystem">
+          <label><span class="small">Typ <button type="button" class="info-tip" data-info="workoutSystems" aria-label="Vysvětlivka: typy tréninků">i</button></span><select id="workoutSystem">
             <option value="">Doporučí trenér</option><option value="recovery">Regenerace</option><option value="endurance">Vytrvalost</option><option value="tempo">Tempo</option><option value="sweet_spot" data-ride-only>Sweet spot</option><option value="threshold">Práh</option><option value="vo2max">VO₂max</option><option value="anaerobic">Anaerobní</option><option value="sprint">Sprint</option>
           </select></label>
           <label><span class="small">Délka (min) <button type="button" class="info-tip" data-info="libraryDuration" aria-label="Vysvětlivka: délka">i</button></span><input id="workoutDuration" type="number" min="20" max="360" step="5" placeholder="auto"></label>
           <label><span class="small">Tolerance délky</span><select id="workoutDurationTolerance"><option value="5">±5 min</option><option value="10">±10 min</option><option value="15" selected>±15 min</option><option value="30">±30 min</option></select></label>
           <label><span class="small">Cílový load (TSS) <button type="button" class="info-tip" data-info="load" aria-label="Vysvětlivka: load">i</button></span><input id="workoutLoad" type="number" min="0" max="400" step="5" placeholder="např. 100"></label>
           <label><span class="small">Max. obtížnost <button type="button" class="info-tip" data-info="difficulty" aria-label="Vysvětlivka: obtížnost">i</button></span><select id="workoutDifficulty"><option value="">Bez limitu</option><option value="2">2 · velmi lehké</option><option value="3">3 · lehké</option><option value="4">4</option><option value="5">5 · střední</option><option value="6">6</option><option value="7">7 · náročné</option><option value="8">8</option><option value="9">9 · velmi náročné</option><option value="10">10 · maximum</option></select></label>
+          <label><span class="small">Řazení</span><select id="workoutSort"><option value="recommended">Doporučené · pestrý výběr</option><option value="difficulty">Nejtěžší první</option><option value="duration">Nejbližší délka</option></select></label>
           <label><span class="small">Fáze <button type="button" class="info-tip" data-info="phase" aria-label="Vysvětlivka: fáze">i</button></span><select id="workoutPhase"><option value="">Auto</option><option value="base">Základ (Base)</option><option value="build">Rozvoj (Build)</option><option value="recovery">Regenerace</option><option value="taper">Ladění (Taper)</option></select></label>
           <label><span class="small">Kde</span><select id="workoutEnvironment" data-env-select><option value="outdoor" selected>Venku</option><option value="indoor">Uvnitř (trenažér)</option></select></label>
           <label><span class="small">Naplánovat na</span><input id="workoutScheduleDate" type="date"></label>
@@ -151,7 +152,7 @@ body{background:var(--bg);font-size:14px;letter-spacing:-.01em}.shell{grid-templ
       </div>
       <div id="workoutRankingContext" class="notice recommend-context">Vyber zaměření nebo uprav filtry.</div>
       <div id="workoutResults" class="workout-results"></div>
-      <details class="recommend-level"><summary>Moje úroveň <button type="button" class="info-tip" data-info="capability" aria-label="Vysvětlivka: úroveň">i</button></summary><div id="workoutCapabilities" class="capability-grid"></div></details>
+      <details class="recommend-level"><summary>Odhad úrovně podle typu <button type="button" class="info-tip" data-info="capability" aria-label="Vysvětlivka: úroveň">i</button></summary><div id="workoutCapabilities" class="capability-grid"></div></details>
     </div>
   </dialog>
   <div id="workoutsGym" hidden>
