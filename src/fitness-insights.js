@@ -2,6 +2,7 @@
 // our own data: muscle freshness and muscular load per muscle group, cardio
 // focus from heart-rate/power zone times, and personal records.
 // The scales are our own estimates, not Bevel's algorithms.
+import { L, plural } from './lang.js';
 import { EXERCISES, FOCUS_GROUPS } from "./strength-generator.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 
@@ -194,9 +195,9 @@ export function recordPeriods(today, dates = []) {
   const known = dates.filter(Boolean).sort(), years = [...new Set(known.map(d => d.slice(0, 4)))].sort().reverse();
   if (!years.includes(today.slice(0, 4))) years.unshift(today.slice(0, 4));
   const periods = {};
-  for (const m of [1, 3, 6]) periods[m + "m"] = { kind: "months", months: m, label: m + (m === 1 ? " měsíc" : m <= 4 ? " měsíce" : " měsíců"), start: shiftMonths(today, m), end: today };
+  for (const m of [1, 3, 6]) periods[m + "m"] = { kind: "months", months: m, label: m + " " + plural(m, "měsíc", "měsíce", "měsíců", "month", "months"), start: shiftMonths(today, m), end: today };
   for (const y of years) periods["y" + y] = { kind: "year", year: Number(y), label: y, start: y + "-01-01", end: y === today.slice(0, 4) ? today : y + "-12-31" };
-  periods.all = { kind: "all", label: "Vše", start: known[0] || today, end: today };
+  periods.all = { kind: "all", label: L("Vše", "All"), start: known[0] || today, end: today };
   return periods;
 }
 // points: [{date, value}]; better(a, b): a beats b.

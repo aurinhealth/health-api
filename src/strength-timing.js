@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // Include both sides of unilateral work, equipment setup, rests and gym delays.
 // Rests are counted between sets of an exercise; moving to the next exercise
 // is a changeover (setting up the station) instead of a full rest.
@@ -27,7 +28,7 @@ export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoa
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     r[11] = 'FALSE'; r[12] = '';
     const rest = warm ? 60 : def.fatigue >= 1.2 ? 150 : def.warmup ? 120 : 75;
-    r[9] = String(r[9] || '').replace(/\s*\[Pauza \d+ s\]/g, '').replace(/; poslední série do technického selhání, jen při čistém provedení/g, '') + ' [Pauza ' + rest + ' s]';
+    r[9] = String(r[9] || '').replace(/\s*\[Pauza \d+ s\]/g, '').replace(/; (?:poslední série do technického selhání, jen při čistém provedení|last set to technical failure, only with clean technique)/g, '') + ' [Pauza ' + rest + ' s]';
   }
   const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
   const station = name => /^Cable |^Single-arm cable |^Low-to-high cable /.test(name) ? 'cable' : /^DB |^Hammer curl/.test(name) ? 'dumbbells' : '';
@@ -45,9 +46,9 @@ export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoa
   // Only one last isolation set reaches technical failure on well-recovered
   // days, and never in a first session, whose loads are still a guess.
   if (!firstSession && factor >= .97 && (recoveryScore == null || recoveryScore >= 70)) {
-    const name = names.find(n => catalog[n]?.fatigue <= .5 && !catalog[n]?.warmup && (muscleLoad.get(catalog[n]?.muscle) || 0) < 2.5 && !/sportovní zátěž/.test(rows.find(r => r[1] === n)?.[9] || '') && !(protectedLegs && ['quads','hamstrings','glutes','calves'].includes(catalog[n]?.muscle)));
+    const name = names.find(n => catalog[n]?.fatigue <= .5 && !catalog[n]?.warmup && (muscleLoad.get(catalog[n]?.muscle) || 0) < 2.5 && !/sportovní zátěž|load from other sports/.test(rows.find(r => r[1] === n)?.[9] || '') && !(protectedLegs && ['quads','hamstrings','glutes','calves'].includes(catalog[n]?.muscle)));
     const last = name && rows.filter(r => r[0] === 'WORK' && r[1] === name).at(-1);
-    if (last) { last[11] = 'TRUE'; last[9] += '; poslední série do technického selhání, jen při čistém provedení'; }
+    if (last) { last[11] = 'TRUE'; last[9] += L('; poslední série do technického selhání, jen při čistém provedení', '; last set to technical failure, only with clean technique'); }
   }
   return rows;
 }

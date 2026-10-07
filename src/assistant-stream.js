@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // Reveal only the answer string from a partial structured reply. Never expose
 // unfinished action JSON or incomplete escapes to the chat.
 export function partialCoachAnswer(json){
@@ -17,7 +18,7 @@ export function partialCoachAnswer(json){
 }
 
 export async function readOpenAIStream(response,onText){
-  if(!response.body)throw new Error('AI nevrátila odpověď.');
+  if(!response.body)throw new Error(L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
   const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',completed=null,text='';
   const parse=block=>{
     const lines=block.split(/\r?\n/).filter(line=>line.startsWith('data:')).map(line=>line.slice(5).trimStart());if(!lines.length)return;
@@ -27,7 +28,7 @@ export async function readOpenAIStream(response,onText){
     if(event.type==='response.completed')completed=event.response;
     // Cut off at max_output_tokens: the part that arrived is kept and marked.
     if(event.type==='response.incomplete')completed={...event.response,status:'incomplete'};
-    if(['error','response.failed'].includes(event.type)){const failure=new Error(String(event.error?.message||event.response?.error?.message||event.message||'odpověď selhala'));failure.ai=true;throw failure;}
+    if(['error','response.failed'].includes(event.type)){const failure=new Error(String(event.error?.message||event.response?.error?.message||event.message||L('odpověď selhala', 'the answer failed')));failure.ai=true;throw failure;}
   };
   try{
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let match;
@@ -35,7 +36,7 @@ export async function readOpenAIStream(response,onText){
       if(done)break;
     }
     if(buffer.trim())parse(buffer);
-    if(!completed)throw new Error('Spojení s AI se přerušilo. Zkus to znovu.');
+    if(!completed)throw new Error(L('Spojení s AI se přerušilo. Zkus to znovu.', 'The connection to the AI was interrupted. Try again.'));
     return {...completed,streamedText:text};
   }finally{reader.releaseLock();}
 }
@@ -49,7 +50,7 @@ export function assistantStreamResponse(work){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
       try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}));send({type:'done',result});}
       catch(error){console.error('Streaming assistant failed',error.message);// What the AI service said is shown (wrong model, key, quota); internal errors are not.
-        send({type:'error',message:error?.limit?error.message:'AI odpověď se nepodařilo dokončit'+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+'. Zkus to znovu.'});}
+        send({type:'error',message:error?.limit?error.message:L('AI odpověď se nepodařilo dokončit', 'The AI answer couldn\'t be finished')+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+L('. Zkus to znovu.', '. Try again.')});}
       finally{if(!cancelled)controller.close();}
     },cancel(){cancelled=true;}
   });

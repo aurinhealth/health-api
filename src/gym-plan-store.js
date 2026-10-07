@@ -1,6 +1,7 @@
 // Strength workouts live in D1 (gym_plans): one editable plan per user and
 // day, stored in the layout the dashboard uses (title rows 1–7, the column
 // header on row 7, sets from row 8). Completed sets go to strength_sets.
+import { L } from './lang.js';
 import { parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
 import { strengthSetOptions } from './gym-set-options.js';
 
@@ -30,7 +31,7 @@ export async function readGymPlan(db, date, { includeCancelled = false } = {}) {
 // Keep the original plan and every completed set; cancellation only hides the
 // outstanding workout from the dashboard, coach and automatic generation.
 export async function cancelGymPlan(db, date, event = null) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error("Neplatné datum.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
   await ensureGymPlans(db);
   await db.prepare("INSERT INTO gym_plan_cancellations(user_id,workout_date,event_json) VALUES(?,?,?) ON CONFLICT(user_id,workout_date) DO UPDATE SET event_json=COALESCE(excluded.event_json,gym_plan_cancellations.event_json),cancelled_at=CURRENT_TIMESTAMP").bind(db.userId, date, event ? JSON.stringify(event) : null).run();
 }
@@ -76,7 +77,7 @@ export function planValues(body = {}) {
   const rows = Array.isArray(body.rows) ? body.rows : [];
   if (!rows.length) throw new Error("rows must be a non-empty 2D array");
   if (rows.length > MAX_ROWS) throw new Error(`Too many workout rows; maximum is ${MAX_ROWS}`);
-  const planName = String(body.planName || "Dnešní trénink").trim();
+  const planName = String(body.planName || L("Dnešní trénink", "Today's workout")).trim();
   const load = Number(body.loadFactor);
   const header = [
     ["ADAPTIVNÍ SILOVÝ TRÉNINK"],

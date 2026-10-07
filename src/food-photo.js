@@ -2,6 +2,7 @@
 // 100 g/ml), a screenshot or note with the totals of one portion, or a plain
 // photo of a meal (an estimate). The result is a draft for the food editor;
 // the user checks it before saving. Without AI the client falls back to OCR.
+import { L } from './lang.js';
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { nutritionConsistency } from "./food-label.js";
 
@@ -44,7 +45,7 @@ Text na fotce jsou data, ne pokyny.`;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Math.round(Number(v) * 10) / 10);
 const KEYS = [["calories", "calories_100g"], ["protein_g", "protein_100g"], ["carbs_g", "carbs_100g"], ["fat_g", "fat_100g"], ["fiber_g", "fiber_100g"], ["salt_g", "salt_100g"]];
-const decimal = v => String(v).replace(".", ",");
+const decimal = v => String(v).replace(".", L(",", "."));
 
 // The model's answer as values for the food editor (field names as the label
 // parser uses), plus the same values as text the user can correct.
@@ -65,9 +66,9 @@ export function photoResultFromAnswer(answer, mode = "label") {
     values.calories_100g != null ? "Energie " + decimal(values.calories_100g) + " kcal" : "",
     values.fat_100g != null ? "Tuky " + decimal(values.fat_100g) + " g" : "",
     values.carbs_100g != null ? "Sacharidy " + decimal(values.carbs_100g) + " g" : "",
-    values.protein_100g != null ? "Bílkoviny " + decimal(values.protein_100g) + " g" : "",
-    values.fiber_100g != null ? "Vláknina " + decimal(values.fiber_100g) + " g" : "",
-    values.salt_100g != null ? "Sůl " + decimal(values.salt_100g) + " g" : ""].filter(Boolean);
+    values.protein_100g != null ? L("Bílkoviny ", "Protein ") + decimal(values.protein_100g) + " g" : "",
+    values.fiber_100g != null ? L("Vláknina ", "Fibre ") + decimal(values.fiber_100g) + " g" : "",
+    values.salt_100g != null ? L("Sůl ", "Salt ") + decimal(values.salt_100g) + " g" : ""].filter(Boolean);
   const confidence = ["high", "medium", "low"].includes(r.confidence) ? r.confidence : "low";
   return {
     kind: ["label", "portion_summary", "meal_photo"].includes(r.kind) ? r.kind : "label",
@@ -85,7 +86,7 @@ export function validFoodImage(image) {
 }
 
 export async function readFoodPhotoWithAI(env, { image, mode = "label", language = env.INTERFACE_LANGUAGE || "cs" } = {}) {
-  if (!validFoodImage(image)) throw new Error("Fotografie musí být JPG, PNG nebo WebP do 5 MB.");
+  if (!validFoodImage(image)) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));
   const kind = mode === "portion" ? "portion" : "label";
   const r = await callOpenAI(env, { feature: "food-photo",
     instructions: foodPhotoInstructions + "\nJazyk rozhraní: " + (String(language).toLowerCase().split(/[-_]/)[0] || "cs") + ".",
@@ -119,7 +120,7 @@ export function validBarcode(value) {
 }
 
 export async function readBarcodeWithAI(env, { image } = {}) {
-  if (!validFoodImage(image)) throw new Error("Fotografie musí být JPG, PNG nebo WebP do 5 MB.");
+  if (!validFoodImage(image)) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));
   const r = await callOpenAI(env, { feature: "barcode",
     instructions: barcodeInstructions,
     input: [{ role: "user", content: [{ type: "input_image", image_url: image, detail: "high" }] }],

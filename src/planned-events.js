@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import {editLocalWorkout} from './local-workouts.js';
 // App-owned plans change locally, then export through the outbox. Legacy
 // imported plans still change at their provider before updating the cache.
@@ -23,7 +24,7 @@ export function shiftEventStart(start, date) {
 }
 
 function auth(env) {
-  if (!env.INTERVALS_API_KEY) throw new Error("Nejprve připoj Intervals.icu.");
+  if (!env.INTERVALS_API_KEY) throw new Error(L("Nejprve připoj Intervals.icu.", "Connect Intervals.icu first."));
   return { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" };
 }
 
@@ -33,14 +34,14 @@ async function plannedRow(db, eventId) {
 
 export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch) {
   const id = eventIdOf(eventId);
-  if (!id) throw new Error("Neplatný plánovaný trénink.");
-  if (!validDate(date)) throw new Error("Neplatné datum.");
+  if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
+  if (!validDate(date)) throw new Error(L("Neplatné datum.", "Invalid date."));
   const row = await plannedRow(env.DB, id);
   let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
   const start = shiftEventStart(payload.start_date_local || row?.start_time, date);
   if(id.startsWith('local-')){const result=await editLocalWorkout(env,id,{start_date_local:start,end_date_local:null},fetchImpl);const gym=isStrengthEvent(payload)?await moveGymPlan(env.DB,eventDate(payload),date):{moved:false};return {...result,date,gymPlanMoved:gym.moved};}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ start_date_local: start }) });
-  if (!response.ok) throw new Error("Intervals.icu přesun odmítlo (HTTP " + response.status + ").");
+  if (!response.ok) throw new Error(L("Intervals.icu přesun odmítlo (HTTP ", "Intervals.icu rejected the move (HTTP ") + response.status + ").");
   const updated = await response.json().catch(() => ({}));
   const event = { ...payload, ...updated, start_date_local: updated.start_date_local || start };
   const end = event.end_date_local || null;
@@ -57,16 +58,16 @@ export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch
 // keeps the environment on its link, so its steps are drawn for that place.
 export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = fetch) {
   const id = eventIdOf(eventId);
-  if (!id) throw new Error("Neplatný plánovaný trénink.");
-  if (!["indoor", "outdoor"].includes(environment)) throw new Error("Vyber venku, nebo uvnitř.");
+  if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
+  if (!["indoor", "outdoor"].includes(environment)) throw new Error(L("Vyber venku, nebo uvnitř.", "Choose outdoor or indoor."));
   const row = await plannedRow(env.DB, id);
   let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
-  if (isStrengthEvent(payload)) throw new Error("Prostředí jde změnit jen u kola a běhu.");
+  if (isStrengthEvent(payload)) throw new Error(L("Prostředí jde změnit jen u kola a běhu.", "The environment can only be changed for rides and runs."));
   const run = /run/i.test(String(payload.type || ""));
   const type = run ? (environment === "indoor" ? "VirtualRun" : "Run") : (environment === "indoor" ? "VirtualRide" : "Ride");
   if(id.startsWith('local-'))return {...await editLocalWorkout(env,id,{type,indoor:environment==='indoor'},fetchImpl),environment,type};
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ type }) });
-  if (!response.ok) throw new Error("Intervals.icu změnu odmítlo (HTTP " + response.status + ").");
+  if (!response.ok) throw new Error(L("Intervals.icu změnu odmítlo (HTTP ", "Intervals.icu rejected the change (HTTP ") + response.status + ").");
   const updated = await response.json().catch(() => ({}));
   const event = { ...payload, ...updated, type: updated.type || type, indoor: environment === "indoor" };
   if (row) await env.DB.prepare("UPDATE health_datapoints SET payload_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(JSON.stringify(event), env.DB.userId, row.id).run();
@@ -76,13 +77,13 @@ export async function setPlannedEnvironment(env, { eventId, environment }, fetch
 
 export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
   const id = eventIdOf(eventId);
-  if (!id) throw new Error("Neplatný plánovaný trénink.");
+  if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   const row = await plannedRow(env.DB, id);
   let event = {}; try { event = JSON.parse(row?.payload_json || '{}'); } catch {}
   if(id.startsWith('local-')){if(isStrengthEvent(event))await cancelGymPlan(env.DB,eventDate(event),event);return editLocalWorkout(env,id,{deleted:true},fetchImpl);}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "DELETE", headers: auth(env) });
   // Already gone in Intervals.icu: still remove the local copy.
-  if (!response.ok && response.status !== 404) throw new Error("Intervals.icu smazání odmítlo (HTTP " + response.status + ").");
+  if (!response.ok && response.status !== 404) throw new Error(L("Intervals.icu smazání odmítlo (HTTP ", "Intervals.icu rejected the deletion (HTTP ") + response.status + ").");
   if (isStrengthEvent(event)) {
     const date=eventDate(event)||String(row.start_time).slice(0,10);
     const remaining=(await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id!=? AND start_time>=? AND start_time<?").bind(env.DB.userId,'planned:'+id,date,date+'T23:59:59.999').all()).results||[];

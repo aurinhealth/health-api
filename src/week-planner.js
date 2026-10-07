@@ -1,3 +1,4 @@
+import { L, bilingual } from './lang.js';
 import { readGymPlan } from "./gym-plan-store.js";
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
@@ -12,14 +13,21 @@ export const DEFAULT_LOCATION = { name: "Kutná Hora", latitude: 49.9484, longit
 
 // Relative load of a role; the client multiplies the shares by the weekly target.
 const SHARE = { long: 1.5, quality: 1.2, endurance: 1, recovery: .5, gym_upper: .4, gym_full: .5 };
-export const ROLE_LABELS = {
+export const ROLE_LABELS = bilingual({
   long: "Dlouhý trénink",
   quality: "Kvalita (intervaly)",
   endurance: "Vytrvalost",
   recovery: "Lehce / regenerace",
   gym_upper: "Posilovna · s rezervou",
   gym_full: "Posilovna · celé tělo"
-};
+}, {
+  long: "Long workout",
+  quality: "Quality (intervals)",
+  endurance: "Endurance",
+  recovery: "Easy / recovery",
+  gym_upper: "Gym · with reserve",
+  gym_full: "Gym · full body"
+});
 // What the coach should do with the role (the coach keeps its readiness guardrails).
 export const ROLE_FOCUS = { long: "long_endurance", endurance: "endurance", recovery: "recovery", quality: null };
 
@@ -41,7 +49,7 @@ export function sanitizeWeekPlan(input = {}) {
     ? { name: String(loc.name || "").trim().slice(0, 80) || DEFAULT_LOCATION.name, latitude: Math.round(lat * 1e4) / 1e4, longitude: Math.round(lon * 1e4) / 1e4 }
     : DEFAULT_LOCATION;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
-  if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error('Počet aktivit musí být 0 až 14.');
+  if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error(L('Počet aktivit musí být 0 až 14.', 'The number of activities must be 0 to 14.'));
   return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}) };
 }
 
@@ -86,14 +94,14 @@ export async function getWeekPlan(db, date = null) {
 // week plan has no gym that day (an empty week plan does not decide), or a
 // plan made or edited by the athlete is already stored.
 export async function nightlyGymSkip(db, date) {
-  if ((await getAthleteState(db)).status !== 'active') return 'Aktuální stav pozastavuje tréninky.';
+  if ((await getAthleteState(db)).status !== 'active') return L('Aktuální stav pozastavuje tréninky.', 'Your current status pauses training.');
   const prefs = await getWeekPlan(db, date);
   const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
-  if (prefs.availability[weekday].minutes === 0) return 'Tento den nemáš čas na aktivitu.';
-  if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return "Podle týdenního plánu není tento den gym.";
+  if (prefs.availability[weekday].minutes === 0) return L('Tento den nemáš čas na aktivitu.', 'You don\'t have time for an activity on this day.');
+  if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return L("Podle týdenního plánu není tento den gym.", "The week plan has no gym on this day.");
   const gym = await readGymPlan(db, date);
-  if (gym.cancelled) return "Gym na tento den jsi zrušil.";
-  if (gym.stored) return "Na tento den už gym plán je.";
+  if (gym.cancelled) return L("Gym na tento den jsi zrušil.", "You cancelled the gym for this day.");
+  if (gym.stored) return L("Na tento den už gym plán je.", "There's already a gym plan for this day.");
   return null;
 }
 
@@ -110,7 +118,7 @@ export async function saveWeekPlan(db, input, date = null) {
 }
 
 export async function addWeekSport(db,date,sport) {
-  if(!validDay(date)||!PLANNER_SPORTS.includes(sport))throw new Error('Neplatný den nebo sport.');
+  if(!validDay(date)||!PLANNER_SPORTS.includes(sport))throw new Error(L('Neplatný den nebo sport.', 'Invalid day or sport.'));
   const prefs=await getWeekPlan(db,date),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
   if(!prefs.days[weekday].includes(sport)&&prefs.days[weekday].length<MAX_PER_DAY)prefs.days[weekday].push(sport);
   return saveWeekPlan(db,prefs,date);

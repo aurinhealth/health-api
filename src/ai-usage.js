@@ -3,6 +3,7 @@
 // the limit before asking and records the cost after. The limit is the lever a
 // paid tier would raise: AI_DAILY_LIMIT_USD (default 1 USD a day; 0 turns AI
 // off for everyone but the owner). The owner is never limited.
+import { L } from './lang.js';
 import { pragueToday } from "./prague-date.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -52,7 +53,7 @@ export async function assertAiAllowance(env) {
   // A failed read of the log does not cost the user the answer.
   const spent = await aiSpentToday(env).catch(error => { console.error("AI usage read failed", error?.message || error); return 0; });
   if (spent < limit && limit > 0) return;
-  const error = new Error(limit > 0 ? `Denní limit AI je vyčerpaný (${usd(limit)}). Zítra se obnoví.` : "AI funkce nejsou pro tento účet zapnuté.");
+  const error = new Error(limit > 0 ? L(`Denní limit AI je vyčerpaný (${usd(limit)}). Zítra se obnoví.`, `The daily AI limit is used up (${usd(limit)}). It resets tomorrow.`) : L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   error.ai = true;
   error.limit = true;
   error.status = 429;

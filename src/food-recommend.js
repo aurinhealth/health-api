@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import legacy from "./index.js";
 import { getCookbook } from "./cookbook.js";
 import { completedMealTypes, nextUnloggedMeals } from "./nutrition-next.js";
@@ -196,13 +197,13 @@ function scoreRecipe(recipe, remaining, targets, context, maxMinutes) {
 
 function recommendationReason(recipe, remaining, context, maxMinutes) {
   const reasons = [];
-  if (context.postRide && Number(recipe.carbs_g || 0) >= 40) reasons.push("sacharidy po kole");
-  else if (context.endurance && Number(recipe.carbs_g || 0) >= Math.max(40, remaining.carbs_g * 0.25)) reasons.push("vhodné sacharidy pro vytrvalost");
-  if (remaining.fat_g <= 20 && Number(recipe.fat_g || 0) <= remaining.fat_g) reasons.push("vejde se do tuku");
-  if (remaining.protein_g > 0 && Number(recipe.protein_g || 0) >= Math.min(40, remaining.protein_g * 0.35)) reasons.push("dobrý příjem bílkovin");
-  if (maxMinutes && recipeMinutes(recipe) <= maxMinutes) reasons.push("rychlá příprava");
+  if (context.postRide && Number(recipe.carbs_g || 0) >= 40) reasons.push(L("sacharidy po kole", "carbs after the ride"));
+  else if (context.endurance && Number(recipe.carbs_g || 0) >= Math.max(40, remaining.carbs_g * 0.25)) reasons.push(L("vhodné sacharidy pro vytrvalost", "good carbs for endurance"));
+  if (remaining.fat_g <= 20 && Number(recipe.fat_g || 0) <= remaining.fat_g) reasons.push(L("vejde se do tuku", "fits your fat budget"));
+  if (remaining.protein_g > 0 && Number(recipe.protein_g || 0) >= Math.min(40, remaining.protein_g * 0.35)) reasons.push(L("dobrý příjem bílkovin", "good protein intake"));
+  if (maxMinutes && recipeMinutes(recipe) <= maxMinutes) reasons.push(L("rychlá příprava", "quick to prepare"));
   if (recipe.meal_prep) reasons.push("Meal Prep");
-  if (remaining.kcal <= 0 && Number(recipe.kcal || 0) <= 150) reasons.push("malá svačina bez velkého navýšení kcal");
+  if (remaining.kcal <= 0 && Number(recipe.kcal || 0) <= 150) reasons.push(L("malá svačina bez velkého navýšení kcal", "a small snack without many extra kcal"));
   return reasons.slice(0, 3).join(", ");
 }
 
@@ -285,37 +286,37 @@ export async function foodRecommend(env, url) {
     });
     const recommendations=filtered.map(recipe=>({recipe,score:scoreRecipe(recipe,share,targets,context,maxMinutes)}))
       .sort((a,b)=>b.score-a.score).slice(0,3).map(({recipe,score})=>({
-        ...recipe,meal_type:meal.type,servings:1,portion_label:'1 porce',recommendation_score:score,
+        ...recipe,meal_type:meal.type,servings:1,portion_label:L('1 porce', '1 serving'),recommendation_score:score,
         recommendation_reason:recommendationReason(recipe,share,context,maxMinutes)
       }));
     return {meal_type:meal.type,label:meal.label,target:share,recommendations};
   });
   const everyday={
     BREAKFAST:[
-      {name:'Ovesné vločky + skyr + banán',kcal:480,protein_g:29,carbs_g:72,fat_g:8,reason:'běžná snídaně'},
-      {name:'Vejce + pečivo + zelenina',kcal:420,protein_g:24,carbs_g:40,fat_g:18,reason:'snídaně s bílkovinami'}
+      {name:L('Ovesné vločky + skyr + banán', 'Oats + skyr + banana'),kcal:480,protein_g:29,carbs_g:72,fat_g:8,reason:L('běžná snídaně', 'an everyday breakfast')},
+      {name:L('Vejce + pečivo + zelenina', 'Eggs + bread + vegetables'),kcal:420,protein_g:24,carbs_g:40,fat_g:18,reason:L('snídaně s bílkovinami', 'a breakfast with protein')}
     ],
     LUNCH:[
-      {name:'Kuřecí maso + rýže + zelenina',kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:'běžný oběd'},
-      {name:'Tuňák + těstoviny + zelenina',kcal:520,protein_g:38,carbs_g:65,fat_g:9,reason:'rychlý oběd'}
+      {name:L('Kuřecí maso + rýže + zelenina', 'Chicken + rice + vegetables'),kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:L('běžný oběd', 'an everyday lunch')},
+      {name:L('Tuňák + těstoviny + zelenina', 'Tuna + pasta + vegetables'),kcal:520,protein_g:38,carbs_g:65,fat_g:9,reason:L('rychlý oběd', 'a quick lunch')}
     ],
     SNACK:[
-      {name:'Skyr + banán',kcal:250,protein_g:22,carbs_g:35,fat_g:1,reason:'rychlá svačina'},
-      {name:'Cottage + pečivo',kcal:350,protein_g:28,carbs_g:35,fat_g:10,reason:'svačina s bílkovinami'}
+      {name:L('Skyr + banán', 'Skyr + banana'),kcal:250,protein_g:22,carbs_g:35,fat_g:1,reason:L('rychlá svačina', 'a quick snack')},
+      {name:L('Cottage + pečivo', 'Cottage cheese + bread'),kcal:350,protein_g:28,carbs_g:35,fat_g:10,reason:L('svačina s bílkovinami', 'a snack with protein')}
     ],
     DINNER:[
-      {name:'Kuřecí maso + rýže + zelenina',kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:'běžná večeře'},
-      {name:'Cottage + pečivo + zelenina',kcal:380,protein_g:30,carbs_g:40,fat_g:10,reason:'jednoduchá večeře'}
+      {name:L('Kuřecí maso + rýže + zelenina', 'Chicken + rice + vegetables'),kcal:550,protein_g:42,carbs_g:65,fat_g:10,reason:L('běžná večeře', 'an everyday dinner')},
+      {name:L('Cottage + pečivo + zelenina', 'Cottage cheese + bread + vegetables'),kcal:380,protein_g:30,carbs_g:40,fat_g:10,reason:L('jednoduchá večeře', 'a simple dinner')}
     ]
   };
   const storeAlternatives=(everyday[slots[0]?.type]||[]).filter(item=>item.kcal<=remaining.kcal*1.1);
-  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180)storeAlternatives.push({name:'Bílý jogurt + ovoce',kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:'menší běžná porce'});
+  if(slots.length&&storeAlternatives.length<2&&remaining.kcal>=180)storeAlternatives.push({name:L('Bílý jogurt + ovoce', 'Plain yogurt + fruit'),kcal:180,protein_g:10,carbs_g:25,fat_g:4,reason:L('menší běžná porce', 'a smaller everyday portion')});
 
   let coaching = "";
-  if (heavilyOverCalories) coaching = "Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.";
-  else if (overCalories) coaching = "Kalorický cíl už je splněný/překročený. Pokud máš hlad, vybírej spíš malou svačinovou porci; další plnohodnotné jídlo není nutné jen kvůli makrům.";
-  else if (postRide) coaching = "Jsi krátce po vytrvalostním tréninku. Pokud budeš ještě jíst, preferuj sacharidy a rozumný příjem bílkovin.";
-  else if (context.endurance) coaching = "Dnes máš vytrvalostní zátěž, takže při dalším jídle mají vyšší prioritu sacharidy.";
+  if (heavilyOverCalories) coaching = L("Kaloricky jsi už výrazně nad dnešním cílem. Plnohodnotné jídlo teď nedoporučuji; pokud máš hlad nebo řešíš recovery po kole, drž se malé sacharidové svačiny.", "You're already well over today's calorie goal. I don't recommend a full meal now; if you're hungry or recovering after a ride, stick to a small carb snack.");
+  else if (overCalories) coaching = L("Kalorický cíl už je splněný/překročený. Pokud máš hlad, vybírej spíš malou svačinovou porci; další plnohodnotné jídlo není nutné jen kvůli makrům.", "The calorie goal is already met or exceeded. If you're hungry, choose a small snack portion; another full meal isn't needed just for the macros.");
+  else if (postRide) coaching = L("Jsi krátce po vytrvalostním tréninku. Pokud budeš ještě jíst, preferuj sacharidy a rozumný příjem bílkovin.", "You've just finished an endurance workout. If you eat again, prefer carbs and a reasonable amount of protein.");
+  else if (context.endurance) coaching = L("Dnes máš vytrvalostní zátěž, takže při dalším jídle mají vyšší prioritu sacharidy.", "You have endurance load today, so carbs take priority in your next meal.");
 
   return Response.json({
     status: "ok",

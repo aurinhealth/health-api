@@ -1,6 +1,7 @@
 // "Měl jsem snickers a kafe s mlékem" in the assistant: the sentence becomes a
 // draft of food entries. Saved foods are used first; only new foods are looked
 // up on the web. Nothing is logged until the user confirms the draft.
+import { L } from './lang.js';
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { lookupFoodWithAI } from "./food-ai.js";
 import { searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
@@ -90,10 +91,10 @@ export async function buildFoodDraft(env, message, today, { parse = parseFoodSen
 }
 
 export function foodDraftSummary(draft) {
-  if (!draft.items.length) return "Ve zprávě jsem nenašel žádné jídlo k zápisu.";
+  if (!draft.items.length) return L("Ve zprávě jsem nenašel žádné jídlo k zápisu.", "I didn't find any food to log in the message.");
   const found = draft.items.filter(i => i.totals), missing = draft.items.filter(i => !i.totals);
   const kcal = Math.round(found.reduce((s, i) => s + (i.totals.kcal || 0), 0));
-  return "Připravil jsem zápis: " + draft.items.map(i => i.name + " " + i.grams + " " + i.basis).join(", ") + (found.length ? ` · celkem asi ${kcal} kcal.` : ".")
-    + (missing.length ? " U „" + missing.map(i => i.name).join("“, „") + "“ jsem hodnoty nenašel; zadej je ve Výživě z etikety." : "")
-    + " Zkontroluj množství a potvrď.";
+  return L("Připravil jsem zápis: ", "I've prepared an entry: ") + draft.items.map(i => i.name + " " + i.grams + " " + i.basis).join(", ") + (found.length ? L(` · celkem asi ${kcal} kcal.`, ` · about ${kcal} kcal.`) : ".")
+    + (missing.length ? L(" U „", " I didn't find values for “") + missing.map(i => i.name).join(L("“, „", "”, “")) + L("“ jsem hodnoty nenašel; zadej je ve Výživě z etikety.", "”; enter them in Nutrition from the label.") : "")
+    + L(" Zkontroluj množství a potvrď.", " Check the amounts and confirm.");
 }

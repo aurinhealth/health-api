@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import {productFromLabel} from './food-sources.js';
 import {foodKey,foodSimilarity} from './personal-foods.js';
 async function ensure(db){await db.prepare('CREATE TABLE IF NOT EXISTS shared_foods (food_key TEXT PRIMARY KEY,search_name TEXT NOT NULL,product_json TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();await db.prepare('CREATE TABLE IF NOT EXISTS food_contributions (user_id INTEGER NOT NULL,personal_id TEXT NOT NULL,catalog_id TEXT NOT NULL,PRIMARY KEY(user_id,personal_id))').run();await ensureFoodReports(db);}
@@ -32,10 +33,10 @@ export async function removeFoodContribution(db,personalId){
   if(old)await db.prepare('DELETE FROM shared_foods WHERE food_key=? AND NOT EXISTS (SELECT 1 FROM food_contributions WHERE user_id IS NOT NULL AND catalog_id=?)').bind(old.catalog_id,old.catalog_id).run();
 }
 export async function reportFood(db,{catalogId,reason}){
-  await ensure(db);if(!/^[a-f0-9]{64}$/.test(String(catalogId||'')))throw new Error('Neplatná položka katalogu.');
-  reason=String(reason||'').trim().slice(0,500);if(!reason)throw new Error('Popiš, které údaje nesedí.');
+  await ensure(db);if(!/^[a-f0-9]{64}$/.test(String(catalogId||'')))throw new Error(L('Neplatná položka katalogu.', 'Invalid catalog item.'));
+  reason=String(reason||'').trim().slice(0,500);if(!reason)throw new Error(L('Popiš, které údaje nesedí.', 'Describe which values are wrong.'));
   const food=await db.prepare('SELECT food_key FROM shared_foods WHERE food_key=?').bind(catalogId).first();
-  if(!food){await db.prepare('CREATE TABLE IF NOT EXISTS shared_recipes (catalog_id TEXT PRIMARY KEY,recipe_json TEXT NOT NULL,search_name TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();if(!await db.prepare('SELECT catalog_id FROM shared_recipes WHERE catalog_id=?').bind(catalogId).first())throw new Error('Položka nebyla nalezena.');}
+  if(!food){await db.prepare('CREATE TABLE IF NOT EXISTS shared_recipes (catalog_id TEXT PRIMARY KEY,recipe_json TEXT NOT NULL,search_name TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();if(!await db.prepare('SELECT catalog_id FROM shared_recipes WHERE catalog_id=?').bind(catalogId).first())throw new Error(L('Položka nebyla nalezena.', 'The item wasn\'t found.'));}
   await db.prepare('INSERT INTO food_reports(user_id,catalog_id,reason) VALUES(?,?,?) ON CONFLICT(user_id,catalog_id) DO UPDATE SET reason=excluded.reason').bind(db.userId,catalogId,reason).run();
   return {status:'ok'};
 }

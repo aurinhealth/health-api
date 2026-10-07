@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import { trainingStatus } from './training-status.js';
 import { recoveryReadiness, sleepNeedFor } from './recovery-model.js';
 const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
@@ -95,10 +96,10 @@ export function buildAdaptiveDecision(context,food=null){
   };
   const tomorrow=upcoming[0]||null;
   const recommendations=[];
-  if(protectLegs) recommendations.push("Sniž objem a náročnost zatížených svalů a uprav načasování vůči klíčovému sportu. Nohy pravidelně posiluj i při cyklistice nebo běhu; sportovní zátěž jejich silový trénink nenahrazuje.");
-  else recommendations.push("Recovery a cyklistická zátěž dovolují standardní silový stimul.");
-  if(tomorrow?.intensity) recommendations.push("Před další intenzitou drž dnešní trénink technicky čistý a nejezdi zbytečný objem do selhání.");
-  if(remaining.protein_g>=30) recommendations.push("V jídelníčku ještě chybí významná část bílkovin; další jídlo směruj hlavně na protein.");
+  if(protectLegs) recommendations.push(L("Sniž objem a náročnost zatížených svalů a uprav načasování vůči klíčovému sportu. Nohy pravidelně posiluj i při cyklistice nebo běhu; sportovní zátěž jejich silový trénink nenahrazuje.", "Reduce the volume and difficulty for the loaded muscles and adjust the timing around your key sport. Keep training your legs regularly even while cycling or running; sport load doesn't replace their strength training."));
+  else recommendations.push(L("Recovery a cyklistická zátěž dovolují standardní silový stimul.", "Recovery and cycling load allow a standard strength stimulus."));
+  if(tomorrow?.intensity) recommendations.push(L("Před další intenzitou drž dnešní trénink technicky čistý a nejezdi zbytečný objem do selhání.", "Before the next intensity, keep today's workout technically clean and avoid unnecessary volume to failure."));
+  if(remaining.protein_g>=30) recommendations.push(L("V jídelníčku ještě chybí významná část bílkovin; další jídlo směruj hlavně na protein.", "Your food log is still missing a big part of your protein; make your next meal mainly about protein."));
   return {
     status:"ok",
     date:context?.date||null,

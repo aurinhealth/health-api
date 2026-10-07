@@ -38,7 +38,7 @@ test('legs are protected only when a key ride is close, not because of the usual
   const lower=generateStrengthPlan(context,{durationMinutes:60,focus:'lower'});
   const legs=lower.loadEstimates.filter(x=>['quads','hamstrings','glutes'].includes(EXERCISES[x.exercise].muscle));
   assert.ok(legs.length>=3);assert.ok(legs.every(x=>x.moderated&&!x.reducedDose&&x.sets<=3));
-  assert.match(lower.rationale,/rezervu u nohou/);
+  assert.match(lower.rationale,/u nich držet rezervu/);
 });
 test('sports do not count as completed strength coverage; future and warmup sets do not count either',()=>{
   const context=base();context.sports={recentActivities:[{date:'2026-10-03',type:'Ride',durationHours:3}]};

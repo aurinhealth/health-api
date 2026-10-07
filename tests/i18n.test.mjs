@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {dashboardPage} from '../src/dashboard.js';
-import {englishScript, replyLanguageNote, langBoot} from '../src/i18n.js';
+import {englishScript, langBoot} from '../src/i18n.js';
+import {aiLanguageNote, withLang} from '../src/lang.js';
 import {EN, EN_TEMPLATES, EN_PATTERNS} from '../src/i18n-en.js';
 
 test('the language is chosen before the first paint: lw-lang cookie, else the device', async () => {
@@ -39,8 +40,16 @@ test('dictionary entries are English and every pattern compiles', () => {
   for (const key of ['Světlý', 'Tmavý', 'Jazyk', 'Nastavení']) assert.ok(EN[key], key);
 });
 
-test('the assistant answers in English only when the app is in English', () => {
-  assert.match(replyLanguageNote({INTERFACE_LANGUAGE: 'en'}), /English/);
-  assert.equal(replyLanguageNote({INTERFACE_LANGUAGE: 'cs'}), '');
-  assert.equal(replyLanguageNote({}), '');
+test('AI texts follow the app language; chat answers in the language the athlete writes in', () => {
+  withLang('en', () => {
+    assert.match(aiLanguageNote('day-review'), /English/);
+    assert.match(aiLanguageNote('assistant'), /language the athlete writes in/);
+    assert.match(aiLanguageNote('assistant'), /workout names and descriptions[^.]*English/);
+    assert.equal(aiLanguageNote('food-sentence'), '');
+  });
+  withLang('cs', () => {
+    assert.equal(aiLanguageNote('day-review'), '');
+    assert.match(aiLanguageNote('assistant'), /v jazyce, ve kterém sportovec píše/);
+  });
+  assert.equal(aiLanguageNote('reflection'), '');
 });

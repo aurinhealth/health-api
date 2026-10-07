@@ -10,6 +10,9 @@
     }
   ],
   "compatibility_date": "2026-09-15",
+  // AsyncLocalStorage (node:async_hooks) holds the user's language during a
+  // request, see src/lang.js.
+  "compatibility_flags": ["nodejs_als"],
   // Smart Placement runs the Worker near the D1 database instead of near the
   // visitor when that is faster: one page load makes many database reads.
   // Its status is under Workers → health-api → Settings → Placement.

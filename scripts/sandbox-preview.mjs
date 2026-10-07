@@ -29,6 +29,7 @@ const adaptiveWeekText = await readFile(new URL('../src/adaptive-week.js',import
 const statusCoachText = await Promise.all(['training-status','coach-engine'].map(name=>readFile(new URL('../src/'+name+'.js',import.meta.url),'utf8')));
 const weeklyReviewText = await readFile(new URL('../src/weekly-plan-review.js',import.meta.url),'utf8');
 import { scopedDb } from "../src/tenancy.js";
+import { withLang } from "../src/lang.js";
 
 const day = (offset, base = today()) => { const d = new Date(base + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
 function today() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
@@ -150,7 +151,7 @@ async function staticResponses() {
   const generated = {};
   for (const sport of ["ride", "run"]) for (const offset of [0, 1, 2, 3, 4, 5, 6]) generated[sport + "|" + day(offset)] = await generate({ sport, date: day(offset), environment: "outdoor" });
   return {
-    "/app/api/me": { status: "ok", user: { id: 999, email: "sandbox@example.com", isAdmin: false }, missingProviders: [] },
+    "/app/api/me": { status: "ok", user: { id: 999, email: "sandbox@example.com", isAdmin: false }, missingProviders: [], onboarding: { completed: true } },
     "/app/api/connections": { status: "ok", providers: [{ id: "google", name: "Google Health", connected: true, configured: true, connectUrl: "#", extras: { birthday: false, weightWrite: false }, extrasUrl: "#", metrics: ["Spánek", "Aktivity"], note: "Sandbox" }, { id: "intervals", name: "Intervals.icu", connected: true, configured: true, metrics: ["Aktivity", "Plán"], note: "Sandbox", connectUrl: "#" }] },
     "/app/api/daily": dailyFor(T).daily, "/app/api/coaches": { status: "ok", coaches: [], reviews: [], priorities: ["Sandbox: ukázková data, nic se neukládá do živé aplikace."] },
     "/app/api/fitness": { status: "ok", wellness }, "/app/api/weight": { status: "ok", current: 82.4, records: Array.from({ length: 30 }, (_, i) => ({ sample_time: day(i - 29) + "T06:30:00Z", value_numeric: 83.6 - i * .04 })) },
@@ -191,7 +192,11 @@ function weatherSample(params) {
 // ---- Browser shim (static build): answers fetch() from the precomputed data.
 function shim(data, planner) {
   return `<script>
-(()=>{const DATA=${JSON.stringify(data).replace(/</g, "\\u003c")};${planner}
+(()=>{const lang=()=>document.documentElement.lang==='en'?'en':'cs',isEnglish=()=>lang()==='en',L=(cs,en)=>lang()==='en'?en:cs;
+const plural=(count,cs1,cs2,cs5,en1,en2)=>{const n=Math.abs(Math.round(Number(count)||0));return lang()==='en'?(n===1?en1:en2):n===1?cs1:n>=2&&n<=4?cs2:cs5;};
+const num=(value,digits=0)=>{const n=Number(value);if(!Number.isFinite(n))return '';const s=String(Math.round(n*10**digits)/10**digits);return lang()==='en'?s:s.replace('.',',');};
+const bilingual=(cs,en)=>{const t={};for(const k of Object.keys(cs))Object.defineProperty(t,k,{get:()=>L(cs[k],en[k]??cs[k]),enumerable:true});return t;};
+const DATA=${JSON.stringify(data).replace(/</g, "\\u003c")}[lang()];${planner}
 const statusCoaches=(()=>{const todayGymContext=(gym,date)=>({date,exercises:[...new Set((gym.values||[]).slice(7).filter(r=>r[0]==='WORK').map(r=>r[1]))].map(name=>({name,sets:gym.values.slice(7).filter(r=>r[0]==='WORK'&&r[1]===name).map(r=>({completed:r[8]==='TRUE'}))}))});${statusCoachText.map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return buildCoachCouncil;})();
 const fallbackReview=(()=>{${[statusCoachText[0],weeklyReviewText].map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return fallbackWeekReview;})();
 const gymDrafts={};let gymDraftSeq=0;
@@ -280,13 +285,13 @@ function fragment(html) {
 let inlineData;
 const buildIndex = process.argv.indexOf("--build");
 if (buildIndex > 0) {
-  inlineData = await staticResponses();
+  inlineData = { cs: await withLang('cs', staticResponses), en: await withLang('en', staticResponses) };
   const html = await page({ inline: true });
   await writeFile(process.argv[buildIndex + 1], process.argv.includes("--fragment") ? fragment(html) : html);
   console.log("Sandbox uložen: " + process.argv[buildIndex + 1]);
 } else {
   // Local server: the same shim, so the browser sees exactly the static build.
-  inlineData = await staticResponses();
+  inlineData = { cs: await withLang('cs', staticResponses), en: await withLang('en', staticResponses) };
   const port = Number(process.env.PORT) || 8792;
   http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");

@@ -30,7 +30,7 @@ async function api(minutes) {
   raw.sqlite.exec('CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))');
   await setBudget(db, minutes);
   const context = vm.createContext({
-    Request, Response, URL, console, crypto,
+    Request, Response, URL, console, crypto, lang: () => 'cs', L: cs => cs,
     getWeekPlan, availabilityOn, trainingBudget, parseTimeWindow, roleFor, targetFor,
     validTrainingDay: validDay, mondayOfDate: weekStartOf, pragueToday: () => today,
     getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes,

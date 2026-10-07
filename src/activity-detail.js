@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import {analyzeRide} from './ride-analysis.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
 const present=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
@@ -24,15 +25,15 @@ export function activityIntervals(detail={}){
   return rows.filter(r=>present(r.elapsed_time)||present(r.moving_time)).slice(0,60).map(r=>({label:r.label||null,type:r.type||null,start:present(r.start_time)?Number(r.start_time):null,seconds:Number(r.moving_time??r.elapsed_time),watts:present(r.average_watts)?Math.round(r.average_watts):null,np:present(r.weighted_average_watts)?Math.round(r.weighted_average_watts):null,hr:present(r.average_heartrate)?Math.round(r.average_heartrate):null,maxHr:present(r.max_heartrate)?Math.round(r.max_heartrate):null,cadence:present(r.average_cadence)?Math.round(r.average_cadence):null,distance:present(r.distance)?Number(r.distance):null,zone:present(r.zone)?Number(r.zone):null}));
 }
 async function boundedJson(response,maxBytes=8*1024*1024){
-  if(!response.ok)throw new Error('Zdroj aktivity není dostupný.');
+  if(!response.ok)throw new Error(L('Zdroj aktivity není dostupný.', 'The activity source isn\'t available.'));
   const reader=response.body.getReader(),chunks=[];let bytes=0;
-  try{while(true){const {value,done}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>maxBytes){await reader.cancel();throw new Error('Záznam aktivity je příliš velký.');}chunks.push(value);}}finally{reader.releaseLock();}
+  try{while(true){const {value,done}=await reader.read();if(done)break;bytes+=value.byteLength;if(bytes>maxBytes){await reader.cancel();throw new Error(L('Záznam aktivity je příliš velký.', 'The activity file is too large.'));}chunks.push(value);}}finally{reader.releaseLock();}
   const joined=new Uint8Array(bytes);let offset=0;for(const part of chunks){joined.set(part,offset);offset+=part.length;}return JSON.parse(new TextDecoder().decode(joined));
 }
 export async function activityDetail(request,env,id,authorized){
-  if(!authorized)return Response.json({message:'Pro soukromou trasu a detail aktivity se přihlas v Nastavení.'},{status:401,headers:{'Cache-Control':'no-store'}});
-  if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:'Neplatná aktivita.'},{status:400});
-  if(!env.INTERVALS_API_KEY)return Response.json({message:'Nejprve připoj Intervals.icu.'},{status:409});
+  if(!authorized)return Response.json({message:L('Pro soukromou trasu a detail aktivity se přihlas v Nastavení.', 'Sign in under Settings to see the private route and activity details.')},{status:401,headers:{'Cache-Control':'no-store'}});
+  if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:L('Neplatná aktivita.', 'Invalid activity.')},{status:400});
+  if(!env.INTERVALS_API_KEY)return Response.json({message:L('Nejprve připoj Intervals.icu.', 'Connect Intervals.icu first.')},{status:409});
   const headers={Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},base='https://intervals.icu/api/v1/activity/'+encodeURIComponent(id);
   try{
     const [detail,streams]=await Promise.all([fetch(base+'?intervals=true',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson),fetch(base+'/streams?types=time,watts,heartrate,altitude,cadence,latlng',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson).catch(()=>[])]);
@@ -43,5 +44,5 @@ export async function activityDetail(request,env,id,authorized){
     const stream=type=>(Array.isArray(streams)?streams:[]).find(x=>x.type===type)?.data||[],zones=Array.isArray(detail.icu_hr_zones)?detail.icu_hr_zones:null;
     const hrr=heartRateRecovery(stream('time'),stream('heartrate'),zones&&zones.length>=4?Number(zones[2])+1:null);
     return Response.json({status:'ok',activity,analysis:analyzeRide(activity,streams),streams:sampleActivityStreams(streams),intervals:activityIntervals(detail),hrr,source:'intervals.icu'},{headers:{'Cache-Control':'private, no-store'}});
-  }catch{return Response.json({message:'Detail není dostupný. Některé aktivity nemají přístupný GPS nebo výkonový stream.'},{status:502,headers:{'Cache-Control':'no-store'}});}
+  }catch{return Response.json({message:L('Detail není dostupný. Některé aktivity nemají přístupný GPS nebo výkonový stream.', 'Details aren\'t available. Some activities have no accessible GPS or power stream.')},{status:502,headers:{'Cache-Control':'no-store'}});}
 }

@@ -26,7 +26,7 @@ test("Dnes is the one day screen: no separate Přehled tab, the rest of Přehled
 });
 
 test("the timeline shows the day's weigh-ins and logs a weight for the shown day", () => {
-  assert.match(client, /cls:'weight',title:'Váha · '/);
+  assert.match(client, /cls:'weight',title:uiText\('Váha · ','Weight · '\)/);
   assert.match(client, /\$\('timelineWeight'\)\.onclick=\(\)=>openWeightSheet\(date\)/);
   assert.match(client, /body:JSON\.stringify\(\{kg:v,date\}\)/);
 });

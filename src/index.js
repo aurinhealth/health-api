@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
@@ -187,9 +188,9 @@ export default {
 async function appWeight(env, request) {
   const body = await request.json();
   const value = Number(body?.kg);
-  if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:"Neplatná hmotnost."},{status:400});
+  if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:L("Neplatná hmotnost.", "Invalid weight.")},{status:400});
   const today = pragueDate(), date = body?.date || today;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) return Response.json({status:"error",message:"Neplatné datum vážení."},{status:400});
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) return Response.json({status:"error",message:L("Neplatné datum vážení.", "Invalid weigh-in date.")},{status:400});
   // Today's weigh-in keeps its real time (for the day timeline); an earlier day gets noon.
   const now = date === today ? pragueNow() : null, at = now ? now.at : date+"T12:00:00+02:00";
   // With Google Health connected the weight goes there too; without it, only
@@ -396,8 +397,8 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 // writing when the user granted it).
 export async function googleToken(env, scopes = healthScopes(env)) {
   // Without a connection Google would only answer "missing refresh_token".
-  if (!env.GOOGLE_REFRESH_TOKEN) throw new Error("Google Health není připojené.");
-  if (!scopes.length) throw new Error("Google Health nemá povolené žádné oprávnění. V Nastavení obnov oprávnění Google.");
+  if (!env.GOOGLE_REFRESH_TOKEN) throw new Error(L("Google Health není připojené.", "Google Health isn't connected."));
+  if (!scopes.length) throw new Error(L("Google Health nemá povolené žádné oprávnění. V Nastavení obnov oprávnění Google.", "Google Health has no permissions granted. Renew the Google permissions in Settings."));
   const response = await fetchWithTimeout(
     "https://oauth2.googleapis.com/token",
 
@@ -2337,8 +2338,8 @@ async function energyForDate(env, date) {
 function goalPhrase(energy) {
   const deficit = Number(energy.calorieBreakdown?.weightLossDeficit) || 0;
   const target = energy.energyProfile?.targetWeightKg;
-  if (deficit > 0) return target ? `cílové tempo úbytku hmotnosti směrem k ${target} kg` : "cílové tempo úbytku hmotnosti";
-  return "udržení hmotnosti";
+  if (deficit > 0) return target ? L(`cílové tempo úbytku hmotnosti směrem k ${target} kg`, `your target rate of weight loss towards ${target} kg`) : L("cílové tempo úbytku hmotnosti", "your target rate of weight loss");
+  return L("udržení hmotnosti", "maintaining your weight");
 }
 
 async function analysisDaily(
@@ -2444,16 +2445,16 @@ async function analysisDaily(
       missing: energy.energyProfile.missing,
       energySource: energy.energyProfile.source,
       reason: !energy.energyProfile.ready
-        ? "Kalorický cíl zatím nepočítám, chybí: " + energy.energyProfile.missing.map(k => MISSING_LABELS[k] || k).join(", ") + "."
+        ? L("Kalorický cíl zatím nepočítám, chybí: ", "I can't calculate a calorie goal yet; missing: ") + energy.energyProfile.missing.map(k => MISSING_LABELS[k] || k).join(", ") + "."
         : (energy.nutritionContext?.endurance
-        ? "Dnešní cíl zohledňuje vytrvalostní zátěž a " + goalPhrase(energy) + "."
+        ? L("Dnešní cíl zohledňuje vytrvalostní zátěž a ", "Today's goal accounts for your endurance load and ") + goalPhrase(energy) + "."
         : energy.nutritionContext?.preRide
-          ? "Zítřejší kolo je zohledněné už dnes: mírně více sacharidů pro doplnění glykogenu, méně tuku, protein zůstává stabilní."
+          ? L("Zítřejší kolo je zohledněné už dnes: mírně více sacharidů pro doplnění glykogenu, méně tuku, protein zůstává stabilní.", "Tomorrow's ride is already accounted for today: slightly more carbs to top up glycogen, less fat, protein stays the same.")
         : energy.nutritionContext?.training
-          ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a " + goalPhrase(energy) + "."
-          : "Dnešní cíl vychází z klidového energetického základu a " + goalPhrase(energy) + ".")
-        + (energy.calorieBreakdown?.trendAdjustment ? " Podle vývoje váhy: " + TREND_REASONS[energy.calorieBreakdown.trendReason] + ", o " + Math.abs(energy.calorieBreakdown.trendAdjustment) + " kcal " + (energy.calorieBreakdown.trendAdjustment < 0 ? "méně" : "víc") + "." : "")
-        + (energy.calorieBreakdown?.floorApplied ? ` Cíl drží bezpečné minimum ${energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.` : ""),
+          ? L("Dnešní cíl zohledňuje plánovaný/dokončený trénink a ", "Today's goal accounts for your planned/completed training and ") + goalPhrase(energy) + "."
+          : L("Dnešní cíl vychází z klidového energetického základu a ", "Today's goal is based on your resting energy baseline and ") + goalPhrase(energy) + ".")
+        + (energy.calorieBreakdown?.trendAdjustment ? L(" Podle vývoje váhy: ", " Based on your weight trend: ") + TREND_REASONS[energy.calorieBreakdown.trendReason] + L(", o ", ", ") + Math.abs(energy.calorieBreakdown.trendAdjustment) + " kcal " + (energy.calorieBreakdown.trendAdjustment < 0 ? L("méně", "less") : L("víc", "more")) + "." : "")
+        + (energy.calorieBreakdown?.floorApplied ? L(` Cíl drží bezpečné minimum ${energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.`, ` The goal stays at the safe minimum of ${energy.calorieBreakdown.minTarget} kcal, so weight loss will be slower than the chosen rate.`) : ""),
       foodLog:
         await foodLogForDate(env, date)
     },
@@ -2882,10 +2883,10 @@ function recipeFitScore(recipe, remaining, targets, options) {
 function recommendationReason(recipe, remaining, options) {
   const reasons=[];
   if (options.postRide && Number(recipe.carbs_g)>=40) reasons.push('sacharidy po kole');
-  if (remaining.protein_g>0 && Number(recipe.protein_g)>=Math.min(40,remaining.protein_g*0.35)) reasons.push('dobrý příjem bílkovin');
-  if (options.maxMinutes && recipeMinutes(recipe)<=options.maxMinutes) reasons.push('rychlá příprava');
+  if (remaining.protein_g>0 && Number(recipe.protein_g)>=Math.min(40,remaining.protein_g*0.35)) reasons.push(L('dobrý příjem bílkovin', 'good protein intake'));
+  if (options.maxMinutes && recipeMinutes(recipe)<=options.maxMinutes) reasons.push(L('rychlá příprava', 'quick to prepare'));
   if (recipe.meal_prep) reasons.push('Meal Prep');
-  if (remaining.kcal<=0 && Number(recipe.kcal)<=150) reasons.push('malá svačina bez velkého navýšení kcal');
+  if (remaining.kcal<=0 && Number(recipe.kcal)<=150) reasons.push(L('malá svačina bez velkého navýšení kcal', 'a small snack without many extra kcal'));
   return reasons.slice(0,3).join(', ');
 }
 
@@ -2893,7 +2894,7 @@ async function foodRecommend(env, url) {
   const date=url.searchParams.get('date')||pragueDate();
   const log=await foodLogForDate(env,date);
   const energy=await energyForDate(env,date);
-  if(!energy.energyProfile.ready)return Response.json({status:"ok",date,calorieTarget:null,missing:energy.energyProfile.missing,foodTotals:log.totals,macroTargets:null,remaining:null,coaching:"Doporučení jídel potřebuje kalorický cíl. Doplň v profilu: "+energy.energyProfile.missing.map(k=>MISSING_LABELS[k]||k).join(", ")+".",mealRecommendations:[],recommendations:[],storeAlternatives:[]});
+  if(!energy.energyProfile.ready)return Response.json({status:"ok",date,calorieTarget:null,missing:energy.energyProfile.missing,foodTotals:log.totals,macroTargets:null,remaining:null,coaching:L("Doporučení jídel potřebuje kalorický cíl. Doplň v profilu: ", "Meal recommendations need a calorie goal. Add to your profile: ")+energy.energyProfile.missing.map(k=>MISSING_LABELS[k]||k).join(", ")+".",mealRecommendations:[],recommendations:[],storeAlternatives:[]});
   const targetKcal=Number(energy.calorieTarget||0);
   const targets=energy.macroTargets||dailyMacroTargets(energy.currentWeight,targetKcal,energy.nutritionContext||{});
   const eaten=log.entries.filter(r=>r.status==="eaten");
@@ -2943,26 +2944,26 @@ async function foodRecommend(env, url) {
       const mealMatch=keys.some(k=>hay.includes(k));
       return {recipe,mealMatch,score:recipeFitScore(recipe,share,targets,{postRide:postRide&&mealType!=="SNACK",maxMinutes})+(mealMatch?40:0)};
     }).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({
-      ...x.recipe,servings:1,portion:1,portion_label:"1 porce",meal_type:mealType,
+      ...x.recipe,servings:1,portion:1,portion_label:L("1 porce", "1 serving"),meal_type:mealType,
       recommendation_score:Math.round(Math.max(0,Math.min(100,x.score))*10)/10,
-      recommendation_reason:[recommendationReason(x.recipe,share,{postRide:postRide&&mealType!=="SNACK",maxMinutes}),x.mealMatch?"odpovídá typu jídla":"vhodné podle zbývajícího příjmu"].filter(Boolean).join(", ")
+      recommendation_reason:[recommendationReason(x.recipe,share,{postRide:postRide&&mealType!=="SNACK",maxMinutes}),x.mealMatch?L("odpovídá typu jídla", "matches the meal type"):L("vhodné podle zbývajícího příjmu", "fits your remaining intake")].filter(Boolean).join(", ")
     }));
     return {meal_type:mealType,label,recommendations:candidates,target:share};
   });
 
   const storeAlternatives=[];
   const addStore=(name,kcal,protein,carbs,fat,reason)=>storeAlternatives.push({name,kcal,protein_g:protein,carbs_g:carbs,fat_g:fat,reason});
-  if(remaining.protein_g>=20)addStore("Skyr / vysokoproteinový jogurt",150,20,10,1,"rychle doplní protein");
-  if(remaining.protein_g>=25)addStore("Kuřecí prsa + zelenina",300,45,10,8,"vysoký protein, nízký přebytek tuku");
-  if(remaining.carbs_g>=35)addStore("Banán + pečivo",250,7,50,3,"rychlé doplnění sacharidů");
-  if(remaining.kcal>=300&&remaining.protein_g>=20)addStore("Cottage + pečivo",350,28,35,10,"jednoduchá vyvážená varianta");
-  if(!storeAlternatives.length)addStore("Proteinový pudink / skyr",150,20,10,2,"malá porce podle zbývajícího příjmu");
+  if(remaining.protein_g>=20)addStore(L("Skyr / vysokoproteinový jogurt", "Skyr / high-protein yogurt"),150,20,10,1,L("rychle doplní protein", "a quick protein top-up"));
+  if(remaining.protein_g>=25)addStore(L("Kuřecí prsa + zelenina", "Chicken breast + vegetables"),300,45,10,8,L("vysoký protein, nízký přebytek tuku", "high protein, little extra fat"));
+  if(remaining.carbs_g>=35)addStore(L("Banán + pečivo", "Banana + bread"),250,7,50,3,L("rychlé doplnění sacharidů", "a quick carb top-up"));
+  if(remaining.kcal>=300&&remaining.protein_g>=20)addStore(L("Cottage + pečivo", "Cottage cheese + bread"),350,28,35,10,L("jednoduchá vyvážená varianta", "a simple balanced option"));
+  if(!storeAlternatives.length)addStore(L("Proteinový pudink / skyr", "Protein pudding / skyr"),150,20,10,2,L("malá porce podle zbývajícího příjmu", "a small portion for your remaining intake"));
 
   let coaching;
-  if(!eaten.length)coaching="Dnes zatím nemám zapsané žádné jídlo, takže skóre zůstává bez hodnocení. Doporučení začínají od celého denního cíle.";
-  else if(hasLunch&&!hasDinner)coaching="Snídaně a oběd jsou zapsané. Proto teď doporučuji jen zbývající svačinu a večeři; každá varianta je 1 porce a přepočítává se podle toho, co už jsi snědl.";
-  else if(postRide)coaching="Po kole máš vyšší prioritu pro sacharidy a dostatek bílkovin. Doporučení se přepočítává podle dnešního příjmu.";
-  else coaching="Doporučení se průběžně přepočítává podle toho, co už jsi dnes snědl, a podle zbývajících maker.";
+  if(!eaten.length)coaching=L("Dnes zatím nemám zapsané žádné jídlo, takže skóre zůstává bez hodnocení. Doporučení začínají od celého denního cíle.", "No food is logged today yet, so there's no score. Recommendations start from the whole daily goal.");
+  else if(hasLunch&&!hasDinner)coaching=L("Snídaně a oběd jsou zapsané. Proto teď doporučuji jen zbývající svačinu a večeři; každá varianta je 1 porce a přepočítává se podle toho, co už jsi snědl.", "Breakfast and lunch are logged, so I'm only recommending the remaining snack and dinner; each option is 1 serving and adjusts to what you've already eaten.");
+  else if(postRide)coaching=L("Po kole máš vyšší prioritu pro sacharidy a dostatek bílkovin. Doporučení se přepočítává podle dnešního příjmu.", "After a ride, carbs and enough protein take priority. The recommendation adjusts to today's intake.");
+  else coaching=L("Doporučení se průběžně přepočítává podle toho, co už jsi dnes snědl, a podle zbývajících maker.", "The recommendation keeps adjusting to what you've eaten today and your remaining macros.");
 
   return Response.json({
     status:"ok",date,mealToPlan:slots[0]?.[0]||null,

@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import {ensureFoodReports} from './shared-foods.js';
 async function ensure(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS personal_recipes (user_id INTEGER NOT NULL,id TEXT NOT NULL,recipe_json TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,id))").run();
@@ -6,12 +7,12 @@ async function ensure(db){
 }
 export function normalizeRecipe(input){
   const name=String(input.name||'').trim().slice(0,180),servings=Number(input.servings),ingredients=Array.isArray(input.ingredients)?input.ingredients:[];
-  if(!name||!Number.isFinite(servings)||servings<=0||servings>100||!ingredients.length||ingredients.length>100)throw new Error('Doplň název, počet porcí a suroviny.');
+  if(!name||!Number.isFinite(servings)||servings<=0||servings>100||!ingredients.length||ingredients.length>100)throw new Error(L('Doplň název, počet porcí a suroviny.', 'Add the name, number of servings and ingredients.'));
   const sums={calories:0,protein_g:0,carbs_g:0,fat_g:0};
   const cleaned=ingredients.map(i=>{
     const item={name:String(i.name||'').trim().slice(0,180),quantity:Number(i.quantity),unit:['g','ml','piece'].includes(i.unit)?i.unit:'g'};
-    if(!item.name||!Number.isFinite(item.quantity)||item.quantity<=0||item.quantity>100000)throw new Error('Doplň platné množství každé suroviny.');
-    for(const k of Object.keys(sums)){const value=Number(i[k]);if(i[k]==null||i[k]===''||!Number.isFinite(value)||value<0||value>100000)throw new Error('Doplň nutriční hodnoty surovin pro použité množství.');item[k]=value;sums[k]+=value;}
+    if(!item.name||!Number.isFinite(item.quantity)||item.quantity<=0||item.quantity>100000)throw new Error(L('Doplň platné množství každé suroviny.', 'Add a valid amount for each ingredient.'));
+    for(const k of Object.keys(sums)){const value=Number(i[k]);if(i[k]==null||i[k]===''||!Number.isFinite(value)||value<0||value>100000)throw new Error(L('Doplň nutriční hodnoty surovin pro použité množství.', 'Add the nutrition values of the ingredients for the amount used.'));item[k]=value;sums[k]+=value;}
     return item;
   });
   return {name,servings,ingredients:cleaned,shared:input.shared===true,...sums,portion:{name,nutrition_basis:'portion',calories_100g:sums.calories/servings,protein_100g:sums.protein_g/servings,carbs_100g:sums.carbs_g/servings,fat_100g:sums.fat_g/servings,source:'personal_recipe'}};
@@ -24,7 +25,7 @@ async function removeContribution(db,id){
 }
 export async function saveRecipe(db,input){
   await ensure(db);const recipe=normalizeRecipe(input),id=input.id?String(input.id):crypto.randomUUID();
-  if(input.id&&!await db.prepare('SELECT id FROM personal_recipes WHERE user_id=? AND id=?').bind(db.userId,id).first())throw new Error('Jídlo nebylo nalezeno.');
+  if(input.id&&!await db.prepare('SELECT id FROM personal_recipes WHERE user_id=? AND id=?').bind(db.userId,id).first())throw new Error(L('Jídlo nebylo nalezeno.', 'The meal wasn\'t found.'));
   await db.prepare('INSERT INTO personal_recipes(user_id,id,recipe_json) VALUES(?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET recipe_json=excluded.recipe_json,updated_at=CURRENT_TIMESTAMP').bind(db.userId,id,JSON.stringify(recipe)).run();
   await removeContribution(db,id);
   if(recipe.shared){
@@ -35,7 +36,7 @@ export async function saveRecipe(db,input){
   }
   return {...recipe,id};
 }
-export async function deleteRecipe(db,id){await ensure(db);const r=await db.prepare('DELETE FROM personal_recipes WHERE user_id=? AND id=?').bind(db.userId,String(id)).run();if(!r.meta.changes)throw new Error('Jídlo nebylo nalezeno.');await removeContribution(db,String(id));}
+export async function deleteRecipe(db,id){await ensure(db);const r=await db.prepare('DELETE FROM personal_recipes WHERE user_id=? AND id=?').bind(db.userId,String(id)).run();if(!r.meta.changes)throw new Error(L('Jídlo nebylo nalezeno.', 'The meal wasn\'t found.'));await removeContribution(db,String(id));}
 export async function searchRecipes(db,name){
   await ensure(db);await ensureFoodReports(db);const q=String(name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[%_]/g,'').trim();if(q.length<2)return [];
   const own=(await listRecipes(db)).filter(r=>r.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(q)).map(r=>({...r.portion,recipeId:r.id}));

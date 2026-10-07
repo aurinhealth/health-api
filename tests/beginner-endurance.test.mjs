@@ -49,7 +49,7 @@ test("too little data is said as such, not as fatigue", () => {
   assert.deepEqual(none.recommendation.adaptations, ["zatím málo dat: držím lehkou intenzitu"]);
   const tired = buildCyclingCoachV2({ date, week: week(history), fitness: { wellness: [{ id: date, ctl: 50, atl: 85 }] }, health: { sleep: [{ type: "sleep", durationMin: 300, endTime: date + "T06:30:00" }] }, manualReadiness: 10 });
   assert.equal(tired.readiness.status, "red");
-  assert.ok(tired.recommendation.adaptations.includes("vysoká únava: zrušit intenzitu"));
+  assert.ok(tired.recommendation.adaptations.includes("vysoká únava: bez intenzity"));
 });
 
 test("without LTHR the heart-rate zones come from the max and resting heart rate in the profile", async () => {

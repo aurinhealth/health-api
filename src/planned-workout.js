@@ -1,5 +1,6 @@
 // Reads a planned Intervals.icu workout (its workout text) into the shared
 // step model and classifies what kind of session it is.
+import { L } from './lang.js';
 import { step, ramp, rep, flattenSteps, totalMinutes, intensityFactor, zoneMinutes, zonesFor, n } from "./workout-model.js";
 
 // Middle of each Intervals.icu power zone (default 7-zone Coggan model), % FTP,
@@ -29,7 +30,7 @@ function parseStepLine(line, zoneTargets = ZONE_POWER) {
   if (single) return step(minutes, Number(single[1]), cadence);
   const zone = rest.match(/\bz([1-7])\b/i);
   if (zone) return step(minutes, zoneTargets[zone[1]], cadence, "Z" + zone[1]);
-  return step(minutes, zoneTargets[2], cadence, "bez cíle");
+  return step(minutes, zoneTargets[2], cadence, L("bez cíle", "no target"));
 }
 
 export function parseIntervalsWorkoutText(text, sport = "ride") {

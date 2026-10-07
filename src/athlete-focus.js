@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // "Hlavní sport a cíl" from the settings: what the athlete trains for. The
 // coach prompts take their role and direction from it; without it they keep
 // their general endurance + strength role.
@@ -8,6 +9,7 @@ const SPORTS = {
   strength: { label: "silový trénink", role: "silového tréninku a kondice" },
   general: { label: "všeobecná kondice", role: "kondice (vytrvalost i síla)" }
 };
+const SPORT_LABEL_EN = { cycling: "cycling", running: "running", triathlon: "triathlon", strength: "strength training", general: "general fitness" };
 export const MAIN_SPORTS = Object.fromEntries(Object.entries(SPORTS).map(([k, v]) => [k, v.label]));
 
 const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -30,7 +32,7 @@ export function athleteFocus(profile, today) {
   if (!f.mainSport && !f.sportGoal && !f.eventName && !f.eventDate && !f.weeklyHours) return null;
   const daysLeft = f.eventDate && today ? Math.round((Date.parse(f.eventDate + "T12:00:00Z") - Date.parse(today + "T12:00:00Z")) / 86400000) : null;
   return {
-    sport: f.mainSport || null, sportLabel: SPORTS[f.mainSport]?.label || null,
+    sport: f.mainSport || null, sportLabel: SPORTS[f.mainSport] ? L(SPORTS[f.mainSport].label, SPORT_LABEL_EN[f.mainSport]) : null,
     goal: f.sportGoal || null,
     event: (f.eventName || f.eventDate) && (daysLeft == null || daysLeft >= 0) ? { name: f.eventName || null, date: f.eventDate || null, daysLeft } : null,
     weeklyHours: f.weeklyHours

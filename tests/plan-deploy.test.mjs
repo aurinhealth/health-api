@@ -8,7 +8,7 @@ const slice = (from, to) => source.slice(source.indexOf(from), source.indexOf(to
 function deployClient(proposals, { intervals = true } = {}) {
   const calls = [], timers = [], listeners = {};
   const state = { proposals };
-  const context = vm.createContext({
+  const context = vm.createContext({uiText:cs=>cs,
     state, INTERVALS_DELAY_MAX_MS: 15000, Date, Math, Number, Object, Boolean, String, Set,
     // An athlete with (or, with intervals: false, without) Intervals.icu connected.
     serviceConnected: id => id !== 'intervals' || intervals,
@@ -71,7 +71,7 @@ test('saving a workout asks no question; the click or the approval is the decisi
 
 test('a rated session shows a tick instead of the Hodnocení button', () => {
   const state = { reflections: {}, ratedSessions: new Set() };
-  const context = vm.createContext({ state, Number, String });
+  const context = vm.createContext({uiText:cs=>cs, state, Number, String });
   vm.runInContext(slice('// A finished session already rated', '// Walks are everyday movement'), context);
   const rated = x => vm.runInContext('sessionRated(x)', Object.assign(context, { x }));
   const ride = { name: 'Sweet Spot', date: '2026-10-05', a: { name: 'Sweet Spot' }, daySessions: 2 };
@@ -86,5 +86,5 @@ test('a rated session shows a tick instead of the Hodnocení button', () => {
   assert.equal(rated({ name: 'Run', date: '2026-10-04', a: {}, daySessions: 1 }), true);
   state.ratedSessions.add('2026-10-03|Long ride');
   assert.equal(rated({ name: 'Long ride', date: '2026-10-03', a: {}, daySessions: 3 }), true);
-  assert.match(source, /sessionRated\(x\)\?'<span class="today-rated">✓ ohodnoceno<\/span>'/);
+  assert.match(source, /sessionRated\(x\)\?'<span class="today-rated">'\+uiText\('✓ ohodnoceno','✓ rated'\)\+'<\/span>'/);
 });

@@ -33,10 +33,10 @@ for(const status of ['sick','injured','on_break']){
     assert.deepEqual(r.coaches.map(c=>c.id),['athlete-status','nutrition']);
     assert.equal(r.coaches[0].phase,'rest');
     assert.match(r.coaches[0].actions.join(' '),/Citlivé koleno/);
-    assert.match(r.priorities[0],new RegExp(status==='on_break'?'On break':status==='sick'?'Sick':'Injured'));
+    assert.match(r.priorities[0],new RegExp(status==='on_break'?'Pauza':status==='sick'?'Nemoc':'Zranění'));
     assert.equal(r.reviews[0].id,'review-done:1');
     assert.match(r.reviews[0].actions[0],/45 TSS/);
-    assert.match(r.coaches[1].actions[1],/není doporučení/);
+    assert.match(r.coaches[1].actions[1],/neber jako doporučení/);
     assert.deepEqual(daily,before);
   });
 
@@ -85,7 +85,7 @@ test('post-workout AI and fallback both receive the current pause and its limita
   const data={date,feedback:{rpe:5},workout:{sport:'ride'},signals:[],activities:[],wellness:[],sleep:[],recentFeedback:[],athleteState:{status:'injured',note:'Bez běhu'}};
   assert.equal(reflectionInput(data).athleteState.note,'Bez běhu');
   const text=rulesReflection(data);
-  assert.match(text,/Injured/);
+  assert.match(text,/Zranění/);
   assert.match(text,/Bez běhu/);
   assert.match(text,/pozastavené/);
 });

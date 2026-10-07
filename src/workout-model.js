@@ -1,3 +1,5 @@
+import { L } from './lang.js';
+
 // Sport-neutral structured workout model. Prescribed intensity is a percentage
 // of threshold; power on free efforts is only an estimate for load and charts.
 // Steps: {durationMinutes, power, [powerStart, powerEnd, ramp], cadence, note, free}
@@ -150,7 +152,7 @@ export function adaptStructure(structure = [], environment = "indoor", sport = "
     return out;
   };
   const out = structure.map(block => Array.isArray(block.steps)
-    ? { ...block, steps: block.steps.map(roundStep), note: block.note || (block.steps.some(s => n(s.durationMinutes, 0) < 1 && n(s.power, 0) >= 106) ? (sport === "run" ? "rovný úsek bez přechodů, ideálně ovál nebo cyklostezka" : "rovný úsek nebo mírné stoupání bez křižovatek") : null) }
+    ? { ...block, steps: block.steps.map(roundStep), note: block.note || (block.steps.some(s => n(s.durationMinutes, 0) < 1 && n(s.power, 0) >= 106) ? (sport === "run" ? L("rovný úsek bez přechodů, ideálně ovál nebo cyklostezka", "a flat stretch without crossings, ideally a track or a bike path") : L("rovný úsek nebo mírné stoupání bez křižovatek", "a flat stretch or a gentle climb without junctions")) : null) }
     : roundStep(block));
   const first = out[0];
   // Only sessions with real intensity need the longer outdoor warm-up.
@@ -164,21 +166,21 @@ export function environmentNotes(environment, sport = "ride", system = null, tag
   const hills = tags.includes("hills");
   if (sport === "run") {
     if (hills) return environment === "outdoor"
-      ? ["Najdi kopec se sklonem 5–8 %, na který vyběhneš za daný čas; úseky jeď podle úsilí, ne tempa.", "Dolů se vrať volně klusem nebo chůzí – to je pauza.", "Tempo do kopce bude pomalejší než v tabulce, důležité je úsilí a tep."]
-      : ["Na páse nastav pro úseky sklon 6–8 % a rychlost, kterou udržíš s tvrdým, ale kontrolovaným úsilím.", "V pauzách sklon vrať na 1 % a klusej nebo jdi.", "Sprinty do kopce na páse jeď opatrně – při náhlé změně rychlosti se drž madla při nástupu."];
+      ? [L("Najdi kopec se sklonem 5–8 %, na který vyběhneš za daný čas; úseky jeď podle úsilí, ne tempa.", "Find a 5–8 % hill you can run up in the given time; run the efforts by effort, not pace."), L("Dolů se vrať volně klusem nebo chůzí – to je pauza.", "Jog or walk back down easily – that's your recovery."), L("Tempo do kopce bude pomalejší než v tabulce, důležité je úsilí a tep.", "Uphill pace will be slower than in the table; effort and heart rate are what matter.")]
+      : [L("Na páse nastav pro úseky sklon 6–8 % a rychlost, kterou udržíš s tvrdým, ale kontrolovaným úsilím.", "On the treadmill, set a 6–8 % incline for the efforts and a speed you can hold with hard but controlled effort."), L("V pauzách sklon vrať na 1 % a klusej nebo jdi.", "During recoveries, set the incline back to 1 % and jog or walk."), L("Sprinty do kopce na páse jeď opatrně – při náhlé změně rychlosti se drž madla při nástupu.", "Do treadmill hill sprints carefully – hold the handrail as the speed changes at the start.")];
     if (easy) return environment === "outdoor"
-      ? ["Běž podle tepu a dechu, ne podle tempa – tempo z tabulky je horní hranice.", "V kopcích zpomal nebo jdi, ať nevyskočíš ze zóny.", "Měkčí povrch (les, šotolina) šetří nohy."]
-      : ["Na páse nastav sklon 1 % – kompenzuje chybějící odpor vzduchu.", "Tempo na páse je přesné; když tep stoupá nad Z2, zpomal."];
+      ? [L("Běž podle tepu a dechu, ne podle tempa – tempo z tabulky je horní hranice.", "Run by heart rate and breathing, not pace – the pace in the table is the upper limit."), L("V kopcích zpomal nebo jdi, ať nevyskočíš ze zóny.", "Slow down or walk on hills so you stay in the zone."), L("Měkčí povrch (les, šotolina) šetří nohy.", "Softer surfaces (trails, gravel) are easier on your legs.")]
+      : [L("Na páse nastav sklon 1 % – kompenzuje chybějící odpor vzduchu.", "Set the treadmill to a 1 % incline – it makes up for the missing air resistance."), L("Tempo na páse je přesné; když tep stoupá nad Z2, zpomal.", "Treadmill pace is exact; if your heart rate climbs above Z2, slow down.")];
     return environment === "outdoor"
-      ? ["Úseky běž na rovině – ovál, cyklostezka nebo úsek bez přechodů.", "Drž rozsah tempa; v prvních sekundách úseku nezačínej moc rychle.", "Rozklus a výklus volně, klidně po měkkém povrchu."]
-      : ["Na páse nastav sklon 1 %; rychlost měň na začátku každého úseku, zrychlení trvá pár sekund.", "Tempo na páse je přesné, tep bývá o pár úderů vyšší – zajisti větrák a pití."];
+      ? [L("Úseky běž na rovině – ovál, cyklostezka nebo úsek bez přechodů.", "Run the efforts on the flat – a track, a bike path or a stretch without crossings."), L("Drž rozsah tempa; v prvních sekundách úseku nezačínej moc rychle.", "Stay within the pace range; don't start too fast in the first seconds of an effort."), L("Rozklus a výklus volně, klidně po měkkém povrchu.", "Warm up and cool down easily, on a soft surface if you like.")]
+      : [L("Na páse nastav sklon 1 %; rychlost měň na začátku každého úseku, zrychlení trvá pár sekund.", "Set the treadmill to a 1 % incline; change the speed at the start of each effort – it takes a few seconds to speed up."), L("Tempo na páse je přesné, tep bývá o pár úderů vyšší – zajisti větrák a pití.", "Treadmill pace is exact; heart rate tends to be a few beats higher – have a fan and drinks ready.")];
   }
   if (easy) return environment === "outdoor"
-    ? ["Zvol rovinatou trasu; do kopců lehký převod, ať výkon nepřeleze horní hranici pásma.", "Rozsah výkonu je orientační – důležitější je nízké úsilí a klidný tep.", "Vyhni se skupinovým jízdám, kde se tempo snadno zvedne."]
-    : ["Na trenažéru stačí ERG nebo konstantní odpor; hlídej, aby výkon nepřesáhl pásmo.", "Zajisti chlazení a pití – i lehká jízda indoor hodně potí."];
+    ? [L("Zvol rovinatou trasu; do kopců lehký převod, ať výkon nepřeleze horní hranici pásma.", "Pick a flat route; use an easy gear on climbs so power stays below the top of the zone."), L("Rozsah výkonu je orientační – důležitější je nízké úsilí a klidný tep.", "The power range is a guide – low effort and a calm heart rate matter more."), L("Vyhni se skupinovým jízdám, kde se tempo snadno zvedne.", "Avoid group rides, where the pace easily creeps up.")]
+    : [L("Na trenažéru stačí ERG nebo konstantní odpor; hlídej, aby výkon nepřesáhl pásmo.", "On the trainer, ERG or constant resistance is enough; make sure power stays within the zone."), L("Zajisti chlazení a pití – i lehká jízda indoor hodně potí.", "Have cooling and drinks ready – even an easy indoor ride makes you sweat a lot.")];
   return environment === "outdoor"
-    ? ["Venku drž rozsah výkonu místo přesné hodnoty; ERG není k dispozici.", "Intervaly nad prahem jeď do kopce nebo proti větru, regenerace po rovině.", system === "sprint" ? "Maximální sprinty jeď naplno bez cílového výkonu." : "Předepsané intervaly jeď kontrolovaně v cílovém pásmu; naplno jen úseky výslovně označené jako maximální."]
-    : ["Na trenažéru použij ERG pro prahové a sweet-spot bloky; sprinty a 30/15 jeď v režimu odporu (level/slope).", "Kadence je součást předpisu; zajisti chlazení (ventilátor) a pití."];
+    ? [L("Venku drž rozsah výkonu místo přesné hodnoty; ERG není k dispozici.", "Outside, hold the power range rather than an exact value; there's no ERG."), L("Intervaly nad prahem jeď do kopce nebo proti větru, regenerace po rovině.", "Ride above-threshold intervals uphill or into the wind and recover on the flat."), system === "sprint" ? L("Maximální sprinty jeď naplno bez cílového výkonu.", "Ride the maximal sprints all-out without a power target.") : L("Předepsané intervaly jeď kontrolovaně v cílovém pásmu; naplno jen úseky výslovně označené jako maximální.", "Ride the prescribed intervals under control in the target zone; go all-out only on efforts explicitly marked as maximal.")]
+    : [L("Na trenažéru použij ERG pro prahové a sweet-spot bloky; sprinty a 30/15 jeď v režimu odporu (level/slope).", "On the trainer, use ERG for threshold and sweet-spot blocks; ride sprints and 30/15s in resistance mode (level/slope)."), L("Kadence je součást předpisu; zajisti chlazení (ventilátor) a pití.", "Cadence is part of the prescription; have cooling (a fan) and drinks ready.")];
 }
 
 // A catalog record in the shape the dashboard, ranking and Intervals use.

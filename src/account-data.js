@@ -2,6 +2,7 @@
 // deleting the account with all of it (Nastavení → Účet). The shared food and
 // recipe catalogue holds no personal data and stays; the links between the
 // user and their contributions are personal and go with the account.
+import { L } from './lang.js';
 import { PERSONAL_TABLES } from "./tenancy.js";
 
 // Sign-in keys of the connected services are never exported.
@@ -36,8 +37,8 @@ async function revokeGoogle(env, fetchImpl) {
 }
 
 export async function deleteAccount(env, user, { fetchImpl = fetch } = {}) {
-  if (!user?.id || Number(user.id) !== Number(env.USER_ID)) throw new Error("Účet se nepodařilo ověřit.");
-  if (user.isOwner) throw new Error("Účet správce nejde smazat: patří k němu data a nastavení aplikace.");
+  if (!user?.id || Number(user.id) !== Number(env.USER_ID)) throw new Error(L("Účet se nepodařilo ověřit.", "The account couldn't be verified."));
+  if (user.isOwner) throw new Error(L("Účet správce nejde smazat: patří k němu data a nastavení aplikace.", "The admin account can't be deleted: the app's data and settings belong to it."));
   const google = await revokeGoogle(env, fetchImpl);
   const deleted = {};
   for (const table of Object.keys(PERSONAL_TABLES)) {

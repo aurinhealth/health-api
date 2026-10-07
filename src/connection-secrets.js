@@ -1,9 +1,10 @@
+import { L } from './lang.js';
 // Provider credentials per user, AES-GCM encrypted with a key derived from STRENGTH_API_KEY.
 async function table(env){await env.DB.prepare('CREATE TABLE IF NOT EXISTS connection_credentials (user_id INTEGER NOT NULL, provider TEXT NOT NULL, encrypted TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, provider))').run();}
-async function key(env){if(!env.STRENGTH_API_KEY)throw new Error('Chybí zabezpečení propojení.');const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.STRENGTH_API_KEY));return crypto.subtle.importKey('raw',hash,'AES-GCM',false,['encrypt','decrypt']);}
+async function key(env){if(!env.STRENGTH_API_KEY)throw new Error(L('Chybí zabezpečení propojení.', 'Connection security is missing.'));const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(env.STRENGTH_API_KEY));return crypto.subtle.importKey('raw',hash,'AES-GCM',false,['encrypt','decrypt']);}
 const enc=bytes=>btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const dec=text=>Uint8Array.from(atob(text),c=>c.charCodeAt(0));
-function userId(env){const id=Number(env.USER_ID);if(!Number.isInteger(id)||id<=0)throw new Error('Připojení vyžaduje přihlášeného uživatele.');return id;}
+function userId(env){const id=Number(env.USER_ID);if(!Number.isInteger(id)||id<=0)throw new Error(L('Připojení vyžaduje přihlášeného uživatele.', 'Connecting requires a signed-in user.'));return id;}
 export async function saveConnectionSecret(env,provider,value){const uid=userId(env);await table(env);const iv=crypto.getRandomValues(new Uint8Array(12)),cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(env),new TextEncoder().encode(value));await env.DB.prepare('INSERT INTO connection_credentials(user_id,provider,encrypted,updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id,provider) DO UPDATE SET encrypted=excluded.encrypted,updated_at=excluded.updated_at').bind(uid,provider,enc(iv)+'.'+enc(cipher),new Date().toISOString()).run();}
 export async function deleteConnectionSecret(env,provider){const uid=userId(env);await table(env);await env.DB.prepare('DELETE FROM connection_credentials WHERE user_id=? AND provider=?').bind(uid,provider).run();}
 // Loads the signed-in user's credentials into env. Only the owner falls back to

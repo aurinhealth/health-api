@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import app from "./index.js";
 import { foodRecommend } from "./food-recommend.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
@@ -151,7 +152,7 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
     const prefs = await getWeekPlan(env.DB, context.date);
     if (body?.preview !== true) assertTrainingAllowed(await getAthleteState(env.DB));
     const duration = body?.preview === true ? body?.durationMinutes : trainingBudget(prefs, context.date, body?.durationMinutes == null ? 60 : Number(body.durationMinutes), { userInitiated: body?.userInitiated === true });
-    if (body?.preview !== true && duration < 30) throw new Error('Na posilovnu nezbývá alespoň 30 minut.');
+    if (body?.preview !== true && duration < 30) throw new Error(L('Na posilovnu nezbývá alespoň 30 minut.', 'There aren\'t at least 30 minutes left for the gym.'));
     const options = {
       diagnosticPreview: body?.preview === true,
       focus: body?.focus ? String(body.focus) : undefined,

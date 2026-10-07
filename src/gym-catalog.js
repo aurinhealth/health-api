@@ -1,9 +1,12 @@
 import {EXERCISES} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad} from './strength-intelligence.js';
+import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
 import {availableAt,stationLabel} from './gym-equipment.js';
 
-const muscleLabels={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
+const MUSCLES_CS={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
+const MUSCLES_EN={chest:'Chest',back:'Back',shoulders:'Shoulders',quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',biceps:'Biceps',triceps:'Triceps',core:'Core',adductors:'Adductors',abductors:'Abductors',rear_delts:'Rear delts',side_delts:'Side delts',calves:'Calves',forearms:'Forearms',traps:'Traps',lower_back:'Lower back'};
+const muscleLabel=id=>L(MUSCLES_CS,MUSCLES_EN)[id]||id;
 const searchTerms={
   'DB bench press':'bench tlaky jednoručky prsa',
   'Low row':'veslování přítahy záda',
@@ -89,7 +92,7 @@ const searchTerms={
 
 export function gymExerciseCatalog(){
   // Only exercises that can be done in the gym (METAGYM Kutná Hora), with the station.
-  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name)).map(([name,def])=>({name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
+  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name)).map(([name,def])=>({name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
 }
 
 // What can take the place of an exercise in the plan: the same muscle,
@@ -108,7 +111,7 @@ export function gymAlternatives(exercise,history=[],exclude=[]){
   if(!EXERCISE_INTELLIGENCE[name])return [];
   return findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)).slice(0,8).map(a=>{
     const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||{kg:null,source:'no-reference'};
-    return {name:a.name,muscle:muscleLabels[def.muscle]||def.muscle,sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
+    return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
   });
 }
 

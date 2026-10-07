@@ -1,5 +1,6 @@
 // Fluid intake: drinks logged per day and a daily target worked out from body
 // weight and the day's training. The target is a guide, not a prescription.
+import { L } from './lang.js';
 import { activityFromRow, dedupeActivities, pragueLocal } from "./coach-reflection.js";
 
 const KINDS = ["water", "coffee", "tea", "juice", "milk", "sport", "other"];
@@ -36,8 +37,8 @@ async function ensure(db) {
 
 export async function addFluid(db, { date, ml, kind = "water", at = null }) {
   const amount = Math.round(Number(ml));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error("Neplatné datum.");
-  if (!(amount >= 10 && amount <= 3000)) throw new Error("Zadej množství 10–3000 ml.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
+  if (!(amount >= 10 && amount <= 3000)) throw new Error(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
   await ensure(db);
   const consumedAt = at && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(at)) ? String(at).slice(0, 16) : `${date}T12:00`;
   const r = await db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(?,?,?,?,?)")

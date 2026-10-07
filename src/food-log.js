@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
 import { searchPersonalFoods } from "./personal-foods.js";
@@ -254,35 +255,35 @@ export function recommendFood({day,nutritionPlan,entries}) {
     const pick=plannedFoodOptions[0];
     suggestions.push({
       reason:"use_planned_food",
-      suggestion:`Máš naplánované jídlo „${pick.name}“ — ${pick.servings} porcí. Z hlediska dnešního zbývajícího příjmu dává smysl začít jím.`,
+      suggestion:L(`Máš naplánované jídlo „${pick.name}“ — ${pick.servings} porcí. Z hlediska dnešního zbývajícího příjmu dává smysl začít jím.`, `You have a planned meal “${pick.name}” — ${pick.servings} servings. Given today's remaining intake, it makes sense to start with it.`),
       food:pick
     });
   }
   if(completedRide && remaining.protein_g>=25) {
     suggestions.push({
       reason:"post_ride_recovery",
-      suggestion:"Po dokončeném kole máš stále prostor hlavně na bílkoviny; dej přednost normálnímu jídlu s kvalitním zdrojem bílkovin a podle délky/intenzity kola i sacharidům."
+      suggestion:L("Po dokončeném kole máš stále prostor hlavně na bílkoviny; dej přednost normálnímu jídlu s kvalitním zdrojem bílkovin a podle délky/intenzity kola i sacharidům.", "After the ride you still have room mainly for protein; prefer a normal meal with a good protein source, plus carbs depending on the ride's length and intensity.")
     });
   } else if(longRide && remaining.carbs_g>=60) {
     suggestions.push({
       reason:"ride_carbs",
-      suggestion:"Na delší plánované kolo je vhodné mít dostatek sacharidů; přednostně je pokryj jídlem, které už máš naplánované, případně rýží, pečivem, bramborami nebo ovocem."
+      suggestion:L("Na delší plánované kolo je vhodné mít dostatek sacharidů; přednostně je pokryj jídlem, které už máš naplánované, případně rýží, pečivem, bramborami nebo ovocem.", "For a longer planned ride, have enough carbs; cover them first with food you've already planned, or with rice, bread, potatoes or fruit.")
     });
   }
   if(remaining.protein_g>=30 && !plannedFoodOptions.length)
-    suggestions.push({reason:"protein_remaining",suggestion:"Chybí ti významná část bílkovin; vhodný je skyr/tvaroh, libové maso, vejce nebo proteinový nápoj podle dostupnosti."});
+    suggestions.push({reason:"protein_remaining",suggestion:L("Chybí ti významná část bílkovin; vhodný je skyr/tvaroh, libové maso, vejce nebo proteinový nápoj podle dostupnosti.", "You're missing a big part of your protein; skyr/quark, lean meat, eggs or a protein shake work well.")});
   if(remaining.calories<=150)
-    suggestions.push({reason:"target_nearby",suggestion:"Jsi blízko dnešního kalorického cíle; další jídlo drž spíše malé a podle zbývajících makroživin."});
+    suggestions.push({reason:"target_nearby",suggestion:L("Jsi blízko dnešního kalorického cíle; další jídlo drž spíše malé a podle zbývajících makroživin.", "You're close to today's calorie goal; keep your next meal small and in line with your remaining macros.")});
   if(!suggestions.length)
-    suggestions.push({reason:"balanced_remaining",suggestion:"Zbývá prostor pro jídlo podle zbývajících kalorií a makroživin."});
+    suggestions.push({reason:"balanced_remaining",suggestion:L("Zbývá prostor pro jídlo podle zbývajících kalorií a makroživin.", "There's room for a meal within your remaining calories and macros.")});
   const mealSchedule=[];
   const plannedByTime=[...planned].sort((a,b)=>String(a.meal_time||"").localeCompare(String(b.meal_time||"")));
   if(longRide && remaining.carbs_g>=60)
-    mealSchedule.push({phase:"pre_ride",timing:"1–3 h před kolem",goal:"sacharidy + lehce stravitelné jídlo",suggestion:"Pokryj část sacharidů z připraveného jídla; před delší jízdou nechoď s velkým kalorickým deficitem."});
+    mealSchedule.push({phase:"pre_ride",timing:L("1–3 h před kolem", "1–3 h before the ride"),goal:L("sacharidy + lehce stravitelné jídlo", "carbs + easily digestible food"),suggestion:L("Pokryj část sacharidů z připraveného jídla; před delší jízdou nechoď s velkým kalorickým deficitem.", "Cover part of the carbs with your prepared food; don't start a longer ride in a big calorie deficit.")});
   if(completedRide && remaining.protein_g>=25)
-    mealSchedule.push({phase:"post_ride",timing:"do 2 h po kole",goal:"regenerace",suggestion:"Normální jídlo s kvalitním proteinem a sacharidy podle délky/intenzity jízdy."});
+    mealSchedule.push({phase:"post_ride",timing:L("do 2 h po kole", "within 2 h after the ride"),goal:L("regenerace", "recovery"),suggestion:L("Normální jídlo s kvalitním proteinem a sacharidy podle délky/intenzity jízdy.", "A normal meal with good protein and carbs depending on the ride's length and intensity.")});
   for(const item of plannedByTime.slice(0,4))
-    mealSchedule.push({phase:item.meal_type||"planned",timing:item.meal_time||"podle hladu a tréninku",goal:"využít připravené jídlo",food:item.recipe_name||item.name||"plánované jídlo",servings:item.servings});
+    mealSchedule.push({phase:item.meal_type||"planned",timing:item.meal_time||L("podle hladu a tréninku", "by hunger and training"),goal:L("využít připravené jídlo", "use the prepared food"),food:item.recipe_name||item.name||L("plánované jídlo", "planned food"),servings:item.servings});
   return {status:"ok",day,remaining,plannedFoodOptions,suggestions,mealSchedule};
 }
 

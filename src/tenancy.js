@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
 
@@ -41,7 +42,8 @@ export const PERSONAL_TABLES = {
   api_cache_versions: {},
   ai_usage: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
-  personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {}
+  personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
+  user_language: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
@@ -307,9 +309,9 @@ export async function listUsersAndInvites(db) {
 
 export async function inviteUser(db, email, invitedBy) {
   const address = normalizeEmail(email);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || address.length > 254) throw new Error("Zadej platný e-mail.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) || address.length > 254) throw new Error(L("Zadej platný e-mail.", "Enter a valid e-mail."));
   const existing = await db.prepare("SELECT id FROM users WHERE email=?").bind(address).first();
-  if (existing) throw new Error("Tento uživatel už má přístup.");
+  if (existing) throw new Error(L("Tento uživatel už má přístup.", "This user already has access."));
   await db.prepare("INSERT INTO user_invites(email, invited_by) VALUES(?, ?) ON CONFLICT(email) DO NOTHING").bind(address, Number(invitedBy) || null).run();
   return address;
 }
@@ -320,8 +322,8 @@ export async function removeInvite(db, email) {
 
 export async function setUserDisabled(db, env, id, disabled) {
   const row = await db.prepare("SELECT email FROM users WHERE id=?").bind(Number(id)).first();
-  if (!row) throw new Error("Uživatel neexistuje.");
-  if (normalizeEmail(row.email) === ownerEmail(env)) throw new Error("Správce nelze zablokovat.");
+  if (!row) throw new Error(L("Uživatel neexistuje.", "The user doesn't exist."));
+  if (normalizeEmail(row.email) === ownerEmail(env)) throw new Error(L("Správce nelze zablokovat.", "The admin can't be blocked."));
   await db.prepare("UPDATE users SET disabled=? WHERE id=?").bind(disabled ? 1 : 0, Number(id)).run();
 }
 

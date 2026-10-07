@@ -8,7 +8,7 @@ const code = source.slice(source.indexOf('const TRANSIENT_ERROR='), source.index
 function setup(answers) {
   const calls = [], el = () => ({ textContent: '', innerHTML: '', disabled: false });
   const nodes = { proposeWeek: el(), plannerStatus: el() };
-  const ctx = vm.createContext({ state: {}, statusCoachingRevision: 0, Set, Promise, JSON, String, Number,
+  const ctx = vm.createContext({uiText:cs=>cs, state: {}, statusCoachingRevision: 0, Set, Promise, JSON, String, Number,
     setTimeout: fn => fn(), $: id => nodes[id] || null, renderWeekHub() {}, renderDeploySteps() {}, queueProposalPush() {}, proposalWaiting: p => Boolean(p?.workout && !p.scheduled), proposalKey: (d, s, n) => d + '|' + s + (n ? '|' + n : ''),
     // An athlete with Intervals.icu connected.
     serviceConnected: () => true,

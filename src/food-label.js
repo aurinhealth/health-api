@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // OCR output is a draft; missing fields remain missing until the user verifies the label.
 // The table usually starts with energy, so a nutrient word before it (e.g. the
 // product name "Protein pudding 200 g") is used only when the table lacks it.
@@ -37,7 +38,7 @@ export function nutritionConsistency(values={}){
   if(![kcal,p,c,f].every(Number.isFinite)||kcal<40)return null;
   const fiber=Number(values.fiber_100g)||0,estimate=4*p+4*Math.max(0,c)+9*f+2*fiber;
   if(Math.abs(estimate-kcal)<=Math.max(25,kcal*.2))return null;
-  return 'Energie '+Math.round(kcal)+' kcal nesedí s makroživinami (≈ '+Math.round(estimate)+' kcal). Zkontroluj přepis proti fotce.';
+  return L('Energie ', 'Energy ')+Math.round(kcal)+L(' kcal nesedí s makroživinami (≈ ', ' kcal doesn\'t match the macros (≈ ')+Math.round(estimate)+L(' kcal). Zkontroluj přepis proti fotce.', ' kcal). Check the values against the photo.');
 }
 
 export function parseNutritionPortion(text){

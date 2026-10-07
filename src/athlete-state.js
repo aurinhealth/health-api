@@ -3,6 +3,7 @@ import { reflectionSignals } from './coach-reflection.js';
 import { ATHLETE_STATUSES } from './training-status.js';
 import { validDay } from './training-availability.js';
 import { dateFormat } from "./date-format.js";
+import { L, plural } from './lang.js';
 export { ATHLETE_STATUSES } from './training-status.js';
 const clean = v => String(v || '').trim().slice(0, 500);
 const pragueDay=()=>dateFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -24,9 +25,9 @@ export async function getAthleteState(db,{date=pragueDay()}={}) {
 export async function updateAthleteState(db, patch,{date=pragueDay()}={}) {
   const state = await getAthleteState(db,{date});
   if (patch.status != null) {
-    if (!Object.hasOwn(ATHLETE_STATUSES, patch.status)) throw new Error('Neznámý stav.');
+    if (!Object.hasOwn(ATHLETE_STATUSES, patch.status)) throw new Error(L('Neznámý stav.','Unknown status.'));
     const until=patch.statusUntil||null;
-    if(until&&(!validDay(until)||until<=date))throw new Error('Konec platnosti musí být v budoucnu.');
+    if(until&&(!validDay(until)||until<=date))throw new Error(L('Konec platnosti musí být v budoucnu.','The end date must be in the future.'));
     state.status = patch.status; state.note = clean(patch.note); state.changedAt = new Date().toISOString();
     state.statusUntil=patch.status==='active'?null:until;
   }
@@ -38,14 +39,14 @@ export async function updateAthleteState(db, patch,{date=pragueDay()}={}) {
 }
 // A lasting preference ("Nechci běhat"), not a remark about one day or a
 // question: "Nechci dnes nohy" or "Nechci zítra kolo?" are not remembered.
-const TEMPORARY=/\?|(?<!\p{L})(?:dnes|dneska|dnešní\p{L}*|zítra|zítřejší\p{L}*|teď|ted|tentokrát|(?:tento|tenhle|tenhleten) (?:týden|víkend))(?!\p{L})/iu;
+const TEMPORARY=/\?|(?<!\p{L})(?:dnes|dneska|dnešní\p{L}*|zítra|zítřejší\p{L}*|teď|ted|tentokrát|(?:tento|tenhle|tenhleten) (?:týden|víkend)|today|tonight|tomorrow|now|this (?:time|week|weekend))(?!\p{L})/iu;
 export function explicitPreference(message) {
   const text=String(message||'');
   if(TEMPORARY.test(text))return null;
-  return /(?:nemám rád|nemam rad|nemám ráda|nemam rada|nechci|nesnáším|nesnasim|preferuji|preferuju|mám rád|mam rad)/i.test(text) ? clean(text) : null;
+  return /(?:nemám rád|nemam rad|nemám ráda|nemam rada|nechci|nesnáším|nesnasim|preferuji|preferuju|mám rád|mam rad|mám ráda|mam rada|\bi (?:don'?t|do not) (?:like|want|enjoy)\b|\bi (?:hate|prefer|like|love|enjoy)\b)/i.test(text) ? clean(text) : null;
 }
 export function assertTrainingAllowed(state) {
-  if (state?.status && state.status !== 'active') throw new Error('Aktuální stav je ' + ATHLETE_STATUSES[state.status] + '. Trénink navrhnu po změně stavu na Active; nyní řeš odpočinek nebo omezení s asistentem.');
+  if (state?.status && state.status !== 'active') throw new Error(L('Aktuální stav je ' + { sick: 'Nemoc', injured: 'Zranění', on_break: 'Pauza' }[state.status] + '. Trénink navrhnu po změně stavu na Trénink; teď s asistentem řeš odpočinek nebo svá omezení.', 'Your current status is ' + ATHLETE_STATUSES[state.status] + '. I\'ll suggest training once you switch your status back to Training; for now, talk to the assistant about rest or your limitations.'));
 }
 // A single bad value cannot diagnose illness or injury. Only suggest a break,
 // based on multiple recent signals, and always let the athlete decide.
@@ -56,5 +57,5 @@ export function proactiveAdvice({ date, fitness = {}, health = {}, week = {}, st
   const id = date + ':recovery';
   if (state.dismissed?.includes(id)) return null;
   const remaining = (week.days || []).filter(d => d.date >= date).flatMap(d => (d.daily?.training?.planned || []).filter(a => !/nutrition/i.test(a.name || '')).map(a => ({ date: d.date, id: a.id, name: a.name })));
-  return { id, status: 'on_break', headline: 'Více ukazatelů dnes naznačuje slabší regeneraci. Zvážíš On break?', reasons: signals.map(s => s.text), remaining, message: remaining.length ? 'Ještě tě čeká ' + remaining.length + ' tréninků. Můžeme projít týden, zkrátit je nebo některý nahradit odpočinkem.' : 'Můžeme upravit další dny podle tvých možností.' };
+  return { id, status: 'on_break', headline: L('Více ukazatelů dnes naznačuje slabší regeneraci. Zvážíš pauzu?', 'Several metrics suggest weaker recovery today. Would you consider a break?'), reasons: signals.map(s => s.text), remaining, message: remaining.length ? L('Ještě tě ' + plural(remaining.length, 'čeká', 'čekají', 'čeká') + ' ' + remaining.length + ' ' + plural(remaining.length, 'trénink', 'tréninky', 'tréninků') + '. Můžeme projít týden, zkrátit je nebo některý nahradit odpočinkem.', 'You still have ' + remaining.length + ' ' + plural(remaining.length, '', '', '', 'workout', 'workouts') + ' ahead. We can go through the week, shorten them or replace one with rest.') : L('Můžeme upravit další dny podle tvých možností.', 'We can adjust the coming days to what works for you.') };
 }

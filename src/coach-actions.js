@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
@@ -12,17 +13,18 @@ type=status navrhuje změnu stavu; nemoc/zranění jen pokud ji uvedl uživatel.
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot/i;
 export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl/i;
-const SHORT_DAYS=['ne','po','út','st','čt','pá','so'];
-const shortDate=d=>validDay(d)?SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.':'';
-const SPORT_NAMES={ride:'kolo',run:'běh',gym:'gym'},STATUS_NAMES={active:'Active',sick:'Sick',injured:'Injured',on_break:'On break'};
+const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
+const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',gym:'gym'},{ride:'ride',run:'run',gym:'gym'}),STATUS_NAMES=()=>L({active:'Trénink',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Training',sick:'Sick',injured:'Injured',on_break:'On break'});
 // One line per validated proposal, stored with the answer so later turns know it.
 export function actionSummary(a){
-  if(a.type==='gym_swap')return 'Vyměnit '+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
-  if(a.type==='week_sport')return 'Přidat '+SPORT_NAMES[a.sport]+' do týdne na '+shortDate(a.date);
-  if(a.type==='status')return 'Stav '+STATUS_NAMES[a.status]+(a.statusUntil?' (znovu Active od '+shortDate(a.statusUntil)+')':'');
-  if(a.type==='move')return 'Přesunout '+(a.eventSnapshot?.name||'trénink')+' na '+shortDate(a.date);
-  if(a.type==='rest')return 'Odstranit '+(a.eventSnapshot?.name||'trénink')+' ('+shortDate(a.date)+')';
-  return 'Připravit '+SPORT_NAMES[a.sport]+(a.workoutName?' „'+a.workoutName+'“':'')+' '+a.minutes+' min na '+shortDate(a.date);
+  const workout=a.eventSnapshot?.name||L('trénink','workout');
+  if(a.type==='gym_swap')return L('Vyměnit ','Swap ')+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
+  if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdne na ','Add a '+SPORT_NAMES()[a.sport]+' to the week on ')+shortDate(a.date);
+  if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Trénink od ',' (back to Training from ')+shortDate(a.statusUntil)+')':'');
+  if(a.type==='move')return L('Přesunout ','Move ')+workout+L(' na ',' to ')+shortDate(a.date);
+  if(a.type==='rest')return L('Odstranit ','Remove ')+workout+' ('+shortDate(a.date)+')';
+  return L('Připravit '+SPORT_NAMES()[a.sport],'Prepare a '+SPORT_NAMES()[a.sport])+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date);
 }
 // The safety inputs the week review sets, for the chat path too: each day's
 // time budget from its own week's plan and the sessions planned from today on.
@@ -34,7 +36,7 @@ export function actionSafetyContext(days,today,planFor){
     remainingPlanned:ahead.flatMap(d=>(d.planned||d.daily?.training?.planned||[]).filter(a=>!/nutrition/i.test(a.name||'')).map(a=>({date:d.date,id:a.id,name:a.name})))
   };
 }
-export const actionsNote=actions=>actions?.length?'[Návrhy: '+actions.map(actionSummary).join('; ')+']':'';
+export const actionsNote=actions=>actions?.length?L('[Návrhy: ','[Proposals: ')+actions.map(actionSummary).join('; ')+']':'';
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{

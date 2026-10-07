@@ -39,7 +39,7 @@ test('inactive status yields confirmed-by-user removals and never invents illnes
   const context=input([day('2026-10-05',[event('1')])],{state:{status:'on_break',note:'Dovolená'}});
   const review=fallbackWeekReview(context);
   assert.equal(review.actions[0].type,'rest');
-  assert.match(review.answer,/On break/);assert.match(review.answer,/Dovolená/);
+  assert.match(review.answer,/Pauza/);assert.match(review.answer,/Dovolená/);
   assert.doesNotMatch(review.answer,/Sick|nemoc/);
 });
 test('an appropriate plan is explicitly left alone',()=>{

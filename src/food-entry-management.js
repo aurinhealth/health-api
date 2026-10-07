@@ -1,27 +1,28 @@
+import { L } from './lang.js';
 const MEALS=new Set(['breakfast','snack_am','lunch','snack_pm','dinner','snack']);
 const FIELDS={kcal:10000,protein_g:1000,carbs_g:1000,fat_g:1000};
 
 function dateValue(value){
   const date=String(value||'');
   const parsed=new Date(date+'T12:00:00Z');
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)throw new Error('Zadej platné datum.');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)throw new Error(L('Zadej platné datum.', 'Enter a valid date.'));
   return date;
 }
 function entryId(value){
   const id=Number(value);
-  if(!Number.isSafeInteger(id)||id<=0)throw new Error('Neplatné jídlo.');
+  if(!Number.isSafeInteger(id)||id<=0)throw new Error(L('Neplatné jídlo.', 'Invalid meal.'));
   return id;
 }
 function noteObject(value){try{const note=JSON.parse(value||'{}');return note&&typeof note==='object'&&!Array.isArray(note)?note:{legacyNote:String(value)}}catch{return value?{legacyNote:String(value)}:{}}}
 function changedDate(timestamp,date){return /^\d{4}-\d{2}-\d{2}/.test(String(timestamp||''))?date+String(timestamp).slice(10):date+'T12:00:00.000Z'}
-async function existing(db,id){const row=await db.prepare('SELECT * FROM food_logs WHERE id=? AND user_id=?').bind(entryId(id),db.userId).first();if(!row)throw new Error('Jídlo už v deníku není.');return row}
+async function existing(db,id){const row=await db.prepare('SELECT * FROM food_logs WHERE id=? AND user_id=?').bind(entryId(id),db.userId).first();if(!row)throw new Error(L('Jídlo už v deníku není.', 'The meal is no longer in the log.'));return row}
 
 export async function updateFoodEntry(db,id,patch){
   const row=await existing(db,id),date=patch.date==null?row.consumed_date:dateValue(patch.date);
   const name=patch.name==null?row.recipe_title:String(patch.name).trim().slice(0,180);
-  if(!name)throw new Error('Doplň název jídla.');
+  if(!name)throw new Error(L('Doplň název jídla.', 'Add the meal name.'));
   const note=noteObject(row.note);
-  if(patch.mealType!=null){if(!MEALS.has(patch.mealType))throw new Error('Neplatný typ jídla.');note.mealType=patch.mealType}
+  if(patch.mealType!=null){if(!MEALS.has(patch.mealType))throw new Error(L('Neplatný typ jídla.', 'Invalid meal type.'));note.mealType=patch.mealType}
   const values=Object.fromEntries(Object.entries(FIELDS).map(([key,max])=>{
     if(patch[key]==='')throw new Error('Zkontroluj energii a makra.');
     const value=patch[key]==null?Number(row[key]||0):Number(patch[key]);

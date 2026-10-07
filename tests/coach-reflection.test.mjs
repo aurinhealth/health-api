@@ -51,7 +51,7 @@ test("short sleep, low HRV and a load spike are named against the athlete's own 
 test("without AI the note quotes the athlete and lists the strongest reasons", () => {
   const s = scenario(), text = rulesReflection({ feedback: s.feedback, workout: s.workout, signals: reflectionSignals(s) });
   assert.match(text, /„těžké nohy“ \(RPE 7\)/);
-  assert.match(text, /Před tréninkem byla chůze/);
+  assert.match(text, /Před tréninkem: chůze/);
 });
 
 test("activities from Intervals.icu and Google Health become one Prague timeline", () => {
@@ -109,7 +109,7 @@ test("RPE feedback starts the coach's note in the background and the dashboard s
   assert.match(entry, /if\(reflect\)ctx\.waitUntil\(createReflection\(/);
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
   assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
-  assert.match(client, /cls:'coach',title:'Kouč'/);
+  assert.match(client, /cls:'coach',title:uiText\('Kouč','Coach'\)/);
   assert.match(client, /\$\('timelineCoach'\)\.onclick=\(\)=>openCoachSheet\(date\)/);
   assert.match(client, /awaitReflection\(body\.scheduledDate\)/);
 });

@@ -1,10 +1,10 @@
-
+import { L } from './lang.js';
 
 function formatKg(value) {
-  if (value == null || value === "") return "vlastní váha";
+  if (value == null || value === "") return L("vlastní váha", "bodyweight");
   const n = Number(String(value).replace(",", "."));
   if (!Number.isFinite(n)) return String(value);
-  return (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10)).replace(".", ",") + " kg";
+  return (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10)).replace(".", L(",", ".")) + " kg";
 }
 
 // Consecutive rows of one exercise and type: the exercise's warm-up or its work sets.
@@ -22,14 +22,14 @@ function groups(rows, type) {
 function formatRows(rows) {
   const sections = [];
   const warmup = groups(rows, "WARMUP");
-  if (warmup.length) sections.push("Rozcvička:", warmup.map(g => `- ${g.exercise}: ${g.rows.map(r => `${formatKg(r[3])} × ${r[4] || "?"}`).join(", ")}`).join("\n"));
+  if (warmup.length) sections.push(L("Rozcvička:", "Warm-up:"), warmup.map(g => `- ${g.exercise}: ${g.rows.map(r => `${formatKg(r[3])} × ${r[4] || "?"}`).join(", ")}`).join("\n"));
   const work = groups(rows, "WORK");
-  if (work.length) sections.push("Pracovní série:", work.map((g, i) => {
+  if (work.length) sections.push(L("Pracovní série:", "Work sets:"), work.map((g, i) => {
     const loads = [...new Set(g.rows.map(r => formatKg(r[3])))];
     const reps = [...new Set(g.rows.map(r => r[4] || "?"))];
     const sets = loads.length === 1 && reps.length === 1 ? `${g.rows.length} × ${reps[0]} @ ${loads[0]}` : g.rows.map(r => `${r[4] || "?"} @ ${formatKg(r[3])}`).join(", ");
     const superset = g.rows[0][12], failure = g.rows.some(r => r[11] === 'TRUE'), rest = String(g.rows[0][9] || '').match(/\[Pauza (\d+) s\]/)?.[1];
-    return `${i + 1}. ${g.exercise}: ${sets}${superset ? ' · supersérie ' + superset : ''}${failure ? ' · poslední série do technického selhání' : ''}${rest ? ' · pauza ' + rest + ' s' : ''}`;
+    return `${i + 1}. ${g.exercise}: ${sets}${superset ? L(' · supersérie ', ' · superset ') + superset : ''}${failure ? L(' · poslední série do technického selhání', ' · last set to technical failure') : ''}${rest ? L(' · pauza ', ' · rest ') + rest + ' s' : ''}`;
   }).join("\n"));
   return sections.join("\n\n");
 }
@@ -40,9 +40,9 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
   const externalId = String(options.externalId || `health-strength-${plan.date}`);
   const durationMinutes = Number(options.durationMinutes || 60);
   const description = [
-    plan.rationale ? `Proč tenhle trénink: ${plan.rationale}` : "",
+    plan.rationale ? L(`Proč tenhle trénink: ${plan.rationale}`, `Why this workout: ${plan.rationale}`) : "",
     formatRows(plan.rows || []),
-    "Vygenerováno v Loadwise"
+    L("Vygenerováno v Loadwise", "Generated in Loadwise")
   ].filter(Boolean).join("\n\n");
 
   return {

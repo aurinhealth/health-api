@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 // App-owned events and an outbox; providers are destinations, not storage.
 export async function ensureLocalWorkouts(db){
@@ -12,7 +13,7 @@ async function projection(db,id,event,remove=false){
 export async function storeLocalEvent(db,event,{key=event.external_id,id=null}={}){
   await ensureLocalWorkouts(db);
   const existing=id?await localWorkout(db,id):await db.prepare('SELECT * FROM local_workouts WHERE user_id=? AND event_key=?').bind(db.userId,key).first();
-  if(id&&!existing)throw new Error('Trénink nebyl nalezen.');
+  if(id&&!existing)throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(db.userId+':'+key));
   id=existing?.id||'local-'+Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('').slice(0,40);
   const payload={...event,id,external_id:'loadwise:'+db.userId+':'+id};
@@ -29,7 +30,7 @@ export async function localWorkout(db,id){
 export async function syncLocalWorkout(env,id,fetchImpl=fetch){
   const db=env.DB,row=await localWorkout(db,id);
   if(!row)return {status:'not_found'};
-  if(!env.INTERVALS_API_KEY)return {status:'not_connected',message:'Trénink je uložený v aplikaci. Intervals.icu není připojeno.'};
+  if(!env.INTERVALS_API_KEY)return {status:'not_connected',message:L('Trénink je uložený v aplikaci. Intervals.icu není připojeno.', 'The workout is saved in the app. Intervals.icu isn\'t connected.')};
   const exported=await db.prepare("SELECT * FROM workout_exports WHERE user_id=? AND local_id=? AND provider='intervals'").bind(db.userId,row.id).first();
   if(exported?.revision===row.revision&&exported.status==='synced')return {status:'synced',eventId:exported.remote_id};
   const claimed=await db.prepare("UPDATE workout_exports SET status='running',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals' AND (status!='running' OR updated_at<datetime('now','-5 minutes'))").bind(db.userId,row.id).run();
@@ -41,7 +42,7 @@ export async function syncLocalWorkout(env,id,fetchImpl=fetch){
     if(row.status==='deleted'&&!remoteId){
       const r=await fetchImpl('https://intervals.icu/api/v1/athlete/0/events?oldest='+event.start_date_local.slice(0,10)+'&newest='+event.start_date_local.slice(0,10),{headers});
       if(!r.ok)throw new Error('Intervals.icu HTTP '+r.status);
-      const events=await r.json();if(!Array.isArray(events))throw new Error('Neplatná odpověď Intervals.icu.');remoteId=events.find(e=>e.external_id===event.external_id)?.id;
+      const events=await r.json();if(!Array.isArray(events))throw new Error(L('Neplatná odpověď Intervals.icu.', 'Invalid response from Intervals.icu.'));remoteId=events.find(e=>e.external_id===event.external_id)?.id;
     }
     if(row.status==='deleted'){
       if(remoteId){const r=await fetchImpl('https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId),{method:'DELETE',headers});if(!r.ok&&r.status!==404)throw new Error('Intervals.icu HTTP '+r.status);}
@@ -52,7 +53,7 @@ export async function syncLocalWorkout(env,id,fetchImpl=fetch){
       const r=await fetchImpl(url,{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
       if(!r.ok)throw new Error('Intervals.icu HTTP '+r.status);
       const data=await r.json(),saved=Array.isArray(data)?data[0]:data;
-      if(saved?.id==null)throw new Error('Intervals.icu nepotvrdilo uložení.');remoteId=String(saved.id);
+      if(saved?.id==null)throw new Error(L('Intervals.icu nepotvrdilo uložení.', 'Intervals.icu didn\'t confirm the save.'));remoteId=String(saved.id);
     }
     await db.prepare("UPDATE workout_exports SET remote_id=?,revision=?,status=CASE WHEN ?=(SELECT revision FROM local_workouts WHERE user_id=? AND id=?) THEN 'synced' ELSE 'pending' END,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals'").bind(remoteId==null?null:String(remoteId),row.revision,row.revision,db.userId,row.id,db.userId,row.id).run();
     // An old imported projection must not double-count an app-owned event.
@@ -60,7 +61,7 @@ export async function syncLocalWorkout(env,id,fetchImpl=fetch){
     return {status:'synced',eventId:remoteId};
   }catch{
     await db.prepare("UPDATE workout_exports SET status='error',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals'").bind(db.userId,row.id).run();
-    return {status:'error',message:'Trénink je uložený v aplikaci. Export se nepodařil; lze ho zkusit znovu.'};
+    return {status:'error',message:L('Trénink je uložený v aplikaci. Export se nepodařil; lze ho zkusit znovu.', 'The workout is saved in the app. The export failed; you can try again.')};
   }
 }
 export async function retryWorkoutExports(env){
@@ -78,7 +79,7 @@ export async function importedEventIsLocal(db,event,userId=db.userId){
   const index=await localExportIndex(db,userId);return index.remote.has(String(event.id??event.event_id??''))||index.external.has(event.external_id);
 }
 export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
-  const db=env.DB,row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error('Trénink nebyl nalezen.');
+  const db=env.DB,row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const event=JSON.parse(row.event_json);
   if(change.deleted){
     await db.batch([db.prepare("UPDATE local_workouts SET status='deleted',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(db.userId,row.id),await projection(db,row.id,event,true),db.prepare("DELETE FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?").bind(db.userId,row.id),db.prepare("UPDATE workout_exports SET status='pending' WHERE user_id=? AND local_id=? AND status!='running'").bind(db.userId,row.id)]);
@@ -93,9 +94,9 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   const sync=await syncLocalWorkout(env,row.id,fetchImpl);return {status:'ok',eventId:row.id,sync};
 }
 export async function completeLocalWorkout(db,id,{minutes,rpe,notes}={}){
-  const row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error('Trénink nebyl nalezen.');
+  const row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const event=JSON.parse(row.event_json),duration=Number(minutes??event.moving_time/60);
-  if(!Number.isFinite(duration)||duration<=0||duration>1440)throw new Error('Zadej skutečnou délku tréninku.');
+  if(!Number.isFinite(duration)||duration<=0||duration>1440)throw new Error(L('Zadej skutečnou délku tréninku.', 'Enter the actual duration of the workout.'));
   const payload={...event,moving_time:duration*60,rpe:Number(rpe)||null,description:String(notes||'').slice(0,1000)};
   await db.batch([
     db.prepare("UPDATE local_workouts SET status='completed' WHERE user_id=? AND id=?").bind(db.userId,row.id),

@@ -1,6 +1,7 @@
 // A gym plan changed by the athlete's words ("bez nohou", "kratší") and the
 // rows a proposal is confirmed with: only exercises from the gym's catalog
 // (or already in the plan), the plan's own columns, no logged results.
+import { L } from './lang.js';
 import { callOpenAI, lightModel } from './coach-assistant.js';
 import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
 import { GYM_PLAN_COLUMNS } from './gym-plan-store.js';
@@ -11,11 +12,11 @@ const kgText = v => v == null || v === '' || !Number.isFinite(Number(String(v).r
 // Plan rows as the client sends them, trimmed to known exercises and the
 // planning columns (a proposal has no results yet).
 export function cleanGymRows(rows, allowed) {
-  if (!Array.isArray(rows)) throw new Error('Chybí cviky plánu.');
+  if (!Array.isArray(rows)) throw new Error(L('Chybí cviky plánu.', 'The plan\'s exercises are missing.'));
   const out = rows.slice(0, MAX_ROWS).map(row => Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => String(row?.[i] ?? '').trim().slice(0, i === 9 ? 300 : 120)))
     .filter(r => /^(WARMUP|WORK)$/i.test(r[0]) && allowed.has(r[1]))
     .map(r => { r[0] = r[0].toUpperCase(); r[3] = kgText(r[3]); r[5] = r[6] = r[7] = ''; r[8] = 'FALSE'; r[11] = /^(true|1)$/i.test(r[11]) ? 'TRUE' : 'FALSE'; r[12] = /^[A-F]$/.test(r[12]) ? r[12] : ''; return r; });
-  if (!out.length) throw new Error('Plán musí mít aspoň jeden cvik.');
+  if (!out.length) throw new Error(L('Plán musí mít aspoň jeden cvik.', 'The plan must have at least one exercise.'));
   return out;
 }
 
@@ -79,6 +80,6 @@ export async function adjustGymPlan(env, { rows, request, history = [] }) {
   const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent });
   const r = await callOpenAI(env, { feature: "gym-adjust", instructions: ADJUST_INSTRUCTIONS, input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
   const data = JSON.parse(r.text), out = fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history);
-  if (!out.length) throw new Error('Úpravu se nepodařilo připravit, zkus ji napsat jinak.');
+  if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));
   return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };
 }

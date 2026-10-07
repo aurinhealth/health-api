@@ -12,7 +12,7 @@ const row=(name,n,options={})=>['WORK',name,String(n),'162,5','10','','','','FAL
 function client(rows,storage=new Map(),userId=1){
   const el={hidden:true,innerHTML:''};
   const state={account:{id:userId},gym:{date:'2026-10-04',values:Array.from({length:7},()=>[]).concat(rows)}};
-  const context=vm.createContext({state,$:id=>id==='gymMode'?el:null,document:{body:{classList:{add(){},remove(){}}}},sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},num:(v,d=0)=>Number.isFinite(Number(v))?Number(v):d,fmt:v=>v,esc:v=>String(v??''),gymDay:()=>state.gym.date,renderToday(){},renderGym(){},renderGymHistory(){},setInterval:()=>1,clearInterval(){},toast(){},jsonFetch:async()=>({}),gymSaveQueue:Promise.resolve()});
+  const context=vm.createContext({uiText:cs=>cs,state,$:id=>id==='gymMode'?el:null,document:{body:{classList:{add(){},remove(){}}}},sessionStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},num:(v,d=0)=>Number.isFinite(Number(v))?Number(v):d,fmt:v=>v,esc:v=>String(v??''),gymDay:()=>state.gym.date,renderToday(){},renderGym(){},renderGymHistory(){},setInterval:()=>1,clearInterval(){},toast(){},jsonFetch:async()=>({}),gymSaveQueue:Promise.resolve()});
   vm.runInContext(source.slice(source.indexOf('// Gym workout mode:'),source.indexOf('function installPhoneLayer(')),context);
   const run=code=>vm.runInContext(code,context);
   const click=action=>{context.event={target:{closest:()=>({dataset:{gm:action}})}};return run("$('gymMode').onclick(event)");};

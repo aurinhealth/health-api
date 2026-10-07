@@ -94,7 +94,7 @@ test('multiple recent recovery signals suggest a break, never diagnose sickness'
 test('scheduling respects a pause and a clock window before external writes',async()=>{
   const raw=createD1(),db=scopedDb(raw,1);
   await updateAthleteState(db,{status:'sick'});
-  await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:CYCLING_WORKOUTS[0].id,date:'2026-10-05',confirm:true}),/Sick/);
+  await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:CYCLING_WORKOUTS[0].id,date:'2026-10-05',confirm:true}),/Nemoc/);
 });
 test('simple, planning and block requests route to configurable Luna and Sol',async()=>{
   const original=globalThis.fetch,calls=[];

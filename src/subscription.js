@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 // Billing is deliberately inactive during the invitation-only pilot.
 export const SUBSCRIPTION_FEATURES = [
   {name:'Profil, kalorické cíle a přehledy', ai:false},
@@ -11,6 +12,7 @@ export const SUBSCRIPTION_FEATURES = [
   {name:'AI zápis jídla vlastními slovy a webové dohledání potravin', ai:true},
   {name:'AI doplnění chybějící techniky cviku mimo katalog', ai:true}
 ];
+const FEATURES_EN = {"Profil, kalorické cíle a přehledy": "Profile, calorie goals and overviews", "Ruční zápis jídla, váhy a tréninků": "Manual logging of food, weight and workouts", "Moje potraviny, moje jídla a hledání v katalogu": "My foods, my meals and catalog search", "Základní generování a plánování tréninků": "Basic workout generation and planning", "Propojení a synchronizace služeb": "Connecting and syncing services", "AI trenér a úpravy plánů vlastními slovy": "AI coach and plan changes in your own words", "AI hodnocení dne, týdne a odcvičeného tréninku": "AI review of the day, the week and a completed workout", "Rozpoznání jídla a etikety z fotky pomocí AI": "AI recognition of meals and labels from a photo", "AI zápis jídla vlastními slovy a webové dohledání potravin": "AI food logging in your own words and web lookup of foods", "AI doplnění chybějící techniky cviku mimo katalog": "AI technique cards for exercises outside the catalog"};
 // The comparison of the plans pops up once, at the first use of an AI feature
 // during the pilot (kept per account, dashboard_profile row 4). Once the paid
 // split is on, it shows whenever a locked feature is used.
@@ -33,10 +35,10 @@ export async function subscriptionStatus(env) {
     const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first();
     if(row?.plan==='ai' && row.valid_until && Date.parse(row.valid_until)>Date.now())plan='ai';
   }
-  return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiAccess:!enforced||plan==='ai',billingActive:enforced,checkoutAvailable:false,features:SUBSCRIPTION_FEATURES,
-    terms:'Během pilotu pro pozvané jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.'};
+  return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiAccess:!enforced||plan==='ai',billingActive:enforced,checkoutAvailable:false,features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
+    terms:L('Během pilotu pro pozvané jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'During the invitation-only pilot, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
 }
 export async function assertAIAccess(env){
   if((await subscriptionStatus(env)).aiAccess)return;
-  const error=new Error('Tato AI funkce vyžaduje AI předplatné. Přehled najdeš v Nastavení → Předplatné.');error.status=402;error.ai=true;error.limit=true;throw error;
+  const error=new Error(L('Tato AI funkce vyžaduje AI předplatné. Přehled najdeš v Nastavení → Předplatné.', 'This AI feature needs an AI subscription. See Settings → Subscription.'));error.status=402;error.ai=true;error.limit=true;throw error;
 }

@@ -51,10 +51,3 @@ var s=document.createElement('script');s.src='/app/i18n-en.js?v=${EN_VERSION()}'
 export function englishScript(url) {
   return new Response(englishScriptBody(), {status:200, headers:{'content-type':'text/javascript; charset=utf-8', 'cache-control':scriptCacheControl(url, EN_VERSION())}});
 }
-
-// For AI replies: the assistant answers in the interface language.
-export function replyLanguageNote(env) {
-  return String(env?.INTERFACE_LANGUAGE || 'cs').toLowerCase().startsWith('en')
-    ? '\n\nThe athlete uses the app in English: write every user-facing text (answer, reasons, labels) in English, regardless of the language of these instructions or the data.'
-    : '';
-}

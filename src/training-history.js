@@ -1,4 +1,5 @@
 // Measured history and conservative starting templates are separate inputs.
+import { L } from './lang.js';
 import {activityFromRow} from './coach-reflection.js';
 const DAY=86400000;
 export const TRAINING_REFERENCES=[
@@ -34,5 +35,5 @@ export function starterPlan(history,experience=history.experience){
   const templates={beginner:[30,0,30,0,0,45,0],regular:[30,0,30,0,30,60,0],experienced:[30,30,0,30,30,60,60]};
   const measured=history.recentCount>=4&&history.recentActiveWeeks>=3;
   const minutes=measured?history.weekdayMinutes.map(m=>m>0?Math.max(20,Math.min(240,Math.round(m/5)*5)):0):templates[experience]||templates.beginner;
-  return {source:measured?'history':'starter',availability:minutes.map(minutes=>({minutes,window:'',preferredSports:[]})),weeklyActivities:minutes.filter(m=>m>0).length,weeklyMinutes:minutes.reduce((a,b)=>a+b,0),references:TRAINING_REFERENCES,explanation:measured?'Výchozí objem a dny vycházejí z posledních 4 týdnů.':'Opatrná výchozí šablona; nejde o změřený volný čas. Čas i dny upravíš v Plánu.'};
+  return {source:measured?'history':'starter',availability:minutes.map(minutes=>({minutes,window:'',preferredSports:[]})),weeklyActivities:minutes.filter(m=>m>0).length,weeklyMinutes:minutes.reduce((a,b)=>a+b,0),references:TRAINING_REFERENCES,explanation:measured?L('Výchozí objem a dny vycházejí z posledních 4 týdnů.', 'The default volume and days are based on the last 4 weeks.'):L('Opatrná výchozí šablona; nejde o změřený volný čas. Čas i dny upravíš v Plánu.', 'A careful default template, not your measured free time. You can adjust the time and days in the Plan.')};
 }

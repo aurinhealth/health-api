@@ -58,7 +58,7 @@ test('focused legs preserve cycling protection', () => {
   const plan=generateStrengthPlan(context,{focusMuscles:['quads']});
   assert.equal(plan.protectedLegs,true);
   assert.deepEqual([...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))],['Leg extension Prime']);
-  assert.match(plan.rationale,/rezervu u nohou/);
+  assert.match(plan.rationale,/u nich držet rezervu/);
 });
 import { completedRowsAreSynced } from "../src/strength-sync-guard.js";
 import { strengthPlanToIntervalsEvent } from "../src/intervals-strength.js";
@@ -474,7 +474,7 @@ test("on a phone, warm-up sets are labelled and each exercise is one block", asy
   assert.match(theme, /tr\[data-type=WARMUP\] td:nth-child\(3\):before\{content:"rozcvička "\}/);
   assert.match(theme, /tr:not\(\.gym-first\) td:nth-child\(2\)/);
   // Workout mode counts warm-up and work sets separately.
-  assert.match(client, /\(warm\(cur\)\?'Rozcvička ':'Série '\)\+k\+' z '\+same\.length/);
+  assert.match(client, /\(warm\(cur\)\?uiText\('Rozcvička ','Warm-up '\):uiText\('Série ','Set '\)\)\+k\+uiText\(' z ',' of '\)\+same\.length/);
 });
 
 test("workout mode shows what the load of a work set is based on", async () => {

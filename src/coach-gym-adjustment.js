@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import { parseStrengthPlan } from './strength-history.js';
 import { EXERCISES } from './strength-generator.js';
 import { findExerciseAlternatives } from './strength-intelligence.js';
@@ -16,11 +17,11 @@ export function todayGymContext(gym,date){
 
 export function prepareGymSwap(gym,fromExercise,toExercise,reason){
   const parsed=parseStrengthPlan(gym.values),source=parsed.rows.filter(r=>r.exercise===fromExercise),def=EXERCISES[toExercise];
-  if(!source.length||!def||!availableAt(toExercise)||fromExercise===toExercise)throw new Error('Cvik není v aktuálním plánu nebo katalogu.');
-  if(def.muscle!==EXERCISES[fromExercise]?.muscle)throw new Error('Náhrada musí zachovat cílovou partii.');
-  if(parsed.rows.some(r=>r.exercise===toExercise))throw new Error('Náhradní cvik už v plánu je.');
-  if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error('Rozcvičený nebo rozepsaný cvik nelze nahradit.');
-  const work=source.filter(r=>r.type==='WORK');if(!work.length)throw new Error('Cvik nemá pracovní série.');
+  if(!source.length||!def||!availableAt(toExercise)||fromExercise===toExercise)throw new Error(L('Cvik není v aktuálním plánu nebo katalogu.', 'The exercise isn\'t in the current plan or catalog.'));
+  if(def.muscle!==EXERCISES[fromExercise]?.muscle)throw new Error(L('Náhrada musí zachovat cílovou partii.', 'The replacement must keep the target muscle group.'));
+  if(parsed.rows.some(r=>r.exercise===toExercise))throw new Error(L('Náhradní cvik už v plánu je.', 'The replacement exercise is already in the plan.'));
+  if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error(L('Rozcvičený nebo rozepsaný cvik nelze nahradit.', 'An exercise that\'s warmed up or partly logged can\'t be replaced.'));
+  const work=source.filter(r=>r.type==='WORK');if(!work.length)throw new Error(L('Cvik nemá pracovní série.', 'The exercise has no work sets.'));
   // The generator's estimate: own history, a similar exercise, or the catalogue's start.
   const estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null};
   const kg=estimate.kg??'',video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique');
@@ -35,10 +36,10 @@ export function prepareGymSwap(gym,fromExercise,toExercise,reason){
 // values survive; a stale or partly completed source cannot be overwritten.
 export function applyGymSwap(values,action){
   const parsed=parseStrengthPlan(values),source=parsed.rows.filter(r=>r.exercise===action.fromExercise);
-  if(parsed.date!==action.date||!source.length||source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null)||parsed.rows.some(r=>r.exercise===action.toExercise)||JSON.stringify(source.map(r=>values[r.planRow-1]))!==JSON.stringify(action.sourceSnapshot))throw new Error('Cvik se mezitím změnil nebo už začal. Požádej o nový návrh.');
+  if(parsed.date!==action.date||!source.length||source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null)||parsed.rows.some(r=>r.exercise===action.toExercise)||JSON.stringify(source.map(r=>values[r.planRow-1]))!==JSON.stringify(action.sourceSnapshot))throw new Error(L('Cvik se mezitím změnil nebo už začal. Požádej o nový návrh.', 'The exercise has changed or already started. Ask for a new proposal.'));
   const indices=new Set(source.map(r=>r.planRow-1)),first=Math.min(...indices),result=[];
   values.forEach((row,i)=>{if(i===first)result.push(...action.replacementRows);if(!indices.has(i))result.push(row);});
-  if(result.length-7>100)throw new Error('Náhradou by plán překročil 100 sérií.');
+  if(result.length-7>100)throw new Error(L('Náhradou by plán překročil 100 sérií.', 'The replacement would push the plan over 100 sets.'));
   return result;
 }
 

@@ -8,9 +8,9 @@ export const TECHNIQUE = {
  'Dead bug': {setup:['Leh na zádech, ruce vzhůru, kolena nad kyčlemi.'],steps:['Zpevni břicho a drž bedra u podložky.','Pomalu natahuj opačnou ruku a nohu do pohodlného rozsahu.','Vrať se a vystřídej strany bez zvednutí beder.'],mistakes:['Ztráta kontaktu beder s podložkou.'],breathing:'Plynulý výdech při natažení.',searchQuery:'dead bug proper technique'},
  "DB bench press": {
   "setup": [
-   "Sedni si na kraj rovné lavice, jednoručky opři o stehna a s výdechem se položenými koleny „odvez“ do lehu.",
+   "Sedni si na kraj rovné lavice, jednoručky opři o stehna a s výdechem se s pomocí kolen „odvez“ do lehu.",
    "Lopatky stáhni k sobě a dolů, chodidla pevně na zemi, hrudník lehce nahoru.",
-   "Jednoručky drž nad ramenem, dlaně směrem k nohám nebo lehce dovnitř."
+   "Jednoručky drž nad rameny, dlaně směrem k nohám nebo lehce dovnitř."
   ],
   "steps": [
    "Spouštěj 2–3 s k bokům hrudníku, lokty asi 45° od trupu.",
@@ -229,7 +229,7 @@ export const TECHNIQUE = {
    "Nohy zaklesni pod válce, chodidla stabilně."
   ],
   "steps": [
-   "Stočuj páteř – přitahuj žebra k pánvi, ne jen předklon v kyčlích.",
+   "Stáčej páteř – přitahuj žebra k pánvi, ne jen předklon v kyčlích.",
    "Dole 1 s stiskni břicho.",
    "Vracej se 2–3 s, těsně před dosednutím závaží zastav.",
    "Hlava a krk v prodloužení trupu."
@@ -419,7 +419,7 @@ export const TECHNIQUE = {
   ],
   "steps": [
    "Posílej boky dozadu, jednoručky kloužou těsně podél stehen.",
-   "Jdi dolů, dokud cítíš protažení hamstringů (zhruba polovina holení) se rovnými zády.",
+   "Jdi dolů, dokud neucítíš protažení hamstringů (zhruba polovina holení) s rovnými zády.",
    "Zpět se zvedni tlakem boků dopředu, nahoře stiskni hýždě.",
    "Tempo dolů 2–3 s, kolena zůstávají ve stejném úhlu."
   ],
@@ -443,7 +443,7 @@ export const TECHNIQUE = {
   ],
   "steps": [
    "Posílej boky dozadu, osa jede těsně po stehnech dolů.",
-   "Jdi do maximálního protažení hamstringů se rovnými zády (obvykle pod kolena).",
+   "Jdi do maximálního protažení hamstringů s rovnými zády (obvykle pod kolena).",
    "Tlakem boků dopředu se vrať nahoru, stiskni hýždě.",
    "Dolů 2–3 s, nahoru plynule."
   ],
@@ -467,7 +467,7 @@ export const TECHNIQUE = {
   ],
   "steps": [
    "Spouštěj se 2–3 s dolů, zadní koleno míří k zemi.",
-   "Jdi do stehna přední nohy rovnoběžně se zemí nebo níž.",
+   "Jdi dolů, až je stehno přední nohy rovnoběžně se zemí nebo níž.",
    "Vytlač přes celé přední chodidlo nahoru.",
    "Dokonči všechna opakování na jednu nohu, pak vyměň."
   ],
@@ -754,7 +754,7 @@ export const TECHNIQUE = {
    "Konce lana drž u hlavy/spánků, boky nad koleny."
   ],
   "steps": [
-   "Stočuj páteř – přitahuj hrudník k pánvi, lokty míří ke kolenům.",
+   "Stáčej páteř – přitahuj hrudník k pánvi, lokty míří ke kolenům.",
    "Dole 1 s stiskni břicho.",
    "Vracej se 2–3 s do protažení, boky zůstávají na místě.",
    "Ruce lano jen drží, netáhnou."
@@ -1115,7 +1115,7 @@ export const TECHNIQUE = {
   ],
   "steps": [
    "Klesej rovně dolů, kolena tlač ve směru špiček.",
-   "Jdi aspoň do vodorovné stehen, trup zůstává vzpřímený.",
+   "Jdi aspoň do vodorovné polohy stehen, trup zůstává vzpřímený.",
    "Zatlač patami a vstaň, nahoře stiskni hýždě.",
    "Dolů 2–3 s, nahoru plynule."
   ],
@@ -1548,7 +1548,7 @@ export const TECHNIQUE = {
   "steps": [
    "Nádech do břicha, zpevni a jdi pánví dozadu a dolů.",
    "Kolena tlač ve směru špiček, celé chodidlo na zemi.",
-   "Jdi aspoň do vodorovné stehen.",
+   "Jdi aspoň do vodorovné polohy stehen.",
    "Tlač nahoru přes celé chodidlo, hrudník i pánev jdou nahoru současně."
   ],
   "mistakes": [
@@ -1572,7 +1572,7 @@ export const TECHNIQUE = {
   "steps": [
    "Nádech, zpevni a klesej rovně dolů.",
    "Trup drž co nejvzpřímenější, lokty nahoru.",
-   "Jdi aspoň do vodorovné stehen, kolena ve směru špiček.",
+   "Jdi aspoň do vodorovné polohy stehen, kolena ve směru špiček.",
    "Tlač nahoru, lokty nepouštěj dolů."
   ],
   "mistakes": [
@@ -1595,7 +1595,7 @@ export const TECHNIQUE = {
   ],
   "steps": [
    "Klesej dolů, kolena ve směru špiček.",
-   "Jdi aspoň do vodorovné stehen, záda rovná.",
+   "Jdi aspoň do vodorovné polohy stehen, záda rovná.",
    "Tlač přes celé chodidlo nahoru.",
    "Nahoře kolena nezamykej, na konci osu zajisti."
   ],
@@ -1817,7 +1817,7 @@ export const TECHNIQUE = {
   ],
   "mistakes": [
    "Krouživé pohyby rameny.",
-   "Pomoc rukama a kolenama.",
+   "Pomoc rukama a koleny.",
    "Předsunutá hlava."
   ],
   "breathing": "Výdech při zvednutí, nádech při spouštění.",

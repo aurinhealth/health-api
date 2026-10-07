@@ -172,7 +172,7 @@ test('earlier turns go to the model as messages with the data first and the ques
     assert.match(body.input[0].content,/^Kontext aplikace/);assert.doesNotMatch(body.input[0].content,/conversation/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
   }finally{globalThis.fetch=original;}
   const move={type:'move',eventId:'planned:7',date:'2026-10-08',reason:'x',eventSnapshot:{name:'Long ride',date:'2026-10-06'}};
-  assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Sick (znovu Active od pá 9. 10.)]');assert.equal(actionsNote([]),'');
+  assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Nemoc (znovu Trénink od pá 9. 10.)]');assert.equal(actionsNote([]),'');
 });
 
 test('the panel shows only open proposals from today and this chat; streaming repaints are throttled',()=>{
