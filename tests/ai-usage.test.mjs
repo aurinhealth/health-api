@@ -29,6 +29,18 @@ test("every AI answer is recorded with its feature, tokens and cost", async () =
   });
 });
 
+test("web searches are counted on top of the tokens, failed ones are not", async () => {
+  const db = createD1(), realFetch = globalThis.fetch;
+  const search = status => ({ type: "web_search_call", status });
+  globalThis.fetch = async () => Response.json({ model: "gpt-6-luna", output: [search("completed"), search("completed"), search("failed"), { content: [{ type: "output_text", text: "ok" }] }], usage: { input_tokens: 10000, output_tokens: 1000 } });
+  try {
+    await callOpenAI(envFor(db), { feature: "food-lookup", instructions: "x", input: "y", tools: [{ type: "web_search" }] });
+  } finally { globalThis.fetch = realFetch; }
+  // 0.001 + 0.0005 for tokens, 2 × 0.01 for searches.
+  assert.equal(db.sqlite.prepare("SELECT cost_usd FROM ai_usage").get().cost_usd, 0.0215);
+  assert.equal(usageCost("gpt-6-luna", { input_tokens: 10000, output_tokens: 1000 }), 0.0015);
+});
+
 test("the daily limit stops the next call once it is spent; the owner has none", async () => {
   const db = createD1();
   await withOpenAI(async calls => {

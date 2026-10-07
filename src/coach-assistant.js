@@ -275,7 +275,9 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   });
   if(!response.ok){const error=await response.json().catch(()=>({})),failure=new Error('OpenAI '+response.status+': '+(error.error?.message||L('AI služba není dostupná.', 'The AI service isn\'t available.')));failure.ai=true;throw failure;}
   const data=onText?await readOpenAIStream(response,onText):await response.json();
-  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage});
+  // Web searches are billed per call; a failed one is not.
+  const webSearches=(data.output||[]).filter(item=>item.type==='web_search_call'&&item.status!=='failed').length;
+  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
   if (!text) throw new Error(incomplete?L('Odpověď AI se nevešla do limitu a nedokončila se. Zkus otázku zúžit.', 'The AI answer didn\'t fit the limit and wasn\'t finished. Try narrowing the question.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));

@@ -10,11 +10,13 @@ const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Nu
 
 // Prices in USD per 1M tokens (input, output).
 export const MODEL_PRICES = { "gpt-6-luna": [0.10, 0.50], "gpt-6-sol": [2, 10], "gpt-6.1-sol": [2, 10], "gpt-6-astra": [10, 50] };
-export function usageCost(model, usage) {
+// Each web search the model runs is billed on top of the tokens (10 USD per 1,000 calls).
+export const WEB_SEARCH_USD = 0.01;
+export function usageCost(model, usage, webSearches = 0) {
   const key = Object.keys(MODEL_PRICES).sort((a, b) => b.length - a.length).find(k => String(model || "").startsWith(k));
   if (!key || !usage) return null;
   const [i, o] = MODEL_PRICES[key];
-  return Math.round(((n(usage.input_tokens) || 0) * i + (n(usage.output_tokens) || 0) * o) / 1e6 * 1e5) / 1e5;
+  return Math.round(((n(usage.input_tokens) || 0) * i + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
 export const DEFAULT_AI_DAILY_LIMIT_USD = 1;
@@ -61,12 +63,12 @@ export async function assertAiAllowance(env) {
 }
 
 // Best effort: a failed write never costs the user the answer.
-export async function recordAiUsage(env, { feature = null, model = null, usage = null } = {}) {
+export async function recordAiUsage(env, { feature = null, model = null, usage = null, webSearches = 0 } = {}) {
   if (!tracked(env) || !usage) return;
   try {
     await ensureAiUsage(env.DB);
     // An unknown model counts at the default model's price, so it cannot slip past the limit.
-    const cost = usageCost(model, usage) ?? usageCost("gpt-6-sol", usage) ?? 0;
+    const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
     await env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, input_tokens, output_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?)")
       .bind(env.USER_ID, pragueToday(), feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost).run();
   } catch (error) {
