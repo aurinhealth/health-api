@@ -59,11 +59,11 @@ export const gymFocusTheme = `
 .gym-focus-builder{margin:20px 0 16px;padding:20px 0;border-top:1px solid color-mix(in srgb,var(--muted) 26%,var(--bg));border-bottom:1px solid color-mix(in srgb,var(--muted) 26%,var(--bg))}
 .gym-focus-heading{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:16px}
 .gym-focus-heading h2{font-size:20px;line-height:1.2;margin:4px 0 0;letter-spacing:0}
-#gymFocusCount{color:color-mix(in srgb,var(--muted) 86%,var(--text));font-size:12px;white-space:nowrap}
+#gymFocusCount{color:color-mix(in srgb,var(--muted) 86%,var(--text));font-size:var(--fs-small);white-space:nowrap}
 .gym-focus-layout{display:grid;grid-template-columns:minmax(260px,400px) minmax(0,1fr);gap:28px;align-items:center}
 .gym-view-switch{display:none}
 .gym-figures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;max-width:400px}
-.gym-figure{text-align:center;color:color-mix(in srgb,var(--muted) 86%,var(--text));font-size:12px}
+.gym-figure{text-align:center;color:color-mix(in srgb,var(--muted) 86%,var(--text));font-size:var(--fs-small)}
 .gym-figure svg{display:block;width:100%;max-height:330px;margin:auto}
 .gym-body{fill:color-mix(in srgb,var(--muted) 60%,var(--bg));stroke:color-mix(in srgb,var(--text) 75%,var(--bg));stroke-width:1.4;stroke-linejoin:round}
 .gym-muscle{fill:var(--fresh-fill,color-mix(in srgb,var(--text) 63%,var(--bg)));stroke:color-mix(in srgb,var(--muted) 31%,var(--bg));stroke-width:1.3;stroke-linejoin:round;cursor:pointer;transition:fill .15s ease,stroke .15s ease,filter .15s ease}
@@ -76,9 +76,9 @@ export const gymFocusTheme = `
 .gym-focus-choices button:hover,.gym-focus-choices button:focus-visible{border-color:color-mix(in srgb,var(--green) 88%,var(--muted));outline:none}
 .gym-focus-choices button[aria-pressed="true"]{background:color-mix(in srgb,var(--green) 21%,var(--bg));border-color:color-mix(in srgb,var(--green) 91%,var(--bg));color:color-mix(in srgb,var(--primary) 11%,var(--text))}
 .gym-focus-action{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px}
-.gym-focus-action label{font-size:12px;color:color-mix(in srgb,var(--muted) 86%,var(--text))}
+.gym-focus-action label{font-size:var(--fs-small);color:color-mix(in srgb,var(--muted) 86%,var(--text))}
 .gym-focus-action select{background:color-mix(in srgb,var(--cyan) 8%,var(--bg));border:1px solid color-mix(in srgb,var(--muted) 40%,var(--bg));border-radius:6px;color:color-mix(in srgb,var(--primary) 5%,var(--text));padding:8px}
 .gym-focus-action button{min-height:39px}
-#gymFocusStatus{font-size:12px;color:color-mix(in srgb,var(--muted) 86%,var(--text));margin:10px 0 0;min-height:18px}
+#gymFocusStatus{font-size:var(--fs-small);color:color-mix(in srgb,var(--muted) 86%,var(--text));margin:10px 0 0;min-height:18px}
 @media(max-width:760px){.gym-focus-layout{grid-template-columns:1fr;gap:15px}.gym-view-switch{display:grid;grid-template-columns:1fr 1fr;gap:2px;max-width:280px;margin:0 auto 8px;padding:3px;border:1px solid color-mix(in srgb,var(--muted) 40%,var(--bg));border-radius:7px;background:color-mix(in srgb,var(--cyan) 6%,var(--bg))}.gym-view-switch button{border:0;border-radius:5px;background:transparent;color:color-mix(in srgb,var(--muted) 86%,var(--text));padding:7px}.gym-view-switch button[aria-pressed="true"]{background:color-mix(in srgb,var(--primary) 29%,var(--bg));color:var(--text);font-weight:700}.gym-figures{display:block;max-width:330px;margin:auto}.gym-figure{display:none}.gym-figure.active{display:block}.gym-figure>span{display:none}.gym-figure svg{height:390px;width:auto;max-height:none;max-width:100%}.gym-focus-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.gym-focus-action button{flex:1 1 100%}}
 `;

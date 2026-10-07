@@ -45,3 +45,23 @@ test('light theme follows the lw-theme cookie or the system setting',async()=>{
   for(const choice of ['light','dark'])assert.match(client,new RegExp('data-theme-choice="'+choice+'"'));
   assert.doesNotMatch(html+client,/data-theme-choice="system"/,'the device decides without a choice; there is no separate option for it');
 });
+
+// Small text was 12px almost everywhere and hard to read; sizes under 15px now come from the
+// type scale in design-system.js, so the app keeps one readable hierarchy.
+test('app layers take small font sizes from the type scale',()=>{
+  const found=[];
+  for(const file of LAYERS.filter(f=>f!=='site-pages.js')){
+    const src=readFileSync(new URL('../src/'+file,import.meta.url),'utf8')
+      .replace(/\.lang-switch button\{[^}]*\}/,'')      // public pages share it and have no scale
+      .replace(/\.info-tip\{[^}]*\}/,'');               // the (i) glyph inside its 17px circle
+    for(const m of src.matchAll(/font(?:-size)?:[^;"'}]*?(\d+(?:\.\d+)?)px/g))if(+m[1]<15)found.push(file+' '+m[0]);
+  }
+  assert.deepEqual(found,[],'use var(--fs-caption|meta|small|body) instead');
+});
+
+test('the type scale keeps secondary text at 14px and fields at 16px on phones',async()=>{
+  const html=await dashboardPage().text();
+  assert.match(html,/--fs-small:14px/);
+  assert.match(html,/--fs-body:15px/);
+  assert.match(html,/max-width:700px\)\{input[^{]*,select,textarea\{font-size:16px/);
+});

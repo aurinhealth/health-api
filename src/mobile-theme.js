@@ -14,8 +14,8 @@ export const mobileTheme = `
 #gymExerciseResults{display:grid;gap:3px;max-height:360px;overflow:auto}
 #gymExerciseResults button{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 11px;background:transparent;color:color-mix(in srgb,var(--cyan) 6%,var(--text));border:1px solid transparent;border-radius:6px;text-align:left}
 #gymExerciseResults button:hover,#gymExerciseResults button:focus-visible,#gymExerciseResults button[aria-selected=true]{background:color-mix(in srgb,var(--primary) 20%,var(--bg));border-color:color-mix(in srgb,var(--primary) 79%,var(--bg));outline:0}
-#gymExerciseResults button strong{font-size:13px}
-#gymExerciseResults button small{color:color-mix(in srgb,var(--primary) 12%,var(--muted));font-size:12px;text-align:right}
+#gymExerciseResults button strong{font-size:var(--fs-small)}
+#gymExerciseResults button small{color:color-mix(in srgb,var(--primary) 12%,var(--muted));font-size:var(--fs-small);text-align:right}
 @media(max-width:700px){
   html{scroll-padding-top:72px}
   body{background:var(--bg)}
@@ -24,7 +24,7 @@ export const mobileTheme = `
   /* One row for all six sections. */
   .nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:1px;overflow:visible}
   .nav button{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;min-width:0;min-height:56px;padding:4px 1px;border:0;border-radius:7px;background:transparent;color:color-mix(in srgb,var(--muted) 86%,var(--text));font-size:22px;line-height:1.1;text-align:center}
-  .nav button span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;letter-spacing:-.1px}
+  .nav button span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-caption);font-weight:650;letter-spacing:-.1px}
   .nav button.active{background:var(--primary-surface);color:var(--primary-text);box-shadow:none}
   .nav button:focus-visible{outline:2px solid var(--primary);outline-offset:-2px}
   .nav button .icon{width:22px;height:22px}
@@ -32,10 +32,10 @@ export const mobileTheme = `
   .top-title{font-size:15px;max-width:none}
   .topbar .actions{width:auto;gap:4px}
   .topbar .top-title,.topbar #refresh{display:none}
-  .topbar #viewDate{width:114px;font-size:12px}
+  .topbar #viewDate{width:114px;font-size:var(--fs-small)}
   .topbar #openAssistant{font-size:0}
-  .topbar #openAssistant::after{content:'AI';font-size:12px}
-  .topbar .actions .btn{flex:none;min-height:38px;padding:8px 10px;font-size:12px}
+  .topbar #openAssistant::after{content:'AI';font-size:var(--fs-small)}
+  .topbar .actions .btn{flex:none;min-height:38px;padding:8px 10px;font-size:var(--fs-small)}
   .topbar .status-dot,.topbar #topStatus{display:none}
   .content{padding:16px 12px calc(92px + env(safe-area-inset-bottom));max-width:600px}
   .section-hero{margin-bottom:12px}
@@ -60,7 +60,7 @@ export const mobileTheme = `
   #nutrition>.section{order:7}
   #nutrition>.card:not(#foodEntry):not(#enteredFood):not(#nutritionInsights){order:8}
   #nutrition .foodrow{align-items:flex-start}
-  #nutrition .foodrow .right{font-size:12px}
+  #nutrition .foodrow .right{font-size:var(--fs-small)}
   #nutrition .next-meal{border-top:1px solid color-mix(in srgb,var(--muted) 25%,var(--bg));padding-top:12px}
   #nutrition .food-selection-layout{grid-template-columns:1fr}
   #nutrition .food-controls{display:grid;grid-template-columns:1fr}

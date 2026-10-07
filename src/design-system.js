@@ -9,7 +9,7 @@ import {icon} from './icons.js';
 const LIGHT = `
   color-scheme:light;
   --bg:#fbfcfd;--sidebar:#f3f5f8;--panel:#ffffff;--panel2:#eef1f5;--line:#d9dee6;
-  --text:#121821;--muted:#596474;
+  --text:#121821;--muted:#4f5a69;
   --ok:#0c7f5a;--warn:#a86a00;--bad:#d42f47;--cyan:#0a76b8;--sky:#0784a8;--blue:#2563eb;
   --green:#0f8a5c;--amber:#b86e00;--violet:#7444d6;--lilac:#8657e0;
   --primary:#0c7f5a;--primary-rgb:12,127,90;--primary-ink:#ffffff;--primary-text:#0a6b4c;
@@ -33,6 +33,10 @@ export const themeTokens = `
   /* Data-coloured text (.ink, colour in --c): the light theme caps its lightness so pastel
      chart hues stay readable on white; the dark theme keeps them as they are. */
   --ink-l:1;
+  /* Type scale. Theme layers take sizes under 15px from these tokens (tests/design-tokens.test.mjs):
+     caption only for short uppercase labels, meta for dense chips, legends and calendar cells,
+     small for secondary sentences, notes, table cells and buttons, body for running text. */
+  --fs-caption:12px;--fs-meta:13px;--fs-small:14px;--fs-body:15px;
 }
 :root[data-theme="light"]{${LIGHT}}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){${LIGHT}}}
@@ -68,10 +72,14 @@ export const themeSwitchCss = `
 `;
 
 export const designSystem = themeTokens + themeSwitchCss + `
+/* Buttons used to inherit the 14px body; keep them at small instead of growing with running text. */
+button{font-size:var(--fs-small)}
+/* iOS zooms into any field under 16px when it gets focus. */
+@media (max-width:700px){input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px!important}}
 body{background:var(--bg)}
 .ink{color:var(--c);color:oklch(from var(--c) min(l,var(--ink-l)) c h)}
 svg .ink{fill:var(--c);fill:oklch(from var(--c) min(l,var(--ink-l)) c h)}
-.brand span{text-transform:none;letter-spacing:0;font-size:12px}
+.brand span{text-transform:none;letter-spacing:0;font-size:var(--fs-small)}
 /* The day timeline scrolls inside its card; the fade says there is more below. */
 #todayTimelineSlot .timeline{padding-bottom:20px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),transparent)}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink);box-shadow:none}
@@ -93,15 +101,15 @@ svg .ink{fill:var(--c);fill:oklch(from var(--c) min(l,var(--ink-l)) c h)}
 .nav button .icon{width:18px;height:18px}
 
 /* Empty states read as a note, not as a measured value. */
-.is-empty{font-size:14px!important;font-weight:600!important;color:var(--muted)!important;letter-spacing:normal!important;line-height:1.4!important}
+.is-empty{font-size:var(--fs-body)!important;font-weight:600!important;color:var(--muted)!important;letter-spacing:normal!important;line-height:1.4!important}
 .link-btn{background:none;border:0;padding:0;color:var(--primary-text);font:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
-.empty-state{padding:18px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px;line-height:1.55}
+.empty-state{padding:18px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:var(--fs-small);line-height:1.55}
 .empty-state .link-btn{margin-left:4px}
 
 /* Sub-tabs (Trénink). */
 .subtabs{display:flex;gap:6px;margin:16px 0 4px;overflow-x:auto;scrollbar-width:none}
 .subtabs::-webkit-scrollbar{display:none}
-.subtabs button{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:9px 14px;border-radius:999px;font-weight:650;font-size:13px}
+.subtabs button{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:9px 14px;border-radius:999px;font-weight:650;font-size:var(--fs-small)}
 .subtabs button[aria-selected=true]{background:var(--primary-surface);border-color:var(--primary-line);color:var(--primary-text)}
 [data-tab-hidden]{display:none!important}
 
