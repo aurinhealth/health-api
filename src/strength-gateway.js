@@ -150,7 +150,7 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
     // generation through MCP/automation observes the same personal limits.
     const prefs = await getWeekPlan(env.DB, context.date);
     if (body?.preview !== true) assertTrainingAllowed(await getAthleteState(env.DB));
-    const duration = body?.preview === true ? body?.durationMinutes : trainingBudget(prefs, context.date, body?.durationMinutes == null ? 60 : Number(body.durationMinutes));
+    const duration = body?.preview === true ? body?.durationMinutes : trainingBudget(prefs, context.date, body?.durationMinutes == null ? 60 : Number(body.durationMinutes), { userInitiated: body?.userInitiated === true });
     if (body?.preview !== true && duration < 30) throw new Error('Na posilovnu nezbývá alespoň 30 minut.');
     const options = {
       diagnosticPreview: body?.preview === true,

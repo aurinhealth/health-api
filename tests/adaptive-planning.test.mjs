@@ -9,6 +9,7 @@ import { capWeekTargets, weekProposal, environmentFor, activityHistoryEstimate }
 import { askCoach, assistantTask } from '../src/coach-assistant.js';
 import { scheduleWorkoutInIntervals, CYCLING_WORKOUTS } from '../src/workout-library.js';
 import { validateCoachActions } from '../src/coach-actions.js';
+import { deletePlannedEvent } from '../src/planned-events.js';
 
 test('availability means duration and retires legacy clock positions and sport preferences',()=>{
   assert.deepEqual(parseTimeWindow('10-15'),{start:'10:00',end:'15:00',minutes:300});
@@ -128,36 +129,39 @@ test('assistant actions cannot invent events, dates or illness from sensor data'
   assert.equal(validateCoachActions([{type:'status',status:'injured',reason:'Bolest kolene'}],{userMessage:'Bolí mě koleno'},'2026-10-05')[0].status,'injured');
 });
 
-test('calendar writes honor the day budget without treating availability as a clock position',async()=>{
+test('three confirmed library workouts can exceed the day budget without using legacy clock positions',async()=>{
   const db=scopedDb(createD1(),1),original=globalThis.fetch,events=[];
   await db.prepare('CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))').run();
   const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');assert.ok(workout);
   await saveWeekPlan(db,{availability:[{window:'10-15',minutes:65}]});
-  globalThis.fetch=async(_,opts)=>{const event=JSON.parse(opts.body)[0];events.push(event);return Response.json([{id:123,category:'WORKOUT'}]);};
+  globalThis.fetch=async(_,opts)=>{const event=JSON.parse(opts.body)[0];events.push(event);return Response.json([{id:122+events.length,category:'WORKOUT'}]);};
   try{
     await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',environment:'indoor',confirm:true});
     assert.equal(events[0].start_date_local,'2026-10-05T00:00:00');
-    const other=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.id!==workout.id);
-    await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',environment:'indoor',confirm:true}),/Součet/);
-    assert.equal(events.length,1);
+    const others=CYCLING_WORKOUTS.filter(w=>w.duration_minutes===60&&w.id!==workout.id).slice(0,2);
+    for(const other of others)assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',environment:'indoor',confirm:true})).status,'ok');
+    assert.equal(events.length,3);
+    assert.equal(events.reduce((sum,e)=>sum+e.moving_time/60,0),180);
+    assert.equal((await db.prepare('SELECT COUNT(*) AS count FROM workout_schedule_links WHERE user_id=?').bind(db.userId).first()).count,3);
+    assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',confirm:true})).status,'already_scheduled');
+    assert.equal(events.length,3);
   }finally{globalThis.fetch=original;}
 });
 
-test('calendar writes count workouts created outside the library without counting linked events twice',async()=>{
+test('a replacement can be saved before deleting the original even with a 150 minute day budget',async()=>{
   const db=scopedDb(createD1(),1),original=globalThis.fetch;
   await db.prepare('CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))').run();
-  await saveWeekPlan(db,{availability:[{minutes:90}]});
-  await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,external_id,payload_json) VALUES(1,'intervals','planned-workout','2026-10-05T09:00:00','planned:99',?)").bind(JSON.stringify({id:99,type:'Run',duration:3600})).run();
-  const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');
-  await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',confirm:true}),/Součet/);
-  await saveWeekPlan(db,{availability:[{minutes:125}]});
+  await saveWeekPlan(db,{availability:[{minutes:150}]});
+  await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,external_id,payload_json) VALUES(1,'intervals','planned-workout','2026-10-05T09:00:00','planned:99',?)").bind(JSON.stringify({id:99,type:'Ride',duration:9000})).run();
+  const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===120&&w.primary_system==='endurance');
   globalThis.fetch=async()=>Response.json([{id:123,category:'WORKOUT'}]);
   try{
-    await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',confirm:true});
-    await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,external_id,payload_json) VALUES(1,'intervals','planned-workout','2026-10-05T00:00:00','planned:123',?)").bind(JSON.stringify({id:123,type:'Ride',duration:3600})).run();
-    const other=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.id!==workout.id);
-    await assert.rejects(scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',confirm:true}),/Součet/);
-    await saveWeekPlan(db,{availability:[{minutes:185}]});
-    assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',confirm:true})).status,'ok');
+    assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',confirm:true})).status,'ok');
+    assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM health_datapoints WHERE user_id=? AND data_type='planned-workout'").bind(db.userId).first()).count,2);
+    await deletePlannedEvent({DB:db,INTERVALS_API_KEY:'test'},{eventId:'planned:99'});
+    assert.equal((await db.prepare("SELECT COUNT(*) AS count FROM health_datapoints WHERE user_id=? AND data_type='planned-workout'").bind(db.userId).first()).count,1);
+    await saveWeekPlan(db,{availability:[{minutes:0}]});
+    const longer=CYCLING_WORKOUTS.find(w=>w.duration_minutes===180&&w.primary_system==='endurance');
+    assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:longer.id,date:'2026-10-05',confirm:true})).status,'ok');
   }finally{globalThis.fetch=original;}
 });

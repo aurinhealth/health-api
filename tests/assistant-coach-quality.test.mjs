@@ -92,7 +92,7 @@ test('the main sport and the event steer the engine',()=>{
   assert.equal(context.cyclingCoachV2.sport,'run');assert.ok(!context.cyclingCoachV2.missingData.includes('explicit goal/event and phase'));
 });
 
-test('chat proposals respect the day budget and sessions already planned',()=>{
+test('automatic proposals respect availability while user initiated chat actions may exceed it and add sessions',()=>{
   const days=[{date:'2026-10-04',planned:[{id:'planned:old',name:'Old'}]},{date:'2026-10-06',planned:[{id:'planned:7',name:'Long ride',durationHours:1}]},{date:'2026-10-07',planned:[{id:'planned:n',name:'Nutrition note'}]},{date:'2026-10-08',planned:[]},{date:'2026-10-12',planned:[]}];
   const plans={'2026-10-05':{availability:[{minutes:60},{minutes:90},{minutes:45},{minutes:60},{minutes:0},{minutes:180},{minutes:240}]},'2026-10-12':{availability:[{minutes:30}]}};
   const safety=actionSafetyContext(days,today,d=>plans[d<'2026-10-12'?'2026-10-05':'2026-10-12']);
@@ -105,6 +105,13 @@ test('chat proposals respect the day budget and sessions already planned',()=>{
   assert.equal(validateCoachActions([workout('2026-10-08',60)],context,today)[0].minutes,60);
   assert.deepEqual(validateCoachActions([{type:'move',eventId:'planned:7',date:'2026-10-07',reason:'Více času'}],context,today),[]);
   assert.equal(validateCoachActions([{type:'move',eventId:'planned:7',date:'2026-10-08',reason:'Více času'}],context,today)[0].date,'2026-10-08');
+  const user={userInitiated:true};
+  for(const a of [workout('2026-10-08',90),workout('2026-10-06',180),workout('2026-10-12',60)])assert.equal(validateCoachActions([a],context,today,user)[0].minutes,a.minutes);
+  const noTime={...context,availabilityByDate:{'2026-10-07':{minutes:0}}};
+  assert.equal(validateCoachActions([workout('2026-10-07',60)],noTime,today,user)[0].minutes,60);
+  assert.equal(validateCoachActions([{type:'move',eventId:'planned:7',date:'2026-10-07',reason:'Přesun na žádost'}],noTime,today,user)[0].date,'2026-10-07');
+  assert.deepEqual(validateCoachActions([workout('2026-02-30',90)],context,today,user),[]);
+  assert.deepEqual(validateCoachActions([workout('2026-10-08',90)],{...context,athleteState:'sick'},today,user),[]);
 });
 
 test('a workout proposal carries only a library workout the coach was offered',()=>{

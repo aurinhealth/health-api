@@ -550,7 +550,7 @@ async function generateFocusedGym(){
   state.gymDate=day;button.disabled=true;button.textContent='Generuji…';
   $('gymFocusStatus').textContent='Sestavuji trénink podle zvolených partií a dostupné zátěže…';
   try{
-    const result=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:gymDay(),focusMuscles:[...selectedGymMuscles],durationMinutes:Number($('gymFocusDuration').value)})});
+    const result=await jsonFetch('/app/api/gym/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:gymDay(),focusMuscles:[...selectedGymMuscles],durationMinutes:Number($('gymFocusDuration').value),userInitiated:true})});
     await loadGym();
     $('gymFocusStatus').textContent=result.rationale||'Cílený plán je připraven.';
     toast('Cílený plán vygenerován');reloadWeek();openTrainingDetail({kind:'gym',date:day,sport:'gym'});

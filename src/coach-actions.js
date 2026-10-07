@@ -35,7 +35,7 @@ export function actionSafetyContext(days,today,planFor){
   };
 }
 export const actionsNote=actions=>actions?.length?'[Návrhy: '+actions.map(actionSummary).join('; ')+']':'';
-export function validateCoachActions(actions,context,today){
+export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
@@ -61,12 +61,12 @@ export function validateCoachActions(actions,context,today){
       if(!event||event.date<today||!String(a.eventId).startsWith('planned:'))return [];
       if(a.type==='move'&&(!validDay(a.date)||a.date<today))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;
-      if(a.type==='move'&&budget!=null&&Number(event.durationHours)*60>budget)return [];
+      if(!userInitiated&&a.type==='move'&&budget!=null&&Number(event.durationHours)*60>budget)return [];
       return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
     }
     if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360){
-      if(context.remainingPlanned?.some(x=>x.date===a.date))return [];
-      const budget=context.availabilityByDate?.[a.date]?.minutes;if(budget!=null&&a.minutes>budget)return [];
+      if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];
+      const budget=context.availabilityByDate?.[a.date]?.minutes;if(!userInitiated&&budget!=null&&a.minutes>budget)return [];
       // Only a workout the coach was actually offered; the preview then shows exactly it.
       const library=a.workoutId?(context.workoutLibraryRecommendations||[]).find(w=>String(w.id)===String(a.workoutId)&&(!w.sport||w.sport===a.sport)):null;
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];

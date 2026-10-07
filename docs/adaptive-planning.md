@@ -6,6 +6,8 @@ V Nastavení → Časové možnosti se ukládá běžný týden. Časová dostup
 
 Ve Workoutech → Časové možnosti lze nastavit výjimku pro vybraný týden. Výjimka má přednost před základem, nepřenáší se do dalších týdnů a lze ji odstranit tlačítkem Vrátit běžný týden. Změny sportovních kartiček v kalendáři platí pro vybraný týden. Dřívější opakovaný rozvrh zůstává jako výchozí nastavení.
 
+Denní časový rozpočet omezuje automatické generování a návrhy AI. Ruční zápis, výběr workoutu z knihovny, výměna, změna délky a změny vyžádané uživatelem v chatu jej mohou překročit, i v den s nulovou dostupností. Potvrzené uložení tréninku denní limit znovu nekontroluje; při výměně proto původní a nový workout neblokují jeden druhý. Omezení aktuálního stavu sportovce a kontrola platnosti dat zůstávají v platnosti.
+
 Počet aktivit se zadává číslem, vedle je zaškrtávací volba Podle historie. Pro odhad se používá historie dokončených aktivit za poslední tři týdny; musí zahrnovat alespoň dva týdny a čtyři dokončené aktivity. Při chybějící či krátké historii editor i návrh týdne vysvětlí, že dočasným základem jsou nejvýše tři aktivity týdně podle dostupného času. Ruční počet má přednost. Nedostupné dny a již naplánované aktivity se respektují; prázdný kalendář bez dostupnosti vyzve k jejímu nastavení.
 
 Denní přehled výživy umožňuje přímo vybrat nápoj, zapsat šest obvyklých množství nebo vlastní množství a zobrazit či odstranit poslední zápisy. Celá historie pití zůstává dostupná přes odkaz Všechny zápisy.

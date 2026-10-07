@@ -27,7 +27,9 @@ export function normalizeAvailability(days = []) {
   });
 }
 export const availabilityOn = (prefs, date) => prefs?.availability?.[(new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7] || { minutes: null, window: '', preferredSports: [] };
-export function trainingBudget(prefs, date, requested = null) {
+export function trainingBudget(prefs, date, requested = null, { userInitiated = false } = {}) {
+  // Saved availability guides automatic planning; an athlete's explicit choice wins.
+  if (userInitiated) return requested;
   const limit = availabilityOn(prefs, date).minutes;
   return limit == null ? requested : requested == null ? limit : Math.min(limit, requested);
 }

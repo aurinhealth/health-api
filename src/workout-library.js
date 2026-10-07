@@ -9,8 +9,6 @@ import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
-import { getWeekPlan } from './week-planner.js';
-import { availabilityOn, parseTimeWindow } from './training-availability.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
 
 export const SYSTEMS = ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"];
@@ -387,30 +385,13 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date) throw new Error("Neplatné datum.");
   const workout = await getWorkout(db, workoutId); if (!workout) throw new Error("Workout nebyl nalezen.");
   assertTrainingAllowed(await getAthleteState(db));
-  const available=availabilityOn(await getWeekPlan(db,date),date);
-  if(available.minutes!=null&&renderForEnvironment(workout,environmentOf(environment)).duration_minutes>available.minutes)throw new Error('Trénink přesahuje dostupný čas pro tento den.');
+  // Confirmation saves the athlete's choice, including replacements and chat
+  // proposals. Availability limits belong to generation, never to this write.
   await ensureTrainingTables(db);
   await ensureLocalWorkouts(db);
   const event = buildIntervalsEvent(workout, date, environmentOf(environment));
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) return { sync: await syncLocalWorkout({...env,DB:db},existing.intervals_event_id), status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null };
-  const links=await db.prepare("SELECT workout_id,environment,intervals_event_id FROM workout_schedule_links WHERE user_id=? AND scheduled_date=? AND status='scheduled'").bind(db.userId,date).all();
-  let usedMinutes=0;
-  for(const link of links.results||[]){const w=await getWorkout(db,link.workout_id);if(w)usedMinutes+=renderForEnvironment(w,link.environment).duration_minutes;}
-  // Include calendar workouts created outside the library, without counting
-  // the cached copy of a linked workout twice.
-  const linkedIds=new Set((links.results||[]).map(l=>String(l.intervals_event_id)));
-  const exports=await db.prepare("SELECT remote_id FROM workout_exports WHERE user_id=? AND provider='intervals'").bind(db.userId).all();for(const e of exports.results||[])if(e.remote_id)linkedIds.add(String(e.remote_id));
-  const planned=await db.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId,date,date+'T23:59:59').all().catch(()=>({results:[]}));
-  for(const row of planned.results||[]){
-    let p;try{p=JSON.parse(row.payload_json);}catch{continue;}
-    if(linkedIds.has(String(p.id??String(row.external_id||'').replace(/^planned:/,'')))||/nutrition|food|meal/i.test(String(p.name||'')+' '+String(p.category||'')))continue;
-    const seconds=Number(p.moving_time??p.duration_seconds??p.duration),start=p.start_date_local,end=p.end_date_local;
-    usedMinutes+=Number.isFinite(seconds)&&seconds>0?seconds/60:start&&end?Math.max(0,(Date.parse(end)-Date.parse(start))/60000):0;
-  }
-  if(available.minutes!=null&&usedMinutes+renderForEnvironment(workout,environmentOf(environment)).duration_minutes>available.minutes)throw new Error('Součet tréninků přesahuje dostupný čas pro tento den.');
-  const window=parseTimeWindow(available.window);
-  if(window){const start=Number(window.start.slice(0,2))*60+Number(window.start.slice(3))+Math.ceil(usedMinutes);event.start_date_local=date+'T'+String(Math.floor(start/60)).padStart(2,'0')+':'+String(start%60).padStart(2,'0')+':00';}
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   const local=await storeLocalEvent(db,event);
