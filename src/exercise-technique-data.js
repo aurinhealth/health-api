@@ -2,6 +2,10 @@
 // by web search (YouTube id and its title) and a search query as a fallback.
 // Generated 2026-10-05; see exercise-technique.js.
 export const TECHNIQUE = {
+ 'Push-up': {setup:['Dlaně pod rameny, tělo v jedné linii.'],steps:['Zpevni břicho a hýždě.','Kontrolovaně pokrč lokty a přibliž hrudník k podlaze.','S výdechem se vytlač zpět; lehčí varianta má ruce na vyšší opoře.'],mistakes:['Prohnutí beder nebo bolest ramen.'],breathing:'Nádech dolů, výdech nahoru.',searchQuery:'push up proper technique'},
+ 'Bodyweight squat': {setup:['Chodidla přibližně na šíři ramen.'],steps:['Pokrč kyčle a kolena a klesej kontrolovaně.','Kolena veď ve směru špiček a paty nech na podlaze.','S výdechem se vrať do stoje v nebolestivém rozsahu.'],mistakes:['Kolena padají dovnitř nebo se zvedají paty.'],breathing:'Nádech dolů, výdech nahoru.',searchQuery:'bodyweight squat proper technique'},
+ 'Glute bridge': {setup:['Leh na zádech, kolena pokrčená, chodidla na podlaze.'],steps:['Zpevni břicho a přitlač chodidla.','Zvedni pánev stažením hýždí bez prohnutí zad.','Kontrolovaně polož pánev zpět.'],mistakes:['Pohyb vede prohnutí beder.'],breathing:'Výdech při zvednutí.',searchQuery:'glute bridge proper technique'},
+ 'Dead bug': {setup:['Leh na zádech, ruce vzhůru, kolena nad kyčlemi.'],steps:['Zpevni břicho a drž bedra u podložky.','Pomalu natahuj opačnou ruku a nohu do pohodlného rozsahu.','Vrať se a vystřídej strany bez zvednutí beder.'],mistakes:['Ztráta kontaktu beder s podložkou.'],breathing:'Plynulý výdech při natažení.',searchQuery:'dead bug proper technique'},
  "DB bench press": {
   "setup": [
    "Sedni si na kraj rovné lavice, jednoručky opři o stehna a s výdechem se položenými koleny „odvez“ do lehu.",

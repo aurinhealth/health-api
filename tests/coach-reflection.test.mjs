@@ -106,7 +106,7 @@ test("the AI input is compact and keeps notes as data", () => {
 test("RPE feedback starts the coach's note in the background and the dashboard shows it", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  assert.match(entry, /if\(validDate\(scheduledDate\)\)ctx\.waitUntil\(createReflection\(/);
+  assert.match(entry, /if\(reflect\)ctx\.waitUntil\(createReflection\(/);
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
   assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
   assert.match(client, /cls:'coach',title:'Kouč'/);

@@ -1,10 +1,3 @@
-const BASE_URL = "https://intervals.icu/api/v1";
-
-function auth(env) {
-  if (!env.INTERVALS_API_KEY) throw new Error("INTERVALS_API_KEY is not configured");
-  return "Basic " + btoa("API_KEY:" + env.INTERVALS_API_KEY);
-}
-
 const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 
 function strengthCalories(weightKg, minutes) {
@@ -73,38 +66,9 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
   };
 }
 
-export async function writeStrengthPlanToIntervals(env, plan, options = {}) {
-  const event = strengthPlanToIntervalsEvent(plan, options);
-  const response = await fetch(`${BASE_URL}/athlete/0/events/bulk?upsert=true`, {
-    method: "POST",
-    headers: {
-      Authorization: auth(env),
-      "Content-Type": "application/json",
-      Accept: "application/json"
-    },
-    body: JSON.stringify([event])
-  });
-  const text = await response.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = text; }
-  if (!response.ok) throw new Error(`Intervals.icu HTTP ${response.status}: ${JSON.stringify(data)}`);
-  const result = Array.isArray(data) ? data[0] : data;
-  if (!result || result.type !== "WeightTraining") {
-    throw new Error(`Intervals.icu returned an unexpected strength event: ${JSON.stringify(result)}`);
-  }
-  // The local copy of the event, so the week shows the session now and not after the next sync.
-  if (result.id != null && env.DB?.prepare) {
-    const start = result.start_date_local || event.start_date_local;
-    await env.DB.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,end_time,payload_json) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET sample_time=excluded.sample_time,start_time=excluded.start_time,end_time=excluded.end_time,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP")
-      .bind(env.USER_ID ?? env.DB.userId, "intervals", "planned-workout", "planned:" + result.id, start, start, result.end_date_local || null, JSON.stringify({ ...event, ...result })).run().catch(() => {});
-  }
-  return {
-    status: "ok",
-    externalId: event.external_id,
-    eventId: result.id ?? null,
-    startDateLocal: result.start_date_local || event.start_date_local,
-    type: result.type,
-    name: result.name || event.name,
-    estimatedCalories: event.calories
-  };
+export async function writeStrengthPlanToIntervals(env,plan,options={}) {
+  const {storeLocalEvent,syncLocalWorkout}=await import('./local-workouts.js');
+  const event=strengthPlanToIntervalsEvent(plan,options),local=await storeLocalEvent(env.DB,event);
+  const result=await syncLocalWorkout(env,local.id);
+  return {...result,externalId:local.event.external_id,eventId:local.id,startDateLocal:event.start_date_local,type:event.type,name:event.name,estimatedCalories:event.calories};
 }

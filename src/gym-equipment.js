@@ -63,6 +63,7 @@ export const EXERCISE_STATIONS = {
   "Pendulum squat": ["pendulum_squat"],
   "Leg extension Prime": ["leg_extension"],
   "Goblet squat": ["dumbbells"],
+  "Dead bug": ["floor_mats"], "Push-up": ["floor_mats"], "Bodyweight squat": ["floor_mats"], "Glute bridge": ["floor_mats"],
   "DB Bulgarian split squat": ["dumbbells", "adjustable_bench"],
   "Prone leg curl Prime": ["prone_leg_curl"],
   "Hip thrust": ["hip_thrust"],

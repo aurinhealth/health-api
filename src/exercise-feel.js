@@ -2,6 +2,10 @@
 // (the "procítění" of the technique card). One pair per catalog exercise; a
 // new catalog exercise needs its pair too (see tests/exercise-technique).
 export const FEEL = {
+  'Push-up': ['Prsní svaly a triceps při vytlačení.', 'Ramena ani zápěstí nebolí; trup drž zpevněný.'],
+  'Bodyweight squat': ['Přední stehna a hýždě.', 'Kolena sledují špičky; pohyb nesmí bolet.'],
+  'Glute bridge': ['Hýždě při zvednutí pánve.', 'Bedra nepřeprohýbej; pohyb nesmí bolet.'],
+  'Dead bug': ['Břišní svaly drží trup.', 'Bedra se nezvedají od podložky a nebolí.'],
   "DB bench press": ["Hlavně prsní svaly – nejvíc dole v protažení a při tlaku k sobě nad hrudníkem; přední ramena a triceps pomáhají.", "Píchání v rameni znamená lokty moc do stran nebo uvolněné lopatky."],
   "Low row": ["Střed zad mezi lopatkami a široký sval zádový; na konci lopatky stáhni k sobě.", "Biceps jen drží – když tahá hlavně ruka, mysli na tah lokty dozadu."],
   "DB shoulder press": ["Přední a boční část ramen, v horní části i triceps.", "Bedra se neprohýbají; zpevni břicho a hýždě."],

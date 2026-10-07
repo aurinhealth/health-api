@@ -130,6 +130,7 @@ test('assistant actions cannot invent events, dates or illness from sensor data'
 
 test('calendar writes honor the day budget without treating availability as a clock position',async()=>{
   const db=scopedDb(createD1(),1),original=globalThis.fetch,events=[];
+  await db.prepare('CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))').run();
   const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');assert.ok(workout);
   await saveWeekPlan(db,{availability:[{window:'10-15',minutes:65}]});
   globalThis.fetch=async(_,opts)=>{const event=JSON.parse(opts.body)[0];events.push(event);return Response.json([{id:123,category:'WORKOUT'}]);};
@@ -144,7 +145,7 @@ test('calendar writes honor the day budget without treating availability as a cl
 
 test('calendar writes count workouts created outside the library without counting linked events twice',async()=>{
   const db=scopedDb(createD1(),1),original=globalThis.fetch;
-  await db.prepare('CREATE TABLE health_datapoints (user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,external_id TEXT,payload_json TEXT)').run();
+  await db.prepare('CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))').run();
   await saveWeekPlan(db,{availability:[{minutes:90}]});
   await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,external_id,payload_json) VALUES(1,'intervals','planned-workout','2026-10-05T09:00:00','planned:99',?)").bind(JSON.stringify({id:99,type:'Run',duration:3600})).run();
   const workout=CYCLING_WORKOUTS.find(w=>w.duration_minutes===60&&w.primary_system==='endurance');

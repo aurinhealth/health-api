@@ -136,7 +136,7 @@ test("Intervals event is deterministic per environment", () => {
 });
 
 // Real SQL through the user-scoped facade.
-function users() { const raw = createD1(); return { raw, alice: scopedDb(raw, 1), bob: scopedDb(raw, 2) }; }
+function users() { const raw = createD1(); raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,external_id TEXT,sample_time TEXT,start_time TEXT,end_time TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))"); return { raw, alice: scopedDb(raw, 1), bob: scopedDb(raw, 2) }; }
 async function withIntervals(fn) {
   const original = globalThis.fetch; let calls = 0;
   globalThis.fetch = async () => { calls++; return new Response(JSON.stringify([{ id: 100 + calls, category: "WORKOUT" }]), { status: 200, headers: { "Content-Type": "application/json" } }); };
@@ -154,7 +154,7 @@ test("scheduling is idempotent per user and separate between users", async () =>
   });
   assert.equal((await getScheduledWorkouts(alice)).length, 2);
   assert.equal((await getScheduledWorkouts(bob)).length, 1);
-  await assert.rejects(scheduleWorkoutInIntervals({}, alice, args), /není připojeno/);
+  assert.equal((await scheduleWorkoutInIntervals({}, alice, {...args,date:'2026-10-04'})).sync.status,'not_connected');
 });
 
 test("feedback changes only the reviewer's capability", async () => {

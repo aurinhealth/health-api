@@ -1,7 +1,8 @@
+function fitsEquipment(name,equipment){if(!equipment||equipment==='gym')return true;const allowed=equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
 import { estimateStartingLoad, resolveLoad, progressionDecision } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
-import { availableAt } from "./gym-equipment.js";
+import { availableAt,EXERCISE_STATIONS } from "./gym-equipment.js";
 import { sportMuscleLoad,strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
@@ -9,6 +10,10 @@ import { configureStrengthCoaching, estimateStrengthTiming } from './strength-ti
 const DEFAULT_EXECUTION = "BILATERAL";
 
 const EXERCISES = {
+  'Dead bug': {pattern:'core',muscle:'core',sets:2,reps:'8–12',baseKg:0,warmup:false,note:'Počet opakování na stranu; kontrolovaný pohyb',fatigue:.3},
+  'Push-up': {pattern:'push',muscle:'chest',sets:2,reps:'6–12',baseKg:0,warmup:false,note:'Vlastní váha; podle potřeby opři ruce o vyšší plochu',fatigue:.6},
+  'Bodyweight squat': {pattern:'quad',muscle:'quads',sets:2,reps:'10–15',baseKg:0,warmup:false,note:'Vlastní váha; pohyb bez bolesti',fatigue:.6},
+  'Glute bridge': {pattern:'hinge',muscle:'glutes',sets:2,reps:'10–15',baseKg:0,warmup:false,note:'Vlastní váha',fatigue:.5},
   "DB bench press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "6–10", baseKg: 16, warmup: true, note: "Hlavní tlak; kg = 1 jednoručka", fatigue: 1.0 },
   "Low row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "6–10", baseKg: 20, warmup: true, note: "Hlavní tah; kg = celková zátěž stroje", fatigue: 1.0 },
   "DB shoulder press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "6–10", baseKg: 10, warmup: true, note: "Volné váhy; kg = 1 jednoručka", fatigue: 0.9 },
@@ -364,6 +369,7 @@ function choosePlan(context, options = {}) {
     .sort((a, b) => a.sets - b.sets || a.order - b.order).map(x => x.group);
 
   // An exercise actually done in the last two days is left out entirely.
+  candidatesByPattern.horizontalPush.push('Push-up');candidatesByPattern.quad.push('Bodyweight squat');candidatesByPattern.hinge.push('Glute bridge');candidatesByPattern.core.push('Dead bug');
   const used = new Set((options.excludeExercises || []).map(normalizeExerciseName));
   for (const row of context?.strength?.recentCompletedSets || []) {
     const ex = normalizeExerciseName(row.exercise);
@@ -372,7 +378,7 @@ function choosePlan(context, options = {}) {
   // A movement already in the session (e.g. a hip thrust) counts against its twin.
   const usedPatterns = new Set();
   function pick(patterns) {
-    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && !used.has(ex));
+    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup?.equipment) && !used.has(ex));
     const ex = pool.slice().sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
     const plain = pool.slice().sort((a, b) => score(a.ex, a.rank, false) - score(b.ex, b.rank, false))[0]?.ex;
     if (ex && plain !== ex && stalled.has(plain)) stallSwaps[ex] = plain;
@@ -530,7 +536,7 @@ export function generateStrengthPlan(context, options = {}) {
   }
   const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
   const focusedExercise = group => {
-    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && !excluded.has(name));
+    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup?.equipment) && !excluded.has(name));
     if (!candidates.length) throw new Error('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.');
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
@@ -542,7 +548,7 @@ export function generateStrengthPlan(context, options = {}) {
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
     return best;
   };
-  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex));
+  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup?.equipment));
   const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
   exercises = exercises.slice(0, maxExercises);
 
@@ -560,7 +566,7 @@ export function generateStrengthPlan(context, options = {}) {
   const nearRide = legProtection(context);
   const durationVolume = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? .75 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? .9 : 1;
   const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume, deload ? 0.6 : 1);
-  const maxSets = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4;
+  const maxSets = context.trainingSetup?.experience==='beginner'?2:Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4;
   let warmedUp = false;
   for (const exercise of exercises) {
     const muscle=EXERCISES[exercise].muscle;
@@ -609,6 +615,7 @@ export function generateStrengthPlan(context, options = {}) {
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);
   const rationale = baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '') + (swapped.length ? ' Po třech trénincích bez posunu nová varianta: ' + swapped.join(', ') + '.' : '');
+  if(!rows.some(r=>r[0]==='WORK'))throw new Error('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.');
   return { date: context.date, planName: (focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name) + (deload ? ' · odlehčený týden' : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + rationale + ' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', timing, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 

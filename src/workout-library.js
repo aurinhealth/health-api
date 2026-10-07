@@ -1,3 +1,5 @@
+import {trainingSetup} from './onboarding.js';
+import {storeLocalEvent,syncLocalWorkout,ensureLocalWorkouts} from './local-workouts.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
@@ -55,7 +57,9 @@ export async function getWorkout(db, id) {
 export async function getCapabilities(db, sport = "ride") {
   await ensureTrainingTables(db);
   const rows = await db.prepare("SELECT * FROM training_capabilities WHERE user_id=? AND sport=?").bind(db.userId, sport).all();
-  return { ...defaultCapabilities(sport), ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) };
+  const training=await trainingSetup(db),defaults=defaultCapabilities(sport);
+  if(training.experience)for(const value of Object.values(defaults))value.level=training.experience==='beginner'?1:training.experience==='experienced'?4:3;
+  return { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) };
 }
 
 export function parseWorkoutSearchFilters(params) {
@@ -368,24 +372,25 @@ export function buildIntervalsEvent(workout, date, environment = "indoor") {
 }
 
 export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, confirm = false, environment = "indoor" }) {
-  if (confirm !== true) throw new Error("Zápis do Intervals.icu vyžaduje potvrzení.");
+  if (confirm !== true) throw new Error("Uložení tréninku vyžaduje potvrzení.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date) throw new Error("Neplatné datum.");
   const workout = await getWorkout(db, workoutId); if (!workout) throw new Error("Workout nebyl nalezen.");
   assertTrainingAllowed(await getAthleteState(db));
   const available=availabilityOn(await getWeekPlan(db,date),date);
   if(available.minutes!=null&&renderForEnvironment(workout,environmentOf(environment)).duration_minutes>available.minutes)throw new Error('Trénink přesahuje dostupný čas pro tento den.');
-  if (!env.INTERVALS_API_KEY) throw new Error("Intervals.icu není připojeno.");
   await ensureTrainingTables(db);
-  const event = buildIntervalsEvent(workout, date, environmentOf(environment)), auth = "Basic " + btoa("API_KEY:" + String(env.INTERVALS_API_KEY));
+  await ensureLocalWorkouts(db);
+  const event = buildIntervalsEvent(workout, date, environmentOf(environment));
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
-  if (existing) return { status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null };
+  if (existing) return { sync: await syncLocalWorkout({...env,DB:db},existing.intervals_event_id), status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null };
   const links=await db.prepare("SELECT workout_id,environment,intervals_event_id FROM workout_schedule_links WHERE user_id=? AND scheduled_date=? AND status='scheduled'").bind(db.userId,date).all();
   let usedMinutes=0;
   for(const link of links.results||[]){const w=await getWorkout(db,link.workout_id);if(w)usedMinutes+=renderForEnvironment(w,link.environment).duration_minutes;}
   // Include calendar workouts created outside the library, without counting
   // the cached copy of a linked workout twice.
   const linkedIds=new Set((links.results||[]).map(l=>String(l.intervals_event_id)));
-  const planned=await db.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId,date,date+'T23:59:59').all().catch(()=>({results:[]}));
+  const exports=await db.prepare("SELECT remote_id FROM workout_exports WHERE user_id=? AND provider='intervals'").bind(db.userId).all();for(const e of exports.results||[])if(e.remote_id)linkedIds.add(String(e.remote_id));
+  const planned=await db.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(db.userId,date,date+'T23:59:59').all().catch(()=>({results:[]}));
   for(const row of planned.results||[]){
     let p;try{p=JSON.parse(row.payload_json);}catch{continue;}
     if(linkedIds.has(String(p.id??String(row.external_id||'').replace(/^planned:/,'')))||/nutrition|food|meal/i.test(String(p.name||'')+' '+String(p.category||'')))continue;
@@ -395,17 +400,12 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   if(available.minutes!=null&&usedMinutes+renderForEnvironment(workout,environmentOf(environment)).duration_minutes>available.minutes)throw new Error('Součet tréninků přesahuje dostupný čas pro tento den.');
   const window=parseTimeWindow(available.window);
   if(window){const start=Number(window.start.slice(0,2))*60+Number(window.start.slice(3))+Math.ceil(usedMinutes);event.start_date_local=date+'T'+String(Math.floor(start/60)).padStart(2,'0')+':'+String(start%60).padStart(2,'0')+':00';}
-  const response = await fetch("https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true", { method: "POST", headers: { Authorization: auth, Accept: "application/json", "Content-Type": "application/json" }, body: JSON.stringify([event]) });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) throw new Error("Intervals.icu HTTP " + response.status);
-  const first = Array.isArray(data) ? data[0] : data;
-  if (!first?.id || first.category !== "WORKOUT") throw new Error("Intervals.icu nepotvrdilo vytvoření workoutu.");
+  const rendered=renderForEnvironment(workout,environmentOf(environment));
+  event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
+  const local=await storeLocalEvent(db,event);
   await db.prepare(`INSERT INTO workout_schedule_links(user_id,sport,workout_id,family,scheduled_date,environment,intervals_external_id,intervals_event_id,status) VALUES(?,?,?,?,?,?,?,?,?)
-    ON CONFLICT(user_id,intervals_external_id) DO UPDATE SET intervals_event_id=excluded.intervals_event_id,status=excluded.status`)
-    .bind(db.userId, sportOf(workout.sport), workout.id, workout.family || null, date, event.tags.includes("outdoor") ? "outdoor" : "indoor", event.external_id, String(first.id), "scheduled").run();
-  // The local copy of the event, so the week shows it now and not after the next sync.
-  const start = first.start_date_local || event.start_date_local || date + "T00:00:00";
-  await db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,end_time,payload_json) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET sample_time=excluded.sample_time,start_time=excluded.start_time,end_time=excluded.end_time,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP")
-    .bind(db.userId, "intervals", "planned-workout", "planned:" + first.id, start, start, first.end_date_local || null, JSON.stringify({ ...event, ...first })).run().catch(() => {});
-  return { status: "ok", workout: { id: workout.id, name: workout.name }, date, environment: event.tags.includes("outdoor") ? "outdoor" : "indoor", externalId: event.external_id, intervalsEventId: first.id, eventId: "planned:" + first.id };
+    ON CONFLICT(user_id,intervals_external_id) DO NOTHING`)
+    .bind(db.userId,sportOf(workout.sport),workout.id,workout.family||null,date,rendered.environment,event.external_id,local.id,'scheduled').run();
+  const sync=await syncLocalWorkout({...env,DB:db},local.id);
+  return {status:'ok',workout:{id:workout.id,name:workout.name},date,environment:rendered.environment,externalId:event.external_id,intervalsEventId:sync.eventId||null,eventId:'planned:'+local.id,sync};
 }

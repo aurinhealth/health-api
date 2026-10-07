@@ -98,11 +98,11 @@ export async function readSuggestions(db, userId) {
 }
 
 // Recomputes the suggestions when they are missing or older than a day.
-export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, now = Date.now() } = {}) {
+export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, now = Date.now(), force = false } = {}) {
   const current = await readSuggestions(env.DB, env.USER_ID);
   // A newly granted permission refreshes right away instead of the next day.
   const permissions = JSON.stringify(grantedExtras(env));
-  if (current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return current;
+  if (!force && current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return current;
   const averageSteps = await averageDailySteps(env.DB, env.USER_ID, now).catch(() => null);
   const rhr = await averageRestingHeartRate(env.DB, env.USER_ID, now).catch(() => null);
   const hrmax = await observedMaxHeartRate(env.DB, env.USER_ID, now).catch(() => null);

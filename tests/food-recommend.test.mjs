@@ -12,6 +12,7 @@ function env(profile, weight) {
     CREATE TABLE dashboard_profile (user_id INTEGER NOT NULL, id INTEGER NOT NULL, profile_json TEXT NOT NULL, PRIMARY KEY (user_id, id));`);
   if (weight) db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (7, 'manual', 'weight', 'w', '2026-09-01T07:00:00Z', ?, '{}')").run(weight);
   if (profile) db.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify(profile));
+  db.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,payload_json) VALUES(7,'intervals','activity',?,'{}')").run(new Date().toISOString());
   return { DB: db, USER_ID: 7, CONNECTED_PROVIDERS: ["google", "intervals"] };
 }
 const recommend = async e => (await gateway.fetch(new Request("https://internal/food/recommend?date=2099-01-05"), e, { waitUntil() {} })).json();

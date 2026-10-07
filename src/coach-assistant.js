@@ -1,3 +1,4 @@
+import {assertAIAccess} from './subscription.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META } from "./cycling-coach-v2.js";
 import { withFocus } from "./athlete-focus.js";
 import { COACH_ACTION_FORMAT, ACTION_INSTRUCTIONS, COACH_VISUALS } from './coach-actions.js';
@@ -248,6 +249,7 @@ export function assistantTask(message,appContext=null,history=[]) {
 // messages. A reply cut off by max_output_tokens (which include reasoning)
 // comes back with `incomplete` instead of being lost.
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null }) {
+  await assertAIAccess(env);
   if (!env.OPENAI_API_KEY) throw new Error('AI není připojena.');
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',

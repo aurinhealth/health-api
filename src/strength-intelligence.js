@@ -12,6 +12,10 @@ export const LOAD_UNITS = {
 };
 
 export const EXERCISE_INTELLIGENCE = {
+  'Push-up': {muscle:'chest',pattern:'horizontal_push',equipment:'bodyweight',unilateral:false,loadUnit:LOAD_UNITS.BODYWEIGHT,fatigue:.6,variants:[]},
+  'Bodyweight squat': {muscle:'quads',pattern:'squat',equipment:'bodyweight',unilateral:false,loadUnit:LOAD_UNITS.BODYWEIGHT,fatigue:.6,variants:[]},
+  'Glute bridge': {muscle:'glutes',pattern:'hinge',equipment:'bodyweight',unilateral:false,loadUnit:LOAD_UNITS.BODYWEIGHT,fatigue:.5,variants:[]},
+  'Dead bug': {muscle:'core',pattern:'trunk',equipment:'bodyweight',unilateral:false,loadUnit:LOAD_UNITS.BODYWEIGHT,fatigue:.3,variants:[]},
   "DB bench press": { muscle: "chest", pattern: "horizontal_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["Chest flat press Prime", "Barbell bench press", "DB incline press"] },
   "Barbell bench press": { muscle: "chest", pattern: "horizontal_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.05, variants: ["DB bench press", "DB incline press"] },
   "DB incline press": { muscle: "chest", pattern: "incline_push", equipment: "dumbbell", unilateral: false, loadUnit: LOAD_UNITS.PER_HAND_KG, fatigue: 1.0, variants: ["DB bench press", "Barbell bench press"] },

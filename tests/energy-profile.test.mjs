@@ -69,6 +69,7 @@ async function dailyFor({ profile, weight, isOwner = false, providers = ["google
     CREATE TABLE dashboard_profile (user_id INTEGER NOT NULL, id INTEGER NOT NULL, profile_json TEXT NOT NULL, PRIMARY KEY (user_id, id));`);
   if (weight) db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (7, 'manual', 'weight', 'w1', '2026-09-01T07:00:00Z', ?, '{}')").run(weight);
   if (profile) db.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify(profile));
+  if(providers.length)db.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,payload_json) VALUES(7,'intervals','activity',?,'{}')").run(new Date().toISOString());
   const env = { DB: db, USER_ID: 7, USER_IS_OWNER: isOwner, CONNECTED_PROVIDERS: providers };
   const response = await legacy.fetch(new Request("https://internal/analysis/daily?date=2099-01-05"), env, { waitUntil() {} });
   return response.json();
@@ -130,6 +131,6 @@ test("the dashboard works without connections", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.doesNotMatch(entry, /status:"onboarding"/);
   assert.match(entry, /source:"none",connected:false/);
-  assert.match(client, /id="onboardingSkip"/);
-  assert.match(client, /const open=!me\.missingProviders\?\.length\|\|onboardingSkipped\(\);/);
+  assert.match(client, /Pokračovat s ručními záznamy/);
+  assert.match(client, /me\.onboarding\?\.completed===true/);
 });

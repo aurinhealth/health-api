@@ -69,6 +69,7 @@ test("with height and activity from Google, only sex, age and goal are asked", a
   const d = db();
   d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (7, 'google-sources', 'weight', 'w', '2026-09-01T07:00:00Z', 60, '{}')").run();
   d.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 2, ?)").run(JSON.stringify({ height: 165, activity: "light" }));
+  d.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,payload_json) VALUES(7,'google-wearables','exercise',?,'{}')").run(new Date().toISOString());
   const env = { DB: d, USER_ID: 7, CONNECTED_PROVIDERS: ["google"] };
   const daily = async () => (await legacy.fetch(new Request("https://internal/analysis/daily?date=2099-01-05"), env, { waitUntil() {} })).json();
   assert.deepEqual((await daily()).nutrition.missing, ["sex", "age", "goal"]);

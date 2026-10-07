@@ -1,7 +1,6 @@
-// Moving and deleting planned workouts. Intervals.icu stays the source of
-// truth: the event is changed there first, then the local copy (planned
-// datapoint and library schedule link) follows so the dashboard updates
-// without waiting for the next sync.
+import {editLocalWorkout} from './local-workouts.js';
+// App-owned plans change locally, then export through the outbox. Legacy
+// imported plans still change at their provider before updating the cache.
 
 import { cancelGymPlan, moveGymPlan } from './gym-plan-store.js';
 
@@ -28,7 +27,7 @@ function auth(env) {
 }
 
 async function plannedRow(db, eventId) {
-  return db.prepare("SELECT id,payload_json,start_time,end_time FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id=?").bind(db.userId, "planned:" + eventId).first();
+  return db.prepare("SELECT id,payload_json,start_time,end_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(db.userId, "planned:" + eventId).first();
 }
 
 export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch) {
@@ -38,6 +37,7 @@ export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch
   const row = await plannedRow(env.DB, id);
   let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
   const start = shiftEventStart(payload.start_date_local || row?.start_time, date);
+  if(id.startsWith('local-')){const result=await editLocalWorkout(env,id,{start_date_local:start,end_date_local:null},fetchImpl);const gym=isStrengthEvent(payload)?await moveGymPlan(env.DB,eventDate(payload),date):{moved:false};return {...result,date,gymPlanMoved:gym.moved};}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ start_date_local: start }) });
   if (!response.ok) throw new Error("Intervals.icu přesun odmítlo (HTTP " + response.status + ").");
   const updated = await response.json().catch(() => ({}));
@@ -63,6 +63,7 @@ export async function setPlannedEnvironment(env, { eventId, environment }, fetch
   if (isStrengthEvent(payload)) throw new Error("Prostředí jde změnit jen u kola a běhu.");
   const run = /run/i.test(String(payload.type || ""));
   const type = run ? (environment === "indoor" ? "VirtualRun" : "Run") : (environment === "indoor" ? "VirtualRide" : "Ride");
+  if(id.startsWith('local-'))return {...await editLocalWorkout(env,id,{type,indoor:environment==='indoor'},fetchImpl),environment,type};
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ type }) });
   if (!response.ok) throw new Error("Intervals.icu změnu odmítlo (HTTP " + response.status + ").");
   const updated = await response.json().catch(() => ({}));
@@ -77,6 +78,7 @@ export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
   if (!id) throw new Error("Neplatný plánovaný trénink.");
   const row = await plannedRow(env.DB, id);
   let event = {}; try { event = JSON.parse(row?.payload_json || '{}'); } catch {}
+  if(id.startsWith('local-')){if(isStrengthEvent(event))await cancelGymPlan(env.DB,eventDate(event),event);return editLocalWorkout(env,id,{deleted:true},fetchImpl);}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "DELETE", headers: auth(env) });
   // Already gone in Intervals.icu: still remove the local copy.
   if (!response.ok && response.status !== 404) throw new Error("Intervals.icu smazání odmítlo (HTTP " + response.status + ").");
@@ -86,7 +88,7 @@ export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
     const another=remaining.some(r=>{try{return isStrengthEvent(JSON.parse(r.payload_json))}catch{return false}});
     if(!another)await cancelGymPlan(env.DB,date,event);
   }
-  await env.DB.prepare("DELETE FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id=?").bind(env.DB.userId, "planned:" + id).run();
+  await env.DB.prepare("DELETE FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.DB.userId, "planned:" + id).run();
   await env.DB.prepare("DELETE FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?").bind(env.DB.userId, id).run().catch(() => {});
   return { status: "ok", eventId: id };
 }

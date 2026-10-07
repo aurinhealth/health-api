@@ -1,3 +1,5 @@
+import {localExportIndex} from './local-workouts.js';
+import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import { nextUnloggedMeals } from "./nutrition-next.js";
@@ -518,6 +520,7 @@ async function setGoogleSyncStatus(env, status, details = null) {
   await ensureSyncStatusTable(env);
   await env.DB.prepare('INSERT INTO sync_status (user_id, sync_name, status, started_at, finished_at, details_json, updated_at) VALUES (?, \'google\', ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id, sync_name) DO UPDATE SET status = excluded.status, started_at = COALESCE(excluded.started_at, sync_status.started_at), finished_at = excluded.finished_at, details_json = excluded.details_json, updated_at = CURRENT_TIMESTAMP')
     .bind(env.USER_ID, status, details?.started_at || null, details?.finished_at || null, details ? JSON.stringify(details) : null).run();
+  if(['completed','partial','error'].includes(status))await env.DB.prepare("UPDATE sync_status SET status=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND sync_name='initial_google'").bind(status==='completed'?'done':status,env.USER_ID).run();
 }
 
 async function googleSyncStatus(env) {
@@ -1403,7 +1406,9 @@ async function syncIntervalsEvents(env) {
 
   let saved = 0;
 
+  const appEvents=await localExportIndex(env.DB,env.USER_ID);
   for (const e of events) {
+    if(appEvents.remote.has(String(e.id??e.event_id??''))||appEvents.external.has(e.external_id))continue;
     const id =
       String(
         e.id ||
@@ -1568,7 +1573,7 @@ async function matchActivities(env) {
         `SELECT *
          FROM health_datapoints
          WHERE user_id = ?
-         AND source_family = 'intervals'
+         AND source_family IN ('intervals','local')
          AND data_type = 'activity'
          AND start_time IS NOT NULL
          ORDER BY start_time`
@@ -2007,7 +2012,7 @@ async function nearbyRideContext(env, date) {
   const rows = await env.DB.prepare(`
     SELECT payload_json, start_time
     FROM health_datapoints
-    WHERE user_id = ? AND source_family = 'intervals'
+    WHERE user_id = ? AND source_family IN ('intervals','local')
       AND data_type = 'planned-workout'
       AND start_time >= ? AND start_time < ?
     ORDER BY start_time
@@ -2065,7 +2070,7 @@ async function energyForDate(env, date) {
   const planned = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE user_id = ? AND source_family = 'intervals'
+    WHERE user_id = ? AND source_family IN ('intervals','local')
       AND data_type = 'planned-workout'
       AND start_time >= ?
       AND start_time < ?
@@ -2075,7 +2080,7 @@ async function energyForDate(env, date) {
   const activities = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE user_id = ? AND source_family = 'intervals'
+    WHERE user_id = ? AND source_family IN ('intervals','local')
       AND data_type = 'activity'
       AND start_time >= ?
       AND start_time < ?
@@ -2101,10 +2106,10 @@ async function energyForDate(env, date) {
   `).bind(env.USER_ID).first();
   const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
   // Sport is estimated from the profile only when no source tracks activities.
-  const providers = env.CONNECTED_PROVIDERS;
+  const activityTracked = await hasRecentActivityData(env.DB,env.USER_ID);
   const baseline = energyBaseline(profile, weight ? Number(weight.value_numeric) : null, {
     isOwner: env.USER_IS_OWNER === true,
-    activityTracked: !Array.isArray(providers) || providers.length > 0
+    activityTracked
   });
 
   const plannedRaw = planned.results.map(r => ({
