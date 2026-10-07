@@ -39,7 +39,11 @@ export async function d1WeightTrend(env, endDate) {
     const mean=a=>a.length?a.reduce((s,x)=>s+x.kg,0)/a.length:null;
     const first=daily[0], latest=daily[daily.length-1];
     const days=Math.max(1,(new Date(latest.date)-new Date(first.date))/86400000);
-    const weeklyRateKg=Math.round(((latest.kg-first.kg)/days)*7*100)/100;
+    // Least-squares slope of all weigh-ins: day-to-day water swings average
+    // out, unlike the first and last point alone (Racette 2012).
+    const xs=daily.map(p=>(new Date(p.date)-new Date(first.date))/86400000),mx=xs.reduce((s,x)=>s+x,0)/xs.length,my=mean(daily);
+    const sxx=xs.reduce((s,x)=>s+(x-mx)**2,0),slope=sxx>0?xs.reduce((s,x,i)=>s+(x-mx)*(daily[i].kg-my),0)/sxx:0;
+    const weeklyRateKg=Math.round(slope*7*100)/100;
     return {samples:daily.length,spanDays:Math.round(days),latestKg:Math.round(latest.kg*10)/10,average7Kg:mean(last)==null?null:Math.round(mean(last)*10)/10,average28Kg:mean(last28)==null?null:Math.round(mean(last28)*10)/10,weeklyRateKg,points:daily.slice(-14)};
   } catch (_) { return {samples:0,latestKg:null,weeklyRateKg:null,average7Kg:null,average28Kg:null}; }
 }
@@ -161,17 +165,36 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // One recovery week for everything: the gym deloads in the week the plan
   // and the ride/run coach treat as a recovery week (src/week-planner.js).
   try {
-    const { recoveryWeek, weekLoadsBefore } = await import("./week-planner.js");
+    const { recoveryWeek, weekLoadsBefore, hrvWeekTrendDown } = await import("./week-planner.js");
     const monday = new Date(Date.parse(date + "T12:00:00Z") - ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
-    const oldestWellness = new Date(Date.parse(monday + "T12:00:00Z") - 22 * 86400000).toISOString().slice(0, 10);
+    // 61 days: the recovery model compares today with a 60-day baseline.
+    const oldestWellness = new Date(Math.min(Date.parse(monday + "T12:00:00Z") - 22 * 86400000, Date.parse(date + "T12:00:00Z") - 61 * 86400000)).toISOString().slice(0, 10);
     const wellness = await intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`);
     const rows = Array.isArray(wellness) ? wellness : [], ctl = Number([...rows].reverse().find(r => Number(r.ctl) > 0)?.ctl) || null;
     const weekLoads = weekLoadsBefore(rows, monday);
-    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
+    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads, hrvDown: hrvWeekTrendDown(rows, monday) }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
+    context.intervalsWellness = rows;
   } catch { context.recoveryWeek = { recovery: false, reason: null, known: false }; }
+  // The day's HRV, resting HR and breathing with their history, as the dashboard
+  // reads them: Google Health first, Intervals.icu filling the gaps.
+  try {
+    const { googleDashboard } = await import("./google-dashboard.js"), { mergeWellnessRows } = await import("./recovery-model.js");
+    const google = await googleDashboard(env.DB, date).catch(() => ({ wellness: [] }));
+    context.wellnessSeries = mergeWellnessRows(google.wellness, context.intervalsWellness);
+  } catch { context.wellnessSeries = []; }
+  delete context.intervalsWellness;
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
-  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "" }; } catch { context.profile = { sex: "" }; }
+  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null }; } catch { context.profile = { sex: "" }; }
+  // The last 10 days of Google Health sleep (nights and naps): the recovery
+  // score's sleep part and the sleep need, as the dashboard computes them.
+  try {
+    const { sleepSessionFromRow } = await import("./sleep-sessions.js");
+    const since = new Date(Date.parse(date + "T12:00:00Z") - 10 * 86400000).toISOString().slice(0, 10);
+    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family = 'google-wearables' AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 60").bind(env.USER_ID, since).all()).results || [];
+    const seen = new Set();
+    context.sleepSessions = rows.map(sleepSessionFromRow).filter(s => { const k = s.startTime + "|" + s.endTime; if (seen.has(k)) return false; seen.add(k); return s.durationMin > 0; });
+  } catch { context.sleepSessions = []; }
   const athleteState=await getAthleteState(env.DB);
   context.athleteState={status:athleteState.status,note:athleteState.note};
   context.nutrition = buildNutritionPlan(context, { weightTrend: context.weightTrend });

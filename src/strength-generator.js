@@ -166,18 +166,20 @@ function daysFrom(item, date) {
 const within = (item, date, from, to) => { const d = daysFrom(item, date); return d == null || (d >= from && d <= to); };
 const longRide = x => (num(x?.durationHours) || 0) >= 2.5;
 const hardRide = x => isIntensity(x) || longRide(x);
-// Ride load of the last 14 days against the athlete's own chronic load (CTL × 14):
-// 600 TSS is a heavy fortnight for one athlete and an easy one for another.
-function acuteLoadRatio(context) {
-  const ctl = num(context?.cycling?.lastRide?.ctl) || num(context?.cycling?.recentActivities?.[0]?.ctl) || num(context?.fitness?.ctl);
-  if (!ctl || ctl <= 0) return null;
-  return (num(context?.cycling?.recentRideTss) || 0) / (ctl * 14);
+// Form (TSB = CTL − ATL, Banister's fitness–fatigue model as Intervals.icu
+// reports it with each activity) says how much fatigue the endurance training
+// left. It replaces an acute:chronic load ratio, which adds no predictive
+// value of its own (Impellizzeri 2020, 2021).
+function rideForm(context) {
+  const a = context?.cycling?.lastRide || context?.cycling?.recentActivities?.[0];
+  const ctl = num(a?.ctl), atl = num(a?.atl);
+  return ctl != null && atl != null && ctl > 0 ? ctl - atl : null;
 }
 function recoveryFactor(context) {
   const recentTss = num(context?.cycling?.recentRideTss) || 0, recentHours = num(context?.cycling?.recentRideHours) || 0;
-  const recent = context?.cycling?.recentActivities || [], signals = recoverySignals(context), ratio = acuteLoadRatio(context);
+  const recent = context?.cycling?.recentActivities || [], signals = recoverySignals(context), form = rideForm(context);
   let factor = 1;
-  if (ratio != null) { if (ratio >= 1.5) factor *= 0.90; else if (ratio >= 1.3) factor *= 0.94; else if (ratio >= 1.15) factor *= 0.97; }
+  if (form != null) { if (form <= -30) factor *= 0.90; else if (form <= -20) factor *= 0.94; else if (form <= -10) factor *= 0.97; }
   else { if (recentTss >= 900) factor *= 0.90; else if (recentTss >= 750) factor *= 0.94; else if (recentTss >= 600) factor *= 0.97; if (recentHours >= 12) factor *= 0.96; else if (recentHours >= 9) factor *= 0.98; }
   const intensityCount = recent.filter(x => within(x, context.date, -4, 0)).slice(0, 4).filter(isIntensity).length;
   if (intensityCount >= 3) factor *= 0.94; else if (intensityCount >= 2) factor *= 0.97;
@@ -207,8 +209,8 @@ function legProtection(context) {
   const ctl = num(context?.cycling?.lastRide?.ctl) || num(context?.cycling?.recentActivities?.[0]?.ctl) || null;
   const last48 = (context?.cycling?.recentActivities || []).filter(x => within(x, date, -1, 0)).slice(0, 3).reduce((sum, x) => sum + (num(x.tss) || 0), 0);
   if (last48 >= Math.max(250, (ctl || 0) * 4)) return { protect: true, reason: "Za poslední dva dny máš za sebou velkou jízdní zátěž (" + Math.round(last48) + " TSS)." };
-  const ratio = acuteLoadRatio(context);
-  if (ratio != null ? ratio >= 1.35 : (num(context?.cycling?.recentRideTss) || 0) >= 1000) return { protect: true, reason: "Jízdní zátěž posledních dvou týdnů je výrazně nad tvým obvyklým objemem." };
+  const form = rideForm(context);
+  if (form != null ? form <= -25 : (num(context?.cycling?.recentRideTss) || 0) >= 1000) return { protect: true, reason: "Jízdní únava je vysoká (forma TSB " + (form != null ? Math.round(form) : "—") + "), nohy dnes šetřím." };
   return { protect: false, reason: "" };
 }
 function recentMuscleExposure(history, contextDate) {
@@ -525,7 +527,7 @@ export function generateStrengthPlan(context, options = {}) {
   // The shared recovery week decides when it is known; four solid gym weeks
   // in a row are the fallback for athletes without Intervals.icu loads.
   const shared = context?.recoveryWeek;
-  const deload = options.noDeload ? null : shared?.recovery ? { shared: true, reason: "Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7." } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date);
+  const deload = options.noDeload ? null : shared?.recovery ? { shared: true, reason: "Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : shared.reason === "hrv_trend" ? "HRV za poslední týden pod tvým běžným pásmem" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7." } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date);
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
   const firstSession = !history.length;

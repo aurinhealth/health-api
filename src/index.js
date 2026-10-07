@@ -4,6 +4,7 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import { nextUnloggedMeals } from "./nutrition-next.js";
 import {walkingEnergyCheck,activityTelemetryEnergy} from './activity-energy-check.js';
+import { sleepSessionFromRow } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
@@ -905,7 +906,8 @@ function googleInfo(type, p) {
     "dailyOxygenSaturation",
     "dailyRespiratoryRate",
     "dailyVo2Max",
-    "dailyHeartRateZones"
+    "dailyHeartRateZones",
+    "dailySleepTemperatureDerivations"
   ];
 
   for (const name of daily) {
@@ -971,6 +973,9 @@ function googleInfo(type, p) {
   if (p.dailyOxygenSaturation?.percentage !== undefined) {
     value = Number(p.dailyOxygenSaturation.percentage); unit = "%";
   }
+  if (p.dailySleepTemperatureDerivations?.nightlyTemperatureCelsius !== undefined) {
+    value = Number(p.dailySleepTemperatureDerivations.nightlyTemperatureCelsius); unit = "°C";
+  }
   if (p.dailyRespiratoryRate?.breathsPerMinute !== undefined) {
     value = Number(p.dailyRespiratoryRate.breathsPerMinute); unit = "breaths/min";
   }
@@ -1001,6 +1006,7 @@ const GOOGLE_SYNC_CONFIGS = [
   ["daily-respiratory-rate", "daily_respiratory_rate", "daily", "google-wearables", 30],
   ["daily-vo2-max", "daily_vo2_max", "daily", "google-wearables", 30],
   ["daily-heart-rate-zones", "daily_heart_rate_zones", "daily", "google-wearables", 30],
+  ["daily-sleep-temperature-derivations", "daily_sleep_temperature_derivations", "daily", "google-wearables", 30],
   ["respiratory-rate-sleep-summary", "respiratory_rate_sleep_summary", "sample", "google-wearables", 7],
   ["sedentary-period", "sedentary_period", "interval", "google-wearables", 7],
   ["time-in-heart-rate-zone", "time_in_heart_rate_zone", "interval", "google-wearables", 7],
@@ -2264,8 +2270,9 @@ async function energyForDate(env, date) {
   // Rest-day intake is the personal resting expenditure minus the weekly goal;
   // tracked training adds 70 % of its cost, untracked sport its daily average.
   const deficit = baseline.ready ? baseline.deficit : 0;
-  // Today and ahead, the weight trend corrects the estimate by ±100 kcal when
-  // the weight moves clearly off the chosen goal (trendAdjustment).
+  // Today and ahead, the weight trend corrects the estimate by energy balance
+  // (up to ±250 kcal) when the weight moves clearly off the chosen goal
+  // (trendAdjustment).
   const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date)) : { adjustment: 0, reason: null };
   const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit + trend.adjustment : null;
   const plannedTrainingCalories = baseline.ready && estimatedTDEE != null ? Math.max(0, estimatedTDEE - baseline.baselineRestTDEE - baseline.sportDaily) : 0;
@@ -2445,7 +2452,7 @@ async function analysisDaily(
         : energy.nutritionContext?.training
           ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a " + goalPhrase(energy) + "."
           : "Dnešní cíl vychází z klidového energetického základu a " + goalPhrase(energy) + ".")
-        + (energy.calorieBreakdown?.trendAdjustment ? " Podle vývoje váhy: " + TREND_REASONS[energy.calorieBreakdown.trendReason] + "." : "")
+        + (energy.calorieBreakdown?.trendAdjustment ? " Podle vývoje váhy: " + TREND_REASONS[energy.calorieBreakdown.trendReason] + ", o " + Math.abs(energy.calorieBreakdown.trendAdjustment) + " kcal " + (energy.calorieBreakdown.trendAdjustment < 0 ? "méně" : "víc") + "." : "")
         + (energy.calorieBreakdown?.floorApplied ? ` Cíl drží bezpečné minimum ${energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.` : ""),
       foodLog:
         await foodLogForDate(env, date)
@@ -3143,38 +3150,7 @@ async function healthSleep(env, url) {
     LIMIT 5000
   `).bind(env.USER_ID).all();
 
-  const sessions = (rows.results || []).map(row => {
-    let p = {};
-    try { p = JSON.parse(row.payload_json || "{}"); } catch {}
-    const sleep = p.sleep || p;
-    const interval = sleep.interval || {};
-    const stages = sleep.stages || sleep.sleepStages || [];
-    const stageMinutes = {};
-    for (const stage of stages) {
-      const a = new Date(stage.startTime || stage.start_time || 0).getTime();
-      const b = new Date(stage.endTime || stage.end_time || 0).getTime();
-      if (Number.isFinite(a) && Number.isFinite(b) && b > a) {
-        const type = String(stage.type || "UNKNOWN").toUpperCase();
-        stageMinutes[type] = (stageMinutes[type] || 0) + (b-a)/60000;
-      }
-    }
-    const startTime = row.start_time || interval.startTime || interval.civilStartTime || null;
-    const endTime = row.end_time || interval.endTime || interval.civilEndTime || null;
-    const durationMin = hoursBetween(startTime,endTime) * 60;
-    const day = dateOnly(endTime || startTime);
-    return {
-      id: row.external_id,
-      date: day,
-      startTime,
-      endTime,
-      timeInBedMin: Number.isFinite(durationMin) ? Math.round(durationMin) : null,
-      durationMin: Object.keys(stageMinutes).some(k=>['DEEP','REM','LIGHT'].includes(k)) ? Math.round(['DEEP','REM','LIGHT'].reduce((s,k)=>s+(stageMinutes[k]||0),0)) : Number.isFinite(durationMin) ? Math.round(durationMin) : null,
-      type: sleep.type || sleep.sleepType || null,
-      stages: Object.fromEntries(Object.entries(stageMinutes).map(([k,v])=>[k,Math.round(v)])),
-      minutesToFallAsleep: sleep.minutesToFallAsleep ?? null,
-      minutesAfterWakeup: sleep.minutesAfterWakeup ?? null
-    };
-  });
+  const sessions = (rows.results || []).map(sleepSessionFromRow);
 
   const filteredSessions = sessions.filter(s => {
     const sStart = String(s.startTime || "").slice(0,10);

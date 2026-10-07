@@ -1,3 +1,4 @@
+import {modelContext} from './helpers/recovery-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -17,7 +18,7 @@ test('missing power and gaps are not fabricated as zero or interpolated across l
   assert.equal(a.powerSeconds,5);assert.equal(a.averageWatts,100);assert.equal(a.normalizedWatts,null);assert.equal(a.aerobicDrift,null);
 });
 test('recovery compares current Google metrics to prior baseline without invented percentage',()=>{
-  const src=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8'),code=src.slice(src.indexOf('function recoverySignals('),src.indexOf('function renderTrainingClarity(')),ctx=vm.createContext({Math,Number,measured:v=>v!=null&&Number.isFinite(Number(v)),num:v=>Number(v)||0,fmt:v=>String(v),hm:v=>v+' min',dateShift:()=> '2026-08-27'});vm.runInContext(code,ctx);
-  const rows=Array.from({length:10},(_,i)=>({id:'2026-09-'+String(i+10).padStart(2,'0'),hrv:100,restingHR:50}));rows.push({id:'2026-09-26',hrv:60,restingHR:60});
+  const src=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8'),ctx=modelContext({measured:v=>v!=null&&Number.isFinite(Number(v)),num:v=>Number(v)||0,fmt:v=>String(Math.round(Number(v)*10)/10),hm:v=>v+' min',nightNeed:()=>480});vm.runInContext(src.slice(src.indexOf('function recoveryIndex('),src.indexOf('function correctDataPresentation(')),ctx);vm.runInContext(src.slice(src.indexOf('function recoverySignals('),src.indexOf('function renderTrainingClarity(')),ctx);
+  const rows=Array.from({length:16},(_,i)=>({id:'2026-09-'+String(i+10).padStart(2,'0'),hrv:98+(i%5),restingHR:49+(i%3)}));rows.push({id:'2026-09-26',hrv:60,restingHR:60});
   const result=ctx.recoverySignals(rows,{date:'2026-09-26',durationMin:300},'2026-09-26');assert.match(result.title,/zvolni/);assert.match(result.text,/HRV 60/);assert.doesNotMatch(result.text,/%/);
 });

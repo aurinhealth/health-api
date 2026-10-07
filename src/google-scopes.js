@@ -55,7 +55,7 @@ const TYPE_PERMISSION = {
   sleep: "sleep", "respiratory-rate-sleep-summary": "sleep",
   "heart-rate": "metrics", "heart-rate-variability": "metrics", "oxygen-saturation": "metrics",
   "daily-resting-heart-rate": "metrics", "daily-heart-rate-variability": "metrics", "daily-oxygen-saturation": "metrics",
-  "daily-respiratory-rate": "metrics", weight: "metrics", "body-fat": "metrics",
+  "daily-respiratory-rate": "metrics", "daily-sleep-temperature-derivations": "metrics", weight: "metrics", "body-fat": "metrics",
   "active-energy-burned": "activity", "active-minutes": "activity", "active-zone-minutes": "activity", steps: "activity",
   distance: "activity", floors: "activity", "sedentary-period": "activity", "time-in-heart-rate-zone": "activity",
   "daily-heart-rate-zones": "activity", "daily-vo2-max": "activity", exercise: "activity", "total-calories": "activity"

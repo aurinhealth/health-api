@@ -18,8 +18,14 @@ const coach = (opts = {}) => buildCyclingCoachV2({ date: "2026-10-01", week: wee
 test("no time and no plan: length is estimated from CTL, with the reasons", () => {
   const c = coach();
   assert.equal(c.constraints.autoLength, true);
-  assert.equal(c.constraints.capacityMinutes, 94); // 55·7/5 = 77 TSS / 49 TSS/h
-  assert.match(c.rationale.at(-1), /^Délka \d+ min: kondice CTL 55 ≈ 77 TSS/);
+  assert.equal(c.constraints.capacityMinutes, 99); // 55·7·1.05 = 404 TSS / 5 days = 81 TSS / 49 TSS/h
+  assert.match(c.rationale.at(-1), /^Délka \d+ min: kondice CTL 55: týdenní cíl 404 TSS na 5 tréninkových dní ≈ 81 TSS/);
+});
+
+test("a CTL ramp above 8 a week holds the load instead of raising it (Friel)", () => {
+  const steep = buildCyclingCoachV2({ date: "2026-10-01", week: week(history), fitness: { wellness: [{ id: "2026-10-01", ctl: 55, atl: 53, rampRate: 9 }] }, health: sleep("2026-10-01") });
+  assert.equal(steep.constraints.capacityMinutes, 94);
+  assert.match(steep.rationale.at(-1), /CTL roste o 9 za týden, nad 8 zátěž jen držím/);
 });
 
 test("fitness, sleep and form change the length; any day can be a long ride", () => {

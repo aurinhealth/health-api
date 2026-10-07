@@ -26,7 +26,7 @@ test("library interval sessions count as quality, easy ones do not", () => {
 test("deep fatigue with a falling HRV is not green and gets no sweet spot", () => {
   const result = coach({ fitness: { wellness: wellness({ atl: 100, tsb: -30, hrv: 58 }) } });
   assert.notEqual(result.readiness.status, "green");
-  assert.ok(result.readiness.reasons.some(r => /HRV 58 ms je o 28 % pod tvým průměrem/.test(r)));
+  assert.ok(result.readiness.reasons.some(r => /HRV 58 ms je pod tvým běžným pásmem 76–84 ms \(28 % pod průměrem\)/.test(r)));
   assert.ok(["endurance", "recovery"].includes(result.recommendation.session.kind));
   // HRV and resting HR are judged against the athlete's own baseline.
   assert.deepEqual(wellnessTrend({ wellness: wellness({ hrv: 58 }) }, date, "hrv"), { today: 58, baseline: 80, deltaPct: -27.5, delta: -22 });

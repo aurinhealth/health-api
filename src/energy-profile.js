@@ -108,28 +108,35 @@ export function proteinReferenceKg(weightKg, heightCm) {
   return Math.round(27 * m * m * 10) / 10;
 }
 
-// A steady correction from the weight trend: with at least 4 weigh-ins over 3
-// weeks, ±100 kcal a day when the weight moves clearly off the chosen goal.
-// Losing: slower than half the goal eats less, faster than 1.5× eats more.
-// Maintaining: more than 0.25 kg a week either way.
+// A correction from the weight trend by energy balance: intake = expenditure
+// + change in body stores (Racette 2012). The gap between the measured weekly
+// rate (a least-squares slope of the weigh-ins, see d1WeightTrend) and the
+// goal, at 7700 kcal per kg, is how much the day's intake is off. Half of it is
+// applied, at most ±250 kcal, rounded to 25: early weight change is partly
+// water and glycogen, worth less energy than tissue (Hall 2011), and a
+// smaller step keeps the target from chasing noise. Needs 4 weigh-ins over 3
+// weeks. No change while the rate is within the goal's range: losing between
+// half and 1.5× the goal, maintaining within ±0.25 kg a week.
+// The loop also corrects a systematic error of the wearable's energy figures.
 export function trendAdjustment(goalKey, trend) {
   const rate = Number(trend?.weeklyRateKg), samples = Number(trend?.samples || 0), span = trend?.spanDays;
   if (trend?.weeklyRateKg == null || !Number.isFinite(rate) || samples < 4 || (span != null && Number(span) < 21)) return { adjustment: 0, reason: "insufficient_weight_history" };
   const goal = (GOALS[goalKey] || GOALS["lose_0.5"]).kgPerWeek;
+  const step = gap => { const kcal = Math.max(-250, Math.min(250, -gap * 7700 / 7 * 0.5)); return Math.round(kcal / 25) * 25 || 0; };
   if (goal < 0) {
-    if (rate > goal / 2) return { adjustment: -100, reason: "loss_below_target" };
-    if (rate < goal * 1.5) return { adjustment: 100, reason: "loss_above_target" };
+    if (rate > goal / 2) return { adjustment: step(rate - goal), reason: "loss_below_target" };
+    if (rate < goal * 1.5) return { adjustment: step(rate - goal), reason: "loss_above_target" };
     return { adjustment: 0, reason: "within_target_range" };
   }
-  if (rate > 0.25) return { adjustment: -100, reason: "gaining_while_maintaining" };
-  if (rate < -0.25) return { adjustment: 100, reason: "losing_while_maintaining" };
+  if (rate > 0.25) return { adjustment: step(rate), reason: "gaining_while_maintaining" };
+  if (rate < -0.25) return { adjustment: step(rate), reason: "losing_while_maintaining" };
   return { adjustment: 0, reason: "within_target_range" };
 }
 export const TREND_REASONS = {
-  loss_below_target: "váha klesá pomaleji, než je cíl: o 100 kcal méně",
-  loss_above_target: "váha klesá rychleji, než je cíl: o 100 kcal víc",
-  gaining_while_maintaining: "váha při udržování roste: o 100 kcal méně",
-  losing_while_maintaining: "váha při udržování klesá: o 100 kcal víc"
+  loss_below_target: "váha klesá pomaleji, než je cíl",
+  loss_above_target: "váha klesá rychleji, než je cíl",
+  gaining_while_maintaining: "váha při udržování roste",
+  losing_while_maintaining: "váha při udržování klesá"
 };
 
 export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "datum narození", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" };

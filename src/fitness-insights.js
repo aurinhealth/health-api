@@ -12,8 +12,16 @@ const daysBetween = (a, b) => (Date.parse(b + "T12:00:00Z") - Date.parse(a + "T1
 const round = (v, d = 0) => Math.round(v * 10 ** d) / 10 ** d;
 
 export const MUSCLES = Object.keys(FOCUS_GROUPS);
-// Small muscles recover faster than large ones (time constant in days).
-const RECOVERY_DAYS = { quads: 1.7, hamstrings: 1.7, hips: 1.6, chest: 1.5, upper_back: 1.4, lats: 1.4, calves: 1.2, front_delts: 1.1, side_delts: 1.0, rear_delts: 1.0, biceps: 1.0, triceps: 1.0, abs: 0.9, obliques: 0.9, forearms: 0.9, traps: 1.0, lower_back: 1.3 };
+// Fatigue decays exponentially with a time constant in days, set so that a
+// usual session leaves the muscle "recovered" (freshness ≥ 75 %) after about
+// 72 h for large muscles worked by multi-joint lifts and about 48 h for the
+// rest: most lifters are back within one rep of baseline at 48 h, squat-,
+// bench- and deadlift-type lifts often need 72 h (Korak 2015), and muscular
+// endurance is restored by 48 h (McLester 2003).
+const RECOVERY_DAYS = { quads: 2.4, hamstrings: 2.4, hips: 2.4, lower_back: 2.4, chest: 2.2, upper_back: 2.2, lats: 2.2, front_delts: 2.0, calves: 1.9, side_delts: 1.8, rear_delts: 1.8, biceps: 1.8, triceps: 1.8, traps: 1.8, abs: 1.4, obliques: 1.4, forearms: 1.4 };
+// Sets taken to failure (RPE ≥ 9.5) prolong recovery beyond 48 h compared
+// with sets that stop short of it (Morán-Navarro 2017).
+const FAILURE_RECOVERY = 1.3;
 // Primary muscle of the exercise catalog → body-map groups.
 const PRIMARY = { chest: ["chest"], back: ["upper_back", "lats"], shoulders: ["front_delts", "side_delts"], quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["hips"], biceps: ["biceps"], triceps: ["triceps"], core: ["abs", "obliques"], adductors: ["hips"], abductors: ["hips"], calves: ["calves"], forearms: ["forearms"], traps: ["traps"], lower_back: ["lower_back"] };
 // Secondary muscles by movement pattern (share of the set's load).
@@ -52,7 +60,8 @@ export function muscleEvents({ sets = [], activities = [] } = {}) {
     const def = EXERCISES[normalizeExerciseName(s.exercise)];
     const rpe = n(s.rpe, NaN), effort = Number.isFinite(rpe) && rpe > 0 ? Math.min(1.5, Math.max(.4, (rpe - 4) / 4)) : 1;
     const load = 10 * n(def?.fatigue, 1) * effort;
-    for (const [muscle, w] of Object.entries(exerciseMuscles(s.exercise))) events.push({ date, muscle, load: load * w, source: "strength" });
+    const failure = Number.isFinite(rpe) && rpe >= 9.5;
+    for (const [muscle, w] of Object.entries(exerciseMuscles(s.exercise))) events.push({ date, muscle, load: load * w, source: "strength", ...(failure ? { failure } : {}) });
   }
   for (const a of activities) {
     const kind = activityKind(a), shares = CARDIO[kind]; if (!shares) continue;
@@ -75,7 +84,7 @@ export function muscleFreshness(events, today) {
     if (trainingDays < 3) { out[muscle] = { status: "calibrating", trainingDays, freshness: null }; continue; }
     const baseline = days[Math.floor(days.length / 2)] || 1, tau = RECOVERY_DAYS[muscle] || 1.3;
     // Training of the day counts as done at the end of the day: half a day of recovery by now.
-    const fatigue = [...byDay].reduce((s, [date, load]) => s + load * Math.exp(-(daysBetween(date, today) + .25) / tau), 0);
+    const fatigue = own.reduce((s, e) => s + e.load * Math.exp(-(daysBetween(e.date, today) + .25) / (tau * (e.failure ? FAILURE_RECOVERY : 1))), 0);
     const freshness = Math.max(1, Math.min(100, Math.round(100 * Math.exp(-fatigue / (1.25 * baseline)))));
     out[muscle] = { status: STATUS_FRESH(freshness), freshness, trainingDays, lastTrained: [...byDay.keys()].sort().at(-1) };
   }

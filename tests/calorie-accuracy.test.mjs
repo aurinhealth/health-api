@@ -77,19 +77,21 @@ test("when the safety floor holds the target up, the reason says the pace will b
   assert.doesNotMatch(maintain.nutrition.reason, /bezpečné minimum/);
 });
 
-test("the weight trend corrects the target by 100 kcal against the chosen goal", async () => {
+test("the weight trend corrects the target by energy balance against the chosen goal", async () => {
   const trend = (rate, extra = {}) => ({ samples: 5, weeklyRateKg: rate, spanDays: 28, ...extra });
-  assert.equal(trendAdjustment("lose_0.5", trend(0.1)).adjustment, -100);
+  assert.equal(trendAdjustment("lose_0.5", trend(0.1)).adjustment, -250);
   assert.equal(trendAdjustment("lose_0.5", trend(-0.4)).adjustment, 0);
-  assert.equal(trendAdjustment("lose_0.5", trend(-0.9)).adjustment, 100);
+  assert.equal(trendAdjustment("lose_0.5", trend(-0.9)).adjustment, 225);
   assert.equal(trendAdjustment("lose_0.25", trend(-0.2)).adjustment, 0);
-  assert.equal(trendAdjustment("maintain", trend(0.3)).adjustment, -100);
-  assert.equal(trendAdjustment("maintain", trend(-0.3)).adjustment, 100);
+  assert.equal(trendAdjustment("maintain", trend(0.3)).adjustment, -175);
+  assert.equal(trendAdjustment("maintain", trend(-0.3)).adjustment, 175);
   assert.equal(trendAdjustment("maintain", trend(0.1)).adjustment, 0);
   assert.equal(trendAdjustment("lose_0.5", trend(0.1, { samples: 3 })).adjustment, 0);
   assert.equal(trendAdjustment("lose_0.5", trend(0.1, { spanDays: 14 })).adjustment, 0);
+  // Slightly off the goal: a small step, proportional to the gap.
+  assert.equal(trendAdjustment("lose_0.5", trend(-0.2)).adjustment, -175);
 
-  // Five weigh-ins over four weeks, slightly up while trying to lose: 100 kcal less today.
+  // Five weigh-ins over four weeks, slightly up while trying to lose: 250 kcal less today.
   const today = pragueToday(), back = days => new Date(Date.parse(today + "T07:00:00Z") - days * 86400000).toISOString();
   const run = async weights => {
     const d = db();
@@ -98,9 +100,21 @@ test("the weight trend corrects the target by 100 kcal against the chosen goal",
     return (await daily(d, today)).nutrition;
   };
   const flat = await run([80]), rising = await run([80, 80.1, 80.2, 80.3, 80.4]);
-  assert.equal(rising.calorieBreakdown.trendAdjustment, -100);
+  assert.equal(rising.calorieBreakdown.trendAdjustment, -250);
   assert.match(rising.reason, /Podle vývoje váhy/);
   assert.equal(flat.calorieBreakdown.trendAdjustment, 0);
   // The app's correction is what the ChatGPT plan reports.
-  assert.equal(withAppTarget({ calorieTarget: 2250, macros: {} }, { nutrition: rising }).adaptiveCalorieAdjustment, -100);
+  assert.equal(withAppTarget({ calorieTarget: 2250, macros: {} }, { nutrition: rising }).adaptiveCalorieAdjustment, -250);
+});
+
+test("the weekly weight rate is a least-squares slope, not two end points", async () => {
+  const { d1WeightTrend } = await import("../src/strength-context.js");
+  const today = pragueToday(), back = days => new Date(Date.parse(today + "T07:00:00Z") - days * 86400000).toISOString();
+  const d = db();
+  // A steady 0.5 kg/week loss with a water-heavy last morning (+1 kg).
+  const kgs = [82, 81.5, 81, 80.5, 81];
+  kgs.forEach((kg, i) => point(d, "manual", "weight", "s" + i, { sample: back(28 - i * 7), value: kg }));
+  const trend = await d1WeightTrend({ DB: d, USER_ID: 7 }, today);
+  // The end points alone would say −0.25 kg/week.
+  assert.equal(trend.weeklyRateKg, -0.3);
 });

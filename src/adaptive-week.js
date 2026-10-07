@@ -1,5 +1,5 @@
 import { availabilityOn, parseTimeWindow } from './training-availability.js';
-import { planWeekRoles, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, isRunActivity } from './week-planner.js';
+import { planWeekRoles, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, isRunActivity, hrvWeekTrendDown } from './week-planner.js';
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
@@ -115,7 +115,7 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 ? 'red' : 'green' });
   // Running this week so far (done, and planned still ahead) counts against the weekly running cap.
   const runCommitted = existing.reduce((n, d) => n + (d.date > today ? d.daily?.training?.planned || [] : d.daily?.training?.completed || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0), 0);
-  let targets = capRunVolume(weekTargets({ roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) }), history ? weeklyRunCap(history, start) : null, runCommitted);
+  let targets = capRunVolume(weekTargets({ roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(fitness.wellness || [], start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) }), history ? weeklyRunCap(history, start) : null, runCommitted);
   // Without fitness data the estimate keeps the same running cap: a beginner's
   // runs share the floor (60 min a week) or what the recent weeks allow.
   if (!ctl) targets = capRunVolume({ status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: x.sport === 'run' ? 30 : 60, tss: 25 }))) }, weeklyRunCap(history || [], start), runCommitted);

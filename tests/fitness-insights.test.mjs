@@ -108,3 +108,12 @@ test("record trends: best in the period against the best before it, or the first
   // Without power data there is no FTP block.
   assert.equal(recordTrends({ today, activities: [{ type: "Ride", date: ago(5), icu_ftp: 250, distance: 30000 }] }).cardio.ftp, null);
 });
+
+test("recovery times follow the evidence: large muscles about 72 h, small ones 48 h, failure slower", () => {
+  const today = "2026-10-08", ago = d => new Date(Date.parse(today + "T12:00:00Z") - d * 86400000).toISOString().slice(0, 10);
+  const history = muscle => [20, 13, 6].map(d => ({ date: ago(d), muscle, load: 10 }));
+  const at = (muscle, hours, extra = {}) => muscleFreshness([...history(muscle), { date: ago(hours / 24), muscle, load: 10, ...extra }], today)[muscle].status;
+  assert.equal(at("quads", 48), "fatigued"); assert.equal(at("quads", 72), "recovered");
+  assert.equal(at("biceps", 48), "recovered"); assert.equal(at("biceps", 24), "fatigued");
+  assert.equal(at("biceps", 48, { failure: true }), "fatigued");
+});

@@ -1,4 +1,5 @@
 import { trainingStatus } from './training-status.js';
+import { recoveryReadiness, sleepNeedFor } from './recovery-model.js';
 const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function latestRecovery(recovery,keyMatchers){
@@ -17,7 +18,28 @@ function latestRecovery(recovery,keyMatchers){
   }
   return best;
 }
+// A sleep session ending in the morning belongs to that day; one stored only by
+// its evening start belongs to the next.
+function nightDate(time){const t=String(time||"");if(!/^\d{4}-\d{2}-\d{2}/.test(t))return null;const d=t.slice(0,10);return Number(t.slice(11,13))>=15?new Date(Date.parse(d+"T12:00:00Z")+86400000).toISOString().slice(0,10):d;}
+// Recovery is the shared model the dashboard shows (src/recovery-model.js):
+// HRV, resting HR and sleep against the athlete's 60-day baseline. Training
+// load is not part of it; the leg readiness adds it. Without a baseline the
+// older rule set below fills in.
 function recoveryMetrics(context){
+  const rows=context?.wellnessSeries,sleep=latestRecovery(context?.recovery,["sleep"]);
+  if(Array.isArray(rows)&&rows.length&&context?.date){
+    // The night and the sleep need as the dashboard has them when the
+    // sessions are known; otherwise the latest sleep value.
+    const sessions=Array.isArray(context.sleepSessions)?context.sleepSessions:null;
+    const main=sessions?sessions.filter(x=>x.date===context.date&&!x.nap&&x.durationMin>=180).sort((a,b)=>b.durationMin-a.durationMin)[0]:null;
+    const night=main||(sleep?{date:nightDate(sleep.time),durationMin:sleep.value}:null);
+    const sleepNeed=sessions?sleepNeedFor({date:context.date,age:context.profile?.age??null,rows,sessions}).need:480;
+    const r=recoveryReadiness({rows,date:context.date,night,sleepNeed});
+    if(r.score!=null)return {score:r.score,zone:r.zone,model:"shared",flags:r.flags,sleepNeed,sleepMinutes:night?.durationMin??sleep?.value??null,hrv:r.components.hrv?.value??null,hrvBaseline:r.components.hrv?Math.round(r.components.hrv.baseline*10)/10:null,restingHr:r.components.restingHR?.value??null,restingHrBaseline:r.components.restingHR?Math.round(r.components.restingHR.baseline*10)/10:null};
+  }
+  return legacyRecoveryMetrics(context);
+}
+function legacyRecoveryMetrics(context){
   const sleep=latestRecovery(context?.recovery,["sleep"]);
   const hrv=latestRecovery(context?.recovery,["hrv","heart_rate_variability"]);
   const rhr=latestRecovery(context?.recovery,["resting"]);
@@ -32,7 +54,7 @@ function recoveryMetrics(context){
   if(hours>=12) score-=5; else if(hours>=9) score-=3;
   const hard=(context?.cycling?.recentActivities||[]).slice(0,4).filter(x=>x?.intensity).length;
   if(hard>=3) score-=7; else if(hard>=2) score-=4;
-  return {score:Math.round(clamp(score,0,100)),sleepMinutes:sleep?.value??null,hrv:hrv?.value??null,hrvBaseline:hrv?.baseline??null,restingHr:rhr?.value??null,restingHrBaseline:rhr?.baseline??null};
+  return {score:Math.round(clamp(score,0,100)),model:"legacy",sleepMinutes:sleep?.value??null,hrv:hrv?.value??null,hrvBaseline:hrv?.baseline??null,restingHr:rhr?.value??null,restingHrBaseline:rhr?.baseline??null};
 }
 function calculateLegReadiness(context,recovery){
   let score=recovery.score;
@@ -40,6 +62,13 @@ function calculateLegReadiness(context,recovery){
   const last48=(context?.cycling?.recentActivities||[]).slice(0,3).reduce((s,x)=>s+n(x.tss),0);
   if(tss>=750) score-=12; else if(tss>=600) score-=7;
   if(last48>=350) score-=8; else if(last48>=250) score-=4;
+  // The shared recovery holds no training load, so the recent volume and
+  // hard sessions count here (the legacy score already includes them).
+  if(recovery.model==="shared"){
+    const hours=n(context?.cycling?.recentRideHours),hard=(context?.cycling?.recentActivities||[]).slice(0,4).filter(x=>x?.intensity).length;
+    if(hours>=12) score-=5; else if(hours>=9) score-=3;
+    if(hard>=3) score-=7; else if(hard>=2) score-=4;
+  }
   const next=context?.cycling?.nextRide;
   if(next?.intensity) score-=12;
   if(n(next?.durationHours)>=2.5) score-=10;
