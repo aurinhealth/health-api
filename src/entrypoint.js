@@ -1,6 +1,6 @@
 import {reportFood} from './shared-foods.js';
 import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup} from './onboarding.js';
-import {subscriptionStatus,assertAIAccess} from './subscription.js';
+import {subscriptionStatus,markAiIntroSeen,assertAIAccess} from './subscription.js';
 import {listRecipes,saveRecipe,deleteRecipe,searchRecipes} from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
@@ -88,6 +88,7 @@ import { isStaging, markStaging } from "./staging.js";
 import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, generateTechnique, exerciseInUse } from "./exercise-technique.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";
 import { aiAllowance } from "./ai-usage.js";
+import { exportAccountData, deleteAccount } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
 import { pragueToday } from './prague-date.js';
@@ -532,7 +533,28 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const [onboarding,ai]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null]);
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai},{headers:{"Cache-Control":"no-store"}});
   }
+  // The user's own data: download everything, or delete the account with it.
+  if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    const data=await exportAccountData(env,session.user);
+    return new Response(JSON.stringify(data,null,1),{headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="loadwise-data-'+pragueToday()+'.json"','Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/account/delete'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:'Přihlas se do dashboardu.'},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    const body=await request.json().catch(()=>({}));
+    if(String(body.confirm||'').trim().toUpperCase()!=='SMAZAT')return Response.json({message:'Pro potvrzení napiš SMAZAT.'},{status:400});
+    try{
+      const result=await deleteAccount(await connectionEnvironment(env),session.user);
+      // The session cookie goes too.
+      return Response.json(result,{headers:{'Cache-Control':'no-store','Set-Cookie':handleDashboardLogout().headers.get('Set-Cookie')}});
+    }catch(error){return Response.json({message:error.message},{status:400});}
+  }
   if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json(await subscriptionStatus(env),{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/subscription/intro'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:'Neplatný původ požadavku.'},{status:403});
+    return Response.json(await markAiIntroSeen(env),{headers:{'Cache-Control':'no-store'}});
+  }
   if(url.pathname==='/app/api/training-setup'){
     if(request.method==='GET')return Response.json({status:'ok',training:await trainingSetup(env.DB)},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='PATCH'){
@@ -619,7 +641,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const result=await adjustGymPlan(env,{rows,request:text,history});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
-    }catch(error){return Response.json({message:error.limit?error.message:error.ai?'AI úprava se nepovedla: '+error.message:error.message},{status:error.limit?429:error.ai?502:400})}
+    }catch(error){return Response.json({message:error.limit?error.message:error.ai?'AI úprava se nepovedla: '+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}
   }
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
@@ -789,7 +811,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     };
     if(body.stream)return assistantStreamResponse(reply);
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
-    catch(error){if(error.limit)return Response.json({message:error.message},{status:429});console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
+    catch(error){if(error.limit)return Response.json({message:error.message},{status:error.status||429});console.error('Assistant request failed',error);return Response.json({message:'AI odpověď se nepodařilo připravit.'},{status:502});}
   }
   // The list of chats, one chat with its messages, and deleting a chat.
   if(url.pathname==='/app/api/assistant/chats'&&request.method==='GET'){
@@ -899,7 +921,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE});
       if(!r.product)return Response.json({status:'not_found',message:'AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).'},{headers:{'Cache-Control':'no-store'}});
       return Response.json({status:'ok',product:{...r.product,name:r.product.name||name},model:r.model},{headers:{'Cache-Control':'no-store'}});
-    }catch(error){return Response.json({status:'error',message:error.limit?error.message:'Dohledání přes AI selhalo: '+String(error.message).slice(0,160)},{status:error.limit?429:502});}
+    }catch(error){return Response.json({status:'error',message:error.limit?error.message:'Dohledání přes AI selhalo: '+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):502});}
   }
   if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
     const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000),parsed=body.mode==='portion'?parseNutritionPortion(text):{values:parseNutritionLabel(text)};
@@ -917,7 +939,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const r=await readFoodPhotoWithAI(env,{image:body.image,mode:body.mode==='portion'?'portion':'label',language:env.INTERFACE_LANGUAGE});
       if(!r.result)return Response.json({status:'unreadable',message:'Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.'},{headers:{'Cache-Control':'no-store'}});
       return Response.json({status:'ok',...r.result,model:r.model},{headers:{'Cache-Control':'no-store'}});
-    }catch(error){return Response.json({status:'error',message:error.limit?error.message:'Čtení fotky přes AI selhalo: '+String(error.message).slice(0,160)},{status:error.limit?429:/JPG|PNG/.test(error.message)?400:502});}
+    }catch(error){return Response.json({status:'error',message:error.limit?error.message:'Čtení fotky přes AI selhalo: '+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):/JPG|PNG/.test(error.message)?400:502});}
   }
   // Cookbook by recipe name (the page lookup is below).
   if(url.pathname==='/app/api/food/recipes'&&request.method==='GET'){

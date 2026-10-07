@@ -61,7 +61,7 @@ test("the limit is set per deployment, and 0 turns AI off for everyone but the o
 
 test("the AI limit reaches the user as a message, and every AI call names its feature", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /if\(error\.limit\)return Response\.json\(\{message:error\.message\},\{status:429\}\)/);
+  assert.match(entry, /if\(error\.limit\)return Response\.json\(\{message:error\.message\},\{status:error\.status\|\|429\}\)/);
   assert.match(entry, /aiAllowance\(env\)/);
   for (const file of ["coach-assistant", "coach-reflection", "coach-review", "exercise-technique", "food-ai", "food-chat", "food-photo", "gym-adjust"]) {
     const source = readFileSync(new URL(`../src/${file}.js`, import.meta.url), "utf8");
@@ -69,4 +69,21 @@ test("the AI limit reaches the user as a message, and every AI call names its fe
     const named = source.match(/(?:await|return) callOpenAI\(env, \{ ?feature: ?["'][a-z-]+["']/g) || [];
     assert.ok(calls.length && calls.length === named.length, file);
   }
+});
+
+test("the AI plans pop up once at the first AI use during the pilot, and on every locked feature later", async () => {
+  const { subscriptionStatus, markAiIntroSeen } = await import("../src/subscription.js");
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const raw = createD1(), env = { DB: scopedDb(raw, 7), USER_ID: 7 };
+  raw.sqlite.exec("CREATE TABLE dashboard_profile (user_id INTEGER NOT NULL, id INTEGER NOT NULL, profile_json TEXT NOT NULL, PRIMARY KEY (user_id, id))");
+  assert.equal((await subscriptionStatus(env)).introSeen, false);
+  await markAiIntroSeen(env);
+  assert.equal((await subscriptionStatus(env)).introSeen, true);
+  assert.equal((await subscriptionStatus({ DB: scopedDb(raw, 8), USER_ID: 8 })).introSeen, false);
+  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  assert.match(client, /async function jsonFetch\(path,options=\{\}\)\{if\(typeof aiIntroBefore==='function'\)await aiIntroBefore\(path,options\);/);
+  assert.match(client, /if\(s\.mode!=='pilot'\|\|s\.introSeen\)return;/);
+  assert.match(client, /if\(r\.status===402&&typeof showAiPlans==='function'\)subscriptionInfo\(\)\.then\(s=>showAiPlans\(s,\{locked:true\}\)\)/);
+  assert.match(client, /if\(typeof aiIntroBefore==='function'\)await aiIntroBefore\('\/app\/api\/assistant',\{method:'POST'\}\);/);
 });
