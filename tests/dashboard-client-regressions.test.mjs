@@ -25,3 +25,8 @@ test("gym video URL parsing keeps its regular expressions intact", () => {
   assert.match(clientSource, /HYPERLINK\\\(\\s\*/);
   assert.match(clientSource, /\^https\?:\\\/\\\//);
 });
+
+test("async sheet loaders check the sheet id, not the title text the icon swap and translator rewrite", () => {
+  assert.doesNotMatch(clientSource, /\$\('sheetTitle'\)\?\.textContent\s*[!=]==/);
+  assert.match(clientSource, /const sheet=openSheet\(title,'<p class="small">Načítám gym…<\/p>',null,'training-detail'\),current=\(\)=>sheetStill\(sheet\)/);
+});

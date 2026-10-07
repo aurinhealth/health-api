@@ -502,9 +502,9 @@ function gymPlanEdit(action,idx,item){
 // Replacements for an exercise of the table: same muscle, possible in the gym.
 async function openGymSwapSheet(idx){
   const name=(state.gym?.values||[])[idx+7]?.[1];if(!name)return;
-  openSheet('Vyměnit '+name,'<p class="small">Hledám náhrady pro stejnou partii…</p>');
+  const sheet=openSheet('Vyměnit '+name,'<p class="small">Hledám náhrady pro stejnou partii…</p>');
   try{const r=await jsonFetch('/app/api/gym/alternatives?date='+gymDay()+'&exercise='+encodeURIComponent(name)),list=r.alternatives||[];
-    if($('sheetTitle')?.textContent!=='Vyměnit '+name)return;
+    if(!sheetStill(sheet))return;
     const done=(state.gym?.values||[]).slice(7).filter(x=>x[1]===name),allDone=done.length&&done.every(gymRowDone);
     $('sheetBody').innerHTML=(allDone?'<p class="small">Všechny série jsou uložené: výměna opraví název cviku i v historii, váhy a opakování zůstanou.</p>':'<p class="small">Uložené série zůstanou, vymění se jen zbývající.</p>')+(list.length?'<div class="gm-alt-list">'+list.map((a,i)=>'<button type="button" class="gm-alt" data-alt="'+i+'"><strong>'+esc(a.name)+'</strong><small>'+esc(a.muscle)+' · '+esc(a.reps)+' op.'+(a.kg!=null?' · '+fmt(a.kg,1)+' kg':'')+(a.station?' · '+esc(a.station):'')+'</small></button>').join('')+'</div>':'<p>Pro tuto partii tu není jiný cvik.</p>');
     $('sheetBody').onclick=e=>{const b=e.target.closest('[data-alt]');if(!b)return;closeSheet();gymPlanEdit('swap',idx,list[Number(b.dataset.alt)]);};
@@ -2350,10 +2350,10 @@ function gymSessionHtml(s){
   if(!ex.length)return '<div class="gym-session"><p class="small">Pro tento den zatím nejsou žádné cviky.</p>'+add+'</div>';
   const rows=s.rows.filter(r=>r?.[1]),work=rows.filter(gymRowWork),warm=rows.length-work.length,did=work.filter(gymRowDone).length,nRec=Object.keys(recs).length;
   const load=gymMuscleLoad(s.muscles,ex.map(e=>({exercise:e.name,count:e.sets.filter(x=>gymRowWork(x.r)&&(!done||gymRowDone(x.r))).length})));
-  const stats=[...(s.facts||[]),['Cviky',ex.length],[done?'Odcvičeno':'Série',done?did+' / '+work.length+' sérií':work.length+' pracovních'],...(warm?[['Rozcvička',warm+' '+(warm===1?'série':warm<5?'série':'sérií')]]:[])];
+  const stats=[...(s.facts||[]),[uiText('Cviky','Exercises'),ex.length],[done?uiText('Odcvičeno','Trained'):uiText('Série','Sets'),done?did+' / '+work.length+uiText(' sérií',' sets'):work.length+uiText(' pracovních',' working')],...(warm?[[uiText('Rozcvička','Warm-up'),warm+' '+uiText(warm<5?'série':'sérií',warm===1?'set':'sets')]]:[])];
   const max=Math.max(0,...Object.values(load)),groups=[['Hlavně','#a77bff',.6,1.01],['Středně','#7a5cc4',.3,.6],['Doplňkově','color-mix(in srgb,var(--lilac) 40%,var(--bg))',0.0001,.3]].map(([label,color,lo,hi])=>[label,color,Object.entries(load).filter(([,v])=>max&&v/max>=lo&&v/max<hi).sort((a,b)=>b[1]-a[1]).map(([m])=>MUSCLE_LABELS[m]||m)]).filter(g=>g[2].length);
   const muscles=groups.length?'<div class="gs-muscles">'+groups.map(([label,color,list])=>'<div class="gs-mg"><span class="gs-mg-h"><i style="background:'+color+'"></i>'+label+'</span><div class="gs-mg-list">'+list.map(m=>'<span>'+esc(m)+'</span>').join('')+'</div></div>').join('')+'</div>':'';
-  const prs=nRec?'<div class="gs-prs"><b>🏆 '+(nRec===1?'Nový osobní rekord':nRec<5?nRec+' nové osobní rekordy':nRec+' nových osobních rekordů')+'</b><ul>'+Object.entries(recs).map(([name,r])=>'<li><span>'+esc(name)+'</span><strong>'+esc(gsKg(r.kg)+' kg × '+r.reps)+'</strong><small>'+(r.kind==='weight'?'dosud max '+esc(gsKg(Math.round(r.before*10)/10))+' kg':uiText('odhad 1RM ', 'estimated 1RM ')+esc(gsKg(Math.round(r.value*10)/10))+' kg')+'</small></li>').join('')+'</ul></div>':'';
+  const prs=nRec?'<div class="gs-prs"><b>🏆 '+(nRec===1?uiText('Nový osobní rekord','New personal record'):uiText(nRec+(nRec<5?' nové osobní rekordy':' nových osobních rekordů'),nRec+' new personal records'))+'</b><ul>'+Object.entries(recs).map(([name,r])=>'<li><span>'+esc(name)+'</span><strong>'+esc(gsKg(r.kg)+' kg × '+r.reps)+'</strong><small>'+(r.kind==='weight'?uiText('dosud max ','previous best ')+esc(gsKg(Math.round(r.before*10)/10))+' kg':uiText('odhad 1RM ', 'estimated 1RM ')+esc(gsKg(Math.round(r.value*10)/10))+' kg')+'</small></li>').join('')+'</ul></div>':'';
   const input=(i,col,v,ph,label)=>'<input class="gs-in" data-gs-row="'+i+'" data-gs-col="'+col+'" inputmode="decimal" value="'+esc(gsKg(v))+'" placeholder="'+esc(ph)+'" aria-label="'+esc(label)+'">';
   const set=(e,{r,i},n)=>{const warmup=!gymRowWork(r),ok=gymRowDone(r),plan=gsKg(r[3])||r[4]?(gsKg(r[3])?gsKg(r[3])+' kg':'dle RPE')+' × '+(r[4]||'—'):'—',what=e.name+(warmup?' rozcvička':' série '+n);
     const failure=!warmup&&(gymPrescribedFailure(r)||ok&&gymFailureValue(r[11]));
@@ -2479,12 +2479,12 @@ async function switchPlannedPlace(entry,button){
 }
 async function openTrainingDetail(entry){
   state.openDetail={date:entry.date,sport:entry.sport||'gym'};
-  const {kind,date,sport='gym'}=entry,today=pragueToday(),title=HUB_SPORTS[sport]+' · '+longDate(date),current=()=>$('sheetTitle')?.textContent===title&&!$('sheet').hidden;
+  const {kind,date,sport='gym'}=entry,today=pragueToday(),title=HUB_SPORTS[sport]+' · '+longDate(date);
   // A strength session (planned, done, or a plan in Intervals.icu) opens as one
   // view: the figure, every set with the warm-up, video, records and its changes.
   if(kind==='gym'||sport==='gym'&&(kind==='planned'||kind==='done')){
     const event=kind==='planned'?entry.item:null,finished=Boolean(entry.done||kind==='done'||date<today);
-    openSheet(title,'<p class="small">Načítám gym…</p>',null,'training-detail');
+    const sheet=openSheet(title,'<p class="small">Načítám gym…</p>',null,'training-detail'),current=()=>sheetStill(sheet);
     try{state.gymDate=date;await loadGym();if(!current())return;
       const values=state.gym?.values||[],stored=values.slice(7).some(r=>r?.[1]),name=values[2]?.[3]||event?.name||'';
       // Saved sets without the day's plan (older imports) are shown as they are.
@@ -2519,12 +2519,12 @@ async function openTrainingDetail(entry){
     if(entry.editable&&date>=today)body+='<div class="training-actions"><button type="button" class="btn" data-td="swap">Vyměnit za jiný</button><button type="button" class="btn sheet-danger" data-td="delete">Zrušit trénink</button></div><p class="small">Na jiný den ho přesuneš tažením v týdnu (na mobilu podrž a táhni).</p>';
     else if(entry.editable)body+='<p class="small">Minulý trénink už nejde přesunout ani zrušit.</p>';
   }
-  openSheet(title,body,el=>{el.onclick=e=>{
+  const sheet=openSheet(title,body,el=>{el.onclick=e=>{
     const b=e.target.closest('[data-td]');if(!b)return;const a=b.dataset.td;
     if(a==='delete'){closeSheet();return deletePlanned(item.id,item.name);}
     if(a==='env'){if(b.getAttribute('aria-pressed')==='true')return;return switchPlannedPlace(entry,b);}
     if(a==='swap'){closeSheet();state.replaceEvent={id:item.id,name:item.name,date};return openChipSuggestion({date,sport,minutes:num(item.durationHours)*60?Math.round(num(item.durationHours)*60):null,env:/indoor|virtual|trainer|pás|treadmill/i.test(String(item.type||'')+' '+String(item.name||''))?'indoor':'outdoor'});}
-  };},'training-detail');
+  };},'training-detail'),current=()=>sheetStill(sheet);
   // The plan's structure and the recorded activity load after the sheet is open.
   if(kind!=='done'&&/^planned:/.test(String(item.id||''))){
     try{const r=await plannedDetail(item.id);if(current()&&$('tdPlan'))$('tdPlan').innerHTML=plannedWorkoutHtml({...r.workout,name:item.name},r.athlete);}
@@ -2760,11 +2760,18 @@ installFitnessInsights();
 const isPhone=()=>window.matchMedia('(max-width:700px)').matches;
 let sheetCloseTimer;
 function closeSheet(){state.openDetail=null;const s=$('sheet');if(!s||s.hidden)return;s.classList.remove('open');document.body.classList.remove('sheet-open');sheetCloseTimer=setTimeout(()=>{s.hidden=true;$('sheetBody').innerHTML='';},180);}
+// Each openSheet() gets an id, so async loaders can tell whether their sheet is still
+// the one shown. Comparing the title text fails: the icon swap and the EN translator
+// rewrite the title in the DOM.
+let sheetSeq=0;
+const sheetStill=id=>id===sheetSeq&&$('sheet')&&!$('sheet').hidden;
 function openSheet(title,body,onMount,panelClass=''){
+  sheetSeq++;
   if(!$('sheet'))document.body.insertAdjacentHTML('beforeend','<div id="sheet" class="sheet" hidden><div class="sheet-backdrop" data-sheet-close></div><section class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"><div class="sheet-handle" data-sheet-close></div><div class="sheet-head"><h3 id="sheetTitle"></h3><button type="button" class="btn" data-sheet-close aria-label="Zavřít">✕</button></div><div id="sheetBody"></div></section></div>');
   clearTimeout(sheetCloseTimer);const s=$('sheet');s.className='sheet '+panelClass;$('sheetTitle').textContent=title;$('sheetBody').innerHTML=body;s.hidden=false;s.querySelector('.sheet-panel').scrollTop=0;document.body.classList.add('sheet-open');requestAnimationFrame(()=>s.classList.add('open'));
   s.onclick=e=>{if(e.target.closest('[data-sheet-close]'))closeSheet();};
   if(onMount)onMount($('sheetBody'));
+  return sheetSeq;
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
 const SPORT_ICON={ride:'🚴',run:'🏃',gym:'🏋️'};
@@ -3113,10 +3120,10 @@ async function openTechnique(exercise,back=null){
     if(b.dataset.tech==='ai'){closeSheet();return openFloatingAssistant('Jak správně provádět '+exercise+'? Na co si dát pozor?');}
     b.disabled=true;try{const r=await jsonFetch('/app/api/gym/technique',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({exercise,url:b.dataset.tech==='remove'?'':$('techOwnUrl')?.value||''})});techniqueCache.set(exercise,r.technique);body.innerHTML=techniqueHtml(r.technique);wire(body);toast(b.dataset.tech==='remove'?'Vlastní video odebráno.':'Video uloženo.');}catch(error){toast(error.message);b.disabled=false;}};};
   const cached=techniqueCache.get(exercise);
-  openSheet(exercise,cached?techniqueHtml(cached):'<p class="small">Načítám techniku…</p>',body=>wire(body),'technique-sheet');
+  const sheet=openSheet(exercise,cached?techniqueHtml(cached):'<p class="small">Načítám techniku…</p>',body=>wire(body),'technique-sheet');
   if(cached)return;
-  try{const r=await jsonFetch('/app/api/gym/technique?exercise='+encodeURIComponent(exercise));techniqueCache.set(exercise,r.technique);if($('sheetTitle')?.textContent===exercise){$('sheetBody').innerHTML=techniqueHtml(r.technique);wire($('sheetBody'));}}
-  catch(error){if($('sheetTitle')?.textContent===exercise){$('sheetBody').innerHTML='<p>'+esc(error.message)+'</p><div class="tech-actions"><button type="button" class="btn" data-tech="ai">✦ Zeptat se AI trenéra</button></div>';wire($('sheetBody'));}}
+  try{const r=await jsonFetch('/app/api/gym/technique?exercise='+encodeURIComponent(exercise));techniqueCache.set(exercise,r.technique);if(sheetStill(sheet)){$('sheetBody').innerHTML=techniqueHtml(r.technique);wire($('sheetBody'));}}
+  catch(error){if(sheetStill(sheet)){$('sheetBody').innerHTML='<p>'+esc(error.message)+'</p><div class="tech-actions"><button type="button" class="btn" data-tech="ai">✦ Zeptat se AI trenéra</button></div>';wire($('sheetBody'));}}
 }
 
 function installPhoneLayer(){
