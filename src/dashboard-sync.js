@@ -6,16 +6,29 @@ export async function dashboardSyncStatus(db,name='dashboard_recent'){
   // waitUntil may be stopped by the runtime without a final status write.
   // Recover abandoned app imports without expiring Google's batched queue.
   await db.prepare("UPDATE sync_status SET status='error',finished_at=datetime('now') WHERE user_id=? AND status='running' AND (sync_name LIKE 'initial_%' OR sync_name='dashboard_recent') AND updated_at<datetime('now','-5 minutes')").bind(db.userId).run();
-  const row=await db.prepare("SELECT status,details_json,updated_at FROM sync_status WHERE user_id=? AND sync_name=?").bind(db.userId,name).first();
+  const row=await db.prepare("SELECT sync_name,status,details_json,updated_at,finished_at FROM sync_status WHERE user_id=? AND sync_name=?").bind(db.userId,name).first();
+  const parse=run=>{try{return JSON.parse(run?.details_json||'{}');}catch{return {};}};
+  const details=parse(row);
+  // A connector's refresh must not wait for or report another connector's errors.
+  if(name!=='dashboard_recent')return {...details,results:details.results||[],status:row?.status||'idle',updatedAt:row?.updated_at||null};
   const google=await db.prepare("SELECT status FROM sync_status WHERE user_id=? AND sync_name='google'").bind(db.userId).first();
-
-  let details={};try{details=JSON.parse(row?.details_json||'{}');}catch{/* Keep status visible. */}
-  const initial=(await db.prepare("SELECT sync_name,status,details_json FROM sync_status WHERE user_id=? AND sync_name LIKE 'initial_%'").bind(db.userId).all()).results||[];
+  const initial=(await db.prepare("SELECT sync_name,status,details_json,updated_at,finished_at FROM sync_status WHERE user_id=? AND sync_name LIKE 'initial_%'").bind(db.userId).all()).results||[];
   const running=row?.status==='running'||google?.status==='running'||initial.some(r=>r.status==='running');
-  const partial=google?.status==='partial'||google?.status==='error'||initial.some(r=>r.status==='partial'||r.status==='error');
-  const results=[...(details.results||[])];
-  for(const run of initial){if(run.sync_name===name)continue;try{results.push(...(JSON.parse(run.details_json||'{}').results||[]));}catch{/* Older import without details. */}}
-  return {...details,results,status:running?'running':partial?'partial':row?.status||(initial.length?'done':'idle'),googleStatus:google?.status||null,updatedAt:row?.updated_at||null};
+  // Keep the latest result for each source. A successful full retry replaces
+  // that source's older recent-import failure, while other errors stay visible.
+  const latest=new Map();
+  for(const run of [row,...initial].filter(Boolean)){
+    const data=parse(run),time=Date.parse(run.finished_at||data.finishedAt||data.startedAt||run.updated_at||'')||0;
+    const source=run.sync_name.startsWith('initial_')?run.sync_name.slice(8):run.sync_name;
+    const entries=data.results?.length?data.results:[{source,status:run.status}];
+    for(const [index,entry] of entries.entries()){
+      const key=entry.source||source+':'+index,previous=latest.get(key);
+      if(!previous||time>=previous.time)latest.set(key,{time,result:run.status==='error'?{...entry,status:'error'}:entry});
+    }
+  }
+  const results=[...latest.values()].map(r=>r.result);
+  const partial=['partial','error'].includes(google?.status)||results.some(r=>['partial','error'].includes(r.status));
+  return {...details,results,status:running?'running':partial?'partial':row||initial.length?'done':'idle',googleStatus:google?.status||null,updatedAt:row?.updated_at||null};
 }
 export async function startDashboardSync(db,ctx,work,name='dashboard_recent'){
   await ensure(db);const runId=crypto.randomUUID(),startedAt=new Date().toISOString();

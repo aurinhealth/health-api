@@ -192,6 +192,7 @@ function serviceCardHtml(p,back,{cls='service-card',more=''}={}){
   const missing=(p.missingPermissions||[]).map(k=>GOOGLE_PERMISSION_LABELS[k]||k);
   let action='',warning='';
   if(p.connected){
+    if(p.id==='intervals')action='<button class="btn" type="button" data-intervals-refresh>Obnovit</button>';
     if(missing.length){warning='<p class="small service-warning"><span>Google nepovolil:</span> '+missing.map(m=>'<span>'+esc(m)+'</span>').join(', ')+'. <span>Tahle data chybí, dokud je nepovolíš.</span></p>';if(connect)action='<a class="btn" href="'+esc(connect)+'">Povolit chybějící</a>';}
   }else if(google){
     action=connect?'<a class="btn primary" href="'+esc(connect)+'">Připojit Google Health</a>':'<p class="small">Připojení Google Health není na serveru nastavené.</p>';
@@ -201,7 +202,7 @@ function serviceCardHtml(p,back,{cls='service-card',more=''}={}){
     action='<button class="btn primary" type="button" data-intervals-key>Připojit Intervals.icu</button>'+intervalsKeyFormHtml(p);
   }
   const buttons=action+more;
-  return '<article class="'+cls+'" data-provider="'+esc(p.id)+'"><div class="service-head"><h3>'+esc(p.name)+'</h3>'+(p.connected?'<span class="pill good">Připojeno</span>':'<span class="pill">Nepřipojeno</span>')+'</div><p class="small">'+esc(brings)+'</p>'+warning+(buttons?'<div class="service-action">'+buttons+'</div>':'')+'</article>';
+  return '<article class="'+cls+'" data-provider="'+esc(p.id)+'"><div class="service-head"><h3>'+esc(p.name)+'</h3>'+(p.connected?'<span class="pill good">Připojeno</span>':'<span class="pill">Nepřipojeno</span>')+'</div><p class="small">'+esc(brings)+'</p>'+warning+(buttons?'<div class="service-action">'+buttons+'</div>':'')+(p.connected&&p.id==='intervals'?'<p class="small" data-provider-sync-status aria-live="polite"></p>':'')+'</article>';
 }
 // Connecting Intervals.icu with a personal API key, step by step.
 function intervalsKeyFormHtml(p){return '<form class="intervals-key-form" hidden><ol class="small key-steps"><li>Otevři v Intervals.icu <a href="'+esc(p.keyUrl||'https://intervals.icu/settings')+'" target="_blank" rel="noopener noreferrer">Settings</a> a sjeď dolů na Developer Settings.</li><li>Zkopíruj API Key (Athlete ID nepotřebuješ).</li><li>Vlož ho sem. Ověříme ho u Intervals a uložíme zašifrovaný.</li></ol><div class="select-row"><input type="password" autocomplete="off" required placeholder="API klíč Intervals.icu" aria-label="API klíč Intervals.icu" class="food-input"><button class="btn primary" type="submit">Ověřit a připojit</button></div><div class="small" aria-live="polite" data-key-result></div></form>';}
@@ -876,13 +877,16 @@ $('refresh').onclick=async()=>{
   const b=$('refresh');b.disabled=true;b.textContent='Synchronizuji…';
   try{
     const started=await jsonFetch('/app/api/sync',{method:'POST'});let status=started.status==='accepted'?'running':started.status;
+    renderAccountImportStatus({...started,status});
     for(let i=0;i<30&&status==='running';i++){
       await new Promise(resolve=>setTimeout(resolve,2000));
       const current=await jsonFetch('/app/api/sync');status=current.status;
+      renderAccountImportStatus(current);
       if(i%5===4&&status==='running')await refreshCoachLifecycle();
     }
     b.textContent='Obnovuji…';markDataChanged('');await load();
     toast(status==='running'?'Synchronizace pokračuje na pozadí; doporučení průběžně obnovujeme.':status==='partial'||status==='error'?'Část služeb se neobnovila. Dostupná data jsou načtená.':status==='idle'?started.message||'Není co synchronizovat.':'Nová data jsou načtená.');
+    if(status==='running')pollAccountImport();
   }catch(error){toast('Synchronizace selhala: '+error.message);}
   finally{b.disabled=false;b.textContent='Obnovit';}
 };
@@ -4596,17 +4600,48 @@ async function renderSetupDone(body){
     '<div class="setup-actions"><button class="btn primary" type="button" id="setupFinish">Začít používat Loadwise</button></div>';
   $('setupFinish').onclick=async()=>{$('onboardingGate')?.remove();if(location.hash==='#setup')history.replaceState(null,'',location.pathname+location.search);try{localStorage.setItem('lw-dashboard-ready','1');}catch{}toast('Vítej v Loadwise.');loadConnections();await load();pollAccountImport();};
 }
-async function pollAccountImport(){
+function accountImportMessage(s){
+  let message=s.status==='running'?'Načítáme historii. Výpočty se zpřesní podle dostupných dat.':s.status==='partial'||s.status==='error'?'Část importu se nepodařila. Dostupná data zůstávají uložená. Zkus Obnovit u příslušné služby v Propojení.':s.status==='done'?'Historie je načtená. Doporučení používají dostupná data.':'Bez propojení používáme tvůj profil a ruční záznamy.';
+  if(s.status==='partial'||s.status==='error'){
+    const names={activities:uiText('aktivity','activities'),planned:uiText('kalendář','calendar'),weight:uiText('váha','weight')},failed=[];
+    for(const r of s.results||[])for(const [key,part] of Object.entries(r.parts||{}))if(part?.status==='error')failed.push((r.source==='intervals'?'Intervals.icu · ':'')+(names[key]||key)+(part.message?' ('+part.message+')':''));
+    if(failed.length)message+=' '+[...new Set(failed)].join(' · ');
+  }
+  return message;
+}
+function renderAccountImportStatus(s){
   const settings=$('settings');if(!settings)return;
   if(!$('importStatus'))settings.insertAdjacentHTML('afterbegin','<p class="notice" id="importStatus" aria-live="polite"></p>');
+  $('importStatus').textContent=accountImportMessage(s);
+}
+let intervalsRefreshing=false;
+async function refreshIntervals(){
+  if(intervalsRefreshing)return;
+  intervalsRefreshing=true;
+  const buttons=[...document.querySelectorAll('[data-intervals-refresh]')];
+  const show=message=>document.querySelectorAll('[data-provider="intervals"] [data-provider-sync-status]').forEach(el=>el.textContent=message);
+  buttons.forEach(b=>{b.disabled=true;b.textContent=uiText('Načítám…','Loading…');});
+  show(uiText('Načítáme historii z Intervals.icu…','Loading history from Intervals.icu…'));
+  try{
+    let current=await jsonFetch('/app/api/connections/intervals/sync',{method:'POST'});
+    renderAccountImportStatus({status:'running'});
+    for(let i=0;i<30&&current.status==='running';i++){
+      await new Promise(resolve=>setTimeout(resolve,2000));
+      current=await jsonFetch('/app/api/connections/intervals/sync');
+    }
+    show(current.status==='running'?uiText('Import pokračuje na pozadí.','The import continues in the background.'):current.status==='done'?uiText('Intervals.icu je obnovené. Dostupná data jsou načtená.','Intervals.icu is refreshed. Available data is loaded.'):accountImportMessage(current));
+    renderAccountImportStatus(await jsonFetch('/app/api/sync'));
+    markDataChanged('');await load();
+    if(current.status==='running')pollAccountImport();
+  }catch(error){show(uiText('Obnova se nepodařila: ','Refresh failed: ')+error.message);}
+  finally{intervalsRefreshing=false;buttons.forEach(b=>{b.disabled=false;b.textContent=uiText('Obnovit','Refresh');});}
+}
+document.addEventListener('click',e=>{if(e.target.closest('[data-intervals-refresh]')){e.preventDefault();refreshIntervals();}});
+async function pollAccountImport(){
+  if(!$('settings'))return;
   for(let i=0;i<60;i++){
     const s=await jsonFetch('/app/api/sync').catch(()=>({status:'error'}));
-    $('importStatus').textContent=s.status==='running'?'Načítáme historii. Výpočty se zpřesní podle dostupných dat.':s.status==='partial'||s.status==='error'?'Část importu se nepodařila. Dostupná data zůstávají uložená. Zkus Obnovit nebo znovu připojit službu.':s.status==='done'?'Historie je načtená. Doporučení používají dostupná data.':'Bez propojení používáme tvůj profil a ruční záznamy.';
-    if(s.status==='partial'||s.status==='error'){
-      const names={activities:uiText('aktivity','activities'),planned:uiText('kalendář','calendar'),weight:uiText('váha','weight')},failed=[];
-      for(const r of s.results||[])for(const [key,part] of Object.entries(r.parts||{}))if(part?.status==='error')failed.push((r.source==='intervals'?'Intervals.icu · ':'')+(names[key]||key)+(part.message?' ('+part.message+')':''));
-      if(failed.length)$('importStatus').textContent+=' '+[...new Set(failed)].join(' · ');
-    }
+    renderAccountImportStatus(s);
     if(s.status!=='running'){if(['done','partial','error'].includes(s.status)){markDataChanged('');await load();}return;}await new Promise(resolve=>setTimeout(resolve,5000));
   }
 }

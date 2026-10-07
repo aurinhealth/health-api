@@ -1126,6 +1126,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }
   }
 
+  if(url.pathname==='/app/api/connections/intervals/sync'&&['POST','GET'].includes(request.method)){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method==='GET')return Response.json(await dashboardSyncStatus(env.DB,'initial_intervals'),{headers:{'Cache-Control':'no-store'}});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    if(!(env.CONNECTED_PROVIDERS||[]).includes('intervals'))return Response.json({message:L('Nejdřív připoj Intervals.icu.', 'Connect Intervals.icu first.')},{status:409});
+    const run=await initialImport(env,ctx,{provider:'intervals',force:true});
+    return Response.json(run,{status:202,headers:{'Cache-Control':'no-store'}});
+  }
+
   if(url.pathname==='/app/api/sync'&&['POST','GET'].includes(request.method)){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.method==='GET')return Response.json(await dashboardSyncStatus(env.DB),{headers:{'Cache-Control':'no-store'}});

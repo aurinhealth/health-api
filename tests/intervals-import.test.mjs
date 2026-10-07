@@ -167,3 +167,48 @@ test('a recent sync stays running despite earlier partial imports; abandoned imp
   assert.equal((await dashboardSyncStatus(db)).status,'partial');
   assert.equal((await db.prepare("SELECT status FROM sync_status WHERE user_id=1 AND sync_name='initial_intervals'").first()).status,'error');
 });
+
+test('explicit Intervals refresh retries full history after success, ignores Google and deduplicates concurrent clicks',async t=>{
+  const {db,env,ctx,pending}=setup();
+  await startDashboardSync(db,ctx,async()=>[{source:'intervals',status:'done'}],'initial_intervals');await Promise.all(pending);pending.length=0;
+  let release;const blocked=new Promise(resolve=>{release=resolve;}),calls=[];
+  t.mock.method(globalThis,'fetch',async url=>{calls.push(String(url));await blocked;return Response.json(String(url).includes('/wellness?')?[{id:pragueToday(),weight:64}]:[]);});
+  const connected={...env,CONNECTED_PROVIDERS:['google','intervals']};
+  const started=await initialImport(connected,ctx,{provider:'intervals',force:true});
+  await initialImport(connected,ctx,{provider:'intervals',force:true});
+  assert.equal(started.status,'running');assert.equal(pending.length,1);
+  assert.equal((await dashboardSyncStatus(db,'initial_intervals')).status,'running');
+  release();await Promise.all(pending);
+  assert.equal((await dashboardSyncStatus(db,'initial_intervals')).status,'done');
+  assert.equal((await latestStoredWeight(db)).value_numeric,64);
+  assert.ok(calls.every(url=>url.startsWith('https://intervals.icu/')));
+  const activityUrl=new URL(calls.find(url=>url.includes('/activities?')));
+  assert.ok(Date.parse(activityUrl.searchParams.get('newest'))-Date.parse(activityUrl.searchParams.get('oldest'))>=364*86400000);
+});
+
+test('latest source results supersede stale import errors and connector status stays scoped',async()=>{
+  const {db,raw}=setup();
+  const save=(name,status,at,results,user=1)=>raw.sqlite.prepare('INSERT OR REPLACE INTO sync_status(user_id,sync_name,status,finished_at,updated_at,details_json) VALUES(?,?,?,?,?,?)').run(user,name,status,at,at,JSON.stringify({finishedAt:at,results}));
+  await dashboardSyncStatus(db);
+  save('dashboard_recent','partial','2026-10-07T12:00:00.001Z',[{source:'intervals',status:'partial',parts:{planned:{status:'error',message:'HTTP 403'}}},{source:'matching',status:'ok'}]);
+  save('initial_intervals','done','2026-10-07T12:00:00.002Z',[{source:'intervals',status:'done'}]);
+  save('initial_intervals','error','2026-10-07T13:00:00Z',[],2);
+  let status=await dashboardSyncStatus(db);
+  assert.equal(status.status,'done');assert.equal(status.results.filter(r=>r.source==='intervals').length,1);
+  assert.equal(status.results.find(r=>r.source==='intervals').status,'done');
+  save('initial_google','error','2026-10-07T12:01:00Z',[]);
+  save('google','error','2026-10-07T12:01:00Z',[]);
+  assert.equal((await dashboardSyncStatus(db)).status,'partial');
+  assert.equal((await dashboardSyncStatus(db,'initial_intervals')).status,'done');
+  save('dashboard_recent','partial','2026-10-07T12:02:00Z',[{source:'intervals',status:'partial',parts:{weight:{status:'error',message:'HTTP 503'}}}]);
+  status=await dashboardSyncStatus(db);
+  assert.equal(status.status,'partial');assert.equal(status.results.find(r=>r.source==='intervals').parts.weight.message,'HTTP 503');
+});
+
+test('anonymous export errors are retained alongside successful exports',async()=>{
+  const {db,ctx,pending}=setup();
+  await startDashboardSync(db,ctx,async()=>[{status:'error',message:'export failed'},{status:'synced'},{source:'intervals',status:'ok'}]);
+  await Promise.all(pending);
+  const status=await dashboardSyncStatus(db);
+  assert.equal(status.status,'partial');assert.equal(status.results.length,3);
+});

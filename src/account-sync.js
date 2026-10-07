@@ -10,15 +10,15 @@ import {syncWellnessToIntervals} from './wellness-sync.js';
 import {L} from './lang.js';
 const shiftDate=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 
-export async function initialImport(env,ctx){
-  const providers=env.CONNECTED_PROVIDERS||[];if(!providers.length)return {status:'idle'};
+export async function initialImport(env,ctx,{provider:onlyProvider,force=false}={}){
+  const providers=(env.CONNECTED_PROVIDERS||[]).filter(provider=>!onlyProvider||provider===onlyProvider);if(!providers.length)return {status:'idle'};
   const runs=[];
   // Separate claims prevent a second connector from being lost during the first import.
   for(const provider of providers){
     const name='initial_'+provider;
     await dashboardSyncStatus(env.DB);
     const old=await env.DB.prepare('SELECT status FROM sync_status WHERE user_id=? AND sync_name=?').bind(env.USER_ID,name).first();
-    if(old?.status==='done')continue;
+    if(old?.status==='done'&&!force)continue;
     runs.push(await startDashboardSync(env.DB,ctx,async()=>{
       const response=await legacyHealthApi.fetch(new Request('https://internal/sync/'+provider,{method:'POST'}),env,ctx);
       const data=await response.json();
