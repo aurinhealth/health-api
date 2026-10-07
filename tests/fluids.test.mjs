@@ -45,7 +45,15 @@ test("the dashboard has the day overview with drinks, compact meals and quick lo
   assert.match(client, /<h3>Denní přehled<\/h3>/);
   assert.doesNotMatch(client, /Dnešní palivo/);
   assert.match(client, /function wheelColumn\(items,index,onPick\)/);
-  assert.match(client, /reader\.decodeFromConstraints\(\{video:\{facingMode:\{ideal:'environment'\}\},audio:false\},video,/);
+  // The scanner borrows a clone of one camera stream, so the browser asks for
+  // the camera once per visit, not on every scan.
+  assert.match(client, /getUserMedia\(\{video:\{facingMode:\{ideal:'environment'\}\},audio:false\}\)/);
+  assert.equal(client.match(/getUserMedia\(/g).length, 1);
+  assert.match(client, /const copy=cameraStream\.clone\(\);/);
+  assert.match(client, /reader\.decodeFromStream\(stream,video,/);
+  // My foods and meals sit in the add-food panel, not in a card of their own.
+  assert.doesNotMatch(client, /id="ownFoodLibraryCard"/);
+  assert.match(client, /row\.append\(\$\('myFoodLibrary'\),\$\('myRecipeLibrary'\)\);/);
   // An unknown barcode goes to AI straight away.
   assert.match(client, /searchFood=async function\(\)\{await search\(\);if\(\$\('foodBarcode'\)\.value\.trim\(\)&&!foodCandidates\.length&&\$\('foodAiLookup'\)\)await lookupFoodAi\(\);\}/);
   // The meal select knows both snacks, so "+" on a snack selects it.

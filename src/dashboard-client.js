@@ -3608,27 +3608,50 @@ function installAmountWheel(){
 // has one, ZXing elsewhere (iPhone). A code fills the EAN and searches; an
 // unknown product is looked up with AI right away.
 let scanStop=null;
+// One camera stream per visit: each scanner gets a clone, so scanning the
+// next product doesn't ask for camera access again (iPhone asks on every new
+// request, above all in the app added to the home screen). Between scans the
+// stream is disabled and it is released after a longer pause.
+const CAMERA_IDLE_MS=10*60*1000;
+let cameraStream=null,cameraRequest=null,cameraIdleTimer=null;
+function releaseCamera(){clearTimeout(cameraIdleTimer);cameraStream?.getTracks().forEach(t=>t.stop());cameraStream=null;}
+async function borrowCamera(){
+  clearTimeout(cameraIdleTimer);
+  if(!cameraStream?.getVideoTracks().some(t=>t.readyState==='live')){
+    cameraRequest??=navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false}).then(s=>{s.getTracks().forEach(t=>{t.enabled=false;});cameraStream=s;return s;}).finally(()=>{cameraRequest=null;});
+    await cameraRequest;
+  }
+  const copy=cameraStream.clone();copy.getTracks().forEach(t=>{t.enabled=true;});return copy;
+}
+function returnCamera(copy){copy?.getTracks().forEach(t=>t.stop());clearTimeout(cameraIdleTimer);cameraIdleTimer=setTimeout(releaseCamera,CAMERA_IDLE_MS);}
+addEventListener('pagehide',releaseCamera);
 async function openBarcodeScanner(){
   openSheet('Skenovat čárový kód','<div class="scan-box"><video id="scanVideo" playsinline muted autoplay></video><div class="scan-frame"></div></div><p class="small" id="scanStatus">Spouštím kameru…</p><div class="food-controls"><input id="scanManual" class="food-input" inputmode="numeric" placeholder="Nebo opiš číslo EAN"><button type="button" class="btn" id="scanManualOk">OK</button></div><label class="btn sheet-wide scan-photo">📷 Vyfotit místo skenování<input hidden id="scanPhoto" type="file" accept="image/*" capture="environment"></label>',body=>{
     $('scanManualOk').onclick=()=>{const code=$('scanManual').value.replace(/\D/g,'');if(!/^\d{8,14}$/.test(code))return toast('EAN má 8–14 číslic.');barcodeFound(code);};
     $('scanPhoto').onchange=e=>{const file=e.target.files[0];closeSheet();openFoodLogger();readFoodPhoto(file,'barcode');};
   });
-  const video=$('scanVideo'),status=$('scanStatus');
+  const video=$('scanVideo'),status=$('scanStatus');let stream=null,stop=null;
+  // Closing the sheet while the camera starts must not leave it running.
+  const gone=()=>!video.isConnected||!document.body.classList.contains('sheet-open');
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw new Error('Prohlížeč nemá přístup ke kameře.');
-    if('BarcodeDetector'in window&&(await BarcodeDetector.getSupportedFormats?.().catch(()=>[]))?.includes?.('ean_13')){
-      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});if(!$('scanVideo')){stream.getTracks().forEach(t=>t.stop());return}video.srcObject=stream;await video.play().catch(()=>{});
-      const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});let live=true;scanStop=()=>{live=false;stream.getTracks().forEach(t=>t.stop());};
-      status.textContent='Namiř kameru na čárový kód.';
+    const native='BarcodeDetector'in window&&(await BarcodeDetector.getSupportedFormats?.().catch(()=>[]))?.includes?.('ean_13');
+    let ZX=null;if(!native){status.textContent='Načítám čtečku…';ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser');}
+    if(gone())return;
+    stream=await borrowCamera();
+    if(native){
+      let live=true;stop=scanStop=()=>{live=false;returnCamera(stream);};if(gone()){stopScanner();return}
+      video.srcObject=stream;await video.play().catch(()=>{});
+      const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e']});
       const tick=async()=>{if(!live)return;try{const codes=await detector.detect(video);const code=codes.find(c=>/^\d{8,14}$/.test(c.rawValue))?.rawValue;if(code){barcodeFound(code);return}}catch{}setTimeout(tick,200);};tick();
     }else{
-      status.textContent='Načítám čtečku…';
-      const ZX=await loadFoodLibrary('https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js','ZXingBrowser'),reader=new ZX.BrowserMultiFormatReader(zxingHints(ZX));
-      if(!$('scanVideo'))return;
-      const controls=await reader.decodeFromConstraints({video:{facingMode:{ideal:'environment'}},audio:false},video,result=>{const code=result?.getText?.();if(code&&/^\d{8,14}$/.test(code))barcodeFound(code);});
-      scanStop=()=>controls.stop();if(!$('scanVideo')){stopScanner();return}status.textContent='Namiř kameru na čárový kód.';
+      if(gone()){returnCamera(stream);return}
+      const reader=new ZX.BrowserMultiFormatReader(zxingHints(ZX));
+      const controls=await reader.decodeFromStream(stream,video,result=>{const code=result?.getText?.();if(code&&/^\d{8,14}$/.test(code))barcodeFound(code);});
+      stop=scanStop=()=>{controls.stop();returnCamera(stream);};if(gone()){stopScanner();return}
     }
-  }catch(error){status.textContent=(error?.name==='NotAllowedError'?'Přístup ke kameře je zakázaný. Povol ho v nastavení prohlížeče, nebo kód vyfoť či opiš.':'Kameru se nepodařilo spustit: '+(error?.message||error))+'';}
+    status.textContent='Namiř kameru na čárový kód.';
+  }catch(error){if(stream&&!stop)returnCamera(stream);status.textContent=(error?.name==='NotAllowedError'?'Přístup ke kameře je zakázaný. Povol ho v nastavení prohlížeče, nebo kód vyfoť či opiš.':'Kameru se nepodařilo spustit: '+(error?.message||error))+'';}
 }
 function stopScanner(){try{scanStop?.();}catch{}scanStop=null;}
 async function barcodeFound(code){
@@ -4636,9 +4659,11 @@ function openManualWorkout(){
  $('manualWorkoutForm').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('button');b.disabled=true;try{const body=Object.fromEntries(new FormData(f));body.completed=f.elements.completed.checked;body.requestId=requestId;const r=await jsonFetch('/app/api/workouts/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});closeSheet();toast(r.sync?.status==='error'?'Trénink je uložený. Export zkus později.':'Trénink je uložený v aplikaci.');await load();}catch(error){$('manualWorkoutError').textContent=error.message;b.disabled=false;}};
 }
 if($('workouts')){$('workouts').insertAdjacentHTML('afterbegin','<button class="btn" id="addManualWorkout" type="button">Přidat vlastní trénink</button>');$('addManualWorkout').onclick=openManualWorkout;}
-if($('nutrition')&&$('myFoodLibrary')){
- $('nutrition').insertAdjacentHTML('beforeend','<article class="card" id="ownFoodLibraryCard" style="margin-top:12px"><h3>Moje potraviny a jídla</h3><p class="small">Spravuj vlastní potraviny a recepty. Společný katalog se nabízí při hledání.</p><div class="select-row" id="ownFoodLibraryButtons"></div></article>');
- $('ownFoodLibraryButtons').append($('myFoodLibrary'),$('myRecipeLibrary'));
+// My foods and meals are part of adding food: a row under the quick actions.
+if($('foodEntry')&&$('myFoodLibrary')){
+ const style=document.createElement('style');style.textContent='#foodEntry .food-library-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}#foodEntry .food-library-row .btn{margin:0}';document.head.append(style);
+ const row=document.createElement('div');row.className='food-library-row';row.id='ownFoodLibraryButtons';row.append($('myFoodLibrary'),$('myRecipeLibrary'));
+ ($('foodEntry').querySelector('.food-actions')||$('foodEntry').querySelector('.food-controls')).after(row);
 }
 
 async function showStrengthPlace(){

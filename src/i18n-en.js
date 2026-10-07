@@ -1941,8 +1941,6 @@ export const EN = {
 "Trénink je uložený. Export zkus později.": "The workout is saved. Try the export later.",
 "Trénink je uložený v aplikaci.": "The workout is saved in the app.",
 "Přidat vlastní trénink": "Add a custom workout",
-"Moje potraviny a jídla": "My foods and meals",
-"Spravuj vlastní potraviny a recepty. Společný katalog se nabízí při hledání.": "Manage your own foods and recipes. The shared catalog is offered when you search.",
 "Kde budeš posilovat?": "Where will you train strength?",
 "Podle místa vybereme cviky, které můžeš provést. Bez nastavení používáme vlastní váhu.": "We pick exercises you can do at that place. Without a setting we use bodyweight.",
 "Místo a dostupné pomůcky": "Place and available equipment",
