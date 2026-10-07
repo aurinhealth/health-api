@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
-import { aiAllowance, aiDailyLimitUsd, usageCost } from "../src/ai-usage.js";
+import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
+import { pragueToday } from "../src/prague-date.js";
 
 const answer = usage => Response.json({ model: "gpt-6-sol", output: [{ content: [{ type: "output_text", text: "ok" }] }], usage });
 
@@ -25,7 +26,7 @@ test("every AI answer is recorded with its feature, tokens and cost", async () =
     await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
     const row = db.sqlite.prepare("SELECT user_id, feature, model, input_tokens, output_tokens, cost_usd FROM ai_usage").get();
     assert.deepEqual({ ...row }, { user_id: 7, feature: "food-lookup", model: "gpt-6-sol", input_tokens: 100000, output_tokens: 50000, cost_usd: 0.7 });
-    assert.deepEqual(await aiAllowance(env), { spentUsd: 0.7, limitUsd: 1 });
+    assert.deepEqual(await aiAllowance(env), { spentUsd: 0.7, limitUsd: 1, monthSpentUsd: 0.7, monthLimitUsd: 5 });
   });
 });
 
@@ -57,6 +58,33 @@ test("the daily limit stops the next call once it is spent; the owner has none",
     assert.equal(calls(), 4);
     assert.equal(aiDailyLimitUsd(owner), null);
   });
+});
+
+test("the monthly limit stops AI for the rest of the month and counts only this month", async () => {
+  const db = createD1();
+  await withOpenAI(async calls => {
+    const env = envFor(db, { AI_DAILY_LIMIT_USD: "100" });
+    await callOpenAI(env, { instructions: "x", input: "y" });
+    const month = pragueToday().slice(0, 7);
+    // Earlier this month and last month: only this month counts.
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4.5), (7, '2000-01-15', 50)").run(month + "-01");
+    assert.deepEqual(await aiAllowance(env), { spentUsd: pragueToday().endsWith("-01") ? 5.2 : 0.7, limitUsd: 100, monthSpentUsd: 5.2, monthLimitUsd: 5 });
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /Měsíční limit AI/.test(error.message));
+    assert.equal(calls(), 1);
+  });
+  assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "12" }), 12);
+  assert.equal(aiMonthlyLimitUsd({ USER_IS_OWNER: true }), null);
+});
+
+test("settings show this month's AI spending against the limit in the app language", () => {
+  const source = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  const fn = source.slice(source.indexOf("function aiUsageHtml("), source.indexOf("\nasync function loadAccount("));
+  for (const lang of ["cs", "en"]) {
+    const uiText = (cs, en) => lang === "en" ? en : cs, esc = v => String(v);
+    const html = new Function("uiText", "esc", fn + "; return aiUsageHtml;")(uiText, esc)({ spentUsd: 0.02, limitUsd: 1, monthSpentUsd: 0.1, monthLimitUsd: 5 });
+    assert.match(html, lang === "en" ? /AI this month: <strong>0\.10 USD of 5\.00 USD<\/strong> · today 0\.02 USD of 1\.00 USD/ : /AI tento měsíc: <strong>0,10 USD z 5,00 USD<\/strong> · dnes 0,02 USD z 1,00 USD/);
+    assert.match(html, /width:2\.0%/);
+  }
 });
 
 test("the limit is set per deployment, and 0 turns AI off for everyone but the owner", async () => {
