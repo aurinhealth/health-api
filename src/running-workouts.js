@@ -85,6 +85,17 @@ const ENDURANCE = [
     build: t => { const x = Math.round(t / 3); return [step(x, 80, null, "lehce"), step(x, 86, null, "svižněji"), step(t - 2 * x, 93, null, "tempo")]; } }
 ];
 
+// Run/walk for beginners: short easy runs with walking breaks, so the legs
+// get used to running before continuous jogging. Levels go from 1 min running
+// / 2 min walking to 5 / 1; 5 min of walking before and after.
+const RUN_WALK = { key: "run-walk", levels: [[1, 2], [2, 2], [3, 1], [5, 1]], totals: [20, 25, 30, 35, 40],
+  desc: "Běh střídaný s chůzí pro začátek – nohy, šlachy a klouby si zvykají na běh postupně. Běh velmi lehce, chůze svižně." };
+function runWalk([r, w], total) {
+  const reps = Math.floor((total - 10) / (r + w));
+  if (reps < 2) return null;
+  return [step(5, 55, null, "svižná chůze"), rep(reps, [step(r, 80, null, "lehký běh"), step(w, 55, null, "chůze")]), step(total - 5 - reps * (r + w), 55, null, "chůze")];
+}
+
 function buildFamilyWorkouts() {
   const out = [];
   for (const f of FAMILIES) {
@@ -103,6 +114,13 @@ function buildFamilyWorkouts() {
   for (const e of ENDURANCE) for (const total of e.totals) {
     out.push(run({ id: `${e.key}-${total}`, name: `${e.label} · ${total} min`, system: "endurance", secondarySystem: e.secondary || null, structure: e.build(total), family: e.key, tags: ["pfd-original", e.key, `${total}min`], description: e.desc }));
   }
+  RUN_WALK.levels.forEach((level, index) => {
+    for (const total of RUN_WALK.totals) {
+      const structure = runWalk(level, total);
+      if (!structure) continue;
+      out.push(run({ id: `${RUN_WALK.key}-${level.join("-")}-${total}`, name: `Běh s chůzí ${level[0]}/${level[1]} min · ${total} min`, system: "endurance", structure, family: RUN_WALK.key, level: index + 1, tags: ["pfd-original", RUN_WALK.key, "beginner", `${total}min`], description: RUN_WALK.desc }));
+    }
+  });
   for (const total of [20, 25, 30, 40, 45]) {
     out.push(run({ id: `run-recovery-${total}`, name: `Regenerační běh · ${total} min`, system: "recovery", structure: [step(total, 72, null, "velmi lehce, klidně s chůzí")], family: "run-recovery", tags: ["pfd-original", "recovery"], description: "Velmi lehký klus po těžkém dni – prokrvení bez další zátěže." }));
   }

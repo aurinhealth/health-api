@@ -251,7 +251,7 @@ export function weeklyRunCap(history = [], weekStart) {
 }
 // Proposed runs share what is left under the cap (at least 20 min each).
 export function capRunVolume(targets, runCap, committed = 0) {
-  if (!runCap || targets?.status !== "ok") return targets;
+  if (!runCap || !["ok", "estimated"].includes(targets?.status)) return targets;
   const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
   const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
   if (!runs.length || proposed <= room) return { ...targets, runCap: info };

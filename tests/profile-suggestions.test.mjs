@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { activityFromSteps, averageDailySteps, googleHeightCm, refreshSuggestions, loadEffectiveProfile, averageRestingHeartRate, observedMaxHeartRate, activityMaxHeartRate } from "../src/profile-suggestions.js";
+import { activityFromSteps, averageDailySteps, googleHeightCm, refreshSuggestions, loadEffectiveProfile, averageRestingHeartRate, observedMaxHeartRate, activityMaxHeartRate, calibratedMaxHeartRate } from "../src/profile-suggestions.js";
 import { effectiveProfile } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
 
@@ -98,4 +98,29 @@ test("maximum heart rate is the highest in Intervals and Google activities over 
   add("intervals", "activity", 5, { max_heartrate: 214 });
   assert.equal(await observedMaxHeartRate(d, 7, NOW), 187);
   assert.equal(activityMaxHeartRate({ average_heartrate: 150 }), null);
+});
+
+test("max heart rate calibrates from activities; until they show a real peak, the age estimate stands in", () => {
+  // 30 years: 208 − 0.7 × 30 = 187.
+  assert.deepEqual(calibratedMaxHeartRate({ max: 150, count: 3 }, 30), { hrmax: 187, source: "age-estimate" });
+  assert.deepEqual(calibratedMaxHeartRate({ max: 182, count: 3 }, 30), { hrmax: 182, source: "activities-6m" });
+  assert.deepEqual(calibratedMaxHeartRate({ max: 195, count: 3 }, 30), { hrmax: 195, source: "activities-6m" });
+  // Many sessions without a higher peak: the athlete's own maximum is lower.
+  assert.deepEqual(calibratedMaxHeartRate({ max: 168, count: 25 }, 30), { hrmax: 168, source: "activities-6m" });
+  assert.deepEqual(calibratedMaxHeartRate({ max: 150, count: 3 }, null), { hrmax: 150, source: "activities-6m" });
+  assert.deepEqual(calibratedMaxHeartRate({ max: null, count: 0 }, null), { hrmax: null, source: null });
+});
+
+test("without Google the resting heart rate comes from the Intervals.icu wellness, and a background refresh keeps the birth date", async () => {
+  const d = db();
+  d.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 1, ?)").run(JSON.stringify({ sex: "female", age: 40 }));
+  d.sqlite.prepare("INSERT INTO dashboard_profile VALUES (7, 2, ?)").run(JSON.stringify({ birthDate: "1986-01-01", fetchedAt: "2000-01-01T00:00:00Z" }));
+  const add = (daysAgo, max) => d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, start_time, payload_json) VALUES (7, 'intervals', 'activity', ?, ?)").run(new Date(NOW - daysAgo * 86400000).toISOString(), JSON.stringify({ max_heartrate: max }));
+  add(3, 150); add(6, 148);
+  const fetchImpl = async url => { assert.match(String(url), /intervals\.icu\/api\/v1\/athlete\/0\/wellness/); return Response.json([{ restingHR: 58 }, { restingHR: 60 }, { restingHR: 62 }, { restingHR: null }]); };
+  const s = await refreshSuggestions({ DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" }, { fetchImpl, now: NOW });
+  assert.equal(s.rhr, 60);
+  assert.equal(s.birthDate, "1986-01-01");
+  // Two easy rides at 150: the age estimate (40 years: 180) until a harder session.
+  assert.deepEqual([s.hrmax, s.sources.hrmax], [180, "age-estimate"]);
 });

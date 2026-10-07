@@ -5,11 +5,13 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../src/dashboard-client.js', import.meta.url), 'utf8');
 const slice = (from, to) => source.slice(source.indexOf(from), source.indexOf(to));
 
-function deployClient(proposals) {
+function deployClient(proposals, { intervals = true } = {}) {
   const calls = [], timers = [], listeners = {};
   const state = { proposals };
   const context = vm.createContext({
     state, INTERVALS_DELAY_MAX_MS: 15000, Date, Math, Number, Object, Boolean, String, Set,
+    // An athlete with (or, with intervals: false, without) Intervals.icu connected.
+    serviceConnected: id => id !== 'intervals' || intervals,
     esc: v => String(v ?? ''), toast() {}, renderWeekHub() {}, statusPausesTraining: () => false,
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     showPendingAdd: () => 'pending', settlePendingAdd() {},
@@ -37,6 +39,15 @@ test('rides and runs are saved in the app within 15 s; a gym proposal waits for 
   assert.equal(app.run("proposalWaiting(state.proposals['2026-10-08|gym'])"), false);
   // An alternative to an already planned session is never sent.
   assert.equal(app.run("proposalWaiting(state.proposals['2026-10-09|run'])"), false);
+  await app.run('pushApprovedProposals(true)');
+  assert.deepEqual(app.calls, ['schedule 2026-10-06|ride']);
+  assert.match(app.run('deployStepsHtml()'), /✓ Nasazeno<\/b><small>1 v plánu aplikace/);
+});
+
+test('without Intervals.icu rides are still saved in the app plan', async () => {
+  const app = deployClient({ '2026-10-06|ride': { workout: { id: 'w1', name: 'Sweet Spot' } } }, { intervals: false });
+  app.run('queueProposalPush()');
+  assert.equal(app.run("proposalWaiting(state.proposals['2026-10-06|ride'])"), true);
   await app.run('pushApprovedProposals(true)');
   assert.deepEqual(app.calls, ['schedule 2026-10-06|ride']);
   assert.match(app.run('deployStepsHtml()'), /✓ Nasazeno<\/b><small>1 v plánu aplikace/);

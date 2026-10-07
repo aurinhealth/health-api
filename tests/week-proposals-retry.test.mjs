@@ -10,6 +10,8 @@ function setup(answers) {
   const nodes = { proposeWeek: el(), plannerStatus: el() };
   const ctx = vm.createContext({ state: {}, statusCoachingRevision: 0, Set, Promise, JSON, String, Number,
     setTimeout: fn => fn(), $: id => nodes[id] || null, renderWeekHub() {}, renderDeploySteps() {}, queueProposalPush() {}, proposalWaiting: p => Boolean(p?.workout && !p.scheduled), proposalKey: (d, s, n) => d + '|' + s + (n ? '|' + n : ''),
+    // An athlete with Intervals.icu connected.
+    serviceConnected: () => true,
     jsonFetch: async (path, o) => { calls.push([path, JSON.parse(o.body).date]); const a = answers.shift(); if (a instanceof Error) throw a; return a; } });
   vm.runInContext(code, ctx);
   return { ctx, calls, nodes };

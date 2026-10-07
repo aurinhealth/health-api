@@ -1,3 +1,4 @@
+import { intervalsAuthorization } from './intervals-auth.js';
 // App-owned events and an outbox; providers are destinations, not storage.
 export async function ensureLocalWorkouts(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS local_workouts (user_id INTEGER NOT NULL,id TEXT NOT NULL,event_key TEXT NOT NULL,event_json TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'scheduled',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,id),UNIQUE(user_id,event_key))").run();
@@ -33,7 +34,7 @@ export async function syncLocalWorkout(env,id,fetchImpl=fetch){
   if(exported?.revision===row.revision&&exported.status==='synced')return {status:'synced',eventId:exported.remote_id};
   const claimed=await db.prepare("UPDATE workout_exports SET status='running',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals' AND (status!='running' OR updated_at<datetime('now','-5 minutes'))").bind(db.userId,row.id).run();
   if(!claimed.meta?.changes)return {status:'pending'};
-  const event=JSON.parse(row.event_json),headers={Authorization:'Basic '+btoa('API_KEY:'+env.INTERVALS_API_KEY),Accept:'application/json','Content-Type':'application/json'};
+  const event=JSON.parse(row.event_json),headers={Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json','Content-Type':'application/json'};
   try{
     let remoteId=exported?.remote_id;
     // A delete whose first export response was lost still removes the upserted event.

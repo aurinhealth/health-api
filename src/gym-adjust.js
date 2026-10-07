@@ -77,7 +77,7 @@ export async function adjustGymPlan(env, { rows, request, history = [] }) {
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
   const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent });
-  const r = await callOpenAI(env, { instructions: ADJUST_INSTRUCTIONS, input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
+  const r = await callOpenAI(env, { feature: "gym-adjust", instructions: ADJUST_INSTRUCTIONS, input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
   const data = JSON.parse(r.text), out = fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history);
   if (!out.length) throw new Error('Úpravu se nepodařilo připravit, zkus ji napsat jinak.');
   return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };

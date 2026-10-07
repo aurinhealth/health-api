@@ -1,0 +1,72 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createD1 } from "./helpers/d1.mjs";
+import { scopedDb } from "../src/tenancy.js";
+import { callOpenAI } from "../src/coach-assistant.js";
+import { aiAllowance, aiDailyLimitUsd, usageCost } from "../src/ai-usage.js";
+
+const answer = usage => Response.json({ model: "gpt-6-sol", output: [{ content: [{ type: "output_text", text: "ok" }] }], usage });
+
+async function withOpenAI(fn) {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  // 100k input + 50k output tokens of gpt-6-sol: 0.2 + 0.5 = 0.70 USD.
+  globalThis.fetch = async () => { calls++; return answer({ input_tokens: 100000, output_tokens: 50000 }); };
+  try { await fn(() => calls); } finally { globalThis.fetch = realFetch; }
+}
+
+const envFor = (db, extra = {}) => ({ DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: "k", ...extra });
+
+test("every AI answer is recorded with its feature, tokens and cost", async () => {
+  const db = createD1();
+  await withOpenAI(async () => {
+    const env = envFor(db);
+    await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
+    const row = db.sqlite.prepare("SELECT user_id, feature, model, input_tokens, output_tokens, cost_usd FROM ai_usage").get();
+    assert.deepEqual({ ...row }, { user_id: 7, feature: "food-lookup", model: "gpt-6-sol", input_tokens: 100000, output_tokens: 50000, cost_usd: 0.7 });
+    assert.deepEqual(await aiAllowance(env), { spentUsd: 0.7, limitUsd: 1 });
+  });
+});
+
+test("the daily limit stops the next call once it is spent; the owner has none", async () => {
+  const db = createD1();
+  await withOpenAI(async calls => {
+    const env = envFor(db);
+    await callOpenAI(env, { instructions: "x", input: "y" });
+    await callOpenAI(env, { instructions: "x", input: "y" });
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && error.status === 429 && /Denní limit AI/.test(error.message));
+    assert.equal(calls(), 2);
+    // Another user has their own budget.
+    await callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8 }, { instructions: "x", input: "y" });
+    // The owner is never stopped.
+    const owner = { ...env, USER_IS_OWNER: true };
+    await callOpenAI(owner, { instructions: "x", input: "y" });
+    assert.equal(calls(), 4);
+    assert.equal(aiDailyLimitUsd(owner), null);
+  });
+});
+
+test("the limit is set per deployment, and 0 turns AI off for everyone but the owner", async () => {
+  assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "2.5" }), 2.5);
+  assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "nonsense" }), 1);
+  await withOpenAI(async calls => {
+    const env = envFor(createD1(), { AI_DAILY_LIMIT_USD: "0" });
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), /nejsou pro tento účet zapnuté/);
+    assert.equal(calls(), 0);
+  });
+  // An unknown model still costs something.
+  assert.equal(usageCost("gpt-6-luna-mini", { input_tokens: 1e6, output_tokens: 0 }), 0.1);
+});
+
+test("the AI limit reaches the user as a message, and every AI call names its feature", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.match(entry, /if\(error\.limit\)return Response\.json\(\{message:error\.message\},\{status:429\}\)/);
+  assert.match(entry, /aiAllowance\(env\)/);
+  for (const file of ["coach-assistant", "coach-reflection", "coach-review", "exercise-technique", "food-ai", "food-chat", "food-photo", "gym-adjust"]) {
+    const source = readFileSync(new URL(`../src/${file}.js`, import.meta.url), "utf8");
+    const calls = source.match(/(?:await|return) callOpenAI\(env, \{/g) || [];
+    const named = source.match(/(?:await|return) callOpenAI\(env, \{ ?feature: ?["'][a-z-]+["']/g) || [];
+    assert.ok(calls.length && calls.length === named.length, file);
+  }
+});

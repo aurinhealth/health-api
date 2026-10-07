@@ -1,3 +1,4 @@
+import { trendAdjustment } from "./energy-profile.js";
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 
@@ -59,14 +60,11 @@ function estimateStrengthMinutes(plan) {
   return Math.round(clamp(workSets * 2.5 + warmupSets * 1.5 + exercises * 4, 35, 100));
 }
 
-function adaptiveBaseCalories(defaults, weightTrend) {
+// The same goal-aware trend correction as the app's calorie target.
+function adaptiveBaseCalories(defaults, weightTrend, goal) {
   const base=Number(defaults.restCalorieTarget);
-  const rate=Number(weightTrend?.weeklyRateKg);
-  const samples=Number(weightTrend?.samples||0);
-  if(!Number.isFinite(rate)||samples<4) return {target:base,adjustment:0,reason:"insufficient_weight_history"};
-  if(rate > -0.10) return {target:base-100,adjustment:-100,reason:"loss_below_target"};
-  if(rate < -0.60) return {target:base+100,adjustment:100,reason:"loss_above_target"};
-  return {target:base,adjustment:0,reason:"within_target_range"};
+  const {adjustment,reason}=trendAdjustment(goal,weightTrend);
+  return {target:base+adjustment,adjustment,reason};
 }
 
 function estimateStrengthCalories(weightKg, minutes) {
@@ -84,7 +82,7 @@ export function buildNutritionPlan(context, options = {}) {
   const weightKg = n(options.weightKg, n(context?.weightKg, n(weightTrend?.latestKg, 88)));
   const defaults = { ...NUTRITION_DEFAULTS, ...(options.defaults || {}) };
   const dayType = classifyDay(context);
-  const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend);
+  const adaptiveBase = adaptiveBaseCalories(defaults, weightTrend, options.goal || context?.goal);
   const next = context?.cycling?.nextRide || null;
   const durationHours = n(next?.durationHours);
   const plannedRideCarbs = durationHours >= defaults.rideFuelingThresholdHours
@@ -182,6 +180,9 @@ export function withAppTarget(plan, daily) {
     calorieTarget: target,
     estimatedCalorieTarget: plan.calorieTarget,
     targetSource: daily.nutrition.energyBudget ? "app (Google Health energy budget)" : "app",
+    // The app's target carries its own trend correction; report that one.
+    adaptiveCalorieAdjustment: Number(daily.nutrition.calorieBreakdown?.trendAdjustment) || 0,
+    adaptiveCalorieReason: daily.nutrition.calorieBreakdown?.trendReason || "app_target",
     macros: { proteinGrams: protein, carbsGrams: carbs, fatGrams: fat, caloriesFromMacros: protein * 4 + carbs * 4 + fat * 9 }
   };
 }

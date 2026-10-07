@@ -15,11 +15,12 @@ Secret `ALLOWED_GOOGLE_EMAILS` už potřeba není.
 
 1. V aplikaci otevři **Nastavení → Uživatelé** a zadej e-mail Google účtu.
 2. Dokud Google aplikaci neověří (OAuth consent screen je ve stavu *Testing*), přidej stejný e-mail i do **Google Cloud Console → OAuth consent screen → Test users**. Bez toho Google připojení Google Health odmítne. Limit je 100 testovacích uživatelů.
-3. Pošli uživateli odkaz `https://petrfitnessdata.eu/app`. Po přihlášení ho aplikace provede připojením:
-   - **Google Health**: souhlas na stránce Google.
-   - **Intervals.icu**: API klíč z *Settings → Developer Settings*. Athlete ID není potřeba, aplikace ho zjistí z klíče.
+3. Pošli uživateli odkaz `https://petrfitnessdata.eu/app`. Po přihlášení ho provede průvodce nastavením (podrobně `docs/account-workflow.md`):
+   - **Propojení**: Google Health tlačítkem (souhlas na stránce Google), Intervals.icu tlačítkem, když je aplikace zaregistrovaná u Intervals.icu (`INTERVALS_CLIENT_ID`, `INTERVALS_CLIENT_SECRET`), jinak vložením API klíče z *Settings → Developer Settings* podle návodu v okně. Athlete ID není potřeba, aplikace ho zjistí z klíče.
+   - **Profil a kalorie**: pohlaví, věk, výška, váha, pohyb přes den, sport za týden a cíl.
+   - **Tvůj trénink**: hlavní sport a cíl, zkušenost, vybavení a čas na sport pro každý den; potom obrazovka s kalorickým cílem a co dál.
 
-Propojení není povinné. Průvodce lze přeskočit tlačítkem *Pokračovat bez propojení*; uživatel pak zapisuje váhu a jídlo ručně a kalorický cíl se počítá z profilu (pohlaví, věk, výška, váha, denní aktivita, sport za týden a cíl). Propojit služby jde kdykoli v Nastavení.
+Propojení není povinné: stačí jedna služba, nebo žádná; uživatel pak zapisuje váhu a jídlo ručně a kalorický cíl se počítá z profilu. Průvodce jde znovu spustit v Nastavení → Účet; propojit služby jde kdykoli v Nastavení → Propojení.
 
 Silový plán (Gym) má každý uživatel vlastní. Plán dne je v databázi (tabulka `gym_plans`) a odcvičené série se ukládají do historie (`strength_sets`). Google Sheets se už nepoužívá.
 

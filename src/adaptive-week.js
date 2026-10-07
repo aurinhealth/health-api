@@ -116,7 +116,9 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   // Running this week so far (done, and planned still ahead) counts against the weekly running cap.
   const runCommitted = existing.reduce((n, d) => n + (d.date > today ? d.daily?.training?.planned || [] : d.daily?.training?.completed || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0), 0);
   let targets = capRunVolume(weekTargets({ roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) }), history ? weeklyRunCap(history, start) : null, runCommitted);
-  if (!ctl) targets = { status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: x.sport === 'run' ? 30 : 60, tss: 25 }))) };
+  // Without fitness data the estimate keeps the same running cap: a beginner's
+  // runs share the floor (60 min a week) or what the recent weeks allow.
+  if (!ctl) targets = capRunVolume({ status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: x.sport === 'run' ? 30 : 60, tss: 25 }))) }, weeklyRunCap(history || [], start), runCommitted);
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
 }

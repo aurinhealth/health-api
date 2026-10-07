@@ -178,8 +178,8 @@ function sessionMinutesFor(kind,capacity,sport){
 
 // Words that differ between the bike and the run coach.
 const WORDS={
-  ride:{hard3:"už byly nejméně 3 náročné cyklistické dny v aktuálním týdnu",hard2:"rozpočet kvalitních cyklistických dnů je už téměř vyčerpaný",today:"dnes už proběhla cyklistická jednotka",none:"V datech nevidím žádnou nedávnou jízdu – začínám aerobní jízdou; kvalitu přidám, až bude trénink zase pravidelný.",off:d=>"Posledních "+d+" dní bez jízdy – návrat přes aerobní jízdu se sníženou obtížností, kvalita přijde v dalších dnech.",two:"Dvě kvalitní jízdy v týdnu už byly – dnes aerobní objem.",recent:"Kvalita byla před méně než 48 h – dnes aerobní jízda na zotavení.",safe:"Připravenost není ideální pro kvalitu – aerobní jízda je bezpečná volba.",gym:"chránit kvalitu kola po lower-body gymu",labels:{sweet_spot:"Sweet spot",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}},
-  run:{hard3:"už byly nejméně 3 náročné běhy v aktuálním týdnu",hard2:"rozpočet kvalitních běhů je už téměř vyčerpaný",today:"dnes už proběhl běh",none:"V datech nevidím žádný nedávný běh – začínám lehkým během; kvalitu přidám, až bude běhání zase pravidelné.",off:d=>"Posledních "+d+" dní bez běhu – návrat přes lehký běh se sníženou obtížností; šlachy a klouby si na běh zvykají pomaleji než srdce.",two:"Dva kvalitní běhy v týdnu už byly – dnes lehký objem.",recent:"Kvalita byla před méně než 48 h – dnes lehký běh na zotavení.",safe:"Připravenost není ideální pro kvalitu – lehký běh je bezpečná volba.",gym:"chránit kvalitu běhu po lower-body gymu",labels:{sweet_spot:"Sub-threshold",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}}
+  ride:{novice:"Kondice je zatím nízká – první týdny stavím aerobní základ bez intervalů a jízdy prodlužuju postupně; kvalitu přidám, až kondice poroste.",hard3:"už byly nejméně 3 náročné cyklistické dny v aktuálním týdnu",hard2:"rozpočet kvalitních cyklistických dnů je už téměř vyčerpaný",today:"dnes už proběhla cyklistická jednotka",none:"V datech nevidím žádnou nedávnou jízdu – začínám aerobní jízdou; kvalitu přidám, až bude trénink zase pravidelný.",off:d=>"Posledních "+d+" dní bez jízdy – návrat přes aerobní jízdu se sníženou obtížností, kvalita přijde v dalších dnech.",two:"Dvě kvalitní jízdy v týdnu už byly – dnes aerobní objem.",recent:"Kvalita byla před méně než 48 h – dnes aerobní jízda na zotavení.",safe:"Připravenost není ideální pro kvalitu – aerobní jízda je bezpečná volba.",gym:"chránit kvalitu kola po lower-body gymu",labels:{sweet_spot:"Sweet spot",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}},
+  run:{novice:"S běháním začínáš – první týdny jen lehký běh (klidně s chůzí) a délku zvyšuju postupně; úseky přidám, až bude běhání pravidelné.",hard3:"už byly nejméně 3 náročné běhy v aktuálním týdnu",hard2:"rozpočet kvalitních běhů je už téměř vyčerpaný",today:"dnes už proběhl běh",none:"V datech nevidím žádný nedávný běh – začínám lehkým během; kvalitu přidám, až bude běhání zase pravidelné.",off:d=>"Posledních "+d+" dní bez běhu – návrat přes lehký běh se sníženou obtížností; šlachy a klouby si na běh zvykají pomaleji než srdce.",two:"Dva kvalitní běhy v týdnu už byly – dnes lehký objem.",recent:"Kvalita byla před méně než 48 h – dnes lehký běh na zotavení.",safe:"Připravenost není ideální pro kvalitu – lehký běh je bezpečná volba.",gym:"chránit kvalitu běhu po lower-body gymu",labels:{sweet_spot:"Sub-threshold",threshold:"Práh",vo2max:"VO₂max",tempo:"Tempo"}}
 };
 
 export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null}={}){
@@ -232,11 +232,18 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     score=Math.round(score*0.65+m*0.35);
     readinessReasons.push("zohledněn ruční readiness check-in");
   }
+  // Missing data caps the score; when only the caps make it red, it is not fatigue.
+  const scoreWithData=Math.round(clamp(score,0,100));
   if(tsb==null){score=Math.min(score,74);readinessReasons.push("chybí aktuální ukazatel tréninkové únavy");}
   if(sleepMinutes==null){score=Math.min(score,74);readinessReasons.push("chybí aktuální spánek");}
   if(tsb==null&&sleepMinutes==null&&manualReadiness==null)score=Math.min(score,54);
   score=Math.round(clamp(score,0,100));
   const readiness=score<55?"red":score<75?"yellow":"green";
+  const onlyMissingData=readiness==="red"&&scoreWithData>=55;
+  // A beginner: low fitness, or without fitness data only a few sessions of
+  // this sport. Intervals, long sessions and the load-based recovery week wait
+  // until the base is there.
+  const novice=ctl!=null?ctl<15:completedAll.length<4;
 
   const plannedToday=planned.find(a=>isoDate(a.date)===targetDate)||daily?.training?.planned?.find(isSport)||null;
   const plannedInfo=plannedToday?classifyPlannedWorkout(plannedToday,sport):null;
@@ -271,7 +278,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // wellness; this sport's rides when the wellness has no loads).
   const wellnessLoads=weekLoadsBefore(fitness?.wellness,monday),weekLoads=wellnessLoads.length?wellnessLoads:[lastWeekLoad];
   const rule=recoveryWeek_({base:ctl!=null&&ctl>0?ctl*7:null,weekLoads});
-  const recoveryWeek=!tapering&&(namedRecovery||rule.recovery);
+  // A beginner's load is always well above a CTL that is still catching up, so
+  // the load rule would call every week a recovery week.
+  const recoveryWeek=!tapering&&(namedRecovery||rule.recovery&&!novice);
   if(recoveryWeek)rationale.push(namedRecovery?"Tento týden je v plánu označený jako regenerační.":rule.reason==="heavy_last_week"?"Regenerační týden: minulý týden "+weekLoads[0]+" TSS je "+Math.round(weekLoads[0]/(ctl*7)*100)+" % udržovací zátěže (CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.":"Regenerační týden: tři týdny v řadě nad udržovací zátěží ("+weekLoads.slice(0,3).reverse().join(", ")+" TSS při CTL "+Math.round(ctl)+" × 7), tenhle týden proto cílím na zhruba 70 %.");
   const phase=txt(goal?.phase||preferences.phase||(tapering?eventPhase:recoveryWeek?"recovery":eventPhase||"auto"));
   const eventName=focus?.event?.name?"„"+focus.event.name+"“":"závod";
@@ -281,7 +290,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
   const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
-  const qualityOk=(lastHard==null||lastHard>=2)&&!(lastRide!=null&&lastRide>=7);
+  const qualityOk=!novice&&(lastHard==null||lastHard>=2)&&!(lastRide!=null&&lastRide>=7);
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
   const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
@@ -312,6 +321,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       // One short, sharp session keeps the form; everything else is easy and shorter.
       if(readiness==="green"&&hard7===0&&eventDays>=3){kind="vo2";rationale.push("Krátká ostrá intenzita udrží formu, objem je nižší.");}
       else kind="endurance";
+    } else if(novice){
+      kind="endurance";
+      rationale.push(W.novice);
     } else if(readiness==="green"&&hard7===0){
       // The quality system trained longest ago (by feedback), in phase order.
       const order=sport==="run"?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
@@ -333,7 +345,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   } else if(readiness==="red"){
     // A planned easy day stays easy; anything harder drops to endurance or recovery.
     if(kind!=="recovery")kind=score<40?"recovery":"endurance";
-    adaptations.push("vysoká únava: zrušit intenzitu");
+    adaptations.push(onlyMissingData?"zatím málo dat: držím lehkou intenzitu":"vysoká únava: zrušit intenzitu");
   } else if(readiness==="yellow"&&["vo2","threshold","sweet_spot"].includes(kind)){
     kind=requestedMinutes<=75?"endurance":"tempo";
     adaptations.push("střední readiness: snížit intenzitu nebo objem kvality");
@@ -348,13 +360,22 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind="tempo";adaptations.push("trénink zhuštěn do dostupného času");}
   if(requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push("krátké časové okno");}
 
+  // A beginner's ride grows like a run: at most 10 % over the longest ride of
+  // the last two weeks, never below an hour.
+  const noviceRideLimit=(()=>{
+    if(run||!novice||["race","openers"].includes(kind)||plannedInfo?.minutes)return null;
+    const longest=Math.max(0,...completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=1&&d<=14;}).map(a=>n(a.durationHours,0)*60));
+    const minutes=Math.max(60,Math.round(longest*1.1/5)*5);
+    return {minutes,reason:longest?"začátečník: nejdelší jízda za 2 týdny měla "+Math.round(longest)+" min, nejvýš "+minutes+" min (+10 %)":"začátečník: začínám na "+minutes+" min"};
+  })();
   let capacity=null;
   if(autoLength){
     capacity=capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,sport,taper:phase==="taper"});
     // An easy day with room for more becomes a long ride/run – any day of the week.
-    if(kind==="endurance"&&capacity.minutes>=longMinutes){kind="long_endurance";rationale.push(sport==="run"?"Máš kapacitu na dlouhý běh – staví vytrvalost bez intenzity.":"Máš kapacitu na dlouhou aerobní jízdu – staví vytrvalost bez intenzity.");}
+    if(kind==="endurance"&&capacity.minutes>=longMinutes&&!novice){kind="long_endurance";rationale.push(sport==="run"?"Máš kapacitu na dlouhý běh – staví vytrvalost bez intenzity.":"Máš kapacitu na dlouhou aerobní jízdu – staví vytrvalost bez intenzity.");}
     const len=sessionMinutesFor(kind,capacity,sport);
     requestedMinutes=clamp(len.minutes,minLen,maxLen);
+    if(noviceRideLimit&&requestedMinutes>noviceRideLimit.minutes){requestedMinutes=noviceRideLimit.minutes;len.reasons.push(noviceRideLimit.reason);}
     rationale.push("Délka "+requestedMinutes+" min: "+len.reasons.join("; ")+". Když chceš jinou, zadej čas na trénink.");
   }
   else if(!plannedInfo?.minutes){
@@ -364,7 +385,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if(phase==="taper"&&kind!=="openers"&&kind!=="race")requestedMinutes=Math.max(minLen,Math.round(requestedMinutes*.65/5)*5);
     if(cap!=null)requestedMinutes=Math.min(requestedMinutes,cap);
     if(requestedMinutes<before)rationale.push("Délka "+requestedMinutes+" min z dostupných "+before+" min: "+(phase==="taper"?"ladění formy zkracuje objem":kind==="recovery"?"regenerace má být krátká":"kvalita nepotřebuje víc času")+".");
+    if(noviceRideLimit&&requestedMinutes>noviceRideLimit.minutes){rationale.push("Délka "+noviceRideLimit.minutes+" min z dostupných "+requestedMinutes+" min: "+noviceRideLimit.reason+".");requestedMinutes=noviceRideLimit.minutes;}
   }
+  if(noviceRideLimit&&kind==="long_endurance"&&requestedMinutes<longMinutes)kind="endurance";
   // Running load grows slowly: tendons and joints adapt later than the heart
   // and lungs. Without a race, no run is more than 10 % longer than the
   // longest one of the last two weeks (30 min after a break).
@@ -378,7 +401,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const capability=capabilities?.[capabilitySystem]||null;
   const capabilityLevel=n(capability?.level,3);
   const progressionOffset=readiness==="green"?.45:readiness==="yellow"?-.25:-1;
-  const targetDifficulty=Math.round(clamp(capabilityLevel+progressionOffset+(phase==="build"?.2:phase==="recovery"?-.6:0)-(returning?1:0),1,10)*10)/10;
+  const targetDifficulty=Math.round(clamp(capabilityLevel+progressionOffset+(phase==="build"?.2:phase==="recovery"?-.6:0)-(returning||novice?1:0),1,10)*10)/10;
   const progressionAction=readiness==="red"?"deload":targetDifficulty>capabilityLevel+.1?"progress":targetDifficulty<capabilityLevel-.1?"regress":"maintain";
   const alternatives=[];
   if(kind!=="endurance") alternatives.push(workoutTemplate("endurance",Math.min(requestedMinutes,sport==="run"?60:90),cadence,sport));
@@ -400,7 +423,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     readiness:{score,status:readiness,reasons:readinessReasons,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
-    constraints:{availableMinutes:requestedMinutes,autoLength,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
+    constraints:{availableMinutes:requestedMinutes,autoLength,novice,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
     recommendation:policy.paused?{session:{kind:'rest',name:policy.headline,durationMinutes:0,steps:[],cadence:null},adaptations:policy.guidance,decisionRule:'status_pause',progression:{system:null,capabilityLevel,targetDifficulty:null,action:'pause',confidence:1}}:{session,adaptations,decisionRule:readiness==="red"?"recover":readiness==="yellow"?"maintain_quality_guardrails":"progress_if_context_allows",progression:{system:capabilitySystem,capabilityLevel,targetDifficulty,action:progressionAction,confidence:n(capability?.confidence,.2)}},
     alternatives:policy.paused?[]:alternatives,
     missingData:missing,

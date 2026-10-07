@@ -2,6 +2,7 @@ import {trainingSetup} from './onboarding.js';
 import { getAthleteState } from './athlete-state.js';
 import { isQualityName } from './session-intensity.js';
 import { dateFormat } from "./date-format.js";
+import { intervalsAuthorization } from "./intervals-auth.js";
 const TZ = "Europe/Prague";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
@@ -15,7 +16,7 @@ function localDate(offsetDays = 0) {
   return new Date(Date.UTC(y, m - 1, d + offsetDays)).toISOString().slice(0, 10);
 }
 function n(v, fallback = 0) { const x = Number(v); return Number.isFinite(x) ? x : fallback; }
-async function d1WeightTrend(env, endDate) {
+export async function d1WeightTrend(env, endDate) {
   try {
     const end = String(endDate || localDate()).slice(0,10);
     const start = localDate(-35);
@@ -39,7 +40,7 @@ async function d1WeightTrend(env, endDate) {
     const first=daily[0], latest=daily[daily.length-1];
     const days=Math.max(1,(new Date(latest.date)-new Date(first.date))/86400000);
     const weeklyRateKg=Math.round(((latest.kg-first.kg)/days)*7*100)/100;
-    return {samples:daily.length,latestKg:Math.round(latest.kg*10)/10,average7Kg:mean(last)==null?null:Math.round(mean(last)*10)/10,average28Kg:mean(last28)==null?null:Math.round(mean(last28)*10)/10,weeklyRateKg,points:daily.slice(-14)};
+    return {samples:daily.length,spanDays:Math.round(days),latestKg:Math.round(latest.kg*10)/10,average7Kg:mean(last)==null?null:Math.round(mean(last)*10)/10,average28Kg:mean(last28)==null?null:Math.round(mean(last28)*10)/10,weeklyRateKg,points:daily.slice(-14)};
   } catch (_) { return {samples:0,latestKg:null,weeklyRateKg:null,average7Kg:null,average28Kg:null}; }
 }
 function durationHours(a) {
@@ -70,7 +71,7 @@ export function isIntensity(a) {
 }
 function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), intensity: isIntensity(a) }; }
 function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), intensity: isIntensity(e), payload: e }; }
-function intervalsAuth(env) { if (!env.INTERVALS_API_KEY) throw new Error("INTERVALS_API_KEY is not configured"); return "Basic " + btoa("API_KEY:" + env.INTERVALS_API_KEY); }
+function intervalsAuth(env) { if (!env.INTERVALS_API_KEY) throw new Error("INTERVALS_API_KEY is not configured"); return intervalsAuthorization(env.INTERVALS_API_KEY); }
 async function intervalsGet(env, path) {
   if(/\/(activities|events)\?/.test(path)){
     const query=new URL('https://internal'+path).searchParams,type=path.includes('/events?')?'planned-workout':'activity';

@@ -4,11 +4,14 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import { nextUnloggedMeals } from "./nutrition-next.js";
 import {walkingEnergyCheck,activityTelemetryEnergy} from './activity-energy-check.js';
-import { energyBaseline, MISSING_LABELS } from "./energy-profile.js";
+import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
+import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight } from "./weight-sync.js";
-import { healthScopes } from "./google-scopes.js";
+import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
 import { dateFormat } from "./date-format.js";
+import { activityKindOf, pragueLocal } from "./coach-reflection.js";
+import { intervalsAuthorization } from "./intervals-auth.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -231,10 +234,17 @@ const CONFIG = {
   preRideWindowHours: 2,
   fluidMlPerHour: 700,
 
+  // For an activity without measured calories. Weight-bearing sports are
+  // scaled by body weight (activityKcalPerHourFor); these are for 88 kg.
   activityKcalPerHour: {
     Ride: 500,
+    VirtualRide: 500,
     Run: 650,
+    VirtualRun: 650,
+    TrailRun: 700,
     Walk: 250,
+    Hike: 350,
+    Swim: 500,
     WeightTraining: 400,
     Workout: 450
   },
@@ -384,6 +394,9 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 // An access token for the given scopes (Google Health by default, with weight
 // writing when the user granted it).
 export async function googleToken(env, scopes = healthScopes(env)) {
+  // Without a connection Google would only answer "missing refresh_token".
+  if (!env.GOOGLE_REFRESH_TOKEN) throw new Error("Google Health není připojené.");
+  if (!scopes.length) throw new Error("Google Health nemá povolené žádné oprávnění. V Nastavení obnov oprávnění Google.");
   const response = await fetchWithTimeout(
     "https://oauth2.googleapis.com/token",
 
@@ -443,11 +456,7 @@ function intervalsAuth(env) {
     );
   }
 
-  return "Basic " +
-    btoa(
-      "API_KEY:" +
-      env.INTERVALS_API_KEY
-    );
+  return intervalsAuthorization(env.INTERVALS_API_KEY);
 }
 
 
@@ -813,10 +822,15 @@ async function googleNutritionLogEndpoint(env, request) {
 }
 
 async function healthNutrition(env, url) {
+  const end = url.searchParams.get("end") || dateDaysFromNow(1);
+  const start = url.searchParams.get("start") || dateDaysAgo(30);
+  // Food logged in Google Health is an extra: without Google Health, or
+  // without the permission to read food, there is simply nothing from there.
+  if (!env.GOOGLE_REFRESH_TOKEN || !hasGoogleScope(env, HEALTH_PERMISSIONS.nutritionRead)) {
+    return Response.json({ status: "ok", source: "google-health", data_type: "nutrition-log", connected: Boolean(env.GOOGLE_REFRESH_TOKEN), permission: false, start, end, count: 0, records: [] });
+  }
   try {
     const token = await googleToken(env);
-    const end = url.searchParams.get("end") || dateDaysFromNow(1);
-    const start = url.searchParams.get("start") || dateDaysAgo(30);
     const points = await googleNutritionList(token, start, end);
     const records = points.map(point => {
       const log = point?.nutritionLog || {};
@@ -1104,8 +1118,9 @@ async function saveGooglePointsBatch(env, family, type, points) {
 }
 async function syncGoogleRecent(env){
   const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise','weight'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])).map(c=>c[0]==='weight'?['weight','weight','sample','all-sources',2]:c);
-  const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:'error',message:error.message};}}));
-  const result={status:results.some(r=>r.status!=='ok')?'partial':'ok',results};
+  const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
+  // Data the user did not give permission for is not a failure.
+  const result={status:results.some(r=>r.status!=='ok'&&r.status!=='skipped')?'partial':'ok',results};
   await ensureSyncStatusTable(env);
   await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'google_recent',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.USER_ID,result.status,JSON.stringify(result)).run();
   return result;
@@ -1182,36 +1197,35 @@ async function processGoogleSyncBatch(env) {
     const [type, filterName, filterType, family, days] = GOOGLE_SYNC_CONFIGS[configIndex];
 
     try {
-      const token = await googleToken(env);
-      const start = dateDaysAgo(days);
-      const end = dateDaysFromNow(1);
-
-      const page = await googleReconcilePage(
-        token,
+      // A data type the user did not give permission for is skipped, not failed.
+      const allowed = googleTypeAllowed(env, type);
+      const page = allowed ? await googleReconcilePage(
+        await googleToken(env),
         type,
         filterName,
         filterType,
-        start,
+        dateDaysAgo(days),
         `users/me/dataSourceFamilies/${family}`,
-        end,
+        dateDaysFromNow(1),
         pageToken
-      );
+      ) : { dataPoints: [], nextPageToken: null };
 
-      const saved = await saveGooglePointsBatch(env, family, type, page.dataPoints);
+      const saved = allowed ? await saveGooglePointsBatch(env, family, type, page.dataPoints) : 0;
       const existing = results.find(x => x.data_type === type);
+      const status = !allowed ? "skipped" : page.nextPageToken ? "partial" : "ok";
 
       if (existing) {
         existing.records_found = Number(existing.records_found || 0) + page.dataPoints.length;
         existing.records_saved = Number(existing.records_saved || 0) + saved;
         existing.pages = Number(existing.pages || 0) + 1;
-        existing.status = page.nextPageToken ? "partial" : "ok";
+        existing.status = status;
       } else {
         results.push({
           data_type: type,
           records_found: page.dataPoints.length,
           records_saved: saved,
-          pages: 1,
-          status: page.nextPageToken ? "partial" : "ok"
+          pages: allowed ? 1 : 0,
+          status
         });
       }
 
@@ -1253,7 +1267,7 @@ async function processGoogleSyncBatch(env) {
         records_found: 0,
         records_saved: 0,
         pages: 0,
-        status: "error",
+        status: skippedForPermission(env, error) ? "skipped" : "error",
         message
       });
 
@@ -1967,6 +1981,23 @@ function googleExerciseActivity(row) {
   };
 }
 
+// Running and walking cost energy in proportion to body weight; riding depends
+// on power, so its rate stays as agreed (cyclingKcalPerHour).
+const WEIGHT_BEARING = /^(Run|VirtualRun|TrailRun|Walk|Hike)$/;
+function activityKcalPerHourFor(type, weightKg) {
+  const base = CONFIG.activityKcalPerHour[type] || 400;
+  const kg = Number(weightKg);
+  return WEIGHT_BEARING.test(type) && kg > 0 ? Math.round(base * Math.min(1.3, Math.max(0.6, kg / 88))) : base;
+}
+
+// The same session recorded by Google and Intervals.icu: the same kind of sport
+// starting within 20 minutes. Intervals.icu stores local time and Google UTC,
+// so both are compared as Prague wall-clock time.
+function sameSessionAsIntervals(googleActivity, intervalsActivities) {
+  const kind = activityKindOf(googleActivity.type), at = Date.parse(pragueLocal(googleActivity.start) + ":00Z");
+  return intervalsActivities.some(a => activityKindOf(a.type) === kind && Math.abs(Date.parse(pragueLocal(a.start) + ":00Z") - at) <= 20 * 60000);
+}
+
 function isDuplicateOfIntervalsActivity(googleActivity, intervalsRows) {
   return intervalsRows.some(row => {
     if (row.record_role === "duplicate") return false;
@@ -2130,9 +2161,10 @@ async function energyForDate(env, date) {
     plannedKeys.add(key); plannedWorkouts.push(w);
   }
 
-  const cyclingRows=activities.results.filter(row=>{try{const p=JSON.parse(row.payload_json||'{}');return /^(ride|virtualride|ebikeride|cycling|mountainbikeride|gravelride)$/i.test(p.type||p.category||'');}catch{return false;}});
-  const intervalsCompleted = cyclingRows.map(row => {
-    const payload = JSON.parse(row.payload_json);
+  // Every sport from Intervals.icu counts: rides, runs, strength, walks, swims.
+  const intervalsRows = activities.results.filter(row => { try { JSON.parse(row.payload_json || "{}"); return true; } catch { return false; } });
+  const intervalsCompleted = intervalsRows.map(row => {
+    const payload = JSON.parse(row.payload_json || "{}");
     const actualCalories =
       Number(payload.calories_kcal ?? payload.calories ?? payload.icu_calories ?? row.value_numeric ?? 0);
     return {
@@ -2153,7 +2185,7 @@ async function energyForDate(env, date) {
 
   const googleCompleted = googleExercises.results
     .map(googleExerciseActivity)
-    .filter(activity => !isDuplicateOfIntervalsActivity(activity, cyclingRows));
+    .filter(activity => !sameSessionAsIntervals(activity, intervalsCompleted) && !isDuplicateOfIntervalsActivity(activity, intervalsRows));
   if (googleCompleted.some(a => a.averageHeartRate == null)) {
     try {
       const samples = (await env.DB.prepare(`
@@ -2215,14 +2247,14 @@ async function energyForDate(env, date) {
   } else if (baseline.ready) {
     let activityAdjustment = 0;
     for (const a of completed) {
-      const rate = CONFIG.activityKcalPerHour[a.type] || (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
+      const rate = CONFIG.activityKcalPerHour[a.type] ? activityKcalPerHourFor(a.type, weight?.value_numeric) : (a.payload && a.payload.category === "Ride" ? CONFIG.activityKcalPerHour.Ride : 400);
       const actual = Number(a.caloriesForPlanning??a.calories);
       activityAdjustment += actual > 0 ? actual : (a.durationHours || 0) * rate;
     }
     for (const w of unmatchedPlanned) {
       if (w.durationHours) {
         const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
-        const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : (CONFIG.activityKcalPerHour[type] || 400);
+        const rate = type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric);
         activityAdjustment += w.durationHours * rate;
       }
     }
@@ -2232,15 +2264,22 @@ async function energyForDate(env, date) {
   // Rest-day intake is the personal resting expenditure minus the weekly goal;
   // tracked training adds 70 % of its cost, untracked sport its daily average.
   const deficit = baseline.ready ? baseline.deficit : 0;
-  const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit : null;
+  // Today and ahead, the weight trend corrects the estimate by ±100 kcal when
+  // the weight moves clearly off the chosen goal (trendAdjustment).
+  const trend = baseline.ready && !isCompleteDay ? trendAdjustment(profile?.goal, await d1WeightTrend(env, date)) : { adjustment: 0, reason: null };
+  const restIntakeTarget = baseline.ready ? baseline.baselineRestTDEE - deficit + trend.adjustment : null;
   const plannedTrainingCalories = baseline.ready && estimatedTDEE != null ? Math.max(0, estimatedTDEE - baseline.baselineRestTDEE - baseline.sportDaily) : 0;
   const trainingCoverage = 0.70;
-  const target = baseline.ready ? Math.max(baseline.floor, Math.min(4000, Math.round(restIntakeTarget + baseline.sportDaily + plannedTrainingCalories * trainingCoverage))) : null;
+  const computedTarget = baseline.ready ? Math.min(4000, Math.round(restIntakeTarget + baseline.sportDaily + plannedTrainingCalories * trainingCoverage)) : null;
+  const target = baseline.ready ? Math.max(baseline.floor, computedTarget) : null;
+  // The safety floor holds the target up: the chosen pace is not reachable.
+  const floorGapKcal = baseline.ready && computedTarget < baseline.floor ? baseline.floor - computedTarget : 0;
   const context = {
     ...nutritionContext({ completedActivities: completed, unmatchedPlannedWorkouts: unmatchedPlanned }),
     ...(await nearbyRideContext(env, date))
   };
-  const macroTargets = dailyMacroTargets(weight ? Number(weight.value_numeric) : null, target, context);
+  const proteinKg = proteinReferenceKg(weight ? Number(weight.value_numeric) : null, profile?.height);
+  const macroTargets = dailyMacroTargets(proteinKg, target, context);
 
   return {
     date,
@@ -2253,7 +2292,7 @@ async function energyForDate(env, date) {
     estimatedPlannedActivityCalories: Math.round(unmatchedPlanned.reduce((sum, w) => {
       if (!w.durationHours) return sum;
       const type = w.type === "Ride" || w.cycling ? "Ride" : w.type;
-      return sum + w.durationHours * (type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : (CONFIG.activityKcalPerHour[type] || 400));
+      return sum + w.durationHours * (type === "Ride" || w.cycling ? cyclingKcalPerHour(w) : activityKcalPerHourFor(type, weight?.value_numeric));
     }, 0)),
     actualActivityCalories: Math.round(completed.reduce((sum, a) => sum + Number(a.calories || 0), 0)),
     suppressedPlannedWorkouts: plannedWorkouts.length - unmatchedPlanned.length,
@@ -2268,8 +2307,13 @@ async function energyForDate(env, date) {
       weightLossDeficit: Math.round(deficit),
       uncappedTarget: estimatedTDEE != null && baseline.ready ? Math.round(estimatedTDEE - deficit) : null,
       minTarget: baseline.floor ?? null,
-      maxTarget: 4000
+      maxTarget: 4000,
+      floorApplied: floorGapKcal > 0,
+      floorGapKcal,
+      trendAdjustment: trend.adjustment,
+      trendReason: trend.reason
     },
+    proteinReferenceKg: proteinKg,
     energyProfile: { ready: baseline.ready, source: baseline.source, missing: baseline.missing, targetWeightKg: baseline.targetWeightKg ?? null, floor: baseline.floor ?? null },
     estimatedTDEE,
     calorieTarget: target,
@@ -2325,9 +2369,9 @@ async function analysisDaily(
     );
 
   const protein =
-    energy.currentWeight
+    energy.proteinReferenceKg
       ? Math.round(
-          energy.currentWeight *
+          energy.proteinReferenceKg *
           CONFIG.proteinGramsPerKg
         )
       : null;
@@ -2394,13 +2438,15 @@ async function analysisDaily(
       energySource: energy.energyProfile.source,
       reason: !energy.energyProfile.ready
         ? "Kalorický cíl zatím nepočítám, chybí: " + energy.energyProfile.missing.map(k => MISSING_LABELS[k] || k).join(", ") + "."
-        : energy.nutritionContext?.endurance
+        : (energy.nutritionContext?.endurance
         ? "Dnešní cíl zohledňuje vytrvalostní zátěž a " + goalPhrase(energy) + "."
         : energy.nutritionContext?.preRide
           ? "Zítřejší kolo je zohledněné už dnes: mírně více sacharidů pro doplnění glykogenu, méně tuku, protein zůstává stabilní."
         : energy.nutritionContext?.training
           ? "Dnešní cíl zohledňuje plánovaný/dokončený trénink a " + goalPhrase(energy) + "."
-          : "Dnešní cíl vychází z klidového energetického základu a " + goalPhrase(energy) + ".",
+          : "Dnešní cíl vychází z klidového energetického základu a " + goalPhrase(energy) + ".")
+        + (energy.calorieBreakdown?.trendAdjustment ? " Podle vývoje váhy: " + TREND_REASONS[energy.calorieBreakdown.trendReason] + "." : "")
+        + (energy.calorieBreakdown?.floorApplied ? ` Cíl drží bezpečné minimum ${energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.` : ""),
       foodLog:
         await foodLogForDate(env, date)
     },

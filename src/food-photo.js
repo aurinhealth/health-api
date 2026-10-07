@@ -87,7 +87,7 @@ export function validFoodImage(image) {
 export async function readFoodPhotoWithAI(env, { image, mode = "label", language = env.INTERFACE_LANGUAGE || "cs" } = {}) {
   if (!validFoodImage(image)) throw new Error("Fotografie musí být JPG, PNG nebo WebP do 5 MB.");
   const kind = mode === "portion" ? "portion" : "label";
-  const r = await callOpenAI(env, {
+  const r = await callOpenAI(env, { feature: "food-photo",
     instructions: foodPhotoInstructions + "\nJazyk rozhraní: " + (String(language).toLowerCase().split(/[-_]/)[0] || "cs") + ".",
     input: [{ role: "user", content: [
       { type: "input_text", text: "Požadovaný režim: " + kind + "." },
@@ -120,7 +120,7 @@ export function validBarcode(value) {
 
 export async function readBarcodeWithAI(env, { image } = {}) {
   if (!validFoodImage(image)) throw new Error("Fotografie musí být JPG, PNG nebo WebP do 5 MB.");
-  const r = await callOpenAI(env, {
+  const r = await callOpenAI(env, { feature: "barcode",
     instructions: barcodeInstructions,
     input: [{ role: "user", content: [{ type: "input_image", image_url: image, detail: "high" }] }],
     format: BARCODE_PHOTO_SCHEMA, maxOutputTokens: 300, model: env.OPENAI_VISION_MODEL || lightModel(env)

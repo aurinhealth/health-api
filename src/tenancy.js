@@ -39,6 +39,7 @@ export const PERSONAL_TABLES = {
   assistant_messages: {},
   exercise_videos: {},
   api_cache_versions: {},
+  ai_usage: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {}
 };

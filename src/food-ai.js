@@ -64,7 +64,7 @@ export async function lookupFoodWithAI(env, { name = "", barcode = "", language=
   if (!product && !code) throw new Error("Napiš název potraviny nebo načti čárový kód.");
   let model=null;
   for(const sourceLanguage of foodLookupLanguages(language)){
-    const r = await callOpenAI(env, {
+    const r = await callOpenAI(env, { feature: "food-lookup",
       instructions: foodLookupInstructions+'\nJazyk rozhraní: '+foodLookupLanguages(language)[0]+'. Odpověď (note) napiš v tomto jazyce. V tomto pokusu hledej '+(sourceLanguage==='any'?'ve všech jazycích.':'pouze zdroje v jazyce '+sourceLanguage+'. Pokud v něm konkrétní výrobek nenajdeš, vrať found=false; aplikace pak zkusí další jazyk. Nepoužívej jinou variantu výrobku jen kvůli jazyku.'),
       input: "Potravina: " + JSON.stringify({ name: product || null, barcode: code || null }),
       tools: [{ type: "web_search" }], format: FOOD_LOOKUP_SCHEMA,

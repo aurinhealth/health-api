@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generateStrengthPlan, EXERCISES, FOCUS_GROUPS, startingLoadScale } from "../src/strength-generator.js";
+import { generateStrengthPlan, EXERCISES, FOCUS_GROUPS, startingLoadScale, FIRST_SESSION_LOAD } from "../src/strength-generator.js";
 import { availableAt } from "../src/gym-equipment.js";
 import { findGymExercises } from "../src/gym-catalog.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
@@ -52,4 +52,20 @@ test("without history a woman starts lighter than the catalogue default", () => 
     return Number(plan.rows.find(r => r[0] === "WORK" && r[1] === "Low row")[3].replace(",", "."));
   };
   assert.ok(kg("female") < kg("male"));
+});
+
+test("a first session without any strength history starts carefully and never to failure", () => {
+  const first = generateStrengthPlan(context("female"), { durationMinutes: 60 });
+  const rows = first.rows.filter(r => r[0] === "WORK");
+  assert.match(first.rationale, /^První trénink v aplikaci/);
+  assert.ok(rows.every(r => r[11] !== "TRUE"), "no set to technical failure");
+  assert.ok(rows.every(r => /první trénink: váha je opatrný odhad/.test(r[9])));
+  const name = rows.find(r => EXERCISES[r[1]].baseKg >= 20)[1], kg = Number(rows.find(r => r[1] === name)[3].replace(",", "."));
+  assert.ok(kg <= EXERCISES[name].baseKg * startingLoadScale(EXERCISES[name].muscle, "female") * FIRST_SESSION_LOAD + 2.5, name + " " + kg);
+  // Once there is any history, the plan follows it and drops the first-session caution.
+  const later = context("female");
+  later.strength.recentCompletedSets = [{ workout_date: "2026-09-30", exercise: "Low row", set_no: 1, actual_kg: 30, actual_reps: 10, rpe: 7 }];
+  const next = generateStrengthPlan(later, { durationMinutes: 60 });
+  assert.doesNotMatch(next.rationale, /První trénink/);
+  assert.ok(next.rows.every(r => !/první trénink/.test(r[9])));
 });

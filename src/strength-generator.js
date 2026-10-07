@@ -479,14 +479,19 @@ function progressionNote(estimate) {
   if (estimate.stalled) return "= " + last + " – 3× bez posunu: přidej opakování, jinak příště vyměníme cvik";
   return "= " + last + " – cíl: o opakování víc";
 }
-function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null) {
-  const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex);
+// Someone with no strength sets here yet: the catalogue loads (an experienced
+// athlete's working weights) are cut to a careful first guess. What they then
+// actually lift drives the next session (own-history progression).
+export const FIRST_SESSION_LOAD = 0.6;
+const FIRST_SESSION_NOTE = "první trénink: váha je opatrný odhad, uprav ji tak, ať ti zbydou 2–3 opakování v rezervě (RPE 7)";
+function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false) {
+  const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex) * (firstSession ? FIRST_SESSION_LOAD : 1);
   const estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: def.reps, fallbackKg, loadFactor: factor, today });
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : def.reps;
   const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier), maxSets);
   const progression = progressionNote(estimate);
-  const note = (estimate.source === "cross-exercise-estimate" ? def.note + "; odhad z " + estimate.referenceExercise + ", ověř RPE" : def.note) + (progression ? "; " + progression : "");
+  const note = (estimate.source === "cross-exercise-estimate" ? def.note + "; odhad z " + estimate.referenceExercise + ", ověř RPE" : def.note) + (progression ? "; " + progression : "") + (firstSession ? "; " + FIRST_SESSION_NOTE : "");
   const rows = [];
   for (let i = 0; i < sets; i++) rows.push(["WORK", exercise, String(i + 1), kg == null ? "" : kgText(kg), reps, "", "", "", "FALSE", note, i === 0 ? "🎥 Video" : "", "", execution]);
   return { rows, kg, sets, estimate };
@@ -523,6 +528,7 @@ export function generateStrengthPlan(context, options = {}) {
   const deload = options.noDeload ? null : shared?.recovery ? { shared: true, reason: "Regenerační týden pro celý trénink (" + (shared.reason === "three_weeks" ? "po třech týdnech nad udržovací zátěží" : "po náročném týdnu") + "): posilovna je odlehčená – méně sérií, váha se drží, RPE do 7." } : shared?.known ? null : strengthDeload(context?.strength?.recentCompletedSets, context.date);
   // A deload week holds the loads (no increase, no set to failure).
   const chosen = choosePlan(context, options), factor = deload ? Math.min(recoveryFactor(context), 0.89) : recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
+  const firstSession = !history.length;
   const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   if (options.focusMuscles != null && !focusMuscles) throw new Error('Vyber 1 až 5 známých partií.');
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
@@ -578,7 +584,7 @@ export function generateStrengthPlan(context, options = {}) {
     const moderated=leg&&(explicitLegs?nearRide.protect:!chosen.protectedLegs&&sport>=1&&sport<1.5);
     const reducedDose=!moderated&&(leg?!explicitLegs&&(chosen.protectedLegs||sport>=1.5):sport>=1);
     const cap=reducedDose?Math.min(2,maxSets):moderated?Math.min(3,maxSets):maxSets;
-    const work = workRows(exercise, historyMap, reducedDose||moderated?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date);
+    const work = workRows(exercise, historyMap, reducedDose||moderated?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date, firstSession);
     if(reducedDose)for(const row of work.rows)row[9]+='; sportovní zátěž: nejvýše 2 pracovní série, nech 3–4 opakování v rezervě (RPE 6–7)';
     if(deload)for(const row of work.rows)row[9]+='; odlehčený týden: stejná váha, 3 opakování v rezervě';
     if(moderated)for(const row of work.rows)row[9]+=explicitLegs?'; blízko je náročná jízda: nech 2–3 opakování v rezervě (RPE 7)':'; nohy po jízdě: nech 2–3 opakování v rezervě (RPE 7)';
@@ -589,7 +595,7 @@ export function generateStrengthPlan(context, options = {}) {
     loadEstimates.push({ exercise, sets: work.sets, reducedDose, moderated, ...work.estimate });
   }
   const requestedMinutes = Number(options.durationMinutes) > 0 ? Number(options.durationMinutes) : Math.max(60, (Number(options.maxExercises) || 5) * 12);
-  const configure = () => configureStrengthCoaching(rows, EXERCISES, { factor, muscleLoad, protectedLegs: chosen.protectedLegs, recoveryScore: context?.adaptive?.recovery?.score ?? null });
+  const configure = () => configureStrengthCoaching(rows, EXERCISES, { factor, muscleLoad, protectedLegs: chosen.protectedLegs, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession });
   configure();
   let timing = estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
   while (timing.totalSeconds > requestedMinutes * 60) {
@@ -614,7 +620,7 @@ export function generateStrengthPlan(context, options = {}) {
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric', month: 'numeric', timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);
-  const rationale = baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '') + (swapped.length ? ' Po třech trénincích bez posunu nová varianta: ' + swapped.join(', ') + '.' : '');
+  const rationale = (firstSession ? 'První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ' : '') + baseRationale + (sportLoad.size?' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.':'') + (nearby.length ? ' Cviky se liší od plánu na ' + nearby.join(' a ') + '.' : '') + (swapped.length ? ' Po třech trénincích bez posunu nová varianta: ' + swapped.join(', ') + '.' : '');
   if(!rows.some(r=>r[0]==='WORK'))throw new Error('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.');
   return { date: context.date, planName: (focusMuscles ? 'Cílený trénink · ' + focusLabels : chosen.name) + (deload ? ' · odlehčený týden' : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + rationale + ' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', timing, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }

@@ -10,6 +10,7 @@
 
 import { grantedExtras } from "./google-scopes.js";
 import { dateFormat } from "./date-format.js";
+import { intervalsAuthorization } from "./intervals-auth.js";
 
 const TOLERANCE_KG = 0.05;
 export const WEIGHT_SYNC_DAYS = 14;
@@ -58,7 +59,7 @@ async function remember(db, userId, target, date, value) {
     .bind(userId, `${target}:${date}`, date + "T12:00:00Z", value).run();
 }
 
-const intervalsAuth = env => ({ Authorization: "Basic " + btoa("API_KEY:" + String(env.INTERVALS_API_KEY)), Accept: "application/json", "Content-Type": "application/json" });
+const intervalsAuth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });
 
 // Weight per day from Intervals.icu wellness.
 export async function intervalsWeights(env, oldest, newest, fetchImpl = fetch) {

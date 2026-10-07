@@ -80,7 +80,7 @@ const TECHNIQUE_INSTRUCTIONS = 'Jsi trenér silového tréninku. Napiš česky t
 // Written once per exercise; a broken answer stores nothing.
 export async function generateTechnique(env, exercise) {
   const name = normalizeExerciseName(exercise);
-  const r = await callOpenAI(env, { instructions: TECHNIQUE_INSTRUCTIONS, input: 'Cvik: ' + JSON.stringify(name), tools: [{ type: 'web_search' }], format: TECHNIQUE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
+  const r = await callOpenAI(env, { feature: "technique", instructions: TECHNIQUE_INSTRUCTIONS, input: 'Cvik: ' + JSON.stringify(name), tools: [{ type: 'web_search' }], format: TECHNIQUE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
   const data = JSON.parse(r.text), clean = v => (Array.isArray(v) ? v : []).map(x => String(x).trim()).filter(Boolean).slice(0, 6);
   const technique = { setup: clean(data.setup), steps: clean(data.steps), feel: clean(data.feel), mistakes: clean(data.mistakes), breathing: String(data.breathing || '').trim(), video: YOUTUBE_ID.test(String(data.videoId || '')) ? { id: data.videoId, title: String(data.videoTitle || '').slice(0, 200) } : null, query: String(data.query || name + ' exercise proper form').slice(0, 200) };
   if (technique.steps.length < 3) throw new Error('Popis techniky se nepodařilo připravit.');

@@ -10,6 +10,12 @@
     }
   ],
   "compatibility_date": "2026-09-15",
+  // Smart Placement runs the Worker near the D1 database instead of near the
+  // visitor when that is faster: one page load makes many database reads.
+  // Its status is under Workers → health-api → Settings → Placement.
+  "placement": {
+    "mode": "smart"
+  },
   // Local development of an environment with a route (wrangler dev --env staging)
   // shows the Worker the route's address; https, as in production, so the
   // HTTPS redirect in web-security.js does not send the page back to itself.
@@ -66,6 +72,9 @@
         }
       ],
       "workers_dev": false,
+      "placement": {
+        "mode": "smart"
+      },
       "triggers": {
         "crons": []
       },

@@ -1,13 +1,15 @@
 // Profile values the app can work out itself, so the user fills in only the
 // rest: height from Google Health, everyday activity from average steps,
-// resting heart rate (30-day average) and the highest heart rate in
-// Intervals.icu and Google Health activities over six months, and the birth
+// resting heart rate (30-day average, Google Health or Intervals.icu) and the
+// highest heart rate in Intervals.icu and Google Health activities over six
+// months (calibratedMaxHeartRate), and the birth
 // date from the Google account when the user allowed it.
 // Stored as dashboard_profile row id=2 and refreshed at most once a day; the
 // user's own values (row id=1) always win.
 
 import { effectiveProfile, ageFrom } from "./energy-profile.js";
 import { grantedExtras, birthdayScopes } from "./google-scopes.js";
+import { intervalsAuthorization } from "./intervals-auth.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,13 +62,40 @@ export function activityMaxHeartRate(payload = {}) {
 // Highest heart rate over six months. A peak more than 8 bpm above every
 // other activity is taken for a sensor spike and skipped.
 export async function observedMaxHeartRate(db, userId, now = Date.now()) {
+  return (await observedHeartRates(db, userId, now)).max;
+}
+// The same, with how many activities had a heart rate at all.
+export async function observedHeartRates(db, userId, now = Date.now()) {
   const since = new Date(now - 183 * DAY_MS).toISOString().slice(0, 10);
   const rows = (await db.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id = ?
     AND ((source_family = 'intervals' AND data_type = 'activity') OR (source_family = 'google-wearables' AND data_type = 'exercise'))
     AND (record_role IS NULL OR record_role != 'duplicate') AND start_time >= ?`).bind(userId, since).all()).results || [];
   const peaks = rows.map(r => { try { return activityMaxHeartRate(JSON.parse(r.payload_json || "{}")); } catch { return null; } }).filter(v => v != null).sort((a, b) => b - a);
-  for (let i = 0; i < peaks.length; i++) if (i === peaks.length - 1 || peaks[i] - peaks[i + 1] <= 8) return peaks[i];
-  return null;
+  for (let i = 0; i < peaks.length; i++) if (i === peaks.length - 1 || peaks[i] - peaks[i + 1] <= 8) return { max: peaks[i], count: peaks.length };
+  return { max: null, count: 0 };
+}
+
+// Heart-rate zones calibrate themselves from the activities. A few easy
+// sessions never reach the real maximum, so until the activities show a peak
+// near the age estimate (Tanaka: 208 − 0.7 × age) or there are 20 of them,
+// the age estimate stands in. Every harder session can only raise it.
+const TRUSTED_ACTIVITIES = 20;
+export function calibratedMaxHeartRate(observed, age) {
+  const predicted = Number(age) >= 10 && Number(age) <= 100 ? Math.round(208 - 0.7 * Number(age)) : null;
+  if (observed.max && (!predicted || observed.max >= predicted * 0.95 || observed.count >= TRUSTED_ACTIVITIES)) return { hrmax: observed.max, source: "activities-6m" };
+  return predicted ? { hrmax: predicted, source: "age-estimate" } : { hrmax: null, source: null };
+}
+
+// Resting heart rate from the Intervals.icu wellness (a watch synced there)
+// for users without Google Health: the 30-day average.
+export async function intervalsRestingHeartRate(env, fetchImpl = fetch, now = Date.now()) {
+  if (!env.INTERVALS_API_KEY) return null;
+  const oldest = new Date(now - 30 * DAY_MS).toISOString().slice(0, 10), newest = new Date(now).toISOString().slice(0, 10);
+  const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
+  if (!response.ok) return null;
+  const rows = await response.json().catch(() => []);
+  const values = (Array.isArray(rows) ? rows : []).map(r => Number(r?.restingHR)).filter(v => v >= 25 && v <= 120);
+  return values.length >= 3 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
 // Latest height in Google Health, in cm; null when there is none or no access.
@@ -104,18 +133,24 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
   const permissions = JSON.stringify(grantedExtras(env));
   if (!force && current?.fetchedAt && now - Date.parse(current.fetchedAt) < DAY_MS && current.permissions === permissions) return current;
   const averageSteps = await averageDailySteps(env.DB, env.USER_ID, now).catch(() => null);
-  const rhr = await averageRestingHeartRate(env.DB, env.USER_ID, now).catch(() => null);
-  const hrmax = await observedMaxHeartRate(env.DB, env.USER_ID, now).catch(() => null);
+  const rhr = await averageRestingHeartRate(env.DB, env.USER_ID, now).catch(() => null)
+    ?? await intervalsRestingHeartRate(env, fetchImpl, now).catch(() => null);
+  const observed = await observedHeartRates(env.DB, env.USER_ID, now).catch(() => ({ max: null, count: 0 }));
   let height = current?.height ?? null;
   if (env.GOOGLE_REFRESH_TOKEN && googleToken) {
     try { height = (await googleHeightCm(await googleToken(env), fetchImpl)) ?? height; }
     catch (error) { console.error("Google height read failed", error.message); }
   }
-  let birthDate = null;
+  // Without access to Google (a background refresh) the birth date read before is kept.
+  let birthDate = googleToken ? null : current?.birthDate ?? null;
   if (env.GOOGLE_REFRESH_TOKEN && googleToken && grantedExtras(env).birthday) {
     try { birthDate = await googleBirthDate(await googleToken(env, birthdayScopes), fetchImpl); }
     catch (error) { console.error("Google birth date read failed", error.message); }
   }
+  const saved = await env.DB.prepare("SELECT profile_json FROM dashboard_profile WHERE user_id = ? AND id = 1").bind(env.USER_ID).first().catch(() => null);
+  let savedProfile = null;
+  try { savedProfile = JSON.parse(saved?.profile_json || "null"); } catch { savedProfile = null; }
+  const { hrmax, source: hrmaxSource } = calibratedMaxHeartRate(observed, effectiveProfile(savedProfile, { birthDate }).age);
   const next = {
     height,
     activity: activityFromSteps(averageSteps),
@@ -124,7 +159,7 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
     hrmax,
     birthDate,
     permissions,
-    sources: { birthDate: birthDate ? "google-account" : null, height: height ? "google-health" : null, activity: averageSteps ? "steps" : null, rhr: rhr ? "google-health-30d" : null, hrmax: hrmax ? "activities-6m" : null },
+    sources: { birthDate: birthDate ? "google-account" : null, height: height ? "google-health" : null, activity: averageSteps ? "steps" : null, rhr: rhr ? "resting-30d" : null, hrmax: hrmaxSource },
     fetchedAt: new Date(now).toISOString()
   };
   await env.DB.prepare("INSERT INTO dashboard_profile (user_id, id, profile_json) VALUES (?, 2, ?) ON CONFLICT(user_id, id) DO UPDATE SET profile_json = excluded.profile_json")

@@ -1,4 +1,5 @@
 import {analyzeRide} from './ride-analysis.js';
+import { intervalsAuthorization } from "./intervals-auth.js";
 const present=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
 export function sampleActivityStreams(streams,limit=1200){
   const rows=Array.isArray(streams)?streams:[],time=rows.find(s=>s.type==='time')?.data||[];
@@ -32,7 +33,7 @@ export async function activityDetail(request,env,id,authorized){
   if(!authorized)return Response.json({message:'Pro soukromou trasu a detail aktivity se přihlas v Nastavení.'},{status:401,headers:{'Cache-Control':'no-store'}});
   if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:'Neplatná aktivita.'},{status:400});
   if(!env.INTERVALS_API_KEY)return Response.json({message:'Nejprve připoj Intervals.icu.'},{status:409});
-  const headers={Authorization:'Basic '+btoa('API_KEY:'+String(env.INTERVALS_API_KEY)),Accept:'application/json'},base='https://intervals.icu/api/v1/activity/'+encodeURIComponent(id);
+  const headers={Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},base='https://intervals.icu/api/v1/activity/'+encodeURIComponent(id);
   try{
     const [detail,streams]=await Promise.all([fetch(base+'?intervals=true',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson),fetch(base+'/streams?types=time,watts,heartrate,altitude,cadence,latlng',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson).catch(()=>[])]);
     const keys=['id','name','type','distance','moving_time','elapsed_time','total_elevation_gain','average_watts','icu_average_watts','icu_weighted_avg_watts','icu_normalized_watts','icu_weighted_average_watts','icu_ftp','average_heartrate','max_heartrate','average_cadence','icu_training_load','icu_intensity','average_speed','calories'];

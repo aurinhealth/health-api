@@ -100,6 +100,39 @@ export function energyBaseline(profile, weightKg, { isOwner = false, activityTra
   };
 }
 
+// Protein follows lean mass more than total weight: above BMI 30 the weight
+// at BMI 27 is the reference, so a heavy beginner is not told to eat 250 g.
+export function proteinReferenceKg(weightKg, heightCm) {
+  const kg = Number(weightKg), m = Number(heightCm) / 100;
+  if (!(kg > 0)) return null;
+  if (!(m >= 1 && m <= 2.3) || kg / (m * m) <= 30) return kg;
+  return Math.round(27 * m * m * 10) / 10;
+}
+
+// A steady correction from the weight trend: with at least 4 weigh-ins over 3
+// weeks, ±100 kcal a day when the weight moves clearly off the chosen goal.
+// Losing: slower than half the goal eats less, faster than 1.5× eats more.
+// Maintaining: more than 0.25 kg a week either way.
+export function trendAdjustment(goalKey, trend) {
+  const rate = Number(trend?.weeklyRateKg), samples = Number(trend?.samples || 0), span = trend?.spanDays;
+  if (trend?.weeklyRateKg == null || !Number.isFinite(rate) || samples < 4 || (span != null && Number(span) < 21)) return { adjustment: 0, reason: "insufficient_weight_history" };
+  const goal = (GOALS[goalKey] || GOALS["lose_0.5"]).kgPerWeek;
+  if (goal < 0) {
+    if (rate > goal / 2) return { adjustment: -100, reason: "loss_below_target" };
+    if (rate < goal * 1.5) return { adjustment: 100, reason: "loss_above_target" };
+    return { adjustment: 0, reason: "within_target_range" };
+  }
+  if (rate > 0.25) return { adjustment: -100, reason: "gaining_while_maintaining" };
+  if (rate < -0.25) return { adjustment: 100, reason: "losing_while_maintaining" };
+  return { adjustment: 0, reason: "within_target_range" };
+}
+export const TREND_REASONS = {
+  loss_below_target: "váha klesá pomaleji, než je cíl: o 100 kcal méně",
+  loss_above_target: "váha klesá rychleji, než je cíl: o 100 kcal víc",
+  gaining_while_maintaining: "váha při udržování roste: o 100 kcal méně",
+  losing_while_maintaining: "váha při udržování klesá: o 100 kcal víc"
+};
+
 export const MISSING_LABELS = { weight: "váha", sex: "pohlaví", age: "datum narození", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" };
 
 // The user's own values, with what the app worked out itself (height,

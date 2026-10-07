@@ -68,7 +68,9 @@ jobs:
           done
 
 
-      - name: Sync planned workout calorie estimates
+      # Calorie estimates are no longer written to Intervals.icu; this removes
+      # the lines left in planned workouts from today on (60 days).
+      - name: Remove planned workout calorie estimates
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         shell: bash

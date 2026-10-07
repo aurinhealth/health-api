@@ -198,8 +198,7 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
     try {
       intervals = await writeStrengthPlanToIntervals(env, plan, {
         startTime: parseTimeWindow(availabilityOn(prefs, context.date).window)?.start || body?.startTime || "00:00",
-        durationMinutes: options.durationMinutes || 60,
-        weightKg: context?.weightTrend?.latestKg
+        durationMinutes: options.durationMinutes || 60
       });
     } catch (error) {
       intervals = { status: "error", message: error.message };

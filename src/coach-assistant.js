@@ -10,6 +10,7 @@ import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { replyLanguageNote } from './i18n.js';
 import { dateFormat } from "./date-format.js";
+import { assertAiAllowance, recordAiUsage } from './ai-usage.js';
 
 export const coachInstructions = `Jsi elitní trenér vytrvalostní cyklistiky a silové přípravy. Přemýšlej s úrovní detailu, disciplíny a plánování, jakou by sportovec očekával od špičkového WorldTour performance staffu včetně týmů typu UAE Team Emirates-XRG. Nejsi zaměstnanec týmu UAE ani jiného týmu. Nikdy netvrď, že UAE zastupuješ, že máš přístup k jejich interním datům nebo že znáš jejich neveřejné algoritmy.
 
@@ -248,14 +249,18 @@ export function assistantTask(message,appContext=null,history=[]) {
 // web sources come back in `citations`. `input` is a string or a list of
 // messages. A reply cut off by max_output_tokens (which include reasoning)
 // comes back with `incomplete` instead of being lost.
-export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null }) {
+// `feature` names the caller in the AI usage log (ai-usage.js), which also
+// stops a user at the daily limit before the call.
+export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null }) {
   await assertAIAccess(env);
   if (!env.OPENAI_API_KEY) throw new Error('AI není připojena.');
+  await assertAiAllowance(env);
+  const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',
     headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`, 'Content-Type':'application/json'},
     body:JSON.stringify({
-      model:model || env.OPENAI_MODEL || 'gpt-6-sol',
+      model:chosenModel,
       reasoning:{effort:reasoningEffort},
       store:false,
       ...(onText?{stream:true}:{}),
@@ -268,6 +273,7 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   });
   if(!response.ok){const error=await response.json().catch(()=>({})),failure=new Error('OpenAI '+response.status+': '+(error.error?.message||'AI služba není dostupná.'));failure.ai=true;throw failure;}
   const data=onText?await readOpenAIStream(response,onText):await response.json();
+  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
   if (!text) throw new Error(incomplete?'Odpověď AI se nevešla do limitu a nedokončila se. Zkus otázku zúžit.':'AI nevrátila odpověď.');
@@ -302,7 +308,7 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   const brief=concise||task==='adjustment';
   let streamed='',lastAnswer='';
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
-  const r = await callOpenAI(env, {instructions:withFocus(coachInstructions, focus)+replyLanguageNote(env)+(actions?'\n\n'+ACTION_INSTRUCTIONS:'')+(brief?'\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.':''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
+  const r = await callOpenAI(env, {feature:'assistant',instructions:withFocus(coachInstructions, focus)+replyLanguageNote(env)+(actions?'\n\n'+ACTION_INSTRUCTIONS:'')+(brief?'\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.':''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
   return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }

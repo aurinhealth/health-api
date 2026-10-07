@@ -9,6 +9,7 @@
 
 import { heartRateFromSamples } from "./index.js";
 import { dateFormat } from "./date-format.js";
+import { intervalsAuthorization } from "./intervals-auth.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -85,7 +86,7 @@ async function remember(db, userId, date, fields) {
     ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET payload_json = excluded.payload_json`).bind(userId, date, date + "T12:00:00Z", JSON.stringify(merged)).run();
 }
 
-const auth = env => ({ Authorization: "Basic " + btoa("API_KEY:" + String(env.INTERVALS_API_KEY)), Accept: "application/json", "Content-Type": "application/json" });
+const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });
 
 // One pass for one user with both Google Health and Intervals.icu connected.
 export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = fetch, now = Date.now() } = {}) {

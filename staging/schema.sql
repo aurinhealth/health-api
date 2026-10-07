@@ -225,6 +225,20 @@ CREATE INDEX IF NOT EXISTS idx_workout_schedule_user_date ON workout_schedule_li
   scheduled_date DESC
 );
 
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  day TEXT NOT NULL,
+  feature TEXT,
+  model TEXT,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  cost_usd REAL
+);
+
+CREATE INDEX IF NOT EXISTS ai_usage_user_day ON ai_usage(user_id, day);
+
 INSERT OR IGNORE INTO d1_migrations (name) VALUES
   ('0001_optimize_reads.sql'),
   ('0002_training_library.sql'),
@@ -234,4 +248,5 @@ INSERT OR IGNORE INTO d1_migrations (name) VALUES
   ('0005_api_cache_versions.sql'),
   ('0006_assistant_chats.sql'),
   ('0007_food_logs_status.sql'),
-  ('0008_strength_sets_plan_row.sql');
+  ('0008_strength_sets_plan_row.sql'),
+  ('0010_ai_usage.sql');

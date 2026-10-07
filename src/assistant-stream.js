@@ -49,7 +49,7 @@ export function assistantStreamResponse(work){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
       try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}));send({type:'done',result});}
       catch(error){console.error('Streaming assistant failed',error.message);// What the AI service said is shown (wrong model, key, quota); internal errors are not.
-        send({type:'error',message:'AI odpověď se nepodařilo dokončit'+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+'. Zkus to znovu.'});}
+        send({type:'error',message:error?.limit?error.message:'AI odpověď se nepodařilo dokončit'+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+'. Zkus to znovu.'});}
       finally{if(!cancelled)controller.close();}
     },cancel(){cancelled=true;}
   });

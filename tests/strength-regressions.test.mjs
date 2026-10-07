@@ -407,10 +407,10 @@ test("strength plan is converted to an Intervals WeightTraining event with set d
   assert.match(event.description, /1\. Chest flat press Prime: 2 × 8–12 @ 42,5 kg\n2\. Hammer curl: 1 × 8–15 @ 10 kg/);
   assert.doesNotMatch(event.description, /kcal/);
   assert.equal(event.calories, undefined);
-  // With the athlete's weight the estimate is included.
+  // No calories go to Intervals.icu, even with the athlete's weight.
   const withWeight = strengthPlanToIntervalsEvent({ date: "2026-09-24", rows: [] }, { weightKg: 80, durationMinutes: 60 });
-  assert.match(withWeight.description, /Odhad výdeje: \d+ kcal · 60 min/);
-  assert.ok(withWeight.calories > 0);
+  assert.doesNotMatch(withWeight.description, /kcal/);
+  assert.equal(withWeight.calories, undefined);
 });
 
 test("nutrition plan increases daily target when a strength plan is present", () => {
@@ -441,23 +441,12 @@ test("nutrition plan increases daily target when a strength plan is present", ()
 });
 
 
-import { estimateEventCalories } from "../src/intervals-calories.js";
+import { withoutCalories } from "../src/intervals-calories.js";
 
-test("planned cycling workout gets a calorie estimate", () => {
-  const kcal = estimateEventCalories({
-    type: "Ride",
-    moving_time: 3600,
-    icu_intensity: 0.75
-  }, { weightKg: 88, ftp: 260 });
-  assert.ok(kcal > 0);
-});
-
-test("planned strength workout gets a calorie estimate", () => {
-  const kcal = estimateEventCalories({
-    type: "WeightTraining",
-    moving_time: 3600
-  }, { weightKg: 88 });
-  assert.ok(kcal > 0);
+test("the calorie lines the app wrote to Intervals.icu are removed and nothing else", () => {
+  assert.equal(withoutCalories("Z2 jízda\n\nEstimated calories: 640 kcal"), "Z2 jízda");
+  assert.equal(withoutCalories("Proč tenhle trénink: nohy\n\nOdhad výdeje: 350 kcal · 60 min\n\nVygenerováno v Loadwise"), "Proč tenhle trénink: nohy\n\nVygenerováno v Loadwise");
+  assert.equal(withoutCalories("Můj vlastní popis 500 kcal"), "Můj vlastní popis 500 kcal");
 });
 
 

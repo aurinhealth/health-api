@@ -22,7 +22,7 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
 }
 
-export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null } = {}) {
+export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false } = {}) {
   for (const r of rows) {
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     r[11] = 'FALSE'; r[12] = '';
@@ -42,8 +42,9 @@ export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoa
     const id = 'ABCDEF'[group++]; used.add(name); used.add(other);
     for (const r of rows) if (r[0] === 'WORK' && [name, other].includes(r[1])) r[12] = id;
   }
-  // Only one last isolation set reaches technical failure on well-recovered days.
-  if (factor >= .97 && (recoveryScore == null || recoveryScore >= 70)) {
+  // Only one last isolation set reaches technical failure on well-recovered
+  // days, and never in a first session, whose loads are still a guess.
+  if (!firstSession && factor >= .97 && (recoveryScore == null || recoveryScore >= 70)) {
     const name = names.find(n => catalog[n]?.fatigue <= .5 && !catalog[n]?.warmup && (muscleLoad.get(catalog[n]?.muscle) || 0) < 2.5 && !/sportovní zátěž/.test(rows.find(r => r[1] === n)?.[9] || '') && !(protectedLegs && ['quads','hamstrings','glutes','calves'].includes(catalog[n]?.muscle)));
     const last = name && rows.filter(r => r[0] === 'WORK' && r[1] === name).at(-1);
     if (last) { last[11] = 'TRUE'; last[9] += '; poslední série do technického selhání, jen při čistém provedení'; }

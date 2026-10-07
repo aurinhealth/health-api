@@ -1,9 +1,4 @@
-const n = (v, fallback = 0) => Number.isFinite(Number(v)) ? Number(v) : fallback;
 
-function strengthCalories(weightKg, minutes) {
-  if (!minutes) return 0;
-  return Math.round((5.0 * 3.5 * weightKg / 200) * minutes);
-}
 
 function formatKg(value) {
   if (value == null || value === "") return "vlastní váha";
@@ -44,13 +39,9 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
   const startTime = String(options.startTime || "00:00").slice(0, 5);
   const externalId = String(options.externalId || `health-strength-${plan.date}`);
   const durationMinutes = Number(options.durationMinutes || 60);
-  // Calories need the athlete's weight; without one they are left out.
-  const weightKg = n(options.weightKg, 0);
-  const calories = weightKg > 0 ? strengthCalories(weightKg, durationMinutes) : null;
   const description = [
     plan.rationale ? `Proč tenhle trénink: ${plan.rationale}` : "",
     formatRows(plan.rows || []),
-    calories ? `Odhad výdeje: ${calories} kcal · ${durationMinutes} min` : "",
     "Vygenerováno v Loadwise"
   ].filter(Boolean).join("\n\n");
 
@@ -61,8 +52,8 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
     type: "WeightTraining",
     name: `Strength — ${plan.planName || "Gym"}`,
     description,
-    moving_time: Math.round(durationMinutes * 60),
-    ...(calories ? { calories } : {})
+    // No calorie estimate: the app keeps the energy picture, Intervals.icu the training.
+    moving_time: Math.round(durationMinutes * 60)
   };
 }
 
@@ -70,5 +61,5 @@ export async function writeStrengthPlanToIntervals(env,plan,options={}) {
   const {storeLocalEvent,syncLocalWorkout}=await import('./local-workouts.js');
   const event=strengthPlanToIntervalsEvent(plan,options),local=await storeLocalEvent(env.DB,event);
   const result=await syncLocalWorkout(env,local.id);
-  return {...result,externalId:local.event.external_id,eventId:local.id,startDateLocal:event.start_date_local,type:event.type,name:event.name,estimatedCalories:event.calories};
+  return {...result,externalId:local.event.external_id,eventId:local.id,startDateLocal:event.start_date_local,type:event.type,name:event.name};
 }

@@ -3,6 +3,7 @@
 // Intervals Companion, Health Sync), Garmin or another app. Google Health
 // nights stay first; Intervals only fills the nights Google does not have.
 // The wellness sync to Intervals reads Google nights only, so nothing loops.
+import { intervalsAuthorization } from "./intervals-auth.js";
 
 export function mergeIntervalsSleep(sessions = [], wellness = [], { start = "", end = "9999-12-31" } = {}) {
   const known = new Set(sessions.map(s => s.date || String(s.endTime || "").slice(0, 10)));
@@ -19,7 +20,7 @@ export function mergeIntervalsSleep(sessions = [], wellness = [], { start = "", 
 export async function intervalsWellness(env, oldest, newest, fetchImpl = fetch) {
   if (!env.INTERVALS_API_KEY) return [];
   try {
-    const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: { Authorization: "Basic " + btoa("API_KEY:" + String(env.INTERVALS_API_KEY)), Accept: "application/json" } });
+    const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
     return response.ok ? await response.json() : [];
   } catch { return []; }
 }
