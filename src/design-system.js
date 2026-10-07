@@ -10,10 +10,11 @@ const LIGHT = `
   color-scheme:light;
   --bg:#fbfcfd;--sidebar:#f3f5f8;--panel:#ffffff;--panel2:#eef1f5;--line:#d9dee6;
   --text:#121821;--muted:#596474;
-  --ok:#0f8f66;--warn:#a86a00;--bad:#d42f47;--cyan:#0a76b8;--sky:#0784a8;--blue:#2563eb;
+  --ok:#0c7f5a;--warn:#a86a00;--bad:#d42f47;--cyan:#0a76b8;--sky:#0784a8;--blue:#2563eb;
   --green:#0f8a5c;--amber:#b86e00;--violet:#7444d6;--lilac:#8657e0;
-  --primary:#0f8f66;--primary-rgb:15,143,102;--primary-ink:#ffffff;--primary-text:#0a6b4c;
+  --primary:#0c7f5a;--primary-rgb:12,127,90;--primary-ink:#ffffff;--primary-text:#0a6b4c;
   --primary-surface:#ddf3ea;--primary-line:#a9dcc8;
+  --ink-l:.5;
 `;
 // Shared by the app (/app) and the public pages (/, /privacy, …).
 export const themeTokens = `
@@ -29,6 +30,9 @@ export const themeTokens = `
   --primary:#83e9c3;--primary-rgb:131,233,195;--primary-ink:#0f241c;--primary-text:#a2f4d6;
   --primary-surface:#1d302b;--primary-line:#2d4b40;
   --accent:var(--primary);--accent2:var(--primary-text);
+  /* Data-coloured text (.ink, colour in --c): the light theme caps its lightness so pastel
+     chart hues stay readable on white; the dark theme keeps them as they are. */
+  --ink-l:1;
 }
 :root[data-theme="light"]{${LIGHT}}
 @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){${LIGHT}}}
@@ -65,11 +69,14 @@ export const themeSwitchCss = `
 
 export const designSystem = themeTokens + themeSwitchCss + `
 body{background:var(--bg)}
+.ink{color:var(--c);color:oklch(from var(--c) min(l,var(--ink-l)) c h)}
+svg .ink{fill:var(--c);fill:oklch(from var(--c) min(l,var(--ink-l)) c h)}
 .brand span{text-transform:none;letter-spacing:0;font-size:12px}
 /* The day timeline scrolls inside its card; the fade says there is more below. */
 #todayTimelineSlot .timeline{padding-bottom:20px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 26px),transparent)}
 .btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink);box-shadow:none}
 .btn.primary:disabled{opacity:.55}
+.pill.good{color:var(--primary-text)}
 .nav button.active{background:var(--primary-surface);border-color:var(--primary-line);color:var(--primary-text);box-shadow:none}
 .plan-day.today,.day.today,.hub-day.today{border-color:var(--primary);box-shadow:inset 0 0 0 1px rgba(var(--primary-rgb),.2)}
 .fab{color:var(--primary-ink)}
