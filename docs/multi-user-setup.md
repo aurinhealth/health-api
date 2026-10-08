@@ -26,7 +26,7 @@ Propojení není povinné: stačí jedna služba, nebo žádná; uživatel pak z
 
 Silový plán (Gym) má každý uživatel vlastní. Plán dne je v databázi (tabulka `gym_plans`) a odcvičené série se ukládají do historie (`strength_sets`). Google Sheets se už nepoužívá.
 
-Katalog cviků odpovídá vybavení pobočky **METAGYM Kutná Hora** (`src/gym-equipment.js`, podle https://metagym.cz/kutnahora; ostatní pobočky mají jiné vybavení). Každý cvik má přiřazené stanoviště. Generátor nabídne jen cviky, pro které pobočka má vybavení. Kutná Hora nemá stojan na dřepy, proto se dřepy dělají na Pendulum squat nebo Pivot leg press.
+Každý uživatel si zaškrtne své vybavení (tlačítko **Moje vybavení** vedle Generovat; uloženo v `user_setup.training_json` jako `stations`). Seznam vybavení a stanoviště každého cviku jsou v `src/gym-equipment.js`. Generátor, výběr cviků, náhrady i výměny od AI nabídnou jen cviky, pro které má uživatel vybavení. Kdo ještě nic nezaškrtl a už má zapsané série, cvičí s celou posilovnou (jako dřív); nový uživatel dostane seznam k zaškrtnutí před prvním generováním. AI umí seznam předvyplnit z odkazu na web posilovny nebo z textu (`src/gym-equipment-ai.js`), uživatel ho pak zkontroluje a uloží.
 
 ## Přihlášení přes Apple (volitelné)
 

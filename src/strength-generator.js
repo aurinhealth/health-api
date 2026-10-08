@@ -1,9 +1,8 @@
-function fitsEquipment(name,equipment){if(!equipment||equipment==='gym')return true;const allowed=equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
 import { L } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
-import { availableAt, EXERCISE_STATIONS } from "./gym-equipment.js";
+import { availableAt, stationsOf } from "./gym-equipment.js";
 import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
@@ -379,6 +378,7 @@ export function stalledExercises(rows, date) {
 }
 
 function choosePlan(context, options = {}) {
+  const equipment = stationsOf(context?.trainingSetup);
   const history = selectionHistory(context);
   const muscleLoad = recentMuscleLoad(history, context.date);
   const muscleExposure = recentMuscleExposure(history, context.date);
@@ -471,7 +471,7 @@ function choosePlan(context, options = {}) {
   // A movement already in the session (e.g. a hip thrust) counts against its twin.
   const usedPatterns = new Set();
   function pick(patterns) {
-    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup?.equipment) && !used.has(ex));
+    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex, equipment) && !used.has(ex));
     const ex = pool.slice().sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
     const plain = pool.slice().sort((a, b) => score(a.ex, a.rank, false) - score(b.ex, b.rank, false))[0]?.ex;
     if (ex && plain !== ex && stalled.has(plain)) stallSwaps[ex] = plain;
@@ -611,6 +611,7 @@ export function strengthDeload(history, date) {
   return { weeks: 4, reason: L("Čtyři týdny po sobě s plným tréninkem: tento týden je odlehčený (méně sérií, stejná váha, RPE do 7), aby se síla mohla projevit.", "Four full training weeks in a row: this is a deload week (fewer sets, same weight, RPE up to 7) so the strength you've built can show.") };
 }
 export function generateStrengthPlan(context, options = {}) {
+  const equipment = stationsOf(context?.trainingSetup);
   const policy=trainingStatus(context?.athleteState);
   // The gateway explicitly marks its read-only deployment diagnostic; ordinary
   // gym requests and previews still obey the athlete's status.
@@ -635,7 +636,7 @@ export function generateStrengthPlan(context, options = {}) {
   }
   const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
   const focusedExercise = group => {
-    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup?.equipment) && !excluded.has(name));
+    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name, equipment) && !excluded.has(name));
     if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
@@ -647,7 +648,7 @@ export function generateStrengthPlan(context, options = {}) {
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
     return best;
   };
-  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup?.equipment));
+  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex)&&availableAt(ex, equipment));
   const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
   exercises = exercises.slice(0, maxExercises);
 
@@ -714,7 +715,7 @@ export function generateStrengthPlan(context, options = {}) {
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);
   const rationale = (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '');
-  if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));
+  if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v „Moje vybavení“ vedle Generovat.', 'No suitable exercise was found for this equipment. Adjust it under “My equipment” next to Generate.'));
   return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.'), timing, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 

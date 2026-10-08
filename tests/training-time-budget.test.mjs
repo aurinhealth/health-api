@@ -140,7 +140,7 @@ test('the resize control sends a user initiated request; generation and the focu
   const ui = vm.createContext({
     state: { generated: { date: today } }, statusCoachingRevision: 0, selectedGymMuscles: new Set(['chest']),
     $: id => elements[id], localToday: () => today, workoutSport: () => 'ride', gymDay: () => today,
-    esc: String, toast() {}, renderGeneratedWorkout() {}, loadGym: async () => {}, reloadWeek() {}, openTrainingDetail() {},
+    esc: String, toast() {}, renderGeneratedWorkout() {}, loadGym: async () => {}, reloadWeek() {}, openTrainingDetail() {}, withGymEquipment: run => run(),
     jsonFetch: async (path, options) => {
       const body = JSON.parse(options.body); calls.push(body);
       const result = await app.post(path, body);

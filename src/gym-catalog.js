@@ -2,7 +2,7 @@ import {EXERCISES} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad} from './strength-intelligence.js';
 import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
-import {availableAt,stationLabel} from './gym-equipment.js';
+import {availableAt,stationLabel,EQUIPMENT,EQUIPMENT_ZONES,EQUIPMENT_PRESETS,EXERCISE_STATIONS,ALL_STATIONS} from './gym-equipment.js';
 
 const MUSCLES_CS={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
 const MUSCLES_EN={chest:'Chest',back:'Back',shoulders:'Shoulders',quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',biceps:'Biceps',triceps:'Triceps',core:'Core',adductors:'Adductors',abductors:'Abductors',rear_delts:'Rear delts',side_delts:'Side delts',calves:'Calves',forearms:'Forearms',traps:'Traps',lower_back:'Lower back'};
@@ -90,9 +90,9 @@ const searchTerms={
 
 };
 
-export function gymExerciseCatalog(){
-  // Only exercises that can be done in the gym (METAGYM Kutná Hora), with the station.
-  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name)).map(([name,def])=>({name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
+export function gymExerciseCatalog(stations=ALL_STATIONS){
+  // Only exercises the athlete's equipment allows, with the station.
+  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name,stations)).map(([name,def])=>({name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
 }
 
 // What can take the place of an exercise in the plan: the same muscle,
@@ -106,10 +106,10 @@ export function gymLoadEstimate(exercise,history=[]){
   const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null});
   return estimate.kg==null?null:{kg:estimate.kg,source:estimate.source,reference:estimate.referenceExercise||null};
 }
-export function gymAlternatives(exercise,history=[],exclude=[]){
+export function gymAlternatives(exercise,history=[],exclude=[],stations=ALL_STATIONS){
   const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
   if(!EXERCISE_INTELLIGENCE[name])return [];
-  return findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)).slice(0,8).map(a=>{
+  return findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name,stations)&&!skip.has(a.name)).slice(0,8).map(a=>{
     const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||{kg:null,source:'no-reference'};
     return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
   });
@@ -119,4 +119,12 @@ export function findGymExercises(query,items=gymExerciseCatalog()){
   const norm=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('cs').trim();
   const words=norm(query).split(/\s+/).filter(Boolean);
   return items.filter(item=>words.every(word=>norm([item.name,item.muscle,item.search].join(' ')).includes(word))).sort((a,b)=>a.name.localeCompare(b.name,'cs'));
+}
+
+// The equipment sheet: the tick list by zone, the quick choices, and which
+// stations each exercise needs, so the sheet can count what a choice allows.
+export function equipmentChoices(){
+  return {zones:EQUIPMENT_ZONES.map(z=>({id:z.id,label:L(z.cs,z.en),items:EQUIPMENT.filter(e=>e.zone===z.id).map(e=>({id:e.id,label:L(e.cs,e.en)}))})),
+    presets:EQUIPMENT_PRESETS,
+    exercises:Object.fromEntries(Object.keys(EXERCISES).filter(name=>EXERCISE_INTELLIGENCE[name]&&EXERCISE_STATIONS[name]).map(name=>[name,EXERCISE_STATIONS[name]]))};
 }

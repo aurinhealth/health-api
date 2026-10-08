@@ -4,15 +4,32 @@ import {normalizeAvailability} from './training-availability.js';
 import { localToday } from "./user-time.js";
 import {trainingHistory,starterPlan} from './training-history.js';
 import {latestStoredWeight} from './athlete-weight.js';
+import {EQUIPMENT_PRESETS,normalizeStations,presetOf} from './gym-equipment.js';
 export async function ensureOnboarding(db){
   await db.prepare('CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT \'{}\')').run();
   await db.prepare('CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY(user_id,id))').run();
 }
-export async function trainingSetup(db){
+async function savedTraining(db){
   await ensureOnboarding(db);const row=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
-  let saved={};try{saved=JSON.parse(row?.training_json||'{}');}catch{}
-  const history=await trainingHistory(db);
-  return {...saved,experience:!saved.experience||saved.experience==='auto'?history.experience:saved.experience,experienceMode:!saved.experience||saved.experience==='auto'?'auto':'manual',equipment:saved.equipment||'bodyweight',history};
+  try{return JSON.parse(row?.training_json||'{}')||{};}catch{return {};}
+}
+// The equipment strength plans use. A saved tick list wins. Before the list
+// existed, an athlete who already logged gym sets trained with the whole gym,
+// so that stays; anyone else keeps the old place choice (bodyweight by default)
+// and is asked to tick their equipment before the first generated workout.
+async function equipmentFrom(db,saved){
+  const stations=normalizeStations(saved.stations);
+  if(stations)return {stations,equipment:presetOf(stations),equipmentChosen:true};
+  const logged=await db.prepare('SELECT 1 AS x FROM strength_sets WHERE user_id=? LIMIT 1').bind(db.userId).first().catch(()=>null);
+  if(logged)return {stations:EQUIPMENT_PRESETS.gym,equipment:'gym',equipmentChosen:true};
+  const equipment=EQUIPMENT_PRESETS[saved.equipment]?saved.equipment:'bodyweight';
+  return {stations:EQUIPMENT_PRESETS[equipment],equipment,equipmentChosen:false};
+}
+export async function equipmentSetup(db){return equipmentFrom(db,await savedTraining(db));}
+export async function trainingSetup(db){
+  const saved=await savedTraining(db);
+  const [history,equipment]=await Promise.all([trainingHistory(db),equipmentFrom(db,saved)]);
+  return {...saved,experience:!saved.experience||saved.experience==='auto'?history.experience:saved.experience,experienceMode:!saved.experience||saved.experience==='auto'?'auto':'manual',...equipment,history};
 }
 export async function hasRecentActivityData(db,userId=db.userId){
   return Boolean(await db.prepare("SELECT id FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND COALESCE(start_time,sample_time)>=date('now','-28 days') AND (record_role IS NULL OR record_role!='duplicate') LIMIT 1").bind(userId).first());
@@ -32,15 +49,19 @@ export async function onboardingStatus(env){
 }
 export function normalizeTraining(input={}){
   const experience=['beginner','regular','experienced'].includes(input.experience)?input.experience:'auto';
-  const equipment=['gym','dumbbells','bodyweight'].includes(input.equipment)?input.equipment:'bodyweight';
+  const stations=normalizeStations(input.stations);
+  const equipment=stations?presetOf(stations):EQUIPMENT_PRESETS[input.equipment]?input.equipment:'bodyweight';
   const limitations=String(input.limitations||'').trim().slice(0,500);
   const availability=normalizeAvailability(input.availability);
-  return {experience,equipment,limitations,availability};
+  return {experience,equipment,...(stations?{stations}:{}),limitations,availability};
 }
 export async function updateTrainingSetup(db,input={}){
   await ensureOnboarding(db);
   const row=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
-  const training=normalizeTraining({...JSON.parse(row?.training_json||'{}'),...input});
+  const merged={...JSON.parse(row?.training_json||'{}'),...input};
+  // A place picked without a tick list (an older app) replaces the list.
+  if('equipment' in input&&!('stations' in input))merged.stations=EQUIPMENT_PRESETS[input.equipment]||EQUIPMENT_PRESETS.bodyweight;
+  const training=normalizeTraining(merged);
   await db.prepare("INSERT INTO user_setup(user_id,training_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET training_json=excluded.training_json").bind(db.userId,JSON.stringify(training)).run();
   return trainingSetup(db);
 }

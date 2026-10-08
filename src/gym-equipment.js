@@ -1,57 +1,64 @@
 import { L } from "./lang.js";
 
-// Equipment of the gym the plans are built for. METAGYM Kutná Hora
-// (https://metagym.cz/kutnahora, checked 2026-10-01; the squat rack and the
-// Smith machine confirmed by the athlete 2026-10-03): every exercise in the
-// strength catalog must be possible on one of these stations.
-export const METAGYM_KUTNA_HORA = {
-  id: "metagym-kutna-hora",
-  name: "METAGYM Kutná Hora",
-  url: "https://metagym.cz/kutnahora",
-  stations: {
-    dumbbells: { label: "Činkárna – sada jednoruček", zone: "Volné váhy a lavice" },
-    adjustable_bench: { label: "Polohovací lavice (5×)", zone: "Volné váhy a lavice" },
-    bench_press: { label: "Benchpress flat", zone: "Volné váhy a lavice" },
-    barbells: { label: "Stojan na rovné osy + trny na kotouče", zone: "Volné váhy a lavice" },
-    squat_rack: { label: "Klec na dřepy (power rack)", zone: "Volné váhy a lavice" },
-    smith_machine: { label: "Smith stroj", zone: "Volné váhy a lavice" },
-    floor_mats: { label: "Podložky na zem", zone: "Volné váhy a lavice" },
-    pendulum_squat: { label: "Pendulum squat", zone: "Nohy a hýždě" },
-    hip_thrust: { label: "Hip thrust", zone: "Nohy a hýždě" },
-    pivot_leg_press: { label: "Pivot leg press", zone: "Nohy a hýždě" },
-    leg_extension: { label: "Leg extension Prime", zone: "Nohy a hýždě" },
-    prone_leg_curl: { label: "Prone leg curl Prime", zone: "Nohy a hýždě" },
-    calf_raise: { label: "Lýtka v polostoji", zone: "Nohy a hýždě" },
-    adduction_abduction: { label: "Adduction / abduction", zone: "Nohy a hýždě" },
-    lat_pulldown_low_row: { label: "Lat pulldown / low row", zone: "Záda a ramena" },
-    standing_row: { label: "Rowing stroj na záda vestoje", zone: "Záda a ramena" },
-    shoulder_press: { label: "Shoulder press Prime", zone: "Záda a ramena" },
-    multi_flight: { label: "Standing multi flight (roztahování na ramena)", zone: "Záda a ramena" },
-    pec_deck: { label: "Pec deck / rear delt", zone: "Záda a ramena" },
-    chest_press: { label: "Chest flat press Prime", zone: "Prsa a kladky" },
-    cables: { label: "Multi-station kladky (5×)", zone: "Prsa a kladky" },
-    abs_bench: { label: "Abs lavička", zone: "Střed těla" },
-    roman_chair: { label: "Roman chair", zone: "Střed těla" },
-    treadmill: { label: "Běžecký pás (2×)", zone: "Kardio" },
-    stairmaster: { label: "Stairmaster", zone: "Kardio" }
-  }
+// Equipment a strength plan can use. Each athlete ticks what their gym or home
+// has ("Moje vybavení" next to the gym plan's Generovat); the generator, the
+// exercise picker, the replacements and the AI coach's swaps only use
+// exercises whose every station is ticked. The list began as the equipment of
+// METAGYM Kutná Hora (checked 2026-10-01) and keeps those ids; the names are
+// generic so any gym's machines fit them.
+export const EQUIPMENT_ZONES = [
+  { id: "free", cs: "Volné váhy a lavice", en: "Free weights and benches" },
+  { id: "legs", cs: "Nohy a hýždě", en: "Legs and glutes" },
+  { id: "upper", cs: "Záda a ramena", en: "Back and shoulders" },
+  { id: "chest", cs: "Prsa a kladky", en: "Chest and cables" },
+  { id: "core", cs: "Střed těla", en: "Core" }
+];
+export const EQUIPMENT = [
+  { id: "floor_mats", zone: "free", cs: "Podložka na zem", en: "Floor mat" },
+  { id: "dumbbells", zone: "free", cs: "Jednoručky", en: "Dumbbells" },
+  { id: "adjustable_bench", zone: "free", cs: "Polohovací lavice", en: "Adjustable bench" },
+  { id: "barbells", zone: "free", cs: "Osa s kotouči", en: "Barbell and plates" },
+  { id: "bench_press", zone: "free", cs: "Lavice na benchpress se stojany", en: "Bench press bench with rack" },
+  { id: "squat_rack", zone: "free", cs: "Klec nebo stojany na dřepy", en: "Squat rack or power rack" },
+  { id: "smith_machine", zone: "free", cs: "Smith stroj", en: "Smith machine" },
+  { id: "pivot_leg_press", zone: "legs", cs: "Leg press", en: "Leg press" },
+  { id: "pendulum_squat", zone: "legs", cs: "Pendulum nebo hack dřep", en: "Pendulum or hack squat" },
+  { id: "leg_extension", zone: "legs", cs: "Předkopávání (leg extension)", en: "Leg extension machine" },
+  { id: "prone_leg_curl", zone: "legs", cs: "Zakopávání (leg curl)", en: "Leg curl machine" },
+  { id: "hip_thrust", zone: "legs", cs: "Stroj na hip thrust", en: "Hip thrust machine" },
+  { id: "adduction_abduction", zone: "legs", cs: "Stroj na přitahování a roznožování", en: "Adduction / abduction machine" },
+  { id: "calf_raise", zone: "legs", cs: "Stroj na lýtka", en: "Calf raise machine" },
+  { id: "lat_pulldown_low_row", zone: "upper", cs: "Horní a spodní kladka (stahování, přítahy vsedě)", en: "Lat pulldown and seated row" },
+  { id: "standing_row", zone: "upper", cs: "Stroj na přítahy (row)", en: "Row machine" },
+  { id: "shoulder_press", zone: "upper", cs: "Stroj na tlaky na ramena", en: "Shoulder press machine" },
+  { id: "multi_flight", zone: "upper", cs: "Stroj na upažování", en: "Lateral raise machine" },
+  { id: "pec_deck", zone: "upper", cs: "Pec deck (rozpažování, zadní ramena)", en: "Pec deck / rear delt machine" },
+  { id: "chest_press", zone: "chest", cs: "Stroj na tlaky na prsa", en: "Chest press machine" },
+  { id: "cables", zone: "chest", cs: "Kladky (kabelová věž, crossover)", en: "Cable station (crossover)" },
+  { id: "abs_bench", zone: "core", cs: "Lavice na břicho", en: "Abs bench" },
+  { id: "roman_chair", zone: "core", cs: "Roman chair (hyperextenze)", en: "Roman chair (back extension)" }
+];
+const BY_ID = new Map(EQUIPMENT.map(e => [e.id, e]));
+export const ALL_STATIONS = EQUIPMENT.map(e => e.id);
+// Quick choices in the equipment sheet. "gym" is the whole list: everything
+// the app had before the choice existed.
+export const EQUIPMENT_PRESETS = {
+  bodyweight: ["floor_mats"],
+  dumbbells: ["floor_mats", "dumbbells", "adjustable_bench"],
+  gym: ALL_STATIONS
 };
 
-// Station names in English (lang.js); names that are already English stay.
-const STATION_EN = {
- "Činkárna – sada jednoruček": "Dumbbell rack",
- "Polohovací lavice (5×)": "Adjustable bench (5×)",
- "Stojan na rovné osy + trny na kotouče": "Barbell rack + plate posts",
- "Klec na dřepy (power rack)": "Power rack",
- "Smith stroj": "Smith machine",
- "Podložky na zem": "Floor mats",
- "Lýtka v polostoji": "Standing calf raise machine",
- "Rowing stroj na záda vestoje": "Standing rowing machine",
- "Standing multi flight (roztahování na ramena)": "Standing multi flight (shoulder flyes)",
- "Multi-station kladky (5×)": "Multi-station cables (5×)",
- "Abs lavička": "Abs bench",
- "Běžecký pás (2×)": "Treadmill (2×)"
-};
+// Known ids only, once each, in the list's order; null when it is not a list.
+export function normalizeStations(list) {
+  if (!Array.isArray(list)) return null;
+  const chosen = new Set(list.map(String));
+  return ALL_STATIONS.filter(id => chosen.has(id));
+}
+export function presetOf(stations) {
+  const list = normalizeStations(stations) || [];
+  return Object.entries(EQUIPMENT_PRESETS).find(([, ids]) => ids.length === list.length && ids.every(id => list.includes(id)))?.[0] || "custom";
+}
+export const equipmentLabel = id => { const e = BY_ID.get(id); return e ? L(e.cs, e.en) : null; };
 
 // Where each catalog exercise is done.
 export const EXERCISE_STATIONS = {
@@ -138,10 +145,16 @@ export const EXERCISE_STATIONS = {
 
 };
 
-export function stationLabel(exercise, gym = METAGYM_KUTNA_HORA) {
-  return (EXERCISE_STATIONS[exercise] || []).map(id => gym.stations[id]?.label).map(label => label && L(label, STATION_EN[label] || label)).filter(Boolean).join(" + ") || null;
+export function stationLabel(exercise) {
+  return (EXERCISE_STATIONS[exercise] || []).map(equipmentLabel).filter(Boolean).join(" + ") || null;
 }
-export function availableAt(exercise, gym = METAGYM_KUTNA_HORA) {
-  const stations = EXERCISE_STATIONS[exercise];
-  return Boolean(stations?.length) && stations.every(id => gym.stations[id]);
+// Whether every station of the exercise is in the athlete's equipment (a list
+// or a Set of ids; the whole list when not given).
+export function availableAt(exercise, stations = ALL_STATIONS) {
+  const needed = EXERCISE_STATIONS[exercise], has = stations instanceof Set ? id => stations.has(id) : id => stations.includes(id);
+  return Boolean(needed?.length) && needed.every(has);
+}
+// The stations of a training setup; the whole list when nothing is known.
+export function stationsOf(setup) {
+  return new Set(normalizeStations(setup?.stations) || EQUIPMENT_PRESETS[setup?.equipment] || ALL_STATIONS);
 }

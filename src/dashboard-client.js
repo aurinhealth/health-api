@@ -145,7 +145,7 @@ async function jsonFetch(path,options={}){if(typeof aiIntroBefore==='function')a
 // once what will belong to the AI plan (remembered per account on the server).
 // Once the paid split is on, a locked AI feature (HTTP 402) shows it each time.
 // Paying is not live yet: the button only says so.
-const AI_PATHS=['/app/api/assistant','/app/api/coach/review','/app/api/gym/adjust','/app/api/food/ai-lookup','/app/api/food/photo'];
+const AI_PATHS=['/app/api/assistant','/app/api/coach/review','/app/api/gym/adjust','/app/api/gym/equipment/ai','/app/api/food/ai-lookup','/app/api/food/photo'];
 let subscriptionPromise=null;
 function subscriptionInfo(){return subscriptionPromise||(subscriptionPromise=fetch('/app/api/subscription',{credentials:'same-origin'}).then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status))).catch(error=>{subscriptionPromise=null;throw error;}));}
 async function aiIntroBefore(path,options={}){
@@ -833,7 +833,7 @@ function renderGymExerciseChoices(){
   visibleGymExercises=gymExerciseCatalog.filter(item=>!existing.has(item.name)&&words.every(word=>[item.name,item.muscle,item.search].join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('cs').includes(word))).sort((a,b)=>Number(recent.has(b.name))-Number(recent.has(a.name))||a.name.localeCompare(b.name,'cs')).slice(0,40);
   gymExerciseIndex=Math.min(gymExerciseIndex,Math.max(0,visibleGymExercises.length-1));
   $('gymExerciseResults').innerHTML=visibleGymExercises.map((item,i)=>'<button type="button" role="option" id="gymExerciseOption'+i+'" aria-selected="'+(i===gymExerciseIndex)+'" data-index="'+i+'" title="'+esc(item.note)+'"><strong>'+esc(item.name)+'</strong><small>'+esc(item.muscle)+' · '+esc(item.sets)+' × '+esc(item.reps)+(item.station?' · '+esc(item.station):'')+'</small></button>').join('');
-  $('gymExerciseHint').textContent=visibleGymExercises.length?visibleGymExercises.length+uiText(' cviků k výběru · vybavení METAGYM Kutná Hora.', ' exercises to choose from · METAGYM Kutná Hora equipment.'):'Žádný další cvik v katalogu neodpovídá hledání.';
+  $('gymExerciseHint').textContent=visibleGymExercises.length?visibleGymExercises.length+uiText(' cviků k výběru · podle tvého vybavení.', ' exercises to choose from · based on your equipment.'):'Žádný další cvik v katalogu neodpovídá hledání.';
   $('gymExerciseSearch').setAttribute('aria-activedescendant',visibleGymExercises.length?'gymExerciseOption'+gymExerciseIndex:'');
 }
 async function openGymExercisePicker(){
@@ -851,7 +851,8 @@ function renderGym(){const values=state.gym?.values||[];const rows=values.slice(
 function gymDay(){return state.gymDate||localToday()}
 async function loadGym(){state.gym=await jsonFetch("/app/api/gym"+(gymDay()!==localToday()?"?date="+gymDay():""));renderGym();renderGymHistory(state.gym.history||[])}
 async function saveGym(){const b=$("saveGym");b.disabled=true;b.textContent="Ukládám…";try{for(const tr of document.querySelectorAll("#gymRows tr[data-row]"))await persistGymRow(tr);await loadGym();toast((state.gym?.values||[]).slice(7).some(gymRowDone)?"Trénink uložen a historie obnovena":"Uloženo. Do historie se propíší série označené Hotovo.");}catch(e){toast("Uložení selhalo: "+e.message)}finally{b.disabled=false;b.textContent="Uložit trénink"}}
-async function generateGym(){const b=$("generateGym");b.disabled=true;b.textContent="Generuji…";try{await jsonFetch("/app/api/gym/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:gymDay()})});toast("Dnešní plán vygenerován");await loadGym()}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="Generovat"}}
+async function generateGym(){return withGymEquipment(generateGymNow);}
+async function generateGymNow(){const b=$("generateGym");b.disabled=true;b.textContent="Generuji…";try{await jsonFetch("/app/api/gym/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({date:gymDay()})});toast("Dnešní plán vygenerován");await loadGym()}catch(e){toast(e.message)}finally{b.disabled=false;b.textContent="Generovat"}}
 const selectedGymMuscles=new Set();
 function renderGymFocus(){
   document.querySelectorAll('.gym-focus-builder [data-muscle]').forEach(el=>el.setAttribute('aria-pressed',String(selectedGymMuscles.has(el.dataset.muscle))));
@@ -867,6 +868,10 @@ function toggleGymMuscle(id){
   renderGymFocus();
 }
 async function generateFocusedGym(){
+  if(!selectedGymMuscles.size)return;
+  return withGymEquipment(generateFocusedGymNow);
+}
+async function generateFocusedGymNow(){
   if(!selectedGymMuscles.size)return;
   const button=$('generateFocusedGym'),day=$('gymFocusDate')?.value||localToday();if(day<localToday()){$('gymFocusStatus').textContent='Vyber dnešek nebo pozdější den.';return;}
   state.gymDate=day;button.disabled=true;button.textContent='Generuji…';
@@ -5166,13 +5171,68 @@ if($('foodEntry')&&$('myFoodLibrary')){
  ($('foodEntry').querySelector('.food-actions')||$('foodEntry').querySelector('.food-controls')).after(row);
 }
 
-async function showStrengthPlace(){
-  try{
-    const {training}=await jsonFetch('/app/api/training-setup');
-    openSheet('Kde budeš posilovat?','<form id="strengthPlaceForm"><p>Podle místa vybereme cviky, které můžeš provést. Bez nastavení používáme vlastní váhu.</p><label>Místo a dostupné pomůcky<select class="food-input" id="strengthPlace"><option value="bodyweight">Doma bez nářadí · vlastní váha</option><option value="dumbbells">Mám jednoručky a lavici</option><option value="gym">V posilovně · stroje a činky</option></select></label><p class="small">Změna se použije při příštím generování. Uložené tréninky zůstávají stejné.</p><button class="btn primary" type="submit">Uložit</button></form>',body=>{
-      $('strengthPlace').value=training.equipment||'bodyweight';
-      body.querySelector('form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('button');b.disabled=true;try{await jsonFetch('/app/api/training-setup',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({equipment:$('strengthPlace').value})});closeSheet();toast('Místo pro silový trénink je uložené.');}catch(error){toast(error.message);b.disabled=false;}};
-    });
-  }catch(error){toast(error.message);}
+// My equipment: what the athlete's gym or home has. Generated workouts, the
+// exercise picker and replacements use only exercises it allows. The tick
+// list works without AI; AI can read a gym's website or a list into ticks,
+// which the athlete then checks before saving. Until it is ticked once, the
+// app asks before the first generated workout.
+let gymEquipment=null;
+async function loadGymEquipment(){return gymEquipment||(gymEquipment=await jsonFetch('/app/api/gym/equipment'));}
+async function withGymEquipment(run){
+  try{const e=await loadGymEquipment();if(!e.equipmentChosen)return showGymEquipment(run);}catch{/* the server keeps the last setting */}
+  return run();
 }
-if($('generateGym')&&!$('strengthPlaceButton')){$('generateGym').insertAdjacentHTML('beforebegin','<button class="btn" type="button" id="strengthPlaceButton">Kde cvičím</button>');$('strengthPlaceButton').onclick=showStrengthPlace;}
+async function showGymEquipment(then=null){
+  let data;try{data=await loadGymEquipment();}catch(error){toast(error.message);return;}
+  const picked=new Set(data.stations||[]);let changed=new Set();
+  const presetButtons=[['bodyweight',uiText('Doma bez nářadí','Home, no equipment')],['dumbbells',uiText('Doma s jednoručkami','Home with dumbbells')],['gym',uiText('Celá posilovna','Full gym')]];
+  const allowed=()=>Object.values(data.exercises||{}).filter(ids=>ids.every(id=>picked.has(id))).length;
+  const intro=then?uiText('Než sestavím trénink, zaškrtni vybavení, které máš. Podle něj vybírám cviky.','Before I build the workout, tick the equipment you have. I pick the exercises from it.'):uiText('Zaškrtni, co máš k dispozici. Generované tréninky, výběr cviků i náhrady použijí jen tohle vybavení.','Tick what you have. Generated workouts, the exercise picker and replacements use only this equipment.');
+  openSheet(uiText('Moje vybavení','My equipment'),'<form id="gymEquipmentForm" class="equip-form"><p>'+esc(intro)+'</p>'
+    +'<div class="equip-presets" role="group" aria-label="'+esc(uiText('Rychlá volba','Quick choice'))+'">'+presetButtons.map(([id,label])=>'<button type="button" class="btn" data-preset="'+id+'">'+esc(label)+'</button>').join('')+'</div>'
+    +'<details class="equip-ai"><summary>'+esc(uiText('Načíst vybavení posilovny přes AI','Read your gym\'s equipment with AI'))+'</summary><p class="small">'+esc(uiText('Vlož odkaz na web posilovny nebo napiš, co tam mají. AI zaškrtne, co najde, a ty to pak zkontroluješ a uložíš.','Paste a link to the gym\'s website or write what it has. AI ticks what it finds; you check it and save.'))+'</p>'
+    +'<textarea class="food-input" id="equipAiText" rows="3" maxlength="4000" placeholder="'+esc(uiText('https://… nebo např. leg press, kladky, jednoručky do 30 kg, benchpress','https://… or e.g. leg press, cables, dumbbells up to 30 kg, bench press'))+'"></textarea>'
+    +'<button type="button" class="btn" id="equipAiRun">'+esc(uiText('Načíst','Read'))+'</button><div id="equipAiResult" class="small" role="status"></div></details>'
+    +(data.zones||[]).map(z=>'<fieldset class="equip-zone"><legend>'+esc(z.label)+'</legend><div class="equip-grid">'+z.items.map(item=>'<label class="equip-item" data-station="'+esc(item.id)+'"><input type="checkbox" value="'+esc(item.id)+'"> <span>'+esc(item.label)+'</span></label>').join('')+'</div></fieldset>').join('')
+    +'<p class="small" id="equipCount" role="status"></p><p class="small">'+esc(uiText('Změna se použije při příštím generování. Uložené tréninky zůstávají stejné.','The change applies the next time a workout is generated. Saved workouts stay the same.'))+'</p>'
+    +'<button class="btn primary" type="submit" id="equipSave">'+esc(then?uiText('Uložit a sestavit trénink','Save and build the workout'):uiText('Uložit','Save'))+'</button></form>',body=>{
+    const sync=()=>{
+      body.querySelectorAll('.equip-item').forEach(el=>{const id=el.dataset.station;el.querySelector('input').checked=picked.has(id);el.classList.toggle('changed',changed.has(id));});
+      const n=allowed();
+      $('equipCount').textContent=n?uiText('S tímto vybavením je k dispozici '+czPlural(n,'cvik','cviky','cviků')+'.','This equipment allows '+n+(n===1?' exercise.':' exercises.')):uiText('Zaškrtni aspoň podložku nebo jednu pomůcku.','Tick at least the floor mat or one piece of equipment.');
+      $('equipSave').disabled=!n;
+    };
+    sync();
+    body.querySelector('.equip-presets').onclick=e=>{const b=e.target.closest('[data-preset]');if(!b)return;picked.clear();(data.presets?.[b.dataset.preset]||[]).forEach(id=>picked.add(id));changed=new Set();sync();};
+    body.addEventListener('change',e=>{const input=e.target.closest('.equip-item input');if(!input)return;if(input.checked)picked.add(input.value);else picked.delete(input.value);changed.delete(input.value);sync();});
+    $('equipAiRun').onclick=async()=>{
+      const text=$('equipAiText').value.trim(),out=$('equipAiResult'),b=$('equipAiRun');
+      if(!text){out.textContent=uiText('Vlož odkaz nebo seznam vybavení.','Paste a link or a list of equipment.');return;}
+      b.disabled=true;b.textContent=uiText('Načítám…','Reading…');out.textContent='';
+      try{
+        const r=await jsonFetch('/app/api/gym/equipment/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+        const extra=r.unsupported?.length?'<p>'+esc(uiText('Tohle aplikace zatím neumí využít: ','The app can\'t use these yet: ')+r.unsupported.join(', ')+'.')+'</p>':'';
+        if(r.status!=='ok'){out.innerHTML='<p>'+esc(r.message||'')+'</p>'+extra;return;}
+        const before=new Set(picked);picked.clear();r.stations.forEach(id=>picked.add(id));
+        changed=new Set([...picked].filter(id=>!before.has(id)).concat([...before].filter(id=>!picked.has(id))));
+        sync();
+        out.innerHTML='<p>'+esc(r.note||'')+' '+esc(uiText('Zkontroluj zaškrtnutí (změny jsou zvýrazněné) a ulož.','Check the ticks (changes are highlighted) and save.'))+'</p>'+extra
+          +(r.sources?.length?'<p>'+r.sources.map(s=>'<a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.title)+'</a>').join(' · ')+'</p>':'');
+      }catch(error){out.textContent=error.message;}
+      finally{b.disabled=false;b.textContent=uiText('Načíst','Read');}
+    };
+    body.querySelector('form').onsubmit=async e=>{
+      e.preventDefault();const b=$('equipSave');b.disabled=true;
+      try{
+        const {training}=await jsonFetch('/app/api/training-setup',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({stations:[...picked]})});
+        gymEquipment={...data,stations:training.stations,equipment:training.equipment,equipmentChosen:true};
+        gymExerciseCatalog=[];closeSheet();toast(uiText('Vybavení je uložené.','Your equipment is saved.'));
+        if(then)await then();
+      }catch(error){toast(error.message);b.disabled=false;}
+    };
+  });
+}
+if($('generateGym')&&!$('gymEquipmentButton')){
+  const style=document.createElement('style');style.textContent='.equip-presets{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px}.equip-ai{margin:0 0 14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px}.equip-ai summary{cursor:pointer;font-weight:650}.equip-ai textarea{width:100%;margin:8px 0;box-sizing:border-box}.equip-ai p{margin:6px 0}.equip-ai a{color:var(--primary-text)}.equip-zone{border:0;padding:0;margin:0 0 12px;min-width:0}.equip-zone legend{font-weight:700;font-size:var(--fs-small);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;padding:0}.equip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px}.equip-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:var(--fs-small);cursor:pointer}.equip-item input{accent-color:var(--accent);width:18px;height:18px;flex:none;margin:0}.equip-item.changed{border-color:var(--accent);background:rgba(var(--primary-rgb),.08)}';document.head.append(style);
+  $('generateGym').insertAdjacentHTML('beforebegin','<button class="btn" type="button" id="gymEquipmentButton">Moje vybavení</button>');$('gymEquipmentButton').onclick=()=>showGymEquipment();
+}

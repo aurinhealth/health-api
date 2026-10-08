@@ -20,7 +20,7 @@ export function cleanGymRows(rows, allowed) {
   return out;
 }
 
-export function catalogNames() { return new Set(gymExerciseCatalog().map(e => e.name)); }
+export function catalogNames(stations) { return new Set(gymExerciseCatalog(stations).map(e => e.name)); }
 
 const ADJUST_SCHEMA = { type: 'json_schema', name: 'gym_adjust', strict: true, schema: { type: 'object', additionalProperties: false, required: ['answer', 'exercises'], properties: {
   answer: { type: 'string' },
@@ -73,8 +73,8 @@ export function fillGymLoads(rows, history = []) {
   }
   return rows;
 }
-export async function adjustGymPlan(env, { rows, request, history = [] }) {
-  const items = gymExerciseCatalog(), catalog = new Map(items.map(e => [e.name, e]));
+export async function adjustGymPlan(env, { rows, request, history = [], stations }) {
+  const items = gymExerciseCatalog(stations), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
   const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent });

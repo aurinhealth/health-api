@@ -1,6 +1,6 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
 import {reportFood} from './shared-foods.js';
-import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup} from './onboarding.js';
+import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup,equipmentSetup} from './onboarding.js';
 import {subscriptionStatus,markAiIntroSeen,assertAIAccess} from './subscription.js';
 import {consentStatus,saveConsent} from './consent.js';
 import {listRecipes,saveRecipe,deleteRecipe,searchRecipes} from './personal-recipes.js';
@@ -30,7 +30,8 @@ import {athleteFocus} from './athlete-focus.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
-import {gymExerciseCatalog,gymAlternatives,gymLoadEstimate} from './gym-catalog.js';
+import {gymExerciseCatalog,gymAlternatives,gymLoadEstimate,equipmentChoices} from './gym-catalog.js';
+import {equipmentWithAI} from './gym-equipment-ai.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
@@ -660,13 +661,27 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // Connections are optional: without them the dashboard works from manual
   // entries (weight, food) and the profile; missingProviders drives the
   // connection prompt in the client.
-  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog((await equipmentSetup(env.DB)).stations)},{headers:{'Cache-Control':'no-store'}});
+  // The athlete's equipment: the tick list, what is ticked, and the exercises
+  // each item allows. Saved through /app/api/training-setup ({stations}).
+  if(url.pathname==='/app/api/gym/equipment'&&request.method==='GET')return Response.json({status:'ok',...equipmentChoices(),...await equipmentSetup(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  // A gym's website or list read by AI into ticks. Only a proposal: the sheet
+  // shows it and nothing is saved until the athlete confirms.
+  if(url.pathname==='/app/api/gym/equipment/ai'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    if(!env.OPENAI_API_KEY)return Response.json({message:L('AI není připojena. Vybavení zaškrtni ručně.', 'AI is not connected. Tick your equipment by hand.')},{status:503});
+    try{
+      const body=await request.json().catch(()=>({})),r=await equipmentWithAI(env,{text:body.text});
+      if(!r.found)return Response.json({status:'not_found',message:r.note||L('V podkladech jsem žádné vybavení nenašla. Zaškrtni ho ručně.', 'I found no equipment in what you sent. Tick it by hand.'),unsupported:r.unsupported,page:r.page},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',...r},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.limit||error.consent?error.message:error.ai?L('Načtení přes AI selhalo: ', 'The AI reading failed: ')+String(error.message).slice(0,160):error.message},{status:error.limit?(error.status||429):error.consent?403:error.ai?502:400});}
+  }
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,history]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[])]);
+    const [plan,history,equipment]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),equipmentSetup(env.DB)]);
     const inPlan=[...new Set((plan?.values||[]).slice(7).map(r=>r?.[1]).filter(Boolean))];
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan)},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,equipment.stations)},{headers:{'Cache-Control':'no-store'}});
   }
   // Loads for exercises added by hand, or a plan's sets left without a weight.
   if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
@@ -690,8 +705,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({})),text=String(body.request||'').trim().slice(0,300);
       if(!text)throw new Error(L('Napiš, co v tréninku změnit.', 'Write what to change in the workout.'));
       const rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(Array.isArray(body.rows)?body.rows:[]).map(r=>String(r?.[1]??'').trim()).filter(Boolean)]));
-      const history=await getStrengthHistory(env.DB,300).catch(()=>[]);
-      const result=await adjustGymPlan(env,{rows,request:text,history});
+      const [history,equipment]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),equipmentSetup(env.DB)]);
+      const result=await adjustGymPlan(env,{rows,request:text,history,stations:equipment.stations});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}
@@ -1235,12 +1250,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let data={status:"ok",values:[],videoLinks:[]};
       try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored,cancelled:plan.cancelled,recoverable:plan.recoverable}; }
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:L("Plán se nepodařilo načíst.", "The plan couldn't be loaded.")}; }
-      let history=[];
-      try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
+      const [history,stations]=await Promise.all([
+        getStrengthHistory(env.DB,500).catch(error=>{console.error("Gym history read failed",error);return [];}),
+        equipmentSetup(env.DB).then(e=>e.stations,()=>undefined)]);
       // Muscles each exercise of the day loads (plan and saved sets), for the body figure.
       const names=new Set([...(data.values||[]).slice(7).map(r=>r?.[1]),...history.filter(r=>String(r.workout_date||'').slice(0,10)===date).map(r=>r.exercise)].filter(Boolean));
       const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
-      return Response.json({...data,history,muscles,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
+      // The equipment goes along for the AI coach's swaps (coach-gym-adjustment.js).
+      return Response.json({...data,history,muscles,stations,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
       try {

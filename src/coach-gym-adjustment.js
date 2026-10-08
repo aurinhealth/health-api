@@ -3,7 +3,7 @@ import { parseStrengthPlan } from './strength-history.js';
 import { EXERCISES } from './strength-generator.js';
 import { findExerciseAlternatives } from './strength-intelligence.js';
 import { gymLoadEstimate } from './gym-catalog.js';
-import { availableAt } from './gym-equipment.js';
+import { availableAt, ALL_STATIONS } from './gym-equipment.js';
 
 export function todayGymContext(gym,date){
   if(!gym?.values?.length)return null;
@@ -12,12 +12,12 @@ export function todayGymContext(gym,date){
   const work=parsed.rows.filter(r=>r.type==='WORK'),names=[...new Set(work.map(r=>r.exercise))];
   return {date,exercises:names.map(name=>({name,muscle:EXERCISES[name]?.muscle,pattern:EXERCISES[name]?.pattern,
     sets:work.filter(r=>r.exercise===name).map(r=>({set:r.setNo,kg:r.plannedKg,reps:r.plannedReps,completed:r.completed,actualKg:r.actualKg,actualReps:r.actualReps,rpe:r.rpe,toFailure:r.toFailure,superset:r.superset})),
-    alternatives:findExerciseAlternatives(name).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!names.includes(a.name)).slice(0,4).map(a=>({name:a.name,muscle:a.muscle,pattern:a.pattern,reps:EXERCISES[a.name].reps}))}))};
+    alternatives:findExerciseAlternatives(name).filter(a=>EXERCISES[a.name]&&availableAt(a.name,gym.stations||ALL_STATIONS)&&!names.includes(a.name)).slice(0,4).map(a=>({name:a.name,muscle:a.muscle,pattern:a.pattern,reps:EXERCISES[a.name].reps}))}))};
 }
 
 export function prepareGymSwap(gym,fromExercise,toExercise,reason){
   const parsed=parseStrengthPlan(gym.values),source=parsed.rows.filter(r=>r.exercise===fromExercise),def=EXERCISES[toExercise];
-  if(!source.length||!def||!availableAt(toExercise)||fromExercise===toExercise)throw new Error(L('Cvik není v aktuálním plánu nebo katalogu.', 'The exercise isn\'t in the current plan or catalog.'));
+  if(!source.length||!def||!availableAt(toExercise,gym.stations||ALL_STATIONS)||fromExercise===toExercise)throw new Error(L('Cvik není v aktuálním plánu nebo katalogu.', 'The exercise isn\'t in the current plan or catalog.'));
   if(def.muscle!==EXERCISES[fromExercise]?.muscle)throw new Error(L('Náhrada musí zachovat cílovou partii.', 'The replacement must keep the target muscle group.'));
   if(parsed.rows.some(r=>r.exercise===toExercise))throw new Error(L('Náhradní cvik už v plánu je.', 'The replacement exercise is already in the plan.'));
   if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error(L('Rozcvičený nebo rozepsaný cvik nelze nahradit.', 'An exercise that\'s warmed up or partly logged can\'t be replaced.'));
