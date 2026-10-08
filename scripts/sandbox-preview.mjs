@@ -30,6 +30,7 @@ const statusCoachText = await Promise.all(['training-status','coach-engine'].map
 const weeklyReviewText = await readFile(new URL('../src/weekly-plan-review.js',import.meta.url),'utf8');
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
+import { nightSegments, nightStats } from "../src/night-detail.js";
 
 const day = (offset, base = today()) => { const d = new Date(base + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
 function today() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
@@ -197,7 +198,7 @@ const plural=(count,cs1,cs2,cs5,en1,en2)=>{const n=Math.abs(Math.round(Number(co
 const num=(value,digits=0)=>{const n=Number(value);if(!Number.isFinite(n))return '';const s=String(Math.round(n*10**digits)/10**digits);return lang()==='en'?s:s.replace('.',',');};
 const bilingual=(cs,en)=>{const t={};for(const k of Object.keys(cs))Object.defineProperty(t,k,{get:()=>L(cs[k],en[k]??cs[k]),enumerable:true});return t;};
 const DATA=${JSON.stringify(data).replace(/</g, "\\u003c")}[lang()];${planner}
-const statusCoaches=(()=>{const todayGymContext=(gym,date)=>({date,exercises:[...new Set((gym.values||[]).slice(7).filter(r=>r[0]==='WORK').map(r=>r[1]))].map(name=>({name,sets:gym.values.slice(7).filter(r=>r[0]==='WORK'&&r[1]===name).map(r=>({completed:r[8]==='TRUE'}))}))});${statusCoachText.map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return buildCoachCouncil;})();
+const statusCoaches=(()=>{const buildGymReview=()=>null,buildRideReview=()=>null,buildRunReview=()=>null;const todayGymContext=(gym,date)=>({date,exercises:[...new Set((gym.values||[]).slice(7).filter(r=>r[0]==='WORK').map(r=>r[1]))].map(name=>({name,sets:gym.values.slice(7).filter(r=>r[0]==='WORK'&&r[1]===name).map(r=>({completed:r[8]==='TRUE'}))}))});${statusCoachText.map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return buildCoachCouncil;})();
 const fallbackReview=(()=>{${[statusCoachText[0],weeklyReviewText].map(s=>s.replace(/^import .*;\r?$/gm,'').replace(/^export /gm,'')).join('\n')} return fallbackWeekReview;})();
 const gymDrafts={};let gymDraftSeq=0;
 let prefs=${JSON.stringify(weekPlan)},overrides={},inboxItems=[],fluidDays={},fluidId=10,athleteState={status:'active',note:'',memories:[],conversation:[],dismissed:[]},gymHistory=${JSON.stringify(gymHistory)},gymByDay={${JSON.stringify(T)}:${JSON.stringify(gymValues)}},GYM_WEEK=${JSON.stringify(gymPlansForWeek())};
@@ -219,6 +220,7 @@ window.fetch=async(input,opts={})=>{const url=new URL(typeof input==='string'?in
  if(p==='/app/api/food/log'){const a=foodIntake(body.product,body.quantity,body.unit,{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density}),id=++foodEntryId;foodEntries.push({id,consumed_date:body.date,consumed_at:body.date+'T12:00:00Z',recipe_title:body.product.name,kcal:a.calories,protein_g:a.protein_g,carbs_g:a.carbs_g,fat_g:a.fat_g,note:JSON.stringify({mealType:body.mealType,amount:a.amount,unit:a.unit,product:body.product}),google:{status:'synced'}});foodProducts=foodProducts.filter(p=>p.name!==body.product.name);foodProducts.push({...body.product,source:'personal'});return ok({status:'ok',id,message:'Jídlo je zapsané a potravina uložená pro příště.'});}
  if(p==='/app/api/food/day')return ok({status:'ok',entries:foodEntries.filter(e=>e.consumed_date===(url.searchParams.get('date')||T))});
  if(p==='/app/api/food/entry'){const row=foodEntries.find(e=>Number(e.id)===Number(body.id));if(m==='PATCH'&&row){for(const k of ['kcal','protein_g','carbs_g','fat_g'])if(body[k]!=null)row[k]=Number(body[k]);if(body.name)row.recipe_title=body.name;row.consumed_date=body.date||row.consumed_date;if(body.mealType)row.note=JSON.stringify({...JSON.parse(row.note||'{}'),mealType:body.mealType});}if(m==='DELETE')foodEntries=foodEntries.filter(e=>Number(e.id)!==Number(body.id));return ok({status:'ok',id:body.id});}
+ if(p==='/app/api/night')return ok(${JSON.stringify(sampleNight(T)).replace(/</g, "\\u003c")});
  if(p==='/app/api/coaches'){const date=url.searchParams.get('date')||T,all=Object.values(DATA.weeks).flatMap(w=>w.days),daily=all.find(d=>d.date===date)?.daily||DATA['/app/api/daily'],current=date===T?athleteState:{status:'active',note:''};return ok({status:'ok',date,...statusCoaches({date,daily,yesterday:all.find(d=>d.date===shift(date,-1))?.daily,fitness:DATA['/app/api/fitness'].wellness.at(-1),sleepSessions:DATA['/app/api/sleep'].sessions,athleteState:current,focus:{sportLabel:'cyklistika'},gym:{values:gymByDay[date]||[]}}),athleteState:{status:current.status,note:current.note,statusUntil:current.statusUntil}});}
  if(p==='/app/api/week-plan'){const key=url.searchParams.get('start'),start=key||Object.keys(WEEKDAYS)[1];if(m==='POST'){if(key)overrides[key]=sanitizeWeekPlan(body);else prefs=sanitizeWeekPlan(body);}if(m==='DELETE')delete overrides[key];const effective=key?{...(overrides[key]||prefs),source:overrides[key]?'week':'default'}:prefs;return ok({status:'ok',prefs:effective,historyEstimate:activityHistoryEstimate(Object.values(DATA.weeks).flatMap(w=>w.days),T),roles:planWeekRoles(effective.days),start,targets:capWeekTargets(weekTargets({roles:planWeekRoles(effective.days),ctl:CTL,lastWeekLoad:LAST,days:WEEKDAYS[start]||[],today:T,weekStart:start}),effective,[],WEATHER_BY_DAY)});}
  if(p==='/app/api/fluids'){const date=body.date||url.searchParams.get('date')||T;if(!fluidDays[date])fluidDays[date]={...DATA[p],entries:[{id:1,kind:'water',ml:1000,consumedAt:date+'T08:00'},{id:2,kind:'tea',ml:300,consumedAt:date+'T09:30'},{id:3,kind:'water',ml:500,consumedAt:date+'T11:00'}]};const f=fluidDays[date];if(m==='POST')f.entries.push({id:fluidId++,kind:body.kind,ml:body.ml,consumedAt:body.at});if(m==='DELETE')for(const day of Object.values(fluidDays))day.entries=day.entries.filter(e=>String(e.id)!==url.searchParams.get('id'));f.totalMl=f.entries.reduce((n,e)=>n+e.ml,0);return ok(f);}
@@ -274,6 +276,24 @@ async function page({ inline }) {
     html = html.replace('<link rel="manifest" href="/manifest.webmanifest">', "");
   }
   return html;
+}
+
+// A sample night for the morning card: four sleep cycles, a few wake-ups and heart-rate spikes.
+function sampleNight(date) {
+  const shift = (d, k) => new Date(Date.parse(d + "T12:00:00Z") + k * 864e5).toISOString().slice(0, 10);
+  const start = shift(date, -1) + "T21:40:00Z", at = m => new Date(Date.parse(start) + m * 60000).toISOString();
+  const plan = [["AWAKE", 14], ["LIGHT", 22], ["DEEP", 48], ["LIGHT", 14], ["REM", 12], ["AWAKE", 4], ["LIGHT", 30], ["DEEP", 30], ["REM", 22], ["LIGHT", 26], ["AWAKE", 9], ["LIGHT", 18], ["DEEP", 14], ["REM", 30], ["LIGHT", 34], ["AWAKE", 3], ["REM", 26], ["LIGHT", 16], ["AWAKE", 6]];
+  let t = 0;
+  const stages = plan.map(([type, len]) => { const x = { type, startTime: at(t), endTime: at(t + len) }; t += len; return x; });
+  const segments = nightSegments(stages, start), hr = [];
+  for (let m = 0; m < t; m += 5) {
+    const seg = segments.find(x => x.s <= m && x.e > m) || { type: "LIGHT" }, base = 62 - m / t * 10 + (seg.type === "DEEP" ? -4 : seg.type === "REM" ? 3 : seg.type === "AWAKE" ? 8 : 0), spike = [95, 180, 305].includes(m) ? 24 : 0;
+    hr.push({ m, avg: Math.round((base + spike / 4) * 10) / 10, min: Math.round(base - 3), max: Math.round(base + 3 + spike) });
+  }
+  const hrv = Array.from({ length: Math.floor(t / 5) }, (_, i) => ({ m: i * 5, ms: Math.round(48 + 12 * Math.sin(i / 6)) }));
+  const stage = k => segments.filter(x => x.type === k).reduce((a, x) => a + x.e - x.s, 0);
+  const history = [1, 2, 3, 4, 5, 6, 7].map(k => ({ date: shift(date, -k), asleepMin: [452, 401, 478, 365, 430, 447, 415][k - 1], inBedMin: 500, stages: { DEEP: 70 + k * 3, REM: 85 - k * 2, LIGHT: 250 }, bedClock: 22 * 60 + 40 + k * 7, wakeClock: 30 * 60 + 30 }));
+  return { status: "ok", date, history, night: { start, end: at(t), offset: 120, inBedMin: t, asleepMin: stage("DEEP") + stage("REM") + stage("LIGHT"), stages: { DEEP: stage("DEEP"), REM: stage("REM"), LIGHT: stage("LIGHT"), AWAKE: stage("AWAKE") }, bedClock: 23 * 60 + 40, wakeClock: 29 * 60 + 38, segments, hr, hrv, stats: nightStats(segments, hr, hrv), usual: { asleepMin: 434, bedClock: 23 * 60 + 8, wakeClock: 30 * 60 + 30, deep: 82, rem: 77, nights: 7 } } };
 }
 
 // A hosted page supplies its own document skeleton: keep the styles and body only.

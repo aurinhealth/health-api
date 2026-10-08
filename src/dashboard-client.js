@@ -323,11 +323,94 @@ function morningWindow(now=new Date(),sync=null){
     const until=valid?Math.max(+noon,+woke+4*3600e3):+noon;return +now<until&&(valid||now.getHours()>=4);}
   const h=now.getHours();return h>=4&&h<12;
 }
+// Last night in detail on the morning card: stage timeline, heart rate with its
+// spikes, HRV and the previous nights, loaded once per day.
+const NIGHT_STAGES=[['AWAKE','Bdění','Awake','#ffc45c'],['REM','REM','REM','#b184ff'],['LIGHT','Lehký','Light','#66d4ff'],['DEEP','Hluboký','Deep','#7563ff']];
+function nightWidth(){return window.innerWidth<640?Math.max(300,Math.min(560,window.innerWidth-56)):760;}
+function nightClock(iso,m){return new Date(Date.parse(iso)+m*60000).toLocaleTimeString(uiText('cs-CZ','en-GB'),{hour:'2-digit',minute:'2-digit'});}
+function clockLabel(min){const m=((Math.round(min)%1440)+1440)%1440;return Math.floor(m/60)+':'+String(m%60).padStart(2,'0');}
+function loadNight(date){
+  if(state.night?.date===date||state.nightLoading===date)return;
+  state.nightLoading=date;
+  jsonFetch('/app/api/night?date='+date).then(d=>{state.night={date,data:d};const el=$('morningNight');if(el)el.innerHTML=nightHtml(d);}).catch(()=>{state.night={date,data:null};}).finally(()=>{state.nightLoading=null;});
+}
+function nightChart(n){
+  const total=Math.max(1,(Date.parse(n.end)-Date.parse(n.start))/60000),W=nightWidth(),L=W<640?58:64,R=12,T=4,laneH=16,gap=4;
+  const x=m=>L+Math.max(0,Math.min(total,m))/total*(W-L-R),grid='color-mix(in srgb,var(--muted) 18%,var(--bg))',ink='color-mix(in srgb,var(--muted) 87%,var(--text))';
+  let out='';const hypH=T+NIGHT_STAGES.length*(laneH+gap);
+  NIGHT_STAGES.forEach(([k,cs,en,c],i)=>{
+    const y=T+i*(laneH+gap);
+    out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+(y+laneH/2)+'" y2="'+(y+laneH/2)+'" stroke="'+grid+'"/><text x="'+(L-8)+'" y="'+(y+laneH/2+4)+'" font-size="12" text-anchor="end" fill="'+ink+'">'+uiText(cs,en)+'</text>';
+    for(const s of (n.segments||[]).filter(s=>s.type===k)){const x0=x(s.s),w=Math.max(1.5,x(s.e)-x0-.5);out+='<rect x="'+x0+'" y="'+y+'" width="'+w+'" height="'+laneH+'" rx="2" fill="'+c+'"><title>'+esc(uiText(cs,en)+' '+nightClock(n.start,s.s)+'–'+nightClock(n.start,s.e)+' · '+(s.e-s.s)+' min')+'</title></rect>';}
+  });
+  let H=hypH+6;const hr=n.hr||[];
+  if(hr.length>3){
+    const top=hypH+18,h=84,lo=Math.floor(Math.min(...hr.map(b=>b.min??b.avg))/5)*5-2,hi=Math.ceil(Math.max(...hr.map(b=>b.max??b.avg))/5)*5+2,y=v=>top+(1-(v-lo)/(hi-lo))*h,avg=n.stats?.avgHr;
+    // Lowest and highest value on the axis, the night's average as a dashed line.
+    const bottom=Math.round(Math.min(...hr.map(b=>b.min??b.avg))),peak=Math.round(Math.max(...hr.map(b=>b.max??b.avg)));
+    for(const v of [bottom,peak])out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="'+grid+'"/><text x="'+(L-8)+'" y="'+(y(v)+4)+'" font-size="12" text-anchor="end" fill="'+ink+'">'+v+'</text>';
+    if(avg!=null)out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(avg)+'" y2="'+y(avg)+'" stroke="color-mix(in srgb,var(--text) 40%,var(--bg))" stroke-dasharray="4 4"/><text x="'+(W-R)+'" y="'+(y(avg)-5)+'" font-size="12" text-anchor="end" fill="'+ink+'">'+uiText('průměr ','avg ')+avg+'</text>';
+    out+='<text x="'+(L-8)+'" y="'+(top+h/2+4)+'" font-size="12" text-anchor="end" fill="'+ink+'">bpm</text>';
+    const pts=hr.filter(b=>b.min!=null&&b.max!=null);
+    if(pts.length>1)out+='<polygon points="'+pts.map(b=>x(b.m+2.5)+','+y(b.max)).join(' ')+' '+pts.slice().reverse().map(b=>x(b.m+2.5)+','+y(b.min)).join(' ')+'" fill="#ff9b80" fill-opacity=".16"/>';
+    out+='<polyline points="'+hr.map(b=>x(b.m+2.5)+','+y(b.avg)).join(' ')+'" fill="none" stroke="#ff9b80" stroke-width="2" stroke-linejoin="round"/>';
+    for(const s of n.stats?.spikes||[])out+='<circle cx="'+x(s.m+2.5)+'" cy="'+y(s.max)+'" r="4" fill="#ff6478" stroke="var(--card,var(--bg))" stroke-width="2"><title>'+esc(uiText('Výkyv tepu ','Heart-rate spike ')+nightClock(n.start,s.m)+' · '+s.max+' bpm')+'</title></circle>';
+    const low=n.stats?.lowHrAt;if(low!=null)out+='<circle cx="'+x(low+2.5)+'" cy="'+y(n.stats.lowHr)+'" r="4" fill="#3fda9c" stroke="var(--card,var(--bg))" stroke-width="2"><title>'+esc(uiText('Nejnižší tep ','Lowest heart rate ')+nightClock(n.start,low)+' · '+n.stats.lowHr+' bpm')+'</title></circle>';
+    H=top+h+6;
+  }
+  // Full hours on the time axis.
+  const first=Math.ceil(Date.parse(n.start)/3600000)*3600000;let ticks='';
+  for(let t=first;t<Date.parse(n.end);t+=3600000){const m=(t-Date.parse(n.start))/60000;if(x(m)-x(0)<44||x(total)-x(m)<50)continue;ticks+='<line x1="'+x(m)+'" x2="'+x(m)+'" y1="'+T+'" y2="'+H+'" stroke="'+grid+'" stroke-dasharray="2 4"/><text x="'+x(m)+'" y="'+(H+14)+'" font-size="12" text-anchor="middle" fill="'+ink+'">'+nightClock(n.start,m).replace(/:00$/,'')+'</text>';}
+  ticks+='<text x="'+L+'" y="'+(H+14)+'" font-size="12" fill="'+ink+'">'+nightClock(n.start,0)+'</text><text x="'+(W-R)+'" y="'+(H+14)+'" font-size="12" text-anchor="end" fill="'+ink+'">'+nightClock(n.start,total)+'</text>';
+  const key=(hr.length>3?'<span><i style="background:#ff9b80"></i>'+uiText('Tep (5 min)','Heart rate (5 min)')+'</span>'+(n.stats?.spikes?.length?'<span><i style="background:#ff6478;border-radius:50%"></i>'+uiText('Výkyv tepu','Spike')+'</span>':'')+(n.stats?.lowHrAt!=null?'<span><i style="background:#3fda9c;border-radius:50%"></i>'+uiText('Nejnižší tep','Lowest')+'</span>':''):'');
+  return '<div class="review-chart"><svg class="experience-chart" viewBox="0 0 '+W+' '+(H+20)+'" role="img" aria-label="'+uiText('Průběh noci: fáze spánku a tep','The night: sleep stages and heart rate')+'">'+ticks+out+'</svg><div class="review-key">'+key+'</div></div>';
+}
+function nightTiles(n){
+  const s=n.stats||{},u=n.usual||{},tiles=[],ok='#3fda9c',warn='#ff9a4d',bad='#ff6478',dev=(a,b)=>a!=null&&b!=null?Math.round(a-b):null;
+  const eff=n.inBedMin?Math.round(n.asleepMin/n.inBedMin*100):null;
+  tiles.push([uiText('Spánek','Sleep'),hm(n.asleepMin),(u.asleepMin!=null?uiText('obvykle ','usual ')+hm(u.asleepMin):'')+(eff!=null?' · '+eff+' %':''),n.asleepMin<360?bad:u.asleepMin!=null&&n.asleepMin<u.asleepMin-45?warn:ok]);
+  const bed=dev(n.bedClock,u.bedClock);
+  tiles.push([uiText('Do postele','Bedtime'),clockLabel(n.bedClock),(s.latencyMin!=null?uiText('usnutí za ','asleep in ')+s.latencyMin+' min':'')+(bed!=null&&Math.abs(bed)>=30?' · '+uiText('o ','')+Math.abs(bed)+' min '+(bed>0?uiText('později','later'):uiText('dříve','earlier')):''),bed!=null&&bed>=60?warn:ok]);
+  if(s.wakeups!=null)tiles.push([uiText('Probuzení','Wake-ups'),s.wakeups+'×',uiText('vzhůru ','awake ')+s.wasoMin+' min',s.wakeups>=5||s.wasoMin>=40?bad:s.wakeups>=3||s.wasoMin>=20?warn:ok]);
+  for(const [k,cs,en] of [['DEEP','Hluboký','Deep'],['REM','REM','REM']]){const v=num(n.stages?.[k]),a=k==='DEEP'?u.deep:u.rem;if(measured(n.stages?.[k]))tiles.push([uiText(cs,en),hm(v),a!=null?uiText('obvykle ','usual ')+hm(a):'',a!=null&&v<a*.75?warn:ok]);}
+  if(s.lowHr!=null)tiles.push([uiText('Nejnižší tep','Lowest HR'),s.lowHr+' bpm',nightClock(n.start,s.lowHrAt)+(s.avgHr!=null?uiText(' · průměr ',' · avg ')+s.avgHr:''),ok]);
+  if(s.spikes)tiles.push([uiText('Výkyvy tepu','HR spikes'),s.spikes.length+'×',uiText('o 15+ bpm nad průměr','15+ bpm above avg'),s.spikes.length>=6?bad:s.spikes.length>=3?warn:ok]);
+  if(s.hrv!=null)tiles.push([uiText('HRV v noci','Night HRV'),s.hrv+' ms',s.hrvLow+'–'+s.hrvHigh+' ms',ok]);
+  return '<div class="rating-signals">'+tiles.map(([l,v,sub,c])=>'<div class="rating-tile"><span class="label">'+l+'</span><b class="ink" style="--c:'+c+'">'+esc(v)+'</b><small>'+esc(sub)+'</small></div>').join('')+'</div>';
+}
+// The previous nights side by side, today last: how much the nights swing.
+function nightHistory(n,history){
+  const rows=[...(history||[])].reverse().concat([{date:null,asleepMin:n.asleepMin,stages:n.stages,today:true}]);if(rows.length<3)return '';
+  const W=nightWidth(),L=W<640?58:64,R=12,T=20,h=64,max=Math.max(...rows.map(r=>num(r.asleepMin)),480),bw=(W-L-R)/rows.length,y=v=>T+(1-v/max)*h;
+  const ink='color-mix(in srgb,var(--muted) 87%,var(--text))',avg=rows.filter(r=>!r.today).reduce((s,r)=>s+num(r.asleepMin),0)/Math.max(1,rows.length-1);
+  let out='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(avg)+'" y2="'+y(avg)+'" stroke="color-mix(in srgb,var(--text) 45%,var(--bg))" stroke-dasharray="4 4"/><text x="'+(L-8)+'" y="'+(y(avg)+4)+'" font-size="12" text-anchor="end" fill="'+ink+'">'+uiText('průměr','avg')+'</text>';
+  rows.forEach((r,i)=>{
+    let top=T+h;const x0=L+i*bw+bw*.18,w=bw*.64,parts=[...NIGHT_STAGES].reverse().filter(([k])=>k!=='AWAKE');
+    const staged=parts.some(([k])=>measured(r.stages?.[k]));
+    if(staged)for(const [k,cs,en,c] of parts){const v=num(r.stages?.[k]);if(!v)continue;const hh=v/max*h;top-=hh;out+='<rect x="'+x0+'" y="'+(top+1)+'" width="'+w+'" height="'+Math.max(1,hh-2)+'" rx="2" fill="'+c+'"'+(r.today?'':' fill-opacity=".55"')+'><title>'+esc((r.today?uiText('Dnešní noc','Last night'):dateLabel(r.date))+' · '+uiText(cs,en)+' '+hm(v))+'</title></rect>';}
+    else out+='<rect x="'+x0+'" y="'+y(num(r.asleepMin))+'" width="'+w+'" height="'+(num(r.asleepMin)/max*h)+'" rx="2" fill="#66d4ff" fill-opacity="'+(r.today?1:.55)+'"/>';
+    out+='<text x="'+(x0+w/2)+'" y="'+(T+h+16)+'" font-size="12" text-anchor="middle" fill="'+(r.today?'var(--text)':ink)+'">'+(r.today?uiText('Dnes','Today'):W<640?Number(String(r.date).slice(8))+'.':dateLabel(r.date))+'</text><text x="'+(x0+w/2)+'" y="'+(y(num(r.asleepMin))-4)+'" font-size="12" text-anchor="middle" fill="'+ink+'">'+clockLabel(num(r.asleepMin))+'</text>';
+  });
+  return '<div class="label night-label">'+uiText('Poslední noci','Recent nights')+'</div><div class="review-chart"><svg class="experience-chart" viewBox="0 0 '+W+' '+(T+h+22)+'" role="img" aria-label="'+uiText('Délka spánku v posledních nocích','Sleep length over recent nights')+'">'+out+'</svg></div>';
+}
+// One sentence on what disturbed the night, with the times.
+function nightNote(n){
+  const s=n.stats||{},spikes=[...(s.spikes||[])].sort((a,b)=>b.max-a.max).slice(0,3).sort((a,b)=>a.m-b.m),parts=[];
+  if(s.wakeups>=3)parts.push(uiText(s.wakeups+'× probuzení (celkem '+s.wasoMin+' min vzhůru)',s.wakeups+' wake-ups ('+s.wasoMin+' min awake in total)'));
+  if(spikes.length)parts.push(uiText('tep vyskočil v ','heart rate jumped at ')+spikes.map(x=>nightClock(n.start,x.m)).join(', ')+' (max '+Math.max(...spikes.map(x=>x.max))+' bpm)');
+  if(!parts.length)return '<p class="night-note">'+uiText('Klidná noc bez větších výkyvů tepu a probouzení.','A calm night without bigger heart-rate swings or wake-ups.')+'</p>';
+  const text=parts.join('; ');return '<p class="night-note">'+esc(text.charAt(0).toUpperCase()+text.slice(1))+'.</p>';
+}
+function nightHtml(d){
+  const n=d?.night;if(!n||!(n.segments?.length||n.hr?.length))return '';
+  return '<div class="label night-label">'+uiText('Průběh noci','The night')+'</div>'+nightChart(n)+nightNote(n)+nightTiles(n)+nightHistory(n,d.history);
+}
 function renderCoachCouncil(){
   const council=state.coaches||{},cards=[...(council.coaches||[]),...(council.reviews||[])];
   const p=$("coachPriorities"),c=$("coachCards");if(!p||!c)return;
   let summary=$('morningSummary');if(!summary){p.insertAdjacentHTML('beforebegin','<div id="morningSummary" class="morning-summary"></div>');summary=$('morningSummary');}
-  const morning=council.morningSummary&&morningWindow(new Date(),council.morningSummary.sleepSync)&&selectedHistoryDate===pragueToday()?council.morningSummary:null;summary.hidden=!morning;summary.innerHTML=morning?'<div class="eyebrow">DNEŠNÍ PŘIPRAVENOST</div><h3>'+esc(morning.headline)+'</h3><p>'+esc(morning.text)+'</p><strong>'+esc(morning.recommendation)+'</strong>':'';
+  const morning=council.morningSummary&&morningWindow(new Date(),council.morningSummary.sleepSync)&&selectedHistoryDate===pragueToday()?council.morningSummary:null;summary.hidden=!morning;summary.innerHTML=morning?'<div class="eyebrow">DNEŠNÍ PŘIPRAVENOST</div><h3>'+esc(morning.headline)+'</h3><p>'+esc(morning.text)+'</p><strong>'+esc(morning.recommendation)+'</strong><div id="morningNight" class="morning-night" data-no-i18n data-raw>'+(state.night?.date===morning.date?nightHtml(state.night.data):'')+'</div>':'';
+  if(morning&&morning.sleepSync?.today)loadNight(morning.date);
   // A priority that only repeats a card's headline and first line is left to the card.
   const heads=cards.map(x=>String(x.headline||'')).filter(Boolean),priorities=(council.priorities||[]).filter(x=>!heads.some(h=>String(x).startsWith(h)));
   p.hidden=!priorities.length;p.innerHTML=priorities.length?'<div class="eyebrow">KOORDINÁTOR · DNEŠNÍ PRIORITY</div><ol class="coach-actions">'+priorities.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ol>':'';

@@ -64,7 +64,16 @@ test('council hides empty nutrition and boilerplate, and follows the athlete spo
 });
 test('morning summary combines fresh sleep, yesterday load and current form without inventing missing data',()=>{
   const r=buildCoachCouncil({date,sleepSessions:[{date,durationMin:330}],fitness:{tsb:-28},yesterday:{training:{completed:[{name:'Ride',durationHours:3,tss:180}]}}});
-  assert.match(r.morningSummary.text,/5 h 30 min/);assert.match(r.morningSummary.text,/180 TSS/);assert.match(r.morningSummary.recommendation,/rezervu/);
+  assert.match(r.morningSummary.text,/5 h 30 min/);assert.match(r.morningSummary.text,/180 TSS/);assert.match(r.morningSummary.recommendation,/nic v plánu/);assert.doesNotMatch(r.morningSummary.recommendation,/posilovn/i);
+  assert.match(r.morningSummary.text,/Dnes nemáš nic v plánu\./);assert.equal(r.morningSummary.headline,'Den na odpočinek');
+  // The advice names only what today holds: a planned ride gets its own line, no gym unless there is one.
+  const short=[{date,durationMin:330}];
+  const ride=buildCoachCouncil({date,sleepSessions:short,fitness:{tsb:-5},daily:{training:{planned:[{id:1,name:'Threshold 4×5',type:'Ride'}]}}}).morningSummary;
+  assert.match(ride.recommendation,/„Threshold 4×5“/);assert.doesNotMatch(ride.recommendation,/posilovn/i);assert.match(ride.text,/Dnes v plánu: Threshold 4×5\./);
+  const lifting=buildCoachCouncil({date,sleepSessions:short,fitness:{tsb:-5},gym}).morningSummary;
+  assert.match(lifting.recommendation,/V posilovně uber/);assert.doesNotMatch(lifting.recommendation,/„/);
+  const normal=buildCoachCouncil({date,sleepSessions:[{date,durationMin:470}],fitness:{tsb:-5},daily:{training:{planned:[{id:2,name:'Endurance',type:'Ride'}]}}}).morningSummary;
+  assert.match(normal.recommendation,/Dnešní plán \(Endurance\) můžeš dodržet/);
   assert.equal(buildCoachCouncil({date,sleepSessions:[{date:'2026-09-01',durationMin:480}]}).morningSummary,null);
   // The client waits for last night's sleep and starts the card at the wake-up time.
   assert.deepEqual(r.morningSummary.sleepSync,{tracked:true,today:true,wokeAt:null});
