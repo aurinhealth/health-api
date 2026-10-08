@@ -3,7 +3,7 @@
 // recipe catalogue holds no personal data and stays; the links between the
 // user and their contributions are personal and go with the account.
 import { L } from './lang.js';
-import { PERSONAL_TABLES } from "./tenancy.js";
+import { PERSONAL_TABLES, publicUser, ownerEmail } from "./tenancy.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials", "provider_tokens"]);
@@ -116,4 +116,18 @@ export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, ch
   const { done, deleted } = await purgeUserData(db, userId, { deadline: Date.now() + budgetMs, chunkRows, maxChunks });
   if (done) await db.prepare("DELETE FROM account_deletions WHERE user_id = ?").bind(userId).run();
   return { userId, done, deleted: Object.values(deleted).reduce((sum, n) => sum + n, 0) };
+}
+
+// Storage limitation (privacy policy): an account nobody has signed in to for
+// two years is deleted with all its data. Signing in is the sign of use: a
+// session lasts at most 30 days (dashboard-auth.js), so someone using the app
+// signs in at least monthly. Every sign-in method must set last_login_at. The
+// owner's account is never deleted.
+export const INACTIVE_MONTHS = 24;
+export async function inactiveAccounts(db, env, { now = new Date(), limit = 10 } = {}) {
+  const cutoff = new Date(now);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - INACTIVE_MONTHS);
+  const rows = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE lower(email) <> ? AND COALESCE(last_login_at, created_at) < ? ORDER BY id LIMIT ?")
+    .bind(ownerEmail(env), cutoff.toISOString().slice(0, 19).replace("T", " "), limit).all();
+  return (rows.results || []).map(row => publicUser(row, env)).filter(user => !user.isOwner);
 }

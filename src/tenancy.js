@@ -43,7 +43,7 @@ export const PERSONAL_TABLES = {
   ai_usage: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
-  user_language: {}, user_time_zone: {}, recovery_sessions: {},
+  user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
   // Sign-in: linked Apple IDs (apple-login.js) and passkeys (passkeys.js),
   // created with user_id.
   user_identities: {},
@@ -110,7 +110,8 @@ export function scopedDb(db, userId) {
 // The env every handler sees for one user: scoped DB, identity, and no access
 // to the owner's legacy global credentials unless this is the owner.
 export function userEnv(env, user) {
-  const scoped = { ...env, DB: scopedDb(env.DB, user.id), RAW_DB: env.DB, USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true };
+  // CONSENT_REQUIRED: AI for this user runs only with their consent (consent.js).
+  const scoped = { ...env, DB: scopedDb(env.DB, user.id), RAW_DB: env.DB, USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
   if (!scoped.USER_IS_OWNER) {
     delete scoped.GOOGLE_REFRESH_TOKEN;
     delete scoped.INTERVALS_API_KEY;
@@ -394,7 +395,9 @@ export async function setUserDisabled(db, env, id, disabled) {
 // jobs and automations that act on everyone's data.
 export async function usersWithProviders(db, env, providers) {
   const placeholders = providers.map(() => "?").join(", ");
-  const rows = await db.prepare(`SELECT DISTINCT u.id, u.email, u.name, u.role, u.disabled FROM users u JOIN connection_credentials c ON c.user_id = u.id WHERE u.disabled = 0 AND c.provider IN (${placeholders}) ORDER BY u.id`).bind(...providers).all().catch(() => ({ results: [] }));
+  // Background jobs touch only the health data of users who consented to it in
+  // the app (consent.js); the owner's jobs always run.
+  const rows = await db.prepare(`SELECT DISTINCT u.id, u.email, u.name, u.role, u.disabled FROM users u JOIN connection_credentials c ON c.user_id = u.id WHERE u.disabled = 0 AND c.provider IN (${placeholders}) AND EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) ORDER BY u.id`).bind(...providers).all().catch(() => ({ results: [] }));
   const list = (rows.results || []).map(row => publicUser(row, env));
   const owner = await ownerUser(db, env);
   if (owner && !list.some(u => u.id === owner.id)) list.unshift(owner);

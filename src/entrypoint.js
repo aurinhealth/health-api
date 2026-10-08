@@ -2,6 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import {reportFood} from './shared-foods.js';
 import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup} from './onboarding.js';
 import {subscriptionStatus,markAiIntroSeen,assertAIAccess} from './subscription.js';
+import {consentStatus,saveConsent} from './consent.js';
 import {listRecipes,saveRecipe,deleteRecipe,searchRecipes} from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
@@ -23,7 +24,7 @@ import { cached, bumpCacheVersion } from './api-cache.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail,rideIntervals} from './activity-detail.js';
-import {getCookbookRecipeByPage} from './cookbook.js';
+import {getCookbookRecipeByPage,useCookbookDatabase,saveCookbook} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {normalizeProfile} from './energy-profile.js';
@@ -95,7 +96,7 @@ import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, 
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange } from "./dashboard-auth.js";
 import { internalHeaders } from "./internal-auth.js";
 import { aiAllowance } from "./ai-usage.js";
-import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle } from "./account-data.js";
+import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
@@ -143,8 +144,16 @@ async function forEachUser(env, providers, fn) {
 const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
+    useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
     if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB).catch(error => console.error("Account deletion failed", error.message));
+    // Accounts unused for two years go with their data (privacy policy). Tried
+    // every ten minutes between 2:00 and 3:00 UTC, as a cron minute can be missed.
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 0) {
+      for (const user of await inactiveAccounts(env.DB, env).catch(error => { console.error("Inactive accounts read failed", error.message); return []; })) {
+        await deleteAccount(await connectionEnvironment(userEnv(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
+      }
+    }
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
@@ -168,6 +177,7 @@ const worker = {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
       throw error;
     }
+    useCookbookDatabase(env.DB);
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     const principal = await resolvePrincipal(request, env);
@@ -202,8 +212,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
-    if(env.AI_PAYWALL_ENABLED==='true'&&/^\/app\/api\/(assistant(?:\/stream)?$|gym\/adjust$|food\/(ai-lookup|photo|chat)$|review(?:\/|$))/.test(url.pathname)){
-      try{await assertAIAccess(env);}catch(error){return Response.json({status:'subscription_required',message:error.message},{status:402});}
+    if(signedIn&&request.method==='POST'&&/^\/app\/api\/(assistant(?:\/stream)?$|gym\/adjust$|food\/(ai-lookup|photo|chat)$|review(?:\/|$))/.test(url.pathname)){
+      try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }
 
 
@@ -586,10 +596,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   if (url.pathname === "/app/api/me" && request.method === "GET") {
-    const [onboarding,ai]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null]);
+    const [onboarding,ai,consent]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null,session.signedIn?consentStatus(env):null]);
     const apple = appleConfigured(env) && session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
     const passkeys = session.user ? await listPasskeys(env.RAW_DB, session.user.id) : [];
-    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,apple,passkeys,emailLogin:emailConfigured(env)},{headers:{"Cache-Control":"no-store"}});
+    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,consent,apple,passkeys,emailLogin:emailConfigured(env)},{headers:{"Cache-Control":"no-store"}});
+  }
+  // Consent to health data (required) and to AI with OpenAI (optional); consent.js.
+  if(url.pathname==='/app/api/consent'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{const result=await saveConsent(env,await request.json().catch(()=>({})));return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:400});}
   }
   if (url.pathname.startsWith("/app/api/passkeys")) {
     const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx);
@@ -1621,6 +1638,12 @@ async function handleAdminApi(request, env, url, session, ctx) {
   try {
     if (url.pathname === "/app/api/admin/users" && request.method === "GET") return Response.json({status:"ok",...await listUsersAndInvites(db)},{headers:{"Cache-Control":"no-store"}});
     const body = await request.json().catch(() => ({}));
+    // The owner's private copy of his printed cookbook (cookbook.js); it never goes into the repository.
+    if (url.pathname === "/app/api/admin/cookbook" && request.method === "POST") {
+      if (!user.isOwner) return Response.json({status:"error",message:L("Kuchařku nahrává jen majitel aplikace.", "Only the app owner uploads the cookbook.")},{status:403});
+      const {recipes} = await saveCookbook(db, body);
+      return Response.json({status:"ok",recipes,message:L(`Kuchařka je nahraná: ${recipes} receptů.`, `The cookbook is uploaded: ${recipes} recipes.`)});
+    }
     if (url.pathname === "/app/api/admin/invites" && request.method === "POST") return Response.json({status:"ok",email:await inviteUser(db, body.email, user.id),message:L("Pozvánka je uložená. Uživatel se může přihlásit přes Google.", "The invitation is saved. The user can sign in with Google.")});
     if (url.pathname === "/app/api/admin/invites" && request.method === "DELETE") { await removeInvite(db, body.email); return Response.json({status:"ok",message:L("Pozvánka je zrušená.", "The invitation is cancelled.")}); }
     // For someone who lost their address: the account (and its data) moves to the new one.

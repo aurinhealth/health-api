@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle } from "../src/account-data.js";
+import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "../src/account-data.js";
 import { findUser } from "../src/tenancy.js";
 
 function database() {
@@ -150,4 +150,17 @@ test("the cron never touches the data of an account that still exists", async ()
 test("the every-minute cron finishes deleted accounts", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(entry, /if \(controller\.cron === "\* \* \* \* \*"\) await finishAccountDeletions\(env\.DB\)/);
+});
+
+test("accounts nobody signed in to for two years are picked for deletion, never the owner", async () => {
+  const db = database();
+  db.sqlite.exec("INSERT INTO users (id, email, created_at, last_login_at) VALUES (5, 'owner@example.com', '2020-01-01 00:00:00', NULL), (6, 'c@example.com', '2020-01-01 00:00:00', '2026-09-01 10:00:00'), (7, 'd@example.com', '2023-01-01 00:00:00', '2024-10-07 23:59:59'), (8, 'e@example.com', '2024-10-09 00:00:00', NULL); UPDATE users SET created_at = '2026-01-01 00:00:00', last_login_at = '2024-10-09 00:00:00' WHERE id = 3; UPDATE users SET created_at = '2024-01-01 00:00:00', last_login_at = NULL WHERE id = 4;");
+  const env = { OWNER_EMAIL: "Owner@example.com" };
+  const picked = await inactiveAccounts(db, env, { now: new Date("2026-10-08T06:00:00Z") });
+  assert.deepEqual(picked.map(u => u.id), [4, 7]);
+  assert.ok(picked.every(u => u.isOwner === false));
+  const scoped = { DB: scopedDb(db, 7), USER_ID: 7 };
+  await deleteAccount(scoped, picked[1], { fetchImpl: async () => ({ ok: true }) });
+  assert.equal(count(db, "users", 7), 0);
+  assert.deepEqual((await inactiveAccounts(db, env, { now: new Date("2026-10-08T06:00:00Z") })).map(u => u.id), [4]);
 });

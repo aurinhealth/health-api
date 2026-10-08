@@ -7,3 +7,8 @@ adaptive-ui*.png
 adaptive-ui-results.json
 adaptive-ui*-results.json
 pfd-sandbox.html
+
+# The owner's cookbook is copyrighted and lives only in the database (scripts/import-cookbook.mjs).
+kucharka*.json
+cookbook*.json
+cookbook*.sql

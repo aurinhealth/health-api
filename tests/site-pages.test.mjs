@@ -93,7 +93,10 @@ test('the privacy policy names the controller and the contact',async()=>{
   assert.match(en,/The controller of your personal data is Petr Bouma/);
   assert.match(cs,/Správcem tvých osobních údajů je Petr Bouma/);
   for(const html of [en,cs,await page(supportPage,'/support','en'),await page(supportPage,'/support','cs')])assert.match(html,/<a href="mailto:petrbouma1994@icloud\.com">petrbouma1994@icloud\.com<\/a>/);
-  // The consent step and the two-year deletion come with their own change; until then the policy does not describe them.
-  assert.doesNotMatch(en,/two years|separate, optional consent/);
+  // The consent step (consent.js) and the two-year deletion (inactiveAccounts) are described.
+  assert.match(en,/deleted automatically with all its data/);
+  assert.match(cs,/dva roky nepřihlásil, automaticky smažeme/);
+  assert.match(en,/The consent covers sending the data an AI feature needs to OpenAI/);
+  assert.match(cs,/Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI/);
   assert.doesNotMatch(en+cs,/ChatGPT|the same way you received your invitation|stejnou cestou, jakou ti přišla pozvánka/);
 });

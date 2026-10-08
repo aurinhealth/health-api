@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { consentStatus } from './consent.js';
 // Billing is deliberately inactive during the invitation-only pilot.
 export const SUBSCRIPTION_FEATURES = [
   {name:'Profil, kalorické cíle a přehledy', ai:false},
@@ -35,10 +36,15 @@ export async function subscriptionStatus(env) {
     const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first();
     if(row?.plan==='ai' && row.valid_until && Date.parse(row.valid_until)>Date.now())plan='ai';
   }
-  return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiAccess:!enforced||plan==='ai',billingActive:enforced,checkoutAvailable:false,features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
+  // AI sends the user's data to OpenAI, so a user's requests and jobs (userEnv)
+  // also need the AI consent (consent.js).
+  const aiConsent=env.CONSENT_REQUIRED?(await consentStatus(env)).aiAllowed:true;
+  return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiConsent,aiAccess:aiConsent&&(!enforced||plan==='ai'),billingActive:enforced,checkoutAvailable:false,features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
     terms:L('Během pilotu pro pozvané jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'During the invitation-only pilot, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
 }
 export async function assertAIAccess(env){
-  if((await subscriptionStatus(env)).aiAccess)return;
+  const status=await subscriptionStatus(env);
+  if(status.aiAccess)return;
+  if(!status.aiConsent){const error=new Error(L('AI funkce posílají tvoje data do OpenAI a k tomu zatím chybí tvůj souhlas.', 'AI features send your data to OpenAI, and your consent to that is still missing.'));error.status=403;error.ai=true;error.consent=true;throw error;}
   const error=new Error(L('Tato AI funkce vyžaduje AI předplatné. Přehled najdeš v Nastavení → Předplatné.', 'This AI feature needs an AI subscription. See Settings → Subscription.'));error.status=402;error.ai=true;error.limit=true;throw error;
 }

@@ -143,7 +143,7 @@ test("connecting Google from the setup window returns to it; cancelling there is
 });
 
 test("the setup window keeps provider cards and lets prefilled profiles bypass extra setup steps", () => {
-  assert.match(entry, /missingProviders:missingProviders\(env\),onboarding,ai[,}]/);
+  assert.match(entry, /missingProviders:missingProviders\(env\),onboarding,ai,consent[,}]/);
   assert.match(client, /providers\.map\(p=>serviceCardHtml\(p,'setup'\)\)/);
   assert.match(client, /wireIntervalsKey\(\$\('setupBody'\)/);
   // The provider pages return to the step the user left.

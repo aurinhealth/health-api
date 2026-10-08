@@ -125,12 +125,14 @@ test("user env hides the owner's global credentials from other users", () => {
   assert.equal(owner.GOOGLE_REFRESH_TOKEN, "owner-token");
 });
 
-test("jobs run for the owner and every user with a connection", async () => {
+test("jobs run for the owner and every user with a connection who consented to health data", async () => {
   _resetTenancyForTest();
   const raw = createD1();
   await ensureTenancy(raw, env);
-  await raw.prepare("INSERT INTO users(email) VALUES ('a@x'), ('b@x'), ('c@x')").run();
-  raw.sqlite.exec("CREATE TABLE connection_credentials (user_id INTEGER NOT NULL, provider TEXT NOT NULL, encrypted TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, provider)); INSERT INTO connection_credentials VALUES (2,'intervals','e','t'), (4,'google','e','t'); UPDATE users SET disabled=1 WHERE email='c@x';");
+  await raw.prepare("INSERT INTO users(email) VALUES ('a@x'), ('b@x'), ('c@x'), ('d@x'), ('e@x')").run();
+  raw.sqlite.exec("CREATE TABLE connection_credentials (user_id INTEGER NOT NULL, provider TEXT NOT NULL, encrypted TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, provider)); INSERT INTO connection_credentials VALUES (2,'intervals','e','t'), (4,'google','e','t'), (5,'google','e','t'), (6,'google','e','t'); UPDATE users SET disabled=1 WHERE email='c@x';");
+  // d@x never consented, e@x took the consent back.
+  raw.sqlite.exec("CREATE TABLE user_consents (user_id INTEGER NOT NULL, kind TEXT NOT NULL, version TEXT NOT NULL, granted_at TEXT NOT NULL, withdrawn_at TEXT, PRIMARY KEY (user_id, kind)); INSERT INTO user_consents VALUES (2,'health','v','t',NULL), (4,'health','v','t',NULL), (5,'ai','v','t',NULL), (6,'health','v','t','t');");
   const users = await usersWithProviders(raw, env, ["intervals", "google"]);
   assert.deepEqual(users.map(u => u.email), ["owner@example.com", "a@x"]);
 });
