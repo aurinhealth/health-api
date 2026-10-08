@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { HEALTH_SCOPES, EXTRA_SCOPES, grantedExtras, healthScopes } from "../src/google-scopes.js";
 import { saveConnectionSecret, connectionEnvironment } from "../src/connection-secrets.js";
@@ -20,11 +21,27 @@ test("Google Health tokens carry weight writing only when it was granted", () =>
 });
 
 test("connecting asks for Google Health only; 'extra' adds the optional scopes incrementally", async () => {
-  const plain = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google"), google, "/oauth/google")).headers.get("Location"));
+  const plain = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1"), google, "/oauth/google")).headers.get("Location"));
   assert.deepEqual(plain.searchParams.get("scope").split(" "), HEALTH_SCOPES);
-  const extra = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?extra=1"), google, "/oauth/google")).headers.get("Location"));
+  const extra = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&extra=1"), google, "/oauth/google")).headers.get("Location"));
   assert.deepEqual(extra.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.birthday]);
   assert.equal(extra.searchParams.get("include_granted_scopes"), "true");
+});
+
+test("Google's consent screen comes only after the app's own disclosure and consent", async () => {
+  // Google Health data policy: the disclosure and consent in the app come right before Google's.
+  for (const [path, back] of [["/oauth/google", "/app?connect=google"], ["/oauth/google?extra=1", "/app?connect=google-extra"], ["/oauth/google?return=setup", "/app?connect=google&return=setup"]]) {
+    const response = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu" + path), google, "/oauth/google");
+    assert.equal(response.status, 302);
+    assert.equal(response.headers.get("Location"), back);
+  }
+  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+  // An unticked box that must be ticked before continuing to Google.
+  assert.match(client, /<input type="checkbox" id="googleConsentAgree">/);
+  assert.match(client, /id="googleConsentGo" disabled>/);
+  // Agreeing continues to the link the user chose, with its extra=1 or return=setup.
+  assert.match(client, /googleHealthConsent\(a\.getAttribute\('href'\)\)/);
+  assert.match(client, /target\.searchParams\.set\('consent','1'\);location\.href=target\.pathname\+target\.search;/);
 });
 
 test("granted scopes are stored per user and offered in the connection status", async () => {

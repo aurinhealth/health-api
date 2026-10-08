@@ -9,9 +9,12 @@ const tenancy = readFileSync(new URL("../src/tenancy.js", import.meta.url), "utf
 const personal = Object.keys(Object.fromEntries([...tenancy.match(/PERSONAL_TABLES = \{([\s\S]*?)\n\};/)[1].matchAll(/^\s{2}([a-z_]+):/gm)].map(m => [m[1], 1])));
 const table = new RegExp(`\\b(${personal.join("|")})\\b`, "i");
 
-// Intentionally cross-user: listing users with connections for cron jobs, and
-// the cron job that re-encrypts everyone's connection keys with CONNECTION_KEY.
-const allowed = [/FROM users u JOIN connection_credentials c ON c\.user_id = u\.id/, /FROM connection_credentials WHERE encrypted NOT LIKE 'v2\.%'/];
+// Intentionally cross-user: listing users with connections for cron jobs,
+// the cron job that re-encrypts everyone's connection keys with CONNECTION_KEY,
+// and signing in with Apple or a passkey, which finds the account by Apple's
+// user id or by the passkey's id.
+const allowed = [/FROM users u JOIN connection_credentials c ON c\.user_id = u\.id/, /FROM connection_credentials WHERE encrypted NOT LIKE 'v2\.%'/, /FROM user_identities i JOIN users u ON u\.id = i\.user_id WHERE i\.provider = 'apple' AND i\.subject = \?/, /^"SELECT user_id FROM user_identities WHERE provider = 'apple' AND subject = \?"$/,
+  /^"SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = \?"$/];
 
 test("personal tables are known", () => {
   for (const name of ["health_datapoints", "food_logs", "dashboard_profile", "connection_credentials"]) assert.ok(personal.includes(name), name);

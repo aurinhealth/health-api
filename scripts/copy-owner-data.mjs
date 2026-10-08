@@ -26,8 +26,11 @@ export const OWNER_TABLES = [
 // Catalogues without personal data.
 export const SHARED_TABLES = ["shared_foods", "workout_library"];
 // Left out on purpose: connection_credentials, provider_tokens (sign-in keys),
-// food_google_exports, sync_status, sync_state, api_cache_versions (sync and
-// cache state), ai_usage (spending on the source copy), users, user_invites (other people), schema_meta, d1_migrations.
+// user_passkeys, user_identities, auth_challenges, email_login_codes (sign-in:
+// passkeys work only on the domain they were made on), food_google_exports,
+// sync_status, sync_state, api_cache_versions (sync and cache state), ai_usage
+// (spending on the source copy), users, user_invites (other people), schema_meta,
+// d1_migrations.
 export const DONE_KEY = "owner_data_copied_at";
 
 const PAGE_ROWS = 5000;

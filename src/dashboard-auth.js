@@ -21,6 +21,12 @@ const PUBLIC_PATHS = new Set([
   "/app/logout",
   "/auth/google",
   "/auth/google/callback",
+  "/auth/apple",
+  "/auth/apple/callback",
+  "/auth/passkey/options",
+  "/auth/passkey/verify",
+  "/auth/email/start",
+  "/auth/email/verify",
   "/mcp",
   "/mcp/health",
   "/automation/strength",
@@ -71,8 +77,10 @@ export function unauthorizedResponse() {
   );
 }
 
+export const CLEARED_SESSION_COOKIE = SESSION_COOKIE+"=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax";
+
 export function handleDashboardLogout() {
-  return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":SESSION_COOKIE+"=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax","Cache-Control":"no-store"}});
+  return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":CLEARED_SESSION_COOKIE,"Cache-Control":"no-store"}});
 }
 
 // Returns the session payload ({uid, exp}) or null.
@@ -106,6 +114,17 @@ export async function sessionCookie(uid, exp, secret) {
   const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp})));
   const signature = await dashboardHmac(payload, secret);
   return SESSION_COOKIE+"="+payload+"."+signature+"; Path=/; Max-Age="+SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
+}
+
+// A JSON answer that also signs the user in (passkey and e-mail code sign-in).
+export async function signedInResponse(userId, env, body = { status: "ok" }) {
+  const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
+  return Response.json(body, { headers: { "Cache-Control": "no-store", "Set-Cookie": await sessionCookie(userId, exp, sessionSecret(env)) } });
+}
+
+// Signs short-lived values with the session secret (the Apple sign-in state, e-mail codes).
+export function signText(value, secret) {
+  return dashboardHmac(value, secret);
 }
 
 async function dashboardHmac(value, secret) {

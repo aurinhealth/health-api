@@ -4,11 +4,14 @@ import { connectReturn, connectReturnUrl } from './connect-return.js';
 const GOOGLE_OAUTH_ORIGIN = "https://petrfitnessdata.eu";
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
+    // ?extra=1 adds the optional scopes on top of what was already granted.
+    const params = new URL(request.url).searchParams, extra = params.get("extra") === "1";
+    // Google Health data policy: the app's own disclosure and consent come right before Google's
+    // consent screen. A visit without it (a bookmark, an old link) opens the disclosure first.
+    if (params.get("consent") !== "1") return new Response(null,{status:302,headers:{Location:"/app?connect=google"+(extra?"-extra":"")+(connectReturn(request)==="setup"?"&return=setup":""),"Cache-Control":"no-store"}});
     const origin = env.APP_ORIGIN || GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
-    // ?extra=1 adds the optional scopes on top of what was already granted.
-    const extra = new URL(request.url).searchParams.get("extra") === "1";
     u.searchParams.set("scope", [...HEALTH_SCOPES, ...(extra ? Object.values(EXTRA_SCOPES) : [])].join(" ")); if (extra) u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
     // The page the user comes back to (the setup wizard or Settings) rides along with the state.
     return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+encodeURIComponent(state+"."+connectReturn(request))+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});

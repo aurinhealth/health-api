@@ -54,6 +54,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Cloudflare Email Service: sign-in codes and notices about new passkeys. Nothing is sent
+  // until petrfitnessdata.eu is onboarded in Email Service → Email Sending and the Worker
+  // has the EMAIL_FROM secret (the sender address); until then e-mail sign-in stays hidden.
+  "send_email": [
+    { "name": "EMAIL" }
+  ],
   "workers_dev": true,
   // The owner is the first admin; existing single-user data belongs to this account.
   "vars": {
@@ -88,6 +94,10 @@
           "database_id": "6fbc690b-c776-42c9-b052-8f4ee44669fd",
           "migrations_dir": "migrations"
         }
+      ],
+      // Bindings are not inherited: the test copy sends its own sign-in codes.
+      "send_email": [
+        { "name": "EMAIL" }
       ],
       "vars": {
         "OWNER_EMAIL": "chelseafc.czsk@gmail.com",

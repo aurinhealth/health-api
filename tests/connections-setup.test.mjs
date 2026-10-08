@@ -133,7 +133,7 @@ test("Intervals.icu connects with one button once its app is registered", async 
 
 test("connecting Google from the setup window returns to it; cancelling there is not a dead end", async () => {
   const google = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" };
-  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?return=setup"), google, "/oauth/google");
+  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&return=setup"), google, "/oauth/google");
   const state = new URL(start.headers.get("Location")).searchParams.get("state"), cookie = start.headers.get("Set-Cookie").split(";")[0];
   const cancelled = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?error=access_denied&state=" + state, { headers: { Cookie: cookie } }), google, "/oauth/google/callback");
   assert.equal(cancelled.headers.get("Location"), "/app?connected=google-cancelled#setup");
@@ -143,7 +143,7 @@ test("connecting Google from the setup window returns to it; cancelling there is
 });
 
 test("the setup window keeps provider cards and lets prefilled profiles bypass extra setup steps", () => {
-  assert.match(entry, /missingProviders:missingProviders\(env\),onboarding,ai\}/);
+  assert.match(entry, /missingProviders:missingProviders\(env\),onboarding,ai[,}]/);
   assert.match(client, /providers\.map\(p=>serviceCardHtml\(p,'setup'\)\)/);
   assert.match(client, /wireIntervalsKey\(\$\('setupBody'\)/);
   // The provider pages return to the step the user left.

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { exportAccountData, deleteAccount, finishAccountDeletions } from "../src/account-data.js";
+import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle } from "../src/account-data.js";
 import { findUser } from "../src/tenancy.js";
 
 function database() {
@@ -63,6 +63,27 @@ test("the owner's account cannot be deleted, and deleting needs the typed confir
   assert.match(entry, /'Set-Cookie':handleDashboardLogout\(\)\.headers\.get\('Set-Cookie'\)/);
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(client, /user\?\.isOwner\?'':'<button class="btn danger" type="button" id="deleteAccount">Smazat účet<\/button>'/);
+  // Disconnecting Google Health gives up the access at Google too; the owner's token can be the shared Worker secret.
+  assert.match(entry, /body\.provider==='google'&&!env\.USER_IS_OWNER\) await revokeGoogle\(env\);/);
+});
+
+test("revoking Google: nothing to revoke, revoked, or failed without stopping the caller", async () => {
+  const calls = [];
+  assert.equal(await revokeGoogle({}, async () => { throw new Error("not called"); }), "none");
+  assert.equal(await revokeGoogle({ GOOGLE_REFRESH_TOKEN: "t1" }, async (url, init) => { calls.push([String(url), String(init.body)]); return new Response(null, { status: 200 }); }), "revoked");
+  assert.deepEqual(calls, [["https://oauth2.googleapis.com/revoke", "token=t1"]]);
+  assert.equal(await revokeGoogle({ GOOGLE_REFRESH_TOKEN: "t2" }, async () => new Response(null, { status: 503 })), "failed");
+  assert.equal(await revokeGoogle({ GOOGLE_REFRESH_TOKEN: "t3" }, async () => { throw new Error("offline"); }), "failed");
+});
+
+test("Apple sign-in links are exported and deleted with the account", async () => {
+  const db = database();
+  db.sqlite.exec("CREATE TABLE user_identities (provider TEXT NOT NULL, subject TEXT NOT NULL, user_id INTEGER NOT NULL, email TEXT, created_at TEXT, last_login_at TEXT, PRIMARY KEY (provider, subject))");
+  db.sqlite.exec("INSERT INTO user_identities (provider, subject, user_id, email) VALUES ('apple', 'sub-3', 3, 'relay@privaterelay.appleid.com'), ('apple', 'sub-4', 4, NULL)");
+  const env = { DB: scopedDb(db, 3), USER_ID: 3 };
+  assert.deepEqual((await exportAccountData(env, user)).tables.user_identities, [{ provider: "apple", subject: "sub-3", email: "relay@privaterelay.appleid.com", created_at: null, last_login_at: null }]);
+  await deleteAccount(env, user, { fetchImpl: async () => new Response("") });
+  assert.deepEqual(db.sqlite.prepare("SELECT subject FROM user_identities").all().map(r => r.subject), ["sub-4"]);
 });
 
 test("a large account is deleted in chunks, never with one DELETE over all its rows", async () => {

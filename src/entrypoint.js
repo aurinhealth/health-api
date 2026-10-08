@@ -86,6 +86,7 @@ import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZO
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
 import legacyHealthApi, { googleToken } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
+import { handleAppleLogin, appleConfigured, appleIdentity, unlinkAppleIdentity } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
@@ -93,9 +94,12 @@ import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, 
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange } from "./dashboard-auth.js";
 import { internalHeaders } from "./internal-auth.js";
 import { aiAllowance } from "./ai-usage.js";
-import { exportAccountData, deleteAccount, finishAccountDeletions } from "./account-data.js";
+import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
-import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
+import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
+import { handleEmailLogin, handleEmailChange, emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
+import { emailConfigured } from "./email-sender.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
@@ -109,7 +113,8 @@ const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/
 const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:" + date, () => googleDashboard(env.DB, date), { ttl: 120 });
 
 // Requests that read or preview only and so keep the cache.
-const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats)/;
+// Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
+const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/mcp/health']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -219,6 +224,11 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
       return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     }
+    // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
+    if (url.pathname === "/.well-known/apple-developer-domain-association.txt" && request.method === "GET") {
+      if (!env.APPLE_DOMAIN_ASSOCIATION) return new Response("Not configured", { status: 404 });
+      return new Response(env.APPLE_DOMAIN_ASSOCIATION, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+    }
     if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
@@ -228,6 +238,12 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     const googleLogin = await handleGoogleLogin(request, rawEnv, url.pathname);
     if (googleLogin) return googleLogin;
+    const appleLogin = await handleAppleLogin(request, rawEnv, url.pathname, { user: signedIn ? user : null });
+    if (appleLogin) return appleLogin;
+    const passkeyLogin = await handlePasskeyLogin(request, rawEnv, url.pathname);
+    if (passkeyLogin) return passkeyLogin;
+    const emailLogin = await handleEmailLogin(request, rawEnv, url.pathname, ctx);
+    if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
       const response = await handleDashboardApi(request, env, ctx, url, { user, signedIn });
@@ -256,13 +272,13 @@ export default {
 
 async function staticRoute(url, request, env) {
   if (url.pathname === "/mcp/health") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
-  if (url.pathname === "/app") return dashboardPage({ clientVersion: CLIENT_VERSION, account: (await verifyDashboardSession(request, sessionSecret(env)))?.uid ?? "" });
+  if (url.pathname === "/app") return dashboardPage({ clientVersion: CLIENT_VERSION, account: (await verifyDashboardSession(request, sessionSecret(env)))?.uid ?? "", signIn: { apple: appleConfigured(env), email: emailConfigured(env) } });
   if (url.pathname === "/app/i18n-en.js") return englishScript(url);
   if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": scriptCacheControl(url, CLIENT_VERSION) } });
   if (url.pathname === "/") return overviewPage(request);
-  if (url.pathname === "/privacy") return privacyPage(request);
+  if (url.pathname === "/privacy") return privacyPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
   if (url.pathname === "/terms") return termsPage(request);
-  if (url.pathname === "/support") return supportPage(request);
+  if (url.pathname === "/support") return supportPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
   if (url.pathname === "/logo.svg") return logoResponse();
   return Response.json({name:"Loadwise",short_name:"Loadwise",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
 }
@@ -570,7 +586,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   if (url.pathname === "/app/api/me" && request.method === "GET") {
     const [onboarding,ai]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null]);
-    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai},{headers:{"Cache-Control":"no-store"}});
+    const apple = appleConfigured(env) && session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
+    const passkeys = session.user ? await listPasskeys(env.RAW_DB, session.user.id) : [];
+    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,apple,passkeys,emailLogin:emailConfigured(env)},{headers:{"Cache-Control":"no-store"}});
+  }
+  if (url.pathname.startsWith("/app/api/passkeys")) {
+    const passkeyApi = await handlePasskeyApi(request, env, url, session, ctx);
+    if (passkeyApi) return passkeyApi;
+  }
+  if (url.pathname.startsWith("/app/api/account/email/")) {
+    const emailChange = await handleEmailChange(request, env, url, session, ctx);
+    if (emailChange) return emailChange;
+  }
+  // Settings → Účet: unlinks the Apple ID (linking goes through /auth/apple?link=1).
+  if (url.pathname === "/app/api/me/apple" && request.method === "DELETE") {
+    if (!session.signedIn) return Response.json({message:"Přihlas se do dashboardu."},{status:401});
+    if (request.headers.get("Origin") !== url.origin) return Response.json({message:"Neplatný původ požadavku."},{status:403});
+    await unlinkAppleIdentity(env.RAW_DB, session.user.id);
+    return Response.json({status:"ok"},{headers:{"Cache-Control":"no-store"}});
   }
   // The user's own data: download everything, or delete the account with it.
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
@@ -642,7 +675,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json();return Response.json({status:'ok',sync:await syncLocalWorkout(env,String(body.eventId||'').replace(/^planned:/,''))});
   }
-  if (url.pathname.startsWith("/app/api/admin/")) return handleAdminApi(request, env, url, session);
+  if (url.pathname.startsWith("/app/api/admin/")) return handleAdminApi(request, env, url, session, ctx);
   // Connections are optional: without them the dashboard works from manual
   // entries (weight, food) and the profile; missingProviders drives the
   // connection prompt in the client.
@@ -1077,6 +1110,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const body=await request.json().catch(()=>({}));
     if (request.method === 'DELETE') {
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
+      // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
+      if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
       await deleteConnectionSecret(env,body.provider);
       if(body.provider==='google') await deleteConnectionSecret(env,'google_scopes');
       return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});
@@ -1571,7 +1606,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
   return null;
 }
 
-async function handleAdminApi(request, env, url, session) {
+async function handleAdminApi(request, env, url, session, ctx) {
   const user = session.user;
   if (!session.signedIn || !user?.isAdmin) return Response.json({status:"error",message:L("Jen pro správce.", "Admins only.")},{status:403});
   if (request.method !== "GET" && request.headers.get("Origin") !== url.origin) return Response.json({message:L("Neplatný původ požadavku.", "Invalid request origin.")},{status:403});
@@ -1581,6 +1616,13 @@ async function handleAdminApi(request, env, url, session) {
     const body = await request.json().catch(() => ({}));
     if (url.pathname === "/app/api/admin/invites" && request.method === "POST") return Response.json({status:"ok",email:await inviteUser(db, body.email, user.id),message:L("Pozvánka je uložená. Uživatel se může přihlásit přes Google.", "The invitation is saved. The user can sign in with Google.")});
     if (url.pathname === "/app/api/admin/invites" && request.method === "DELETE") { await removeInvite(db, body.email); return Response.json({status:"ok",message:L("Pozvánka je zrušená.", "The invitation is cancelled.")}); }
+    // For someone who lost their address: the account (and its data) moves to the new one.
+    if (url.pathname === "/app/api/admin/users/email" && request.method === "POST") {
+      const changed = await changeUserEmail(db, env, body.id, body.email);
+      if (changed.error) return emailChangeRefusal(changed.error);
+      await notifyOldAddress(env, changed, requestLanguage(request), ctx);
+      return Response.json({status:"ok",email:changed.email,message:L("E-mail je změněný. Uživatel se přihlásí novou adresou.", "The email is changed. The user signs in with the new address.")});
+    }
     if (url.pathname === "/app/api/admin/users" && request.method === "POST") { await setUserDisabled(db, env, body.id, body.disabled === true); return Response.json({status:"ok",message:body.disabled===true?L("Přístup je zablokovaný.", "Access is blocked."):L("Přístup je obnovený.", "Access is restored.")}); }
   } catch (error) { return Response.json({status:"error",message:error.message},{status:400}); }
   return Response.json({status:"error",message:"Not found"},{status:404});

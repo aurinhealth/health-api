@@ -84,7 +84,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
   return new Response(null, { status: 302, headers });
 }
-export { finishLogin as _finishLoginForTest };
+export { finishLogin as _finishLoginForTest, page as loginPage };
 
 export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fetch) {
   const parts = String(token).split(".");

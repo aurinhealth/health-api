@@ -24,9 +24,10 @@ export async function exportAccountData(env, user) {
 }
 
 // Google keeps a granted consent until it is revoked; the app gives it back
-// before forgetting the key. Intervals.icu has no revoke call: its key or token
-// is deleted here and the user can remove the app at intervals.icu/settings.
-async function revokeGoogle(env, fetchImpl) {
+// before forgetting the key (here and on disconnecting Google Health).
+// Intervals.icu has no revoke call: its key or token is deleted here and the
+// user can remove the app at intervals.icu/settings.
+export async function revokeGoogle(env, fetchImpl = fetch) {
   if (!env.GOOGLE_REFRESH_TOKEN) return "none";
   try {
     const response = await fetchImpl("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: env.GOOGLE_REFRESH_TOKEN }) });

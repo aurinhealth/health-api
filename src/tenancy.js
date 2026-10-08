@@ -43,7 +43,11 @@ export const PERSONAL_TABLES = {
   ai_usage: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
-  user_language: {}, user_time_zone: {}, recovery_sessions: {}
+  user_language: {}, user_time_zone: {}, recovery_sessions: {},
+  // Sign-in: linked Apple IDs (apple-login.js) and passkeys (passkeys.js),
+  // created with user_id.
+  user_identities: {},
+  user_passkeys: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
@@ -297,6 +301,65 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
     db.prepare("DELETE FROM user_invites WHERE email=?").bind(address)
   ]);
   return publicUser({ ...row, email: address, name: name || row.name }, env);
+}
+
+// Who may get a sign-in code by e-mail: an active user, an invited address or the owner.
+export async function mayGetEmailCode(db, env, email) {
+  const address = normalizeEmail(email);
+  if (!address) return false;
+  const [user, invite] = await Promise.all([
+    db.prepare("SELECT disabled FROM users WHERE email=?").bind(address).first(),
+    db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first()
+  ]);
+  if (user) return !user.disabled;
+  return Boolean(invite) || address === ownerEmail(env);
+}
+
+// Signs in the owner of an e-mail address that confirmed a code: an existing
+// user, or an invited address / the owner, whose account is created now.
+export async function signInEmailUser(db, env, email) {
+  const address = normalizeEmail(email);
+  if (!address) return null;
+  let row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first(), created = false;
+  if (!row) {
+    const invite = await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first();
+    if (!invite && address !== ownerEmail(env)) return null;
+    const inserted = await db.prepare("INSERT INTO users(email, role) VALUES(?, ?) ON CONFLICT(email) DO NOTHING").bind(address, address === ownerEmail(env) ? "admin" : "user").run();
+    created = Number(inserted.meta?.changes) > 0;
+    row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
+  }
+  if (!row || row.disabled) return null;
+  await db.batch([
+    db.prepare("UPDATE users SET last_login_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.id),
+    db.prepare("DELETE FROM user_invites WHERE email=?").bind(address)
+  ]);
+  // created: the account was made just now (the sign-in screen then offers a passkey).
+  return { ...publicUser(row, env), created };
+}
+
+// Moves an account to another e-mail address. Its data stays with it (everything is stored
+// under the account id); the Google account is unlinked, so the next Google sign-in binds the
+// one with the new address. The owner's address comes from OWNER_EMAIL and is not changed here.
+// Returns { email, previous } or { error: "invalid" | "missing" | "same" | "owner" | "taken" }.
+export async function changeUserEmail(db, env, id, email) {
+  const address = normalizeEmail(email);
+  if (!address || address.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { error: "invalid" };
+  const row = await db.prepare("SELECT id, email FROM users WHERE id=?").bind(Number(id)).first();
+  if (!row) return { error: "missing" };
+  if (normalizeEmail(row.email) === address) return { error: "same" };
+  if (normalizeEmail(row.email) === ownerEmail(env) || address === ownerEmail(env)) return { error: "owner" };
+  if (await db.prepare("SELECT id FROM users WHERE email=? AND id<>?").bind(address, row.id).first()) return { error: "taken" };
+  try {
+    await db.batch([
+      db.prepare("UPDATE users SET email=?, google_sub=NULL WHERE id=?").bind(address, row.id),
+      db.prepare("DELETE FROM user_invites WHERE email=?").bind(address)
+    ]);
+  } catch (error) {
+    // Someone took the address in the meantime (users.email is unique).
+    if (/UNIQUE/i.test(String(error?.message))) return { error: "taken" };
+    throw error;
+  }
+  return { email: address, previous: row.email };
 }
 
 export async function listUsersAndInvites(db) {
