@@ -1,3 +1,5 @@
+// The device's time zone; the server learns it from X-Time-Zone and uses the same days.
+const USER_TZ=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Prague"}catch{return "Europe/Prague"}})();
 const $=id=>document.getElementById(id);
 let coachRefreshRunning=false;
 // Plan edits not yet in Intervals.icu (see "Plan changes" below); declared first
@@ -49,8 +51,6 @@ function fmt(v,d=0){return Math.round(num(v)*10**d)/10**d}
 function dec(v,d=1){const x=Number(v);return Number.isFinite(x)?x.toFixed(d).replace('.',','):''}
 function cz(v,d=1){return String(fmt(v,d)).replace('.',',')}
 function dateShift(date,days){const p=date.split("-").map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]+days)).toISOString().slice(0,10)}
-// The device's time zone; the server learns it from X-Time-Zone and uses the same days.
-const USER_TZ=(()=>{try{return Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Prague"}catch{return "Europe/Prague"}})();
 function localToday(){const p=new Intl.DateTimeFormat("en-GB",{timeZone:USER_TZ,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value+"-"+p.find(x=>x.type==="day").value}
 function localMonday(){const d=localToday().split("-").map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
 function mondayOf(date){const d=date.split('-').map(Number),x=new Date(Date.UTC(d[0],d[1]-1,d[2])),wd=(x.getUTCDay()+6)%7;x.setUTCDate(x.getUTCDate()-wd);return x.toISOString().slice(0,10)}
