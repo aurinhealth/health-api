@@ -92,7 +92,7 @@ import { isStaging, markStaging } from "./staging.js";
 import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, generateTechnique, exerciseInUse } from "./exercise-technique.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret } from "./dashboard-auth.js";
 import { aiAllowance } from "./ai-usage.js";
-import { exportAccountData, deleteAccount } from "./account-data.js";
+import { exportAccountData, deleteAccount, finishAccountDeletions } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled } from "./tenancy.js";
 import { pragueToday } from './prague-date.js';
@@ -132,6 +132,8 @@ async function forEachUser(env, providers, fn) {
 const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
+    // Data of deleted accounts that the delete request had no time for.
+    if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB).catch(error => console.error("Account deletion failed", error.message));
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google'],async scoped=>{await backfillFoodGoogle(scoped.DB);return processFoodGoogle(scoped,{token:googleToken});});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],async scoped=>{await retryWorkoutExports(scoped);});
