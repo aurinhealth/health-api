@@ -1631,12 +1631,14 @@ async function handleStrengthAutomation(request, env, ctx) {
     const body = await request.json().catch(() => ({}));
     const date = body?.date == null || body.date === "" ? localToday() : String(body.date).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
-    const skip = await nightlyGymSkip(env.DB, date);
+    // The deploy smoke test asks for a preview: the plan is built, never written.
+    const preview = body?.preview === true;
+    const skip = preview ? null : await nightlyGymSkip(env.DB, date);
     if (skip) return Response.json({ status: "skipped", action: "generate", date, reason: skip });
     const internalRequest = new Request(new URL("/strength/generate-plan", request.url), {
       method: "POST",
       headers: { ...internalHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ date, preview: false, action: "generate", nightly: true })
+      body: JSON.stringify(preview ? { date, preview: true, action: "generate" } : { date, preview: false, action: "generate", nightly: true })
     });
     const response = await app.fetch(internalRequest, env, ctx);
     const result = await response.clone().json().catch(() => null);
