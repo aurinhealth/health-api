@@ -87,16 +87,14 @@ function activityInfo(row) {
 }
 
 async function loadTrainingContext(env, date) {
-  const plannedRows = await env.DB.prepare(`
+  const [plannedRows, activityRows] = await Promise.all([env.DB.prepare(`
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND source_family = 'intervals'
       AND data_type = 'planned-workout'
       AND start_time LIKE ?
     ORDER BY start_time
-  `).bind(env.USER_ID, date + "%").all();
-
-  const activityRows = await env.DB.prepare(`
+  `).bind(env.USER_ID, date + "%").all(), env.DB.prepare(`
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND source_family = 'intervals'
@@ -104,7 +102,7 @@ async function loadTrainingContext(env, date) {
       AND start_time LIKE ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(env.USER_ID, date + "%").all();
+  `).bind(env.USER_ID, date + "%").all()]);
 
   const actual = (activityRows.results || []).map(activityInfo);
   const completedIds = new Set(actual.flatMap(a => a.pairedIds));
@@ -208,18 +206,28 @@ function recommendationReason(recipe, remaining, context, maxMinutes) {
 }
 
 // Meal suggestions for the week view: the next unlogged meals fitted to what is
-// left of the personal target from index.js (/analysis/energy).
-export async function foodRecommend(env, url) {
+// left of the personal target from index.js (/analysis/energy). The week view
+// passes the day's target and food log it is reading anyway (`known`, a
+// promise), so the same day is not computed twice.
+export async function foodRecommend(env, url, known = null) {
   const date = url.searchParams.get("date") || localToday();
-  const [energyResponse, foodResponse] = await Promise.all([
+  // The training context and the weight don't depend on the target: they are
+  // read while the target is still being worked out.
+  const contextRead = loadTrainingContext(env, date);
+  const weightRead = env.DB.prepare(`
+    SELECT value_numeric FROM health_datapoints
+    WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
+    ORDER BY sample_time DESC, id DESC LIMIT 1
+  `).bind(env.USER_ID).first();
+  contextRead.catch(() => {}); weightRead.catch(() => {});
+  const day = await known;
+  const [energy, food] = day ? [day.energy, day.food] : await Promise.all([
     legacy.fetch(new Request(new URL(`/analysis/energy?date=${encodeURIComponent(date)}`, url).toString()), env),
     legacy.fetch(new Request(new URL(`/food/today?date=${encodeURIComponent(date)}`, url).toString()), env)
-  ]);
-  const energy = await energyResponse.json();
-  const food = await foodResponse.json();
+  ].map(async response => (await response).json()));
   // Without a personal calorie target (weight or profile missing) there is nothing to fit meals to.
   if (energy.final?.calorieTarget == null) return Response.json({ status: "ok", date, calorieTarget: null, missing: energy.energyProfile?.missing || [], foodTotals: food.totals || null, macroTargets: null, remaining: null, mealRecommendations: [], recommendations: [], storeAlternatives: [] });
-  const context = await loadTrainingContext(env, date);
+  const context = await contextRead;
   context.endurance = context.cycling || context.totalEnduranceHours >= 1;
   context.training = context.actual.length > 0 || context.unmatched.length > 0;
 
@@ -227,11 +235,7 @@ export async function foodRecommend(env, url) {
   // (/analysis/energy in index.js), not a second formula.
   const calorieTarget = Number(energy.final.calorieTarget);
 
-  const weightRow = await env.DB.prepare(`
-    SELECT value_numeric FROM health_datapoints
-    WHERE user_id = ? AND data_type = 'weight' AND value_numeric IS NOT NULL
-    ORDER BY sample_time DESC, id DESC LIMIT 1
-  `).bind(env.USER_ID).first();
+  const weightRow = await weightRead;
   const currentWeight = weightRow ? Number(weightRow.value_numeric) : null;
   const targets = macroTargets(currentWeight, calorieTarget, context);
   const calorieDelta = calorieTarget - Number(food.totals?.kcal || 0);

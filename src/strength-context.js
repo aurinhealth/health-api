@@ -92,26 +92,47 @@ async function intervalsGet(env, path) {
 // row of each data type is read: the consumers (adaptive engine, strength
 // generator) use just that, and minute-level heart-rate samples over a week
 // are far too many to load and parse (it exceeded the Worker's limits).
-const RECOVERY_TYPES = ["sleep", "hrv", "heart_rate", "resting"];
+// Same types the old `lower(data_type) LIKE '%heart_rate%'` filter matched
+// (in LIKE "_" is any character, so heart-rate and heart_rate both count).
+const RECOVERY_TYPE = /sleep|hrv|heart.rate|resting/i;
+// Every query below narrows by (user_id, data_type, sample_time), the index on
+// health_datapoints. A filter on COALESCE(sample_time, start_time) cannot use
+// it and read all ~1M heart-rate rows (tens of seconds), so a time is matched
+// as "sample_time in range, or no sample_time and start_time in range".
+const inRange = (lo, hi) => `((sample_time ${lo} ? AND sample_time ${hi} ?) OR (sample_time IS NULL AND start_time ${lo} ? AND start_time ${hi} ?))`;
 export async function d1Recovery(env, startDate, endDate) {
   const from = `${startDate}T00:00:00`, to = `${endDate}T23:59:59`;
-  const typeFilter = RECOVERY_TYPES.map(() => "lower(data_type) LIKE ?").join(" OR ");
-  const typeBinds = RECOVERY_TYPES.map(t => `%${t}%`);
-  const latest = await env.DB.prepare(`SELECT data_type, MAX(COALESCE(sample_time, start_time)) AS t FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND COALESCE(sample_time, start_time) >= ? AND COALESCE(sample_time, start_time) <= ? AND (${typeFilter}) GROUP BY data_type`).bind(env.USER_ID, from, to, ...typeBinds).all();
+  const types = ((await env.DB.prepare("SELECT DISTINCT data_type FROM health_datapoints WHERE user_id = ?").bind(env.USER_ID).all()).results || [])
+    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")));
+  if (!types.length) return {};
+  const google = "data_type = ? AND source_family LIKE 'google%'";
+  const latest = await env.DB.batch(types.flatMap(type => [
+    env.DB.prepare(`SELECT MAX(sample_time) AS t FROM health_datapoints WHERE user_id = ? AND ${google} AND sample_time >= ? AND sample_time <= ?`).bind(env.USER_ID, type, from, to),
+    env.DB.prepare(`SELECT MAX(start_time) AS t FROM health_datapoints WHERE user_id = ? AND ${google} AND sample_time IS NULL AND start_time >= ? AND start_time <= ?`).bind(env.USER_ID, type, from, to)
+  ]));
+  // The newest row of each type, and for HRV and resting heart rate the
+  // athlete's own average over the 4 weeks before it (the value only means
+  // something against that baseline). One batch: a single round trip.
+  const found = types.map((type, i) => {
+    const sampled = latest[2 * i]?.results?.[0]?.t, started = latest[2 * i + 1]?.results?.[0]?.t;
+    const t = sampled && (!started || sampled >= started) ? sampled : started;
+    return t && { type, t, bySample: t === sampled, baseline: /hrv|variability|resting/i.test(type) };
+  }).filter(Boolean);
+  if (!found.length) return {};
+  const reads = await env.DB.batch(found.flatMap(({ type, t, bySample, baseline }) => {
+    const row = env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND ${google} AND ${bySample ? "sample_time = ?" : "sample_time IS NULL AND start_time = ?"} LIMIT 1`).bind(env.USER_ID, type, t);
+    if (!baseline) return [row];
+    const from28 = new Date(Date.parse(String(t).slice(0, 10) + "T12:00:00Z") - 28 * 86400000).toISOString().slice(0, 10) + "T00:00:00", until = String(t).slice(0, 10) + "T00:00:00";
+    return [row, env.DB.prepare(`SELECT AVG(value_numeric) AS v, COUNT(value_numeric) AS c FROM health_datapoints WHERE user_id = ? AND ${google} AND ${inRange(">=", "<")}`).bind(env.USER_ID, type, from28, until, from28, until)];
+  }));
   const out = {};
-  for (const { data_type: type, t } of latest.results || []) {
-    if (!t) continue;
-    const r = await env.DB.prepare(`SELECT data_type, sample_time, start_time, end_time, value_numeric, value_unit, payload_json FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND data_type = ? AND COALESCE(sample_time, start_time) = ? LIMIT 1`).bind(env.USER_ID, type, t).first();
+  let k = 0;
+  for (const { type, baseline } of found) {
+    const r = reads[k++]?.results?.[0], avg = baseline ? reads[k++]?.results?.[0] : null;
     if (!r) continue;
     let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {}
     out[type] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
-    // HRV and resting heart rate only mean something against the athlete's
-    // own average: 4 weeks before the latest value.
-    if (/hrv|variability|resting/i.test(type)) {
-      const from28 = new Date(Date.parse(String(t).slice(0, 10) + "T12:00:00Z") - 28 * 86400000).toISOString().slice(0, 10) + "T00:00:00";
-      const avg = await env.DB.prepare(`SELECT AVG(value_numeric) AS v, COUNT(value_numeric) AS c FROM health_datapoints WHERE user_id = ? AND source_family LIKE 'google%' AND data_type = ? AND COALESCE(sample_time, start_time) >= ? AND COALESCE(sample_time, start_time) < ?`).bind(env.USER_ID, type, from28, String(t).slice(0, 10) + "T00:00:00").first().catch(() => null);
-      if (avg?.c >= 5 && Number(avg.v) > 0) out[type][0].baseline = Math.round(Number(avg.v) * 10) / 10;
-    }
+    if (avg?.c >= 5 && Number(avg.v) > 0) out[type][0].baseline = Math.round(Number(avg.v) * 10) / 10;
   }
   return out;
 }

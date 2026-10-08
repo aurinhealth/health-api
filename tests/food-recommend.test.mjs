@@ -39,3 +39,17 @@ test("a step tagged intensity=interval does not make an endurance ride an interv
   assert.equal(r.plannedEnduranceRideHours, 2);
   assert.equal(r.plannedRideCalories, 2 * 500 + 600);
 });
+
+// The week view hands over the day it has already read: same suggestions as
+// /food/recommend computing that day itself.
+test("suggestions from the week view's day match /food/recommend", async () => {
+  const { foodRecommend } = await import("../src/food-recommend.js");
+  for (const [profile, weight] of [[{ sex: "male", age: 30, height: 180, activity: "active", goal: "lose_0.5" }, 80], [{ sex: "male", age: 30, height: 180, activity: "active", goal: "lose_0.5" }]]) {
+    const e = env(profile, weight), url = "https://internal/analysis/daily?date=2099-01-05";
+    const daily = await (await gateway.fetch(new Request(url), e, { waitUntil() {} })).json();
+    const food = await (await gateway.fetch(new Request("https://internal/food/log?date=2099-01-05"), e, { waitUntil() {} })).json();
+    const known = { energy: { final: { calorieTarget: daily.calories?.target ?? null, estimatedTDEE: daily.calories?.estimatedTDEE ?? null }, energyProfile: { missing: daily.nutrition?.missing || [] } }, food };
+    const fromWeek = await (await foodRecommend(e, new URL("https://internal/food/recommend?date=2099-01-05"), known)).json();
+    assert.deepEqual(fromWeek, await recommend(e));
+  }
+});

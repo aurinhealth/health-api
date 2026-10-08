@@ -21,7 +21,8 @@ export function createD1() {
         sqlite.exec("BEGIN");
         try {
           const results = [];
-          for (const s of statements) results.push(await s.run());
+          // Like D1, a SELECT in a batch returns its rows.
+          for (const s of statements) results.push(/^\s*(select|with)\b/i.test(s.sql) ? await s.all() : await s.run());
           sqlite.exec("COMMIT");
           return results;
         } catch (error) { sqlite.exec("ROLLBACK"); throw error; }

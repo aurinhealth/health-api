@@ -6,6 +6,7 @@ import {listRecipes,saveRecipe,deleteRecipe,searchRecipes} from './personal-reci
 import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
 import app from "./strength-gateway.js";
+import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { buildRideReview } from "./ride-review.js";
 import { buildRunReview } from "./run-review.js";
@@ -1436,20 +1437,26 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       foodUrl.searchParams.set("date", date);
       const recommendUrl = new URL("/food/recommend", request.url);
       recommendUrl.searchParams.set("date", date);
-      // Meal recommendations (the costliest part) only for today and later:
-      // nothing is eaten on a past day any more.
-      const [dailyResponse, foodResponse, recommendResponse] = await Promise.all([
+      const reads = Promise.all([
         app.fetch(new Request(dailyUrl, {method:"GET",headers:internalAuth}), env, ctx),
-        app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx),
-        date >= localToday() ? app.fetch(new Request(recommendUrl, {method:"GET",headers:internalAuth}), env, ctx) : null
+        app.fetch(new Request(foodUrl, {method:"GET",headers:internalAuth}), env, ctx)
+      ].map(async response => { const r = await response; return { ok: r.ok, body: await r.json() }; }));
+      // Meal recommendations (the costliest part) only for today and later:
+      // nothing is eaten on a past day any more. They fit meals to the day's
+      // calorie target and food log read here (before the energy budget below,
+      // as /analysis/energy gives it), instead of computing the day again.
+      const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
+      const [[{ body: daily }, { body: food }], recommendations] = await Promise.all([
+        reads,
+        date >= localToday() ? foodRecommend(env, recommendUrl, known).then(r => r.json()).catch(error => ({ status: "error", message: error.message })) : null
       ]);
       return {
         date,
         gymCancelled:cancelledGym.has(date),
         gymPlan:cancelledGym.has(date)?null:gymPlans.get(date)||null,
-        daily: applyEnergyBudget(await dailyResponse.json(), profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
-        food: await foodResponse.json(),
-        recommendations: recommendResponse ? await recommendResponse.json() : null
+        daily: applyEnergyBudget(daily, profile, {today: health?.wellness?.find(w => w.id === date) || {}}),
+        food,
+        recommendations
       };
     });
     return {status:"ok",start,end:dates[6],days};

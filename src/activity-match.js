@@ -24,9 +24,17 @@ const parse = json => { if (json && typeof json === "object") return json; try {
 // {at, alt, kind, minutes, stub, source}. `at` is the start instant (ms).
 // Intervals.icu shows Strava activities only as a stub without length and UTC
 // time, and their "local" time is the UTC one: `alt` reads it so.
+// Read once per row: matching compares every Google exercise with every
+// activity, and parsing the JSON on each comparison took most of a second.
+const sessions = new WeakMap();
 export function sessionOf(row) {
   if (!row) return null;
   if (row.session !== undefined) return row.session;
+  if (typeof row !== "object") return readSession(row);
+  if (!sessions.has(row)) sessions.set(row, readSession(row));
+  return sessions.get(row);
+}
+function readSession(row) {
   const p = parse(row.payload_json ?? row.payload);
   const google = row.source_family === "google-wearables" || row.source === "google" || row.source === "google-health" || Boolean(p.exercise);
   if (google) {

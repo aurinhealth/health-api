@@ -24,3 +24,21 @@ test("recovery reads only the latest value per type, even with minute-level hear
   assert.equal(out.hrv[0].value, 88);
   assert.equal(out.heart_rate[0].sampleTime, "2026-09-30T23:59:00");
 });
+
+test("recovery baseline averages the 4 weeks before the latest value, for start-time-only rows too", async () => {
+  const db = createD1();
+  await db.prepare("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, source_family TEXT NOT NULL, data_type TEXT NOT NULL, external_id TEXT, sample_time TEXT, start_time TEXT, end_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT)").run();
+  await db.prepare("CREATE INDEX ix ON health_datapoints(user_id, data_type, sample_time DESC)").run();
+  const add = (type, sample, start, value, family = "google-wearables") => db.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, sample_time, start_time, value_numeric, payload_json) VALUES (1,?,?,?,?,?,'{}')").bind(family, type, sample, start, value).run();
+  // Ten daily resting heart rates (start time only): 50..59, the newest is 70.
+  for (let d = 0; d < 10; d++) await add("daily-resting-heart-rate", null, `2026-09-${String(20 + d).padStart(2, "0")}T00:00:00`, 50 + d);
+  await add("daily-resting-heart-rate", null, "2026-10-01T00:00:00", 70);
+  await add("daily-resting-heart-rate", null, "2026-10-01T00:00:00", 99, "manual"); // not from Google
+  await add("heart-rate-variability", "2026-10-01T06:00:00", null, 80);
+  await add("heart-rate-variability", "2026-10-09T06:00:00", null, 10); // after the window
+  const out = await d1Recovery({ DB: db, USER_ID: 1 }, "2026-09-25", "2026-10-02");
+  assert.equal(out["daily-resting-heart-rate"][0].value, 70);
+  assert.equal(out["daily-resting-heart-rate"][0].baseline, 54.5);
+  assert.equal(out["heart-rate-variability"][0].value, 80);
+  assert.equal(out["heart-rate-variability"][0].baseline, undefined);
+});

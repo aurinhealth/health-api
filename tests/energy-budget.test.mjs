@@ -29,7 +29,7 @@ test("day view, week view and coaches all apply the same energy budget", () => {
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   // Day view, each day of the week view, and the coach inputs.
   assert.equal(source.match(/applyEnergyBudget\(/g).length, 3);
-  assert.match(source, /daily: applyEnergyBudget\(await dailyResponse\.json\(\), profile,/);
+  assert.match(source, /daily: applyEnergyBudget\(daily, profile,/);
 });
 
 test("early in the day the expected day from the profile is the floor of the target", () => {
