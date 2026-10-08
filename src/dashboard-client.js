@@ -224,7 +224,9 @@ async function startPasskeyAutofill(show){try{if(!$('loginEmail')||!passkeysSupp
     await finishPasskeySignIn(c);location.reload();}
   // Only the server's answer to a chosen passkey is worth showing; the browser's own refusals are not.
   catch(error){if(!ctl.signal.aborted&&error?.data)show(error.message);}})();return true;}
-function installLoginGate(){const status=$('loginStatus'),show=text=>{if(status)status.textContent=text||'';},card=document.querySelector('#loginGate .login-card');
+function installLoginGate(){// The iPhone app signs in with Google through Safari (nativeLogin).
+  if(nativeApp())document.querySelector('#loginGate .sign-in-google')?.addEventListener('click',e=>{e.preventDefault();nativeLogin();});
+  const status=$('loginStatus'),show=text=>{if(status)status.textContent=text||'';},card=document.querySelector('#loginGate .login-card');
   const mode=()=>card?.dataset.mode==='register'?'register':'signin';
   // Two tabs over the same buttons: the card's data-mode swaps the words (see signInButtonsCss).
   const tabs=[...document.querySelectorAll('#loginGate [data-tab]')],pick=(tab,focus)=>{if(card)card.dataset.mode=tab;tabs.forEach(b=>{const on=b.dataset.tab===tab;b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;if(on&&focus)b.focus();});show('');};
@@ -250,6 +252,37 @@ async function offerPasskey({created=false,email=''}={}){let offer=false;try{off
   card.innerHTML='<img class="login-logo" src="/logo.svg" alt="" width="48" height="48"><h2 id="loginGateTitle">'+(created?'Účet je založený':'Příště rychleji')+'</h2><p class="small">'+(created?'Chceš se příště přihlašovat bez kódu? Přidej si přístupový klíč (passkey) do telefonu, počítače nebo správce hesel. Přihlásíš se pak otiskem prstu, obličejem nebo zámkem obrazovky.':'Přidej si přístupový klíč a příště se přihlásíš otiskem prstu, obličejem nebo zámkem obrazovky, bez čekání na e-mail.')+'</p><div class="sign-in-buttons"><button class="btn primary" type="button" id="offerPasskey">Přidat přístupový klíč</button><button class="btn" type="button" id="skipPasskey">Teď ne</button></div><p class="small">Přidat nebo odebrat ho můžeš kdykoli v Nastavení → Účet.</p><p id="loginStatus" class="small login-status" role="status" aria-live="polite"></p>';
   $('skipPasskey').onclick=()=>{try{localStorage.setItem('lw-passkey-offer','no');}catch{}location.reload();};
   $('offerPasskey').onclick=async()=>{const b=$('offerPasskey');b.disabled=true;try{await addPasskey();location.reload();}catch(error){$('loginStatus').textContent=passkeyError(error,'Přidání přístupového klíče se nedokončilo.');b.disabled=false;newPasskeyOptions.get().catch(()=>{});}};}
+// ---- iPhone app (mobile/, Capacitor) ----
+// Google refuses sign-in inside an app's web view, so the app signs in in
+// Safari and comes back through loadwise://auth with a short-lived token. Only
+// this web view knows the verifier that redeems it (see src/google-login.js).
+// E-mail codes work in the app as they are; Apple sign-in and passkeys would
+// need a paid Apple developer account, so the app hides their buttons.
+function nativeApp(){return Boolean(window.Capacitor?.isNativePlatform?.());}
+// The app draws under the status bar and the home indicator: the page gets the
+// iPhone's safe areas (viewport-fit=cover) and the top bar and the sign-in
+// screens leave room for them. The bottom bar and sheets already do.
+if(nativeApp()){
+  document.documentElement.classList.add('native-app');
+  const viewport=document.querySelector('meta[name="viewport"]');if(viewport&&!/viewport-fit/.test(viewport.content))viewport.content+=',viewport-fit=cover';
+  const style=document.createElement('style');style.textContent='.native-app .topbar{box-sizing:content-box!important;top:0!important;padding-top:env(safe-area-inset-top)!important}.native-app .sign-in-apple,.native-app #passkeySignIn{display:none!important}.native-app #loginGate,.native-app #onboardingGate{padding-top:calc(16px + env(safe-area-inset-top))!important;padding-bottom:calc(16px + env(safe-area-inset-bottom))!important}';document.head.append(style);
+}
+let appVerifier='';
+async function nativeLogin(){
+  const b64=bytes=>btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  appVerifier=b64(crypto.getRandomValues(new Uint8Array(32)));try{sessionStorage.setItem('lw-app-verifier',appVerifier);}catch{}
+  const challenge=b64(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(appVerifier))));
+  try{await window.Capacitor.nativePromise('Browser','open',{url:location.origin+'/auth/google?app='+challenge});}catch(error){toast(error?.message||String(error));}
+}
+async function finishNativeLogin(url){
+  window.Capacitor.nativePromise('Browser','close').catch(()=>{});
+  let verifier=appVerifier;try{verifier||=sessionStorage.getItem('lw-app-verifier')||'';}catch{}
+  const token=new URL(url).searchParams.get('token');
+  const r=token&&verifier?await fetch('/auth/app/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,verifier})}).catch(()=>null):null;
+  if(r?.ok){try{sessionStorage.removeItem('lw-app-verifier');}catch{}location.replace('/app');}
+  else toast(uiText('Přihlášení se nepodařilo dokončit. Zkus to znovu.','Sign-in could not be completed. Please try again.'));
+}
+if(nativeApp())window.Capacitor.addListener('App','appUrlOpen',e=>{if(String(e?.url||'').startsWith('loadwise://auth'))finishNativeLogin(e.url);});
 // Complete the saved profile before opening the dashboard; providers are optional.
 function showOnboarding(){showAccountSetup().catch(error=>toast(error.message));}
 // Google Health data policy: before Google's consent screen the app says which data it reads and

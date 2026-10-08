@@ -108,3 +108,37 @@ test("ID token checks reject forged or mismatched tokens", async () => {
   await assert.rejects(verifyGoogleIdToken(await idToken({ sub: "" }), "client-123", "n1", f), /subject/);
   assert.equal((await verifyGoogleIdToken(await idToken(), "client-123", "n1", f)).email, "owner@example.com");
 });
+
+// The iPhone app signs in through Safari and redeems a short-lived token in its
+// own web view, where only it knows the verifier behind the challenge.
+test("the iPhone app signs in through Safari and redeems the token with its verifier", async () => {
+  _resetJwksCacheForTest();
+  const e = freshEnv();
+  const verifier = "v".repeat(43), challenge = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
+  const start = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google?app=" + challenge), e, "/auth/google");
+  const cookie = start.headers.get("Set-Cookie").split(";")[0];
+  assert.equal(cookie.split("=")[1].split(".")[3], challenge);
+  const state = new URL(start.headers.get("Location")).searchParams.get("state"), nonce = cookie.split("=")[1].split(".")[1];
+  const back = await _finishLoginForTest(callback("code=c1&state=" + state, cookie), e, googleFetch(await idToken({ nonce })));
+  assert.equal(back.status, 200);
+  assert.ok(!back.headers.getSetCookie().some(c => c.startsWith("pfd_session=")), "Safari gets no session");
+  const token = decodeURIComponent((await back.text()).match(/loadwise:\/\/auth\?token=([^"]+)"/)[1]);
+  const redeem = (body, headers = {}) => handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }), e, "/auth/app/session");
+  assert.equal((await redeem({ token, verifier: "w".repeat(43) })).status, 401);
+  assert.equal((await redeem({ token: token.replace(/.$/, c => c === "A" ? "B" : "A"), verifier })).status, 401);
+  assert.equal((await redeem({ token, verifier }, { Origin: "https://evil.example" })).status, 401);
+  const ok = await redeem({ token, verifier });
+  assert.equal(ok.status, 200);
+  const session = ok.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
+  const principal = await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
+  const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
+  assert.deepEqual(principal, { kind: "user", userId: owner.id });
+  assert.equal(isPublicPath("/auth/app/session"), true);
+});
+
+test("a handoff token is not a session and an invalid app challenge is ignored", async () => {
+  const start = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google?app=short"), env, "/auth/google");
+  assert.equal(start.headers.get("Set-Cookie").split(";")[0].split("=")[1].split(".")[3], "");
+  const form = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "token=x&verifier=y" }), env, "/auth/app/session");
+  assert.equal(form.status, 401);
+});

@@ -1,4 +1,4 @@
-import { sessionCookie, sessionSecret, SESSION_SECONDS } from "./dashboard-auth.js";
+import { signText, sessionCookie, sessionSecret, SESSION_SECONDS, timingSafeEqualString } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 
 // "Sign in with Google" for the dashboard. Only identity scopes are requested;
@@ -13,12 +13,23 @@ const STATE_SECONDS = 600;
 const GOOGLE_ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 
+// The iPhone app (mobile/) cannot sign in inside its web view: Google refuses
+// embedded browsers. It opens /auth/google?app=<challenge> in Safari instead;
+// the callback sends Safari back to loadwise://auth with a short-lived token,
+// and the app's web view trades that token plus the verifier behind the
+// challenge for its own session at /auth/app/session. Another app grabbing the
+// loadwise:// link gets nothing without the verifier.
+const APP_RETURN_URL = "loadwise://auth";
+const APP_HANDOFF_SECONDS = 300;
+const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
+
 let cachedJwks = null;
 let cachedJwksAt = 0;
 
 export async function handleGoogleLogin(request, env, pathname) {
-  if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env));
+  if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env), request);
   if (pathname === "/auth/google/callback" && request.method === "GET") return finishLogin(request, googleClientEnv(env));
+  if (pathname === "/auth/app/session" && request.method === "POST") return finishAppLogin(request, googleClientEnv(env));
   return null;
 }
 
@@ -33,8 +44,9 @@ function configured(env) {
 }
 const NOT_CONFIGURED = ["Přihlášení přes Google není nastavené", "Chybí GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET nebo OWNER_EMAIL.", 503];
 
-async function startLogin(env) {
+async function startLogin(env, request) {
   if (!configured(env)) return page(...NOT_CONFIGURED);
+  const app = new URL(request.url).searchParams.get("app") || "";
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
@@ -46,7 +58,7 @@ async function startLogin(env) {
   u.searchParams.set("code_challenge", base64url(await sha256(verifier)));
   u.searchParams.set("code_challenge_method", "S256");
   u.searchParams.set("prompt", "select_account");
-  const cookie = STATE_COOKIE + "=" + [state, nonce, verifier].join(".") + "; Max-Age=" + STATE_SECONDS + "; Path=/auth/google; Secure; HttpOnly; SameSite=Lax";
+  const cookie = STATE_COOKIE + "=" + [state, nonce, verifier, APP_CHALLENGE.test(app) ? app : ""].join(".") + "; Max-Age=" + STATE_SECONDS + "; Path=/auth/google; Secure; HttpOnly; SameSite=Lax";
   return new Response(null, { status: 302, headers: { Location: u.toString(), "Set-Cookie": cookie, "Cache-Control": "no-store" } });
 }
 
@@ -56,7 +68,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   if (url.searchParams.get("error")) return page("Přihlášení zrušeno", "Google přihlášení nebylo dokončeno.", 400);
   const code = url.searchParams.get("code"), state = url.searchParams.get("state");
   const match = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
-  const [expectedState, nonce, verifier] = (match?.[1] || "").split(".");
+  const [expectedState, nonce, verifier, app] = (match?.[1] || "").split(".");
   if (!code || !state || !expectedState || state !== expectedState || !nonce || !verifier) return page("Přihlášení selhalo", "Neplatný nebo prošlý požadavek. Zkus to znovu.", 400);
 
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
@@ -78,6 +90,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
     return page("Přístup odepřen", "Tento Google účet nemá do aplikace pozvánku. Požádej správce o přístup.", 403);
   }
 
+  if (app) return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env)));
   const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
   const headers = new Headers({ Location: "/app", "Cache-Control": "no-store" });
   headers.append("Set-Cookie", await sessionCookie(user.id, exp, sessionSecret(env)));
@@ -85,6 +98,40 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   return new Response(null, { status: 302, headers });
 }
 export { finishLogin as _finishLoginForTest, page as loginPage };
+
+async function appHandoffToken(uid, challenge, secret) {
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({ uid, ch: challenge, exp: Math.floor(Date.now() / 1000) + APP_HANDOFF_SECONDS })));
+  return payload + "." + await signText("app-handoff." + payload, secret);
+}
+
+// Safari asks before opening another app, so the page keeps a button for it.
+function appReturnPage(token) {
+  const link = APP_RETURN_URL + "?token=" + encodeURIComponent(token);
+  const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" });
+  headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
+  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>Přihlášení hotovo</h1><p>Vrať se do aplikace Loadwise.</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">Otevřít aplikaci</a></p><script>location.href=document.getElementById(\"open\").href</script></body></html>", { status: 200, headers });
+}
+
+// The app's web view trades the handoff token and its verifier for a session.
+// JSON only, so another site cannot post a token from a hidden form.
+async function finishAppLogin(request, env) {
+  if (!configured(env)) return Response.json({ status: "error", message: "Přihlášení není nastavené." }, { status: 503 });
+  const fail = () => Response.json({ status: "error", message: "Přihlášení vypršelo. Zkus to znovu." }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  const origin = request.headers.get("Origin");
+  if (!(request.headers.get("Content-Type") || "").startsWith("application/json") || (origin && origin !== new URL(request.url).origin)) return fail();
+  const { token, verifier } = await request.json().catch(() => ({}));
+  const [payload, signature] = String(token || "").split(".");
+  if (!payload || !signature || typeof verifier !== "string" || verifier.length < 43 || verifier.length > 128) return fail();
+  if (!timingSafeEqualString(signature, await signText("app-handoff." + payload, sessionSecret(env)))) return fail();
+  let data;
+  try { data = JSON.parse(new TextDecoder().decode(fromBase64url(payload))); } catch { return fail(); }
+  const uid = Number(data?.uid), now = Math.floor(Date.now() / 1000);
+  if (!Number.isInteger(uid) || uid <= 0 || !(Number(data?.exp) > now)) return fail();
+  if (!timingSafeEqualString(base64url(await sha256(verifier)), String(data.ch || ""))) return fail();
+  const headers = new Headers({ "Cache-Control": "no-store" });
+  headers.append("Set-Cookie", await sessionCookie(uid, now + SESSION_SECONDS, sessionSecret(env)));
+  return Response.json({ status: "ok" }, { headers });
+}
 
 export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fetch) {
   const parts = String(token).split(".");

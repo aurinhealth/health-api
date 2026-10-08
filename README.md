@@ -105,6 +105,10 @@ Na https://staging.petrfitnessdata.eu/app běží kopie aplikace s vlastní data
 - Secrets se nastavují zvlášť u Workeru `health-api-staging` (v Cloudflare nebo `wrangler secret put NAZEV --env staging`). Pro přihlášení stačí `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (stejné jako v produkci) a `SESSION_SECRET` (u stagingu vlastní, libovolný dlouhý náhodný řetězec; stejně tak `STRENGTH_API_KEY` a `CONNECTION_KEY`, pokud je nastavíš); v Google Cloud musí OAuth klient mít navíc přesměrování `https://staging.petrfitnessdata.eu/auth/google/callback` a `https://staging.petrfitnessdata.eu/oauth/google/callback`. Pro asistenta a fotky jídla volitelně `OPENAI_API_KEY`.
 - `INTERVALS_API_KEY` ani připojení Google Health ve stagingu raději nenastavuj: pracují se skutečnými účty, takže by se zápisy (tréninky, váha) propsaly i tam.
 
+## Aplikace pro iPhone
+
+`mobile/` je nativní obal (Capacitor) kolem živé `/app`. GitHub ho sestaví bez Macu a bez placeného účtu Apple (`ios-app.yml`) a do iPhonu se nainstaluje přes Sideloadly. Postup je v `mobile/README.md`. Přihlášení přes Google probíhá v Safari a do aplikace se vrací přes `loadwise://auth` s krátkodobým tokenem, který uplatní jen aplikace, jež přihlášení spustila (`/auth/app/session` v `src/google-login.js`).
+
 ## Bezpečnost
 
 - Cloudflare spouští `src/main.js`: aplikaci z `entrypoint.js` za přesměrováním na HTTPS a bezpečnostními hlavičkami (`web-security.js`: HSTS, zákaz vložení do cizí stránky, `nosniff`, `Referrer-Policy`). Hlavičku, kterou si odpověď nastaví sama, nepřepisuje.

@@ -2,6 +2,7 @@
 // appear on the page; EN_TEMPLATES keys have every number replaced by {n}.
 // Generated from the rendered app with sample data, then reviewed.
 export const EN = {
+"Přihlášení se nepodařilo dokončit. Zkus to znovu.": "Sign-in could not be completed. Please try again.",
 "Za tento týden chybí celodenní tep i aktivní energie. Zátěž se spočítá z tepových zón Google Health, jakmile bude připojený.": "This week has no all-day heart rate or active energy. The strain is calculated from Google Health heart-rate zones once it is connected.",
 "Detail aktivity": "Activity detail",
 "Vyber den pro kopii.": "Pick a day to copy to.",

@@ -1,0 +1,12 @@
+{
+  "appId": "eu.petrfitnessdata.loadwise",
+  "appName": "Loadwise",
+  "webDir": "www",
+  "server": {
+    "url": "https://petrfitnessdata.eu/app"
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0a0d12"
+  }
+}

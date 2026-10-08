@@ -1,0 +1,17 @@
+{
+  "name": "loadwise-ios",
+  "private": true,
+  "description": "iPhone app for Loadwise: a native shell around https://petrfitnessdata.eu/app (Capacitor).",
+  "scripts": {
+    "sync": "cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.1.1",
+    "@capacitor/browser": "8.0.4",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}
