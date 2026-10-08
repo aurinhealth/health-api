@@ -13,7 +13,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testTodayScreen() throws {
-        try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40) }
+        try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
     func testSignInScreen() throws {
@@ -28,6 +28,12 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(Fmt.dayHeading(today.date), "ČTVRTEK 8. ŘÍJNA")
         XCTAssertEqual(Fmt.hoursMinutes(432), "7:12")
         XCTAssertEqual(Fmt.decimal(8.4), "8,4")
+    }
+
+    func testDayShift() {
+        XCTAssertEqual(AppModel.shift("2026-10-09", by: -1), "2026-10-08")
+        XCTAssertEqual(AppModel.shift("2026-03-01", by: -1), "2026-02-28")
+        XCTAssertEqual(AppModel.shift("2026-10-25", by: 1), "2026-10-26", "across the end of summer time")
     }
 
     func testServerResponseDecodes() throws {

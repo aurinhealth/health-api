@@ -34,8 +34,8 @@ struct TodayContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                SectionLabel(text: Fmt.dayHeading(today.date))
+            HStack(spacing: 10) {
+                DayNavigator(date: today.date)
                 Spacer()
                 Button(action: openSettings) {
                     Text("P").font(.footnote.weight(.medium))
@@ -46,7 +46,7 @@ struct TodayContent: View {
                 .accessibilityLabel("Profil a nastavení")
             }
 
-            ReadinessHero(readiness: today.readiness)
+            ReadinessHero(readiness: today.readiness, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                 .padding(.top, 40)
 
             KeyNumbers(today: today)
@@ -100,22 +100,60 @@ struct TodayContent: View {
     }
 }
 
+/// "‹ ČTVRTEK 8. ŘÍJNA ›": a day back, a day forward (not past today).
+struct DayNavigator: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button { Task { await model.showDay(offset: -1) } } label: {
+                Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 36)
+            }
+            .accessibilityLabel("Předchozí den")
+            SectionLabel(text: Fmt.dayHeading(date))
+            if model.selectedDate != nil {
+                Button { Task { await model.showDay(offset: 1) } } label: {
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 36)
+                }
+                .accessibilityLabel("Další den")
+                Button { Task { await model.showToday() } } label: {
+                    Text("Dnes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 10).frame(height: 28)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                }
+            }
+        }
+        .foregroundStyle(Palette.muted)
+        .disabled(model.demo || model.loading)
+    }
+}
+
 struct ReadinessHero: View {
     let readiness: TodaySnapshot.Readiness
+    var nightMissing = false
+    var isToday = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Připravenost").font(Typo.body).foregroundStyle(Palette.muted)
-            HStack(alignment: .lastTextBaseline, spacing: 14) {
-                Text(readiness.score.map { String($0) } ?? "–")
-                    .font(Typo.number(132))
-                    .foregroundStyle(Palette.ink)
-                if let pill = pill {
-                    Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
+            if let score = readiness.score {
+                HStack(alignment: .lastTextBaseline, spacing: 14) {
+                    Text(String(score))
+                        .font(Typo.number(132))
+                        .foregroundStyle(Palette.ink)
+                    if let pill = pill {
+                        Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
+                    }
                 }
-            }
-            if readiness.score == nil {
-                Text("Zatím málo dat. Připravenost potřebuje aspoň 14 dní HRV nebo klidového tepu.")
+            } else {
+                Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
+                    .font(Typo.sentence(34, relativeTo: .largeTitle))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.top, 8)
+                Text(nightMissing && isToday
+                     ? "Ukáže se, až hodinky nahrají dnešní spánek. Předchozí den najdeš šipkou vlevo nahoře."
+                     : "Připravenost potřebuje aspoň 14 dní HRV nebo klidového tepu.")
                     .font(Typo.small).foregroundStyle(Palette.muted)
             }
         }

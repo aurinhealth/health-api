@@ -52,9 +52,13 @@ struct BarChart: View {
             if let labels {
                 HStack(spacing: spacing) {
                     ForEach(labels.indices, id: \.self) { i in
+                        // Wider than its bar when the bars are thin ("14" over 2.5 pt
+                        // gaps): it may overflow sideways, it must not wrap.
                         Text(labels[i])
                             .font(.system(size: 9, weight: i == highlighted ? .semibold : .regular))
                             .foregroundStyle(i == highlighted ? Palette.ink : Palette.faint)
+                            .lineLimit(1)
+                            .fixedSize()
                             .frame(maxWidth: .infinity)
                     }
                 }
