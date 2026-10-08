@@ -38,6 +38,6 @@ test('a finished gym session replaces its preparation card with the review', () 
   const council = withLang('cs', () => buildCoachCouncil({ date, daily: { date, training: { planned: [{ id: 'g', name: 'Horní tělo A', type: 'WeightTraining' }], completed: [] } }, gym: { values: all }, strengthHistory: history }));
   assert.ok(!council.coaches.some(c => c.id === 'gym'));
   assert.equal(council.reviews.length, 1);
-  assert.equal(council.reviews[0].title, 'Posilovna · hodnocení tréninku');
+  assert.equal(council.reviews[0].title, 'Po tréninku · Posilovna');
   assert.equal(council.reviews[0].headline, 'Horní tělo A');
 });

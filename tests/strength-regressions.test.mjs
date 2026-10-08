@@ -60,7 +60,6 @@ test('focused legs preserve cycling protection', () => {
   assert.deepEqual([...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))],['Leg extension Prime']);
   assert.match(plan.rationale,/u nich držet rezervu/);
 });
-import { completedRowsAreSynced } from "../src/strength-sync-guard.js";
 import { strengthPlanToIntervalsEvent } from "../src/intervals-strength.js";
 import { buildNutritionPlan } from "../src/nutrition-intelligence.js";
 
@@ -201,61 +200,6 @@ test("generator treats aliased recent leg curl as the same exercise", () => {
   }, { focus: "lower", maxExercises: 4 });
   assert.ok(!plan.rows.some(row => row[0] === "WORK" && row[1] === "Prone leg curl Prime"));
 });
-
-test("sync guard accepts blank actuals stored with planned weight", () => {
-  const completed = [{
-    planRow: 10,
-    type: "WORK",
-    exercise: "DB curl",
-    setNo: 1,
-    plannedKg: 10,
-    plannedReps: "8–15",
-    actualKg: null,
-    actualReps: null,
-    rpe: null
-  }];
-  const dbRows = [{
-    plan_row: 10,
-    type: "WORK",
-    exercise: "DB curl",
-    set_no: 1,
-    planned_kg: 10,
-    planned_reps: "8–15",
-    actual_kg: 10,
-    actual_reps: null,
-    rpe: null,
-    completed: 1
-  }];
-  assert.equal(completedRowsAreSynced(completed, dbRows), true);
-});
-
-test("sync guard rejects mismatched completed row", () => {
-  const completed = [{
-    planRow: 10,
-    type: "WORK",
-    exercise: "DB curl",
-    setNo: 1,
-    plannedKg: 10,
-    plannedReps: "8–15",
-    actualKg: 10,
-    actualReps: 12,
-    rpe: 8
-  }];
-  const dbRows = [{
-    plan_row: 10,
-    type: "WORK",
-    exercise: "DB curl",
-    set_no: 1,
-    planned_kg: 10,
-    planned_reps: "8–15",
-    actual_kg: 10,
-    actual_reps: 11,
-    rpe: 8,
-    completed: 1
-  }];
-  assert.equal(completedRowsAreSynced(completed, dbRows), false);
-});
-
 
 test("generator reduces leg dose while retaining strength work around hard rides", () => {
   const plan = generateStrengthPlan({
@@ -438,15 +382,6 @@ test("nutrition plan increases daily target when a strength plan is present", ()
   assert.ok(withGym.training.strengthCalories > 0);
   assert.ok(withGym.calorieTarget >= base.calorieTarget);
   assert.equal(withGym.macros.proteinGrams, 176);
-});
-
-
-import { withoutCalories } from "../src/intervals-calories.js";
-
-test("the calorie lines the app wrote to Intervals.icu are removed and nothing else", () => {
-  assert.equal(withoutCalories("Z2 jízda\n\nEstimated calories: 640 kcal"), "Z2 jízda");
-  assert.equal(withoutCalories("Proč tenhle trénink: nohy\n\nOdhad výdeje: 350 kcal · 60 min\n\nVygenerováno v Loadwise"), "Proč tenhle trénink: nohy\n\nVygenerováno v Loadwise");
-  assert.equal(withoutCalories("Můj vlastní popis 500 kcal"), "Můj vlastní popis 500 kcal");
 });
 
 

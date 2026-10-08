@@ -6,7 +6,7 @@ import { L } from './lang.js';
 import { PERSONAL_TABLES, publicUser, ownerEmail } from "./tenancy.js";
 
 // Sign-in keys of the connected services are never exported.
-const SECRET_TABLES = new Set(["connection_credentials", "provider_tokens"]);
+const SECRET_TABLES = new Set(["connection_credentials"]);
 const missingTable = error => /no such table/i.test(String(error?.message || error));
 
 export async function exportAccountData(env, user) {

@@ -28,6 +28,7 @@ export function environmentFor(date, sport, weather = null) {
 // Weather is fetched on the server as well as in the calendar. Client data is
 // never the authority for training or health constraints.
 export async function weekWeather(location, start) {
+  if (!location) return {};
   const end = shift(start, 6);
   try {
     const query = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, daily: 'weather_code,temperature_2m_max,precipitation_probability_max,precipitation_sum,wind_speed_10m_max', timezone: timeZone(), start_date: start, end_date: end });

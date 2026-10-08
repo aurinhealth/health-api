@@ -15,15 +15,9 @@ function healthDb() {
   return d;
 }
 
-// A link opened from another site is a GET that carries the session cookie.
-test("the food diary takes text only by POST", async () => {
-  const response = await legacy.fetch(new Request("https://internal/food/log-text?text=str.%2012"), { DB: healthDb(), USER_ID: 7 }, ctx);
-  assert.equal(response.status, 405);
-});
-
 // A link or an image on another page is a GET that carries the session cookie.
 test("a sync starts only by POST", async () => {
-  for (const path of ["/sync/google", "/sync/intervals", "/sync/all"]) {
+  for (const path of ["/sync/google", "/sync/intervals"]) {
     const d = healthDb();
     const response = await legacy.fetch(new Request("https://internal" + path), { DB: d, USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx);
     assert.equal(response.status, 405, path);
@@ -45,13 +39,8 @@ test("the origin check comes before every route", () => {
   const start = entry.indexOf("async function routeRequest(");
   const check = entry.indexOf("if (foreignOriginChange(request, principal)) return", start);
   assert.ok(start > 0 && check > start && check < entry.indexOf("url.pathname", start));
-  // GitHub's periodic sync of every user starts it by POST as well.
-  assert.match(entry, /url\.pathname === "\/sync\/intervals" && principal\?\.kind === "system" && request\.method === "POST"/);
-  const workflow = readFileSync(new URL("../.github/workflows/strength-maintenance.yml", import.meta.url), "utf8");
-  assert.match(workflow, /curl [^\n]*-X POST [^\n]*"https:\/\/petrfitnessdata\.eu\/sync\/intervals"/);
 });
 
-// The periodic sync prints this answer in a public GitHub Actions log.
 test("the Intervals sync answers with counts, not the activities or planned workouts", async t => {
   const d = healthDb();
   t.mock.method(globalThis, "fetch", async url => Response.json(String(url).includes("/activities?")

@@ -1,4 +1,4 @@
-// The app's layers (entrypoint, strength gateway, MCP) call each other inside
+// The app's layers (entrypoint, strength gateway, index.js) call each other inside
 // the Worker with made-up requests. Those carry this token instead of the
 // owner API key: it is random, exists only in the memory of one running
 // Worker instance and never leaves it, so no stored secret travels with them.

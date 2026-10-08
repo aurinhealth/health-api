@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { planWeekRoles, roleFor, sanitizeWeekPlan, saveWeekPlan, getWeekPlan, DEFAULT_LOCATION, weekTargets, targetFor } from "../src/week-planner.js";
+import { planWeekRoles, roleFor, sanitizeWeekPlan, saveWeekPlan, getWeekPlan, weekTargets, targetFor } from "../src/week-planner.js";
 import { rankWorkoutCandidates, CYCLING_WORKOUTS, defaultCapabilities } from "../src/workout-library.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 import { googleExerciseHeartRate, heartRateFromSamples } from "../src/index.js";
@@ -50,7 +50,11 @@ test("roleFor maps a date to its weekday role", () => {
 test("week plan preferences are sanitised and stored per user", async () => {
   const raw = createD1(), a = scopedDb(raw, 1), b = scopedDb(raw, 2);
   assert.deepEqual(sanitizeWeekPlan({ days: [["ride", "swim"]], location: { latitude: 999 } }).days[0], ["ride"]);
-  assert.deepEqual(sanitizeWeekPlan({}).location, DEFAULT_LOCATION);
+  // No weather without a place the user chose; the old default place counts as none.
+  assert.equal(sanitizeWeekPlan({}).location, null);
+  assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682 } }).location, null);
+  assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682, source: "search" } }).location.name, "Kutná Hora");
+  assert.deepEqual(sanitizeWeekPlan({ location: { latitude: 50.08, longitude: 14.42, source: "device" } }).location, { name: "Moje poloha", latitude: 50.08, longitude: 14.42, source: "device" });
   await saveWeekPlan(a, { days: example, location: { name: "Praha", latitude: 50.0755, longitude: 14.4378 } });
   assert.equal((await getWeekPlan(a)).location.name, "Praha");
   assert.deepEqual((await getWeekPlan(a)).days[5], ["ride", "gym"]);

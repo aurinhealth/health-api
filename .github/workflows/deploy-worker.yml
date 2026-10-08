@@ -158,25 +158,6 @@ jobs:
           fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", "status="+str(d.get("status")); assert d.get("preview") is True, "not a preview"; p=d.get("plan") or {}; assert p.get("rows"), "plan has no rows"; assert p.get("loadEstimates") is not None, "plan has no load estimates"' <<< "$body"
 
-      - name: Smoke test food resolution
-        env:
-          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          body='{"name":"Milbona High Protein Pudding","brand":"Milbona","calories_100g":81,"protein_100g":10,"carbs_100g":6.4,"fat_100g":1.6,"fiber_100g":0.7,"salt_100g":0.28}'
-          resolved="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" -X POST -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/food/resolve")"
-          python -c 'import json,sys; d=json.load(sys.stdin); p=d.get("product") or {}; assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("match")=="package_label","match="+str(d.get("match")); assert [p.get(k) for k in ("calories_100g","protein_100g","fiber_100g","salt_100g")]==[81,10,0.7,0.28],"label values differ"' <<< "$resolved"
-
-      - name: Smoke test daily plan
-        env:
-          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          plan="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/daily/plan")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert "training" in d and "nutrition" in d and "food" in d and "meals" in d, "daily plan is missing a part"' <<< "$plan"
-
       - name: Smoke test Google Health nutrition
         env:
           OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
@@ -215,14 +196,3 @@ jobs:
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "activities" in d' <<< "$activities"
           week="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,"days="+str(len(d.get("days",[])))' <<< "$week"
-
-      - name: Smoke test MCP endpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          init="$(curl -fsS -X POST -H "Authorization: Bearer health-strength-demo-2026" -H "Content-Type: application/json" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{}}}' "https://petrfitnessdata.eu/mcp")"
-          python -c 'import json,sys; d=json.load(sys.stdin); assert d["result"]["protocolVersion"]=="2026-07-28"; assert d["result"]["serverInfo"]["name"]=="health-api-strength-coach"' <<< "$init"
-          discover="$(curl -fsS -X POST -H "Authorization: Bearer health-strength-demo-2026" -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "MCP-Protocol-Version: 2026-07-28" -H "Mcp-Method: server/discover" --data '{"jsonrpc":"2.0","id":3,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientInfo":{"name":"ci-smoke-test","version":"1.0.0"},"io.modelcontextprotocol/clientCapabilities":{}}}}' "https://petrfitnessdata.eu/mcp")"
-          python -c 'import json,sys; d=json.load(sys.stdin); r=d["result"]; assert r["resultType"]=="complete"; assert "2026-07-28" in r["supportedVersions"]; assert r["_meta"]["io.modelcontextprotocol/serverInfo"]["name"]=="health-api-strength-coach"' <<< "$discover"
-          tools="$(curl -fsS -X POST -H "Authorization: Bearer health-strength-demo-2026" -H "Content-Type: application/json" -H "MCP-Protocol-Version: 2026-07-28" --data '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' "https://petrfitnessdata.eu/mcp")"
-          python -c 'import json,sys; d=json.load(sys.stdin); names={x["name"] for x in d["result"]["tools"]}; assert "generateStrengthPlan" in names and "syncStrengthPlan" in names and "resolveFood" in names and "consumePlannedFood" in names and "updateFoodEntry" in names and "cancelFoodEntry" in names' <<< "$tools"

@@ -8,13 +8,13 @@ const req = (headers = {}) => new Request("https://petrfitnessdata.eu/app/api/da
 const future = () => Math.floor(Date.now() / 1000) + 60;
 
 test("personal data routes are not public", () => {
-  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/profile", "/app/api/food/log", "/app/api/inbox", "/app/api/me", "/app/api/admin/users", "/health/sleep", "/health/db", "/sync/google", "/sync/intervals", "/daily/plan", "/food/resolve", "/auth-test", "/test/intervals", "/strength/history"]) {
+  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/profile", "/app/api/food/log", "/app/api/inbox", "/app/api/me", "/app/api/admin/users", "/health/sleep", "/health/db", "/sync/google", "/sync/intervals", "/daily/plan", "/food/resolve", "/mcp", "/authorize", "/token", "/register", "/auth-test", "/test/intervals", "/strength/history"]) {
     assert.equal(isPublicPath(path), false, path);
   }
 });
 
 test("static pages, Google login and self-authenticating routes stay public", () => {
-  for (const path of ["/", "/app", "/app/dashboard-client.js", "/app/logout", "/auth/google", "/mcp", "/mcp/health", "/.well-known/openai-apps-challenge", "/oauth/google/callback", "/automation/strength"]) {
+  for (const path of ["/", "/app", "/app/dashboard-client.js", "/app/logout", "/auth/google", "/.well-known/apple-developer-domain-association.txt", "/oauth/google/callback", "/automation/strength"]) {
     assert.equal(isPublicPath(path), true, path);
   }
   assert.equal(isPublicPath("/app/login"), false);

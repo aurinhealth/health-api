@@ -45,7 +45,7 @@ export function explicitPreference(message) {
   return /(?:nemám rád|nemam rad|nemám ráda|nemam rada|nechci|nesnáším|nesnasim|preferuji|preferuju|mám rád|mam rad|mám ráda|mam rada|\bi (?:don'?t|do not) (?:like|want|enjoy)\b|\bi (?:hate|prefer|like|love|enjoy)\b)/i.test(text) ? clean(text) : null;
 }
 export function assertTrainingAllowed(state) {
-  if (state?.status && state.status !== 'active') throw new Error(L('Aktuální stav je ' + { sick: 'Nemoc', injured: 'Zranění', on_break: 'Pauza' }[state.status] + '. Trénink navrhnu po změně stavu na Trénink; teď s asistentem řeš odpočinek nebo svá omezení.', 'Your current status is ' + ATHLETE_STATUSES[state.status] + '. I\'ll suggest training once you switch your status back to Training; for now, talk to the assistant about rest or your limitations.'));
+  if (state?.status && state.status !== 'active') throw new Error(L('Aktuální stav je ' + { sick: 'Nemoc', injured: 'Zranění', on_break: 'Pauza' }[state.status] + '. Trénink navrhnu po změně stavu na Trénink; teď s AI řeš odpočinek nebo svá omezení.', 'Your current status is ' + ATHLETE_STATUSES[state.status] + '. I\'ll suggest training once you switch your status back to Training; for now, talk to AI about rest or your limitations.'));
 }
 // A single bad value cannot diagnose illness or injury. Only suggest a break,
 // based on multiple recent signals, and always let the athlete decide.

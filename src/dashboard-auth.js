@@ -6,7 +6,7 @@ export const SESSION_SECONDS = 30 * 24 * 60 * 60;
 
 // Routes reachable without a dashboard session or API key. Everything else
 // requires authentication. Routes listed here either serve static/public
-// content or enforce their own authentication (MCP bearer, GitHub OIDC,
+// content or enforce their own authentication (GitHub OIDC,
 // dashboard session inside the OAuth connectors).
 const PUBLIC_PATHS = new Set([
   "/",
@@ -15,7 +15,6 @@ const PUBLIC_PATHS = new Set([
   "/support",
   "/logo.svg",
   "/manifest.webmanifest",
-  "/openapi.json",
   "/app",
   "/app/dashboard-client.js",
   "/app/logout",
@@ -28,11 +27,7 @@ const PUBLIC_PATHS = new Set([
   "/auth/passkey/verify",
   "/auth/email/start",
   "/auth/email/verify",
-  "/mcp",
-  "/mcp/health",
-  "/automation/strength",
-  "/automation/nutrition",
-  "/automation/nutrition-notes"
+  "/automation/strength"
 ]);
 const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/"];
 

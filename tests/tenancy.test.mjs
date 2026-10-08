@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { ensureTenancy, scopedDb, signInGoogleUser, inviteUser, setUserDisabled, userEnv, usersWithProviders, _resetTenancyForTest } from "../src/tenancy.js";
 import { savePersonalFood, searchPersonalFoods } from "../src/personal-foods.js";
-import { logFood, getFoodDay, cancelFoodEntry } from "../src/food-log.js";
+import { logFood, updateFoodEntry } from "../src/food-log.js";
 
 const env = { OWNER_EMAIL: "Owner@Example.com" };
 
@@ -110,9 +110,10 @@ test("users never see each other's foods or food log", async () => {
   assert.equal((await searchPersonalFoods(alice, "Alice granola")).length, 1);
   assert.equal((await searchPersonalFoods(bob, "Alice granola")).length, 0);
   const logged = await logFood(alice, { date: "2026-09-30", name: "Oats", calories: 300, protein_g: 10, carbs_g: 50, fat_g: 5 });
-  assert.equal((await getFoodDay(bob, "2026-09-30")).entries?.length ?? 0, 0);
-  assert.equal((await cancelFoodEntry(bob, logged.id)).cancelled, false);
-  assert.equal((await getFoodDay(alice, "2026-09-30")).entries.length, 1);
+  const day = db => db.prepare("SELECT id, kcal FROM food_logs WHERE user_id = ? AND consumed_date = ?");
+  assert.equal(((await day(bob).bind(2, "2026-09-30").all()).results || []).length, 0);
+  await updateFoodEntry(bob, { id: logged.id, servings: 3 }).catch(() => null);
+  assert.deepEqual(((await day(alice).bind(1, "2026-09-30").all()).results || []).map(r => r.kcal), [300]);
 });
 
 test("user env hides the owner's global credentials from other users", () => {

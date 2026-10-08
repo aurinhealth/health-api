@@ -4,12 +4,10 @@ const EXPECTED_AUDIENCE = "health-strength";
 const EXPECTED_REPOSITORY = "shaarkyn/health-api";
 const EXPECTED_REPOSITORY_ID = "1371310425";
 const EXPECTED_REPOSITORY_OWNER_ID = "329509326";
+const NIGHTLY_GYM_WORKFLOW = "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main";
 const EXPECTED_WORKFLOWS = new Set([
-  "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main",
-  "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main",
-  "shaarkyn/health-api/.github/workflows/nutrition.yml@refs/heads/main",
-  "shaarkyn/health-api/.github/workflows/strength-maintenance.yml@refs/heads/main",
-  "shaarkyn/health-api/.github/workflows/nutrition-cleanup.yml@refs/heads/main"
+  NIGHTLY_GYM_WORKFLOW,
+  "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main"
 ]);
 
 let cachedJwks = null;
@@ -36,9 +34,7 @@ export async function verifyGitHubActionsToken(request) {
   if (String(claims.repository_owner_id) !== EXPECTED_REPOSITORY_OWNER_ID) throw new Error("Invalid GitHub Actions repository owner");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
   if (!EXPECTED_WORKFLOWS.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
-  const scheduledWorkflow = claims.workflow_ref === "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main"
-    || claims.workflow_ref === "shaarkyn/health-api/.github/workflows/strength-maintenance.yml@refs/heads/main";
-  if (claims.event_name !== "push" && !(scheduledWorkflow && claims.event_name === "schedule")) {
+  if (claims.event_name !== "push" && !(claims.workflow_ref === NIGHTLY_GYM_WORKFLOW && claims.event_name === "schedule")) {
     throw new Error("Invalid GitHub Actions event");
   }
   if (claims.actor !== "shaarkyn") throw new Error("Invalid GitHub Actions actor");

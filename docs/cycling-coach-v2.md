@@ -177,7 +177,7 @@ Before merge:
 2. Review the assistant output on representative historical days.
 3. Confirm `OPENAI_API_KEY` and the selected API model on Cloudflare.
 4. Merge only after review.
-5. After deployment run smoke tests for dashboard, assistant, daily plan and MCP.
+5. After deployment run smoke tests for dashboard and assistant.
 6. Keep writes to Intervals.icu behind explicit user confirmation.
 
 ## Files

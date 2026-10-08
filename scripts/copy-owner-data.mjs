@@ -16,7 +16,7 @@ import { pathToFileURL } from "node:url";
 
 // Tables with a user_id column whose rows belong to the owner.
 export const OWNER_TABLES = [
-  "health_datapoints", "food_logs", "food_log", "personal_foods", "strength_sets",
+  "health_datapoints", "food_logs", "personal_foods", "strength_sets",
   "gym_plans", "gym_plan_cancellations", "dashboard_profile", "coach_inbox",
   "training_capabilities", "workout_feedback", "coach_reflections", "fluid_log",
   "workout_schedule_links", "training_profile", "week_plan_preferences",
@@ -25,10 +25,10 @@ export const OWNER_TABLES = [
 ];
 // Catalogues without personal data.
 export const SHARED_TABLES = ["shared_foods", "workout_library"];
-// Left out on purpose: connection_credentials, provider_tokens (sign-in keys),
+// Left out on purpose: connection_credentials (sign-in keys),
 // user_passkeys, user_identities, auth_challenges, email_login_codes (sign-in:
 // passkeys work only on the domain they were made on), food_google_exports,
-// sync_status, sync_state, api_cache_versions (sync and cache state), ai_usage
+// sync_status, api_cache_versions (sync and cache state), ai_usage
 // (spending on the source copy), users, user_invites (other people), schema_meta,
 // d1_migrations.
 export const DONE_KEY = "owner_data_copied_at";

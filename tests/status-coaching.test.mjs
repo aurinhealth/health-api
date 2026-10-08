@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { buildCoachCouncil } from '../src/coach-engine.js';
 import { buildCyclingCoachV2 } from '../src/cycling-coach-v2.js';
 import { coachContext } from '../src/coach-assistant.js';
-import { buildDailyPlan } from '../src/daily-plan.js';
 import { buildAdaptiveDecision } from '../src/adaptive-engine.js';
 import { generateStrengthPlan } from '../src/strength-generator.js';
 import { reflectionInput, rulesReflection } from '../src/coach-reflection.js';
@@ -53,7 +52,7 @@ for(const status of ['sick','injured','on_break']){
     assert.equal(r.athleteState.note,athleteState.note);
   });
 
-  test(status+': daily and adaptive plans suppress training, including a previously cached positive decision',()=>{
+  test(status+': the adaptive decision suppresses training',()=>{
     const active=buildAdaptiveDecision(context);
     const pausedContext={...context,athleteState};
     const adaptive=buildAdaptiveDecision(pausedContext);
@@ -62,14 +61,6 @@ for(const status of ['sick','injured','on_break']){
     assert.equal(adaptive.strengthPriority,'rest');
     assert.equal(adaptive.nextRide,null);
     assert.deepEqual(adaptive.upcomingCycling,[]);
-    const r=buildDailyPlan({context:{...pausedContext,adaptive:active},nutrition:daily.nutrition,food:{totals:{eaten:{calories:800}}}});
-    assert.equal(r.training.paused,true);
-    assert.deepEqual(r.training.actions,[]);
-    assert.equal(r.training.nextRide,null);
-    assert.equal(r.training.strength,null);
-    assert.equal(r.nutrition.calorieTarget,2650);
-    assert.equal(r.food.eaten.calories,800);
-    assert.match(r.recommendations.join(' '),/Citlivé koleno/);
   });
 }
 

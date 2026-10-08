@@ -1,4 +1,3 @@
-import { L } from './lang.js';
 import { normalizeExerciseName } from "./strength-normalization.js";
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -313,29 +312,6 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
   }
   if (fallbackKg != null) return { kg: resolveLoad(exercise, Number(fallbackKg)), source: "catalogue-default", confidence: 0.25 };
   return { kg: null, source: "no-reference", confidence: 0 };
-}
-
-export function analyzeCompletedWorkout(parsed, history = []) {
-  const work = (parsed?.completedRows || []).filter(r => r.type === "WORK").map(r => ({ ...r, exercise: normalizeExerciseName(r.exercise) }));
-  if (!work.length) return { status: "ok", completedSets: 0, summary: L("Zatím nejsou dokončené pracovní série k analýze.", "There are no completed work sets to analyse yet."), exercises: [], recommendations: [] };
-  const byExercise = new Map();
-  for (const row of work) { const arr = byExercise.get(row.exercise) || []; arr.push(row); byExercise.set(row.exercise, arr); }
-  const exercises = [], recommendations = [];
-  for (const [exercise, rows] of byExercise) {
-    const usable = rows.filter(r => n(r.actual_kg) != null && n(r.actual_reps) != null);
-    const avgRpeValues = rows.map(r => normalizeRpe(r.rpe)).filter(x => x != null);
-    const avgRpe = avgRpeValues.length ? avgRpeValues.reduce((a, b) => a + b, 0) / avgRpeValues.length : null;
-    const topReps = usable.length ? Math.max(...usable.map(r => n(r.actual_reps))) : null;
-    const planned = rows[0]?.planned_kg != null ? n(rows[0].planned_kg) : null;
-    const actuals = usable.map(r => n(r.actual_kg));
-    const actualKg = actuals.length ? Math.max(...actuals) : null;
-    let action = "hold";
-    if (avgRpe != null && avgRpe <= 7.5 && topReps != null) action = "increase_small";
-    else if (avgRpe != null && avgRpe >= 9) action = "hold_or_reduce";
-    exercises.push({ exercise, sets: rows.length, plannedKg: planned, actualKg, avgRpe: avgRpe == null ? null : Math.round(avgRpe * 10) / 10, topReps, action, loadUnit: EXERCISE_INTELLIGENCE[exercise]?.loadUnit || null });
-    recommendations.push({ exercise, action, reason: action === "increase_small" ? L("RPE byl kontrolovaný; příště lze zkusit malý nárůst, pokud se drží technika.", "RPE was under control; next time you can try a small increase if your technique holds.") : action === "hold_or_reduce" ? L("RPE byl vysoký; příště držet nebo mírně snížit podle regenerace.", "RPE was high; next time hold or slightly reduce depending on recovery.") : L("Zátěž zatím ponechat a potvrdit další sérií výkonu.", "Keep the load for now and confirm it with another set.") });
-  }
-  return { status: "ok", completedSets: work.length, workoutDate: parsed.date, summary: L(`Analyzováno ${work.length} dokončených pracovních sérií ve ${byExercise.size} cvicích.`, `Analysed ${work.length} completed work sets in ${byExercise.size} exercises.`), exercises, recommendations };
 }
 
 export function findExerciseAlternatives(exercise, history = [], requestedMuscle = null) {

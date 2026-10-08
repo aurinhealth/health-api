@@ -123,6 +123,8 @@ test("RPE feedback starts the coach's note in the background and the dashboard s
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
   assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
   assert.match(client, /x\.rating\?ratingCard\(x\)/);
-  assert.match(client, /\$\('timelineCoach'\)\.onclick=\(\)=>openCoachSheet\(date\)/);
+  assert.match(client, /x\.rated\?'<div class="review-rating">/);
+  // AI has one way in, the AI button: no separate coach button on the day's timeline.
+  assert.doesNotMatch(client, /timelineCoach|openCoachSheet/);
   assert.match(client, /awaitReflection\(body\.scheduledDate\)/);
 });

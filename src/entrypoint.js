@@ -11,8 +11,6 @@ import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { buildRideReview } from "./ride-review.js";
 import { buildRunReview } from "./run-review.js";
-import { handleMcpCompat } from "./mcp-compat.js";
-import { deleteDailyNutritionNotes } from "./intervals-nutrition-notes.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
@@ -36,7 +34,6 @@ import {gymExerciseCatalog,gymAlternatives,gymLoadEstimate} from './gym-catalog.
 import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
-import {weekReviewContext,fallbackWeekReview,WEEK_REVIEW_REQUEST} from './weekly-plan-review.js';
 import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
@@ -76,7 +73,6 @@ import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrength
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile } from "./training-profile.js";
-import { removePlannedEventCalories } from "./intervals-calories.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
 import { nightDetail } from "./night-detail.js";
@@ -108,8 +104,6 @@ import { dateFormat } from "./date-format.js";
 import { lang, withLang, storedLanguage, rememberLanguage, L } from "./lang.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, dayStartUtc, localNow, localToday, localDate, timeZone } from "./user-time.js";
 
-const OPENAPI_URL = "https://raw.githubusercontent.com/shaarkyn/health-api/main/openapi.json";
-
 // A month of Google Health samples summed per day: thousands of rows that only a
 // sync changes (every five minutes, or the Obnovit button, which drops the cache).
 const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:" + date, () => googleDashboard(env.DB, date), { ttl: 120 });
@@ -117,7 +111,7 @@ const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:"
 // Requests that read or preview only and so keep the cache.
 // Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
 const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|passkeys$|passkeys\/options$)/;
-const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support','/mcp/health']);
+const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
@@ -187,8 +181,8 @@ const worker = {
     if (principal?.kind === "user") {
       user = await findUser(env.DB, principal.userId, env);
       if (!user && !isPublic) return unauthorizedResponse();
-    } else if (principal?.kind === "owner" || principal?.kind === "system" || url.pathname === "/mcp") {
-      // The shared API key (MCP, API clients) and GitHub automations act as the owner.
+    } else if (principal?.kind === "owner" || principal?.kind === "system") {
+      // The owner API key and GitHub automations act as the owner.
       user = await ownerUser(env.DB, env);
     }
     if (user) env = await connectionEnvironment(userEnv(rawEnv, user));
@@ -220,21 +214,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Legacy Google Health endpoints live in index.js. The deployed Worker
     // uses entrypoint.js, so expose these routes explicitly instead of letting
     // them fall through to the dashboard gateway.
-    if (url.pathname === "/sync/intervals" && principal?.kind === "system" && request.method === "POST") {
-      return Response.json({status:"ok",users:await forEachUser(rawEnv,["intervals"],scoped=>legacyHealthApi.fetch(request.clone(),scoped,ctx).then(r=>r.json().catch(()=>({status:r.status}))))});
-    }
     if (url.pathname === "/sync/google" || url.pathname === "/sync/google/status" || url.pathname === "/health/sleep") {
       return legacyHealthApi.fetch(request, env, ctx);
     }
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
-    if (url.pathname === "/automation/nutrition") return handleNutritionAutomation(request, env, ctx);
-    if (url.pathname === "/automation/nutrition-notes") return handleNutritionNotesAutomation(request, rawEnv);
-    if (url.pathname === "/automation/planned-calories") return handlePlannedCaloriesAutomation(request, rawEnv);
-    if (url.pathname === "/mcp") return handleMcpCompat(request, env);
-    if (url.pathname === "/.well-known/openai-apps-challenge" && request.method === "GET") {
-      if (!env.OPENAI_APP_CHALLENGE) return new Response("Not configured", { status: 404 });
-      return new Response(env.OPENAI_APP_CHALLENGE, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
-    }
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
     if (url.pathname === "/.well-known/apple-developer-domain-association.txt" && request.method === "GET") {
       if (!env.APPLE_DOMAIN_ASSOCIATION) return new Response("Not configured", { status: 404 });
@@ -262,12 +245,6 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
       return response;
     }
-    if (url.pathname === "/openapi.json" && request.method === "GET") {
-      const response = await fetch(OPENAPI_URL, { cf: { cacheTtl: 60 } });
-      if (!response.ok) return new Response(JSON.stringify({ status: "error", message: "OpenAPI schema unavailable" }), { status: 502, headers: { "content-type": "application/json" } });
-      const text = await response.text();
-      return new Response(text, { status: 200, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60" } });
-    }
     if (!user) return unauthorizedResponse();
     return app.fetch(request, env, ctx);
     }
@@ -282,7 +259,6 @@ export default {
 };
 
 async function staticRoute(url, request, env) {
-  if (url.pathname === "/mcp/health") return Response.json({ status: "ok", service: "health-api-mcp", version: "1.1.0", endpoint: "/mcp", protocol: "2026-07-28+legacy" });
   if (url.pathname === "/app") return dashboardPage({ clientVersion: CLIENT_VERSION, account: (await verifyDashboardSession(request, sessionSecret(env)))?.uid ?? "", signIn: { apple: appleConfigured(env), email: emailConfigured(env) } });
   if (url.pathname === "/app/i18n-en.js") return englishScript(url);
   if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": scriptCacheControl(url, CLIENT_VERSION) } });
@@ -366,7 +342,7 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
     if(!row) return Response.json({status:"error",message:L("Návrh už neexistuje.", "The proposal no longer exists.")},{status:404});
     if(row.status==="confirmed") return Response.json({status:"ok",message:L("Tento návrh už je potvrzený.", "This proposal is already confirmed.")});
     const draft=JSON.parse(row.draft_json||"{}"); let result={status:"ok"};
-    if(draft.kind)return Response.json({status:'error',message:L('Tento návrh potvrď v osobním asistentovi nebo v náhledu gymu.', 'Confirm this proposal in the personal assistant or in the gym preview.')},{status:400});
+    if(draft.kind)return Response.json({status:'error',message:L('Tento návrh potvrď v AI nebo v náhledu gymu.', 'Confirm this proposal in AI or in the gym preview.')},{status:400});
     if(draft.action?.type==="gym_generate") {
       const r=await app.fetch(new Request("https://internal/strength/generate-plan",{method:"POST",headers:{...internalAuth,"Content-Type":"application/json"},body:JSON.stringify({date:draft.date})}),env,ctx);
       result=await r.json().catch(()=>({status:"error",message:L("Neplatná odpověď Gymu", "Invalid response from the gym planner")})); if(!r.ok||result.status!=="ok") throw new Error(result.message||L("Gym plán se nepodařilo uložit.", "The gym plan couldn't be saved."));
@@ -575,24 +551,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const body=await request.json(),start=validTrainingDay(body.start)?mondayOfDate(body.start):mondayOfDate(localToday());
       const today=localToday();
-      const [prefs,state,inputs,athleteFeedback,coachNotes]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today),recentWorkoutFeedback(env.DB,shiftDate(today,-21)),listReflections(env.DB,{limit:5}).catch(()=>[])]);
+      const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today)]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week.days.push(...(data.days||[]));}
       const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),28)]),proposal=weekProposal({prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,focus:inputs.focus,weather,history});
-      const context=weekReviewContext({inputs,prefs,state,start,today,proposal,weather,history,athleteFeedback,coachNotes});
-      const weeks=[...new Set(inputs.week.days.filter(d=>d.date>=today&&d.date<=context.reviewScope.end).map(d=>mondayOfDate(d.date)))];
-      const effectiveWeeks=new Map(await Promise.all(weeks.map(async w=>[w,await getWeekPlan(env.DB,w)])));
-      context.availabilityByDate=Object.fromEntries(inputs.week.days.filter(d=>d.date>=today&&d.date<=context.reviewScope.end).map(d=>[d.date,effectiveWeeks.get(mondayOfDate(d.date)).availability[(new Date(d.date+'T12:00:00Z').getUTCDay()+6)%7]]));
-      if(start<today)context.weatherUpcoming=await weekWeather(prefs.location,today);
-      let review=fallbackWeekReview(context),aiError=null;
-      // "Vygenerovat tréninky" only needs the week's sessions; the AI review is the chat's.
-      if(body.review===false)return Response.json({status:'ok',start,proposal,actions:[]},{headers:{'Cache-Control':'no-store'}});
-      if(env.OPENAI_API_KEY){try{
-        review={...await askCoach(env,WEEK_REVIEW_REQUEST,context,{focus:inputs.focus,task:'planning',actions:true,concise:true}),source:'ai'};
-      }catch(error){aiError=error.message}}
-      context.userMessage=L('Zkontroluj budoucí plán a navrhni změny.', 'Review the upcoming plan and suggest changes.');
-      const actions=validateCoachActions(review.actions,context,today),drafts=[];await ensureCoachInboxTable(env.DB);
-      for(const action of actions){const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',L('Revize budoucího plánu od ', 'Review of the upcoming plan from ')+today,JSON.stringify({kind:'coach_action',action})).run();drafts.push({...action,draftId:ins.meta?.last_row_id});}
-      return Response.json({status:'ok',start,proposal,review:{...review,actions:drafts},actions:drafts,reviewScope:context.reviewScope,reviewedCount:context.remainingPlanned.length,aiError},{headers:{'Cache-Control':'no-store'}});
+      // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
+      return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   if (url.pathname === "/app/api/me" && request.method === "GET") {
@@ -1394,20 +1357,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));
-    // The week plan's gym chip for that day sets the length and upper/full body,
-    // unless the request chose them.
+    // Training time is set only in the week plan: the day's gym chip sets the
+    // length (and upper/full body unless the request chose the focus), and the
+    // day's available time caps it.
     const day = /^\d{4}-\d{2}-\d{2}$/.test(String(body?.date||"")) ? body.date : localToday();
     try {
       assertTrainingAllowed(await getAthleteState(env.DB));
-      const prefs=await getWeekPlan(env.DB,day),budget=trainingBudget(prefs,day,body.durationMinutes==null?null:Number(body.durationMinutes),{userInitiated:body.userInitiated===true});
+      const prefs=await getWeekPlan(env.DB,day);
+      if (body?.durationMinutes == null) {
+        const chip = targetFor(await computeWeekTargets(env, ctx, mondayOfDate(day), prefs).catch(() => null), day, "gym");
+        if (chip) { body.durationMinutes = chip.minutes; if (chip.role === "gym_upper" && !body?.focus && !body?.focusMuscles && !body?.forceProtectLegs) { body.focus = "upper"; body.focusSource = "week"; } }
+      }
+      const budget=trainingBudget(prefs,day,body.durationMinutes==null?null:Number(body.durationMinutes),{userInitiated:body.userInitiated===true});
       if(budget!=null&&budget<30)throw new Error(L('Na gym potřebuješ alespoň 30 minut dostupného času.', 'The gym needs at least 30 minutes of available time.'));
       if(budget!=null)body.durationMinutes=budget;
     }catch(error){return Response.json({message:error.message},{status:400})}
-    if (body?.durationMinutes == null && !body?.focus && !body?.focusMuscles && !body?.forceProtectLegs) {
-      const prefs = await getWeekPlan(env.DB,day).catch(() => null);
-      const chip = prefs ? targetFor(await computeWeekTargets(env, ctx, mondayOfDate(day), prefs).catch(() => null), day, "gym") : null;
-      if (chip) { body.durationMinutes = chip.minutes; if (chip.role === "gym_upper") { body.focus = "upper"; body.focusSource = "week"; } }
-    }
     const internal = new URL("/strength/generate-plan", request.url);
     const response = await app.fetch(new Request(internal,{
       method:"POST",
@@ -1658,114 +1622,35 @@ async function handleAdminApi(request, env, url, session, ctx) {
   return Response.json({status:"error",message:"Not found"},{status:404});
 }
 
+// The nightly gym plan (health-strength.yml). It follows the week plan: no gym
+// that day, no plan; a plan already there (made or edited by the athlete) is kept.
 async function handleStrengthAutomation(request, env, ctx) {
   if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
   try {
     await verifyGitHubActionsToken(request);
     const body = await request.json().catch(() => ({}));
-    const date = body?.date == null || body.date === "" ? null : String(body.date).trim();
-    const action = String(body?.action || "generate").toLowerCase();
-    const preview = body?.preview === true;
-    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
-
-    const routes = {
-      generate: "/strength/generate-plan",
-      regenerate: "/strength/generate-plan",
-      adjust: "/strength/generate-plan",
-      shorten: "/strength/generate-plan",
-      protect_legs: "/strength/generate-plan",
-      focus_upper: "/strength/generate-plan",
-      focus_lower: "/strength/generate-plan",
-      substitute: "/strength/substitute",
-      import_history: "/strength/history/import",
-      sync: "/strength/sync"
-    };
-    const route = routes[action];
-    if (!route) return Response.json({ status: "error", message: `Unknown strength action: ${action}` }, { status: 400 });
-
-    // The nightly run follows the week plan: no gym that day, no plan; a plan
-    // already there (made or edited by the athlete) is kept.
-    if (body?.nightly === true && action === "generate") {
-      const day = date || localToday(), skip = await nightlyGymSkip(env.DB, day);
-      if (skip) return Response.json({ status: "skipped", action, date: day, reason: skip });
-    }
-    const internalUrl = new URL(route, request.url);
-    const payload = { ...body, date, preview, action };
-    if (action === "protect_legs" || action === "focus_upper") payload.forceProtectLegs = true;
-    if (action === "shorten" && payload.durationMinutes == null) payload.durationMinutes = 60;
-    if (action === "substitute") {
-      if (!payload.from) return Response.json({ status: "error", message: "substitute requires 'from'" }, { status: 400 });
-      if (!payload.to && !payload.muscle) return Response.json({ status: "error", message: "substitute requires 'to' or 'muscle'" }, { status: 400 });
-    }
-
-    const internalRequest = new Request(internalUrl, {
+    const date = body?.date == null || body.date === "" ? localToday() : String(body.date).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
+    const skip = await nightlyGymSkip(env.DB, date);
+    if (skip) return Response.json({ status: "skipped", action: "generate", date, reason: skip });
+    const internalRequest = new Request(new URL("/strength/generate-plan", request.url), {
       method: "POST",
       headers: { ...internalHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ date, preview: false, action: "generate", nightly: true })
     });
     const response = await app.fetch(internalRequest, env, ctx);
     const result = await response.clone().json().catch(() => null);
-    if (result && typeof result === "object") return Response.json({ ...result, action }, { status: response.status });
+    if (result && typeof result === "object") return Response.json({ ...result, action: "generate" }, { status: response.status });
     return response;
   } catch (error) {
     return Response.json({ status: "error", step: "github_actions_auth", message: error.message }, { status: 401 });
   }
 }
 
-
-async function handleNutritionAutomation(request, env, ctx) {
-  if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
-  try {
-    await verifyGitHubActionsToken(request);
-    const body = await request.json().catch(() => ({}));
-    const date = body?.date == null || body.date === "" ? null : String(body.date).trim();
-    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
-    const internalUrl = new URL("/nutrition/plan", request.url);
-    const internalRequest = new Request(internalUrl, {
-      method: "POST",
-      headers: { ...internalHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, date })
-    });
-    const response = await app.fetch(internalRequest, env, ctx);
-    const result = await response.clone().json().catch(() => null);
-    if (result && typeof result === "object") return Response.json(result, { status: response.status });
-    return response;
-  } catch (error) {
-    return Response.json({ status: "error", step: "github_actions_auth", message: error.message }, { status: 401 });
-  }
-}
 
 function logoResponse() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><rect width="256" height="256" rx="48" fill="#111827"/><path d="M68 132h32l18-54 30 100 20-46h20" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><circle cx="68" cy="132" r="8" fill="#fff"/></svg>`;
   return new Response(svg, { status: 200, headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" } });
-}
-
-
-// Calories are not written to Intervals.icu. These automations remove what
-// the app wrote there before: the calorie lines in planned workouts and the
-// daily "Nutrition — date" notes, from today on.
-async function handlePlannedCaloriesAutomation(request, rawEnv) {
-  if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
-  try { await verifyGitHubActionsToken(request); }
-  catch (error) { return Response.json({status:"error",step:"github_actions_auth",message:error.message},{status:401}); }
-  try {
-    const body=await request.json().catch(()=>({}));
-    const today=localToday(),oldest=String(body?.oldest||today),newest=String(body?.newest||shiftDate(today,60));
-    const users=await forEachUser(rawEnv,["intervals"],env=>removePlannedEventCalories(env,{oldest,newest}));
-    return Response.json({status:"ok",users});
-  } catch (error) { return Response.json({status:"error",step:"planned_calories",message:error.message},{status:500}); }
-}
-
-async function handleNutritionNotesAutomation(request, rawEnv) {
-  if (request.method !== "POST") return Response.json({status:"error",message:"Method not allowed"},{status:405});
-  try {
-    await verifyGitHubActionsToken(request);
-    const body=await request.json().catch(()=>({}));
-    const today=localToday(), oldest=String(body?.oldest||today), newest=String(body?.newest||shiftDate(today,14));
-    const users=await forEachUser(rawEnv,["intervals"],env=>deleteDailyNutritionNotes(env,{oldest,newest}));
-    const failed=users.filter(u=>u.error);
-    return Response.json({status:failed.length&&failed.length===users.length?"error":"ok",users},{status:failed.length&&failed.length===users.length?500:200});
-  } catch(error){ return Response.json({status:"error",step:"nutrition_notes",message:error.message},{status:500}); }
 }
 
 

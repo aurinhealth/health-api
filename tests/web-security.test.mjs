@@ -43,9 +43,9 @@ test("plain HTTP goes to HTTPS without reaching the app", async () => {
   const page = await worker.fetch(new Request("http://petrfitnessdata.eu/app?lang=en"), {}, ctx);
   assert.equal(page.status, 301);
   assert.equal(page.headers.get("Location"), "https://petrfitnessdata.eu/app?lang=en");
-  const post = await worker.fetch(new Request("http://petrfitnessdata.eu/mcp", { method: "POST", body: "{}" }), {}, ctx);
+  const post = await worker.fetch(new Request("http://petrfitnessdata.eu/app/api/sync", { method: "POST", body: "{}" }), {}, ctx);
   assert.equal(post.status, 308);
-  assert.equal(post.headers.get("Location"), "https://petrfitnessdata.eu/mcp");
+  assert.equal(post.headers.get("Location"), "https://petrfitnessdata.eu/app/api/sync");
   assert.deepEqual(app.calls, []);
 });
 

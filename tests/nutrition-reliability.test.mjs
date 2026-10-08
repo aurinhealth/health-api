@@ -126,7 +126,7 @@ test("the nutrition plan uses the athlete's own latest weight, not a fixed 88 kg
   assert.equal(buildNutritionPlan(context).macros.proteinGrams, 176);
 });
 
-test("ChatGPT gets the app's calorie target: same kcal, app protein and fat, carbs fill the rest", async () => {
+test("the gym plan's nutrition gets the app's calorie target: same kcal, app protein and fat, carbs fill the rest", async () => {
   const { buildNutritionPlan, withAppTarget } = await import("../src/nutrition-intelligence.js");
   const context = { date: "2026-10-05", cycling: { plannedWorkouts: [], recentActivities: [], recentRideHours: 0, recentRideTss: 0 } };
   const own = buildNutritionPlan(context, { weightTrend: { latestKg: 80, samples: 10, weeklyRateKg: -0.3 } });
@@ -143,8 +143,8 @@ test("ChatGPT gets the app's calorie target: same kcal, app protein and fat, car
   const partial = withAppTarget(own, { nutrition: { calorieTarget: 2400, macros: { protein_g: null } } });
   assert.equal(partial.macros.proteinGrams, own.macros.proteinGrams);
   assert.equal(partial.macros.fatGrams, own.macros.fatGrams);
-  // Every nutrition route ChatGPT calls goes through the app target.
+  // The gym plan's nutrition goes through the app target.
   const gateway = readFileSync(new URL("../src/strength-gateway.js", import.meta.url), "utf8");
   assert.equal((gateway.match(/buildNutritionPlan\(/g) || []).length, 1);
-  assert.equal((gateway.match(/await nutritionFor\(/g) || []).length, 6);
+  assert.equal((gateway.match(/await nutritionFor\(/g) || []).length, 1);
 });

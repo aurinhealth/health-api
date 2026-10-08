@@ -1,5 +1,5 @@
-import {trainingSetup} from './onboarding.js';
-import {storeLocalEvent,syncLocalWorkout,ensureLocalWorkouts} from './local-workouts.js';
+import { trainingSetup } from './onboarding.js';
+import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-workouts.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
@@ -9,7 +9,6 @@ import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
-import { intervalsAuthorization } from "./intervals-auth.js";
 import { workoutEn } from "./workout-i18n.js";
 import { L, lang } from "./lang.js";
 

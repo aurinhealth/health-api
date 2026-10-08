@@ -58,7 +58,6 @@ Každý uživatel kromě správce si může v **Nastavení → Účet** stáhnou
 
 ## Co zatím zůstává jen pro správce
 
-- Přístup přes MCP (`/mcp` s klíčem `MCP_API_KEY` pracuje s daty správce).
 - GitHub automatizace silového plánu. Synchronizace Intervals a denní výživové poznámky už běží pro každého uživatele zvlášť.
 
 ## Aktualizace databáze po nasazení

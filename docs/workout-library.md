@@ -146,9 +146,3 @@ Ranking is independent and does not reproduce proprietary scores. Inputs:
 | `workout_schedule_links` | per user | `UNIQUE (user_id, intervals_external_id)` |
 
 All tables carry `sport` (`ride`, `run` next) so running reuses the same schema. They are created by `migrations/0002_training_library.sql` and `ensureTrainingTables()`.
-
-## MCP
-
-- `searchCyclingWorkouts` and `scheduleCyclingWorkout` accept `environment`.
-- `getCyclingCapabilities` and `recordCyclingWorkoutFeedback` are unchanged.
-- Scheduling still requires an explicit `confirm=true`.

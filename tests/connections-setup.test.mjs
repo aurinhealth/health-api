@@ -212,21 +212,8 @@ test("the gym plan does not need Intervals.icu", async () => {
   } finally { globalThis.fetch = realFetch; }
 });
 
-test("no calories are written to Intervals.icu; the automations only remove the old ones", async () => {
-  assert.doesNotMatch(entry, /syncPlannedEventCalories|syncDailyNutritionNotes/);
-  assert.match(entry, /forEachUser\(rawEnv,\["intervals"\],env=>removePlannedEventCalories\(env,\{oldest,newest\}\)\)/);
-  assert.match(entry, /forEachUser\(rawEnv,\["intervals"\],env=>deleteDailyNutritionNotes\(env,\{oldest,newest\}\)\)/);
-  const { removePlannedEventCalories } = await import("../src/intervals-calories.js");
-  const realFetch = globalThis.fetch, puts = [];
-  globalThis.fetch = async (url, init = {}) => {
-    if (init.method === "PUT") { puts.push(JSON.parse(init.body)); return Response.json({}); }
-    return Response.json([{ id: 1, description: "Z2\n\nEstimated calories: 500 kcal" }, { id: 2, description: "Bez kalorií" }]);
-  };
-  try {
-    const result = await removePlannedEventCalories({ INTERVALS_API_KEY: "k" }, { oldest: "2099-01-01" });
-    assert.equal(result.cleanedCount, 1);
-    assert.deepEqual(puts.map(p => [p.id, p.description]), [[1, "Z2"]]);
-  } finally { globalThis.fetch = realFetch; }
+test("no calories are written to Intervals.icu", () => {
+  assert.doesNotMatch(entry, /syncPlannedEventCalories|syncDailyNutritionNotes|removePlannedEventCalories|deleteDailyNutritionNotes/);
 });
 
 test("without a service the app does not offer what needs it", () => {

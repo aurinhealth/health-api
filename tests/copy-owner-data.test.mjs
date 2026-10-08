@@ -27,7 +27,6 @@ function liveDatabase() {
   db.exec("INSERT INTO assistant_chats (id, user_id, title) VALUES (7, 1, 'Plan'), (8, 2, 'Friend chat')");
   db.exec("INSERT INTO assistant_messages (chat_id, user_id, role, content) VALUES (7, 1, 'user', 'hi'), (8, 2, 'user', 'secret')");
   db.exec("INSERT INTO connection_credentials (user_id, provider, encrypted, updated_at) VALUES (1, 'intervals', 'cipher', '2026-10-01')");
-  db.exec("INSERT INTO provider_tokens (user_id, provider, ciphertext, updated_at) VALUES (1, 'google', 'cipher', '2026-10-01')");
   db.exec("INSERT INTO sync_status (user_id, sync_name, status) VALUES (1, 'google', 'ok')");
   db.exec("INSERT INTO shared_foods (food_key, search_name, product_json) VALUES ('milk', 'mleko', '{}')");
   return db;
@@ -75,7 +74,7 @@ test("only the owner's rows are copied, without sign-in keys or sync state", asy
   assert.deepEqual(food.map(f => ({ ...f })), [{ recipe_title: TRICKY, kcal: 512.25, note: null }]);
   assert.deepEqual(staging.prepare("SELECT id, title FROM assistant_chats").all().map(r => ({ ...r })), [{ id: 7, title: "Plan" }]);
   assert.deepEqual(staging.prepare("SELECT chat_id, content FROM assistant_messages").all().map(r => ({ ...r })), [{ chat_id: 7, content: "hi" }]);
-  for (const table of ["connection_credentials", "provider_tokens", "sync_status", "user_invites"]) {
+  for (const table of ["connection_credentials", "sync_status", "user_invites"]) {
     assert.equal(staging.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n, 0, table);
   }
   assert.equal(staging.prepare("SELECT COUNT(*) AS n FROM users").get().n, 1);

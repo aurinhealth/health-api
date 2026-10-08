@@ -3,7 +3,6 @@ import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
-import { nextUnloggedMeals } from "./nutrition-next.js";
 import {walkingEnergyCheck,activityTelemetryEnergy} from './activity-energy-check.js';
 import { sleepSessionFromRow } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
@@ -13,7 +12,7 @@ import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
 import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
 import { pairSessions } from "./activity-match.js";
-import { localToday, localHour, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
+import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 
 export default {
@@ -61,7 +60,7 @@ export default {
 
       // Starting a sync changes data, so it takes POST only: a link or an image
       // on another page (a GET that carries the session cookie) must not start one.
-      if (["/sync/google", "/sync/intervals", "/sync/all"].includes(url.pathname) && request.method !== "POST") {
+      if (["/sync/google", "/sync/intervals"].includes(url.pathname) && request.method !== "POST") {
         return Response.json({ status: "error", message: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
       }
 
@@ -94,20 +93,12 @@ export default {
         return await syncIntervals(env);
       }
 
-      if (url.pathname === "/sync/all") {
-        return await syncAll(env);
-      }
-
       if (url.pathname === "/analysis/daily") {
         return await analysisDaily(env, url);
       }
 
       if (url.pathname === "/analysis/energy") {
         return await analysisEnergy(env, url);
-      }
-
-      if (url.pathname === "/analysis/fueling") {
-        return await analysisFueling(env, url);
       }
 
       if (url.pathname === "/cookbook/page") {
@@ -123,16 +114,8 @@ export default {
         return await foodLog(env, request, url);
       }
 
-      if (url.pathname === "/food/log-text") {
-        return await foodLogText(env, request);
-      }
-
       if (url.pathname === "/food/today") {
         return await foodLog(env, request, url);
-      }
-
-      if (url.pathname === "/food/recommend") {
-        return await foodRecommend(env, url);
       }
 
       if (url.pathname === "/app/api/weight" && request.method === "POST") {
@@ -153,10 +136,6 @@ export default {
 
       if (url.pathname === "/health/nutrition") {
         return await healthNutrition(env, url);
-      }
-
-      if (url.pathname === "/health/nutrition/log") {
-        return await googleNutritionLogEndpoint(env, request);
       }
 
       return Response.json(
@@ -600,122 +579,6 @@ async function googleNutritionList(token, startDate, endDate) {
   }
 
   return all;
-}
-
-function googleNutritionWritePayload(body) {
-  const now = new Date();
-  const start = body.consumed_at
-    ? new Date(body.consumed_at)
-    : now;
-
-  if (Number.isNaN(start.getTime())) {
-    throw new Error("Invalid consumed_at");
-  }
-
-  const end = body.end_at
-    ? new Date(body.end_at)
-    : new Date(start.getTime() + 60 * 1000);
-
-  if (Number.isNaN(end.getTime()) || end <= start) {
-    throw new Error("Invalid end_at");
-  }
-
-  const log = {
-    interval: {
-      startTime: start.toISOString(),
-      endTime: end.toISOString()
-    },
-    foodDisplayName: body.name || body.foodDisplayName || "Food",
-    mealType: body.mealType || "UNKNOWN",
-    serving: {
-      amount: Number(body.servings || 1)
-    }
-  };
-
-  if (body.food) {
-    delete log.foodDisplayName;
-    log.food = String(body.food);
-  } else {
-    const kcal = Number(body.kcal);
-    if (Number.isFinite(kcal)) log.energy = { kcal };
-
-    const carbs = Number(body.carbs_g ?? body.carbohydrates_g);
-    if (Number.isFinite(carbs)) log.totalCarbohydrate = { grams: carbs };
-
-    const fat = Number(body.fat_g);
-    if (Number.isFinite(fat)) log.totalFat = { grams: fat };
-
-    const protein = Number(body.protein_g);
-    if (Number.isFinite(protein)) {
-      log.nutrients = [
-        {
-          nutrient: "PROTEIN",
-          quantity: { grams: protein }
-        }
-      ];
-    }
-  }
-
-  return { nutritionLog: log };
-}
-
-async function googleNutritionWrite(token, body) {
-  const payload = googleNutritionWritePayload(body);
-
-  const response = await fetch(
-    "https://health.googleapis.com/v4/users/me/dataTypes/nutrition-log/dataPoints",
-    {
-      method: "POST",
-      headers: {
-        Authorization: "Bearer " + token,
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify(payload)
-    }
-  );
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(
-      `nutrition-log write HTTP ${response.status}: ` +
-      JSON.stringify(data)
-    );
-  }
-
-  return data;
-}
-
-async function googleNutritionLogEndpoint(env, request) {
-  if (request.method !== "POST") {
-    return Response.json(
-      { status: "error", message: "Method not allowed" },
-      { status: 405 }
-    );
-  }
-
-  try {
-    const body = await request.json();
-    const token = await googleToken(env);
-    const result = await googleNutritionWrite(token, body);
-
-    return Response.json({
-      status: "ok",
-      source: "google-health",
-      operation: "nutrition-log.create",
-      result
-    });
-  } catch (error) {
-    return Response.json(
-      {
-        status: "error",
-        source: "google-health",
-        operation: "nutrition-log.create",
-        message: error.message
-      },
-      { status: 500 }
-    );
-  }
 }
 
 async function healthNutrition(env, url) {
@@ -2321,58 +2184,6 @@ function calculateFueling(
 }
 
 
-async function analysisFueling(
-  env,
-  url
-) {
-  const date =
-    url.searchParams.get(
-      "date"
-    ) ||
-    localToday();
-
-  const energy =
-    await energyForDate(
-      env,
-      date
-    );
-
-  const ride =
-    energy.plannedWorkouts.find(
-      x => x.cycling
-    );
-
-  if (!ride) {
-    return Response.json({
-      status: "ok",
-      date,
-      plannedRide: null,
-      recommendation:
-        "No planned cycling activity found."
-    });
-  }
-
-  const fueling =
-    calculateFueling(
-      energy.currentWeight,
-      ride
-    );
-
-  return Response.json({
-    status: "ok",
-
-    date,
-
-    plannedRide:
-      ride,
-
-    fueling,
-
-    dailyCalories:
-      energy.calorieTarget
-  });
-}
-
 
 // ======================================================
 // COOKBOOK
@@ -2563,146 +2374,6 @@ async function foodLog(env, request, url) {
   });
 }
 
-function recipeMinutes(recipe) {
-  return Number(String(recipe.time || "").match(/\d+/)?.[0] || 60);
-}
-
-function recipeFitScore(recipe, remaining, targets, options) {
-  const kcal = Number(recipe.kcal);
-  const protein = Number(recipe.protein_g || 0);
-  const carbs = Number(recipe.carbs_g || 0);
-  const fat = Number(recipe.fat_g || 0);
-  if (!Number.isFinite(kcal) || kcal <= 0) return -9999;
-
-  const remainingKcal = Number(remaining.kcal || 0);
-  const remainingProtein = Number(remaining.protein_g || 0);
-  const remainingCarbs = Number(remaining.carbs_g || 0);
-  let score = 0;
-
-  if (remainingKcal > 0) {
-    const ratio = kcal / remainingKcal;
-    score += Math.max(0, 45 - Math.abs(1 - ratio) * 45);
-    if (kcal <= remainingKcal * CONFIG.recipeOvershootTolerance) score += 15;
-    else score -= Math.min(60, (kcal - remainingKcal) * 0.25);
-  } else {
-    if (kcal <= 150) score += 45;
-    else if (kcal <= 250) score += 15;
-    else score -= Math.min(100, (kcal - 150) * 0.6);
-  }
-
-  if (remainingProtein > 0) score += Math.min(20, protein / remainingProtein * 20);
-  if (remainingCarbs > 0) score += Math.min(25, carbs / remainingCarbs * 25);
-
-  if (options.postRide) {
-    score += Math.min(35, carbs * 0.35) * CONFIG.postRideCarbPriority;
-    score -= Math.max(0, fat - 15) * CONFIG.postRideFatPenalty;
-  } else {
-    score -= Math.max(0, fat - Math.max(20, targets.fat_g * 0.35)) * 0.25;
-  }
-  if (options.maxMinutes) {
-    const minutes = recipeMinutes(recipe);
-    score += minutes <= options.maxMinutes ? 20 : -Math.min(30, (minutes-options.maxMinutes)*1.2);
-  }
-  if (recipe.meal_prep) score += 8;
-  if (recipe.level === 'Easy') score += 10;
-  return Math.round(score * 10) / 10;
-}
-
-function recommendationReason(recipe, remaining, options) {
-  const reasons=[];
-  if (options.postRide && Number(recipe.carbs_g)>=40) reasons.push('sacharidy po kole');
-  if (remaining.protein_g>0 && Number(recipe.protein_g)>=Math.min(40,remaining.protein_g*0.35)) reasons.push(L('dobrý příjem bílkovin', 'good protein intake'));
-  if (options.maxMinutes && recipeMinutes(recipe)<=options.maxMinutes) reasons.push(L('rychlá příprava', 'quick to prepare'));
-  if (recipe.meal_prep) reasons.push('Meal Prep');
-  if (remaining.kcal<=0 && Number(recipe.kcal)<=150) reasons.push(L('malá svačina bez velkého navýšení kcal', 'a small snack without many extra kcal'));
-  return reasons.slice(0,3).join(', ');
-}
-
-async function foodRecommend(env, url) {
-  const date=url.searchParams.get('date')||localToday();
-  const log=await foodLogForDate(env,date);
-  const energy=await energyForDate(env,date);
-  if(!energy.energyProfile.ready)return Response.json({status:"ok",date,calorieTarget:null,missing:energy.energyProfile.missing,foodTotals:log.totals,macroTargets:null,remaining:null,coaching:L("Doporučení jídel potřebuje kalorický cíl. Doplň v profilu: ", "Meal recommendations need a calorie goal. Add to your profile: ")+energy.energyProfile.missing.map(k=>MISSING_LABELS[k]||k).join(", ")+".",mealRecommendations:[],recommendations:[],storeAlternatives:[]});
-  const targetKcal=Number(energy.calorieTarget||0);
-  const targets=energy.macroTargets||dailyMacroTargets(energy.currentWeight,targetKcal,energy.nutritionContext||{});
-  const eaten=log.entries.filter(r=>r.status==="eaten");
-  const normalizeMealType=v=>{const x=String(v||"").toUpperCase().trim();if(x==="SNACCK"||x==="SNACK")return "SNACK";if(x.includes("BREAKFAST")||x.includes("SNIDAN"))return "BREAKFAST";if(x.includes("LUNCH")||x.includes("OBED"))return "LUNCH";if(x.includes("DINNER")||x.includes("VECERE"))return "DINNER";return x;};
-  const mealTypes=new Set(eaten.map(r=>normalizeMealType(r.meal_type)).filter(Boolean));
-  const hasBreakfast=mealTypes.has("BREAKFAST")||eaten.some(r=>/^0[5-9]:|^10:/.test(String(r.meal_time||"")));
-  const hasLunch=mealTypes.has("LUNCH")||eaten.some(r=>/^1[12]:|^13:|^14:/.test(String(r.meal_time||"")));
-  const hasDinner=mealTypes.has("DINNER")||eaten.some(r=>/^1[89]:|^2[0-3]:/.test(String(r.meal_time||"")));
-  const hasSnack=mealTypes.has("SNACK");
-  const remaining={kcal:Math.max(0,targetKcal-log.totals.kcal),protein_g:Math.max(0,targets.protein_g-log.totals.protein_g),carbs_g:Math.max(0,targets.carbs_g-log.totals.carbs_g),fat_g:Math.max(0,targets.fat_g-log.totals.fat_g)};
-  const explicitPostRide=url.searchParams.get('post_ride');
-  const postRide=explicitPostRide==='1'||(explicitPostRide!=='0'&&energy.nutritionContext?.postRide);
-  const maxMinutes=Number(url.searchParams.get('max_minutes')||0);
-  const limit=Math.max(2,Math.min(5,Number(url.searchParams.get('limit')||3)));
-  const cookbookData=await getCookbook();
-  const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
-
-    const completed=new Set([hasBreakfast&&'BREAKFAST',hasLunch&&'LUNCH',hasSnack&&'SNACK',hasDinner&&'DINNER'].filter(Boolean));
-  const slots=nextUnloggedMeals(completed,date===localToday()?localHour():0).map(meal=>[meal.type,meal.label]);
-
-  const mealKeywords={
-    BREAKFAST:["breakfast","snidane","snídaně"],
-    LUNCH:["lunch","obed","oběd"],
-    DINNER:["dinner","vecere","večeře"],
-    SNACK:["snack","svacina","svačina"]
-  };
-  const remainingSlots=Math.max(1,slots.length);
-  const mealRecommendations=slots.map(([mealType,label])=>{
-    const share={
-      kcal:remaining.kcal/remainingSlots,
-      protein_g:remaining.protein_g/remainingSlots,
-      carbs_g:remaining.carbs_g/remainingSlots,
-      fat_g:remaining.fat_g/remainingSlots
-    };
-    const keys=mealKeywords[mealType]||[];
-    let candidates=cookbook.filter(recipe=>{
-      const kcal=Number(recipe.kcal);
-      if(!Number.isFinite(kcal)||kcal<=0)return false;
-      if(maxMinutes&&recipeMinutes(recipe)>maxMinutes)return false;
-      if(remaining.kcal<=0&&kcal>150)return false;
-      if(mealType==="SNACK"&&kcal>450)return false;
-      return true;
-    });
-    candidates=candidates.map(recipe=>{
-      const hay=(String(recipe.category||'')+' '+String(recipe.meal||'')+' '+String(recipe.type||'')+' '+String(recipe.tags||'')).toLowerCase();
-      const mealMatch=keys.some(k=>hay.includes(k));
-      return {recipe,mealMatch,score:recipeFitScore(recipe,share,targets,{postRide:postRide&&mealType!=="SNACK",maxMinutes})+(mealMatch?40:0)};
-    }).sort((a,b)=>b.score-a.score).slice(0,limit).map(x=>({
-      ...x.recipe,servings:1,portion:1,portion_label:L("1 porce", "1 serving"),meal_type:mealType,
-      recommendation_score:Math.round(Math.max(0,Math.min(100,x.score))*10)/10,
-      recommendation_reason:[recommendationReason(x.recipe,share,{postRide:postRide&&mealType!=="SNACK",maxMinutes}),x.mealMatch?L("odpovídá typu jídla", "matches the meal type"):L("vhodné podle zbývajícího příjmu", "fits your remaining intake")].filter(Boolean).join(", ")
-    }));
-    return {meal_type:mealType,label,recommendations:candidates,target:share};
-  });
-
-  const storeAlternatives=[];
-  const addStore=(name,kcal,protein,carbs,fat,reason)=>storeAlternatives.push({name,kcal,protein_g:protein,carbs_g:carbs,fat_g:fat,reason});
-  if(remaining.protein_g>=20)addStore(L("Skyr / vysokoproteinový jogurt", "Skyr / high-protein yogurt"),150,20,10,1,L("rychle doplní protein", "a quick protein top-up"));
-  if(remaining.protein_g>=25)addStore(L("Kuřecí prsa + zelenina", "Chicken breast + vegetables"),300,45,10,8,L("vysoký protein, nízký přebytek tuku", "high protein, little extra fat"));
-  if(remaining.carbs_g>=35)addStore(L("Banán + pečivo", "Banana + bread"),250,7,50,3,L("rychlé doplnění sacharidů", "a quick carb top-up"));
-  if(remaining.kcal>=300&&remaining.protein_g>=20)addStore(L("Cottage + pečivo", "Cottage cheese + bread"),350,28,35,10,L("jednoduchá vyvážená varianta", "a simple balanced option"));
-  if(!storeAlternatives.length)addStore(L("Proteinový pudink / skyr", "Protein pudding / skyr"),150,20,10,2,L("malá porce podle zbývajícího příjmu", "a small portion for your remaining intake"));
-
-  let coaching;
-  if(!eaten.length)coaching=L("Dnes zatím nemám zapsané žádné jídlo, takže skóre zůstává bez hodnocení. Doporučení začínají od celého denního cíle.", "No food is logged today yet, so there's no score. Recommendations start from the whole daily goal.");
-  else if(hasLunch&&!hasDinner)coaching=L("Snídaně a oběd jsou zapsané. Proto teď doporučuji jen zbývající svačinu a večeři; každá varianta je 1 porce a přepočítává se podle toho, co už jsi snědl.", "Breakfast and lunch are logged, so I'm only recommending the remaining snack and dinner; each option is 1 serving and adjusts to what you've already eaten.");
-  else if(postRide)coaching=L("Po kole máš vyšší prioritu pro sacharidy a dostatek bílkovin. Doporučení se přepočítává podle dnešního příjmu.", "After a ride, carbs and enough protein take priority. The recommendation adjusts to today's intake.");
-  else coaching=L("Doporučení se průběžně přepočítává podle toho, co už jsi dnes snědl, a podle zbývajících maker.", "The recommendation keeps adjusting to what you've eaten today and your remaining macros.");
-
-  return Response.json({
-    status:"ok",date,mealToPlan:slots[0]?.[0]||null,
-    mealsCompleted:{breakfast:hasBreakfast,lunch:hasLunch,dinner:hasDinner},
-    foodTotals:log.totals,calorieTarget:targetKcal,calorieDelta:targetKcal-log.totals.kcal,
-    macroTargets:targets,remaining,nutritionContext:energy.nutritionContext||null,
-    coaching,mealRecommendations,
-    recommendations:mealRecommendations[0]?.recommendations||[],
-    storeAlternatives
-  });
-}
-
 // ======================================================
 // FOOD LOG MANAGEMENT
 // ======================================================
@@ -2714,82 +2385,6 @@ async function deleteFoodLog(env, url) {
   }
   const result = await env.DB.prepare(`DELETE FROM food_logs WHERE user_id = ? AND id = ?`).bind(env.USER_ID, id).run();
   return Response.json({ status: "ok", id, deleted: Number(result.meta.changes || 0) > 0 });
-}
-
-async function foodLogText(env, request) {
-  let body = {};
-
-  // POST only: a link opened from another site (a GET with the session cookie)
-  // must not write to the food diary.
-  if (request.method === "POST") {
-    const contentType = request.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) {
-      body = await request.json();
-    } else {
-      const raw = await request.text();
-      body = raw ? { text: raw } : {};
-    }
-  } else {
-    return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
-  }
-
-  const text = String(body.text || body.message || "").trim();
-  if (!text) return Response.json({ status: "error", message: "text is required" }, { status: 400 });
-
-  const date = body.date || localToday();
-  const pageNumbers = [...text.matchAll(/(?:str(?:án|a)n?\.?|p(?:age)?\.?)?\s*(\d{1,3})(?!\d)/gi)]
-    .map(m => Number(m[1]))
-    .filter(n => n > 0 && n < 1000);
-
-  const uniquePages = [...new Set(pageNumbers)];
-  const logged = [];
-  const errors = [];
-  const existingRecent = await env.DB.prepare(`SELECT id,cookbook_page,recipe_title,source FROM food_logs WHERE user_id = ? AND consumed_date=? AND note=? AND created_at>=datetime('now','-30 seconds')`).bind(env.USER_ID, date,text).all();
-  const existingKeys = new Set((existingRecent.results||[]).map(r=>`${r.cookbook_page||''}|${r.recipe_title||''}|${r.source||''}`));
-
-  for (const page of uniquePages) {
-    const recipe = await cookbookRecipeByPage(page);
-    if (!recipe) {
-      errors.push({ page, message: "Cookbook page not found" });
-      continue;
-    }
-    const scaled = scaleRecipe(recipe, 1);
-    const dedupKey = `${recipe.page||''}|${recipe.title||''}|cookbook-text`;
-    if (existingKeys.has(dedupKey)) {
-      const existing=(existingRecent.results||[]).find(r=>`${r.cookbook_page||''}|${r.recipe_title||''}|${r.source||''}`===dedupKey);
-      logged.push({id:existing.id,page:recipe.page,title:recipe.title,duplicate:true,...scaled});
-      continue;
-    }
-    const result = await env.DB.prepare(`
-      INSERT INTO food_logs (user_id, consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
-      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'cookbook-text', ?)
-    `).bind(env.USER_ID, date, body.consumed_at || new Date().toISOString(), recipe.page, recipe.title, scaled.kcal, scaled.protein_g, scaled.carbs_g, scaled.fat_g, scaled.fiber_g, text).run();
-    existingKeys.add(dedupKey);
-    logged.push({ id: result.meta.last_row_id, page: recipe.page, title: recipe.title, ...scaled });
-  }
-
-  // Lightweight manual-food support for common whole-fruit mentions.
-  const fruit = {
-    nektarinka: { name: "Nektarinka", kcal: 63, protein_g: 1.5, carbs_g: 15, fat_g: 0.5, fiber_g: 2.4 },
-    nektarinku: { name: "Nektarinka", kcal: 63, protein_g: 1.5, carbs_g: 15, fat_g: 0.5, fiber_g: 2.4 },
-    banán: { name: "Banán", kcal: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.3, fiber_g: 3.1 },
-    banan: { name: "Banán", kcal: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.3, fiber_g: 3.1 },
-    jablko: { name: "Jablko", kcal: 95, protein_g: 0.5, carbs_g: 25, fat_g: 0.3, fiber_g: 4.4 },
-    pomeranč: { name: "Pomeranč", kcal: 62, protein_g: 1.2, carbs_g: 15.4, fat_g: 0.2, fiber_g: 3.1 },
-    pomeranc: { name: "Pomeranč", kcal: 62, protein_g: 1.2, carbs_g: 15.4, fat_g: 0.2, fiber_g: 3.1 }
-  };
-  for (const [key, value] of Object.entries(fruit)) {
-    if (text.toLowerCase().includes(key)) {
-      const result = await env.DB.prepare(`
-        INSERT INTO food_logs (user_id, consumed_date, consumed_at, cookbook_page, recipe_title, servings, kcal, protein_g, carbs_g, fat_g, fiber_g, source, note)
-        VALUES (?, ?, ?, NULL, ?, 1, ?, ?, ?, ?, ?, 'manual-text', ?)
-      `).bind(env.USER_ID, date, body.consumed_at || new Date().toISOString(), value.name, value.kcal, value.protein_g, value.carbs_g, value.fat_g, value.fiber_g, text).run();
-      logged.push({ id: result.meta.last_row_id, ...value, source: "manual-text" });
-      break;
-    }
-  }
-
-  return Response.json({ status: "ok", date, parsed_pages: uniquePages, logged, errors });
 }
 
 
@@ -2912,19 +2507,3 @@ async function healthSleep(env, url) {
 // COMPLETE SYNC
 // ======================================================
 
-async function syncAll(env) {
-  const [google,intervals]=await Promise.all([startGoogleSync(env),syncIntervals(env)]);
-  const matching = await matchActivities(env);
-  const intervalsData = await intervals.json();
-
-  return Response.json({
-    status: "ok",
-    google: {
-      status: google.started ? "started" : "already_running",
-      source: "google",
-      status_url: "/sync/google/status"
-    },
-    intervals: intervalsData,
-    matching
-  });
-}

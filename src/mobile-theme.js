@@ -36,7 +36,8 @@ export const mobileTheme = `
   .topbar #openAssistant{font-size:0}
   .topbar #openAssistant::after{content:'AI';font-size:var(--fs-small)}
   .topbar .actions .btn{flex:none;min-height:38px;padding:8px 10px;font-size:var(--fs-small)}
-  .topbar .status-dot,.topbar #topStatus{display:none}
+  /* Vzhled is in Nastavení; the top bar keeps the date and AI. */
+  .topbar #topStatus,.topbar .theme-switch{display:none}
   .content{padding:16px 12px calc(92px + env(safe-area-inset-bottom));max-width:600px}
   .section-hero{margin-bottom:12px}
   .view>.section:first-of-type{margin-top:14px}

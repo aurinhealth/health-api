@@ -14,7 +14,6 @@ export const PERSONAL_TABLES = {
     indexes: [["user_id", "data_type", "sample_time DESC"], ["user_id", "source_family", "data_type", "start_time"]]
   },
   food_logs: { indexes: [["user_id", "consumed_date", "consumed_at"]] },
-  food_log: { indexes: [["user_id", "date"]] },
   personal_foods: { pk: ["user_id", "food_key"] },
   food_google_exports: { pk: ["user_id", "entry_id"] },
   strength_sets: { unique: [["user_id", "source_key"]] },
@@ -24,7 +23,6 @@ export const PERSONAL_TABLES = {
   coach_inbox: { indexes: [["user_id", "created_at DESC"]] },
   sync_status: { pk: ["user_id", "sync_name"] },
   connection_credentials: { pk: ["user_id", "provider"] },
-  provider_tokens: { pk: ["user_id", "provider"] },
   // Created with user_id from the start (workout-library.js); listed so the
   // scoped database enforces the filter.
   training_capabilities: { pk: ["user_id", "sport", "system"] },

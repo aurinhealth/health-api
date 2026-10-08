@@ -1,5 +1,5 @@
 import { normalizeExerciseName } from "./strength-normalization.js";
-import { strengthSetOptions,strengthOptionNote } from './gym-set-options.js';
+import { strengthSetOptions, strengthOptionNote } from './gym-set-options.js';
 
 const PLAN_TITLE = "Dnešní trénink";
 const VISIBLE_HEADER_ROW = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
@@ -138,88 +138,6 @@ export async function ensureStrengthTable(db) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_strength_sets_user_date ON strength_sets(user_id, workout_date DESC)`).run();
 }
 
-async function purgeLegacyTestRows(db) {
-  // One-time cleanup for the artificial 51kg DB bench test. Restrict it to
-  // the exact test date/exercise/value so a real future 51kg performance is safe.
-  const result = await db.prepare(`
-    DELETE FROM strength_sets
-    WHERE user_id = ? AND workout_date = '2026-09-17'
-      AND lower(exercise) = 'db bench press'
-      AND (actual_kg = 51 OR planned_kg = 51)
-  `).bind(db.userId).run();
-  return Number(result.meta?.changes || 0);
-}
-
-export async function syncStrengthPlan(db, values) {
-  const parsed = parseStrengthPlan(values);
-  await ensureStrengthTable(db);
-  const purgedTestRows = await purgeLegacyTestRows(db);
-
-  if (!parsed.date) return { status: "error", step: "strength_sync", message: "Workout date not found in sheet", parsed };
-
-  let upserted = 0;
-  let completed = 0;
-
-  for (const row of parsed.rows) {
-    const sourceKey = `${parsed.date}:${row.planRow}`;
-    const performance = row.completed ? resolveStrengthPerformance(row) : row;
-    await db.prepare(`
-      INSERT INTO strength_sets (user_id, 
-        workout_date, plan_row, type, exercise, set_no, planned_kg, planned_reps,
-        actual_kg, actual_reps, rpe, completed, note, video, replacement, execution,
-        source, source_key, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'plan', ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(user_id, source_key) DO UPDATE SET
-        workout_date=excluded.workout_date,
-        plan_row=excluded.plan_row,
-        type=excluded.type,
-        exercise=excluded.exercise,
-        set_no=excluded.set_no,
-        planned_kg=excluded.planned_kg,
-        planned_reps=excluded.planned_reps,
-        actual_kg=excluded.actual_kg,
-        actual_reps=excluded.actual_reps,
-        rpe=excluded.rpe,
-        completed=excluded.completed,
-        note=excluded.note,
-        video=excluded.video,
-        replacement=excluded.replacement,
-        execution=excluded.execution,
-        updated_at=CURRENT_TIMESTAMP
-    `).bind(db.userId, 
-      parsed.date,
-      row.planRow,
-      row.type,
-      row.exercise,
-      row.setNo,
-      row.plannedKg,
-      row.plannedReps,
-      performance.actualKg,
-      performance.actualReps,
-      row.completed&&row.toFailure?10:row.rpe,
-      row.completed ? 1 : 0,
-      strengthOptionNote(row),
-      row.video,
-      row.replacement,
-      row.execution,
-      sourceKey
-    ).run();
-    upserted++;
-    if (row.completed) completed++;
-  }
-
-  return {
-    status: "ok",
-    workoutDate: parsed.date,
-    headerRow: parsed.headerRow,
-    legacyLayout: parsed.legacyLayout,
-    rowsSeen: parsed.rows.length,
-    rowsUpserted: upserted,
-    completedRows: completed,
-    purgedLegacyTestRows: purgedTestRows
-  };
-}
-
 export async function importStrengthHistory(db, workout) {
   await ensureStrengthTable(db);
   const date = text(workout?.date);
@@ -299,16 +217,3 @@ export async function getStrengthHistory(db, limit = 100) {
   return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
 }
 
-export async function getExerciseHistory(db, exercise, limit = 30) {
-  await ensureStrengthTable(db);
-  const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
-  const result = await db.prepare(`
-    SELECT workout_date, type, exercise, set_no, planned_kg, planned_reps,
-           actual_kg, actual_reps, rpe, completed, note, replacement, execution
-    FROM strength_sets
-    WHERE user_id = ? AND completed = 1 AND type = 'WORK' AND lower(exercise) = lower(?)
-    ORDER BY workout_date DESC, set_no ASC
-    LIMIT ?
-  `).bind(db.userId, text(exercise), safeLimit).all();
-  return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
-}

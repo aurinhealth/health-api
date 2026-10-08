@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {recoveryModelBlock} from '../src/recovery-model-block.js';
-import {personalBaseline,sleepNeedMinutes,sleepDebtMinutes,recoveryReadiness,heartRateLoad,strainScore,recoveryComponentScore} from '../src/recovery-model.js';
+import {personalBaseline,sleepNeedMinutes,sleepDebtMinutes,recoveryReadiness,heartRateLoad,strainScore,recoveryComponentScore,bedtimePlan} from '../src/recovery-model.js';
 
 const day=i=>new Date(Date.UTC(2026,7,1)+i*86400000).toISOString().slice(0,10);
 const history=(n,f)=>Array.from({length:n},(_,i)=>({id:day(i),...f(i)}));
@@ -80,4 +80,21 @@ test('sleep need: naps lower it, a low HRV status and sleep debt raise it, withi
 test('sleep debt adds a day\'s naps to its night',()=>{
   const s=[{date:day(6),durationMin:420},{date:day(6),durationMin:40,nap:true}];
   assert.equal(sleepDebtMinutes(s,day(6),480).minutes,20);
+});
+
+test('bedtimePlan wakes at the usual time of that kind of morning and adds the time awake in bed', () => {
+  // Work days wake at 6:30, weekends at 8:00; asleep 90 % of the time in bed.
+  const nights = [];
+  for (let i = 0; i < 14; i++) {
+    const date = new Date(Date.parse('2026-10-08T12:00:00Z') - i * 864e5).toISOString().slice(0, 10), day = new Date(date + 'T12:00:00Z').getUTCDay();
+    nights.push({ date, wakeMin: [0, 6].includes(day) ? 480 : 390, durationMin: 450, timeInBedMin: 500 });
+  }
+  const workday = bedtimePlan({ date: '2026-10-08', need: 495, nights });
+  assert.equal(workday.wake, 390);
+  assert.equal(workday.inBed, 550); // 495 / 0.9
+  assert.equal(workday.bed, 1280); // 21:20
+  const weekend = bedtimePlan({ date: '2026-10-09', need: 480, nights });
+  assert.equal(weekend.weekend, true);
+  assert.equal(weekend.wake, 480);
+  assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: [] }), null);
 });

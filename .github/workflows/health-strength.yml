@@ -1,11 +1,8 @@
-name: Health & Strength automation
+name: Nightly gym plan
 
+# Makes the day's gym plan at night, only on a gym day of the week plan and
+# never over a plan that is already there.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "automation/strength-request.json"
   schedule:
     - cron: "5 1 * * *"
 
@@ -20,50 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Read automation request
-        id: request
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            date_value="$(TZ=Europe/Prague date +%F)"
-            preview_value="false"
-          else
-            action_value="$(python - <<'PY'
-          import json
-          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
-              data = json.load(f)
-          print(data.get("action", "generate"))
-          PY
-          )"
-            if [ "$action_value" = "none" ]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "date=" >> "$GITHUB_OUTPUT"
-              echo "preview=true" >> "$GITHUB_OUTPUT"
-              echo "Neutral strength automation request; nothing to run."
-              exit 0
-            fi
-            date_value="$(python - <<'PY'
-          import json
-          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
-              data = json.load(f)
-          print(data.get("date", ""))
-          PY
-          )"
-            preview_value="$(python - <<'PY'
-          import json
-          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
-              data = json.load(f)
-          print("true" if data.get("preview") is True else "false")
-          PY
-          )"
-          fi
-          echo "date=$date_value" >> "$GITHUB_OUTPUT"
-          echo "preview=$preview_value" >> "$GITHUB_OUTPUT"
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-
       - name: Request GitHub OIDC token
-        if: steps.request.outputs.skip != 'true'
         id: oidc
         shell: bash
         run: |
@@ -77,29 +31,12 @@ jobs:
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
-      - name: Generate and write strength plan
-        if: steps.request.outputs.skip != 'true'
+      - name: Generate the gym plan
         env:
           OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
-          REQUEST_DATE: ${{ steps.request.outputs.date }}
-          REQUEST_PREVIEW: ${{ steps.request.outputs.preview }}
         run: |
           set -euo pipefail
-          body="$(python - <<'PY'
-          import json, os
-          with open("automation/strength-request.json", "r", encoding="utf-8") as f:
-              data = json.load(f)
-          data["date"] = os.environ.get("REQUEST_DATE", "") or None
-          data["preview"] = os.environ.get("REQUEST_PREVIEW", "false").lower() == "true"
-          # The nightly run always generates; the request file is for manual runs
-          # and is idle ("none") between them.
-          if os.environ.get("GITHUB_EVENT_NAME") == "schedule":
-              data["action"] = "generate"
-              # Only on a gym day of the week plan, never over an existing plan.
-              data["nightly"] = True
-          print(json.dumps(data))
-          PY
-          )"
+          body="{\"date\":\"$(TZ=Europe/Prague date +%F)\"}"
           response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "$body" "https://petrfitnessdata.eu/automation/strength")"
           code="${response##*$'\n'}"
           # Public log: a summary only, never the plan itself.

@@ -34,7 +34,8 @@ test("the coach's role and direction follow the main sport and goal", () => {
     assert.match(out, /Hlavní sport: běh/);
     assert.match(out, /„maraton pod 3:30“/);
     assert.match(out, /za 43 dní, 6 týdnů/);
-    assert.match(out, /8 h týdně/);
+    // Training time comes from the week plan, not from Settings.
+    assert.doesNotMatch(out, /h týdně/);
     assert.match(out, /ne pokyny\.$/);
   }
   // A goal without a sport keeps the general role; a past race is left out.

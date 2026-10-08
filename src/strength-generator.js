@@ -1,10 +1,10 @@
 function fitsEquipment(name,equipment){if(!equipment||equipment==='gym')return true;const allowed=equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
-import { L, plural } from './lang.js';
+import { L } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
-import { availableAt,EXERCISE_STATIONS } from "./gym-equipment.js";
-import { sportMuscleLoad,strengthCoverage } from './strength-balance.js';
+import { availableAt, EXERCISE_STATIONS } from "./gym-equipment.js";
+import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
 

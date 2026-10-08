@@ -145,11 +145,11 @@ function activityReview(a,matched,input={}){
   // A ride is set against its planned steps and the day's recovery (ride-review.js).
   if(isBike(a)){
     const r=buildRideReview({activity:a,detail:input.rideDetails?.[a.id]||null,plan,wellness:input.wellness||[],fitness:input.fitness||{},date:input.date||input.daily?.date});
-    return {id:'review-'+a.id,title:L('Kolo · hodnocení jízdy','Bike · ride review'),headline:a.name||L('Dokončená jízda','Completed ride'),phase:'after',status:'tracking',actions:r.actions,verdict:r.verdict,target:r.target,table:r.table,chart:r.chart,sections:r.sections,analysis:[],confidence:r.table?'high':'medium'};
+    return {id:'review-'+a.id,title:L('Po tréninku · Kolo','After the session · Bike'),headline:a.name||L('Dokončená jízda','Completed ride'),phase:'after',status:'tracking',actions:r.actions,verdict:r.verdict,target:r.target,table:r.table,chart:r.chart,sections:r.sections,analysis:[],confidence:r.table?'high':'medium'};
   }
   if(isRun(a)){
     const r=buildRunReview({activity:a,detail:input.rideDetails?.[a.id]||null,plan,wellness:input.wellness||[],fitness:input.fitness||{},date:input.date||input.daily?.date,thresholdPace:input.thresholds?.runThresholdPace});
-    return {id:'review-'+a.id,title:L('Běh · hodnocení','Run · review'),headline:a.name||L('Dokončený běh','Completed run'),phase:'after',status:'tracking',actions:r.actions,verdict:r.verdict,target:r.target,table:r.table,chart:r.chart,sections:r.sections,analysis:[],confidence:r.table?'high':'medium'};
+    return {id:'review-'+a.id,title:L('Po tréninku · Běh','After the session · Run'),headline:a.name||L('Dokončený běh','Completed run'),phase:'after',status:'tracking',actions:r.actions,verdict:r.verdict,target:r.target,table:r.table,chart:r.chart,sections:r.sections,analysis:[],confidence:r.table?'high':'medium'};
   }
   if(isGym(a)&&input.gymReview)return gymReviewCard(input.gymReview,a.name,a.id);
   const h=n(a.durationHours),tss=n(a.tss),calories=n(a.calories),actions=[];
@@ -160,10 +160,10 @@ function activityReview(a,matched,input={}){
   const p=a.payload||{},np=n(p.icu_normalized_watts||p.icu_weighted_average_watts),ftp=n(p.icu_ftp),analysis=[];
   if(plan&&n(plan.durationHours)>0&&h!=null)analysis.push({label:L('Délka oproti plánu','Duration vs. plan'),text:Math.round(h*60)+' / '+Math.round(n(plan.durationHours)*60)+L(' min. Samotná délka nepotvrzuje, že byly odjeté intervaly.',' min. Duration alone doesn\'t confirm the intervals were done.')});
   if(np>0&&ftp>0)analysis.push({label:L('Intenzita','Intensity'),text:'IF '+(np/ftp).toFixed(2)+' · NP '+Math.round(np)+' W · FTP '+Math.round(ftp)+' W.'});
-  return {id:'review-'+a.id,title:isBike(a)?L('Kolo · hodnocení jízdy','Bike · ride rating'):L('Posilovna · dokončený trénink','Gym · completed workout'),headline:a.name||L('Dokončená aktivita','Completed activity'),phase:'after',status:'tracking',actions,analysis,confidence:'medium'};
+  return {id:'review-'+a.id,title:isBike(a)?L('Po tréninku · Kolo','After the session · Bike'):L('Po tréninku · Posilovna','After the session · Gym'),headline:a.name||L('Dokončená aktivita','Completed activity'),phase:'after',status:'tracking',actions,analysis,confidence:'medium'};
 }
 function gymReviewCard(r,name,id){
-  return {id:'review-'+id,title:L('Posilovna · hodnocení tréninku','Gym · session review'),headline:name||L('Posilovna','Gym'),phase:'after',status:'tracking',actions:r.actions,verdict:r.verdict,table:r.table,sets:r.sets,sections:r.sections,analysis:[],confidence:'high'};
+  return {id:'review-'+id,title:L('Po tréninku · Posilovna','After the session · Gym'),headline:name||L('Posilovna','Gym'),phase:'after',status:'tracking',actions:r.actions,verdict:r.verdict,table:r.table,sets:r.sets,sections:r.sections,analysis:[],confidence:'high'};
 }
 export function buildCoachCouncil(input){
   const date=input.date||input.daily?.date,daily=input.daily||{},training=daily.training||{},completed=training.completed||[],matched=training.matched||[],used=new Set(),policy=trainingStatus(input.athleteState);

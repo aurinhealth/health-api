@@ -26,13 +26,3 @@ test('the planned structure keeps steps and headings from the Intervals.icu text
   assert.equal((html.match(/plan-step"/g)||[]).length,2);assert.match(html,/plan-step-head">3x/);
   assert.match(run("workoutPlanHtml('')"),/nemá v Intervals.icu popsanou strukturu/);
 });
-
-test('a done gym compares the plan with the saved sets, including exercises outside the plan',()=>{
-  const run=client(),values=JSON.stringify([[],[],[],[],[],[],[],['WORK','Bench','1','40','10','','','','FALSE'],['WORK','Bench','2','40','10','','','','FALSE'],['WORK','Row','1','50','10','42','10','','TRUE']]);
-  const history=JSON.stringify([{type:'WORK',exercise:'Bench',actual_kg:40,actual_reps:10},{type:'WARMUP',exercise:'Bench',actual_kg:20,actual_reps:8},{type:'WORK',exercise:'Curl',actual_kg:12,actual_reps:12}]);
-  const html=run('gymCompareHtml('+values+',true,'+history+')');
-  assert.match(html,/Bench<\/th><td>2 × 10 · 40 kg<\/td><td class="under">40×10<\/td>/);
-  assert.match(html,/Row<\/th><td>1 × 10 · 50 kg<\/td><td class="ok">42×10<\/td>/);
-  assert.match(html,/Curl<\/th><td>mimo plán<\/td><td class="ok">12×12<\/td>/);
-  assert.doesNotMatch(run('gymCompareHtml('+values+',false)'),/Odcvičeno/);
-});

@@ -73,8 +73,6 @@ CREATE TABLE IF NOT EXISTS food_google_exports (
   remote_name TEXT,operation_name TEXT,operation_revision INTEGER,operation_kind TEXT,status TEXT NOT NULL DEFAULT 'queued',message TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,entry_id));
 
-CREATE TABLE IF NOT EXISTS "food_log" (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, meal_time TEXT, meal_type TEXT, recipe_page INTEGER, recipe_name TEXT, cookbook_page INTEGER, servings REAL NOT NULL DEFAULT (1), calories REAL, protein_g REAL, carbs_g REAL, fat_g REAL, status TEXT NOT NULL DEFAULT ('eaten'), source TEXT NOT NULL DEFAULT ('cookbook'), note TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), fiber_g REAL, salt_g REAL, amount_g REAL, brand TEXT, barcode TEXT);
-
 CREATE TABLE IF NOT EXISTS "food_logs" (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, consumed_date TEXT NOT NULL, consumed_at TEXT, cookbook_page INTEGER, recipe_title TEXT, servings REAL NOT NULL DEFAULT (1), kcal REAL NOT NULL DEFAULT (0), protein_g REAL NOT NULL DEFAULT (0), carbs_g REAL NOT NULL DEFAULT (0), fat_g REAL NOT NULL DEFAULT (0), fiber_g REAL NOT NULL DEFAULT (0), source TEXT NOT NULL DEFAULT ('manual'), note TEXT, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), status TEXT);
 
 CREATE TABLE IF NOT EXISTS gym_plan_cancellations (user_id INTEGER NOT NULL, workout_date TEXT NOT NULL, event_json TEXT, cancelled_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, workout_date));
@@ -85,15 +83,11 @@ CREATE TABLE IF NOT EXISTS "health_datapoints" (user_id INTEGER NOT NULL, id INT
 
 CREATE TABLE IF NOT EXISTS "personal_foods" (user_id INTEGER NOT NULL, food_key TEXT, product_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), PRIMARY KEY (user_id, food_key));
 
-CREATE TABLE IF NOT EXISTS "provider_tokens" (user_id INTEGER NOT NULL, provider TEXT, ciphertext TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, provider));
-
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS shared_foods (food_key TEXT PRIMARY KEY,search_name TEXT NOT NULL,product_json TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 
 CREATE TABLE IF NOT EXISTS "strength_sets" (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, workout_date TEXT NOT NULL, plan_row INTEGER NOT NULL, type TEXT NOT NULL, exercise TEXT NOT NULL, set_no REAL, planned_kg REAL, planned_reps TEXT, actual_kg REAL, actual_reps REAL, rpe REAL, completed INTEGER NOT NULL DEFAULT (0), note TEXT, video TEXT, replacement TEXT, execution TEXT, source TEXT NOT NULL DEFAULT ('google-sheet'), source_key TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), updated_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP), UNIQUE (user_id, source_key));
-
-CREATE TABLE IF NOT EXISTS sync_state (     source TEXT PRIMARY KEY,     last_sync_at TEXT,     cursor TEXT,     status TEXT,     error_message TEXT,     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP );
 
 CREATE TABLE IF NOT EXISTS "sync_status" (user_id INTEGER NOT NULL, sync_name TEXT, status TEXT NOT NULL, started_at TEXT, finished_at TEXT, details_json TEXT, updated_at TEXT DEFAULT (CURRENT_TIMESTAMP), PRIMARY KEY (user_id, sync_name));
 
@@ -208,8 +202,6 @@ CREATE INDEX IF NOT EXISTS idx_coach_reflections_user_date ON coach_reflections(
 CREATE INDEX IF NOT EXISTS idx_recovery_sessions_user_date ON recovery_sessions(user_id, date);
 
 CREATE INDEX IF NOT EXISTS idx_fluid_log_user_date ON fluid_log(user_id, date);
-
-CREATE INDEX IF NOT EXISTS idx_food_log_user_0 ON food_log(user_id, date);
 
 CREATE INDEX IF NOT EXISTS idx_food_logs_user_0 ON food_logs(user_id, consumed_date, consumed_at);
 

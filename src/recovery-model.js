@@ -81,6 +81,29 @@ export function sleepNeedFor(input) {
   const need = Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };
 }
+// When to go to bed for the night after `date`, as WHOOP's Sleep Planner
+// does: wake at the usual time and spend in bed the night's need plus the
+// usual time awake in bed. The wake time is the median of the last 14 nights
+// of the same kind of morning (work day or weekend, all nights when fewer
+// than 3), the efficiency the median of asleep / in bed (0.8–0.97, 0.9
+// without data). `nights` are primary nights with their wake-up date and
+// local wake time in minutes after midnight (wakeMin).
+export function bedtimePlan(input) {
+  const date = input.date, need = Number(input.need) || 480, end = Date.parse(date + "T12:00:00Z");
+  const morning = new Date(end + 86400000).getUTCDay(), weekend = d => [0, 6].includes(new Date(Date.parse(d + "T12:00:00Z")).getUTCDay());
+  const recent = (input.nights || []).filter(n => {
+    const age = n && n.date ? (end - Date.parse(n.date + "T12:00:00Z")) / 86400000 : NaN;
+    return age >= -1 && age <= 13 && Number.isFinite(Number(n.wakeMin)) && Number(n.durationMin) > 0;
+  });
+  if (!recent.length) return null;
+  const median = xs => { const v = [...xs].sort((a, b) => a - b), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+  const alike = recent.filter(n => weekend(n.date) === [0, 6].includes(morning)), wakeNights = alike.length >= 3 ? alike : recent;
+  const wake = Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
+  const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
+  const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
+  const inBed = Math.round(need / efficiency / 5) * 5;
+  return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning) };
+}
 // Sleep index 0–100: duration against the personal need (50, from none at
 // half the need to full at the need: under 6 h is not recommended), sleep
 // efficiency with full points from 85 % (35; NSF sleep quality, Ohayon 2017)
@@ -210,4 +233,4 @@ export function mergeWellnessRows(google, intervals) {
 }
 
 // The functions the dashboard client copies verbatim.
-export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];
+export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];

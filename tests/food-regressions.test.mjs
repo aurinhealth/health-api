@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { productFromLabel, calculateAmount, normalizeBarcode } from "../src/food-sources.js";
-import { remainingNutrition, recommendFood } from "../src/food-log.js";
 
 test("package label is the highest-priority source", () => {
   const p = productFromLabel({
@@ -32,46 +31,4 @@ test("200 g label values are calculated exactly", () => {
 
 test("barcode normalization keeps EAN-13 stable", () => {
   assert.equal(normalizeBarcode("4056489918325"), "4056489918325");
-});
-
-test("remaining nutrition never goes negative", () => {
-  const r = remainingNutrition({
-    calorieTarget: 2250,
-    macros: {proteinGrams:176,carbsGrams:250,fatGrams:60}
-  }, {calories:2400,protein_g:190,carbs_g:300,fat_g:80});
-  assert.deepEqual(r, {calories:0,protein_g:0,carbs_g:0,fat_g:0});
-});
-
-test("recommendation prefers planned food before generic food", () => {
-  const result = recommendFood({
-    day:"2026-09-23",
-    nutritionPlan:{
-      calorieTarget:2250,
-      macros:{proteinGrams:176,carbsGrams:250,fatGrams:60},
-      training:{cyclingTrainingCalories:800},
-      fueling:{plannedRide:null}
-    },
-    entries:{
-      totals:{eaten:{calories:1500,protein_g:110,carbs_g:150,fat_g:35}},
-      entries:[
-        {id:7,status:"planned",recipe_name:"Kuřecí kari",servings:1,calories:500,protein_g:40,carbs_g:55,fat_g:12}
-      ]
-    }
-  });
-  assert.equal(result.plannedFoodOptions[0].id, 7);
-  assert.equal(result.suggestions[0].reason, "use_planned_food");
-  assert.equal(result.suggestions.some(x=>x.reason==="post_ride_recovery"), true);
-});
-
-
-test("meal schedule includes training timing and planned food", () => {
-  const result = recommendFood({
-    day:"2026-09-23",
-    nutritionPlan:{calorieTarget:3000,macros:{proteinGrams:176,carbsGrams:350,fatGrams:60},training:{cyclingTrainingCalories:700},fueling:{plannedRide:{durationHours:2,intensity:false}}},
-    entries:{totals:{eaten:{calories:1200,protein_g:90,carbs_g:120,fat_g:20}},entries:[
-      {id:8,status:"planned",recipe_name:"Rice + chicken",servings:1,meal_type:"lunch",meal_time:"12:00",calories:700,protein_g:50,carbs_g:80,fat_g:10}
-    ]}
-  });
-  assert.ok(result.mealSchedule.some(x=>x.phase==="pre_ride"));
-  assert.ok(result.mealSchedule.some(x=>x.food==="Rice + chicken"));
 });

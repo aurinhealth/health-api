@@ -131,11 +131,11 @@ test('a user initiated gym request survives both HTTP generation layers without 
   assert.equal((await readGymPlan(app.db, today)).values[4][1], 90);
 });
 
-test('the duration controls send user initiated requests while an automatic length keeps the day limit', async () => {
+test('the resize control sends a user initiated request; generation and the focused gym keep the week plan\'s day limit', async () => {
   const app = await api(0), calls = [], elements = {
     generateDate: { value: today }, generateEnvironment: { value: 'indoor' }, generateMinutes: { value: '' }, resizeGenerated: {},
     generateWorkoutBtn: {}, generatedWorkout: {}, generateFocusedGym: {}, gymFocusDate: { value: today },
-    gymFocusDuration: { value: '90' }, gymFocusStatus: {}
+    gymFocusStatus: {}
   };
   const ui = vm.createContext({
     state: { generated: { date: today } }, statusCoachingRevision: 0, selectedGymMuscles: new Set(['chest']),
@@ -158,7 +158,10 @@ test('the duration controls send user initiated requests while an automatic leng
   await ui.generateWorkoutForDay();
   assert.equal(calls[1].userInitiated, undefined);
   assert.match(elements.generatedWorkout.innerHTML, /nemáš dost času/);
+  // Training time is set only in the week plan: the focused gym sends no
+  // length of its own, and a day without time gets no gym.
   await ui.generateFocusedGym();
-  assert.equal(calls[2].userInitiated, true);
-  assert.equal((await readGymPlan(app.db, today)).values[4][1], 90);
+  assert.equal(calls[2].userInitiated, undefined);
+  assert.equal(calls[2].durationMinutes, undefined);
+  assert.match(elements.gymFocusStatus.textContent, /30 minut/);
 });

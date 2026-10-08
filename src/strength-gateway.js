@@ -4,23 +4,17 @@ import { foodRecommend } from "./food-recommend.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
 import { isInternalCall } from "./internal-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { getStrengthHistory, parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
-import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
-import { analyzeCompletedWorkout, findExerciseAlternatives, estimateStartingLoad, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
+import { parseStrengthPlan } from "./strength-history.js";
+import { generateStrengthPlan } from "./strength-generator.js";
 import { readGymPlan, writeStrengthPlanToDb, syncGymPlanHistory } from "./gym-plan-store.js";
 import { buildNutritionPlan, withAppTarget } from "./nutrition-intelligence.js";
 import { applyEnergyBudget } from "./energy-budget.js";
 import { googleDashboard } from "./google-dashboard.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
-import { buildAdaptiveDecision } from "./adaptive-engine.js";
-import { buildWeeklyReview } from "./weekly-review.js";
-import { buildDailyPlan } from "./daily-plan.js";
-import { getCyclingContext } from "./cycling-context.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { getWeekPlan } from './week-planner.js';
 import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
-import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveFoodProduct, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
 import { localToday } from "./user-time.js";
 
 
@@ -32,53 +26,12 @@ export default {
       const auth = authorizeStrength(request, env);
       if (auth) return auth;
     }
-    if (url.pathname === "/strength/today" && request.method === "GET") return readTodayPlan(env, url);
     if (url.pathname === "/strength/write-plan" && request.method === "POST") return writeStrengthPlanRoute(env, request);
     if (url.pathname === "/strength/generate-plan" && request.method === "POST") return generateStrengthPlanRoute(env, request, url, ctx);
-    if (url.pathname === "/strength/sync" && request.method === "POST") return syncStrength(env);
-    if (url.pathname === "/strength/history/import" && request.method === "POST") return importStrengthHistoryRoute(env, request);
-    if (url.pathname === "/strength/history" && request.method === "GET") return strengthHistory(env, url);
-    if (url.pathname === "/strength/context" && request.method === "GET") return strengthContext(env, url);
-    if (url.pathname === "/strength/analyze" && request.method === "POST") return analyzeStrengthRoute(env, request);
-    if (url.pathname === "/strength/alternatives" && request.method === "POST") return alternativesRoute(env, request);
-    if (url.pathname === "/strength/substitute" && request.method === "POST") return substituteRoute(env, request);
-    if (url.pathname === "/nutrition/plan" && request.method === "POST") return nutritionPlanRoute(env, request, ctx);
-    if (url.pathname === "/cookbook/search" && request.method === "GET") return cookbookSearchRoute(env, url);
-    if (url.pathname === "/cookbook/recipe" && request.method === "GET") return cookbookRecipeRoute(env, url);
-    if (url.pathname === "/nutrition/log-meal" && request.method === "POST") return logMealRoute(env, request);
-    if (url.pathname === "/nutrition/day" && request.method === "GET") return nutritionDayRoute(env, url, ctx);
-    if (url.pathname === "/nutrition/recommend" && request.method === "POST") return nutritionRecommendRoute(env, request, ctx);
-    if (url.pathname === "/decision/daily" && request.method === "POST") return dailyDecisionRoute(env, request, ctx);
-    if (url.pathname === "/daily/plan" && request.method === "GET") return dailyPlanRoute(env, url, ctx);
-    if (url.pathname === "/training/weekly-review" && request.method === "GET") return weeklyReviewRoute(env, url);
-    if (url.pathname === "/food/resolve" && request.method === "POST") return foodResolveRoute(env, request);
-    if (url.pathname === "/food/product" && request.method === "GET") return foodProductRoute(env, url);
-    if (url.pathname === "/food/favorites" && request.method === "GET") return foodFavoritesRoute(env, url);
-    if (url.pathname === "/nutrition/log-product" && request.method === "POST") return logProductRoute(env, request);
-    if (url.pathname === "/nutrition/consume" && request.method === "POST") return consumeFoodRoute(env, request);
-    if (url.pathname === "/nutrition/food/update" && request.method === "POST") return updateFoodRoute(env, request);
-    if (url.pathname === "/nutrition/food/cancel" && request.method === "POST") return cancelFoodRoute(env, request);
-    if (url.pathname === "/cycling/context" && request.method === "GET") return cyclingContextRoute(env, url);
     if (url.pathname === "/food/recommend") return foodRecommend(env, url);
     return app.fetch(request, env, ctx);
   }
 };
-
-async function cyclingContextRoute(env, url) {
-  try {
-    const context = await getCyclingContext(env, {
-      date: url.searchParams.get("date") || undefined,
-      lat: url.searchParams.get("lat") || undefined,
-      lon: url.searchParams.get("lon") || undefined,
-      rideType: url.searchParams.get("ride_type") || undefined,
-      durationMinutes: url.searchParams.get("duration_minutes") || undefined,
-      startTime: url.searchParams.get("start_time") || undefined
-    });
-    return Response.json(context);
-  } catch (error) {
-    return Response.json({ status: "error", step: "cycling_context", message: error.message }, { status: 502 });
-  }
-}
 
 // The day's calorie target exactly as the app shows it: /analysis/daily plus
 // the Google Health energy budget, the same steps as /app/api/daily. Without
@@ -115,14 +68,6 @@ function authorizeStrength(request, env) {
 async function fetchTodayValues(env, date = null) {
   const plan = await readGymPlan(env.DB, date || localToday());
   return { range: "d1:gym_plans/" + plan.date, values: plan.values, videoLinks: [], stored: plan.stored };
-}
-
-async function readTodayPlan(env, url) {
-  try {
-    const date = url.searchParams.get("date");
-    const data = await fetchTodayValues(env, /^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) ? date : null);
-    return Response.json({ status: "ok", storage: "d1", range: data.range, values: data.values, videoLinks: data.videoLinks, stored: data.stored });
-  } catch (error) { return Response.json({ status: "error", step: "strength_plan_read", message: error.message }, { status: 500 }); }
 }
 
 // Before a plan for a day is replaced, its completed sets are saved to the
@@ -219,243 +164,4 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
   } catch (error) { return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 }); }
 }
 
-async function syncStrength(env) {
-  try {
-    const data = await fetchTodayValues(env);
-    const { parsed, ...result } = await syncGymPlanHistory(env.DB, data.values);
-    return Response.json({ ...result, workoutDate: parsed?.date || null, sourceRange: data.range });
-  } catch (error) { return Response.json({ status: "error", step: "strength_sync", message: error.message }, { status: 500 }); }
-}
 
-async function importStrengthHistoryRoute(env, request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const result = await importStrengthHistory(env.DB, body);
-    return Response.json(result);
-  } catch (error) {
-    return Response.json({ status: "error", step: "strength_history_import", message: error.message }, { status: 500 });
-  }
-}
-
-async function strengthHistory(env, url) {
-  try {
-    const limit = url.searchParams.get("limit") || "100";
-    const rows = await getStrengthHistory(env.DB, limit);
-    return Response.json({ status: "ok", count: rows.length, rows });
-  } catch (error) { return Response.json({ status: "error", step: "strength_history", message: error.message }, { status: 500 }); }
-}
-
-async function strengthContext(env, url) {
-  try {
-    const date = url.searchParams.get("date") || null;
-    return Response.json(await buildStrengthContext(env, date));
-  } catch (error) { return Response.json({ status: "error", step: "strength_context", message: error.message }, { status: 500 }); }
-}
-
-async function analyzeStrengthRoute(env, request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const data = await fetchTodayValues(env);
-    const parsed = parseStrengthPlan(data.values);
-    const { parsed: _p, ...sync } = await syncGymPlanHistory(env.DB, data.values);
-    const history = await getStrengthHistory(env.DB, 300);
-    const analysis = analyzeCompletedWorkout(parsed, history);
-    return Response.json({ status: "ok", command: body?.command || "analyze", sync, analysis });
-  } catch (error) { return Response.json({ status: "error", step: "strength_analyze", message: error.message }, { status: 500 }); }
-}
-
-async function alternativesRoute(env, request) {
-  try {
-    const body = await request.json();
-    const exercise = String(body?.exercise || "").trim();
-    const muscle = String(body?.muscle || "").trim() || null;
-    if (!exercise && !muscle) return Response.json({ status: "error", message: "Provide exercise or muscle" }, { status: 400 });
-    const history = await getStrengthHistory(env.DB, 300);
-    const alternatives = findExerciseAlternatives(exercise, history, muscle);
-    return Response.json({ status: "ok", exercise: exercise || null, muscle: muscle || EXERCISE_INTELLIGENCE[exercise]?.muscle || null, alternatives });
-  } catch (error) { return Response.json({ status: "error", step: "strength_alternatives", message: error.message }, { status: 500 }); }
-}
-
-
-async function nutritionPlanRoute(env, request, ctx) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const date = String(body?.date || "").trim() || null;
-    const context = await buildStrengthContext(env, date);
-    if (context.status !== "ok") throw new Error("Shared daily context is not ready");
-
-    let strengthPlan = body?.strengthPlan || null;
-    if (!strengthPlan) {
-      try {
-        const plan = await fetchTodayValues(env, date);
-        const parsed = parseStrengthPlan(plan.values);
-        if (!date || parsed.date === date) {
-          const rows = (parsed.rows || []).map(r => [
-            r.type, r.exercise, r.setNo == null ? "" : String(r.setNo),
-            r.plannedKg == null ? "" : String(r.plannedKg),
-            r.plannedReps || "", "", "", "", "FALSE", r.note || "", r.video || ""
-          ]);
-          if (rows.some(r => r[0] === "WORK")) {
-            strengthPlan = { date: parsed.date, rows };
-          }
-        }
-      } catch (_) {
-        // Nutrition remains available even if the optional plan read fails.
-      }
-    }
-
-    const plan = await nutritionFor(env, ctx, context, { ...body, strengthPlan, weightTrend: context.weightTrend });
-    return Response.json({ status: "ok", plan });
-  } catch (error) {
-    return Response.json({ status: "error", step: "nutrition_plan", message: error.message }, { status: 500 });
-  }
-}
-
-async function cookbookSearchRoute(env, url) {
-  try {
-    return Response.json(await searchCookbookRecipes({ page:url.searchParams.get("page"), name:url.searchParams.get("name"), limit:url.searchParams.get("limit") || 10 }));
-  } catch (error) { return Response.json({ status:"error", step:"cookbook_search", message:error.message }, { status:500 }); }
-}
-async function cookbookRecipeRoute(env, url) {
-  try {
-    const recipe=await getCookbookRecipe({ page:url.searchParams.get("page"), name:url.searchParams.get("name"), recipeId:url.searchParams.get("recipe_id") });
-    if (!recipe) return Response.json({ status:"error", message:"Recipe not found" }, { status:404 });
-    return Response.json({ status:"ok", recipe });
-  } catch (error) { return Response.json({ status:"error", step:"cookbook_recipe", message:error.message }, { status:500 }); }
-}
-async function logMealRoute(env, request) {
-  try { return Response.json(await logFood(env.DB, await request.json().catch(()=>({})))); }
-  catch (error) { return Response.json({ status:"error", step:"nutrition_log_meal", message:error.message }, { status:400 }); }
-}
-async function nutritionDayRoute(env, url, ctx) {
-  try {
-    const date=url.searchParams.get("date") || localToday();
-    const context=await buildStrengthContext(env,date);
-    const plan=await nutritionFor(env,ctx,context,{weightTrend:context.weightTrend});
-    const food=await getFoodDay(env.DB,date);
-    const recommendations=recommendFood({day:date,nutritionPlan:plan,entries:food});
-    const adaptive=buildAdaptiveDecision(context,{...food,nutritionTarget:plan});
-    return Response.json({ status:"ok", date, plan, food, recommendations, adaptive });
-  } catch (error) { return Response.json({ status:"error", step:"nutrition_day", message:error.message }, { status:500 }); }
-}
-async function nutritionRecommendRoute(env, request, ctx) {
-  try {
-    const body=await request.json().catch(()=>({})), date=String(body.date || localToday());
-    const context=await buildStrengthContext(env,date), plan=await nutritionFor(env,ctx,context,{...body,weightTrend:context.weightTrend});
-    const food=await getFoodDay(env.DB,date);
-    return Response.json({...recommendFood({day:date,nutritionPlan:plan,entries:food}),adaptive:buildAdaptiveDecision(context,{...food,nutritionTarget:plan})});
-  } catch (error) { return Response.json({ status:"error", step:"nutrition_recommend", message:error.message }, { status:500 }); }
-}
-
-async function dailyDecisionRoute(env, request, ctx) {
-  try {
-    const body=await request.json().catch(()=>({}));
-    const date=String(body.date||"").trim()||null;
-    const context=await buildStrengthContext(env,date);
-    const plan=await nutritionFor(env,ctx,context,{...body,weightTrend:context.weightTrend});
-    const food=await getFoodDay(env.DB,context.date);
-    return Response.json({...buildAdaptiveDecision(context,{...food,nutritionTarget:plan}),nutrition:plan,food});
-  } catch(error) { return Response.json({status:"error",step:"daily_decision",message:error.message},{status:500}); }
-}
-async function dailyPlanRoute(env,url,ctx) {
-  try {
-    const date=String(url.searchParams.get("date")||"").trim()||null;
-    const context=await buildStrengthContext(env,date);
-    const nutrition=await nutritionFor(env,ctx,context,{weightTrend:context.weightTrend});
-    const food=await getFoodDay(env.DB,context.date);
-    const recommendations=recommendFood({day:context.date,nutritionPlan:nutrition,entries:food});
-    return Response.json(buildDailyPlan({context,nutrition,food,recommendations}));
-  } catch(error) { return Response.json({status:"error",step:"daily_plan",message:error.message},{status:500}); }
-}
-async function weeklyReviewRoute(env,url) {
-  try {
-    const date=String(url.searchParams.get("date")||"").trim()||null;
-    const context=await buildStrengthContext(env,date);
-    return Response.json(await buildWeeklyReview(env,context,context.date));
-  } catch(error) { return Response.json({status:"error",step:"weekly_review",message:error.message},{status:500}); }
-}
-
-async function foodResolveRoute(env, request) {
-  try {
-    const body = await request.json().catch(() => ({}));
-    const result = await resolveFoodProduct(env.DB, body);
-    return Response.json(result, { status: result.status === "not_found" ? 404 : 200 });
-  } catch (error) { return Response.json({ status:"error", step:"food_resolve", message:error.message }, { status:502 }); }
-}
-async function foodProductRoute(env, url) {
-  try {
-    const barcode = url.searchParams.get("barcode");
-    const name = url.searchParams.get("name");
-    const result = await resolveFoodProduct(env.DB, { barcode, name });
-    return Response.json(result, { status: result.status === "not_found" ? 404 : 200 });
-  } catch (error) { return Response.json({ status:"error", step:"food_product", message:error.message }, { status:502 }); }
-}
-async function foodFavoritesRoute(env,url) {
-  try { return Response.json(await getFoodFavorites(env.DB,url.searchParams.get("limit")||20)); }
-  catch(error) { return Response.json({status:"error",step:"food_favorites",message:error.message},{status:500}); }
-}
-async function logProductRoute(env, request) {
-  try { return Response.json(await logResolvedFood(env.DB, await request.json().catch(()=>({})))); }
-  catch (error) { return Response.json({ status:"error", step:"nutrition_log_product", message:error.message }, { status:400 }); }
-}
-
-async function consumeFoodRoute(env, request) {
-  try { return Response.json(await consumePlannedFood(env.DB, await request.json().catch(()=>({})))); }
-  catch (error) { return Response.json({ status:"error", step:"nutrition_consume", message:error.message }, { status:400 }); }
-}
-async function updateFoodRoute(env, request) {
-  try { return Response.json(await updateFoodEntry(env.DB, await request.json().catch(()=>({})))); }
-  catch (error) { return Response.json({ status:"error", step:"nutrition_food_update", message:error.message }, { status:400 }); }
-}
-async function cancelFoodRoute(env, request) {
-  try {
-    const body=await request.json().catch(()=>({}));
-    return Response.json(await cancelFoodEntry(env.DB, body.id));
-  } catch (error) { return Response.json({ status:"error", step:"nutrition_food_cancel", message:error.message }, { status:400 }); }
-}
-
-async function substituteRoute(env, request) {
-  try {
-    const body = await request.json();
-    const from = String(body?.from || "").trim();
-    const to = String(body?.to || "").trim();
-    const muscle = String(body?.muscle || "").trim() || null;
-    if (!from) return Response.json({ status: "error", message: "Missing from exercise" }, { status: 400 });
-    if (!to && !muscle) return Response.json({ status: "error", message: "Provide to exercise or muscle" }, { status: 400 });
-
-    const target = to || findExerciseAlternatives(from, [], muscle)[0]?.name;
-    if (!target || !EXERCISES[target] || !EXERCISE_INTELLIGENCE[target]) return Response.json({ status: "error", message: `Replacement exercise is not in the active catalogue: ${target || "none"}` }, { status: 400 });
-    if (!EXERCISES[from] && !EXERCISE_INTELLIGENCE[from]) return Response.json({ status: "error", message: `Original exercise is not in the active catalogue: ${from}` }, { status: 400 });
-
-    const data = await fetchTodayValues(env);
-    const parsed = parseStrengthPlan(data.values);
-    if (!parsed.date) return Response.json({ status: "error", message: "Workout date not found in the plan" }, { status: 400 });
-    const history = await getStrengthHistory(env.DB, 300);
-    const context = await buildStrengthContext(env, parsed.date);
-    const factor = Number(context?.cycling ? 1 : 1);
-    const def = EXERCISES[target];
-    const estimate = estimateStartingLoad({ exercise: target, history, targetReps: def.reps, fallbackKg: def.baseKg, loadFactor: factor });
-
-    const sourceRows = parsed.rows.filter(r => r.exercise === from);
-    if (!sourceRows.length) return Response.json({ status: "error", message: `Exercise not found in today's plan: ${from}` }, { status: 404 });
-    const sourceWork = sourceRows.filter(r => r.type === "WORK");
-    const firstIndex = parsed.rows.findIndex(r => r.exercise === from);
-    const before = parsed.rows.slice(0, firstIndex).filter(r => r.exercise !== from);
-    const after = parsed.rows.slice(firstIndex).filter(r => r.exercise !== from);
-    const replacementRows = [];
-    const fmt = x => x == null ? "" : String(x).replace(".", ",");
-    if (def.warmup) {
-      const kg = estimate.kg ?? def.baseKg;
-      replacementRows.push(["WARMUP", target, "1", fmt(Math.max(2, Math.round(kg * 0.4 * 2) / 2)), "8", "", "", "", "FALSE", "[WARMUP]", "🎥 Video"]);
-      replacementRows.push(["WARMUP", target, "2", fmt(Math.max(2, Math.round(kg * 0.65 * 2) / 2)), "5", "", "", "", "FALSE", "[WARMUP]", ""]);
-      replacementRows.push(["WARMUP", target, "3", fmt(Math.max(2, Math.round(kg * 0.8 * 2) / 2)), "3", "", "", "", "FALSE", "[WARMUP]", ""]);
-    }
-    const workCount = sourceWork.length || def.sets;
-    for (let i = 0; i < workCount; i++) replacementRows.push(["WORK", target, String(i + 1), estimate.kg == null ? "" : fmt(estimate.kg), def.reps, "", "", "", "FALSE", "", ""]);
-
-    const replacementPlan = [...before.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : fmt(r.plannedKg), r.plannedReps, "", "", "", "FALSE", r.note, r.video]), ...replacementRows, ...after.map(r => [r.type, r.exercise, r.setNo == null ? "" : String(r.setNo), r.plannedKg == null ? "" : fmt(r.plannedKg), r.plannedReps, "", "", "", "FALSE", r.note, r.video])];
-    await syncGymPlanHistory(env.DB, data.values);
-    const result = await writeStrengthPlanToDb(env.DB, { date: parsed.date, rows: replacementPlan });
-    return Response.json({ ...result, replaced: from, replacement: target, estimate });
-  } catch (error) { return Response.json({ status: "error", step: "strength_substitute", message: error.message }, { status: 500 }); }
-}

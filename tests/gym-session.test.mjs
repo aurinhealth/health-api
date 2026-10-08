@@ -79,10 +79,11 @@ test('a confirmed proposal keeps only planning columns of known exercises', () =
 
 test('"Vygenerovat tréninky" prepares the week without the chat and gym waits for "Potvrdit trénink"', () => {
   const generate = between('async function showAdaptiveWeekProposal(){', 'function renderAssistantWeekProposal(');
-  assert.match(generate, /review:false/);
+  assert.match(generate, /\/app\/api\/coach\/week/);
   assert.doesNotMatch(generate, /openFloatingAssistant|appendCoachTurn/);
   assert.match(source, /✓ Potvrdit trénink/);
   const server = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
-  assert.match(server, /if\(body\.review===false\)return Response\.json/);
+  assert.match(server, /return Response\.json\(\{status:'ok',start,proposal\}/);
+  assert.doesNotMatch(server, /WEEK_REVIEW_REQUEST/);
   assert.match(server, /if\(Array\.isArray\(body\.rows\)\)plan\.rows=cleanGymRows/);
 });

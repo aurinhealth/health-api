@@ -9,7 +9,11 @@ import {trainingHistory,starterPlan} from './training-history.js';
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
 
 export const PLANNER_SPORTS = ["ride", "run", "gym"];
-export const DEFAULT_LOCATION = { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682 };
+// Weather only for a place the user chose: their device location (with the
+// browser's permission) or a place they searched for. Plans saved before that
+// carry the old default place without a source; it counts as not chosen.
+export const LOCATION_SOURCES = ["device", "search"];
+const OLD_DEFAULT = { latitude: 49.9484, longitude: 15.2682 };
 
 // Relative load of a role; the client multiplies the shares by the weekly target.
 const SHARE = { long: 1.5, quality: 1.2, endurance: 1, recovery: .5, gym_upper: .4, gym_full: .5 };
@@ -45,9 +49,11 @@ export function sanitizeWeekPlan(input = {}) {
   });
   const loc = input.location || {};
   const lat = Number(loc.latitude), lon = Number(loc.longitude);
-  const location = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
-    ? { name: String(loc.name || "").trim().slice(0, 80) || DEFAULT_LOCATION.name, latitude: Math.round(lat * 1e4) / 1e4, longitude: Math.round(lon * 1e4) / 1e4 }
-    : DEFAULT_LOCATION;
+  const source = LOCATION_SOURCES.includes(loc.source) ? loc.source : null;
+  const oldDefault = !source && lat === OLD_DEFAULT.latitude && lon === OLD_DEFAULT.longitude;
+  const location = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !oldDefault
+    ? { name: String(loc.name || "").trim().slice(0, 80) || L("Moje poloha", "My location"), latitude: Math.round(lat * 1e4) / 1e4, longitude: Math.round(lon * 1e4) / 1e4, ...(source ? { source } : {}) }
+    : null;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
   if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error(L('Počet aktivit musí být 0 až 14.', 'The number of activities must be 0 to 14.'));
   return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}) };

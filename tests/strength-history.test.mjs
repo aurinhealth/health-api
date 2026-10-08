@@ -3,8 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { ensureStrengthTable, importStrengthHistory, syncStrengthPlan, resolveStrengthPerformance } from "../src/strength-history.js";
-import { completedRowsAreSynced } from "../src/strength-sync-guard.js";
+import { ensureStrengthTable, importStrengthHistory, resolveStrengthPerformance } from "../src/strength-history.js";
 
 const date = "2026-10-02";
 const columns = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
@@ -32,29 +31,6 @@ test("manual imports persist planned performance and preserve explicit actuals o
       { actual_kg: 15, actual_reps: 9 }, { actual_kg: 0, actual_reps: 0 }, { actual_kg: 0, actual_reps: 12 }
     ]);
   } finally { raw.sqlite.close(); }
-});
-
-test("sheet synchronization resolves completed sets and leaves incomplete sets blank", async () => {
-  const raw = createD1(), db = scopedDb(raw, 1);
-  try {
-    const values = [["Datum", date], columns,
-      ...sets.map(s => ["WORK", s.exercise, s.setNo, s.plannedKg, s.plannedReps, s.actualKg, s.actualReps, "", true]),
-      ["WARMUP", "DB curl", 1, 5, "12", "", "", "", false]
-    ];
-    await syncStrengthPlan(db, values);
-    const rows = (await db.prepare("SELECT actual_kg, actual_reps FROM strength_sets WHERE user_id=? ORDER BY plan_row").bind(1).all()).results;
-    assert.deepEqual(rows[0], { actual_kg: 12.5, actual_reps: 10 });
-    assert.deepEqual(rows[1], { actual_kg: 12.5, actual_reps: null });
-    assert.deepEqual(rows[3], { actual_kg: 0, actual_reps: 0 });
-    assert.deepEqual(rows[5], { actual_kg: null, actual_reps: null });
-  } finally { raw.sqlite.close(); }
-});
-
-test("sync guard compares blank entries with their persisted performance", () => {
-  const sheet = { planRow: 8, type: "WORK", exercise: "DB curl", setNo: 1, plannedKg: 10, plannedReps: "12", actualKg: null, actualReps: null, rpe: null };
-  const stored = { plan_row: 8, type: "WORK", exercise: "DB curl", set_no: 1, planned_kg: 10, planned_reps: "12", actual_kg: 10, actual_reps: 12, rpe: null, completed: 1 };
-  assert.equal(completedRowsAreSynced([sheet], [stored]), true);
-  assert.equal(completedRowsAreSynced([sheet], [{ ...stored, actual_kg: null }]), false);
 });
 
 test("one-time repair is limited to the owner's completed workout and preserves explicit performance", async () => {
