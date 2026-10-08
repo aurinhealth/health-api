@@ -52,20 +52,18 @@ export default {
         });
       }
 
-      if (url.pathname === "/auth-test") {
-        return await testGoogleAuth(env);
-      }
-
-      if (url.pathname === "/test/intervals") {
-        return await testIntervals(env);
-      }
-
       if (url.pathname === "/sync/google/status") {
         return await googleSyncStatus(env);
       }
       if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
       if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3});
       if(url.pathname==='/sync/match'&&request.method==='POST')return Response.json(await matchActivities(env));
+
+      // Starting a sync changes data, so it takes POST only: a link or an image
+      // on another page (a GET that carries the session cookie) must not start one.
+      if (["/sync/google", "/sync/intervals", "/sync/all"].includes(url.pathname) && request.method !== "POST") {
+        return Response.json({ status: "error", message: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
+      }
 
       if (url.pathname === "/sync/google") {
         const start = await startGoogleSync(env);
@@ -151,10 +149,6 @@ export default {
 
       if (url.pathname === "/health/sleep") {
         return await healthSleep(env, url);
-      }
-
-      if (url.pathname === "/health/db") {
-        return await healthDb(env);
       }
 
       if (url.pathname === "/health/nutrition") {
@@ -435,19 +429,6 @@ export async function googleToken(env, scopes = healthScopes(env)) {
 }
 
 
-async function testGoogleAuth(env) {
-  const token =
-    await googleToken(env);
-
-  return Response.json({
-    status: "ok",
-    google_oauth: "working",
-    has_access_token:
-      Boolean(token)
-  });
-}
-
-
 // ======================================================
 // INTERVALS AUTH
 // ======================================================
@@ -502,22 +483,6 @@ async function intervalsGet(
   }
 
   return data;
-}
-
-
-async function testIntervals(env) {
-  const data =
-    await intervalsGet(
-      env,
-      "/athlete/0/profile"
-    );
-
-  return Response.json({
-    status: "ok",
-    source: "intervals.icu",
-    api_connection: "working",
-    athlete: data
-  });
 }
 
 
@@ -3194,40 +3159,6 @@ async function healthSleep(env, url) {
 }
 
 
-
-
-// ======================================================
-// DATABASE ENDPOINT
-// ======================================================
-
-async function healthDb(env) {
-  const rows =
-    await env.DB
-      .prepare(
-        `SELECT
-          source_family,
-          data_type,
-          record_role,
-          COUNT(*) AS count
-         FROM health_datapoints
-         WHERE user_id = ?
-         GROUP BY
-           source_family,
-           data_type,
-           record_role
-         ORDER BY
-           source_family,
-           data_type`
-      )
-      .bind(env.USER_ID)
-      .all();
-
-  return Response.json({
-    status: "ok",
-    data:
-      rows.results
-  });
-}
 
 
 // ======================================================

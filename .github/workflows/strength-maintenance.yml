@@ -52,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            response="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/sync/intervals" || true)"
+            response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data '{}' "https://petrfitnessdata.eu/sync/intervals" || true)"
             code="${response##*$'\n'}"
             body="${response%$'\n'*}"
             if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then

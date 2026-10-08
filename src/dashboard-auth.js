@@ -34,20 +34,30 @@ export function isPublicPath(pathname) {
 }
 
 // Identifies who is calling: a signed-in user (session cookie), the owner's
-// API key (MCP, API clients, internal hops) or a GitHub Actions workflow.
-// Returns null for anonymous or invalid credentials.
+// API key (API clients) or a GitHub Actions workflow. Returns null for
+// anonymous or invalid credentials.
 export async function resolvePrincipal(request, env, verifyOidc = verifyGitHubActionsToken) {
-  const secret = String(env.STRENGTH_API_KEY || "");
-  if (!secret) return null;
   const session = await verifyDashboardSession(request, sessionSecret(env));
   if (session) return { kind: "user", userId: session.uid };
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return null;
   const token = authorization.slice(7).trim();
   if (!token) return null;
-  if (timingSafeEqualString(token, secret)) return { kind: "owner" };
+  const ownerKey = String(env.STRENGTH_API_KEY || "");
+  if (ownerKey && timingSafeEqualString(token, ownerKey)) return { kind: "owner" };
   if (token.split(".").length !== 3) return null;
   try { await verifyOidc(request); return { kind: "system" }; } catch { return null; }
+}
+
+// The browser sends the session cookie also with requests that pages of other
+// sites under petrfitnessdata.eu make here (the test copy at
+// staging.petrfitnessdata.eu is one): it treats them as the same site, so
+// SameSite=Lax does not stop them. A change made with the session therefore
+// has to come from a page of this very address.
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+export function foreignOriginChange(request, principal) {
+  if (principal?.kind !== "user" || READ_METHODS.has(request.method)) return false;
+  return request.headers.get("Origin") !== new URL(request.url).origin;
 }
 
 export async function isAuthorizedRequest(request, env, verifyOidc = verifyGitHubActionsToken) {
@@ -85,11 +95,11 @@ export async function verifyDashboardSession(request, secret) {
   } catch { return null; }
 }
 
-// Signs dashboard sessions. SESSION_SECRET keeps sessions independent of the
-// owner API key (which OAuth hands to API clients); without it the API key is
-// used, as before. Setting or rotating SESSION_SECRET signs everyone out once.
+// Signs dashboard sessions: SESSION_SECRET only, never the owner API key, so
+// whoever holds that key cannot make up a session of another user. Without it
+// nobody can sign in. Rotating it signs everyone out once.
 export function sessionSecret(env) {
-  return String(env.SESSION_SECRET || env.STRENGTH_API_KEY || "");
+  return String(env.SESSION_SECRET || "");
 }
 
 export async function sessionCookie(uid, exp, secret) {

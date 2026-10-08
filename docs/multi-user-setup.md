@@ -28,7 +28,7 @@ Katalog cviků odpovídá vybavení pobočky **METAGYM Kutná Hora** (`src/gym-e
 
 ## Co zatím zůstává jen pro správce
 
-- Přístup přes MCP (`/mcp` s klíčem `STRENGTH_API_KEY` pracuje s daty správce).
+- Přístup přes MCP (`/mcp` s klíčem `MCP_API_KEY` pracuje s daty správce).
 - GitHub automatizace silového plánu. Synchronizace Intervals a denní výživové poznámky už běží pro každého uživatele zvlášť.
 
 ## Aktualizace databáze po nasazení

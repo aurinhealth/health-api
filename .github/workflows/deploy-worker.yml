@@ -51,6 +51,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js).
+      # Without it nobody could sign in, so nothing is deployed.
+      - name: Check Worker secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 secret list | node scripts/require-secrets.mjs SESSION_SECRET
+
       - name: Apply D1 migrations
         uses: cloudflare/wrangler-action@v4
         with:
@@ -184,6 +195,9 @@ jobs:
           page="$(curl -fsS "https://petrfitnessdata.eu/app")"
           anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/daily")"
           [ "$anonymous" = "401" ] || { echo "Dashboard API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
+          # Sessions are signed with SESSION_SECRET only: without it nobody can sign in.
+          login="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://petrfitnessdata.eu/auth/google")"
+          case "$login" in "302 https://accounts.google.com/"*) ;; *) echo "Google sign-in is not set up (HTTP ${login%% *}); is SESSION_SECRET set?"; exit 1;; esac
           python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "Gym" in s; assert "Recovery & Health" in s; assert "sessionStorage" not in s; assert "Dashboard access key" not in s' <<< "$page"
           curl -fsS "https://petrfitnessdata.eu/app/dashboard-client.js?deployment=$GITHUB_SHA" -o /tmp/dashboard-client.js
           home="$(curl -fsS "https://petrfitnessdata.eu/")"

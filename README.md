@@ -65,9 +65,10 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 
 | Název | K čemu |
 | --- | --- |
-| `STRENGTH_API_KEY` | API klíč správce (MCP, interní volání, automatizace). Odvozuje se z něj i šifrovací klíč připojení uživatelů, proto ho neměň bez migrace uložených připojení. |
-| `SESSION_SECRET` | Podpis přihlášení do dashboardu. Když chybí, použije se `STRENGTH_API_KEY`. Nastavení nebo změna jednou odhlásí všechny uživatele. |
-| `MCP_API_KEY` | Volitelně samostatný klíč pro `/mcp`; jinak platí `STRENGTH_API_KEY`. |
+| `STRENGTH_API_KEY` | API klíč správce pro vlastní klienty API (hlavička `Authorization: Bearer`). Přihlášení, MCP, vnitřní volání ani šifrování na něm nezávisí. Jen připojení uložená před `CONNECTION_KEY` se dešifrují klíčem z něj odvozeným, dokud je cron nepřešifruje. |
+| `SESSION_SECRET` | Podpis přihlášení do dashboardu. Povinný: bez něj se nikdo nepřihlásí. Změna jednou odhlásí všechny uživatele. |
+| `CONNECTION_KEY` | Šifrovací klíč uložených připojení uživatelů (Google, Intervals.icu), náhodný řetězec o délce aspoň 32 znaků. Připojení uložená dřív cron do 5 minut přešifruje (`connection-secrets.js`). Neměň ho ani nemaž: všichni by se museli připojit znovu. |
+| `MCP_API_KEY` | Klíč pro `/mcp` (MCP klienti, data správce). Bez něj `/mcp` odpovídá jen demo klíči. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Přihlášení přes Google a připojení Google Health. |
 | `INTERVALS_API_KEY` | Intervals.icu správce (ostatní uživatelé si klíč ukládají v aplikaci). |
 | `INTERVALS_CLIENT_ID`, `INTERVALS_CLIENT_SECRET` | Volitelné: aplikace zaregistrovaná u Intervals.icu. S nimi se Intervals.icu připojuje jedním tlačítkem (OAuth, `intervals-oauth.js`), bez nich vložením osobního API klíče. |
@@ -96,15 +97,17 @@ Na https://staging.petrfitnessdata.eu/app běží kopie aplikace s vlastní data
 - Data: `scripts/copy-owner-data.mjs` jednou zkopíruje data správce (`OWNER_EMAIL`) ze živé databáze, kterou jen čte. Nekopíruje přihlašovací klíče ke Googlu a Intervals.icu, stav synchronizace ani data pozvaných uživatelů. Znovu se kopíruje jen při ručním spuštění workflow s volbou `refresh_data` (přepíše, co v kopii je).
 - Každá stránka má dole štítek „TEST · staging“ a hlavičku `noindex`.
 - Nemá cron, sama nic nesynchronizuje do Google ani Intervals.icu.
-- Secrets se nastavují zvlášť u Workeru `health-api-staging` (v Cloudflare nebo `wrangler secret put NAZEV --env staging`). Pro přihlášení stačí `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (stejné jako v produkci) a `STRENGTH_API_KEY` (u stagingu vlastní, libovolný dlouhý náhodný řetězec); v Google Cloud musí OAuth klient mít navíc přesměrování `https://staging.petrfitnessdata.eu/auth/google/callback` a `https://staging.petrfitnessdata.eu/oauth/google/callback`. Pro asistenta a fotky jídla volitelně `OPENAI_API_KEY`.
+- Secrets se nastavují zvlášť u Workeru `health-api-staging` (v Cloudflare nebo `wrangler secret put NAZEV --env staging`). Pro přihlášení stačí `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (stejné jako v produkci) a `SESSION_SECRET` (u stagingu vlastní, libovolný dlouhý náhodný řetězec; stejně tak `STRENGTH_API_KEY` a `CONNECTION_KEY`, pokud je nastavíš); v Google Cloud musí OAuth klient mít navíc přesměrování `https://staging.petrfitnessdata.eu/auth/google/callback` a `https://staging.petrfitnessdata.eu/oauth/google/callback`. Pro asistenta a fotky jídla volitelně `OPENAI_API_KEY`.
 - `INTERVALS_API_KEY` ani připojení Google Health ve stagingu raději nenastavuj: pracují se skutečnými účty, takže by se zápisy (tréninky, váha) propsaly i tam.
 
 ## Bezpečnost
 
 - Cloudflare spouští `src/main.js`: aplikaci z `entrypoint.js` za přesměrováním na HTTPS a bezpečnostními hlavičkami (`web-security.js`: HSTS, zákaz vložení do cizí stránky, `nosniff`, `Referrer-Policy`). Hlavičku, kterou si odpověď nastaví sama, nepřepisuje.
 - Repozitář je veřejný, a s ním i logy GitHub Actions. Workflow proto z odpovědí API vypisují jen souhrn ze `scripts/ci-summary.mjs` (stav, zpráva, počty), nikdy celé tělo, a nic necommitují zpět. Hlídá to `tests/ci-summary.test.mjs`.
-- Zápis dat patří do POST (nebo PUT, DELETE), ne do GET: odkaz z cizího webu je GET a cookie přihlášení s sebou nese.
-- Připojení ChatGPT k datům aplikace (OAuth na `/authorize` a `/token`, kde se do formuláře zadával klíč správce) je odstraněné. `/mcp` přijímá jen klíč správce v hlavičce `Authorization` a demo klíč, který vrací jen statická ukázková data.
+- Zápis dat patří do POST (nebo PUT, DELETE), ne do GET: odkaz z cizího webu je GET a cookie přihlášení s sebou nese. Proto se i synchronizace (`/sync/google`, `/sync/intervals`, `/sync/all`) spouští jen přes POST.
+- Každý zápis s cookie přihlášení (cokoli kromě GET, HEAD a OPTIONS) musí přijít ze stránky téže adresy (hlavička `Origin`), jinak vrací 403 (`foreignOriginChange` v `dashboard-auth.js`, volá se před všemi cestami). SameSite=Lax nestačí: stránky ze staging.petrfitnessdata.eu prohlížeč bere jako stejný web a cookie živé aplikace jim přidá.
+- Každý klíč má jednu roli: `SESSION_SECRET` podepisuje přihlášení, `CONNECTION_KEY` šifruje připojení uživatelů (navíc svázaná s uživatelem a službou), `MCP_API_KEY` otevírá `/mcp` a `STRENGTH_API_KEY` je klíč správce pro API. Vrstvy aplikace se uvnitř Workeru volají s náhodným tokenem, který z Workeru nikdy neodchází (`internal-auth.js`). Nasazení živé i testovací verze se zastaví dřív, než cokoli změní, když Worker nemá `SESSION_SECRET` (`scripts/require-secrets.mjs`).
+- Připojení ChatGPT k datům aplikace (OAuth na `/authorize` a `/token`, kde se do formuláře zadával klíč správce) je odstraněné. `/mcp` přijímá jen `MCP_API_KEY` v hlavičce `Authorization` a demo klíč, který vrací jen statická ukázková data.
 
 ## Další dokumentace
 

@@ -21,6 +21,36 @@ test("the food diary takes text only by POST", async () => {
   assert.equal(response.status, 405);
 });
 
+// A link or an image on another page is a GET that carries the session cookie.
+test("a sync starts only by POST", async () => {
+  for (const path of ["/sync/google", "/sync/intervals", "/sync/all"]) {
+    const d = healthDb();
+    const response = await legacy.fetch(new Request("https://internal" + path), { DB: d, USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx);
+    assert.equal(response.status, 405, path);
+    assert.equal(response.headers.get("Allow"), "POST", path);
+  }
+});
+
+test("the debugging routes are gone", async () => {
+  for (const path of ["/auth-test", "/test/intervals", "/health/db"]) {
+    const response = await legacy.fetch(new Request("https://internal" + path), { DB: healthDb(), USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx);
+    assert.equal(response.status, 404, path);
+  }
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.doesNotMatch(entry, /health-db|\/health\/db/);
+});
+
+test("the origin check comes before every route", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const start = entry.indexOf("async function routeRequest(");
+  const check = entry.indexOf("if (foreignOriginChange(request, principal)) return", start);
+  assert.ok(start > 0 && check > start && check < entry.indexOf("url.pathname", start));
+  // GitHub's periodic sync of every user starts it by POST as well.
+  assert.match(entry, /url\.pathname === "\/sync\/intervals" && principal\?\.kind === "system" && request\.method === "POST"/);
+  const workflow = readFileSync(new URL("../.github/workflows/strength-maintenance.yml", import.meta.url), "utf8");
+  assert.match(workflow, /curl [^\n]*-X POST [^\n]*"https:\/\/petrfitnessdata\.eu\/sync\/intervals"/);
+});
+
 // The periodic sync prints this answer in a public GitHub Actions log.
 test("the Intervals sync answers with counts, not the activities or planned workouts", async t => {
   const d = healthDb();

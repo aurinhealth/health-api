@@ -5,7 +5,7 @@ import { resolvePrincipal, isPublicPath } from "../src/dashboard-auth.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { _resetTenancyForTest } from "../src/tenancy.js";
 
-const baseEnv = { GOOGLE_CLIENT_ID: "client-123", GOOGLE_CLIENT_SECRET: "secret", STRENGTH_API_KEY: "test-secret-key", OWNER_EMAIL: "Owner@Example.com" };
+const baseEnv = { GOOGLE_CLIENT_ID: "client-123", GOOGLE_CLIENT_SECRET: "secret", SESSION_SECRET: "test-session-secret", OWNER_EMAIL: "Owner@Example.com" };
 function freshEnv() { _resetTenancyForTest(); return { ...baseEnv, DB: createD1() }; }
 const env = freshEnv();
 const b64 = value => Buffer.from(typeof value === "string" ? value : JSON.stringify(value)).toString("base64url");
@@ -54,6 +54,11 @@ test("login start requests only identity scopes with state, nonce and PKCE", asy
 
 test("login is disabled without an owner", async () => {
   const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), { ...env, OWNER_EMAIL: "" }, "/auth/google");
+  assert.equal(response.status, 503);
+});
+
+test("sessions are never signed with the owner API key", async () => {
+  const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), { ...env, SESSION_SECRET: "", STRENGTH_API_KEY: "owner-key" }, "/auth/google");
   assert.equal(response.status, 503);
 });
 

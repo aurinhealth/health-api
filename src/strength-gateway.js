@@ -2,6 +2,7 @@ import { L } from './lang.js';
 import app from "./index.js";
 import { foodRecommend } from "./food-recommend.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
+import { isInternalCall } from "./internal-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { getStrengthHistory, parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
 import { generateStrengthPlan, EXERCISES } from "./strength-generator.js";
@@ -101,11 +102,13 @@ async function nutritionFor(env, ctx, context, options) {
   return withAppTarget(buildNutritionPlan(context, options), await appDailyTarget(env, ctx, context?.date));
 }
 
+// The app's own layers call with the internal token; API clients from outside
+// with the owner key (STRENGTH_API_KEY).
 function authorizeStrength(request, env) {
-  if (!env.STRENGTH_API_KEY) return Response.json({ status: "error", step: "strength_auth", message: "STRENGTH_API_KEY is not configured" }, { status: 503 });
+  if (isInternalCall(request)) return null;
   const authorization = request.headers.get("Authorization") || "";
-  if (!timingSafeEqualString(authorization, `Bearer ${env.STRENGTH_API_KEY}`)) return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
-  return null;
+  if (env.STRENGTH_API_KEY && timingSafeEqualString(authorization, `Bearer ${env.STRENGTH_API_KEY}`)) return null;
+  return Response.json({ status: "error", step: "strength_auth", message: "Unauthorized" }, { status: 401 });
 }
 
 

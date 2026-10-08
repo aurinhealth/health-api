@@ -57,6 +57,17 @@ jobs:
       - name: Run tests
         run: npm test
 
+      # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js).
+      # Without it nobody could sign in, so nothing is deployed.
+      - name: Check Worker secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 secret list --env staging | node scripts/require-secrets.mjs SESSION_SECRET
+
       # Tables that predate the migrations; a no-op once they exist.
       - name: Prepare staging database structure
         uses: cloudflare/wrangler-action@v4

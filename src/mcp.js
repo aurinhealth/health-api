@@ -1,5 +1,6 @@
 import healthApp from "./strength-gateway.js";
 import { timingSafeEqualString } from "./dashboard-auth.js";
+import { internalHeaders } from "./internal-auth.js";
 import { searchWorkoutLibrary, getCapabilities, scheduleWorkoutInIntervals, recordWorkoutFeedback } from "./workout-library.js";
 
 const MCP_PROTOCOL_VERSION = "2026-07-28";
@@ -46,12 +47,12 @@ export async function handleMcp(request,env){
  if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{...cors,"Access-Control-Allow-Methods":"POST,GET,OPTIONS","Access-Control-Allow-Headers":"Authorization,Content-Type,MCP-Protocol-Version,Mcp-Session-Id,Accept"}});
  if(request.method==="GET")return new Response(null,{status:405,headers:{...cors,Allow:"POST, GET"}});
  if(request.method!=="POST")return new Response("Method Not Allowed",{status:405,headers:{...cors,Allow:"POST, GET"}});
- const expectedKey=env.MCP_API_KEY||env.STRENGTH_API_KEY;
- if(!expectedKey)return json({jsonrpc:"2.0",error:{code:-32603,message:"MCP authentication is not configured"}},500,cors);
  const authorization=request.headers.get("Authorization")||"",demoMode=timingSafeEqualString(authorization,`Bearer ${DEMO_API_KEY}`);
- // The owner key (API clients) or the demo key (static sample data). There is
- // no OAuth: nobody types the owner key into a web form to connect a client.
- if(!demoMode&&!timingSafeEqualString(authorization,`Bearer ${expectedKey}`))return new Response("Unauthorized",{status:401,headers:{...cors,"WWW-Authenticate":'Bearer realm="health-api-mcp"'}});
+ // The MCP key (MCP clients) or the demo key (static sample data). The MCP key
+ // is its own secret, not the owner API key: it opens the MCP tools and nothing
+ // else. Without MCP_API_KEY only the demo works. There is no OAuth: nobody
+ // types a key into a web form to connect a client.
+ if(!demoMode&&!(env.MCP_API_KEY&&timingSafeEqualString(authorization,`Bearer ${env.MCP_API_KEY}`)))return new Response("Unauthorized",{status:401,headers:{...cors,"WWW-Authenticate":'Bearer realm="health-api-mcp"'}});
  let message;try{message=await request.json()}catch{return json({jsonrpc:"2.0",error:{code:-32700,message:"Parse error"}},400,cors)}
  if(!message||message.jsonrpc!=="2.0"||typeof message.method!=="string")return json({jsonrpc:"2.0",id:message?.id??null,error:{code:-32600,message:"Invalid Request"}},400,cors);
  const protocolHeader=request.headers.get("MCP-Protocol-Version");
@@ -152,10 +153,7 @@ async function callHealthApi(request,env,toolName,args){
  };
  const route=routes[toolName];if(!route)throw new Error(`Unsupported tool: ${toolName}`);
  const method=["getStrengthContext","getCyclingContext","getStrengthHistory","getTodayStrengthWorkout","getWeeklyReview","getDailyPlan","getFoodFavorites","searchCookbook","getCookbookRecipe","getFoodDay","getFoodProduct"].includes(toolName)?"GET":"POST";
- const headers=new Headers({Accept:"application/json"});
- const internalKey=env.STRENGTH_API_KEY||env.MCP_API_KEY;
- if(!internalKey)throw new Error("Strength API authentication is not configured");
- headers.set("Authorization",`Bearer ${internalKey}`);
+ const headers=new Headers({Accept:"application/json",...internalHeaders()});
  let url=`${base}${route()}`,body;
  if(toolName==="getNutritionPlan") body=JSON.stringify({date:args.date||null});
  if(toolName==="getDailyDecision") body=JSON.stringify({date:args.date||null});
