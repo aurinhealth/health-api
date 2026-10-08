@@ -56,3 +56,11 @@ test('starter recommendations are separate from observed averages and optional s
  const profile={sex:'male',age:30,height:180,activity:'light',goal:'maintain',sportHours:'auto'};
  const baseline=energyBaseline(profile,80,{activityTracked:false});assert.equal(baseline.ready,true);assert.equal(baseline.sportDaily,0);assert.ok(Number.isFinite(baseline.baselineRestTDEE));
 });
+test('history counts the user\'s own day: just after midnight in Prague today\'s ride is not cut off by the UTC date',async()=>{
+ const {raw,a}=db();
+ // 22:30 UTC on 8 October is 00:30 on 9 October in Prague (summer time).
+ const now=Date.parse('2026-10-08T22:30:00Z');
+ for(const start of ['2026-10-09T00:10:00','2026-10-07T18:00:00','2026-10-05T18:00:00'])raw.sqlite.prepare('INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,sample_time,payload_json) VALUES(1,?,?,?,?,?,?)').run('intervals','activity',crypto.randomUUID(),start,start,JSON.stringify({type:'Ride',moving_time:1800}));
+ const h=await trainingHistory(a,1,{now});
+ assert.equal(h.recentCount,3);assert.equal(h.mainSport,'cycling');
+});

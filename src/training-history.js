@@ -1,18 +1,21 @@
 // Measured history and conservative starting templates are separate inputs.
 import { L } from './lang.js';
 import {activityFromRow,dedupeActivities} from './coach-reflection.js';
+import {localToday} from './user-time.js';
 const DAY=86400000;
 export const TRAINING_REFERENCES=[
   {name:'WHO 2020: 150–300 min střední intenzity týdně; síla alespoň 2 dny',url:'https://doi.org/10.1136/bjsports-2020-102955'},
   {name:'ACSM: postupná progrese silového tréninku podle zkušeností',url:'https://doi.org/10.1249/MSS.0b013e3181915670'}
 ];
 export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
-  const end=new Date(now).toISOString().slice(0,10),since=new Date(now-84*DAY).toISOString().slice(0,10);
+  // Days in the user's zone: in the first hours of their day the UTC date is
+  // still yesterday, and today's activities would fall outside the window.
+  const end=localToday(new Date(now)),daysBack=n=>new Date(Date.parse(end+'T12:00:00Z')-n*DAY).toISOString().slice(0,10),since=daysBack(84);
   const rows=(await db.prepare("SELECT source_family,data_type,start_time,end_time,sample_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND COALESCE(start_time,sample_time)>=? AND COALESCE(start_time,sample_time)<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY COALESCE(start_time,sample_time)").bind(userId,since,end+'T23:59:59').all().catch(()=>({results:[]}))).results||[];
   const activities=dedupeActivities(rows.map(row=>activityFromRow({...row,start_time:row.start_time||row.sample_time})).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
   const training=activities.filter(a=>['ride','run','strength','swim'].includes(a.kind));
-  const recent=training.filter(a=>a.date>=new Date(now-28*DAY).toISOString().slice(0,10));
-  const focused=training.filter(a=>a.date>=new Date(now-56*DAY).toISOString().slice(0,10));
+  const recent=training.filter(a=>a.date>=daysBack(28));
+  const focused=training.filter(a=>a.date>=daysBack(56));
   const counts={};for(const a of focused)counts[a.kind]=(counts[a.kind]||0)+1;
   const ranked=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   const dominant=ranked.length&&(!ranked[1]||ranked[0][1]>ranked[1][1])?ranked[0][0]:null;

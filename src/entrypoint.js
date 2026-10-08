@@ -25,6 +25,7 @@ import {activityDetail,rideIntervals} from './activity-detail.js';
 import {getCookbookRecipeByPage,useCookbookDatabase,saveCookbook} from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
+import {buildToday} from './app-today.js';
 import {normalizeProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
@@ -102,7 +103,7 @@ import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
 import { lang, withLang, storedLanguage, rememberLanguage, L } from "./lang.js";
-import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, dayStartUtc, localNow, localToday, localDate, timeZone } from "./user-time.js";
+import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, dayStartUtc, localNow, localToday, localDate, localHour, timeZone } from "./user-time.js";
 
 // A month of Google Health samples summed per day: thousands of rows that only a
 // sync changes (every five minutes, or the Obnovit button, which drops the cache).
@@ -1115,6 +1116,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return activityDetail(request,env,id,true);
   }
   if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
+
+  // Everything the native app's Today screen shows, in one response (app-today.js).
+  if(url.pathname==='/app/api/today'&&request.method==='GET'){
+    try{
+      const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const from=shiftDate(date,-30),to=shiftDate(date,1);
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile]=await Promise.all([
+        read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
+        cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
+        read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
+        api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null)
+      ]);
+      applyEnergyBudget(daily,profile,health);
+      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
 
   if(url.pathname==='/app/api/coaches'&&request.method==='GET'){
     try{

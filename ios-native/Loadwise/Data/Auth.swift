@@ -1,0 +1,81 @@
+import AuthenticationServices
+import CryptoKit
+import Foundation
+import UIKit
+
+// Google refuses sign-in inside an app's own web view, so the app uses the
+// same handoff as the Capacitor app (src/google-login.js):
+// 1. open /auth/google?app=<challenge> in a system browser sheet,
+// 2. the server answers with loadwise://auth?token=<short-lived token>,
+// 3. the app trades the token plus the verifier behind the challenge for the
+//    session cookie at POST /auth/app/session.
+// The cookie lands in HTTPCookieStorage.shared and URLSession sends it with
+// every API call.
+@MainActor
+final class AuthService: NSObject, ASWebAuthenticationPresentationContextProviding {
+    private let api: APIClient
+    private var session: ASWebAuthenticationSession?
+
+    init(api: APIClient) {
+        self.api = api
+    }
+
+    func signIn() async throws {
+        let verifier = Self.randomVerifier()
+        let challenge = Self.challenge(for: verifier)
+        var start = URLComponents(url: api.baseURL.appending(path: "auth/google"), resolvingAgainstBaseURL: false)!
+        start.queryItems = [URLQueryItem(name: "app", value: challenge)]
+
+        let callback = try await openBrowser(start.url!)
+        guard let token = URLComponents(url: callback, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "token" })?.value else {
+            throw APIError.message("Přihlášení se nepodařilo dokončit. Zkus to znovu.")
+        }
+        try await api.exchangeHandoff(token: token, verifier: verifier)
+    }
+
+    private func openBrowser(_ url: URL) async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "loadwise") { callback, error in
+                if let callback {
+                    continuation.resume(returning: callback)
+                } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                    continuation.resume(throwing: CancellationError())
+                } else {
+                    continuation.resume(throwing: error ?? APIError.message("Přihlášení se nepodařilo."))
+                }
+            }
+            session.presentationContextProvider = self
+            // Keep Google's own cookies, so the account picker remembers the user.
+            session.prefersEphemeralWebBrowserSession = false
+            self.session = session
+            session.start()
+        }
+    }
+
+    nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes
+                .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+                .first ?? ASPresentationAnchor()
+        }
+    }
+
+    // 32 random bytes as base64url: 43 characters, like the web app's verifier.
+    static func randomVerifier() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return base64url(Data(bytes))
+    }
+
+    static func challenge(for verifier: String) -> String {
+        base64url(Data(SHA256.hash(data: Data(verifier.utf8))))
+    }
+
+    static func base64url(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}

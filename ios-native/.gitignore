@@ -1,0 +1,5 @@
+# Generated on the CI runner by XcodeGen and xcodebuild.
+Loadwise.xcodeproj/
+Loadwise/Info.plist
+build/
+ipa/

@@ -1,0 +1,102 @@
+name: iOS native app
+
+# Builds the native SwiftUI app in ios-native/ without a Mac or an Apple
+# Developer account. The Xcode project is generated from project.yml.
+# Artifacts (Actions → this run → Artifacts):
+# - Loadwise-native-unsigned.ipa: install with Sideloadly (free Apple ID,
+#   valid for 7 days, then install again). It sits next to the Capacitor app.
+# - Loadwise-native-screens: whole-screen snapshots in light and dark mode
+#   from the sample data, plus simulator screenshots of the running app.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios-native/**"
+      - ".github/workflows/ios-native.yml"
+  pull_request:
+    paths:
+      - "ios-native/**"
+      - ".github/workflows/ios-native.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ios-native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Pick a simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          phones = [d for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")]
+          pick = next((d for d in phones if d["name"] in ("iPhone 16", "iPhone 16 Pro", "iPhone 15")), phones[0])
+          print(pick["udid"])')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # Unit tests render the screens to PNG (LoadwiseTests/SnapshotTests.swift).
+      - name: Test and render screens
+        env:
+          TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/screens
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/screens"
+          xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO test
+
+      # The real app on the simulator with sample data, as the phone shows it.
+      - name: Screenshot the running app
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Loadwise.app
+          for mode in light dark; do
+            xcrun simctl ui "$udid" appearance "$mode"
+            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo
+            sleep 6
+            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/simulator-today-$mode.png"
+          done
+
+      # Unsigned: Sideloadly signs it with the user's Apple ID.
+      - name: Build for iPhone
+        run: |
+          xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build
+          mkdir -p ipa/Payload
+          cp -R build/Build/Products/Release-iphoneos/Loadwise.app ipa/Payload/
+          (cd ipa && zip -qry "$GITHUB_WORKSPACE/Loadwise-native-unsigned.ipa" Payload)
+
+      - name: Upload the app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Loadwise-native-ios
+          path: Loadwise-native-unsigned.ipa
+          retention-days: 30
+
+      - name: Upload the screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Loadwise-native-screens
+          path: screens
+          if-no-files-found: ignore
+          retention-days: 30

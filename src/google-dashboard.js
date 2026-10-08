@@ -1,8 +1,11 @@
-import { localDate } from "./user-time.js";
+import { localDate, localDateTime } from "./user-time.js";
 const finite=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const day=t=>{if(!t)return null;if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;const d=new Date(t);return Number.isFinite(+d)?localDate(d):null;};
 export function googleHealthSummary(rows,today,zoneRows=[]){
   const days=new Map(),coverage={};
+  // Steps per local hour for the last 15 days: today's climb through the day
+  // and the usual one to compare (the app's Pohyb widget).
+  const stepsByHour={},hourFrom=new Date(Date.parse(today+'T12:00:00Z')-14*86400000).toISOString().slice(0,10);
   for(const row of rows){let p;try{p=JSON.parse(row.payload_json||'{}');}catch{continue;}
     const camel=row.data_type.replace(/-([a-z])/g,(_,c)=>c.toUpperCase()),obj=p[camel]||p,date=obj.date?`${obj.date.year}-${String(obj.date.month).padStart(2,'0')}-${String(obj.date.day).padStart(2,'0')}`:day(row.sample_time||row.end_time||row.start_time||obj.interval?.endTime||obj.interval?.startTime);
     if(!date)continue;coverage[row.data_type]=[coverage[row.data_type],date].filter(Boolean).sort().at(-1);
@@ -16,13 +19,15 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
     if(key&&value!=null)item[key]=['steps','activeCalories'].includes(key)?(item[key]||0)+value:value;
+    if(key==='steps'&&value!=null){const local=localDateTime(row.start_time||row.sample_time||obj.interval?.startTime||''),d=local.slice(0,10),h=Number(local.slice(11,13));
+      if(local.length>=13&&d>=hourFrom&&d<=today&&h>=0&&h<24)(stepsByHour[d]||(stepsByHour[d]=Array(24).fill(0)))[h]+=value;}
     days.set(date,item);
   }
   // Minutes in Google's heart-rate zones per local day (for all-day strain).
   for(const z of zoneRows){const date=day(z.start_time),key=String(z.zone||'').toLowerCase(),minutes=(Date.parse(z.end_time)-Date.parse(z.start_time))/60000;
     if(!date||!['light','moderate','vigorous','peak'].includes(key)||!(minutes>0&&minutes<=1440))continue;
     const item=days.get(date)||{id:date,source:'google-health'},zones=item.hrZoneMinutes||(item.hrZoneMinutes={light:0,moderate:0,vigorous:0,peak:0});zones[key]=Math.round((zones[key]+minutes)*10)/10;days.set(date,item);coverage['time-in-heart-rate-zone']=[coverage['time-in-heart-rate-zone'],date].filter(Boolean).sort().at(-1);}
-  return{status:'ok',source:'google-health',coverage,wellness:[...days.values()].sort((a,b)=>a.id.localeCompare(b.id)),today:days.get(today)||{id:today,source:'google-health'}};
+  return{status:'ok',source:'google-health',coverage,stepsByHour,wellness:[...days.values()].sort((a,b)=>a.id.localeCompare(b.id)),today:days.get(today)||{id:today,source:'google-health'}};
 }
 export async function googleDashboard(db,today){
   const shift=d=>new Date(Date.parse(today+'T12:00:00Z')+d*86400000).toISOString().slice(0,10),end=shift(1);
