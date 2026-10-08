@@ -10,7 +10,7 @@ import {dashboardSyncStatus, startDashboardSync} from '../src/dashboard-sync.js'
 import {latestStoredWeight} from '../src/athlete-weight.js';
 import {syncWeights} from '../src/weight-sync.js';
 import {energyBaseline} from '../src/energy-profile.js';
-import {pragueToday} from '../src/prague-date.js';
+import {localToday} from '../src/user-time.js';
 import {EXTRA_SCOPES} from '../src/google-scopes.js';
 import {loadEffectiveProfile} from '../src/profile-suggestions.js';
 
@@ -23,7 +23,7 @@ function setup(){
   return {raw,db,env,ctx,pending};
 }
 const sync=(env,ctx,path='/sync/intervals')=>legacy.fetch(new Request('https://internal'+path,{method:'POST'}),env,ctx).then(r=>r.json());
-const daily=(env,ctx)=>legacy.fetch(new Request('https://internal/analysis/daily?date='+pragueToday()),env,ctx).then(r=>r.json());
+const daily=(env,ctx)=>legacy.fetch(new Request('https://internal/analysis/daily?date='+localToday()),env,ctx).then(r=>r.json());
 const point=(raw,user,source,type,at,value,id=crypto.randomUUID())=>raw.sqlite.prepare('INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,value_numeric,value_unit,payload_json) VALUES(?,?,?,?,?,?,?,\'kg\',\'{}\')').run(user,source,type,id,at,at,value);
 
 test('Intervals-only initial import makes weight and profile nutrition available even when the calendar is forbidden',async t=>{
@@ -36,7 +36,7 @@ test('Intervals-only initial import makes weight and profile nutrition available
     assert.ok(opts.signal,'remote reads must have a deadline');
     if(path.includes('/activities?'))return Response.json([]);
     if(path.includes('/events?'))return new Response('private response body',{status:403});
-    if(path.includes('/wellness?'))return Response.json([{id:pragueToday(),weight:60}]);
+    if(path.includes('/wellness?'))return Response.json([{id:localToday(),weight:60}]);
     throw new Error('Unexpected remote call: '+path);
   });
   await initialImport(env,ctx);await Promise.all(pending);
@@ -55,7 +55,7 @@ test('Intervals-only initial import makes weight and profile nutrition available
   assert.deepEqual(analysis.nutrition.missing,[]);
   assert.ok(calls.every(url=>url.startsWith('https://intervals.icu/')));
   // A retry clears the partial state rather than treating it as a done import.
-  t.mock.method(globalThis,'fetch',async url=>Response.json(String(url).includes('/wellness?')?[{id:pragueToday(),weight:61}]:[]));
+  t.mock.method(globalThis,'fetch',async url=>Response.json(String(url).includes('/wellness?')?[{id:localToday(),weight:61}]:[]));
   pending.length=0;await initialImport(env,ctx);await Promise.all(pending);
   assert.equal((await dashboardSyncStatus(db)).status,'done');
   assert.equal((await onboardingStatus(env)).weightKg,61);
@@ -66,7 +66,7 @@ test('Refresh imports a new Intervals-only weight after an already completed ini
   await startDashboardSync(db,ctx,async()=>[{source:'intervals',status:'done'}],'initial_intervals');await Promise.all(pending);pending.length=0;
   t.mock.method(globalThis,'fetch',async(url,opts={})=>{
     assert.equal(opts.method||'GET','GET');
-    return Response.json(String(url).includes('/wellness?')?[{id:pragueToday(),weight:62}]:[]);
+    return Response.json(String(url).includes('/wellness?')?[{id:localToday(),weight:62}]:[]);
   });
   await initialImport(env,ctx);
   const run=await startDashboardSync(db,ctx,()=>recentDashboardImport(env,ctx));
@@ -79,20 +79,20 @@ test('a large history is saved in batches and a remote activity outage still imp
   const {raw,env,ctx}=setup();
   const batches=[],batch=raw.batch.bind(raw);raw.batch=async statements=>{batches.push(statements.length);return batch(statements);};
   // scopedDb closes over raw.batch, so the calls remain observable.
-  const activities=Array.from({length:125},(_,i)=>({id:'i'+i,name:'Run',type:'Run',start_date_local:pragueToday()+'T07:00:00',moving_time:1800}));
-  t.mock.method(globalThis,'fetch',async url=>Response.json(String(url).includes('/activities?')?activities:String(url).includes('/wellness?')?[{id:pragueToday(),weight:60}]:[]));
+  const activities=Array.from({length:125},(_,i)=>({id:'i'+i,name:'Run',type:'Run',start_date_local:localToday()+'T07:00:00',moving_time:1800}));
+  t.mock.method(globalThis,'fetch',async url=>Response.json(String(url).includes('/activities?')?activities:String(url).includes('/wellness?')?[{id:localToday(),weight:60}]:[]));
   const imported=await sync(env,ctx);
   assert.equal(imported.status,'ok');assert.equal(imported.activities.activities_saved,125);
   assert.ok(batches.filter(n=>n===50).length>=2);
   assert.equal((await raw.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=1 AND data_type='activity'").first()).n,125);
-  t.mock.method(globalThis,'fetch',async url=>String(url).includes('/activities?')?new Response('',{status:503}):Response.json(String(url).includes('/wellness?')?[{id:pragueToday(),weight:61}]:[]));
+  t.mock.method(globalThis,'fetch',async url=>String(url).includes('/activities?')?new Response('',{status:503}):Response.json(String(url).includes('/wellness?')?[{id:localToday(),weight:61}]:[]));
   const partial=await sync(env,ctx,'/sync/intervals/recent');
   assert.equal(partial.status,'partial');assert.match(partial.activities.message,/HTTP 503/);
   assert.equal((await latestStoredWeight(env.DB)).value_numeric,61);
 });
 
 test('a failed calendar write rolls back replacement and preserves other users',async t=>{
-  const {raw,env,ctx}=setup(),date=pragueToday();
+  const {raw,env,ctx}=setup(),date=localToday();
   raw.sqlite.exec("CREATE TRIGGER reject_bad_event BEFORE INSERT ON health_datapoints WHEN NEW.external_id='planned:bad' BEGIN SELECT RAISE(FAIL,'storage unavailable'); END");
   point(raw,1,'intervals','planned-workout',date,0,'planned:old');point(raw,2,'intervals','planned-workout',date,0,'planned:other');
   t.mock.method(globalThis,'fetch',async url=>Response.json(String(url).includes('/events?')?[{id:'bad',name:'Run',start_date_local:date}]:[]));
@@ -103,7 +103,7 @@ test('a failed calendar write rolls back replacement and preserves other users',
 
 test('remote weights are stored locally even if writing to Google fails, and a deleted app copy is repaired',async t=>{
   const {env}=setup();let writes=0;
-  const today=pragueToday();
+  const today=localToday();
   const deps={googleToken:async()=>{throw new Error('Google unavailable');},fetchImpl:async(url,opts={})=>{
     if(opts.method){writes++;throw new Error('No remote writes expected');}
     return Response.json([{id:today,weight:63}]);
@@ -146,8 +146,8 @@ test('the calculation profile works without any sport focus and history does not
   assert.equal(result.profile.mainSport,'general');
   assert.equal(result.profile.sportGoal,'');
   assert.equal(result.baseline.sportDaily,0);
-  point(raw,1,'intervals','activity',pragueToday()+'T08:00:00',0,'activity:ride');
-  await db.prepare("UPDATE health_datapoints SET payload_json=? WHERE user_id=1 AND external_id='activity:ride'").bind(JSON.stringify({id:'ride',type:'Ride',name:'Ride',start_date_local:pragueToday()+'T08:00:00',moving_time:3600})).run();
+  point(raw,1,'intervals','activity',localToday()+'T08:00:00',0,'activity:ride');
+  await db.prepare("UPDATE health_datapoints SET payload_json=? WHERE user_id=1 AND external_id='activity:ride'").bind(JSON.stringify({id:'ride',type:'Ride',name:'Ride',start_date_local:localToday()+'T08:00:00',moving_time:3600})).run();
   await db.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(1,2,?)').bind(JSON.stringify({mainSport:'cycling'})).run();
   const status=await onboardingStatus(env);
   assert.equal(status.history.mainSport,'cycling');
@@ -172,7 +172,7 @@ test('explicit Intervals refresh retries full history after success, ignores Goo
   const {db,env,ctx,pending}=setup();
   await startDashboardSync(db,ctx,async()=>[{source:'intervals',status:'done'}],'initial_intervals');await Promise.all(pending);pending.length=0;
   let release;const blocked=new Promise(resolve=>{release=resolve;}),calls=[];
-  t.mock.method(globalThis,'fetch',async url=>{calls.push(String(url));await blocked;return Response.json(String(url).includes('/wellness?')?[{id:pragueToday(),weight:64}]:[]);});
+  t.mock.method(globalThis,'fetch',async url=>{calls.push(String(url));await blocked;return Response.json(String(url).includes('/wellness?')?[{id:localToday(),weight:64}]:[]);});
   const connected={...env,CONNECTED_PROVIDERS:['google','intervals']};
   const started=await initialImport(connected,ctx,{provider:'intervals',force:true});
   await initialImport(connected,ctx,{provider:'intervals',force:true});

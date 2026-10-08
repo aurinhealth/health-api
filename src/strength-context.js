@@ -3,13 +3,13 @@ import { getAthleteState } from './athlete-state.js';
 import { isQualityName } from './session-intensity.js';
 import { dateFormat } from "./date-format.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
-const TZ = "Europe/Prague";
+import { timeZone } from "./user-time.js";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
 
 function localDate(offsetDays = 0) {
   const now = new Date();
-  const parts = dateFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const parts = dateFormat("en-CA", { timeZone: timeZone(), year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
   const y = Number(parts.find(x => x.type === "year").value);
   const m = Number(parts.find(x => x.type === "month").value);
   const d = Number(parts.find(x => x.type === "day").value);

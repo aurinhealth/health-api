@@ -1,12 +1,9 @@
 import { L } from './lang.js';
-import { dateFormat } from "./date-format.js";
-const TZ = "Europe/Prague";
+import { localToday, timeZone } from "./user-time.js";
 const DEFAULT_LAT = 50.0;
 const DEFAULT_LON = 15.3;
 
-function localDate() {
-  return dateFormat("en-CA", { timeZone: TZ }).format(new Date());
-}
+const localDate = () => localToday();
 
 function seasonFor(date) {
   const m = Number(String(date).slice(5, 7));
@@ -102,7 +99,7 @@ async function fetchWeather(date, lat, lon) {
   url.searchParams.set("longitude", String(lon));
   url.searchParams.set("start_date", date);
   url.searchParams.set("end_date", date);
-  url.searchParams.set("timezone", TZ);
+  url.searchParams.set("timezone", timeZone());
   url.searchParams.set("daily", [
     "weather_code",
     "temperature_2m_max",
@@ -156,7 +153,7 @@ export async function getCyclingContext(env, options = {}) {
   return {
     status: "ok",
     date,
-    timezone: TZ,
+    timezone: timeZone(),
     season,
     weekday: weekdayFor(date),
     location: { latitude: lat, longitude: lon },

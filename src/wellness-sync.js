@@ -8,8 +8,8 @@
 // is never overwritten, while today's steps can grow through the day.
 
 import { heartRateFromSamples } from "./index.js";
-import { dateFormat } from "./date-format.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { localDate } from "./user-time.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -25,7 +25,6 @@ const DAILY = {
 const ROUND = { restingHR: 0, hrv: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0, avgSleepingHR: 0 };
 const TOLERANCE = { steps: 1, sleepSecs: 60 };
 
-const pragueDay = iso => /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? String(iso) : dateFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
 // Google sample times are stored as RFC 3339 UTC without milliseconds.
 const utc = iso => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "Z");
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };
@@ -39,11 +38,11 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   const rows = (await db.prepare(`SELECT data_type, sample_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'google-sources')
     AND data_type IN (${types.map(() => "?").join(", ")}) AND value_numeric IS NOT NULL AND sample_time >= ? AND (record_role IS NULL OR record_role != 'duplicate') ORDER BY sample_time`)
     .bind(userId, ...types, oldest).all()).results || [];
-  for (const r of rows) put(pragueDay(r.sample_time), DAILY[r.data_type], r.value_numeric);
+  for (const r of rows) put(localDate(r.sample_time), DAILY[r.data_type], r.value_numeric);
   const steps = (await db.prepare(`SELECT start_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'steps'
     AND record_role = 'primary' AND start_time >= ?`).bind(userId, oldest).all()).results || [];
   const stepsPerDay = {};
-  for (const r of steps) { const d = pragueDay(r.start_time); stepsPerDay[d] = (stepsPerDay[d] || 0) + Number(r.value_numeric || 0); }
+  for (const r of steps) { const d = localDate(r.start_time); stepsPerDay[d] = (stepsPerDay[d] || 0) + Number(r.value_numeric || 0); }
   for (const [d, v] of Object.entries(stepsPerDay)) put(d, "steps", v);
   // The night's main sleep: the longest session ending that day. Its average
   // heart rate comes from Google Health's heart-rate samples in that window.
@@ -92,7 +91,7 @@ const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_K
 export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = fetch, now = Date.now() } = {}) {
   const providers = env.CONNECTED_PROVIDERS || [];
   if (!providers.includes("google") || !providers.includes("intervals")) return { status: "skipped" };
-  const newest = pragueDay(new Date(now).toISOString()), oldest = pragueDay(new Date(now - (WELLNESS_SYNC_DAYS - 1) * 86400000).toISOString());
+  const newest = localDate(new Date(now).toISOString()), oldest = localDate(new Date(now - (WELLNESS_SYNC_DAYS - 1) * 86400000).toISOString());
   const google = await googleWellness(env.DB, env.USER_ID, oldest, await sleepSessions(oldest, newest));
   const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: auth(env) });
   if (!response.ok) throw new Error("Intervals wellness HTTP " + response.status);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { assistantTask, isSimpleMessage, askCoach, coachContext, compactActivity, coachAnswerText, TRUNCATED_NOTE, strengthProgress, nutritionContext, engineSport, focusGoal, sleepNights, pragueNow } from '../src/coach-assistant.js';
+import { assistantTask, isSimpleMessage, askCoach, coachContext, compactActivity, coachAnswerText, TRUNCATED_NOTE, strengthProgress, nutritionContext, engineSport, focusGoal, sleepNights, localNow } from '../src/coach-assistant.js';
 import { isFoodLogMessage } from '../src/food-chat.js';
 import { validateCoachActions, actionSafetyContext, actionsNote, COACH_ACTION_FORMAT } from '../src/coach-actions.js';
 import { explicitPreference } from '../src/athlete-state.js';
@@ -82,7 +82,7 @@ test('dates, sleep, nutrition and strength progression are in the context',()=>{
   const context=coachContext({date:today,now:'2026-10-05 07:30',week:{days:[{date:'2026-10-08'}]},gym:{history},health:{sleep:[{date:today,durationMin:410}]},availabilityByDate:{'2026-10-08':{minutes:60}}});
   assert.equal(context.weekday,'pondělí');assert.equal(context.now,'2026-10-05 07:30');assert.deepEqual(context.week[0],{date:'2026-10-08',weekday:'čtvrtek',availabilityMinutes:60,planned:undefined,completed:undefined});
   assert.equal(context.sleep[0].minutes,410);assert.equal(context.strengthProgress[0].exercise,'Bench press');assert.deepEqual(Object.keys(context.gym[0]).sort(),['date','exercise','kg','reps','rpe','set']);
-  assert.match(pragueNow(new Date('2026-10-05T05:30:00Z')),/^2026-10-05 07:30$/);
+  assert.match(localNow(new Date('2026-10-05T05:30:00Z')),/^2026-10-05 07:30$/);
 });
 
 test('the main sport and the event steer the engine',()=>{
@@ -178,7 +178,7 @@ test('earlier turns go to the model as messages with the data first and the ques
 test('the panel shows only open proposals from today and this chat; streaming repaints are throttled',()=>{
   const client=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
   assert.match(client,/renderCoachActionCards\(\(state\.inbox\|\|\[\]\)\.filter\(openCoachDraft\)/);
-  assert.match(client,/day===pragueToday\(\)&&\(!a\?\.date\|\|a\.date>=pragueToday\(\)\)&&\(x\.draft\.chatId==null\|\|x\.draft\.chatId===assistantChat\.id\)/);
+  assert.match(client,/day===localToday\(\)&&\(!a\?\.date\|\|a\.date>=localToday\(\)\)&&\(x\.draft\.chatId==null\|\|x\.draft\.chatId===assistantChat\.id\)/);
   assert.match(client,/pendingAnswer=answer;if\(Date\.now\(\)-paintedAt>=100\)paint\(\);/);
   const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
   assert.match(entry,/UPDATE coach_inbox SET status='expired' WHERE user_id=\? AND status='draft' AND created_at<\?/);

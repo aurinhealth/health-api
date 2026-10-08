@@ -6,7 +6,7 @@
 // from using up the month: AI_DAILY_LIMIT_USD (default 1 USD). 0 in either turns
 // AI off for everyone but the owner. The owner is never limited.
 import { L } from './lang.js';
-import { pragueToday } from "./prague-date.js";
+import { localToday } from "./user-time.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -45,14 +45,14 @@ async function ensureAiUsage(db) {
 export async function aiSpentToday(env) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ?").bind(env.USER_ID, pragueToday()).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ?").bind(env.USER_ID, localToday()).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
 export async function aiSpentThisMonth(env) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const month = pragueToday().slice(0, 7);
+  const month = localToday().slice(0, 7);
   const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ?").bind(env.USER_ID, month + "-01", month + "-31").first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
@@ -93,7 +93,7 @@ export async function recordAiUsage(env, { feature = null, model = null, usage =
     // An unknown model counts at the default model's price, so it cannot slip past the limit.
     const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
     await env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, input_tokens, output_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(env.USER_ID, pragueToday(), feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost).run();
+      .bind(env.USER_ID, localToday(), feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost).run();
   } catch (error) {
     console.error("AI usage not recorded", error?.message || error);
   }

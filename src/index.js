@@ -12,8 +12,8 @@ import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
 import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
-import { dateFormat } from "./date-format.js";
-import { activityKindOf, pragueLocal } from "./coach-reflection.js";
+import { pairSessions } from "./activity-match.js";
+import { localToday, localHour, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 
 export default {
@@ -184,10 +184,10 @@ async function appWeight(env, request) {
   const body = await request.json();
   const value = Number(body?.kg);
   if (!Number.isFinite(value) || value < 30 || value > 300) return Response.json({status:"error",message:L("Neplatná hmotnost.", "Invalid weight.")},{status:400});
-  const today = pragueDate(), date = body?.date || today;
+  const today = localToday(), date = body?.date || today;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) return Response.json({status:"error",message:L("Neplatné datum vážení.", "Invalid weigh-in date.")},{status:400});
   // Today's weigh-in keeps its real time (for the day timeline); an earlier day gets noon.
-  const now = date === today ? pragueNow() : null, at = now ? now.at : date+"T12:00:00+02:00";
+  const now = date === today ? zonedIso() : localNoon(date), at = now.at;
   // With Google Health connected the weight goes there too; without it, only
   // here. A refused Google write (no write permission) does not lose the entry.
   let google = null;
@@ -197,7 +197,7 @@ async function appWeight(env, request) {
       const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
         method:"POST",
         headers:{Authorization:"Bearer "+token,"Content-Type":"application/json",Accept:"application/json"},
-        body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:(now?now.offsetSeconds:7200)+"s"},weightGrams:value*1000,notes:"Loadwise"}})
+        body:JSON.stringify({weight:{sampleTime:{physicalTime:at,utcOffset:now.offsetSeconds+"s"},weightGrams:value*1000,notes:"Loadwise"}})
       });
       google = await response.json().catch(()=>({}));
       if (!response.ok) { console.error("Google Health weight write failed", response.status); google = { error: response.status }; }
@@ -265,42 +265,8 @@ const CONFIG = {
 // DATE HELPERS
 // ======================================================
 
-// The current Prague wall-clock time with its UTC offset (CET or CEST).
-function pragueNow() {
-  const p = Object.fromEntries(dateFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZoneName: "longOffset" }).formatToParts(new Date()).map(x => [x.type, x.value]));
-  const offset = String(p.timeZoneName || "").replace("GMT", "") || "+00:00", [, sign, h, m] = offset.match(/([+-])(\d{2}):(\d{2})/) || [, "+", "00", "00"];
-  return { at: `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${offset}`, offsetSeconds: (sign === "-" ? -1 : 1) * (Number(h) * 3600 + Number(m) * 60) };
-}
-
-function pragueDate() {
-  const parts = dateFormat(
-    "en-GB",
-    {
-      timeZone: "Europe/Prague",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    }
-  ).formatToParts(new Date());
-
-  const year = parts.find(
-    x => x.type === "year"
-  ).value;
-
-  const month = parts.find(
-    x => x.type === "month"
-  ).value;
-
-  const day = parts.find(
-    x => x.type === "day"
-  ).value;
-
-  return `${year}-${month}-${day}`;
-}
-
-
 function dateDaysAgo(days) {
-  const p = pragueDate().split("-");
+  const p = localToday().split("-");
 
   const d = new Date(
     Date.UTC(
@@ -315,7 +281,7 @@ function dateDaysAgo(days) {
 
 
 function dateDaysFromNow(days) {
-  const p = pragueDate().split("-");
+  const p = localToday().split("-");
 
   const d = new Date(
     Date.UTC(
@@ -579,46 +545,6 @@ function pointStatement(env, source, type, payload, value = null, unit = null, s
       JSON.stringify(payload)
     );
 }
-
-
-async function markMatch(
-  env,
-  source,
-  type,
-  externalId,
-  role,
-  matchedId,
-  confidence
-) {
-  await env.DB
-    .prepare(
-      `UPDATE health_datapoints
-       SET
-         record_role = ?,
-         matched_activity_id = ?,
-         match_confidence = ?,
-         updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = ?
-       AND source_family = ?
-       AND data_type = ?
-       AND external_id = ?`
-    )
-    .bind(
-      role,
-      matchedId,
-      confidence,
-      env.USER_ID,
-      source,
-      type,
-      externalId
-    )
-    .run();
-}
-
-
-
-
-
 
 
 // ======================================================
@@ -1097,6 +1023,7 @@ async function syncGoogleRecent(env){
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
   // Data the user did not give permission for is not a failure.
   const result={status:results.some(r=>r.status!=='ok'&&r.status!=='skipped')?'partial':'ok',results};
+  if(results.some(r=>r.type==='exercise'&&r.saved>0))await matchActivities(env,{days:14}).catch(error=>console.error('Activity matching failed',error.message));
   await ensureSyncStatusTable(env);
   await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'google_recent',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.USER_ID,result.status,JSON.stringify(result)).run();
   return result;
@@ -1473,6 +1400,8 @@ async function syncIntervals(env,options={}) {
   const parts = Object.fromEntries(settled.map((result,i) => [names[i], result.status === 'fulfilled'
     ? result.value : {status:'error',message:result.reason?.message || 'Import failed'}]));
   const failures = settled.filter(r => r.status === 'rejected').length;
+  // The new activities against the watch's Google exercises (and back).
+  if (settled[0].status === 'fulfilled') await matchActivities(env, { days: 14 }).catch(error => console.error('Activity matching failed', error.message));
   return Response.json({status:failures === names.length ? 'error' : failures ? 'partial' : 'ok',source:'intervals.icu',...parts});
 }
 
@@ -1481,202 +1410,39 @@ async function syncIntervals(env,options={}) {
 // ACTIVITY MATCHING
 // ======================================================
 
-function activitySimilarity(
-  a,
-  b
-) {
-  const aStart =
-    activityStart(a);
-
-  const bStart =
-    activityStart(b);
-
-  if (!aStart || !bStart) {
-    return 0;
+// The same workout from Intervals.icu (or the app) and from the watch in
+// Google Health: the copy becomes record_role 'duplicate' (the queries skip
+// it) and points to the kept record. See activity-match.js. `days` limits it
+// to recent activities (after each sync); without it all are checked again.
+async function matchActivities(env, { days = null } = {}) {
+  const since = days ? dateDaysAgo(days + 1) : "0000";
+  const rows = (await env.DB.prepare(
+    `SELECT source_family, data_type, external_id, start_time, end_time, payload_json, record_role, matched_activity_id
+     FROM health_datapoints
+     WHERE user_id = ?
+     AND ((source_family IN ('intervals','local') AND data_type = 'activity') OR (source_family = 'google-wearables' AND data_type = 'exercise'))
+     AND start_time IS NOT NULL AND start_time >= ?
+     ORDER BY start_time`
+  ).bind(env.USER_ID, since).all()).results || [];
+  const key = row => row.source_family + ":" + row.external_id;
+  const wanted = new Map();
+  const pairs = pairSessions(rows);
+  for (const { keep, drop, inside } of pairs) {
+    wanted.set(drop, { role: "duplicate", matched: key(keep) });
+    if (!inside) wanted.set(keep, { role: "primary", matched: key(drop) });
   }
-
-  const timeDifference =
-    Math.abs(
-      new Date(aStart).getTime() -
-      new Date(bStart).getTime()
-    ) / 60000;
-
-  if (
-    timeDifference > 20
-  ) {
-    return 0;
+  const updates = [];
+  for (const row of rows) {
+    // A pair that no longer holds (a source changed or deleted it) is undone.
+    const want = wanted.get(row) || (row.matched_activity_id ? { role: "primary", matched: null } : null);
+    if (!want || (row.record_role === want.role && (row.matched_activity_id ?? null) === want.matched)) continue;
+    updates.push(env.DB.prepare(
+      `UPDATE health_datapoints SET record_role = ?, matched_activity_id = ?, match_confidence = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
+    ).bind(want.role, want.matched, want.matched ? 1 : null, env.USER_ID, row.source_family, row.data_type, row.external_id));
   }
-
-  let score = 0;
-
-  if (
-    timeDifference <= 2
-  ) {
-    score += 0.55;
-  } else if (
-    timeDifference <= 5
-  ) {
-    score += 0.45;
-  } else if (
-    timeDifference <= 10
-  ) {
-    score += 0.30;
-  } else {
-    score += 0.15;
-  }
-
-  const aDuration =
-    hoursBetween(
-      activityStart(a),
-      activityEnd(a)
-    );
-
-  const bDuration =
-    hoursBetween(
-      activityStart(b),
-      activityEnd(b)
-    );
-
-  if (
-    aDuration &&
-    bDuration
-  ) {
-    const ratio =
-      Math.abs(
-        aDuration -
-        bDuration
-      ) /
-      Math.max(
-        aDuration,
-        bDuration
-      );
-
-    if (ratio <= 0.03) {
-      score += 0.35;
-    } else if (ratio <= 0.10) {
-      score += 0.25;
-    } else if (ratio <= 0.20) {
-      score += 0.10;
-    }
-  }
-
-  return Math.min(
-    1,
-    score
-  );
-}
-
-
-// ======================================================
-// MATCH GOOGLE ACTIVITY-LIKE DATA
-// ======================================================
-
-async function matchActivities(env) {
-  const intervals =
-    await env.DB
-      .prepare(
-        `SELECT *
-         FROM health_datapoints
-         WHERE user_id = ?
-         AND source_family IN ('intervals','local')
-         AND data_type = 'activity'
-         AND start_time IS NOT NULL
-         ORDER BY start_time`
-      )
-      .bind(env.USER_ID)
-      .all();
-
-  const google =
-    await env.DB
-      .prepare(
-        `SELECT *
-         FROM health_datapoints
-         WHERE user_id = ?
-         AND source_family = 'google-wearables'
-         AND data_type = 'exercise'
-         AND start_time IS NOT NULL
-         ORDER BY start_time`
-      )
-      .bind(env.USER_ID)
-      .all();
-
-  let matched = 0;
-
-  for (const icu of intervals.results) {
-    let best = null;
-
-    const icuPayload =
-      JSON.parse(
-        icu.payload_json
-      );
-
-    for (const g of google.results) {
-      const gStart =
-        g.start_time;
-
-      const gEnd =
-        g.end_time;
-
-      const candidate = {
-        start_date_local:
-          gStart,
-
-        end_date_local:
-          gEnd
-      };
-
-      const score =
-        activitySimilarity(
-          icuPayload,
-          candidate
-        );
-
-      if (
-        score > 0 &&
-        (!best ||
-        score > best.score)
-      ) {
-        best = {
-          record: g,
-          score
-        };
-      }
-    }
-
-    if (
-      best &&
-      best.score >= 0.70
-    ) {
-      const activityId =
-        icu.external_id;
-
-      await markMatch(
-        env,
-        "intervals",
-        "activity",
-        icu.external_id,
-        "primary",
-        activityId,
-        best.score
-      );
-
-      await markMatch(
-        env,
-        best.record.source_family,
-        best.record.data_type,
-        best.record.external_id,
-        "duplicate",
-        activityId,
-        best.score
-      );
-
-      matched++;
-    }
-  }
-
-  return {
-    matched
-  };
+  for (let i = 0; i < updates.length; i += 50) await env.DB.batch(updates.slice(i, i + 50));
+  return { matched: pairs.length, updated: updates.length };
 }
 
 
@@ -1945,6 +1711,7 @@ function googleExerciseActivity(row) {
     SWIMMING: "Swim",
     HIKING: "Hike",
     WEIGHTLIFTING: "WeightTraining",
+    WEIGHTS: "WeightTraining",
     STRENGTH_TRAINING: "WeightTraining",
     AEROBIC_WORKOUT: "Workout"
   };
@@ -1980,28 +1747,6 @@ function activityKcalPerHourFor(type, weightKg) {
   const kg = Number(weightKg);
   return WEIGHT_BEARING.test(type) && kg > 0 ? Math.round(base * Math.min(1.3, Math.max(0.6, kg / 88))) : base;
 }
-
-// The same session recorded by Google and Intervals.icu: the same kind of sport
-// starting within 20 minutes. Intervals.icu stores local time and Google UTC,
-// so both are compared as Prague wall-clock time.
-function sameSessionAsIntervals(googleActivity, intervalsActivities) {
-  const kind = activityKindOf(googleActivity.type), at = Date.parse(pragueLocal(googleActivity.start) + ":00Z");
-  return intervalsActivities.some(a => activityKindOf(a.type) === kind && Math.abs(Date.parse(pragueLocal(a.start) + ":00Z") - at) <= 20 * 60000);
-}
-
-function isDuplicateOfIntervalsActivity(googleActivity, intervalsRows) {
-  return intervalsRows.some(row => {
-    if (row.record_role === "duplicate") return false;
-    let payload = {};
-    try { payload = JSON.parse(row.payload_json || "{}"); } catch {}
-    return activitySimilarity(payload, {
-      start_date_local: googleActivity.start,
-      end_date_local: googleActivity.end
-    }) >= 0.70;
-  });
-}
-
-
 
 function activityIsStrength(activity) {
   const text = `${activity?.type || ""} ${activity?.name || ""} ${activity?.payload?.type || ""} ${activity?.payload?.name || ""}`.toLowerCase();
@@ -2110,6 +1855,8 @@ async function energyForDate(env, date) {
     ORDER BY start_time
   `).bind(env.USER_ID, date, nextDate).all();
 
+  // Google Health stores UTC: the user's day runs from local midnight to midnight.
+  const dayStart = dayStartUtc(date), dayEnd = dayStartUtc(nextDate);
   const googleExercises = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
@@ -2119,7 +1866,7 @@ async function energyForDate(env, date) {
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all();
+  `).bind(env.USER_ID, dayStart, dayEnd).all();
 
   const weight = await latestStoredWeight(env.DB, env.USER_ID);
   const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
@@ -2170,9 +1917,10 @@ async function energyForDate(env, date) {
     };
   });
 
-  const googleCompleted = googleExercises.results
-    .map(googleExerciseActivity)
-    .filter(activity => !sameSessionAsIntervals(activity, intervalsCompleted) && !isDuplicateOfIntervalsActivity(activity, intervalsRows));
+  // One workout from both sources counts once (the sync has usually marked the copy already).
+  const googleAll = googleExercises.results.map(googleExerciseActivity);
+  const copies = new Set(pairSessions([...intervalsCompleted, ...googleAll]).map(pair => pair.drop));
+  const googleCompleted = googleAll.filter(activity => !copies.has(activity));
   if (googleCompleted.some(a => a.averageHeartRate == null)) {
     try {
       const samples = (await env.DB.prepare(`
@@ -2180,7 +1928,7 @@ async function energyForDate(env, date) {
         WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
           AND sample_time >= ? AND sample_time < ?
         LIMIT 5000
-      `).bind(env.USER_ID, date, nextDate).all()).results || [];
+      `).bind(env.USER_ID, dayStart, dayEnd).all()).results || [];
       for (const a of googleCompleted) if (a.averageHeartRate == null) {
         const bpm = heartRateFromSamples(a, samples);
         if (bpm != null) { a.averageHeartRate = bpm; a.payload.average_heartrate = bpm; a.heartRateSource = "samples"; }
@@ -2188,7 +1936,7 @@ async function energyForDate(env, date) {
     } catch (error) { console.error("Heart-rate samples read failed", error.message); }
   }
 
-  const completed = [...intervalsCompleted, ...googleCompleted]
+  const completed = [...intervalsCompleted.filter(activity => !copies.has(activity)), ...googleCompleted]
     .filter(a => {
       const name=String(a.name||"").trim().toLowerCase();
       const type=String(a.type||"").trim().toLowerCase();
@@ -2197,7 +1945,7 @@ async function energyForDate(env, date) {
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||''));
   if(walking.length){
-    const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,date,nextDate).all().catch(()=>({results:[]}))).results||[];
+    const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
     for(const activity of walking){
       const checked=walkingEnergyCheck(activity,weight?.value_numeric),measured=activityTelemetryEnergy(activity,telemetry);
       activity.reportedCalories=activity.calories;
@@ -2224,7 +1972,7 @@ async function energyForDate(env, date) {
   // Historical complete days: Fitbit/Google total-calories is authoritative.
   // Today/future: total calories may be incomplete, so project from rest-day
   // baseline plus the incremental cost of completed/planned activity.
-  const nowDate = pragueDate();
+  const nowDate = localToday();
   const isCompleteDay = date < nowDate;
   const observed = google?.value_numeric != null ? Number(google.value_numeric) : null;
 
@@ -2330,7 +2078,7 @@ async function analysisDaily(
     url.searchParams.get(
       "date"
     ) ||
-    pragueDate();
+    localToday();
 
   const energy =
     await energyForDate(
@@ -2450,7 +2198,7 @@ async function analysisDaily(
       total: energy.estimatedTDEE,
       observedTotal: energy.googleTotalCalories,
       activity: energy.actualActivityCalories,
-      source: energy.googleTotalCalories != null && date < pragueDate() ? "observed" : "estimated"
+      source: energy.googleTotalCalories != null && date < localToday() ? "observed" : "estimated"
     },
 
     fueling
@@ -2470,7 +2218,7 @@ async function analysisEnergy(
     url.searchParams.get(
       "date"
     ) ||
-    pragueDate();
+    localToday();
 
   const energy =
     await energyForDate(
@@ -2581,7 +2329,7 @@ async function analysisFueling(
     url.searchParams.get(
       "date"
     ) ||
-    pragueDate();
+    localToday();
 
   const energy =
     await energyForDate(
@@ -2744,7 +2492,7 @@ async function foodLogForDate(env, date) {
 
 async function foodLog(env, request, url) {
   if (request.method === "GET") {
-    const date = url.searchParams.get("date") || pragueDate();
+    const date = url.searchParams.get("date") || localToday();
     const log = await foodLogForDate(env, date);
     return Response.json({ status: "ok", date, ...log });
   }
@@ -2754,7 +2502,7 @@ async function foodLog(env, request, url) {
   }
 
   const body = await request.json();
-  const date = body.date || body.consumed_date || pragueDate();
+  const date = body.date || body.consumed_date || localToday();
   const consumedAt = body.consumed_at || new Date().toISOString();
   const servings = Number(body.servings || 1);
 
@@ -2871,7 +2619,7 @@ function recommendationReason(recipe, remaining, options) {
 }
 
 async function foodRecommend(env, url) {
-  const date=url.searchParams.get('date')||pragueDate();
+  const date=url.searchParams.get('date')||localToday();
   const log=await foodLogForDate(env,date);
   const energy=await energyForDate(env,date);
   if(!energy.energyProfile.ready)return Response.json({status:"ok",date,calorieTarget:null,missing:energy.energyProfile.missing,foodTotals:log.totals,macroTargets:null,remaining:null,coaching:L("Doporučení jídel potřebuje kalorický cíl. Doplň v profilu: ", "Meal recommendations need a calorie goal. Add to your profile: ")+energy.energyProfile.missing.map(k=>MISSING_LABELS[k]||k).join(", ")+".",mealRecommendations:[],recommendations:[],storeAlternatives:[]});
@@ -2892,9 +2640,8 @@ async function foodRecommend(env, url) {
   const cookbookData=await getCookbook();
   const cookbook=Array.isArray(cookbookData)?cookbookData:(cookbookData?.recipes||[]);
 
-  const localHour=Number(dateFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
-  const completed=new Set([hasBreakfast&&'BREAKFAST',hasLunch&&'LUNCH',hasSnack&&'SNACK',hasDinner&&'DINNER'].filter(Boolean));
-  const slots=nextUnloggedMeals(completed,date===pragueDate()?localHour:0).map(meal=>[meal.type,meal.label]);
+    const completed=new Set([hasBreakfast&&'BREAKFAST',hasLunch&&'LUNCH',hasSnack&&'SNACK',hasDinner&&'DINNER'].filter(Boolean));
+  const slots=nextUnloggedMeals(completed,date===localToday()?localHour():0).map(meal=>[meal.type,meal.label]);
 
   const mealKeywords={
     BREAKFAST:["breakfast","snidane","snídaně"],
@@ -2989,7 +2736,7 @@ async function foodLogText(env, request) {
   const text = String(body.text || body.message || "").trim();
   if (!text) return Response.json({ status: "error", message: "text is required" }, { status: 400 });
 
-  const date = body.date || pragueDate();
+  const date = body.date || localToday();
   const pageNumbers = [...text.matchAll(/(?:str(?:án|a)n?\.?|p(?:age)?\.?)?\s*(\d{1,3})(?!\d)/gi)]
     .map(m => Number(m[1]))
     .filter(n => n > 0 && n < 1000);
@@ -3134,8 +2881,8 @@ async function healthSleep(env, url) {
   const sessions = (rows.results || []).map(sleepSessionFromRow);
 
   const filteredSessions = sessions.filter(s => {
-    const sStart = String(s.startTime || "").slice(0,10);
-    const sEnd = String(s.endTime || "").slice(0,10);
+    const sStart = localDate(s.startTime) || "";
+    const sEnd = s.date || "";
     return (sStart && sStart < end && (!sEnd || sEnd >= start)) || (sEnd && sEnd >= start && sEnd < end);
   });
   // Google can expose the same nightly session more than once through different

@@ -33,7 +33,7 @@ async function api(minutes) {
   const context = vm.createContext({
     Request, Response, URL, console, crypto, lang: () => 'cs', L: cs => cs, internalHeaders,
     getWeekPlan, availabilityOn, trainingBudget, parseTimeWindow, roleFor, targetFor,
-    validTrainingDay: validDay, mondayOfDate: weekStartOf, pragueToday: () => today,
+    validTrainingDay: validDay, mondayOfDate: weekStartOf, localToday: () => today,
     getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes,
     buildCyclingCoachV2, generateWorkout, getCapabilities, scheduleWorkoutInIntervals,
     storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan,
@@ -139,7 +139,7 @@ test('the duration controls send user initiated requests while an automatic leng
   };
   const ui = vm.createContext({
     state: { generated: { date: today } }, statusCoachingRevision: 0, selectedGymMuscles: new Set(['chest']),
-    $: id => elements[id], pragueToday: () => today, workoutSport: () => 'ride', gymDay: () => today,
+    $: id => elements[id], localToday: () => today, workoutSport: () => 'ride', gymDay: () => today,
     esc: String, toast() {}, renderGeneratedWorkout() {}, loadGym: async () => {}, reloadWeek() {}, openTrainingDetail() {},
     jsonFetch: async (path, options) => {
       const body = JSON.parse(options.body); calls.push(body);

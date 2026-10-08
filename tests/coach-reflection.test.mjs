@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { reflectionSignals, rulesReflection, createReflection, listReflections, activityFromRow, dedupeActivities, pragueLocal, reflectionInput, reflectionInstructions } from "../src/coach-reflection.js";
+import { reflectionSignals, rulesReflection, createReflection, listReflections, activityFromRow, dedupeActivities, reflectionInput, reflectionInstructions } from "../src/coach-reflection.js";
+import { localDateTime } from "../src/user-time.js";
 
 const DATE = "2026-10-03";
 const day = i => new Date(Date.parse(DATE + "T12:00:00Z") - i * 86400000).toISOString().slice(0, 10);
@@ -60,7 +61,7 @@ test("activities from Intervals.icu and Google Health become one Prague timeline
   const intervals = activityFromRow({ start_time: "2026-10-03T09:30:00", payload_json: JSON.stringify({ type: "Ride", name: "Z2", moving_time: 14400, icu_training_load: 180 }) });
   const echo = { ...intervals, source: "google", tss: null, start: "2026-10-03T09:35" };
   assert.equal(dedupeActivities([echo, intervals, google]).length, 2);
-  assert.equal(pragueLocal("2026-01-10T06:00:00Z"), "2026-01-10T07:00");
+  assert.equal(localDateTime("2026-01-10T06:00:00Z"), "2026-01-10T07:00");
 });
 
 function env(key) {

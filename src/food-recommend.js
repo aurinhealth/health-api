@@ -2,7 +2,7 @@ import { L } from './lang.js';
 import legacy from "./index.js";
 import { getCookbook } from "./cookbook.js";
 import { completedMealTypes, nextUnloggedMeals } from "./nutrition-next.js";
-import { dateFormat } from "./date-format.js";
+import { localToday, localHour } from "./user-time.js";
 
 const PROTEIN_PER_KG = 2.0;
 const FAT_PER_KG = 0.8;
@@ -210,7 +210,7 @@ function recommendationReason(recipe, remaining, context, maxMinutes) {
 // Meal suggestions for the week view: the next unlogged meals fitted to what is
 // left of the personal target from index.js (/analysis/energy).
 export async function foodRecommend(env, url) {
-  const date = url.searchParams.get("date") || dateFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
+  const date = url.searchParams.get("date") || localToday();
   const [energyResponse, foodResponse] = await Promise.all([
     legacy.fetch(new Request(new URL(`/analysis/energy?date=${encodeURIComponent(date)}`, url).toString()), env),
     legacy.fetch(new Request(new URL(`/food/today?date=${encodeURIComponent(date)}`, url).toString()), env)
@@ -274,9 +274,7 @@ export async function foodRecommend(env, url) {
       recommendation_reason: recommendationReason(x.recipe, remaining, context, maxMinutes)
     }));
 
-  const localToday=dateFormat('en-CA',{timeZone:'Europe/Prague'}).format(new Date());
-  const localHour=Number(dateFormat('en-GB',{timeZone:'Europe/Prague',hour:'2-digit',hourCycle:'h23'}).format(new Date()));
-  const slots=nextUnloggedMeals(completedMealTypes(food.entries),date===localToday?localHour:0);
+  const slots=nextUnloggedMeals(completedMealTypes(food.entries),date===localToday()?localHour():0);
   const categories={BREAKFAST:['Snídaně'],LUNCH:['Hlavní jídla'],SNACK:['Svačiny','Smoothie','Dezerty'],DINNER:['Hlavní jídla']};
   const mealRecommendations=slots.map(meal=>{
     const share=Object.fromEntries(Object.entries(remaining).map(([key,value])=>[key,value/Math.max(1,slots.length)]));

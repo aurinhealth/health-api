@@ -2,27 +2,26 @@ import { reflectionSignals } from './coach-reflection.js';
 
 import { ATHLETE_STATUSES } from './training-status.js';
 import { validDay } from './training-availability.js';
-import { dateFormat } from "./date-format.js";
 import { L, plural } from './lang.js';
+import { localToday } from "./user-time.js";
 export { ATHLETE_STATUSES } from './training-status.js';
 const clean = v => String(v || '').trim().slice(0, 500);
-const pragueDay=()=>dateFormat('en-CA',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 // statusUntil is the first calendar day on which the status no longer applies.
-export function effectiveAthleteState(state,date=pragueDay()){
+export function effectiveAthleteState(state,date=localToday()){
   return state.statusUntil&&validDay(state.statusUntil)&&state.statusUntil<=date
     ? {...state,status:'active',note:'',statusUntil:null} : state;
 }
 async function ensure(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS athlete_state (user_id INTEGER PRIMARY KEY, state_json TEXT NOT NULL)').run();
 }
-export async function getAthleteState(db,{date=pragueDay()}={}) {
+export async function getAthleteState(db,{date=localToday()}={}) {
   await ensure(db);
   const row = await db.prepare('SELECT state_json FROM athlete_state WHERE user_id=?').bind(db.userId).first();
   let state = {}; try { state = JSON.parse(row?.state_json || '{}'); } catch { /* defaults */ }
   // `conversation` is no longer written (chats live in assistant_chats); old rows still read.
   return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], conversation: [], dismissed: [], ...state },date);
 }
-export async function updateAthleteState(db, patch,{date=pragueDay()}={}) {
+export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   const state = await getAthleteState(db,{date});
   if (patch.status != null) {
     if (!Object.hasOwn(ATHLETE_STATUSES, patch.status)) throw new Error(L('Neznámý stav.','Unknown status.'));

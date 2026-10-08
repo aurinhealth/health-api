@@ -1,7 +1,7 @@
 import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile.js';
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
-import {pragueToday} from './prague-date.js';
+import { localToday } from "./user-time.js";
 import {trainingHistory,starterPlan} from './training-history.js';
 import {latestStoredWeight} from './athlete-weight.js';
 export async function ensureOnboarding(db){
@@ -57,7 +57,7 @@ export async function completeOnboarding(env,input={}){
   const history=await trainingHistory(db);
   if(profile.sportHours==='auto'&&!history.automaticSportAvailable)profile.sportHours='';
   const baseline=energyBaseline(effectiveProfile(profile,await readSuggestions(db,db.userId)),weight,{activityTracked:await hasRecentActivityData(db)});
-  const date=pragueToday(),start=date+'T12:00:00',payload=JSON.stringify({kg:weight,date,source:'manual'});
+  const date=localToday(),start=date+'T12:00:00',payload=JSON.stringify({kg:weight,date,source:'manual'});
   await db.batch([
     db.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(db.userId,JSON.stringify(profile)),
     ...(supplied?[db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,value_numeric,value_unit,payload_json) VALUES(?,'manual','weight',?,?,?,?, 'kg',?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET value_numeric=excluded.value_numeric,payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId,'onboarding-weight:'+date,start,start,weight,payload)]:[]),

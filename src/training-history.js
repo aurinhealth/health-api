@@ -1,6 +1,6 @@
 // Measured history and conservative starting templates are separate inputs.
 import { L } from './lang.js';
-import {activityFromRow} from './coach-reflection.js';
+import {activityFromRow,dedupeActivities} from './coach-reflection.js';
 const DAY=86400000;
 export const TRAINING_REFERENCES=[
   {name:'WHO 2020: 150–300 min střední intenzity týdně; síla alespoň 2 dny',url:'https://doi.org/10.1136/bjsports-2020-102955'},
@@ -9,12 +9,7 @@ export const TRAINING_REFERENCES=[
 export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const end=new Date(now).toISOString().slice(0,10),since=new Date(now-84*DAY).toISOString().slice(0,10);
   const rows=(await db.prepare("SELECT source_family,data_type,start_time,end_time,sample_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND COALESCE(start_time,sample_time)>=? AND COALESCE(start_time,sample_time)<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY COALESCE(start_time,sample_time)").bind(userId,since,end+'T23:59:59').all().catch(()=>({results:[]}))).results||[];
-  const candidates=rows.map(row=>{const a=activityFromRow({...row,start_time:row.start_time||row.sample_time});return a?{...a,source:row.source_family}:null;}).filter(a=>a&&a.minutes>0&&a.minutes<=1440);
-  const activities=[];
-  for(const a of candidates.sort((a,b)=>(a.source==='intervals'?0:1)-(b.source==='intervals'?0:1))){
-    if(activities.some(b=>a.source!==b.source&&a.kind===b.kind&&Math.abs(Date.parse(a.start)-Date.parse(b.start))<=20*60000))continue;
-    activities.push(a);
-  }
+  const activities=dedupeActivities(rows.map(row=>activityFromRow({...row,start_time:row.start_time||row.sample_time})).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
   const training=activities.filter(a=>['ride','run','strength','swim'].includes(a.kind));
   const recent=training.filter(a=>a.date>=new Date(now-28*DAY).toISOString().slice(0,10));
   const focused=training.filter(a=>a.date>=new Date(now-56*DAY).toISOString().slice(0,10));

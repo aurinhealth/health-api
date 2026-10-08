@@ -12,7 +12,7 @@ function setup() {
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     window: { addEventListener() {}, confirm: () => true }, document: { addEventListener() {}, visibilityState: 'visible' },
     jsonFetch: async (path, o) => { calls.push([path, JSON.parse(o.body)]); return { status: 'ok' }; },
-    refreshAfterPlanChange: async () => refreshed.push(1), renderWeekHub() {}, toast() {}, longDate: d => d, pragueToday: () => '2026-10-05', num: v => Number(v) || 0 });
+    refreshAfterPlanChange: async () => refreshed.push(1), renderWeekHub() {}, toast() {}, longDate: d => d, localToday: () => '2026-10-05', num: v => Number(v) || 0 });
   vm.runInContext(slice('function takePlanned(', 'async function refreshAfterPlanChange('), ctx);
   vm.runInContext(slice('const PLAN_SETTLE_MS=', 'function installPlannedEditing('), ctx);
   return { ctx, calls, timers, refreshed, week };

@@ -7,7 +7,7 @@ import { cleanGymRows, rowsFromModel, planForModel } from '../src/gym-adjust.js'
 const source = readFileSync(new URL('../src/dashboard-client.js', import.meta.url), 'utf8');
 const between = (from, to) => source.slice(source.indexOf(from), source.indexOf(to));
 function client(today = '2026-10-06') {
-  const context = vm.createContext({uiText:cs=>cs, esc: v => String(v ?? ''), fmt: v => String(v), num: v => Number(v) || 0, cz: v => String(v), pragueToday: () => today, MUSCLE_LABELS: { chest: 'Hrudník' }, $: () => null });
+  const context = vm.createContext({uiText:cs=>cs, esc: v => String(v ?? ''), fmt: v => String(v), num: v => Number(v) || 0, cz: v => String(v), localToday: () => today, MUSCLE_LABELS: { chest: 'Hrudník' }, $: () => null });
   vm.runInContext(between('function gymRowWork(', 'function renumberGymRows('), context);
   const at = source.indexOf('function gymFailureValue(');
   vm.runInContext(source.slice(at, source.indexOf('\n', at)), context);

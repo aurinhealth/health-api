@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
-import { pragueToday } from "../src/prague-date.js";
+import { localToday } from "../src/user-time.js";
 
 const answer = usage => Response.json({ model: "gpt-6-sol", output: [{ content: [{ type: "output_text", text: "ok" }] }], usage });
 
@@ -65,10 +65,10 @@ test("the monthly limit stops AI for the rest of the month and counts only this 
   await withOpenAI(async calls => {
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "100" });
     await callOpenAI(env, { instructions: "x", input: "y" });
-    const month = pragueToday().slice(0, 7);
+    const month = localToday().slice(0, 7);
     // Earlier this month and last month: only this month counts.
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4.5), (7, '2000-01-15', 50)").run(month + "-01");
-    assert.deepEqual(await aiAllowance(env), { spentUsd: pragueToday().endsWith("-01") ? 5.2 : 0.7, limitUsd: 100, monthSpentUsd: 5.2, monthLimitUsd: 5 });
+    assert.deepEqual(await aiAllowance(env), { spentUsd: localToday().endsWith("-01") ? 5.2 : 0.7, limitUsd: 100, monthSpentUsd: 5.2, monthLimitUsd: 5 });
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /Měsíční limit AI/.test(error.message));
     assert.equal(calls(), 1);
   });

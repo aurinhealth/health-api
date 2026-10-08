@@ -43,7 +43,7 @@ export const PERSONAL_TABLES = {
   ai_usage: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
-  user_language: {}, recovery_sessions: {}
+  user_language: {}, user_time_zone: {}, recovery_sessions: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

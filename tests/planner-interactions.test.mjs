@@ -16,7 +16,7 @@ function planner(){
   }
   const root=new Node(),week=new Node('',{},root),day=new Node('',{hubDay:'2026-10-11'},week),ride=new Node('hub-item editable',{eventId:'planned:ride'},day),palette=new Node('planner-chip palette',{chipSport:'gym'},root,'BUTTON'),chip=new Node('planner-chip',{chipSport:'gym',chipDay:'0'},week);
   const state={weekPlan:{prefs:{days:[['gym'],[],[],[],[],[],['ride']]}},plannerPick:null},changed=[];
-  const context=vm.createContext({state,document:{querySelector:()=>root,elementFromPoint:()=>ride},$:id=>id==='hubWeek'?week:{addEventListener(){}},HUB_SPORTS:{gym:'Gym',ride:'Kolo'},Date,Math,weekdayOf:()=>6,plannerChanged:()=>changed.push(JSON.parse(JSON.stringify(state.weekPlan.prefs.days))),renderPlanner(){},renderWeekHub(){},pragueToday:()=> '2026-10-05'});
+  const context=vm.createContext({state,document:{querySelector:()=>root,elementFromPoint:()=>ride},$:id=>id==='hubWeek'?week:{addEventListener(){}},HUB_SPORTS:{gym:'Gym',ride:'Kolo'},Date,Math,weekdayOf:()=>6,plannerChanged:()=>changed.push(JSON.parse(JSON.stringify(state.weekPlan.prefs.days))),renderPlanner(){},renderWeekHub(){},localToday:()=> '2026-10-05'});
   vm.runInContext(source.slice(source.indexOf('function plannerPlace('),source.indexOf('async function saveWeekPlanner(')),context);
   vm.runInContext(source.slice(source.indexOf('function installPlannerDrag('),source.indexOf('// The gym panel suggests')),context);
   vm.runInContext(source.slice(source.indexOf('function installPlannedEditing('),source.indexOf('function installPlannedEditing(')+source.slice(source.indexOf('function installPlannedEditing(')).indexOf('\n}\n')+2),context);

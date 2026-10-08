@@ -2,7 +2,7 @@
 // in the app. This removes the lines the app used to append to planned
 // workouts ("Estimated calories: … kcal", strength "Odhad výdeje: … kcal"),
 // from the given day on; nothing else in the description changes.
-import { pragueToday } from "./prague-date.js";
+import { localToday } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 const BASE_URL = "https://intervals.icu/api/v1";
 
@@ -17,7 +17,7 @@ export function withoutCalories(description) {
 }
 
 export async function removePlannedEventCalories(env, options = {}) {
-  const oldest = String(options.oldest || pragueToday());
+  const oldest = String(options.oldest || localToday());
   const newest = String(options.newest || oldest);
   const response = await fetch(
     `${BASE_URL}/athlete/0/events?oldest=${encodeURIComponent(oldest)}&newest=${encodeURIComponent(newest)}&category=WORKOUT`,

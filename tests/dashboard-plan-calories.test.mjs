@@ -14,6 +14,6 @@ test('calorie progress uses logged kcal, normalizes macro shares and distinguish
 });
 test('today uses current daily data and suppresses the cancelled gym fallback and recurring gym suggestion',()=>{
   const date='2026-10-04',state={daily:{training:{planned:[],completed:[]}},gym:{date,cancelled:true,values:[]},week:{days:[{date,gymCancelled:true,daily:{training:{planned:[{name:'Old gym',type:'WeightTraining'}]}}}]},weekPlan:{roles:{6:{items:[{sport:'gym',label:'Gym'}]}}}};
-  const ctx=run('function todayItems(', '// Walks are everyday',{state,selectedHistoryDate:date,hubDays:()=>state.week.days,pragueToday:()=>date,statusPausesTraining:()=>false,gymCancelledOn:()=>true,weekdayOf:()=>6,isNutritionItem:()=>false,activitySport:()=> 'gym'});
+  const ctx=run('function todayItems(', '// Walks are everyday',{state,selectedHistoryDate:date,hubDays:()=>state.week.days,localToday:()=>date,statusPausesTraining:()=>false,gymCancelledOn:()=>true,weekdayOf:()=>6,isNutritionItem:()=>false,activitySport:()=> 'gym'});
   assert.equal(ctx.todayItems(date).length,0);
 });

@@ -9,7 +9,6 @@ import { readOpenAIStream,partialCoachAnswer } from './assistant-stream.js';
 import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { aiLanguageNote, L } from './lang.js';
-import { dateFormat } from "./date-format.js";
 import { assertAiAllowance, recordAiUsage } from './ai-usage.js';
 
 export const coachInstructions = `Jsi trenér v aplikaci Loadwise pro cyklistiku (venku i na trenažeru), běh a posilovnu, včetně sportovní výživy a regenerace kolem nich. Tvoje odbornost odpovídá tomu, co aplikace nabízí: plánování a hodnocení tréninků z Intervals.icu, silový trénink v posilovně, výživa a spánek. Otázky mimo tyto sporty a témata odbyj jednou větou, že jsi trenér pro ně, a vrať se k tréninku; nevymýšlej rady pro jiné obory. Nejsi zaměstnanec žádného profesionálního týmu a netvrď, že znáš jejich interní data nebo neveřejné algoritmy.
@@ -67,8 +66,8 @@ appContext popisuje právě otevřenou obrazovku: date je vybraný den, weekStar
 
 Návrh nikdy sám neukládej ani neodesílej do Intervals.icu. Uživatel musí mít možnost návrh zkontrolovat před zápisem.`;
 
-// "2026-10-05 19:09" in Prague: the coach knows what is left of the day.
-export const pragueNow=(at=new Date())=>dateFormat('sv-SE',{timeZone:'Europe/Prague',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(at);
+// "2026-10-05 19:09" in the user's zone: the coach knows what is left of the day.
+export { localNow } from "./user-time.js";
 const WEEKDAYS=['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'];
 export const weekdayOf=date=>WEEKDAYS[new Date(String(date)+'T12:00:00Z').getUTCDay()]||null;
 const shiftDay=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);

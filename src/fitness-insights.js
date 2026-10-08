@@ -5,6 +5,8 @@
 import { L, plural } from './lang.js';
 import { EXERCISES, FOCUS_GROUPS } from "./strength-generator.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { sameSession } from "./activity-match.js";
+import { localDate } from "./user-time.js";
 
 const DAY = 86400000;
 const n = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
@@ -264,13 +266,15 @@ export async function loadFitnessInsights(db, today) {
   const activities = (activityRows.results || []).map(r => {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch {}
     if (r.source_family === "google-wearables") {
-      const ex = p.exercise || {}, type = { WALKING: "Walk", RUNNING: "Run", BIKING: "Ride", HIKING: "Hike", WEIGHTLIFTING: "WeightTraining", STRENGTH_TRAINING: "WeightTraining" }[ex.exerciseType] || ex.exerciseType;
+      const ex = p.exercise || {}, type = { WALKING: "Walk", RUNNING: "Run", BIKING: "Ride", HIKING: "Hike", WEIGHTLIFTING: "WeightTraining", WEIGHTS: "WeightTraining", STRENGTH_TRAINING: "WeightTraining" }[ex.exerciseType] || ex.exerciseType;
       const secs = Number(String(ex.activeDuration || "").replace(/s$/, "")) || null;
-      return { source: "google", type, date: iso(r.start_time), name: ex.displayName || type, moving_time: secs, distance: n(ex.metricsSummary?.distanceMillimeters) / 1000 || null };
+      return { source: "google", type, date: localDate(r.start_time), name: ex.displayName || type, moving_time: secs, distance: n(ex.metricsSummary?.distanceMillimeters) / 1000 || null, row: r };
     }
-    return { ...p, source: "intervals", type: p.type, date: iso(p.start_date_local || r.start_time), name: p.name, tss: p.icu_training_load, payload: p };
+    return { ...p, source: "intervals", type: p.type, date: iso(p.start_date_local || r.start_time), name: p.name, tss: p.icu_training_load, payload: p, row: r };
   });
-  // A Google exercise that Intervals also has would count twice: keep cardio from Intervals.
-  const intervalsDays = new Set(activities.filter(a => a.source === "intervals").map(a => a.date + activityKind(a)));
-  return fitnessInsights({ sets: setRows.results || [], activities: activities.filter(a => a.source === "intervals" || !intervalsDays.has(a.date + activityKind(a))), today });
+  // A Google exercise that Intervals also has would count twice (the sync marks
+  // most as duplicates already): keep the one from Intervals.
+  const intervals = activities.filter(a => a.source === "intervals");
+  const kept = activities.filter(a => a.source === "intervals" || !intervals.some(b => sameSession(a.row, b.row))).map(({ row, ...a }) => a);
+  return fitnessInsights({ sets: setRows.results || [], activities: kept, today });
 }

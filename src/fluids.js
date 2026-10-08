@@ -1,7 +1,8 @@
 // Fluid intake: drinks logged per day and a daily target worked out from body
 // weight and the day's training. The target is a guide, not a prescription.
 import { L } from './lang.js';
-import { activityFromRow, dedupeActivities, pragueLocal } from "./coach-reflection.js";
+import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
+import { localDateTime } from "./user-time.js";
 
 const KINDS = ["water", "coffee", "tea", "juice", "milk", "sport", "other"];
 const round100 = ml => Math.round(ml / 100) * 100;
@@ -89,7 +90,7 @@ export async function dayActivityHours(db, userId, date) {
   const hours = list => list.reduce((s, a) => s + (Number(a.minutes) || 0), 0) / 60;
   let planned = 0;
   for (const r of rows.filter(r => r.data_type === "planned-workout")) {
-    if (pragueLocal(r.start_time).slice(0, 10) !== date) continue;
+    if (localDateTime(r.start_time).slice(0, 10) !== date) continue;
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch { p = {}; }
     const seconds = Number(p.moving_time ?? p.duration ?? p.duration_seconds ?? p.elapsed_time);
     if (seconds > 0 && seconds <= 8 * 3600 && !/nutrition/i.test(String(p.name || p.type || ""))) planned += seconds / 3600;

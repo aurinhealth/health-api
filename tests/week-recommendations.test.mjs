@@ -66,7 +66,7 @@ test('planner bar: renamed generate button with its info, recommendations button
 });
 
 test('the daily recommendation appears only when today has no plan', () => {
-  const ctx = context({ pragueToday: () => '2026-10-05', pragueMonday: () => '2026-10-05', isNutritionItem: () => false, activitySport: a => a.type === 'Ride' ? 'ride' : null, weekdayOf: d => (new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7 });
+  const ctx = context({ localToday: () => '2026-10-05', localMonday: () => '2026-10-05', isNutritionItem: () => false, activitySport: a => a.type === 'Ride' ? 'ride' : null, weekdayOf: d => (new Date(d + 'T12:00:00Z').getUTCDay() + 6) % 7 });
   vm.runInContext(slice('function todayHasPlan(', '// Any sport for a free day'), ctx);
   ctx.state.week = { days: [{ date: '2026-10-05', daily: { training: { planned: [] } } }] };
   ctx.state.weekPlan = { start: '2026-10-05', prefs: { days: [[], [], [], [], [], [], []] } };

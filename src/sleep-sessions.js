@@ -2,8 +2,8 @@
 // session the app works with: times, minutes asleep, stages, the NSF quality
 // indicators and whether Google marks it a nap. Shared by /health/sleep and the
 // coaches' recovery inputs.
+import { localDate } from "./user-time.js";
 const finiteOrNull = v => v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v);
-const dateOnly = v => v ? String(v).slice(0, 10) : null;
 function hoursBetween(start, end) {
   if (!start || !end) return null;
   const a = new Date(start).getTime(), b = new Date(end).getTime();
@@ -28,7 +28,8 @@ export function sleepSessionFromRow(row) {
   const startTime = row.start_time || interval.startTime || interval.civilStartTime || null;
   const endTime = row.end_time || interval.endTime || interval.civilEndTime || null;
   const durationMin = hoursBetween(startTime,endTime) * 60;
-  const day = dateOnly(endTime || startTime);
+  // The night belongs to the day the user wakes up on, in their time zone.
+  const day = localDate(endTime || startTime);
   return {
     id: row.external_id,
     date: day,

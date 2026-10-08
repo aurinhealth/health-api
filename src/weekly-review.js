@@ -1,10 +1,10 @@
 import { L } from './lang.js';
-import { pragueToday } from "./prague-date.js";
+import { localToday } from "./user-time.js";
 const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
 const dateKey=v=>String(v||"").slice(0,10);
 function daysAgo(date,days){const d=new Date(date+"T12:00:00Z");d.setUTCDate(d.getUTCDate()-days);return d.toISOString().slice(0,10);}
 export async function buildWeeklyReview(env,context,date){
-  const end=date||context?.date||pragueToday();
+  const end=date||context?.date||localToday();
   const start=daysAgo(end,6);
   const activities=(context?.cycling?.recentActivities||[]).filter(a=>a.date>=start&&a.date<=end);
   const rides=activities.filter(a=>a.cycling);

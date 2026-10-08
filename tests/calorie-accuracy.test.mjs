@@ -4,7 +4,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import legacy from "../src/index.js";
 import { proteinReferenceKg, trendAdjustment } from "../src/energy-profile.js";
 import { withAppTarget } from "../src/nutrition-intelligence.js";
-import { pragueToday } from "../src/prague-date.js";
+import { localToday } from "../src/user-time.js";
 
 const ctx = { waitUntil() {} };
 
@@ -92,7 +92,7 @@ test("the weight trend corrects the target by energy balance against the chosen 
   assert.equal(trendAdjustment("lose_0.5", trend(-0.2)).adjustment, -175);
 
   // Five weigh-ins over four weeks, slightly up while trying to lose: 250 kcal less today.
-  const today = pragueToday(), back = days => new Date(Date.parse(today + "T07:00:00Z") - days * 86400000).toISOString();
+  const today = localToday(), back = days => new Date(Date.parse(today + "T07:00:00Z") - days * 86400000).toISOString();
   const run = async weights => {
     const d = db();
     profile(d, man);
@@ -109,7 +109,7 @@ test("the weight trend corrects the target by energy balance against the chosen 
 
 test("the weekly weight rate is a least-squares slope, not two end points", async () => {
   const { d1WeightTrend } = await import("../src/strength-context.js");
-  const today = pragueToday(), back = days => new Date(Date.parse(today + "T07:00:00Z") - days * 86400000).toISOString();
+  const today = localToday(), back = days => new Date(Date.parse(today + "T07:00:00Z") - days * 86400000).toISOString();
   const d = db();
   // A steady 0.5 kg/week loss with a water-heavy last morning (+1 kg).
   const kgs = [82, 81.5, 81, 80.5, 81];

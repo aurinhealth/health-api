@@ -38,12 +38,12 @@ function weightEnv() {
 }
 const post = (env, body) => legacy.fetch(new Request("https://internal/app/api/weight", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }), env, { waitUntil() {} });
 
-test("today's manual weigh-in keeps its Prague time, an earlier day gets noon", async () => {
+test("today's manual weigh-in keeps its local time, an earlier day gets local noon (Prague by default)", async () => {
   const env = weightEnv();
   assert.equal((await post(env, { kg: 80.2 })).status, 200);
   assert.equal((await post(env, { kg: 80.9, date: "2026-01-05" })).status, 200);
   const rows = env.DB.sqlite.prepare("SELECT sample_time FROM health_datapoints ORDER BY sample_time").all().map(r => r.sample_time);
-  assert.equal(rows[0], "2026-01-05T12:00:00+02:00");
+  assert.equal(rows[0], "2026-01-05T12:00:00+01:00");
   assert.match(rows[1], /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+0[12]:00$/);
 });
 

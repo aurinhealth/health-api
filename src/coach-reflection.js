@@ -5,8 +5,10 @@
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { trainingStatus } from './training-status.js';
-import { dateFormat } from "./date-format.js";
 import { L } from "./lang.js";
+import { localDateTime } from "./user-time.js";
+import { activityKindOf, sessionOf, sameSession, richerSession } from "./activity-match.js";
+export { activityKindOf };
 
 const DAY = 86400000;
 const n = v => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -22,48 +24,36 @@ const SYSTEM_LABEL = () => L({ recovery: "regeneraci", endurance: "vytrvalost (Z
 const KIND_LABEL = () => L({ ride: "jízda na kole", run: "běh", walk: "chůze", strength: "posilovna", swim: "plavání", other: "aktivita" }, { ride: "a ride", run: "a run", walk: "a walk", strength: "a gym session", swim: "a swim", other: "an activity" });
 const dayLabel = d => L(Number(d.slice(8, 10)) + ". " + Number(d.slice(5, 7)) + ".", new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }));
 
-// Prague wall-clock time "YYYY-MM-DDTHH:MM"; a time without a zone is already local.
-export function pragueLocal(value) {
-  const s = String(value || "");
-  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) return s.slice(0, 16);
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return s.slice(0, 16);
-  const p = Object.fromEntries(dateFormat("en-GB", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value]));
-  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
-}
-
-export function activityKindOf(type) {
-  const t = String(type || "").toLowerCase();
-  if (/weight|strength/.test(t)) return "strength";
-  if (/ride|cycl|bik/.test(t)) return "ride";
-  if (/run/.test(t)) return "run";
-  if (/walk|hike/.test(t)) return "walk";
-  if (/swim/.test(t)) return "swim";
-  return "other";
-}
-
 // One activity row of health_datapoints (Intervals.icu activity or Google
 // Health exercise) as {date, start, kind, name, minutes, tss, source}.
-export function activityFromRow(row) {
+function activityFields(row) {
   let p = {};
   try { p = JSON.parse(row.payload_json || "{}"); } catch { p = {}; }
   const google = p.exercise && typeof p.exercise === "object";
   const type = google ? p.exercise.exerciseType : p.type || p.category;
-  const start = pragueLocal(row.start_time || p.start_date_local || p.start_date);
+  const start = localDateTime(row.start_time || p.start_date_local || p.start_date);
   if (!start) return null;
   const seconds = google ? Number(String(p.exercise.activeDuration || "").replace(/s$/i, "")) : n(p.moving_time ?? p.elapsed_time);
   const span = row.end_time ? (Date.parse(row.end_time) - Date.parse(row.start_time)) / 1000 : null;
   const minutes = Number.isFinite(seconds) && seconds > 0 ? seconds / 60 : Number.isFinite(span) && span > 0 ? span / 60 : null;
   return { date: start.slice(0, 10), start, kind: activityKindOf(type), name: (google ? p.exercise.displayName : p.name) || String(type || L("Aktivita", "Activity")), minutes: minutes == null ? null : round(minutes), tss: n(p.icu_training_load ?? p.training_load), source: google ? "google" : "intervals" };
 }
+// The same with the instant and length used to recognise one workout from two
+// sources (activity-match.js); kept out of JSON so it never reaches the AI.
+export function activityFromRow(row) {
+  const a = activityFields(row);
+  if (a) Object.defineProperty(a, "session", { value: sessionOf({ ...row, source_family: a.source === "google" ? "google-wearables" : row.source_family || "intervals" }), enumerable: false });
+  return a;
+}
 
-// The same session recorded by two sources is kept once, preferring Intervals.icu.
+// The same session recorded by two sources is kept once (activity-match.js):
+// a full Intervals.icu activity over the watch's Google exercise.
 export function dedupeActivities(list) {
   const out = [];
-  for (const a of [...list].filter(Boolean).sort((x, y) => (x.source === "intervals" ? 0 : 1) - (y.source === "intervals" ? 0 : 1))) {
-    const t = Date.parse(a.start + ":00Z");
-    if (out.some(b => b.kind === a.kind && Math.abs(Date.parse(b.start + ":00Z") - t) <= 20 * 60000)) continue;
-    out.push(a);
+  for (const a of list.filter(Boolean)) {
+    const i = out.findIndex(b => a.session && b.session ? sameSession(a, b) : b.kind === a.kind && Math.abs(Date.parse(b.start + ":00Z") - Date.parse(a.start + ":00Z")) <= 20 * 60000);
+    if (i < 0) out.push(a);
+    else if (a.session && out[i].session) out[i] = richerSession(out[i], a);
   }
   return out.sort((a, b) => a.start.localeCompare(b.start));
 }
@@ -163,7 +153,7 @@ export function reflectionInput({ date, feedback, workout, signals, activities, 
   return {
     date, feedback, workout,athleteState:trainingStatus(athleteState), signals: signals.map(({ id, weight, text }) => ({ id, weight, text })),
     todayTimeline: activities.filter(a => a.date === date).map(a => ({ time: clock(a.start), kind: a.kind, name: a.name, minutes: a.minutes, tss: a.tss })),
-    todayFood: (food || []).map(f => ({ time: clock(pragueLocal(f.consumed_at)), name: f.recipe_title, kcal: n(f.kcal), carbs_g: n(f.carbs_g) })),
+    todayFood: (food || []).map(f => ({ time: clock(localDateTime(f.consumed_at)), name: f.recipe_title, kcal: n(f.kcal), carbs_g: n(f.carbs_g) })),
     last14Days: activities.filter(a => since(a.date) && a.date < date).map(a => ({ date: a.date, time: clock(a.start), kind: a.kind, minutes: a.minutes, tss: a.tss })),
     wellness: wellness.filter(x => since(String(x.id || x.date).slice(0, 10))).map(x => ({ date: String(x.id || x.date).slice(0, 10), ctl: n(x.ctl) == null ? null : round(x.ctl, 1), atl: n(x.atl) == null ? null : round(x.atl, 1), tsb: n(x.tsb) == null ? null : round(x.tsb, 1), hrv: n(x.hrv), restingHR: n(x.restingHR) })),
     sleep: sleep.filter(s => since(s.date)).map(s => ({ date: s.date, minutes: n(s.durationMin) })),

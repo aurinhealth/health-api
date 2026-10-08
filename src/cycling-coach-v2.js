@@ -2,7 +2,7 @@ import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { qualityDomain } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown } from './week-planner.js';
-import { pragueToday } from "./prague-date.js";
+import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { recoveryReadiness } from "./recovery-model.js";
 
@@ -225,7 +225,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
-  const targetDate=isoDate(date)||pragueToday();
+  const targetDate=isoDate(date)||localToday();
   const weekActivities=allWeekActivities(week);
   const completedAll=weekActivities.filter(a=>a.completed&&isSport(a));
   const completed=completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=0&&d<=6;});

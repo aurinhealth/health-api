@@ -2,7 +2,7 @@ import { L } from './lang.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { calculateAmount, normalizeBarcode, productFromLabel } from "./food-sources.js";
 import { searchPersonalFoods } from "./personal-foods.js";
-import { pragueToday } from "./prague-date.js";
+import { localToday, timeZone } from "./user-time.js";
 import { dateFormat } from "./date-format.js";
 
 // null and "" are missing values, not 0: ChatGPT sends "servings": null, and
@@ -60,12 +60,12 @@ function noteOf(row) { try { const note = JSON.parse(row?.note || "{}"); return 
 // When a meal is logged for another day than today, it gets its slot's usual time.
 export const MEAL_DEFAULT_TIMES = { breakfast: "07:00", snack_am: "10:00", lunch: "12:00", snack_pm: "16:00", dinner: "19:00" };
 export function mealConsumedAt(date, mealType) {
-  return date === pragueToday() ? null : date + "T" + (MEAL_DEFAULT_TIMES[mealType] || "12:00") + ":00";
+  return date === localToday() ? null : date + "T" + (MEAL_DEFAULT_TIMES[mealType] || "12:00") + ":00";
 }
 function consumedAt(date, time) {
   const t = String(time || "").match(/^(\d{1,2}):(\d{2})/);
   if (t) return date + "T" + t[1].padStart(2, "0") + ":" + t[2] + ":00";
-  return date === pragueToday() ? new Date().toISOString() : date + "T12:00:00";
+  return date === localToday() ? new Date().toISOString() : date + "T12:00:00";
 }
 // "HH:MM" in Prague from the app's consumed_at (local, or UTC with Z).
 function pragueTime(value) {
@@ -73,7 +73,7 @@ function pragueTime(value) {
   if (!/T\d{2}:\d{2}/.test(t)) return null;
   if (!/Z$|[+-]\d{2}:?\d{2}$/.test(t)) return t.slice(11, 16);
   const d = new Date(t);
-  return Number.isFinite(d.getTime()) ? dateFormat("en-GB", { timeZone: "Europe/Prague", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : null;
+  return Number.isFinite(d.getTime()) ? dateFormat("en-GB", { timeZone: timeZone(), hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d) : null;
 }
 // A diary row in the shape the ChatGPT tools have always returned.
 function toEntry(row) {
@@ -148,7 +148,7 @@ export async function logResolvedFood(db, input = {}) {
 
 export async function logFood(db, input = {}) {
   await ensureFoodLogTable(db);
-  const date=text(input.date) || pragueToday(), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
+  const date=text(input.date) || localToday(), servings=Math.max(0.01,n(input.servings,1)), status=normalizeStatus(input.status);
   const sourceText = text(input.source).toLowerCase();
   // Own nutrition values make it a manual entry: a loose name match must not
   // turn "Tvaroh, 200 kcal" into "Zapečené palačinky s tvarohem".
@@ -191,7 +191,7 @@ export async function consumePlannedFood(db, input = {}) {
   const currentServings=Math.max(0,n(row.servings,1));
   const requested=input.servings == null ? currentServings : Math.max(0.01,n(input.servings));
   if (requested > currentServings + 1e-9) throw new Error("Consumed servings exceed planned servings");
-  const when = row.consumed_date === pragueToday() ? new Date().toISOString() : row.consumed_at;
+  const when = row.consumed_date === localToday() ? new Date().toISOString() : row.consumed_at;
   if (Math.abs(requested-currentServings) < 1e-9) {
     await db.prepare("UPDATE food_logs SET status=NULL, consumed_at=? WHERE user_id = ? AND id=?").bind(when, db.userId, id).run();
     return {status:"ok",mode:"promoted",id,consumedId:id,remainingPlannedServings:0};
@@ -228,7 +228,7 @@ export async function cancelFoodEntry(db, id) {
 }
 
 export async function getFoodDay(db,date) {
-  await ensureFoodLogTable(db); const day=text(date)||pragueToday();
+  await ensureFoodLogTable(db); const day=text(date)||localToday();
   const rows=await db.prepare("SELECT * FROM food_logs WHERE user_id = ? AND consumed_date=? ORDER BY consumed_at,id").bind(db.userId, day).all();
   const all=(rows.results||[]).map(toEntry),eaten=all.filter(r=>r.status==="eaten"),planned=all.filter(r=>r.status==="planned");
   const sum=list=>["calories","protein_g","carbs_g","fat_g","fiber_g","salt_g"].reduce((o,k)=>{o[k]=Math.round(list.reduce((s,r)=>s+n(r[k],0),0));return o;},{});

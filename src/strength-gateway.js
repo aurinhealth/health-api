@@ -21,8 +21,7 @@ import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { getWeekPlan } from './week-planner.js';
 import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
 import { searchCookbookRecipes, getCookbookRecipe, logFood, getFoodDay, recommendFood, resolveFoodProduct, logResolvedFood, consumePlannedFood, updateFoodEntry, cancelFoodEntry, getFoodFavorites } from "./food-log.js";
-import { pragueToday } from "./prague-date.js";
-import { dateFormat } from "./date-format.js";
+import { localToday } from "./user-time.js";
 
 
 export default {
@@ -86,7 +85,7 @@ async function cyclingContextRoute(env, url) {
 // it (no profile or weight yet) the nutrition plan keeps its own estimate.
 async function appDailyTarget(env, ctx, date) {
   try {
-    const day = date || pragueToday();
+    const day = date || localToday();
     const response = await app.fetch(new Request("https://internal/analysis/daily?date=" + encodeURIComponent(day)), env, ctx);
     if (!response.ok) return null;
     const daily = await response.json();
@@ -113,9 +112,8 @@ function authorizeStrength(request, env) {
 
 
 // The strength plan of a day from D1 (gym_plans).
-function pragueDate() { return dateFormat("en-CA", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
 async function fetchTodayValues(env, date = null) {
-  const plan = await readGymPlan(env.DB, date || pragueDate());
+  const plan = await readGymPlan(env.DB, date || localToday());
   return { range: "d1:gym_plans/" + plan.date, values: plan.values, videoLinks: [], stored: plan.stored };
 }
 
@@ -331,7 +329,7 @@ async function logMealRoute(env, request) {
 }
 async function nutritionDayRoute(env, url, ctx) {
   try {
-    const date=url.searchParams.get("date") || pragueToday();
+    const date=url.searchParams.get("date") || localToday();
     const context=await buildStrengthContext(env,date);
     const plan=await nutritionFor(env,ctx,context,{weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,date);
@@ -342,7 +340,7 @@ async function nutritionDayRoute(env, url, ctx) {
 }
 async function nutritionRecommendRoute(env, request, ctx) {
   try {
-    const body=await request.json().catch(()=>({})), date=String(body.date || pragueToday());
+    const body=await request.json().catch(()=>({})), date=String(body.date || localToday());
     const context=await buildStrengthContext(env,date), plan=await nutritionFor(env,ctx,context,{...body,weightTrend:context.weightTrend});
     const food=await getFoodDay(env.DB,date);
     return Response.json({...recommendFood({day:date,nutritionPlan:plan,entries:food}),adaptive:buildAdaptiveDecision(context,{...food,nutritionTarget:plan})});
