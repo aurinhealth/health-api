@@ -48,6 +48,7 @@ struct SettingsMenu: View {
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("restSets") private var restSets = 90
     @AppStorage("restExercises") private var restExercises = 120
+    @AppStorage(DrinkFigureKind.storageKey) private var drinkFigure = DrinkFigureKind.fallback.rawValue
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -115,6 +116,11 @@ struct SettingsMenu: View {
                 SettingsDivider()
                 NavigationLink { DrinkSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "cup.and.saucer.fill", color: Palette.blue), title: "Oblíbené nápoje")
+                }
+                SettingsDivider()
+                NavigationLink { DrinkFigureSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "drop.fill", color: Palette.blue), title: "Postavička pití",
+                                value: DrinkFigureKind.from(drinkFigure).label)
                 }
             }
             .buttonStyle(.plain)

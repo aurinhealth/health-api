@@ -415,6 +415,10 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
         XCTAssertEqual(LibrarySport.find("run")?.label, "Běh")
         XCTAssertNil(LibrarySport.find("swim"))
+        XCTAssertEqual(DrinkFigureKind.from("octopus"), .octopus)
+        XCTAssertEqual(DrinkFigureKind.from("dragon"), .whale, "an unknown figure falls back to the whale")
+        XCTAssertEqual(DrinksCard.remaining(ml: 1200, target: 2500), "ještě 1,3 l do cíle")
+        XCTAssertEqual(DrinksCard.remaining(ml: 2600, target: 2500), "cíl splněn")
     }
 
     func testRoundFourScreens() throws {
@@ -424,6 +428,17 @@ final class SnapshotTests: XCTestCase {
         }
         try render("drinks-card", glow: Palette.Glow.food, height: 460) {
             DrinksCard(water: DemoData.food.water).environment(model).padding(24)
+        }
+        try render("drink-figures", glow: Palette.Glow.food, height: 760) {
+            VStack(spacing: 6) {
+                ForEach(DrinkFigureKind.allCases) { kind in
+                    HStack(spacing: 12) {
+                        Text(kind.label).font(.caption).frame(width: 80, alignment: .leading)
+                        ForEach([0.0, 0.5, 1.0], id: \.self) { DrinkFigure(kind: kind, fraction: $0, size: 80, animate: false) }
+                    }
+                }
+            }
+            .padding(20)
         }
         try render("library-choice", glow: Palette.Glow.training, height: 520) {
             NavigationStack { TrainingLibraryView() }.environment(model)

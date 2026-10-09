@@ -244,6 +244,33 @@ struct DrinksCard: View {
     let water: FoodSnapshot.Water
     @State private var other = false
     @State private var editing: FoodSnapshot.Drink?
+    @State private var choosing = false
+    @State private var pop = false
+    @AppStorage(DrinkFigureKind.storageKey) private var figureRaw = DrinkFigureKind.fallback.rawValue
+    @AppStorage(DrinkFigureKind.animateKey) private var animate = true
+
+    private var figure: DrinkFigureKind { DrinkFigureKind.from(figureRaw) }
+    private var target: Double { max(water.target ?? 2500, 1) }
+    private var fraction: Double { (water.ml ?? 0) / target }
+    private var reached: Bool { fraction >= 1 }
+
+    /// "ještě 1,3 l do cíle", "cíl splněn".
+    static func remaining(ml: Double, target: Double) -> String {
+        ml >= target ? "cíl splněn" : "ještě " + Fmt.decimal((target - ml) / 1000) + " l do cíle"
+    }
+
+    private func amount(_ size: CGFloat) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(Fmt.decimal((water.ml ?? 0) / 1000)).font(Typo.number(size)).foregroundStyle(Palette.ink)
+            Text("/ " + Fmt.decimal(target / 1000) + " l").font(Typo.number(size / 2)).foregroundStyle(Palette.faint)
+        }
+    }
+
+    @ViewBuilder private var drunkNote: some View {
+        if let drunk = water.drunkMl, abs(drunk - (water.ml ?? 0)) >= 20 {
+            Text("vypito " + Fmt.decimal(drunk / 1000) + " l").font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
 
     var body: some View {
         Card {
@@ -259,15 +286,28 @@ struct DrinksCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Přidat pití")
             }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Fmt.decimal((water.ml ?? 0) / 1000)).font(Typo.number(34)).foregroundStyle(Palette.ink)
-                Text("/ " + Fmt.decimal((water.target ?? 2500) / 1000) + " l").font(Typo.number(17)).foregroundStyle(Palette.faint)
-                Spacer()
-                if let drunk = water.drunkMl, abs(drunk - (water.ml ?? 0)) >= 20 {
-                    Text("vypito " + Fmt.decimal(drunk / 1000) + " l").font(Typo.caption).foregroundStyle(Palette.muted)
+            if figure == .line {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    amount(34)
+                    Spacer()
+                    drunkNote
+                }
+                ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
+            } else {
+                HStack(spacing: 16) {
+                    DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate)
+                        .scaleEffect(pop ? 1.12 : 1)
+                        .onLongPressGesture { choosing = true }
+                        .accessibilityAction(named: "Vybrat postavičku") { choosing = true }
+                    VStack(alignment: .leading, spacing: 2) {
+                        amount(40)
+                        Text(Fmt.int(fraction * 100) + " %").font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
+                        Text(Self.remaining(ml: water.ml ?? 0, target: target)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        drunkNote
+                    }
+                    Spacer(minLength: 0)
                 }
             }
-            ProgressLine(fraction: (water.ml ?? 0) / max(water.target ?? 2500, 1), color: Palette.blue, height: 5)
             if let drinks = water.drinks, !drinks.isEmpty {
                 VStack(spacing: 0) {
                     ForEach(drinks) { d in
@@ -278,6 +318,23 @@ struct DrinksCard: View {
                 }
             }
             DrinkPresetRow(add: { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) })
+        }
+        .animation(.easeInOut(duration: 0.6), value: water.ml)
+        .onChange(of: reached) { _, now in
+            guard now, animate else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { pop = true }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) { pop = false }
+        }
+        .sensoryFeedback(.success, trigger: reached) { _, now in now }
+        .sheet(isPresented: $choosing) {
+            NavigationStack {
+                ScrollView { DrinkFigurePicker().padding(20) }
+                    .background(Palette.settingsBackground.ignoresSafeArea())
+                    .navigationTitle("Postavička pití")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { choosing = false } } }
+            }
+            .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
         .sheet(item: $editing) { d in
