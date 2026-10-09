@@ -75,6 +75,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   // The week, Monday to Sunday: what was done (heart rate through the day) and
   // what is planned (the planned sessions' TSS).
   let doneCount = 0, plannedCount = 0, doneTss = 0, plannedTss = 0;
+  const sessions = [];
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = shift(start, i), training = byDate.get(d)?.training || {};
     const planned = (training.planned || []).filter(Boolean);
@@ -87,6 +88,13 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     plannedCount += d <= date ? Math.max(planned.length + gymOnly, completed.length) : planned.length + gymOnly;
     if (d <= date) { doneCount += completed.length; doneTss += cTss; }
     plannedTss += d < date ? cTss : Math.max(pTss, d === date ? cTss : 0);
+    // The week's sessions for the list: what was done (with the Intervals.icu
+    // id for its detail) and what is still planned (its event id, to move or
+    // delete it). A plan that was done is shown once, as done.
+    const matchedIds = new Set((training.matched || []).map(m => m?.planned?.id).filter(Boolean));
+    for (const a of completed) sessions.push(sessionOf(a, d, "done"));
+    for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
+    if (gymOnly) sessions.push({ id: "gym:" + d, kind: "gym", status: d < date ? "missed" : "planned", date: d, time: null, title: gym[d].name || "Posilovna", sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
     return {
       date: d,
       strain: d <= date ? actualStrain(google.find(r => r.id === d)) : null,
@@ -184,7 +192,33 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     zones: zoneTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal) } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: active.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active } : null,
+    sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
+  };
+}
+
+const SPORTS = [[/virtualride|ride|cycl|bike|kolo/i, "ride"], [/run|běh/i, "run"], [/weight|strength|gym|posil|síl/i, "strength"], [/swim|plav/i, "swim"], [/walk|hike|chůze/i, "walk"]];
+function sportOf(w) {
+  const text = String(w?.type || "") + " " + String(w?.name || "");
+  return (SPORTS.find(([re]) => re.test(text)) || [null, "other"])[1];
+}
+
+// One row of the week's list (Training → Tento týden).
+function sessionOf(w, date, status) {
+  const done = status === "done";
+  const activityId = done && w.source === "intervals" ? String(w.payload?.id || String(w.id || "").replace(/^activity:/, "")) || null : null;
+  return {
+    id: String(w.id || status + ":" + date + ":" + (w.name || "")),
+    kind: done ? "activity" : "planned",
+    status,
+    date,
+    time: clockOf(w.start),
+    title: String(w.name || w.type || "Trénink").slice(0, 120),
+    sport: sportOf(w),
+    minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
+    tss: round(num(w.tss)),
+    activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
+    eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null
   };
 }
 

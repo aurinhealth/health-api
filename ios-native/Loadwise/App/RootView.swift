@@ -15,6 +15,7 @@ struct RootView: View {
     }()
     @State private var showAdd = false
     @State private var showSettings = false
+    @State private var showCoach = false
 
     var body: some View {
         switch model.phase {
@@ -24,11 +25,16 @@ struct RootView: View {
             ZStack(alignment: .bottom) {
                 Group {
                     switch tab {
-                    case .today: TodayView(openSettings: { showSettings = true })
+                    case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
                     case .training: TrainingView()
                     case .food: FoodView()
                     case .health: HealthView()
                     }
+                }
+                if model.offline {
+                    OfflineBanner()
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 4)
                 }
                 TabBar(tab: $tab, onAdd: { showAdd = true })
                     .padding(.horizontal, 20)
@@ -36,7 +42,21 @@ struct RootView: View {
             }
             .sheet(isPresented: $showAdd) { AddSheet() }
             .sheet(isPresented: $showSettings) { SettingsView() }
+            .sheet(isPresented: $showCoach) { CoachView() }
         }
+    }
+}
+
+/// "Bez připojení": the screens show what was saved on the phone.
+struct OfflineBanner: View {
+    var body: some View {
+        Label("Bez připojení · uložená data", systemImage: "wifi.slash")
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(Palette.ink)
+            .padding(.horizontal, 14).frame(height: 32)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+            .allowsHitTesting(false)
     }
 }
 
@@ -87,6 +107,7 @@ struct AddSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var food = false
     @State private var weight = false
+    @State private var workout = false
     @State private var water: String?
 
     var body: some View {
@@ -106,6 +127,7 @@ struct AddSheet: View {
                     }
                 }
                 tile("Váha", "scalemass") { weight = true }
+                tile("Trénink", "figure.run") { workout = true }
             }
             Spacer()
         }
@@ -114,6 +136,7 @@ struct AddSheet: View {
         .presentationBackground(Palette.background)
         .sheet(isPresented: $food, onDismiss: { dismiss() }) { AddFoodSheet(meal: MealSlot.now()) }
         .sheet(isPresented: $weight, onDismiss: { dismiss() }) { WeightEntrySheet() }
+        .sheet(isPresented: $workout, onDismiss: { dismiss() }) { ManualWorkoutSheet() }
     }
 
     private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {

@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 // The pages behind the Settings menu. Each edits a copy and saves with the
 // "Uložit" button in the bar; the server checks the values again.
@@ -331,6 +332,126 @@ struct UnitsSettingsView: View {
                     SettingsRow(title: unit.0, value: unit.1, chevron: false)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Reminders
+
+struct NotificationsSettingsView: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(Reminders.bedtimeKey) private var bedtime = true
+    @AppStorage(Reminders.workoutKey) private var workout = true
+    @AppStorage(Reminders.waterKey) private var water = true
+    @AppStorage(Reminders.foodKey) private var food = true
+    @State private var allowed: Bool?
+
+    var body: some View {
+        SettingsPage(title: "Oznámení") {
+            if allowed == false {
+                SettingsGroup(footer: "Oznámení pro Loadwise jsou v iPhonu vypnutá.") {
+                    Button {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    } label: { SettingsRow(title: "Otevřít nastavení iPhonu", titleColor: Palette.blue) }
+                    .buttonStyle(.plain)
+                }
+            }
+            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat, nic dalšího se neposílá. Upozornění ze serveru a widgety na ploše přijdou s placeným vývojářským účtem.") {
+                SettingsToggle(title: "Čas do postele", subtitle: "půl hodiny před doporučeným časem", isOn: $bedtime)
+                SettingsDivider()
+                SettingsToggle(title: "Trénink", subtitle: "hodinu před naplánovaným tréninkem", isOn: $workout)
+                SettingsDivider()
+                SettingsToggle(title: "Pití", subtitle: "v 10, 13 a 16 h, dokud nemáš splněno", isOn: $water)
+                SettingsDivider()
+                SettingsToggle(title: "Zapsat jídlo", subtitle: "ve 20:30", isOn: $food)
+            }
+        }
+        .task { await check() }
+        .onChange(of: [bedtime, workout, water, food]) { Task { await check(); if let today = model.today { await Reminders.reschedule(from: today) } } }
+    }
+
+    private func check() async {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        if status == .notDetermined, bedtime || workout || water || food {
+            allowed = await Reminders.requestPermission()
+        } else {
+            allowed = status == .authorized || status == .provisional
+        }
+    }
+}
+
+// MARK: - Privacy and the account
+
+struct PrivacySettingsView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var ai = false
+    @State private var aiLoaded = false
+    @State private var exportURL: URL?
+    @State private var exporting = false
+    @State private var confirmDelete = false
+    @State private var deleteText = ""
+    @State private var error: String?
+
+    var body: some View {
+        SettingsPage(title: "Soukromí a data") {
+            SettingsGroup(footer: "Kouč, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
+                SettingsToggle(title: "AI funkce", isOn: $ai, disabled: !aiLoaded || model.demo)
+            }
+            SettingsGroup(footer: "Soubor JSON se vším, co o tobě Loadwise ukládá.") {
+                if let exportURL {
+                    ShareLink(item: exportURL) { SettingsRow(title: "Sdílet soubor s daty", chevron: false, titleColor: Palette.blue) }
+                } else {
+                    Button { Task { await export() } } label: {
+                        SettingsRow(title: exporting ? "Připravuji…" : "Stáhnout moje data", chevron: false, titleColor: Palette.blue)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(exporting || model.demo)
+                }
+            }
+            SettingsGroup(footer: "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou.") {
+                Button { confirmDelete = true } label: { SettingsRow(title: "Smazat účet", chevron: false, titleColor: Palette.rust) }
+                    .buttonStyle(.plain)
+                    .disabled(model.demo)
+            }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+        .task {
+            guard !model.demo else { return }
+            ai = (try? await model.api.aiAllowed()) ?? false
+            aiLoaded = true
+        }
+        .onChange(of: ai) { _, value in
+            guard aiLoaded else { return }
+            Task {
+                do { try await model.api.setAI(value); error = nil } catch { self.error = "Změna se neuložila: " + error.localizedDescription }
+            }
+        }
+        .alert("Smazat účet?", isPresented: $confirmDelete) {
+            TextField("SMAZAT", text: $deleteText).textInputAutocapitalization(.characters)
+            Button("Smazat", role: .destructive) { Task { await delete() } }
+            Button("Zrušit", role: .cancel) { deleteText = "" }
+        } message: {
+            Text("Pro potvrzení napiš SMAZAT.")
+        }
+    }
+
+    private func export() async {
+        exporting = true
+        defer { exporting = false }
+        do { exportURL = try await model.api.exportData() } catch { self.error = error.localizedDescription }
+    }
+
+    private func delete() async {
+        guard deleteText.trimmingCharacters(in: .whitespaces).uppercased() == "SMAZAT" else {
+            error = "Účet zůstal: pro smazání je potřeba napsat SMAZAT."
+            return
+        }
+        do {
+            try await model.api.deleteAccount()
+            model.signOut()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

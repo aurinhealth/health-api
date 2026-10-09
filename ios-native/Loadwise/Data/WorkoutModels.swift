@@ -1,0 +1,276 @@
+import Foundation
+
+/// One row of Training → Tento týden (src/app-training.js sessionOf).
+struct WeekSession: Decodable, Hashable, Identifiable {
+    let id: String
+    /// "activity", "planned" or "gym".
+    let kind: String
+    /// "done", "planned" or "missed".
+    let status: String
+    let date: String
+    let time: String?
+    let title: String
+    /// ride, run, strength, swim, walk or other.
+    let sport: String
+    let minutes: Int?
+    let tss: Double?
+    /// Intervals.icu activity id for GET /app/api/activity-detail.
+    let activityId: String?
+    /// "planned:<id>" for /app/api/planned/move and delete.
+    let eventId: String?
+}
+
+// MARK: - Gym (GET/POST /app/api/gym, src/gym-plan-store.js)
+
+/// The stored gym plan: a sheet of rows. Rows 0–6 are the header (row 2 holds
+/// the plan name in column 3), sets start at row 7 with the columns
+/// Typ, Cvik, Série, Plán kg, Plán reps, Skutečně kg, Skutečně reps, RPE,
+/// Hotovo, Poznámka, Video, Do selhání, Supersérie.
+struct GymDay: Decodable, Equatable {
+    let date: String?
+    var values: [[JSONValue]]
+    let cancelled: Bool?
+
+    static let columns = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie"]
+    static let firstSetRow = 7
+
+    var planName: String? {
+        guard values.count > 2, values[2].count > 3 else { return nil }
+        return values[2][3].string
+    }
+
+    var note: String? {
+        guard values.count > 3, values[3].count > 1 else { return nil }
+        return values[3][1].string
+    }
+
+    /// The sets grouped by exercise, in the plan's order.
+    var exercises: [GymExercise] {
+        var out: [GymExercise] = []
+        for index in values.indices where index >= Self.firstSetRow {
+            let row = values[index]
+            guard let name = cell(row, 1), !name.isEmpty else { continue }
+            let set = GymSet(row: index,
+                             warmup: (cell(row, 0) ?? "WORK").uppercased() == "WARMUP",
+                             number: cell(row, 2) ?? "",
+                             plannedKg: cell(row, 3),
+                             plannedReps: cell(row, 4),
+                             kg: cell(row, 5),
+                             reps: cell(row, 6),
+                             rpe: cell(row, 7),
+                             done: Self.isDone(cell(row, 8)),
+                             note: cell(row, 9))
+            if let last = out.indices.last, out[last].name == name {
+                out[last].sets.append(set)
+            } else {
+                out.append(GymExercise(name: name, superset: cell(row, 12), sets: [set]))
+            }
+        }
+        return out
+    }
+
+    static func isDone(_ value: String?) -> Bool {
+        ["TRUE", "1", "ANO", "✓", "☑", "YES"].contains((value ?? "").uppercased())
+    }
+
+    private func cell(_ row: [JSONValue], _ column: Int) -> String? {
+        column < row.count ? row[column].string : nil
+    }
+
+    /// Writes a value into a cell, growing the row as needed.
+    mutating func set(row: Int, column: Int, _ value: String) {
+        guard row < values.count else { return }
+        while values[row].count <= column { values[row].append(.string("")) }
+        values[row][column] = .string(value)
+    }
+
+    /// Records a set as the web does (dashboard-client.js saveGymSet).
+    mutating func complete(row: Int, kg: String, reps: String, rpe: String) {
+        set(row: row, column: 5, kg)
+        set(row: row, column: 6, reps)
+        set(row: row, column: 7, rpe)
+        set(row: row, column: 8, "TRUE")
+        set(row: row, column: 11, rpe == "10" ? "TRUE" : "FALSE")
+    }
+
+    mutating func undo(row: Int) {
+        set(row: row, column: 8, "FALSE")
+    }
+
+    /// Swaps an exercise for another in the sets not done yet.
+    mutating func replace(exercise: String, with name: String) {
+        for index in values.indices where index >= Self.firstSetRow {
+            guard values[index].count > 1, values[index][1].string == exercise else { continue }
+            if values[index].count > 8, Self.isDone(values[index][8].string) { continue }
+            values[index][1] = .string(name)
+            set(row: index, column: 3, "")
+        }
+    }
+
+    /// The body of POST /app/api/gym: the sets and the whole sheet.
+    var saveBody: JSONObject {
+        var full = values
+        if full.count > 6, full[6].count < Self.columns.count { full[6] = Self.columns.map { .string($0) } }
+        while let last = full.last, full.count > Self.firstSetRow, last.allSatisfy({ $0.string == nil }) { full.removeLast() }
+        let rows = Array(full.dropFirst(Self.firstSetRow))
+        return ["values": .array(rows.map { .array($0) }), "fullValues": .array(full.map { .array($0) })]
+    }
+}
+
+struct GymExercise: Equatable, Identifiable {
+    let name: String
+    let superset: String?
+    var sets: [GymSet]
+    var id: String { name + "|" + String(sets.first?.row ?? 0) }
+    var doneCount: Int { sets.filter { $0.done && !$0.warmup }.count }
+    var workCount: Int { sets.filter { !$0.warmup }.count }
+}
+
+struct GymSet: Equatable, Identifiable {
+    let row: Int
+    let warmup: Bool
+    let number: String
+    let plannedKg: String?
+    let plannedReps: String?
+    let kg: String?
+    let reps: String?
+    let rpe: String?
+    let done: Bool
+    let note: String?
+    var id: Int { row }
+}
+
+struct GymTechnique: Decodable, Equatable {
+    let exercise: String?
+    let muscles: [String]?
+    let note: String?
+    let setup: [String]?
+    let steps: [String]?
+    let mistakes: [String]?
+    let breathing: String?
+    let feel: [String]?
+    let video: Video?
+    let searchUrl: String?
+
+    struct Video: Decodable, Equatable {
+        let id: String?
+        let title: String?
+    }
+}
+
+struct GymAlternative: Decodable, Equatable, Identifiable {
+    let name: String
+    let muscle: String?
+    let sets: JSONValue?
+    let reps: JSONValue?
+    let note: String?
+    let station: String?
+    var id: String { name }
+}
+
+// MARK: - Activity detail (GET /app/api/activity-detail, src/activity-detail.js)
+
+struct ActivityDetail: Decodable, Equatable {
+    let activity: Activity
+    let analysis: Analysis?
+    let streams: [Stream]?
+    let intervals: [Lap]?
+    let hrr: HeartRateRecovery?
+
+    struct Activity: Decodable, Equatable {
+        let name: String?
+        let type: String?
+        let distance: Double?
+        let moving_time: Double?
+        let total_elevation_gain: Double?
+        let average_watts: Double?
+        let icu_normalized_watts: Double?
+        let average_heartrate: Double?
+        let max_heartrate: Double?
+        let average_cadence: Double?
+        let icu_training_load: Double?
+        let icu_intensity: Double?
+        let average_speed: Double?
+        let calories: Double?
+        let icu_rpe: Double?
+    }
+
+    struct Zone: Decodable, Equatable {
+        let zone: JSONValue?
+        let seconds: Double?
+        let percent: Double?
+    }
+
+    struct Analysis: Decodable, Equatable {
+        let variability: Double?
+        let aerobicDrift: Double?
+        let zones: [Zone]?
+    }
+
+    struct StreamPoint: Decodable, Equatable {
+        let t: Double
+        let v: Double?
+    }
+
+    struct Stream: Decodable, Equatable {
+        let type: String
+        let points: [StreamPoint]
+    }
+
+    struct Lap: Decodable, Equatable {
+        let label: String?
+        let type: String?
+        let seconds: Double?
+        let watts: Double?
+        let hr: Double?
+        let speed: Double?
+        let distance: Double?
+    }
+
+    struct HeartRateRecovery: Decodable, Equatable {
+        let peak: Double?
+        let after: Double?
+        let drop: Double?
+        let seconds: Double?
+    }
+
+    func stream(_ type: String) -> [Double] {
+        (streams?.first { $0.type == type }?.points ?? []).compactMap(\.v)
+    }
+}
+
+// MARK: - Planned workout (GET /app/api/workouts/planned)
+
+struct PlannedWorkout: Decodable, Equatable {
+    let source: String?
+    let workout: Workout
+
+    struct Step: Decodable, Equatable {
+        let durationSeconds: Double?
+        let percentLow: Double?
+        let percentHigh: Double?
+        let wattsLow: Double?
+        let wattsHigh: Double?
+        let paceSlow: Double?
+        let paceFast: Double?
+        let cadence: JSONValue?
+        let note: String?
+    }
+
+    struct Block: Decodable, Equatable {
+        let repeats: Int?
+        let note: String?
+        let steps: [Step]?
+    }
+
+    struct Workout: Decodable, Equatable {
+        let name: String?
+        let sport: String?
+        let environment: String?
+        let duration_minutes: Double?
+        let target_load: Double?
+        let intensity_factor: Double?
+        let description: String?
+        let steps: [Block]?
+    }
+}

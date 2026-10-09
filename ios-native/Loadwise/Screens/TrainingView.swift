@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrainingView: View {
     @Environment(AppModel.self) private var model
+    @State private var addingWorkout = false
 
     var body: some View {
         NavigationStack {
@@ -9,7 +10,7 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     ScrollView {
-                        TrainingContent(training: training)
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true })
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
@@ -27,25 +28,36 @@ struct TrainingView: View {
             .navigationDestination(for: TrainingDetail.self) { detail in
                 switch detail {
                 case .form: if let training = model.training { FormDetailView(training: training) }
+                case .gym(let date): GymSessionView(date: date)
+                case .activity(let session): ActivityDetailView(session: session)
+                case .planned(let session): PlannedWorkoutView(session: session)
                 }
             }
         }
         .task { if model.training == nil { await model.refreshTraining() } }
+        .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
     }
 }
 
 enum TrainingDetail: Hashable {
     case form
+    case gym(String)
+    case activity(WeekSession)
+    case planned(WeekSession)
 }
 
 /// The Training screen without the scroll view, so tests can render it whole.
 struct TrainingContent: View {
     let training: TrainingSnapshot
+    var addWorkout: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Trénink · týden \(training.week)")
-                .frame(height: 36)
+            HStack {
+                SectionLabel(text: "Trénink · týden \(training.week)")
+                Spacer()
+                CircleButton(systemImage: "plus", label: "Zapsat trénink", action: addWorkout)
+            }
 
             StrainHero(training: training)
                 .padding(.top, 30)
@@ -74,6 +86,12 @@ struct TrainingContent: View {
                     }
                 }
                 ThisWeekWidget(week: training.thisWeek, loads: training.load.weeks)
+                if let sessions = training.sessions, !sessions.isEmpty {
+                    Card {
+                        WidgetHeader(title: "Tréninky týdne", color: Palette.amberBar)
+                        WeekSessionsList(sessions: sessions, today: training.date)
+                    }
+                }
                 if let active = training.activeCalories { ActiveCaloriesWidget(active: active) }
                 if let zones = training.zones { ZonesWidget(zones: zones) }
             }
@@ -217,8 +235,16 @@ struct NextSession: View {
                 Text(advice).font(Typo.small).foregroundStyle(Palette.green)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if session.sport == "strength" && session.date == today {
+                NavigationLink(value: TrainingDetail.gym(session.date)) {
+                    Text("Začít trénink").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                        .background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var when: String {

@@ -23,6 +23,9 @@ final class AppModel {
     var errorMessage: String?
     /// Sample data instead of the server ("Prohlédnout ukázku", screenshots).
     private(set) var demo: Bool
+    /// The last refresh failed for lack of a connection: the screens show the
+    /// data saved on the phone (SnapshotCache) with a note.
+    private(set) var offline = false
     /// The day on the Today screen, nil for today.
     private(set) var selectedDate: String?
 
@@ -41,7 +44,24 @@ final class AppModel {
             food = DemoData.food
         } else {
             phase = api.hasSession ? .signedIn : .signedOut
+            if phase == .signedIn { loadSaved() }
         }
+    }
+
+    /// The screens as they were last time, until the server answers.
+    private func loadSaved() {
+        today = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value
+        training = SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value
+        health = SnapshotCache.load(HealthSnapshot.self, key: "health")?.value
+        food = SnapshotCache.load(FoodSnapshot.self, key: "food")?.value
+    }
+
+    /// Notes whether a refresh reached the server; true when the error was a
+    /// missing connection and saved data is on screen instead.
+    private func noteConnection(_ error: Error?) -> Bool {
+        let lost = (error as? URLError).map { [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost, .dataNotAllowed].contains($0.code) } ?? false
+        offline = lost
+        return lost
     }
 
     func signIn() async {
@@ -76,10 +96,13 @@ final class AppModel {
         do {
             today = try await api.today(date: selectedDate)
             errorMessage = nil
+            _ = noteConnection(nil)
+            if selectedDate == nil, let today { await Reminders.reschedule(from: today) }
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            errorMessage = error.localizedDescription
+            // Without signal the saved screen stays; an error only without one.
+            if !(noteConnection(error) && today != nil) { errorMessage = error.localizedDescription }
         }
     }
 
@@ -88,10 +111,11 @@ final class AppModel {
         do {
             training = try await api.training()
             trainingError = nil
+            _ = noteConnection(nil)
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            trainingError = error.localizedDescription
+            if !(noteConnection(error) && training != nil) { trainingError = error.localizedDescription }
         }
     }
 
@@ -100,10 +124,11 @@ final class AppModel {
         do {
             health = try await api.health()
             healthError = nil
+            _ = noteConnection(nil)
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            healthError = error.localizedDescription
+            if !(noteConnection(error) && health != nil) { healthError = error.localizedDescription }
         }
     }
 
@@ -112,10 +137,11 @@ final class AppModel {
         do {
             food = try await api.food()
             foodError = nil
+            _ = noteConnection(nil)
         } catch APIError.unauthorized {
             signOut()
         } catch {
-            foodError = error.localizedDescription
+            if !(noteConnection(error) && food != nil) { foodError = error.localizedDescription }
         }
     }
 
@@ -196,6 +222,9 @@ final class AppModel {
 
     func signOut() {
         api.signOut()
+        SnapshotCache.clear()
+        Reminders.cancelAll()
+        offline = false
         demo = false
         today = nil
         training = nil

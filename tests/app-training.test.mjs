@@ -138,3 +138,16 @@ test("The server answers GET /app/api/training with buildTraining", () => {
   assert.match(src, /url\.pathname==='\/app\/api\/training'&&request\.method==='GET'/);
   assert.match(src, /buildTraining\(\{date,days,gym,health,fitness,insights,coaches,profile/);
 });
+
+test("The week's sessions: done with the activity id, planned with the event id", () => {
+  const withIds = days.map(d => d.date === day(-1)
+    ? { ...d, daily: { training: { planned: [], completed: [{ id: "activity:i123", source: "intervals", payload: { id: "i123" }, type: "Ride", name: "Odpolední jízda", start: day(-1) + "T15:00:00Z", durationHours: 1, tss: 60 }] } } }
+    : d.date === DATE ? { ...d, daily: { training: { planned: [{ ...ride, id: "planned:77" }], completed: [], matched: [] } } } : d);
+  const t = buildTraining({ ...input, days: withIds });
+  const done = t.sessions.find(s => s.date === day(-1));
+  assert.deepEqual([done.kind, done.status, done.activityId, done.sport, done.minutes, done.time], ["activity", "done", "i123", "ride", 60, "17:00"]);
+  const today = t.sessions.find(s => s.date === DATE);
+  assert.deepEqual([today.kind, today.status, today.eventId, today.sport], ["planned", "planned", "planned:77", "ride"]);
+  assert.ok(!t.sessions.some(s => s.date === day(-3) && s.status === "missed"), "a past plan with a session done is not missed");
+  assert.equal(t.sessions.find(s => s.date === day(2)).sport, "run");
+});

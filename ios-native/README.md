@@ -33,7 +33,15 @@ installed side by side (different bundle IDs).
   water (+250 ml), the day's meals with a suggestion for the meals ahead.
   Adding food: search your foods and the catalog, AI lookup, typing it in,
   and the barcode scanner (VisionKit, camera permission).
-- The "+" in the tab bar: food, water, weight.
+- The "+" in the tab bar: food, water, weight, a workout typed in.
+- Training → Tréninky týdne: every session of the week. Done ones open the
+  activity detail (Intervals.icu: summary, power and heart rate, zones,
+  laps, "Jak to šlo?"); planned ones show their structure and can be moved,
+  set indoor/outdoor or deleted; the gym session opens the workout.
+- The gym workout (`/app/api/gym`): exercises and sets, tick a set to record
+  it, technique, swap an exercise; without a plan it builds one.
+- The screens keep their last data on the phone and open with it without
+  signal ("Bez připojení · uložená data").
 - Settings (the "P" on Today), a closed menu with pages:
   - Profil: sex, age, height, heart rate, activity and the weight goal;
   - Cíle: main sport, weekly hours and the main event;

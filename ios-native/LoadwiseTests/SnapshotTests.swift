@@ -33,6 +33,16 @@ final class SnapshotTests: XCTestCase {
         try render("health-weight", glow: Palette.Glow.health) { WeightDetailContent(health: health).padding(24).padding(.top, 30) }
     }
 
+    func testWorkoutScreens() throws {
+        let gymDay = DemoData.gym
+        try render("gym", glow: Palette.Glow.training) {
+            VStack(spacing: 12) { ForEach(gymDay.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
+                .padding(24).padding(.top, 30)
+        }
+        let sessions = DemoData.training.sessions ?? []
+        try render("training-sessions", glow: Palette.Glow.training) { NavigationStack { WeekSessionsList(sessions: sessions, today: "2026-10-08") }.padding(24).frame(height: 600) }
+    }
+
     func testFoodScreens() throws {
         try render("food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("food-amount", height: 700) { NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_pm") }.environment(AppModel(demo: true)) }
@@ -66,6 +76,52 @@ final class SnapshotTests: XCTestCase {
          "macros":{"carbs":{"eaten":0,"target":null},"protein":{"eaten":0,"target":null},"fat":{"eaten":0,"target":null}},"meals":[],"water":{"ml":null,"target":null,"entries":0}}
         """
         XCTAssertTrue(try JSONDecoder().decode(FoodSnapshot.self, from: Data(emptyFood.utf8)).meals.isEmpty)
+    }
+
+    func testGymPlan() throws {
+        var day = DemoData.gym
+        XCTAssertEqual(day.planName, "Celé tělo")
+        let exercises = day.exercises
+        XCTAssertEqual(exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy v předklonu"])
+        XCTAssertEqual(exercises[0].sets.count, 4)
+        XCTAssertTrue(exercises[0].sets[0].warmup)
+        XCTAssertEqual(exercises[0].doneCount, 1)
+        XCTAssertEqual(exercises[0].workCount, 3)
+        XCTAssertEqual(exercises[1].superset, "A")
+
+        let second = exercises[0].sets[2]
+        day.complete(row: second.row, kg: "82.5", reps: "7", rpe: "10")
+        XCTAssertEqual(day.exercises[0].doneCount, 2)
+        XCTAssertEqual(day.values[second.row][5], .string("82.5"))
+        XCTAssertEqual(day.values[second.row][11], .string("TRUE"), "RPE 10 is to failure")
+        day.undo(row: second.row)
+        XCTAssertEqual(day.exercises[0].doneCount, 1)
+
+        day.replace(exercise: "Dřep", with: "Leg press")
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Leg press", "Tlak na lavici", "Přítahy v předklonu"], "done sets keep the old name")
+
+        let body = day.saveBody
+        guard case .array(let rows) = body["values"], case .array(let full) = body["fullValues"] else { return XCTFail("body") }
+        XCTAssertEqual(full.count, rows.count + 7)
+        XCTAssertEqual(rows.count, 8)
+    }
+
+    func testTrainingSessionsDecode() {
+        let sessions = DemoData.training.sessions ?? []
+        XCTAssertEqual(sessions.first { $0.activityId != nil }?.activityId, "i9001")
+        XCTAssertEqual(sessions.first { $0.eventId != nil }?.eventId, "planned:42")
+    }
+
+    func testCoachActions() throws {
+        let json = #"{"status":"ok","answer":"**Dnes** lehce.","chatId":12,"actions":[{"type":"move","eventId":"planned:9","date":"2026-10-10","reason":"Nohy potřebují den navíc.","draftId":456,"eventSnapshot":{"name":"Dlouhý běh","date":"2026-10-09","durationHours":1.5}},{"type":"workout","date":"2026-10-09","sport":"ride","minutes":60,"draftId":457,"preview":{"x":1}}]}"#
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(json.utf8))
+        XCTAssertEqual(result.chatId, 12)
+        XCTAssertEqual(result.actions?.count, 2)
+        XCTAssertEqual(result.actions?[0].title, "Přesunout „Dlouhý běh“ na So 10. října")
+        XCTAssertEqual(result.actions?[1].title, "Naplánovat: jízda · 1 h · Pá 9. října")
+        try render("coach-action", height: 300) {
+            VStack { ForEach(result.actions ?? []) { ActionCard(action: $0, result: nil, decide: { _ in }) } }.padding(24)
+        }
     }
 
     func testSettingsScreens() throws {

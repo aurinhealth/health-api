@@ -197,3 +197,43 @@ struct BarcodeScanner: UIViewControllerRepresentable {
         }
     }
 }
+
+/// The system camera (or the photo library where there is no camera) for one photo.
+struct CameraPicker: UIViewControllerRepresentable {
+    let onImage: (UIImage?) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ picker: UIImagePickerController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator { Coordinator(onImage: onImage) }
+
+    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onImage: (UIImage?) -> Void
+        init(onImage: @escaping (UIImage?) -> Void) { self.onImage = onImage }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            onImage(info[.originalImage] as? UIImage)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onImage(nil)
+        }
+    }
+}
+
+extension UIImage {
+    /// JPEG at most `side` points on the longer side, small enough for the
+    /// server's 5 MB limit.
+    func jpegForUpload(side: CGFloat = 1600) -> Data? {
+        let scale = min(1, side / max(size.width, size.height))
+        let target = CGSize(width: size.width * scale, height: size.height * scale)
+        let resized = UIGraphicsImageRenderer(size: target).image { _ in draw(in: CGRect(origin: .zero, size: target)) }
+        return resized.jpegData(compressionQuality: 0.75)
+    }
+}

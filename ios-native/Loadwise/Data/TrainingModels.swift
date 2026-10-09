@@ -13,6 +13,8 @@ struct TrainingSnapshot: Decodable, Equatable {
     let zones: Zones?
     let vo2max: VO2max?
     let activeCalories: ActiveCalories?
+    /// The week's sessions, done and planned (older saved answers lack it).
+    let sessions: [WeekSession]?
     let thisWeek: ThisWeek
 
     struct Strain: Decodable, Equatable {

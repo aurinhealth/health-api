@@ -3,13 +3,14 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     var openSettings: () -> Void = {}
+    var openCoach: () -> Void = {}
 
     var body: some View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.today)
             if let today = model.today {
                 ScrollView {
-                    TodayContent(today: today, openSettings: openSettings)
+                    TodayContent(today: today, openSettings: openSettings, openCoach: openCoach)
                         .padding(.bottom, 100)
                 }
                 .refreshable { await model.refresh() }
@@ -31,12 +32,14 @@ struct TodayView: View {
 struct TodayContent: View {
     let today: TodaySnapshot
     var openSettings: () -> Void = {}
+    var openCoach: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 DayNavigator(date: today.date)
                 Spacer()
+                CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
                 Button(action: openSettings) {
                     Text("P").font(.footnote.weight(.medium))
                         .frame(width: 36, height: 36)
@@ -54,7 +57,13 @@ struct TodayContent: View {
 
             if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
                 VStack(alignment: .leading, spacing: 12) {
-                    SectionLabel(text: "Co to znamená pro dnešek")
+                    HStack {
+                        SectionLabel(text: "Co to znamená pro dnešek")
+                        Spacer()
+                        Button(action: openCoach) {
+                            Label("Zeptat se", systemImage: "bubble.left").font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
+                        }
+                    }
                     summaryText(summary)
                         .font(Typo.sentence(22))
                         .foregroundStyle(Palette.ink)

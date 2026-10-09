@@ -14,6 +14,8 @@ struct AddFoodSheet: View {
     @State private var message: String?
     @State private var path: [FoodRoute] = []
     @State private var scanning = false
+    @State private var photoMode: String?
+    @State private var readingPhoto = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -40,9 +42,14 @@ struct AddFoodSheet: View {
 
                     HStack(spacing: 10) {
                         tile("Skenovat", "barcode.viewfinder") { scanning = true }
+                        tile("Jídlo", "camera") { photoMode = "portion" }
+                        tile("Etiketa", "doc.text.viewfinder") { photoMode = "label" }
                         tile("Ručně", "pencil") { path.append(.manual) }
                     }
                     .padding(.top, 18)
+                    if readingPhoto {
+                        HStack(spacing: 8) { ProgressView(); Text("Čtu fotku…").font(Typo.small).foregroundStyle(Palette.muted) }.padding(.top, 12)
+                    }
 
                     if let message {
                         Text(message).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 14)
@@ -84,6 +91,7 @@ struct AddFoodSheet: View {
             .navigationDestination(for: FoodRoute.self) { route in
                 switch route {
                 case .amount(let product): FoodAmountView(product: product, meal: meal, done: { dismiss() })
+                case .photo(let product, let note): FoodAmountView(product: product, meal: meal, note: note, done: { dismiss() })
                 case .manual: ManualFoodView(meal: meal, name: query, done: { dismiss() })
                 }
             }
@@ -93,6 +101,13 @@ struct AddFoodSheet: View {
         .task(id: query) { await search() }
         .task { await loadRecent() }
         .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }) }
+        .fullScreenCover(item: Binding(get: { photoMode.map { Named(name: $0) } }, set: { photoMode = $0?.name })) { mode in
+            CameraPicker { image in
+                photoMode = nil
+                if let image { Task { await read(image, mode: mode.name) } }
+            }
+            .ignoresSafeArea()
+        }
     }
 
     private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
@@ -129,6 +144,20 @@ struct AddFoodSheet: View {
         recent = Array(((try? await model.api.personalFoods()) ?? []).prefix(8))
     }
 
+    /// A photo of a meal or a nutrition label, read by AI on the server.
+    private func read(_ image: UIImage, mode: String) async {
+        guard !model.demo, let jpeg = image.jpegForUpload() else { return }
+        readingPhoto = true
+        defer { readingPhoto = false }
+        do {
+            let r = try await model.api.readFoodPhoto(jpeg, mode: mode)
+            path.append(.photo(r.product, r.note))
+            message = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
     private func lookUp() async {
         lookingUp = true
         defer { lookingUp = false }
@@ -147,6 +176,7 @@ struct AddFoodSheet: View {
 
 enum FoodRoute: Hashable {
     case amount(FoodProduct)
+    case photo(FoodProduct, String?)
     case manual
 }
 
@@ -194,6 +224,8 @@ struct FoodAmountView: View {
     @Environment(\.dismiss) private var dismiss
     let product: FoodProduct
     let meal: String
+    /// What the AI was unsure about, after a photo.
+    var note: String? = nil
     var done: () -> Void = {}
     @State private var amount = ""
     @State private var saving = false
@@ -212,6 +244,10 @@ struct FoodAmountView: View {
                     Text(product.perPortion ? "porce" : product.unit).font(Typo.body).foregroundStyle(Palette.faint)
                 }
                 NutritionCells(product: product, amount: value ?? 0)
+                if let note {
+                    Label(note, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text(product.perPortion ? "Hodnoty na porci." : "Hodnoty ze 100 \(product.unit) přepočtené na množství.")
                     .font(Typo.caption).foregroundStyle(Palette.faint)
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }

@@ -94,6 +94,10 @@ struct SettingsMenu: View {
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Aplikace") {
+                NavigationLink { NotificationsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "bell.fill", color: Palette.amberBar), title: "Oznámení", value: remindersValue)
+                }
+                SettingsDivider()
                 NavigationLink { AppearanceSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.button), title: "Vzhled", value: AppearanceSettingsView.label(appearance))
                 }
@@ -107,8 +111,8 @@ struct SettingsMenu: View {
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Ostatní") {
-                Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
-                    SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.faint), title: "Soukromí a export dat", subtitle: "ve webové aplikaci")
+                NavigationLink { PrivacySettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.faint), title: "Soukromí a data")
                 }
                 SettingsDivider()
                 Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
@@ -128,6 +132,16 @@ struct SettingsMenu: View {
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
         }
+    }
+
+    @AppStorage(Reminders.bedtimeKey) private var r1 = true
+    @AppStorage(Reminders.workoutKey) private var r2 = true
+    @AppStorage(Reminders.waterKey) private var r3 = true
+    @AppStorage(Reminders.foodKey) private var r4 = true
+
+    private var remindersValue: String {
+        let on = [r1, r2, r3, r4].filter { $0 }.count
+        return on == 0 ? "vypnutá" : "\(on) " + Fmt.plural(on, "zapnuté", "zapnutá", "zapnutých")
     }
 
     private var goalsValue: String? {
