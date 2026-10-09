@@ -20,6 +20,7 @@ struct FoodSnapshot: Decodable, Equatable {
         let carbs: Amount
         let protein: Amount
         let fat: Amount
+        var fiber: Amount? = nil
     }
 
     struct Entry: Decodable, Equatable, Identifiable {
@@ -33,11 +34,15 @@ struct FoodSnapshot: Decodable, Equatable {
         let fat: Double?
         let amount: String?
         let brand: String?
+        var fiber: Double? = nil
     }
 
+    /// What to aim for in this meal (its share of the day's targets).
     struct Suggestion: Decodable, Equatable {
         let kcal: Double
         let protein: Double?
+        var carbs: Double? = nil
+        var fat: Double? = nil
     }
 
     struct Meal: Decodable, Equatable, Identifiable {
@@ -51,10 +56,23 @@ struct FoodSnapshot: Decodable, Equatable {
         var id: String { type }
     }
 
+    /// ml counts the drinks by how much they hydrate (coffee 90 %, beer 50 %…).
     struct Water: Decodable, Equatable {
         let ml: Double?
         let target: Double?
         let entries: Int
+        /// All that was drunk, before the hydration factors.
+        var drunkMl: Double? = nil
+        var drinks: [Drink]? = nil
+    }
+
+    struct Drink: Decodable, Equatable, Identifiable {
+        let id: Int
+        /// water, tea, coffee, juice, milk, sport, soda, beer, wine or other.
+        let kind: String
+        let ml: Double?
+        let hydrationMl: Double?
+        let time: String?
     }
 }
 

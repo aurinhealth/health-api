@@ -255,6 +255,32 @@ struct PlannedWorkout: Decodable, Equatable {
         let paceFast: Double?
         let cadence: JSONValue?
         let note: String?
+
+        enum CodingKeys: String, CodingKey {
+            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note
+        }
+
+        /// Lenient: the library sends paces as "4:35" text, the plan as seconds.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let value = { (key: CodingKeys) in (try? c.decodeIfPresent(JSONValue.self, forKey: key)) ?? nil }
+            let pace = { (key: CodingKeys) -> Double? in
+                if case .string(let t) = value(key) {
+                    let parts = t.split(separator: ":").compactMap { Double($0) }
+                    return parts.count == 2 ? parts[0] * 60 + parts[1] : nil
+                }
+                return value(key)?.number
+            }
+            durationSeconds = value(.durationSeconds)?.number
+            percentLow = value(.percentLow)?.number
+            percentHigh = value(.percentHigh)?.number
+            wattsLow = value(.wattsLow)?.number
+            wattsHigh = value(.wattsHigh)?.number
+            paceSlow = pace(.paceSlow)
+            paceFast = pace(.paceFast)
+            cadence = value(.cadence)
+            note = value(.note)?.string
+        }
     }
 
     struct Block: Decodable, Equatable {

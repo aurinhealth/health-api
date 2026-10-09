@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {recoveryModelBlock} from '../src/recovery-model-block.js';
-import {personalBaseline,sleepNeedMinutes,sleepDebtMinutes,recoveryReadiness,heartRateLoad,strainScore,recoveryComponentScore,bedtimePlan} from '../src/recovery-model.js';
+import {personalBaseline,sleepNeedMinutes,sleepDebtMinutes,recoveryReadiness,heartRateLoad,strainScore,recoveryComponentScore,bedtimePlan,sleepNeedFor} from '../src/recovery-model.js';
 
 const day=i=>new Date(Date.UTC(2026,7,1)+i*86400000).toISOString().slice(0,10);
 const history=(n,f)=>Array.from({length:n},(_,i)=>({id:day(i),...f(i)}));
@@ -97,4 +97,19 @@ test('bedtimePlan wakes at the usual time of that kind of morning and adds the t
   assert.equal(weekend.weekend, true);
   assert.equal(weekend.wake, 480);
   assert.equal(bedtimePlan({ date: '2026-10-08', need: 480, nights: [] }), null);
+});
+
+test("an own sleep goal replaces the age baseline and a set alarm plans bedtime without nights", () => {
+  assert.equal(sleepNeedMinutes({ age: 40, goal: 450 }), 450);
+  assert.equal(sleepNeedMinutes({ age: 40, goal: 450, strain: 18 }), 480, "a hard day still adds 30 min");
+  assert.equal(sleepNeedMinutes({ age: 40, goal: 200 }), 480, "a goal outside 6–10 h is ignored");
+  assert.equal(sleepNeedFor({ date: "2026-10-08", age: 40, goal: 390, rows: [], sessions: [] }).need, 390, "a 6.5 h goal may go under 7 h");
+  // 2026-10-08 is a Thursday: the next morning is a work day.
+  const plan = bedtimePlan({ date: "2026-10-08", need: 480, nights: [], wake: { workday: 390, weekend: 480 } });
+  assert.equal(plan.wake, 390);
+  assert.equal(plan.wakeSource, "setting");
+  assert.equal(plan.bed, ((390 - Math.round(480 / 0.9 / 5) * 5) % 1440 + 1440) % 1440);
+  const saturday = bedtimePlan({ date: "2026-10-09", need: 480, nights: [], wake: { workday: 390, weekend: 480 } });
+  assert.equal(saturday.wake, 480, "Friday night: the weekend alarm");
+  assert.equal(bedtimePlan({ date: "2026-10-08", need: 480, nights: [] }), null, "no nights and no alarm: no plan");
 });

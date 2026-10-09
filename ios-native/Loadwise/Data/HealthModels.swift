@@ -61,6 +61,9 @@ struct HealthSnapshot: Decodable, Equatable {
         let naps: Int
         let bedtime: String?
         let wake: String?
+        /// The user set an own sleep goal / an alarm (Nastavení spánku).
+        var goalSet: Bool? = nil
+        var wakeSet: Bool? = nil
     }
 
     struct Debt: Decodable, Equatable {

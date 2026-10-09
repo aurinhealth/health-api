@@ -40,10 +40,9 @@ enum MealSlot {
 
     /// The meal for the time of day, as the server sorts entries (app-food.js mealOf).
     static func now(_ date: Date = Date()) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "HH:mm"
-        let t = f.string(from: date)
-        return t < "10:00" ? "breakfast" : t < "11:30" ? "snack_am" : t < "14:30" ? "lunch" : t < "17:30" ? "snack_pm" : "dinner"
+        let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+        let t = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        return t < 600 ? "breakfast" : t < 690 ? "snack_am" : t < 870 ? "lunch" : t < 1050 ? "snack_pm" : "dinner"
     }
 
     /// "ke svačině", "k obědu": the end of "Přidat …".
@@ -85,8 +84,11 @@ struct FoodContent: View {
             }
 
             MacroCells(macros: food.macros).padding(.top, 26)
+            if let fiber = food.macros.fiber {
+                FiberRow(fiber: fiber).padding(.top, 12)
+            }
 
-            WaterRow(water: food.water).padding(.top, 14)
+            DrinksCard(water: food.water).padding(.top, 18)
 
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Jídla dne")
@@ -156,35 +158,90 @@ struct MacroCells: View {
     }
 }
 
-struct WaterRow: View {
-    @Environment(AppModel.self) private var model
-    let water: FoodSnapshot.Water
-    @State private var adding = false
+/// "Vláknina 12 / 30 g" under the macros.
+struct FiberRow: View {
+    let fiber: FoodSnapshot.Amount
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "drop.fill").foregroundStyle(Palette.blue)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    Text(Fmt.decimal((water.ml ?? 0) / 1000)).font(Typo.number(22)).foregroundStyle(Palette.ink)
-                    Text("/ " + Fmt.decimal((water.target ?? 2500) / 1000) + " l vody").font(Typo.small).foregroundStyle(Palette.faint)
-                }
-                ProgressLine(fraction: (water.ml ?? 0) / (water.target ?? 2500), color: Palette.blue, height: 3)
-            }
-            Button {
-                Task {
-                    adding = true
-                    await model.addWater(ml: 250)
-                    adding = false
-                }
-            } label: {
-                Text(adding ? "…" : "+ 250 ml").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 12).frame(height: 32)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-            }
-            .disabled(adding)
-            .accessibilityLabel("Přidat 250 mililitrů vody")
+            Text("Vláknina").font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 70, alignment: .leading)
+            ProgressLine(fraction: (fiber.eaten ?? 0) / max(fiber.target ?? 30, 1), color: Palette.green, height: 3)
+            Text(Fmt.int(fiber.eaten ?? 0) + (fiber.target.map { " / " + Fmt.int($0) } ?? "") + " g")
+                .font(Typo.number(16)).foregroundStyle(Palette.ink).lineLimit(1)
         }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Pití: how much the drinks hydrate (coffee, beer… count less than water),
+/// the day's drinks, water at one tap and any other drink.
+struct DrinksCard: View {
+    @Environment(AppModel.self) private var model
+    let water: FoodSnapshot.Water
+    @State private var adding = false
+    @State private var other = false
+
+    var body: some View {
+        Card {
+            WidgetHeader(title: "Pití a hydratace", color: Palette.blue)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(Fmt.decimal((water.ml ?? 0) / 1000)).font(Typo.number(34)).foregroundStyle(Palette.ink)
+                Text("/ " + Fmt.decimal((water.target ?? 2500) / 1000) + " l").font(Typo.number(17)).foregroundStyle(Palette.faint)
+                Spacer()
+                if let drunk = water.drunkMl, abs(drunk - (water.ml ?? 0)) >= 20 {
+                    Text("vypito " + Fmt.decimal(drunk / 1000) + " l").font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+            ProgressLine(fraction: (water.ml ?? 0) / max(water.target ?? 2500, 1), color: Palette.blue, height: 5)
+            if let drinks = water.drinks, !drinks.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(drinks) { d in
+                        HStack(spacing: 10) {
+                            Image(systemName: DrinkKind.find(d.kind)?.symbol ?? "drop.fill").font(.system(size: 13)).foregroundStyle(Palette.blue).frame(width: 20)
+                            Text(DrinkKind.find(d.kind)?.label ?? d.kind).font(Typo.small).foregroundStyle(Palette.secondary)
+                            if let t = d.time { Text(t).font(Typo.tiny).foregroundStyle(Palette.faint) }
+                            Spacer()
+                            Text(Fmt.int(d.ml) + " ml").font(Typo.number(16)).foregroundStyle(Palette.ink)
+                            if let h = d.hydrationMl, let ml = d.ml, abs(h - ml) >= 1 {
+                                Text("→ " + Fmt.int(h)).font(Typo.caption).foregroundStyle(Palette.muted)
+                            }
+                        }
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .contextMenu {
+                            Button(role: .destructive) { Task { await model.deleteDrink(id: d.id) } } label: { Label("Smazat", systemImage: "trash") }
+                        }
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                Button {
+                    Task {
+                        adding = true
+                        await model.addWater(ml: 250)
+                        adding = false
+                    }
+                } label: {
+                    Label(adding ? "Přidávám…" : "Voda 250 ml", systemImage: "plus")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 38)
+                        .background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(adding)
+                .accessibilityLabel("Přidat 250 mililitrů vody")
+                Button { other = true } label: {
+                    Label("Jiný nápoj", systemImage: "cup.and.saucer")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 38)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            Text("Káva se počítá z 90 %, pivo napůl, víno vůbec. Podržením nápoj smažeš.")
+                .font(Typo.tiny).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
+        }
+        .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
     }
 }
 
@@ -209,8 +266,9 @@ struct MealRow: View {
                 .frame(width: 50, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
                 Text(meal.label).font(.subheadline.weight(.medium)).foregroundStyle(empty ? Palette.muted : Palette.ink)
-                if let hint = suggestion {
-                    Text(hint).font(Typo.caption).foregroundStyle(Palette.amber)
+                if let hint = targets {
+                    Text(hint).font(Typo.caption).foregroundStyle(empty ? Palette.amber : Palette.muted)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
@@ -236,10 +294,20 @@ struct MealRow: View {
         .accessibilityLabel("Přidat " + MealSlot.toMeal(meal.type))
     }
 
-    private var suggestion: String? {
-        guard empty, let s = meal.suggestion else { return nil }
-        var text = "doporučeno · ~" + Fmt.int(s.kcal) + " kcal"
-        if let protein = s.protein, protein > 0 { text += " · aspoň " + Fmt.int(protein) + " g bílkovin" }
+    /// What to aim for: "cíl ~520 kcal · B 30 · S 60 · T 18 g" before the meal,
+    /// then what it has: "B 22 · S 40 · T 12 g z ~520 kcal".
+    private var targets: String? {
+        let s = meal.suggestion
+        if empty {
+            guard let s else { return nil }
+            var parts = ["cíl ~" + Fmt.int(s.kcal) + " kcal"]
+            let macros = [("B", s.protein), ("S", s.carbs), ("T", s.fat)].compactMap { label, value in value.map { label + " " + Fmt.int($0) } }
+            if !macros.isEmpty { parts.append(macros.joined(separator: " · ") + " g") }
+            return parts.joined(separator: " · ")
+        }
+        let sum = { (key: KeyPath<FoodSnapshot.Entry, Double?>) in meal.entries.compactMap { $0[keyPath: key] }.reduce(0, +) }
+        var text = "B " + Fmt.int(sum(\.protein)) + " · S " + Fmt.int(sum(\.carbs)) + " · T " + Fmt.int(sum(\.fat)) + " g"
+        if let s { text += " z ~" + Fmt.int(s.kcal) + " kcal" }
         return text
     }
 }

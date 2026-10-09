@@ -25,6 +25,10 @@ struct ZonesSettingsView: View {
             .pickerStyle(.segmented)
 
             if let training = store.training {
+                if changes != original {
+                    Label("Zóny níže se přepočítají po uložení.", systemImage: "info.circle")
+                        .font(Typo.caption).foregroundStyle(Palette.amber)
+                }
                 if sport == "run" { run(training) } else { bike(training) }
                 intervals(training)
             } else if store.demo {
@@ -52,7 +56,7 @@ struct ZonesSettingsView: View {
             SettingsField(title: "Prahový tep", text: $runLthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.runLthr.map { Fmt.int($0) } ?? "–")
         }
         SettingsGroup(title: "Tempové zóny", footer: "Procenta jsou z prahové rychlosti.") {
-            SettingsPicker(title: "Předvolba", selection: $paceModel, options: t.paceZoneModels.map { ($0.id, $0.label) })
+            OptionListRow(title: "Předvolba", selection: $paceModel, options: t.paceZoneModels.map { ($0.id, $0.label) }, footer: Self.presetFooter)
             ForEach(t.paceZones) { z in
                 SettingsDivider()
                 ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " %" },
@@ -81,14 +85,14 @@ struct ZonesSettingsView: View {
             SettingsField(title: "Maximální tep", text: $maxHr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.maxHr.map { Fmt.int($0) } ?? "–")
         }
         SettingsGroup(title: "Výkonové zóny", footer: "Procenta jsou z FTP.") {
-            SettingsPicker(title: "Předvolba", selection: $powerModel, options: t.powerZoneModels.map { ($0.id, $0.label) })
+            OptionListRow(title: "Předvolba", selection: $powerModel, options: t.powerZoneModels.map { ($0.id, $0.label) }, footer: Self.presetFooter)
             ForEach(t.powerZones) { z in
                 SettingsDivider()
                 ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.int($0) + " %" }, range: wattRange(z))
             }
         }
         SettingsGroup(title: "Tepové zóny pro kolo") {
-            SettingsPicker(title: "Předvolba", selection: $hrModel, options: t.hrZoneModels.map { ($0.id, $0.label) })
+            OptionListRow(title: "Předvolba", selection: $hrModel, options: t.hrZoneModels.map { ($0.id, $0.label) }, footer: Self.presetFooter)
             ForEach(t.hrZones) { z in
                 SettingsDivider()
                 ZoneRow(name: z.name, percent: nil, range: bpmRange(z))
@@ -100,9 +104,13 @@ struct ZonesSettingsView: View {
 
     @ViewBuilder
     private func intervals(_ t: TrainingProfileResponse) -> some View {
-        SettingsGroup(title: "Intervals.icu", footer: "Po uložení se prahy i hranice zón zapíšou do nastavení sportů Ride a Run v Intervals.icu, takže kalendář, hodinky i trenér počítají se stejnými čísly. Prázdné prahy se berou z Intervals.icu.") {
-            SettingsToggle(title: "Zapisovat do Intervals.icu", subtitle: t.intervalsConnected == false ? "Intervals.icu není připojené" : nil,
-                           isOn: $writeIntervals, disabled: t.intervalsConnected == false)
+        VStack(alignment: .leading, spacing: 10) {
+            PillToggle(title: "Zapisovat do Intervals.icu",
+                       subtitle: t.intervalsConnected == false ? "Intervals.icu není připojené" : writeIntervals ? "Prahy a zóny se po uložení pošlou do Intervals.icu" : "Zóny zůstanou jen v Loadwise",
+                       systemImage: "arrow.triangle.2.circlepath", isOn: $writeIntervals, disabled: t.intervalsConnected == false)
+            Text("Kalendář, hodinky i trenér pak počítají se stejnými čísly. Prázdné prahy se berou z Intervals.icu.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                .fixedSize(horizontal: false, vertical: true)
         }
         if let result = t.intervals {
             switch result.status {
@@ -130,6 +138,8 @@ struct ZonesSettingsView: View {
     }
 
     // MARK: Values
+
+    static let presetFooter = "Předvolby jsou stejné jako v Intervals.icu. Hranice zón se přepočítají po uložení."
 
     static func pace(_ seconds: Double) -> String {
         let s = Int(seconds.rounded())
@@ -198,7 +208,7 @@ struct ZoneRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(name).font(.subheadline).foregroundStyle(Palette.ink).lineLimit(1)
+            Text(name).font(.subheadline).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 6)
             if let percent { Text(percent).font(.caption).foregroundStyle(Palette.faint) }
             Text(range).font(Typo.number(17)).foregroundStyle(Palette.ink).frame(minWidth: 82, alignment: .trailing)

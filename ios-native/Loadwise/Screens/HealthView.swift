@@ -4,7 +4,7 @@ struct HealthView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: model.path(.health)) {
             ZStack {
                 ScreenBackground(glow: Palette.Glow.health)
                 if let health = model.health {
@@ -24,23 +24,10 @@ struct HealthView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: HealthDetail.self) { detail in
-                if let health = model.health {
-                    switch detail {
-                    case .readiness: DetailScreen(glow: Palette.Glow.health) { ReadinessDetailContent(health: health) }
-                    case .sleep: SleepDetailView(health: health)
-                    case .heart: DetailScreen(glow: Palette.Glow.health) { HeartDetailContent(health: health) }
-                    case .weight: WeightDetailView(health: health)
-                    }
-                }
-            }
+            .appRoutes()
         }
         .task { if model.health == nil { await model.refreshHealth() } }
     }
-}
-
-enum HealthDetail: Hashable {
-    case readiness, sleep, heart, weight
 }
 
 /// A drill-down page: the section's background, a back button and a column.
@@ -75,36 +62,36 @@ struct HealthContent: View {
             SectionLabel(text: "Zdraví · " + Fmt.dayHeading(health.date))
                 .frame(height: 36)
 
-            NavigationLink(value: HealthDetail.readiness) { ReadinessCard(readiness: health.readiness) }
-                .buttonStyle(.plain)
+            RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
                 .padding(.top, 24)
 
             HealthSection(title: "Spánek") {
-                NavigationLink(value: HealthDetail.sleep) { SleepWidget(sleep: health.sleep) }.buttonStyle(.plain)
+                RouteLink(route: .sleep) { SleepWidget(sleep: health.sleep) }
                 if health.sleep.debt != nil || health.oxygen != nil {
                     WidgetRow {
-                        if let debt = health.sleep.debt { SleepDebtWidget(debt: debt) } else { Color.clear }
+                        if let debt = health.sleep.debt { RouteLink(route: .sleep) { SleepDebtWidget(debt: debt) } } else { Color.clear }
                     } right: {
-                        if let oxygen = health.oxygen { OxygenWidget(oxygen: oxygen) } else { Color.clear }
+                        if let oxygen = health.oxygen { RouteLink(route: .sleep) { OxygenWidget(oxygen: oxygen) } } else { Color.clear }
                     }
                 }
                 if health.respiration != nil || health.skinTemp != nil {
                     WidgetRow {
-                        if let r = health.respiration { RespirationWidget(respiration: r) } else { Color.clear }
+                        if let r = health.respiration { RouteLink(route: .sleep) { RespirationWidget(respiration: r) } } else { Color.clear }
                     } right: {
-                        if let t = health.skinTemp { SkinTempWidget(skin: t) } else { Color.clear }
+                        if let t = health.skinTemp { RouteLink(route: .sleep) { SkinTempWidget(skin: t) } } else { Color.clear }
                     }
                 }
+                RouteLink(route: .sleepSettings) { SleepSettingsCard(tonight: health.sleep.tonight) }
             }
 
             if health.hrv != nil || health.restingHR != nil {
                 HealthSection(title: "Srdce") {
                     if let hrv = health.hrv {
-                        NavigationLink(value: HealthDetail.heart) { HRVWideWidget(hrv: hrv, restingHR: health.restingHR?.value) }.buttonStyle(.plain)
+                        RouteLink(route: .heart) { HRVWideWidget(hrv: hrv, restingHR: health.restingHR?.value) }
                     }
                     WidgetRow {
                         if let rhr = health.restingHR {
-                            RestingHRWidget(restingHR: TodaySnapshot.RestingHR(value: rhr.value, baseline: rhr.baseline, series: rhr.series))
+                            RouteLink(route: .heart) { RestingHRWidget(restingHR: TodaySnapshot.RestingHR(value: rhr.value, baseline: rhr.baseline, series: rhr.series)) }
                         } else { Color.clear }
                     } right: {
                         AppleHealthWidget(title: "Nálada", color: Palette.gold)
@@ -114,20 +101,18 @@ struct HealthContent: View {
 
             HealthSection(title: "Tělo") {
                 if let weight = health.weight {
-                    NavigationLink(value: HealthDetail.weight) {
+                    RouteLink(route: .weight) {
                         WeightWidget(weight: TodaySnapshot.Weight(latest: weight.latest, goal: weight.goal, series: Array(weight.series.filter { $0.date > (AppModel.shift(health.date, by: -30) ?? "") })))
                     }
-                    .buttonStyle(.plain)
-                    if let fat = weight.bodyFat { BodyFatWidget(fat: fat) }
+                    if let fat = weight.bodyFat { RouteLink(route: .weight) { BodyFatWidget(fat: fat) } }
                     AppleHealthWidget(title: "Svalová hmota", color: Palette.brown)
                 } else {
-                    NavigationLink(value: HealthDetail.weight) {
+                    RouteLink(route: .weight) {
                         Card {
                             WidgetHeader(title: "Váha", color: Palette.brown)
                             Text("Zatím žádné vážení. Klepni a zapiš první.").font(Typo.small).foregroundStyle(Palette.muted)
                         }
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -349,7 +334,6 @@ struct SleepWidget: View {
                              height: 56)
                 }
             }
-            Text("7 nocí · čárkovaně = tvoje potřeba spánku").font(Typo.tiny).foregroundStyle(Palette.faint)
         }
     }
 }

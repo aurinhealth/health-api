@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import VisionKit
 
@@ -16,12 +17,18 @@ struct BarcodeScanSheet: View {
     @State private var saving = false
     @State private var error: String?
 
+    /// nil until the camera permission is known (the scanner is unavailable
+    /// before the first permission prompt, so the app asks first).
+    @State private var cameraAllowed: Bool?
+
     enum ScanState { case scanning, searching, found, notFound }
 
     var body: some View {
         ZStack {
             Color(light: 0x1D2020, dark: 0x1D2020).ignoresSafeArea()
-            if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+            if cameraAllowed == nil {
+                ProgressView().tint(.white)
+            } else if cameraAllowed == true && DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
                 BarcodeScanner(paused: state != .scanning) { scanned in
                     guard state == .scanning else { return }
                     code = scanned
@@ -29,8 +36,14 @@ struct BarcodeScanSheet: View {
                 }
                 .ignoresSafeArea()
             } else {
-                Text("Skener tu nejde spustit. Povol Loadwise přístup ke kameře v Nastavení iPhonu.")
-                    .font(Typo.sentence(20)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center).padding(32)
+                VStack(spacing: 16) {
+                    Text(DataScannerViewController.isSupported ? "Skener potřebuje kameru. Povol Loadwise přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
+                        .font(Typo.sentence(20)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
+                    if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
+                        Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)
+                    }
+                }
+                .padding(32)
             }
 
             VStack {
@@ -52,6 +65,15 @@ struct BarcodeScanSheet: View {
                 Spacer()
                 if state != .scanning { resultCard.padding(.horizontal, 12).padding(.bottom, 20) }
             }
+        }
+        .task { await askCamera() }
+    }
+
+    private func askCamera() async {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: cameraAllowed = true
+        case .notDetermined: cameraAllowed = await AVCaptureDevice.requestAccess(for: .video)
+        default: cameraAllowed = false
         }
     }
 

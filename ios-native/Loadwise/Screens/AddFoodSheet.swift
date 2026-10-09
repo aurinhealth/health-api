@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 /// "Co přidáme?": search your foods and the catalog, scan a barcode, look a
@@ -6,6 +7,11 @@ struct AddFoodSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let meal: String
+    /// Straight to the camera, the scanner… when opened from the "+" menu.
+    var start: FoodStart? = nil
+    @State private var started = false
+    @State private var galleryOpen = false
+    @State private var galleryItem: PhotosPickerItem?
     @State private var query = ""
     @State private var results: [FoodProduct] = []
     @State private var recent: [FoodProduct] = []
@@ -40,13 +46,18 @@ struct AddFoodSheet: View {
                     .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink.opacity(0.25)).frame(height: 1) }
                     .padding(.top, 18)
 
-                    HStack(spacing: 10) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
                         tile("Skenovat", "barcode.viewfinder") { scanning = true }
-                        tile("Jídlo", "camera") { photoMode = "portion" }
+                        tile("Vyfotit", "camera") { photoMode = "portion" }
+                        tile("Z galerie", "photo.on.rectangle") { galleryOpen = true }
                         tile("Etiketa", "doc.text.viewfinder") { photoMode = "label" }
                         tile("Ručně", "pencil") { path.append(.manual) }
+                        tile("Dohledat AI", "sparkles") { Task { await lookUp() } }
+                            .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || lookingUp || model.demo)
                     }
                     .padding(.top, 18)
+                    Text("Vyfoť talíř a AI odhadne porci, nebo vyfoť tabulku nutričních hodnot na obalu. „Dohledat AI“ najde potravinu podle napsaného názvu.")
+                        .font(Typo.tiny).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
                     if readingPhoto {
                         HStack(spacing: 8) { ProgressView(); Text("Čtu fotku…").font(Typo.small).foregroundStyle(Palette.muted) }.padding(.top, 12)
                     }
@@ -100,6 +111,17 @@ struct AddFoodSheet: View {
         .presentationBackground(Palette.background)
         .task(id: query) { await search() }
         .task { await loadRecent() }
+        .onAppear(perform: begin)
+        .photosPicker(isPresented: $galleryOpen, selection: $galleryItem, matching: .images)
+        .onChange(of: galleryItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                    await read(image, mode: "portion")
+                }
+                galleryItem = nil
+            }
+        }
         .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }) }
         .fullScreenCover(item: Binding(get: { photoMode.map { Named(name: $0) } }, set: { photoMode = $0?.name })) { mode in
             CameraPicker { image in
@@ -110,6 +132,19 @@ struct AddFoodSheet: View {
         }
     }
 
+    private func begin() {
+        guard !started, let start else { return }
+        started = true
+        switch start {
+        case .photo: photoMode = "portion"
+        case .label: photoMode = "label"
+        case .scan: scanning = true
+        case .gallery: galleryOpen = true
+        case .manual: path.append(.manual)
+        case .search: break
+        }
+    }
+
     private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 8) {
@@ -117,8 +152,8 @@ struct AddFoodSheet: View {
                 Text(title).font(.footnote.weight(.medium))
             }
             .foregroundStyle(Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 76)
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.ink.opacity(0.12), lineWidth: 1))
+            .frame(maxWidth: .infinity).frame(height: 72)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(.plain)
     }

@@ -86,6 +86,8 @@ struct TodaySnapshot: Decodable, Equatable {
         let title: String
         let detail: String?
         let done: Bool
+        /// Workouts: ride, run, strength or other.
+        var sport: String? = nil
 
         var id: String { kind + "|" + (time ?? "") + "|" + title }
     }
@@ -94,6 +96,8 @@ struct TodaySnapshot: Decodable, Equatable {
         let bedtime: String?
         let wake: String?
         let need: Int?
+        /// The wake time comes from the user's alarm setting (not the usual nights).
+        var wakeSet: Bool? = nil
     }
 
     struct Steps: Decodable, Equatable {

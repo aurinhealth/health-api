@@ -62,13 +62,16 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         protein: round(num(e.protein_g), 1),
         carbs: round(num(e.carbs_g), 1),
         fat: round(num(e.fat_g), 1),
+        fiber: round(num(e.fiber_g), 1),
         amount: amount != null && unit ? round(amount, 1) + " " + (unit === "portion" ? "porce" : unit === "piece" ? "ks" : unit) : null,
         brand: note.brand || null
       };
     });
   const sum = key => round(entries.reduce((s, e) => s + (e[key] || 0), 0), key === "kcal" ? 0 : 1);
   const totals = food.totals || {};
-  const eaten = { kcal: round(num(totals.kcal)) ?? sum("kcal"), protein: round(num(totals.protein_g)) ?? sum("protein"), carbs: round(num(totals.carbs_g)) ?? sum("carbs"), fat: round(num(totals.fat_g)) ?? sum("fat") };
+  const eaten = { kcal: round(num(totals.kcal)) ?? sum("kcal"), protein: round(num(totals.protein_g)) ?? sum("protein"), carbs: round(num(totals.carbs_g)) ?? sum("carbs"), fat: round(num(totals.fat_g)) ?? sum("fat"), fiber: round(num(totals.fiber_g)) ?? sum("fiber") };
+  // Fibre: 14 g per 1000 kcal (US Dietary Guidelines), at least the EFSA 25 g.
+  const fiberTarget = target != null ? Math.max(25, Math.round(target / 1000 * 14)) : 30;
 
   // Slots still ahead get a share of what is left of the target, in the
   // proportions of a usual day (a quarter for breakfast and dinner, …).
@@ -76,7 +79,9 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
   const open = MEALS.filter(m => !entries.some(e => e.meal === m.type) && (now == null || MEAL_DEFAULT_TIMES[m.type] >= now));
   const left = target != null ? Math.max(0, target - (eaten.kcal || 0)) : null;
   const shares = open.reduce((s, m) => s + m.share, 0);
-  const proteinLeft = num(macros.protein_g) != null ? Math.max(0, num(macros.protein_g) - (eaten.protein || 0)) : null;
+  const leftOf = (key, eatenValue) => num(macros[key]) != null ? Math.max(0, num(macros[key]) - (eatenValue || 0)) : null;
+  const proteinLeft = leftOf("protein_g", eaten.protein), carbsLeft = leftOf("carbs_g", eaten.carbs), fatLeft = leftOf("fat_g", eaten.fat);
+  const slice = (value, m, step) => value != null ? Math.round(value * m.share / shares / step) * step : null;
 
   const meals = MEALS.map(m => {
     const items = entries.filter(e => e.meal === m.type).sort((a, b) => String(a.time || "").localeCompare(String(b.time || "")));
@@ -88,11 +93,13 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
       kcal: items.length ? round(items.reduce((s, e) => s + (e.kcal || 0), 0)) : null,
       entries: items,
       suggestion: isOpen && left != null && shares > 0 ? {
-        kcal: Math.round(left * m.share / shares / 10) * 10,
-        protein: proteinLeft != null ? Math.round(proteinLeft * m.share / shares / 5) * 5 : null
+        kcal: slice(left, m, 10),
+        protein: slice(proteinLeft, m, 5),
+        carbs: slice(carbsLeft, m, 5),
+        fat: slice(fatLeft, m, 5)
       } : null
     };
-  }).filter(m => m.entries.length || m.suggestion);
+  });
 
   return {
     status: "ok",
@@ -104,10 +111,16 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
     macros: {
       carbs: { eaten: eaten.carbs, target: num(macros.carbs_g) },
       protein: { eaten: eaten.protein, target: num(macros.protein_g) },
-      fat: { eaten: eaten.fat, target: num(macros.fat_g) }
+      fat: { eaten: eaten.fat, target: num(macros.fat_g) },
+      fiber: { eaten: eaten.fiber, target: fiberTarget }
     },
     meals,
-    water: { ml: num(fluids.totalMl), target: num(fluids.target?.ml), entries: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food").length }
+    water: {
+      ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml), drunkMl: num(fluids.totalMl),
+      entries: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food").length,
+      drinks: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food" && Number(f.id) > 0)
+        .map(f => ({ id: Number(f.id), kind: f.kind, ml: num(f.ml), hydrationMl: num(f.hydrationMl ?? f.ml), time: entryTime(f.consumedAt) }))
+    }
   };
 }
 

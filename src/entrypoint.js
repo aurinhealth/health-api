@@ -54,7 +54,9 @@ async function queueFoodGoogleSafely(env,ctx,id,options){
   }
 }
 import { lookupFoodWithAI } from "./food-ai.js";
-import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks } from "./fluids.js";
+import { EXERCISE_STATIONS } from "./gym-equipment.js";
+import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
+import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks, hydrationMl } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { loadRecoveryValidation } from "./recovery-validation.js";
@@ -115,7 +117,7 @@ const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:"
 
 // Requests that read or preview only and so keep the cache.
 // Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
-const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|passkeys$|passkeys\/options$)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -665,7 +667,23 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // Connections are optional: without them the dashboard works from manual
   // entries (weight, food) and the profile; missingProviders drives the
   // connection prompt in the client.
-  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog()},{headers:{'Cache-Control':'no-store'}});
+  // The athlete's gym: the stations it has (equipment "custom"), and AI that
+  // picks them from a photo of the gym or its web page (nothing is saved there).
+  if(url.pathname==='/app/api/gym/equipment'){
+    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||''},{headers:{'Cache-Control':'no-store'}});}
+    if(request.method==='POST'){
+      if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      try{const body=await request.json().catch(()=>({}));const training=await updateTrainingSetup(env.DB,{equipment:body.equipment,stations:body.stations,gymName:body.gymName,gymUrl:body.gymUrl});await bumpCacheVersion(env.DB);return Response.json({status:'ok',equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||''});}
+      catch(error){return Response.json({message:error.message},{status:400});}
+    }
+  }
+  if(url.pathname==='/app/api/gym/equipment/detect'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    if(!env.OPENAI_API_KEY)return Response.json({message:L('AI není připojena (chybí OPENAI_API_KEY).', 'AI is not connected (OPENAI_API_KEY is missing).')},{status:503});
+    try{const body=await request.json().catch(()=>({}));const r=await detectGymEquipment(env,{images:body.images||(body.image?[body.image]:[]),url:body.url});return Response.json({status:r.found?'ok':'not_found',...r,message:r.found?null:L('Vybavení se nepodařilo poznat. Zkus jinou fotku nebo vyber stroje ručně.', 'The equipment couldn\'t be recognised. Try another photo or pick the machines by hand.')},{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({status:'error',message:error.limit?error.message:String(error.message).slice(0,200)},{status:error.limit?(error.status||429):400});}
+  }
+  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name)}))},{headers:{'Cache-Control':'no-store'}});
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
@@ -1061,8 +1079,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           dashboardProfile(env).catch(()=>null),dayActivityHours(env.DB,env.USER_ID,date)]);
         const target=hydrationTarget({weightKg:weight?.value_numeric,sex:profile?.sex,...hours});
         // Drinks from the food diary are listed with the logged ones and counted (alcohol not).
-        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt)));
-        return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),target},{headers:{'Cache-Control':'no-store'}});
+        const entries=[...logged,...fromFood].sort((a,b)=>String(a.consumedAt).localeCompare(String(b.consumedAt))).map(e=>({...e,hydrationMl:hydrationMl(e.ml,e.kind)}));
+        return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       if(request.method==='POST'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await addFluid(env.DB,{date:validDay(body.date)?body.date:localToday(),ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}

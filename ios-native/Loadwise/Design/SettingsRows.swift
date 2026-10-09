@@ -104,7 +104,7 @@ struct SettingsToggle: View {
                 }
             }
         }
-        .tint(Palette.green)
+        .toggleStyle(LoadwiseToggleStyle())
         .disabled(disabled)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -156,5 +156,140 @@ struct SettingsPage<Content: View>: View {
         .background(Palette.settingsBackground.ignoresSafeArea())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The switch of the design: a capsule with a sliding knob that shows a check
+/// when on (instead of the plain system switch).
+struct LoadwiseToggleStyle: ToggleStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) { configuration.isOn.toggle() }
+        } label: {
+            HStack(spacing: 12) {
+                configuration.label
+                Spacer(minLength: 8)
+                ZStack(alignment: configuration.isOn ? .trailing : .leading) {
+                    Capsule()
+                        .fill(configuration.isOn ? Palette.green : Palette.ink.opacity(0.12))
+                        .frame(width: 54, height: 32)
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 26, height: 26)
+                        .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
+                        .overlay(
+                            Image(systemName: configuration.isOn ? "checkmark" : "minus")
+                                .font(.system(size: 10, weight: .heavy))
+                                .foregroundStyle(configuration.isOn ? Palette.green : Color.gray.opacity(0.6))
+                        )
+                        .padding(3)
+                }
+                .opacity(isEnabled ? 1 : 0.45)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(configuration.isOn ? "zapnuto" : "vypnuto")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// A switch on its own card, with an icon: for the switches that matter
+/// ("Zapisovat do Intervals.icu", "Jen s mým vybavením").
+struct PillToggle: View {
+    let title: String
+    var subtitle: String? = nil
+    var systemImage: String? = nil
+    @Binding var isOn: Bool
+    var disabled = false
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            HStack(spacing: 12) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isOn ? Palette.onButton : Palette.muted)
+                        .frame(width: 34, height: 34)
+                        .background(isOn ? Palette.green : Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                    if let subtitle {
+                        Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+        .toggleStyle(LoadwiseToggleStyle())
+        .disabled(disabled)
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(isOn ? Palette.green.opacity(0.5) : Palette.hairline, lineWidth: 1))
+    }
+}
+
+/// A choice among long names (zone presets): the row shows the choice on one
+/// line, the list opens on its own page where every name fits.
+struct OptionListRow: View {
+    let title: String
+    @Binding var selection: String
+    let options: [(String, String)]
+    var footer: String? = nil
+
+    var body: some View {
+        NavigationLink {
+            OptionListPage(title: title, selection: $selection, options: options, footer: footer)
+        } label: {
+            HStack(spacing: 12) {
+                Text(title).font(.body).foregroundStyle(Palette.ink).layoutPriority(1)
+                Spacer(minLength: 8)
+                Text(options.first { $0.0 == selection }?.1 ?? "nevybráno")
+                    .font(.subheadline).foregroundStyle(Palette.muted)
+                    .lineLimit(1).truncationMode(.tail)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct OptionListPage: View {
+    let title: String
+    @Binding var selection: String
+    let options: [(String, String)]
+    var footer: String? = nil
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SettingsPage(title: title) {
+            SettingsGroup(footer: footer) {
+                ForEach(options.indices, id: \.self) { i in
+                    if i > 0 { SettingsDivider() }
+                    Button {
+                        selection = options[i].0
+                        dismiss()
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(options[i].1).font(.body).foregroundStyle(Palette.ink)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 8)
+                            if options[i].0 == selection {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                            }
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 13)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 }

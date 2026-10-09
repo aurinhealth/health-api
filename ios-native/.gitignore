@@ -3,3 +3,6 @@ Loadwise.xcodeproj/
 Loadwise/Info.plist
 build/
 ipa/
+Loadwise/Loadwise.entitlements
+LoadwiseWidgets/Info.plist
+LoadwiseWidgets/LoadwiseWidgets.entitlements

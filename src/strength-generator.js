@@ -1,4 +1,7 @@
-function fitsEquipment(name,equipment){if(!equipment||equipment==='gym')return true;const allowed=equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
+// The athlete's equipment (onboarding.js trainingSetup): the whole gym, own
+// stations chosen in the app (equipment "custom" with the station ids), only
+// dumbbells or the body weight.
+function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return true;const allowed=equipment==='custom'&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
 import { L } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
@@ -471,7 +474,7 @@ function choosePlan(context, options = {}) {
   // A movement already in the session (e.g. a hip thrust) counts against its twin.
   const usedPatterns = new Set();
   function pick(patterns) {
-    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup?.equipment) && !used.has(ex));
+    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup) && !used.has(ex));
     const ex = pool.slice().sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
     const plain = pool.slice().sort((a, b) => score(a.ex, a.rank, false) - score(b.ex, b.rank, false))[0]?.ex;
     if (ex && plain !== ex && stalled.has(plain)) stallSwaps[ex] = plain;
@@ -635,7 +638,7 @@ export function generateStrengthPlan(context, options = {}) {
   }
   const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
   const focusedExercise = group => {
-    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup?.equipment) && !excluded.has(name));
+    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name));
     if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
@@ -647,7 +650,7 @@ export function generateStrengthPlan(context, options = {}) {
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
     return best;
   };
-  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup?.equipment));
+  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup));
   const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
   exercises = exercises.slice(0, maxExercises);
 

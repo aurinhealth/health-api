@@ -9,6 +9,9 @@ struct AssistantResult: Decodable, Equatable {
     let chatId: Int?
     let actions: [CoachAction]?
     let memorySaved: String?
+    /// Pictures to draw under the answer from the app's own data:
+    /// form, recovery, sleep, nutrition, week, training or zones.
+    var visuals: [String]? = nil
 }
 
 /// A change the coach proposes; nothing happens until it is confirmed

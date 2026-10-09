@@ -20,7 +20,7 @@ struct WeekSessionsList: View {
         }
     }
 
-    private func destination(_ s: WeekSession) -> TrainingDetail? {
+    private func destination(_ s: WeekSession) -> AppRoute? {
         if s.sport == "strength" && s.status != "done" { return .gym(s.date) }
         if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }

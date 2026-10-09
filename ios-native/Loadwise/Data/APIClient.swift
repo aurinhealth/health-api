@@ -369,7 +369,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Plumbing
 
     /// With a cache key the answer is also kept on disk (SnapshotCache).
-    private func get<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> T {
+    func get<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> T {
         let (data, response) = try await session.data(for: makeRequest(path))
         try check(response, data)
         let value: T
@@ -382,7 +382,7 @@ final class APIClient: @unchecked Sendable {
         return value
     }
 
-    private func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B) async throws -> T {
+    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B) async throws -> T {
         var request = makeRequest(path, method: method)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)

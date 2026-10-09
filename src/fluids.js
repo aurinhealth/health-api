@@ -4,7 +4,14 @@ import { L } from './lang.js';
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime } from "./user-time.js";
 
-const KINDS = ["water", "coffee", "tea", "juice", "milk", "sport", "other"];
+const KINDS = ["water", "coffee", "tea", "juice", "milk", "sport", "soda", "beer", "wine", "other"];
+
+// How much of a drink counts towards hydration, against water (the Beverage
+// Hydration Index, Maughan 2016: milk and oral-rehydration drinks keep more
+// water in the body, coffee and tea about as much as water). Coffee is counted
+// at 0.9 to stay on the safe side; beer at half; wine and spirits not at all.
+export const HYDRATION_FACTORS = { water: 1, tea: 1, coffee: 0.9, juice: 1, milk: 1.1, sport: 1.1, soda: 0.9, beer: 0.5, wine: 0, other: 1, food: 1 };
+export const hydrationMl = (ml, kind) => Math.round((Number(ml) || 0) * (HYDRATION_FACTORS[kind] ?? 1));
 const round100 = ml => Math.round(ml / 100) * 100;
 
 // Drinks per day: 30 ml per kg of body weight (food covers the rest of the

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 /// App state: signed in or not, and the Today data.
 @MainActor
@@ -28,6 +29,14 @@ final class AppModel {
     private(set) var offline = false
     /// The day on the Today screen, nil for today.
     private(set) var selectedDate: String?
+    /// The open tab and each tab's navigation stack, so cards, widgets and
+    /// links (loadwise://open/sleep) can open any detail.
+    var tab: AppTab = .today
+    var paths: [AppTab: [AppRoute]] = [:]
+    /// After the first sign-in: the profile setup has not been done yet.
+    var needsSetup = false
+    /// A full-screen flow (Režim tréninku) hides the tab bar.
+    var immersive = false
 
     let api: APIClient
     private let auth: AuthService
@@ -45,6 +54,11 @@ final class AppModel {
         } else {
             phase = api.hasSession ? .signedIn : .signedOut
             if phase == .signedIn { loadSaved() }
+        }
+        // "-tab training" (simulator screenshots) opens another tab first.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-tab"), i + 1 < args.count {
+            tab = ["training": AppTab.training, "food": .food, "health": .health][args[i + 1]] ?? .today
         }
     }
 
@@ -64,6 +78,45 @@ final class AppModel {
         return lost
     }
 
+    func path(_ tab: AppTab) -> Binding<[AppRoute]> {
+        Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
+    }
+
+    /// Opens a detail on its own tab (widgets, notifications, links).
+    func open(_ route: AppRoute) {
+        tab = route.tab
+        paths[route.tab] = [route]
+    }
+
+    func handle(_ url: URL) {
+        if let route = AppRoute(url: url) {
+            open(route)
+        } else if let tab = TabLink.tab(url) {
+            self.tab = tab
+            paths[tab] = []
+        }
+    }
+
+    /// Whether the profile setup (GET /app/api/onboarding) still waits; asked
+    /// once per sign-in, remembered after it is done.
+    func checkSetup() async {
+        guard !demo, phase == .signedIn, !UserDefaults.standard.bool(forKey: Self.setupDoneKey) else { return }
+        if let done = try? await api.onboardingCompleted() {
+            needsSetup = !done
+            if done { UserDefaults.standard.set(true, forKey: Self.setupDoneKey) }
+        }
+    }
+
+    func finishSetup() async {
+        UserDefaults.standard.set(true, forKey: Self.setupDoneKey)
+        needsSetup = false
+        await refresh()
+        await refreshFood()
+        await refreshHealth()
+    }
+
+    nonisolated static let setupDoneKey = "setupDone"
+
     func signIn() async {
         signingIn = true
         defer { signingIn = false }
@@ -72,6 +125,7 @@ final class AppModel {
             demo = false
             phase = .signedIn
             errorMessage = nil
+            await checkSetup()
             await refresh()
         } catch is CancellationError {
             // The user closed the sign-in sheet.
@@ -97,7 +151,10 @@ final class AppModel {
             today = try await api.today(date: selectedDate)
             errorMessage = nil
             _ = noteConnection(nil)
-            if selectedDate == nil, let today { await Reminders.reschedule(from: today) }
+            if selectedDate == nil, let today {
+                await Reminders.reschedule(from: today)
+                WidgetBridge.update(today)
+            }
         } catch APIError.unauthorized {
             signOut()
         } catch {
@@ -145,6 +202,32 @@ final class AppModel {
         }
     }
 
+    /// A drink of any kind; true when it was saved.
+    @discardableResult
+    func addDrink(ml: Int, kind: String) async -> Bool {
+        guard !demo else { return true }
+        do {
+            try await api.addFluid(ml: ml, kind: kind)
+            await refreshFood()
+            await refresh()
+            return true
+        } catch {
+            foodError = error.localizedDescription
+            return false
+        }
+    }
+
+    func deleteDrink(id: Int) async {
+        guard !demo else { return }
+        do {
+            try await api.deleteFluid(id: id)
+            await refreshFood()
+            await refresh()
+        } catch {
+            foodError = error.localizedDescription
+        }
+    }
+
     /// Logs a food; nil when it worked, else the message to show.
     func logFood(product: FoodProduct, amount: Double, meal: String) async -> String? {
         guard !demo else { return nil }
@@ -169,15 +252,9 @@ final class AppModel {
         }
     }
 
-    func addWater(ml: Int) async {
-        guard !demo else { return }
-        do {
-            try await api.addFluid(ml: ml)
-            await refreshFood()
-            await refresh()
-        } catch {
-            foodError = error.localizedDescription
-        }
+    @discardableResult
+    func addWater(ml: Int) async -> Bool {
+        await addDrink(ml: ml, kind: "water")
     }
 
     /// One day back or forward from the day on screen; forward stops at today.
@@ -194,7 +271,7 @@ final class AppModel {
         await refresh()
     }
 
-    static func localDate(_ date: Date) -> String {
+    nonisolated static func localDate(_ date: Date) -> String {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = .current
@@ -202,7 +279,7 @@ final class AppModel {
         return f.string(from: date)
     }
 
-    static func shift(_ isoDate: String, by days: Int) -> String? {
+    nonisolated static func shift(_ isoDate: String, by days: Int) -> String? {
         let utc = TimeZone(identifier: "UTC")!
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -224,6 +301,11 @@ final class AppModel {
         api.signOut()
         SnapshotCache.clear()
         Reminders.cancelAll()
+        WidgetBridge.clear()
+        UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
+        needsSetup = false
+        paths = [:]
+        tab = .today
         offline = false
         demo = false
         today = nil
