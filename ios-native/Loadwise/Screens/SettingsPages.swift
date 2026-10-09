@@ -272,7 +272,11 @@ struct SourcesSettingsView: View {
                 Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet { googleDisclosure = false; connect("google") } }
+        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
+            googleDisclosure = false
+            // The browser sheet opens once this one has closed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
+        } }
         .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await store.load() ; message = "Intervals.icu je připojené." } }
         .confirmationDialog("Odpojit \(disconnecting?.name ?? "")?", isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
             Button("Odpojit", role: .destructive) { if let p = disconnecting { Task { await disconnect(p.id) } } }

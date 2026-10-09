@@ -334,7 +334,7 @@ struct InsightsView: View {
             .padding(.top, 8)
         }
 
-        let cardio = Self.cardio.compactMap { key, title in insights.records?.cardio?[key].flatMap { $0 }.map { (title, $0) } }
+        let cardio = cardioRecords(insights)
         if !cardio.isEmpty {
             SectionLabel(text: "Vytrvalost za rok").padding(.top, 24)
             Card {
@@ -360,6 +360,14 @@ struct InsightsView: View {
                 }
             }
             .padding(.top, 8)
+        }
+    }
+
+    private func cardioRecords(_ insights: FitnessInsights) -> [(String, FitnessInsights.Record)] {
+        guard let map = insights.records?.cardio else { return [] }
+        return Self.cardio.compactMap { key, title in
+            guard let value = map[key], let record = value else { return nil }
+            return (title, record)
         }
     }
 
