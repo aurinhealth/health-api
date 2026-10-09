@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { energyBaseline, normalizeProfile, restingMetabolicRate, OWNER_CALIBRATION } from "../src/energy-profile.js";
+import { energyBaseline, normalizeProfile, restingMetabolicRate, OWNER_CALIBRATION, sleepSettings } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
 
 const woman = { sex: "female", age: 30, height: 165, activity: "sedentary", goal: "lose_0.5" };
@@ -57,9 +57,19 @@ test("without a connected source, weekly sport is part of the estimate", () => {
   assert.equal(energyBaseline({ ...woman, sportHours: "3-6" }, 60).sportDaily, 0);
 });
 
+test("sleep settings: a goal of 6–10 h and alarm clock times", () => {
+  const p = normalizeProfile({ sleepGoal: "450", wakeTime: "6:30", wakeTimeWeekend: "25:00" });
+  assert.equal(p.sleepGoal, 450);
+  assert.equal(p.wakeTime, "06:30");
+  assert.equal(p.wakeTimeWeekend, "", "an impossible time is dropped");
+  assert.equal(normalizeProfile({ sleepGoal: 200 }).sleepGoal, null);
+  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null } });
+});
+
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
     { sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
+      sleepGoal: null, wakeTime: "", wakeTimeWeekend: "",
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });
 

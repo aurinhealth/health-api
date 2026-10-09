@@ -40,18 +40,24 @@ test("Food: eaten against the target, macros and meals in their slots", () => {
   assert.match(f.sentence, /^Tréninkový den: o 350 kcal víc\. Zbývá 1475 kcal/);
   assert.deepEqual(f.macros.protein, { eaten: 59, target: 150 });
   const types = f.meals.map(m => m.type);
-  assert.deepEqual(types, ["breakfast", "lunch", "snack_pm", "dinner"], "the morning snack slot is past and empty");
+  assert.deepEqual(types, ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"], "every slot stays, breakfast included");
+  assert.equal(f.meals[1].suggestion, null, "the morning snack slot is past and empty: no suggestion");
   const breakfast = f.meals[0];
   assert.equal(breakfast.entries.length, 2, "the banana at 8:10 is breakfast");
   assert.equal(breakfast.kcal, 535);
   assert.equal(breakfast.entries[0].amount, "1 porce");
-  assert.equal(f.meals[1].time, "12:30");
+  assert.equal(f.meals[2].time, "12:30");
   assert.ok(!f.meals.some(m => m.entries.some(e => e.name === "Plánovaná večeře")), "planned food is not eaten");
-  const snack = f.meals[2], dinner = f.meals[3];
+  const snack = f.meals[3], dinner = f.meals[4];
   assert.equal(snack.suggestion.kcal, Math.round(1475 * 0.1 / 0.35 / 10) * 10);
   assert.equal(dinner.suggestion.kcal, Math.round(1475 * 0.25 / 0.35 / 10) * 10);
+  assert.equal(dinner.suggestion.protein, Math.round((150 - 58.8) * 0.25 / 0.35 / 5) * 5, "the protein still to eat");
+  assert.equal(dinner.suggestion.carbs, Math.round((330 - 146.9) * 0.25 / 0.35 / 5) * 5);
+  assert.equal(dinner.suggestion.fat, Math.round((80 - 29.4) * 0.25 / 0.35 / 5) * 5);
+  assert.deepEqual(f.macros.fiber, { eaten: 0, target: 37 }, "14 g fibre per 1000 kcal");
   assert.equal(f.water.ml, 1800);
   assert.equal(f.water.entries, 1);
+  assert.deepEqual(f.water.drinks.map(d => d.kind), ["water"]);
 });
 
 test("A past day has no suggestions for the empty slots it still has", () => {
@@ -64,7 +70,8 @@ test("Food stays usable without data", () => {
   const f = buildFood({ date: DATE });
   assert.equal(f.target, null);
   assert.equal(f.sentence, null);
-  assert.deepEqual(f.meals, []);
+  assert.equal(f.meals.length, 5, "the slots are there to add the first food");
+  assert.ok(f.meals.every(m => m.suggestion === null && m.entries.length === 0));
   assert.equal(f.water.ml, null);
 });
 

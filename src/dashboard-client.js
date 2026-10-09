@@ -1640,9 +1640,10 @@ function personalBaseline(rows, date, key, options) {
 }
 function sleepNeedMinutes(options) {
   const age = options && options.age != null ? Number(options.age) : null, strain = options && options.strain != null ? Number(options.strain) : null;
-  let need = age != null && age >= 65 ? 450 : 480;
+  const goal = options && Number(options.goal) >= 360 && Number(options.goal) <= 600 ? Math.round(Number(options.goal)) : null;
+  let need = goal != null ? goal : age != null && age >= 65 ? 450 : 480;
   if (strain >= 18) need += 30; else if (strain >= 14) need += 15;
-  return Math.max(420, Math.min(540, need));
+  return goal != null ? Math.max(360, Math.min(600, need)) : Math.max(420, Math.min(540, need));
 }
 function sleepDebtMinutes(nights, date, need) {
   const want = need || 480, end = Date.parse(date + "T12:00:00Z"), byDay = new Map();
@@ -1668,12 +1669,13 @@ function sleepNeedFor(input) {
   const rows = input.rows || [], sessions = input.sessions || [];
   const prevRow = rows.find(r => r && r.id === prev);
   const strain = input.strain != null ? input.strain : (prevRow ? strainScore(heartRateLoad(prevRow.hrZoneMinutes)) : null);
-  const base = sleepNeedMinutes({ age: input.age, strain });
+  const goal = Number(input.goal) >= 360 && Number(input.goal) <= 600 ? Math.round(Number(input.goal)) : null;
+  const base = sleepNeedMinutes({ age: input.age, strain, goal });
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
-  const debtState = sleepDebtMinutes(sessions.filter(s => (s.date || String(s.endTime || "").slice(0, 10)) <= prev), prev, sleepNeedMinutes({ age: input.age }));
+  const debtState = sleepDebtMinutes(sessions.filter(s => (s.date || String(s.endTime || "").slice(0, 10)) <= prev), prev, sleepNeedMinutes({ age: input.age, goal }));
   const debt = debtState ? Math.min(30, Math.round(debtState.minutes / 4)) : 0;
   const naps = sessions.filter(s => (s.nap || Number(s.durationMin) < 180) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
-  const need = Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
+  const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };
 }
 function bedtimePlan(input) {
@@ -1683,14 +1685,16 @@ function bedtimePlan(input) {
     const age = n && n.date ? (end - Date.parse(n.date + "T12:00:00Z")) / 86400000 : NaN;
     return age >= -1 && age <= 13 && Number.isFinite(Number(n.wakeMin)) && Number(n.durationMin) > 0;
   });
-  if (!recent.length) return null;
+  const set = input.wake || {}, validWake = v => v != null && v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) < 1440;
+  const chosen = [0, 6].includes(morning) && validWake(set.weekend) ? Number(set.weekend) : validWake(set.workday) ? Number(set.workday) : null;
+  if (!recent.length && chosen == null) return null;
   const median = xs => { const v = [...xs].sort((a, b) => a - b), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
   const alike = recent.filter(n => weekend(n.date) === [0, 6].includes(morning)), wakeNights = alike.length >= 3 ? alike : recent;
-  const wake = Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
+  const wake = chosen != null ? Math.round(chosen) : Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
   const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
   const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
   const inBed = Math.round(need / efficiency / 5) * 5;
-  return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning) };
+  return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning), wakeSource: chosen != null ? "setting" : "usual" };
 }
 function sleepIndexScore(night, need) {
   if (!night || !(Number(night.durationMin) > 0)) return null;
@@ -1777,7 +1781,7 @@ function strainScore(load) {
 // (copied above between the recovery-model markers). Sleep need: age from the
 // profile, the strain of the day before, HRV status, sleep debt and naps
 // (sleepNeedFor).
-function nightNeed(date){return date?sleepNeedFor({date,age:appProfile().age,strain:daywideStrain(dateShift(date,-1))?.score??null,rows:vitalWellness(),sessions:state.sleep?.sessions||[]}).need:sleepNeedMinutes({age:appProfile().age});}
+function nightNeed(date){return date?sleepNeedFor({date,age:appProfile().age,goal:appProfile().sleepGoal,strain:daywideStrain(dateShift(date,-1))?.score??null,rows:vitalWellness(),sessions:state.sleep?.sessions||[]}).need:sleepNeedMinutes({age:appProfile().age,goal:appProfile().sleepGoal});}
 function sleepIndex(night){return night?sleepIndexScore(night,nightNeed(night.date||String(night.endTime||'').slice(0,10))):null;}
 function recoveryIndex(rows,night,today){return {...recoveryReadiness({rows,date:today,night,sleepNeed:nightNeed(today)}),current:rows.find(r=>r.id===today)};}
 // Sleep in hours against the night's need, and tonight's bedtime (bedtimePlan):
@@ -1785,12 +1789,13 @@ function recoveryIndex(rows,night,today){return {...recoveryReadiness({rows,date
 function localClockMin(iso){const t=Date.parse(iso);if(!Number.isFinite(t))return null;const parts=new Intl.DateTimeFormat('en-GB',{timeZone:USER_TZ,hour:'numeric',minute:'numeric',hourCycle:'h23'}).formatToParts(new Date(t)),h=Number(parts.find(p=>p.type==='hour')?.value),m=Number(parts.find(p=>p.type==='minute')?.value);return Number.isFinite(h)&&Number.isFinite(m)?h*60+m:null;}
 function clockText(min){return String(Math.floor(min/60)%24).padStart(2,'0')+':'+String(min%60).padStart(2,'0');}
 function tonightPlan(){
-  const today=localToday(),sessions=state.sleep?.sessions||[],info=sleepNeedFor({date:dateShift(today,1),age:appProfile().age,strain:daywideStrain(today)?.score??null,rows:vitalWellness(),sessions});
+  const today=localToday(),sessions=state.sleep?.sessions||[],info=sleepNeedFor({date:dateShift(today,1),age:appProfile().age,goal:appProfile().sleepGoal,strain:daywideStrain(today)?.score??null,rows:vitalWellness(),sessions});
   const nights=primarySleepSessions(sessions).map(n=>({date:n.date||String(n.endTime||'').slice(0,10),wakeMin:localClockMin(n.endTime),durationMin:n.durationMin,timeInBedMin:n.timeInBedMin}));
-  const plan=bedtimePlan({date:today,need:info.need,nights});return plan&&{...plan,info};
+  const wakeMin=t=>{const m=String(t||'').match(/^(\d{2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):null;};
+  const plan=bedtimePlan({date:today,need:info.need,nights,wake:{workday:wakeMin(appProfile().wakeTime),weekend:wakeMin(appProfile().wakeTimeWeekend)}});return plan&&{...plan,info};
 }
 function needBreakdown(info){
-  const base=sleepNeedMinutes({age:appProfile().age}),min=v=>Math.round(Math.abs(v))+' min',parts=[uiText('základ ','base ')+hm(base)];
+  const base=sleepNeedMinutes({age:appProfile().age,goal:appProfile().sleepGoal}),min=v=>Math.round(Math.abs(v))+' min',parts=[uiText('základ ','base ')+hm(base)];
   if(info.base>base)parts.push(uiText('náročný den +','hard day +')+min(info.base-base));
   if(info.hrv)parts.push(uiText('nízké HRV +','low HRV +')+min(info.hrv));
   if(info.debt)parts.push(uiText('spánkový dluh +','sleep debt +')+min(info.debt));
@@ -4259,7 +4264,7 @@ function openRatingSheet({date=localToday(),name=null}={}){
 // ---- Zdraví: the tiles that matter. Sleep and weight as in Dnes, sleep debt
 // and VO₂ max instead of the averages; the long-term card is gone. ----
 // Naps count toward the day's sleep, so all sessions go in, not only the nights.
-function sleepDebt(sessions,date){return sleepDebtMinutes((state.sleep?.sessions||sessions).filter(s=>(s.date||String(s.endTime||'').slice(0,10))<=date),date,sleepNeedMinutes({age:appProfile().age}));}
+function sleepDebt(sessions,date){return sleepDebtMinutes((state.sleep?.sessions||sessions).filter(s=>(s.date||String(s.endTime||'').slice(0,10))<=date),date,sleepNeedMinutes({age:appProfile().age,goal:appProfile().sleepGoal}));}
 function healthTile(label,value,meta,tone=''){return '<div class="metric-tile'+(tone?' tone-'+tone:'')+'"><div class="label">'+label+'</div><div class="metric-number">'+value+'</div><div class="small">'+meta+'</div></div>';}
 function renderHealthTiles(){
   const recovery=$('recovery');if(!recovery)return;

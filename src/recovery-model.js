@@ -25,11 +25,14 @@ export function personalBaseline(rows, date, key, options) {
 // Foundation, Hirshkowitz 2015); the midpoint is the start, as in Garmin's
 // Sleep Coach. A hard day adds up to 30 min: athletes are advised the upper
 // end of the range after heavy training (Walsh 2021 consensus).
+// A sleep goal of the athlete's own (6–10 h) replaces the age baseline and
+// widens the range to 6–10 h.
 export function sleepNeedMinutes(options) {
   const age = options && options.age != null ? Number(options.age) : null, strain = options && options.strain != null ? Number(options.strain) : null;
-  let need = age != null && age >= 65 ? 450 : 480;
+  const goal = options && Number(options.goal) >= 360 && Number(options.goal) <= 600 ? Math.round(Number(options.goal)) : null;
+  let need = goal != null ? goal : age != null && age >= 65 ? 450 : 480;
   if (strain >= 18) need += 30; else if (strain >= 14) need += 15;
-  return Math.max(420, Math.min(540, need));
+  return goal != null ? Math.max(360, Math.min(600, need)) : Math.max(420, Math.min(540, need));
 }
 
 // Sleep debt over the last 7 days. Deficits add up night after night (Van
@@ -73,12 +76,13 @@ export function sleepNeedFor(input) {
   const rows = input.rows || [], sessions = input.sessions || [];
   const prevRow = rows.find(r => r && r.id === prev);
   const strain = input.strain != null ? input.strain : (prevRow ? strainScore(heartRateLoad(prevRow.hrZoneMinutes)) : null);
-  const base = sleepNeedMinutes({ age: input.age, strain });
+  const goal = Number(input.goal) >= 360 && Number(input.goal) <= 600 ? Math.round(Number(input.goal)) : null;
+  const base = sleepNeedMinutes({ age: input.age, strain, goal });
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
-  const debtState = sleepDebtMinutes(sessions.filter(s => (s.date || String(s.endTime || "").slice(0, 10)) <= prev), prev, sleepNeedMinutes({ age: input.age }));
+  const debtState = sleepDebtMinutes(sessions.filter(s => (s.date || String(s.endTime || "").slice(0, 10)) <= prev), prev, sleepNeedMinutes({ age: input.age, goal }));
   const debt = debtState ? Math.min(30, Math.round(debtState.minutes / 4)) : 0;
   const naps = sessions.filter(s => (s.nap || Number(s.durationMin) < 180) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
-  const need = Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
+  const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };
 }
 // When to go to bed for the night after `date`, as WHOOP's Sleep Planner
@@ -87,7 +91,9 @@ export function sleepNeedFor(input) {
 // of the same kind of morning (work day or weekend, all nights when fewer
 // than 3), the efficiency the median of asleep / in bed (0.8–0.97, 0.9
 // without data). `nights` are primary nights with their wake-up date and
-// local wake time in minutes after midnight (wakeMin).
+// local wake time in minutes after midnight (wakeMin). A wake time the
+// athlete set (input.wake: { workday, weekend } in minutes after midnight)
+// wins over the usual one, so the plan works without any recorded nights.
 export function bedtimePlan(input) {
   const date = input.date, need = Number(input.need) || 480, end = Date.parse(date + "T12:00:00Z");
   const morning = new Date(end + 86400000).getUTCDay(), weekend = d => [0, 6].includes(new Date(Date.parse(d + "T12:00:00Z")).getUTCDay());
@@ -95,14 +101,16 @@ export function bedtimePlan(input) {
     const age = n && n.date ? (end - Date.parse(n.date + "T12:00:00Z")) / 86400000 : NaN;
     return age >= -1 && age <= 13 && Number.isFinite(Number(n.wakeMin)) && Number(n.durationMin) > 0;
   });
-  if (!recent.length) return null;
+  const set = input.wake || {}, validWake = v => v != null && v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) < 1440;
+  const chosen = [0, 6].includes(morning) && validWake(set.weekend) ? Number(set.weekend) : validWake(set.workday) ? Number(set.workday) : null;
+  if (!recent.length && chosen == null) return null;
   const median = xs => { const v = [...xs].sort((a, b) => a - b), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
   const alike = recent.filter(n => weekend(n.date) === [0, 6].includes(morning)), wakeNights = alike.length >= 3 ? alike : recent;
-  const wake = Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
+  const wake = chosen != null ? Math.round(chosen) : Math.round(median(wakeNights.map(n => Number(n.wakeMin))));
   const ratios = recent.filter(n => Number(n.timeInBedMin) >= Number(n.durationMin)).map(n => Number(n.durationMin) / Number(n.timeInBedMin));
   const efficiency = ratios.length ? Math.max(0.8, Math.min(0.97, median(ratios))) : 0.9;
   const inBed = Math.round(need / efficiency / 5) * 5;
-  return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning) };
+  return { wake, inBed, need, efficiency, bed: ((Math.round((wake - inBed) / 5) * 5) % 1440 + 1440) % 1440, nights: wakeNights.length, weekend: [0, 6].includes(morning), wakeSource: chosen != null ? "setting" : "usual" };
 }
 // Sleep index 0–100: duration against the personal need (50, from none at
 // half the need to full at the need: under 6 h is not recommended), sleep

@@ -5,6 +5,7 @@
 // Pure: GET /app/api/health loads the inputs.
 import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan } from "./recovery-model.js";
 import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
+import { sleepSettings } from "./energy-profile.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -35,7 +36,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
   const age = num(profile.age);
-  const needOn = d => sleepNeedFor({ date: d, age, strain: dayStrain(google, shift(d, -1)), rows, sessions });
+  const sleepSet = sleepSettings(profile);
+  const needOn = d => sleepNeedFor({ date: d, age, goal: sleepSet.goal, strain: dayStrain(google, shift(d, -1)), rows, sessions });
 
   // Readiness today and for the last 14 days.
   const readinessOn = d => recoveryReadiness({ rows, date: d, night: nights.get(d) || null, sleepNeed: needOn(d).need });
@@ -53,6 +55,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const tonight = needOn(shift(sleepDay, 1));
   const plan = bedtimePlan({
     date: sleepDay,
+    wake: sleepSet.wake,
     need: tonight.need,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
@@ -117,7 +120,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       } : null,
       week,
       need: needToday.need,
-      tonight: { need: tonight.need, base: sleepNeedMinutes({ age }), strain: tonight.base - sleepNeedMinutes({ age }), hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null },
+      tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null },
       debt: debt ? { minutes: debt.minutes, nights: debt.nights } : null,
       regularity: beds.length >= 3 ? { bedtime: clock(bedAvg + 18 * 60), spread: Math.round(bedSd), nights: beds.map(b => ({ date: b.date, value: b.value })) } : null
     },

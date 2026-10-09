@@ -5,6 +5,7 @@
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore } from "./recovery-model.js";
 import { localDateTime } from "./user-time.js";
+import { sleepSettings } from "./energy-profile.js";
 
 const STEP_GOAL = 10000;
 
@@ -48,11 +49,12 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
   const age = num(profile.age);
+  const sleepSet = sleepSettings(profile);
 
   // Sleep and readiness for the night that ended this morning. Until it has
   // synced they stay empty: an earlier day is a tap away (?date=).
   const night = nights.get(date) || null;
-  const need = sleepNeedFor({ date, age, strain: dayStrain(google, shift(date, -1)), rows, sessions }).need;
+  const need = sleepNeedFor({ date, age, goal: sleepSet.goal, strain: dayStrain(google, shift(date, -1)), rows, sessions }).need;
   const readiness = recoveryReadiness({ rows, date, night, sleepNeed: need });
   const hrv = readiness.components?.hrv || null;
 
@@ -61,9 +63,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // coming night is the one that ends this morning.
   const sleepDay = hour != null && hour < 6 && !nights.get(date) ? shift(date, -1) : date;
   const strainNow = dayStrain(google, date);
-  const tonightNeed = sleepNeedFor({ date: shift(sleepDay, 1), age, strain: dayStrain(google, sleepDay), rows, sessions }).need;
+  const tonightNeed = sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: dayStrain(google, sleepDay), rows, sessions }).need;
   const plan = bedtimePlan({
     date: sleepDay,
+    wake: sleepSet.wake,
     need: tonightNeed,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
@@ -130,10 +133,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       protein: { eaten: round(num(totals.protein_g)), target: num(macros.protein_g) },
       carbs: { eaten: round(num(totals.carbs_g)), target: num(macros.carbs_g) },
       fat: { eaten: round(num(totals.fat_g)), target: num(macros.fat_g) },
-      water: { ml: num(fluids.totalMl), target: num(fluids.target?.ml) }
+      water: { ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml) }
     },
     plan: planItems,
-    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed } : null,
+    tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null
   };
