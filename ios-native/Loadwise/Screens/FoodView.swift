@@ -203,13 +203,20 @@ struct FiberRow: View {
         self.init(amount: fiber)
     }
 
+    /// "12 / 30 g", or "41 / max 66 g" for a limit.
+    static func text(eaten: Double, target: Double?, limit: Bool) -> String {
+        guard let target else { return Fmt.int(eaten) + " g" }
+        let separator = limit ? " / max " : " / "
+        return Fmt.int(eaten) + separator + Fmt.int(target) + " g"
+    }
+
     var body: some View {
         let eaten = amount.eaten ?? 0, target = amount.target ?? 30
         let over = limit && eaten > target
         HStack(spacing: 12) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 70, alignment: .leading)
             ProgressLine(fraction: eaten / max(target, 1), color: over ? Palette.rust : color, height: 3)
-            Text(Fmt.int(eaten) + (amount.target.map { (limit ? " / max " : " / ") + Fmt.int($0) } ?? "") + " g")
+            Text(Self.text(eaten: eaten, target: amount.target, limit: limit))
                 .font(Typo.number(16)).foregroundStyle(over ? Palette.rust : Palette.ink).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
@@ -321,17 +328,28 @@ struct MealRow: View {
         let aim = meal.suggestion ?? meal.target
         if empty {
             guard let aim else { return nil }
-            let macros = [("bílkoviny", aim.protein), ("sacharidy", aim.carbs), ("tuky", aim.fat)]
-                .compactMap { label, value in value.map { label + " " + Fmt.int($0) + " g" } }
-            return "Cíl " + Fmt.int(aim.kcal) + " kcal" + (macros.isEmpty ? "" : ": " + macros.joined(separator: ", "))
+            var macros: [String] = []
+            if let v = aim.protein { macros.append("bílkoviny " + Fmt.int(v) + " g") }
+            if let v = aim.carbs { macros.append("sacharidy " + Fmt.int(v) + " g") }
+            if let v = aim.fat { macros.append("tuky " + Fmt.int(v) + " g") }
+            let head = "Cíl " + Fmt.int(aim.kcal) + " kcal"
+            return macros.isEmpty ? head : head + ": " + macros.joined(separator: ", ")
         }
         let sum = { (key: KeyPath<FoodSnapshot.Entry, Double?>) in meal.entries.compactMap { $0[keyPath: key] }.reduce(0, +) }
         let goal = meal.target ?? meal.suggestion
-        let part = { (label: String, eaten: Double, target: Double?) in label + " " + Fmt.int(eaten) + (target.map { " z " + Fmt.int($0) } ?? "") }
-        var text = [part("Bílkoviny", sum(\.protein), goal?.protein), part("sacharidy", sum(\.carbs), goal?.carbs), part("tuky", sum(\.fat), goal?.fat)]
-            .joined(separator: " · ") + " g"
+        var text = [Self.part("Bílkoviny", sum(\.protein), goal?.protein), Self.part("sacharidy", sum(\.carbs), goal?.carbs),
+                    Self.part("tuky", sum(\.fat), goal?.fat)].joined(separator: " · ") + " g"
         if let goal { text += " · cíl " + Fmt.int(goal.kcal) + " kcal" }
         return text
+    }
+}
+
+extension MealRow {
+    /// "Bílkoviny 42 z 60".
+    static func part(_ label: String, _ eaten: Double, _ target: Double?) -> String {
+        let head = label + " " + Fmt.int(eaten)
+        guard let target else { return head }
+        return head + " z " + Fmt.int(target)
     }
 }
 

@@ -65,8 +65,7 @@ struct PlanEditorSheet: View {
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name).font(.body.weight(.medium)).foregroundStyle(left ? Palette.ink : Palette.muted)
-                Text("\(work.count) " + Fmt.plural(work.count, "série", "série", "sérií") + (reps.map { " × " + $0 } ?? "")
-                     + (exercise.doneCount > 0 ? " · hotovo \(exercise.doneCount)" : ""))
+                Text(Self.summary(sets: work.count, reps: reps, done: exercise.doneCount))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 6)
@@ -83,6 +82,14 @@ struct PlanEditorSheet: View {
             .accessibilityLabel("O sérii víc")
         }
         .foregroundStyle(Palette.ink)
+    }
+
+    /// "3 série × 8-12 · hotovo 1".
+    static func summary(sets: Int, reps: String?, done: Int) -> String {
+        var text = "\(sets) " + Fmt.plural(sets, "série", "série", "sérií")
+        if let reps { text += " × " + reps }
+        if done > 0 { text += " · hotovo \(done)" }
+        return text
     }
 
     /// "3" or "3-4" sets in the catalog: the first number.

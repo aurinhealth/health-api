@@ -156,7 +156,10 @@ struct SleepSettingsForm: View {
             alarmNote = problem
             systemAlarm = false
         } else {
-            alarmNote = "Budík zvoní " + [work.map { "v pracovní dny v " + $0 }, weekend.map { "o víkendu v " + $0 }].compactMap { $0 }.joined(separator: " a ") + "."
+            var when: [String] = []
+            if let work { when.append("v pracovní dny v " + work) }
+            if let weekend { when.append("o víkendu v " + weekend) }
+            alarmNote = "Budík zvoní " + when.joined(separator: " a ") + "."
         }
     }
 

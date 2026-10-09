@@ -266,10 +266,14 @@ struct AddFoodSheet: View {
     }
 
     private func recipeLine(_ r: FoodRecipe) -> String {
+        var parts = ["1 porce"]
+        if let s = r.servings {
+            let number = Fmt.decimal(s, digits: s.rounded() == s ? 0 : 1)
+            parts.append("z " + number + " " + Fmt.plural(Int(s), "porce", "porce", "porcí"))
+        }
         let count = r.ingredients?.count ?? 0
-        let servings = r.servings.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " " + Fmt.plural(Int($0), "porce", "porce", "porcí") }
-        return ["1 porce", servings.map { "z " + $0 }, count > 0 ? "\(count) " + Fmt.plural(count, "surovina", "suroviny", "surovin") : nil]
-            .compactMap { $0 }.joined(separator: " · ")
+        if count > 0 { parts.append("\(count) " + Fmt.plural(count, "surovina", "suroviny", "surovin")) }
+        return parts.joined(separator: " · ")
     }
 
     private func loadRecent() async {
@@ -517,12 +521,23 @@ struct NutritionCells: View {
             .fixedSize(horizontal: false, vertical: true)
             .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
             .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
-            let extra = [("z toho cukry", product.grams(product.sugars_100g, for: amount)), ("vláknina", product.grams(product.fiber_100g, for: amount))]
-                .compactMap { label, grams in grams.map { label + " " + Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) + " g" } }
+            let extra = extras
             if !extra.isEmpty {
                 Text(extra.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
+    }
+
+    /// "z toho cukry 5,6 g · vláknina 2 g", for what the food has.
+    private var extras: [String] {
+        var out: [String] = []
+        if let g = product.grams(product.sugars_100g, for: amount) { out.append("z toho cukry " + Self.grams(g)) }
+        if let g = product.grams(product.fiber_100g, for: amount) { out.append("vláknina " + Self.grams(g)) }
+        return out
+    }
+
+    static func grams(_ value: Double) -> String {
+        Fmt.decimal(value, digits: value < 10 ? 1 : 0) + " g"
     }
 
     private func cell(_ value: String, _ label: String, first: Bool = false) -> some View {

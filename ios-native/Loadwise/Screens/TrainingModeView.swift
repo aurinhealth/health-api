@@ -214,6 +214,12 @@ struct TrainingModeView: View {
         Effort(rpe: 10, label: "Selhání", hint: "už ani jedno")
     ]
 
+    /// "V zásobě zbývala 2 opakování · RPE 8".
+    static func reserve(_ e: Effort) -> String {
+        let reps = e.rpe == 10 ? "" : " opakování"
+        return "V zásobě " + e.hint + reps + " · RPE \(e.rpe)"
+    }
+
     private var effort: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Jak to šlo?").font(Typo.caption).foregroundStyle(Palette.muted)
@@ -231,7 +237,7 @@ struct TrainingModeView: View {
                 }
             }
             if let e = Self.efforts.first(where: { $0.rpe == rpe }) {
-                Text("V zásobě " + e.hint + (rpe == 10 ? "" : " opakování") + " · RPE \(rpe)")
+                Text(Self.reserve(e))
                     .font(Typo.caption).foregroundStyle(Palette.faint)
             }
         }
