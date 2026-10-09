@@ -135,10 +135,12 @@ struct SettingsMenu: View {
                 }
                 SettingsDivider()
                 NavigationLink { UnitsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Color(light: 0x5B7FA6, dark: 0x8FB1D6)), title: "Jednotky", value: "metrické")
+                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Color(light: 0x5B7FA6, dark: 0x8FB1D6)), title: "Jednotky", value: UnitsSettingsView.label(units))
                 }
                 SettingsDivider()
-                SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk", value: "čeština", chevron: false)
+                NavigationLink { LanguageSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk", value: LanguageSettingsView.label(language))
+                }
             }
             .buttonStyle(.plain)
 
@@ -166,6 +168,8 @@ struct SettingsMenu: View {
         }
     }
 
+    @AppStorage(Units.key) private var units = "metric"
+    @AppStorage(L10n.key) private var language = "cs"
     @AppStorage(Reminders.bedtimeKey) private var r1 = true
     @AppStorage(Reminders.workoutKey) private var r2 = true
     @AppStorage(Reminders.waterKey) private var r3 = true

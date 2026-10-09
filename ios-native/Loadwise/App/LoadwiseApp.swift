@@ -6,6 +6,8 @@ struct LoadwiseApp: App {
     @State private var model = AppModel(demo: ProcessInfo.processInfo.arguments.contains("-demo"))
     /// Settings → Vzhled: "system", "light" or "dark".
     @AppStorage("appearance") private var appearance = "system"
+    /// Settings → Jazyk: "cs" or "en".
+    @AppStorage(L10n.key) private var language = "cs"
 
     var body: some Scene {
         WindowGroup {
@@ -15,6 +17,9 @@ struct LoadwiseApp: App {
                 .onOpenURL { model.handle($0) }
                 .tint(Palette.ink)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
+                .environment(\.locale, L10n.locale)
+                // Texts from variables are translated when drawn, so a new language redraws everything.
+                .id(language)
         }
     }
 }

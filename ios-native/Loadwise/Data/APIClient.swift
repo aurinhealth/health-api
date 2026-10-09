@@ -460,7 +460,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         // The server counts days in the user's zone and answers in Czech.
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
-        request.setValue("cs", forHTTPHeaderField: "X-Interface-Language")
+        request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")

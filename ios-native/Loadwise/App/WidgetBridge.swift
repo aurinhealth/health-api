@@ -19,6 +19,11 @@ enum WidgetBridge {
         WidgetCenter.shared.reloadAllTimelines()
     }
 
+    /// Redraws the widgets in a new language or new units.
+    static func reload() {
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
     static func clear() {
         WidgetSnapshot.clear()
         WidgetCenter.shared.reloadAllTimelines()

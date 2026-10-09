@@ -62,12 +62,12 @@ enum W {
 
     static func int(_ v: Double?) -> String {
         guard let v else { return "–" }
-        return Int(v.rounded()).formatted(.number.locale(Locale(identifier: "cs_CZ")))
+        return Int(v.rounded()).formatted(.number.locale(L10n.locale))
     }
 
     static func decimal(_ v: Double?) -> String {
         guard let v else { return "–" }
-        return v.formatted(.number.precision(.fractionLength(1)).locale(Locale(identifier: "cs_CZ")))
+        return v.formatted(.number.precision(.fractionLength(1)).locale(L10n.locale))
     }
 }
 
