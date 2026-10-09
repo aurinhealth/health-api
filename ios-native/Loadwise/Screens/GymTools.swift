@@ -20,6 +20,10 @@ struct TrainingTools: View {
                 tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
             }
             LibraryWidget()
+            LazyVGrid(columns: columns, spacing: 10) {
+                tile(.weekPlan, "calendar.badge.plus", "Plán týdne", Palette.green)
+                tile(.insights, "trophy.fill", "Rekordy", Palette.gold)
+            }
             Button(action: addWorkout) {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink)

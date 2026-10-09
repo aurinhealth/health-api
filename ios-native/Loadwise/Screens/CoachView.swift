@@ -95,6 +95,12 @@ struct CoachView: View {
                     }
                 }
             }
+            HStack(spacing: 10) {
+                NavigationLink { DayReviewView() } label: { coachTool("Posoudit dnešek", "checkmark.seal") }
+                NavigationLink { WeekPlanView() } label: { coachTool("Naplánovat týden", "calendar.badge.plus") }
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
             SectionLabel(text: "Zkus třeba").padding(.top, 6)
             ForEach(["Jak mám dnes trénovat?", "Necítím se dobře, uprav mi týden.", "Co sníst před večerním tréninkem?", "Proč mám nízkou připravenost?"], id: \.self) { q in
                 Button { input = q; Task { await send() } } label: {
@@ -105,6 +111,13 @@ struct CoachView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private func coachTool(_ title: String, _ symbol: String) -> some View {
+        Label(title, systemImage: symbol)
+            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            .frame(maxWidth: .infinity).frame(height: 46)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     private var consentCard: some View {

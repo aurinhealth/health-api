@@ -38,6 +38,7 @@ struct TodayView: View {
 
 /// The Today screen without the scroll view, so tests can render it whole.
 struct TodayContent: View {
+    @Environment(AppModel.self) private var model
     let today: TodaySnapshot
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
@@ -73,6 +74,10 @@ struct TodayContent: View {
 
             KeyNumbers(today: today)
                 .padding(.top, 28)
+
+            if model.selectedDate == nil {
+                CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
+            }
 
             if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
                 VStack(alignment: .leading, spacing: 12) {
