@@ -174,6 +174,7 @@ final class AppModel {
         guard !demo, phase == .signedIn else { return }
         loading = true
         defer { loading = false }
+        await sendPendingDrinks()
         do {
             today = try await api.today(date: selectedDate)
             errorMessage = nil
@@ -242,6 +243,18 @@ final class AppModel {
             foodError = error.localizedDescription
             return false
         }
+    }
+
+    /// Water added from the widget while the app was closed.
+    private func sendPendingDrinks() async {
+        let drinks = PendingDrinks.take()
+        guard !drinks.isEmpty else { return }
+        var failed: [PendingDrinks.Drink] = []
+        for d in drinks {
+            do { try await api.addFluid(ml: d.ml, kind: "water", date: d.date) } catch { failed.append(d) }
+        }
+        PendingDrinks.putBack(failed)
+        if food != nil { await refreshFood() }
     }
 
     /// Loads the calendar days that are not here yet (all of them with force).

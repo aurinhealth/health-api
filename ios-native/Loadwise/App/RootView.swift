@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var showAdd = false
     @State private var showSettings = false
     @State private var showCoach = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         switch model.phase {
@@ -47,6 +48,10 @@ struct RootView: View {
             .sheet(isPresented: $showCoach) { CoachView() }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView() }
             .task { await model.checkSetup(); await model.loadAccountInitial() }
+            // Back in the app: new data, and water added from the widget goes out.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active, model.today != nil { Task { await model.refresh() } }
+            }
         }
     }
 

@@ -21,6 +21,12 @@ struct WidgetSnapshot: Codable, Equatable {
     var kcalTarget: Double?
     var waterMl: Double?
     var waterTarget: Double?
+    var protein: Double? = nil
+    var proteinTarget: Double? = nil
+    var carbs: Double? = nil
+    var carbsTarget: Double? = nil
+    var fat: Double? = nil
+    var fatTarget: Double? = nil
     var steps: Double?
     var stepsGoal: Double?
     var bedtime: String?
@@ -47,5 +53,6 @@ struct WidgetSnapshot: Codable, Equatable {
 
     static let sample = WidgetSnapshot(date: "2026-10-08", updated: Date(), readiness: 78, zone: "green", sleepMinutes: 432, sleepIndex: 82,
                                        strain: 8.4, strainPlanned: 14, hrv: 58, kcal: 1240, kcalTarget: 2650, waterMl: 1200, waterTarget: 2800,
+                                       protein: 64, proteinTarget: 150, carbs: 140, carbsTarget: 320, fat: 38, fatTarget: 80,
                                        steps: 6400, stepsGoal: 10000, bedtime: "22:45", nextTitle: "Celé tělo", nextTime: "17:30")
 }

@@ -12,6 +12,7 @@ struct LoadwiseWidgetBundle: WidgetBundle {
         ReadinessWidget()
         SleepWidget()
         DayWidget()
+        FoodWaterWidget()
     }
 }
 
@@ -245,5 +246,112 @@ struct DayWidgetView: View {
             Spacer(minLength: 4)
             Text(value).font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
+    }
+}
+
+// MARK: - Food and drinks
+
+struct FoodWaterWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "food", provider: SnapshotProvider()) { entry in
+            FoodWaterWidgetView(entry: entry)
+                .widgetURL(URL(string: "loadwise://open/food"))
+                .widgetCard()
+        }
+        .configurationDisplayName("Jídlo a pití")
+        .description("Kalorie, živiny a pití. Vodu přidáš jedním klepnutím.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+struct FoodWaterWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: SnapshotEntry
+
+    static let protein = Color(red: 0.18, green: 0.5, blue: 0.85)
+    static let carbs = Color(red: 0.85, green: 0.54, blue: 0.02)
+    static let fat = Color(red: 0.49, green: 0.36, blue: 0.88)
+
+    var body: some View {
+        if let s = entry.snapshot {
+            if family == .systemMedium {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        kcal(s)
+                        macro("Bílkoviny", s.protein, s.proteinTarget, Self.protein)
+                        macro("Sacharidy", s.carbs, s.carbsTarget, Self.carbs)
+                        macro("Tuky", s.fat, s.fatTarget, Self.fat)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        water(s)
+                        HStack(spacing: 6) {
+                            add(250)
+                            add(500)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    kcal(s)
+                    Spacer(minLength: 0)
+                    water(s)
+                    add(250)
+                }
+            }
+        } else {
+            EmptyWidgetView()
+        }
+    }
+
+    private func kcal(_ s: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Jídlo").font(.caption.weight(.medium)).foregroundStyle(W.muted)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(W.int(s.kcal)).font(W.number(30)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
+                if let target = s.kcalTarget { Text("/ " + W.int(target)).font(.caption2).foregroundStyle(W.muted) }
+            }
+        }
+    }
+
+    private func water(_ s: WidgetSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: "drop.fill").font(.caption2).foregroundStyle(.blue)
+                Text(W.decimal((s.waterMl ?? 0) / 1000) + (s.waterTarget.map { " / " + W.decimal($0 / 1000) } ?? "") + " l")
+                    .font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            bar(s.waterMl, s.waterTarget, .blue)
+        }
+    }
+
+    private func macro(_ title: String, _ eaten: Double?, _ target: Double?, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title).font(.caption2).foregroundStyle(W.muted)
+                Spacer(minLength: 2)
+                Text(W.int(eaten) + (target.map { "/" + W.int($0) } ?? "") + " g").font(.caption2.weight(.semibold)).foregroundStyle(W.ink)
+            }
+            bar(eaten, target, color)
+        }
+    }
+
+    private func bar(_ value: Double?, _ target: Double?, _ color: Color) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(color.opacity(0.18))
+                Capsule().fill(color).frame(width: geo.size.width * min(1, max(0, (value ?? 0) / max(1, target ?? 1))))
+            }
+        }
+        .frame(height: 4)
+    }
+
+    private func add(_ ml: Int) -> some View {
+        Button(intent: AddWaterIntent(ml: ml)) {
+            Label("\(ml) ml", systemImage: "plus")
+                .font(.caption.weight(.semibold))
+                .frame(maxWidth: .infinity)
+        }
+        .tint(.blue)
     }
 }
