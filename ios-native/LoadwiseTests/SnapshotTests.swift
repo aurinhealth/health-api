@@ -127,8 +127,8 @@ final class SnapshotTests: XCTestCase {
     func testSettingsScreens() throws {
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
-        try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) } }
-        try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) } }
+        try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
     }
 
     func testJSONValueKeepsUnknownKeys() throws {
