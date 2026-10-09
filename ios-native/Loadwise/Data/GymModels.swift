@@ -145,7 +145,7 @@ struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
     /// "Lehký", "Střední" or "Těžký" from the difficulty (1–10).
     var difficultyLabel: String? {
         guard let d = difficulty else { return nil }
-        return d < 4 ? "lehký" : d < 6.5 ? "střední" : "těžký"
+        return L10n.tr(d < 4 ? "lehký" : d < 6.5 ? "střední" : "těžký")
     }
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }
@@ -157,7 +157,7 @@ struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
     ]
 
     static func systemLabel(_ id: String?) -> String {
-        systems.first { $0.0 == id }?.1 ?? (id ?? "")
+        systems.first { $0.0 == id }.map { L10n.tr($0.1) } ?? (id ?? "")
     }
 }
 

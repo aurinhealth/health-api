@@ -8,7 +8,7 @@ enum APIError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: return "Přihlášení vypršelo. Přihlas se znovu."
+        case .unauthorized: return L10n.tr("Přihlášení vypršelo. Přihlas se znovu.")
         case .message(let text): return text
         case .aiConsentRequired(let text): return text
         }
@@ -83,7 +83,7 @@ final class APIClient: @unchecked Sendable {
                         switch object["type"] as? String {
                         case "progress": continuation.yield(.progress(object["message"] as? String ?? ""))
                         case "answer": continuation.yield(.answer(object["answer"] as? String ?? ""))
-                        case "error": throw APIError.message(object["message"] as? String ?? "Kouč teď neodpověděl.")
+                        case "error": throw APIError.message(object["message"] as? String ?? L10n.tr("Kouč teď neodpověděl."))
                         case "done":
                             let result = try JSONSerialization.data(withJSONObject: object["result"] ?? [:])
                             continuation.yield(.done(try decoder.decode(AssistantResult.self, from: result)))
@@ -311,8 +311,8 @@ final class APIClient: @unchecked Sendable {
         struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string(mode)]
         let r: Response = try await send("/app/api/food/photo", method: "POST", body: body)
-        guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? "Na fotce se hodnoty nepodařilo přečíst.") }
-        var product = FoodProduct(name: (r.name?.isEmpty == false ? r.name! : "Jídlo z fotky"), calories_100g: v.calories_100g, protein_100g: v.protein_100g,
+        guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? L10n.tr("Na fotce se hodnoty nepodařilo přečíst.")) }
+        var product = FoodProduct(name: (r.name?.isEmpty == false ? r.name! : L10n.tr("Jídlo z fotky")), calories_100g: v.calories_100g, protein_100g: v.protein_100g,
                                   carbs_100g: v.carbs_100g, fat_100g: v.fat_100g,
                                   nutrition_basis: r.basis == "portion" ? "portion" : r.basis == "100ml" ? "ml" : "g",
                                   serving_size: r.servingSize.flatMap { $0.isEmpty ? nil : JSONValue.string($0) },
@@ -378,7 +378,7 @@ final class APIClient: @unchecked Sendable {
         request.httpBody = try JSONSerialization.data(withJSONObject: ["token": token, "verifier": verifier])
         let (data, response) = try await session.data(for: request)
         try check(response, data)
-        guard hasSession else { throw APIError.message("Server nevrátil přihlášení. Zkus to znovu.") }
+        guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
     }
 
     /// E-mail sign-in, step 1: a six-digit code goes to the address (when it has access).
@@ -389,7 +389,7 @@ final class APIClient: @unchecked Sendable {
     /// Step 2: the code for the session cookie.
     func verifyEmailLogin(email: String, code: String) async throws {
         let _: JSONValue = try await send("/auth/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
-        guard hasSession else { throw APIError.message("Server nevrátil přihlášení. Zkus to znovu.") }
+        guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
     }
 
     // MARK: - Data sources
@@ -399,7 +399,7 @@ final class APIClient: @unchecked Sendable {
     func connectLink(provider: String) async throws -> URL {
         struct Response: Decodable { let url: String }
         let r: Response = try await send("/app/api/connect/start", method: "POST", body: ["provider": JSONValue.string(provider)])
-        guard let url = URL(string: r.url) else { throw APIError.message("Odkaz na připojení je neplatný.") }
+        guard let url = URL(string: r.url) else { throw APIError.message(L10n.tr("Odkaz na připojení je neplatný.")) }
         return url
     }
 
@@ -433,7 +433,7 @@ final class APIClient: @unchecked Sendable {
         do {
             value = try decoder.decode(T.self, from: data)
         } catch {
-            throw APIError.message("Odpověď serveru se nepodařilo přečíst.")
+            throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
         if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
         return value
@@ -450,7 +450,7 @@ final class APIClient: @unchecked Sendable {
         } catch {
             // Writes whose answer the app does not read may answer with nothing.
             if let ignored = JSONValue.null as? T { return ignored }
-            throw APIError.message("Odpověď serveru se nepodařilo přečíst.")
+            throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
     }
 
@@ -469,15 +469,15 @@ final class APIClient: @unchecked Sendable {
     }
 
     private func check(_ response: URLResponse, _ data: Data) throws {
-        guard let http = response as? HTTPURLResponse else { throw APIError.message("Server neodpověděl.") }
+        guard let http = response as? HTTPURLResponse else { throw APIError.message(L10n.tr("Server neodpověděl.")) }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let message = json?["message"] as? String
             if json?["status"] as? String == "ai_consent_required" {
-                throw APIError.aiConsentRequired(message ?? "AI funkce potřebují tvůj souhlas.")
+                throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }
-            throw APIError.message(message ?? "Server odpověděl chybou \(http.statusCode).")
+            throw APIError.message(message ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode)))
         }
     }
 }

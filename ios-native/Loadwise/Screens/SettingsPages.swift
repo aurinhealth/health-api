@@ -72,7 +72,14 @@ struct ProfileSettingsView: View {
 
     static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]
     static let sportHourOptions = [("auto", "podle záznamů"), ("0", "žádný"), ("1-3", "1–3 h"), ("3-6", "3–6 h"), ("6-10", "6–10 h"), ("10+", "víc než 10 h")]
-    static let goals = [("lose_0.25", "hubnout 0,25 kg týdně"), ("lose_0.5", "hubnout 0,5 kg týdně"), ("lose_0.75", "hubnout 0,75 kg týdně"), ("lose_1", "hubnout 1 kg týdně"), ("maintain", "udržovat váhu")]
+    /// "hubnout 0,5 kg týdně", in pounds when the units are imperial.
+    static var goals: [(String, String)] {
+        func lose(_ kg: Double, _ digits: Int) -> String {
+            L10n.f("hubnout %@ týdně", Units.weightText(kg, digits: Units.imperial ? 1 : digits))
+        }
+        return [("lose_0.25", lose(0.25, 2)), ("lose_0.5", lose(0.5, 1)), ("lose_0.75", lose(0.75, 2)), ("lose_1", lose(1, 0)),
+                ("maintain", L10n.tr("udržovat váhu"))]
+    }
 
     var body: some View {
         SettingsPage(title: "Profil") {
@@ -80,12 +87,12 @@ struct ProfileSettingsView: View {
                 SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "muž"), ("female", "žena")])
                 SettingsDivider()
                 if hasBirthDate {
-                    SettingsRow(title: "Věk", value: age.isEmpty ? "–" : age + " let", chevron: false)
+                    SettingsRow(title: "Věk", value: age.isEmpty ? "–" : L10n.f("%@ let", age), chevron: false)
                 } else {
                     SettingsField(title: "Věk", text: $age, unit: "let", keyboard: .numberPad)
                 }
                 SettingsDivider()
-                SettingsField(title: "Výška", text: $height, unit: "cm", keyboard: .numberPad)
+                SettingsField(title: "Výška", text: $height, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
             }
             SettingsGroup(title: "Tep", footer: "Prázdné hodnoty dopočítá Loadwise z tvých tréninků a nocí.") {
                 SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad)
@@ -99,7 +106,7 @@ struct ProfileSettingsView: View {
                 SettingsDivider()
                 SettingsPicker(title: "Cíl", selection: $goal, options: Self.goals)
                 SettingsDivider()
-                SettingsField(title: "Cílová váha", text: $targetWeight, unit: "kg")
+                SettingsField(title: "Cílová váha", text: $targetWeight, unit: Units.weightUnit)
             }
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
@@ -112,23 +119,35 @@ struct ProfileSettingsView: View {
         let p = store.profile
         sex = p["sex"]?.string ?? ""
         age = p["age"]?.string ?? ""
-        height = p["height"]?.string ?? ""
+        height = Units.imperial
+            ? (p["height"]?.number).map { Fmt.decimal(Units.length($0), digits: 1) } ?? ""
+            : p["height"]?.string ?? ""
         hrmax = p["hrmax"]?.string ?? ""
         rhr = p["rhr"]?.string ?? ""
         activity = p["activity"]?.string ?? ""
         sportHours = p["sportHours"]?.string ?? ""
         goal = p["goal"]?.string ?? ""
-        targetWeight = (p["targetWeight"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
+        targetWeight = (p["targetWeight"]?.number).map { (kg: Double) -> String in
+            let shown = Units.weight(kg)
+            return Fmt.decimal(shown, digits: shown.rounded() == shown ? 0 : 1)
+        } ?? ""
         original = changes
     }
 
     private var changes: JSONObject {
         var c: JSONObject = [
-            "sex": .string(sex), "height": .field(height), "hrmax": .field(hrmax), "rhr": .field(rhr),
-            "activity": .string(activity), "sportHours": .string(sportHours), "goal": .string(goal), "targetWeight": .field(targetWeight)
+            "sex": .string(sex), "height": Self.metric(height, Units.cm, scale: 1), "hrmax": .field(hrmax), "rhr": .field(rhr),
+            "activity": .string(activity), "sportHours": .string(sportHours), "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10)
         ]
         if !hasBirthDate { c["age"] = .field(age) }
         return c
+    }
+
+    /// A value typed in the chosen unit, sent in metric (rounded to 1/scale).
+    private static func metric(_ text: String, _ toMetric: (Double) -> Double, scale: Double) -> JSONValue {
+        let value = JSONValue.field(text)
+        guard Units.imperial, case .number(let shown) = value else { return value }
+        return .number((toMetric(shown) * scale).rounded() / scale)
     }
 
     private func save() async {
@@ -167,7 +186,7 @@ struct GoalsSettingsView: View {
                 SettingsToggle(title: "Mám hlavní závod", isOn: $hasEvent)
                 if hasEvent {
                     SettingsDivider()
-                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: "Pražský půlmaraton")
+                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: L10n.tr("Pražský půlmaraton"))
                     SettingsDivider()
                     DatePicker("Datum", selection: $eventDate, in: Date()..., displayedComponents: .date)
                         .environment(\.locale, Fmt.locale)
@@ -233,7 +252,7 @@ struct SourcesSettingsView: View {
                     if index > 0 { SettingsDivider() }
                     Menu {
                         Button { start(provider.id) } label: {
-                            Label(provider.connected == true ? "Připojit znovu" : "Připojit", systemImage: "link")
+                            Label(L10n.tr(provider.connected == true ? "Připojit znovu" : "Připojit"), systemImage: "link")
                         }
                         if provider.id == "intervals" {
                             Button { intervalsKey = true } label: { Label("Vložit API klíč", systemImage: "key") }
@@ -278,7 +297,7 @@ struct SourcesSettingsView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
         } }
         .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await store.load() ; message = "Intervals.icu je připojené." } }
-        .confirmationDialog("Odpojit \(disconnecting?.name ?? "")?", isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
+        .confirmationDialog(L10n.f("Odpojit %@?", disconnecting?.name ?? ""), isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
             Button("Odpojit", role: .destructive) { if let p = disconnecting { Task { await disconnect(p.id) } } }
         } message: {
             Text("Data, která už Loadwise má, zůstanou. Nová přestanou chodit.")
@@ -298,7 +317,7 @@ struct SourcesSettingsView: View {
                 guard let event = try await model.connect(provider: provider) else { return }
                 switch event {
                 case "google", "intervals":
-                    message = (provider == "google" ? "Google" : "Intervals.icu") + " je připojené, data se začínají stahovat."
+                    message = L10n.f("%@ je připojené, data se začínají stahovat.", provider == "google" ? "Google" : "Intervals.icu")
                 case "intervals-failed":
                     message = "Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč."
                     intervalsKey = true
@@ -328,7 +347,7 @@ struct SourcesSettingsView: View {
 
     private func subtitle(_ provider: ConnectionsResponse.Provider) -> String? {
         let missing = provider.missingPermissions?.count ?? 0
-        if missing > 0 { return "chybí \(missing) " + Fmt.plural(missing, "oprávnění", "oprávnění", "oprávnění") }
+        if missing > 0 { return missing == 1 ? L10n.tr("chybí 1 oprávnění") : L10n.f("chybí %@ oprávnění", String(missing)) }
         return provider.metrics.map { $0.joined(separator: ", ").lowercased() }
     }
 
@@ -340,7 +359,11 @@ struct SourcesSettingsView: View {
         guard let date else { return nil }
         let out = DateFormatter()
         out.locale = Fmt.locale
-        out.dateFormat = Calendar.current.isDateInToday(date) ? "'dnes' H:mm" : "d. M. H:mm"
+        if L10n.isEnglish {
+            out.dateFormat = Calendar.current.isDateInToday(date) ? "'today' h:mm a" : "MMM d, h:mm a"
+        } else {
+            out.dateFormat = Calendar.current.isDateInToday(date) ? "'dnes' H:mm" : "d. M. H:mm"
+        }
         return out.string(from: date)
     }
 
@@ -455,7 +478,7 @@ struct AppearanceSettingsView: View {
                     if index > 0 { SettingsDivider() }
                     Button { appearance = value } label: {
                         HStack {
-                            Text(Fmt.capitalized(Self.label(value))).font(.body).foregroundStyle(Palette.ink)
+                            Text(verbatim: Fmt.capitalized(L10n.tr(Self.label(value)))).font(.body).foregroundStyle(Palette.ink)
                             Spacer()
                             if appearance == value { Image(systemName: "checkmark").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.green) }
                         }
@@ -653,12 +676,12 @@ struct PrivacySettingsView: View {
         let before = ai
         ai = value
         Task {
-            do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = "Změna se neuložila: " + error.localizedDescription }
+            do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
         }
     }
 
     private func delete() async {
-        guard deleteText.trimmingCharacters(in: .whitespaces).uppercased() == "SMAZAT" else {
+        guard ["SMAZAT", "DELETE"].contains(deleteText.trimmingCharacters(in: .whitespaces).uppercased()) else {
             error = "Účet zůstal: pro smazání je potřeba napsat SMAZAT."
             return
         }

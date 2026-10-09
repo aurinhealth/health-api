@@ -157,7 +157,7 @@ extension APIClient {
     func reviewDay(date: String) async throws -> DayReviewResponse.Review {
         let r: DayReviewResponse = try await send("/app/api/coach/review", method: "POST", body: ["date": JSONValue.string(date)])
         if let review = r.reviews?.first?.review { return review }
-        throw APIError.message(r.reviews?.first?.error ?? "Kouč den nezhodnotil.")
+        throw APIError.message(r.reviews?.first?.error ?? L10n.tr("Kouč den nezhodnotil."))
     }
 
     func fitnessInsights() async throws -> FitnessInsights {

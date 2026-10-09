@@ -103,7 +103,7 @@ struct CoachView: View {
             .padding(.top, 6)
             SectionLabel(text: "Zkus třeba").padding(.top, 6)
             ForEach(["Jak mám dnes trénovat?", "Necítím se dobře, uprav mi týden.", "Co sníst před večerním tréninkem?", "Proč mám nízkou připravenost?"], id: \.self) { q in
-                Button { input = q; Task { await send() } } label: {
+                Button { input = L10n.tr(q); Task { await send() } } label: {
                     Text(q).font(.subheadline).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -114,7 +114,7 @@ struct CoachView: View {
     }
 
     private func coachTool(_ title: String, _ symbol: String) -> some View {
-        Label(title, systemImage: symbol)
+        Label(L10n.tr(title), systemImage: symbol)
             .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity).frame(height: 46)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

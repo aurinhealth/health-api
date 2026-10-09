@@ -94,7 +94,7 @@ struct AddSheet: View {
     private func save(ml: Int, kind: String) async {
         failed = nil
         if await model.addDrink(ml: ml, kind: kind) {
-            added = "Přidáno: " + (DrinkKind.find(kind)?.label ?? kind).lowercased() + " \(ml) ml"
+            added = L10n.f("Přidáno: %@ %@", L10n.tr(DrinkKind.find(kind)?.label ?? kind).lowercased(with: L10n.locale), Units.volumeText(Double(ml)))
         } else {
             added = nil
             failed = model.foodError ?? "Nepodařilo se uložit."
@@ -184,29 +184,33 @@ struct DrinkSheet: View {
                 }
 
                 HStack(alignment: .lastTextBaseline) {
-                    Button { ml = max(50, ml - 50) } label: { Image(systemName: "minus.circle").font(.system(size: 28)) }
+                    Button { step(-1) } label: { Image(systemName: "minus.circle").font(.system(size: 28)) }
+                        .accessibilityLabel("Méně")
                     Spacer()
-                    Text("\(ml)").font(Typo.number(64)).foregroundStyle(Palette.ink)
-                    Text("ml").font(Typo.small).foregroundStyle(Palette.muted)
+                    Text(Units.imperial ? Fmt.int(Units.volume(Double(ml))) : String(ml)).font(Typo.number(64)).foregroundStyle(Palette.ink)
+                    Text(verbatim: Units.volumeUnit).font(Typo.small).foregroundStyle(Palette.muted)
                     Spacer()
-                    Button { ml = min(2000, ml + 50) } label: { Image(systemName: "plus.circle").font(.system(size: 28)) }
+                    Button { step(1) } label: { Image(systemName: "plus.circle").font(.system(size: 28)) }
+                        .accessibilityLabel("Více")
                 }
                 .foregroundStyle(Palette.ink)
-                ChipFlow(items: Array(Set(amounts + DrinkPrefs.amounts(kind))).sorted(), label: { "\($0) ml" }, isOn: { $0 == ml }, toggle: { ml = $0 })
+                ChipFlow(items: Array(Set(amounts + DrinkPrefs.amounts(kind))).sorted(), label: { Units.volumeText(Double($0)) }, isOn: { $0 == ml }, toggle: { ml = $0 })
                 HStack(spacing: 16) {
                     Button {
                         var list = DrinkPrefs.list(favorites).filter { $0 != kind }
                         if !DrinkPrefs.list(favorites).contains(kind) { list.append(kind) }
                         favorites = list.joined(separator: ",")
                     } label: {
-                        Label(DrinkPrefs.list(favorites).contains(kind) ? "V oblíbených" : "Do oblíbených",
+                        Label(L10n.tr(DrinkPrefs.list(favorites).contains(kind) ? "V oblíbených" : "Do oblíbených"),
                               systemImage: DrinkPrefs.list(favorites).contains(kind) ? "star.fill" : "star")
                     }
                     Button {
                         DrinkPrefs.setAmounts(kind, Array((DrinkPrefs.amounts(kind) + [ml]).suffix(5)))
                         presetSaved = true
                     } label: {
-                        Label(DrinkPrefs.amounts(kind).contains(ml) || presetSaved ? "Množství uložené" : "Uložit \(ml) ml jako předvolbu", systemImage: "bookmark")
+                        Label(DrinkPrefs.amounts(kind).contains(ml) || presetSaved
+                              ? L10n.tr("Množství uložené")
+                              : L10n.f("Uložit %@ jako předvolbu", Units.volumeText(Double(ml))), systemImage: "bookmark")
                     }
                     .disabled(DrinkPrefs.amounts(kind).contains(ml))
                 }
@@ -220,7 +224,7 @@ struct DrinkSheet: View {
                         HStack {
                             Text("Do hydratace se počítá").font(Typo.body).foregroundStyle(Palette.secondary)
                             Spacer()
-                            Text("\(Int((Double(ml) * d.factor).rounded())) ml").font(Typo.number(24)).foregroundStyle(Palette.blue)
+                            Text(Units.volumeText((Double(ml) * d.factor).rounded())).font(Typo.number(24)).foregroundStyle(Palette.blue)
                         }
                         Text(note(d)).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
@@ -240,6 +244,16 @@ struct DrinkSheet: View {
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
+    }
+
+    /// −/+ by 50 ml, or by 1 fl oz in imperial units; the amount stays in ml.
+    private func step(_ direction: Int) {
+        if Units.imperial {
+            let ounces = max(1, Units.volume(Double(ml)).rounded() + Double(direction))
+            ml = min(2000, Units.roundedMl(fluidOunces: ounces))
+        } else {
+            ml = min(2000, max(50, ml + 50 * direction))
+        }
     }
 
     private func note(_ d: DrinkKind) -> String {

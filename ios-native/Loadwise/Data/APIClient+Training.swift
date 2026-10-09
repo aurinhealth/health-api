@@ -45,7 +45,7 @@ extension APIClient {
         if !muscles.isEmpty { body["focusMuscles"] = .array(muscles.map { .string($0) }) }
         else if let focus { body["focus"] = .string(focus) }
         let r: GymPreviewResponse = try await send("/app/api/gym/generate", method: "POST", body: body)
-        guard let plan = r.plan else { throw APIError.message(r.message ?? "Trénink se nepodařilo sestavit.") }
+        guard let plan = r.plan else { throw APIError.message(r.message ?? L10n.tr("Trénink se nepodařilo sestavit.")) }
         return GymProposal(draftId: r.draftId, planName: plan.planName ?? "Silový trénink", rationale: plan.rationale, rows: plan.rows, muscles: r.muscles ?? [:])
     }
 

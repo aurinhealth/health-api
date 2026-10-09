@@ -4,7 +4,7 @@ import SwiftUI
 // check-in, the review of a day and the records.
 
 private func sportLabel(_ sport: String) -> String {
-    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání"][sport] ?? Fmt.capitalized(sport)
+    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
 }
 
 private func sportSymbol(_ sport: String) -> String {
@@ -77,7 +77,7 @@ struct WeekPlanView: View {
                     .frame(width: 40, height: 40).background(Palette.amberSoft, in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Fmt.capitalized(Fmt.dayHeading(item.date))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text([sportLabel(item.sport), item.minutes.map { Fmt.duration($0) }, item.environment.map { $0 == "indoor" ? "uvnitř" : "venku" }]
+                    Text([sportLabel(item.sport), item.minutes.map { Fmt.duration($0) }, item.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }]
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if let why = item.reason ?? item.label {
@@ -127,7 +127,7 @@ struct WeekPlanView: View {
                     if let draft = proposal.draftId { try await model.api.confirmGym(draftId: draft, rows: proposal.rows) }
                 } else {
                     let generated = try await model.api.generateWorkout(date: item.date, sport: item.sport, minutes: item.minutes, environment: item.environment)
-                    guard let workout = generated.workout else { throw APIError.message(generated.message ?? "Bez návrhu.") }
+                    guard let workout = generated.workout else { throw APIError.message(generated.message ?? L10n.tr("Bez návrhu.")) }
                     try await model.api.scheduleWorkout(id: workout.id, date: item.date, indoor: item.environment == "indoor")
                 }
                 progress[item.id] = "done"
@@ -207,7 +207,7 @@ struct DayReviewView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.today) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Kouč · " + Fmt.dayHeading(date)).padding(.top, 24)
+                SectionLabel(text: L10n.tr("Kouč") + " · " + Fmt.dayHeading(date)).padding(.top, 24)
                 if loading {
                     HStack(spacing: 8) { ProgressView(); Text("Kouč čte tvůj den…").font(Typo.small).foregroundStyle(Palette.muted) }.padding(.top, 30)
                 } else if let error {
@@ -258,7 +258,7 @@ struct DayReviewView: View {
     }
 
     static func verdictLabel(_ verdict: String) -> String {
-        ["go": "Jak je v plánu", "keep": "Jak je v plánu", "adjust": "Upravit", "modify": "Upravit", "easier": "Ubrat", "rest": "Odpočinek", "swap": "Vyměnit"][verdict] ?? Fmt.capitalized(verdict)
+        ["go": "Jak je v plánu", "keep": "Jak je v plánu", "adjust": "Upravit", "modify": "Upravit", "easier": "Ubrat", "rest": "Odpočinek", "swap": "Vyměnit"][verdict].map { L10n.tr($0) } ?? Fmt.capitalized(verdict)
     }
 
     private func load() async {
@@ -307,7 +307,7 @@ struct InsightsView: View {
     @ViewBuilder
     private func content(_ insights: FitnessInsights) -> some View {
         if let focus = insights.cardioFocus, let p = focus.percent {
-            SectionLabel(text: "Intenzita za \(focus.days ?? 28) dní").padding(.top, 24)
+            SectionLabel(text: L10n.f("Intenzita za %@ dní", String(focus.days ?? 28))).padding(.top, 24)
             Card {
                 GeometryReader { geo in
                     let total = max(1, (p.low ?? 0) + (p.high ?? 0) + (p.anaerobic ?? 0))
@@ -354,8 +354,8 @@ struct InsightsView: View {
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     let best = lift.heaviest
                     recordRow(Fmt.capitalized(lift.exercise),
-                              value: best?.value.map { Fmt.decimal($0) + " kg" } ?? "–",
-                              detail: lift.e1rm?.value.map { "odhad 1RM " + Fmt.int($0) + " kg" },
+                              value: best?.value.map { Units.weightText($0) } ?? "–",
+                              detail: lift.e1rm?.value.map { L10n.f("odhad 1RM %@", Units.weightText($0, digits: 0)) },
                               fresh: !(lift.recent ?? []).isEmpty)
                 }
             }
@@ -374,7 +374,7 @@ struct InsightsView: View {
     private func legend(_ title: String, _ value: Double?, _ color: Color) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 7, height: 7)
-            Text(title + " " + Fmt.int(value) + " %").font(Typo.caption).foregroundStyle(Palette.secondary)
+            Text(verbatim: L10n.tr(title) + " " + Fmt.int(value) + " %").font(Typo.caption).foregroundStyle(Palette.secondary)
         }
     }
 
@@ -396,7 +396,8 @@ struct InsightsView: View {
     private static func format(_ record: FitnessInsights.Record) -> String {
         guard let value = record.value else { return "–" }
         switch record.unit {
-        case "s/km": return String(format: "%d:%02d /km", Int(value) / 60, Int(value) % 60)
+        case "s/km": return Units.paceText(value)
+        case "km": return Units.distanceText(value)
         case "h": return Fmt.duration(Int(value * 60))
         case let unit?: return Fmt.decimal(value, digits: value.rounded() == value ? 0 : 1) + " " + unit
         case nil: return Fmt.decimal(value)

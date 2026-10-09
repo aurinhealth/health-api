@@ -264,10 +264,10 @@ struct AddFoodSheet: View {
     }
 
     private func recipeLine(_ r: FoodRecipe) -> String {
-        var parts = ["1 porce"]
+        var parts = [L10n.tr("1 porce")]
         if let s = r.servings {
             let number = Fmt.decimal(s, digits: s.rounded() == s ? 0 : 1)
-            parts.append("z " + number + " " + Fmt.plural(Int(s), "porce", "porce", "porcí"))
+            parts.append(L10n.f("z %@ %@", number, Fmt.plural(Int(s), "porce", "porce", "porcí")))
         }
         let count = r.ingredients?.count ?? 0
         if count > 0 { parts.append("\(count) " + Fmt.plural(count, "surovina", "suroviny", "surovin")) }
@@ -348,12 +348,12 @@ struct ProductRow: View {
     }
 
     private var subtitle: String {
-        let amount = product.perPortion ? "1 porce" : Fmt.int(product.defaultAmount) + " " + product.unit
+        let amount = product.perPortion ? L10n.tr("1 porce") : Fmt.int(product.defaultAmount) + " " + product.unit
         let source: String? = switch product.source {
-        case "personal", "manual": "moje potravina"
-        case "recipe", "composed": "moje jídlo"
-        case "ai", "ai_lookup": "dohledáno AI"
-        default: product.source == nil ? nil : "katalog"
+        case "personal", "manual": L10n.tr("moje potravina")
+        case "recipe", "composed": L10n.tr("moje jídlo")
+        case "ai", "ai_lookup": L10n.tr("dohledáno AI")
+        default: product.source == nil ? nil : L10n.tr("katalog")
         }
         return [product.brand, amount, source].compactMap { $0 }.joined(separator: " · ")
     }
@@ -402,7 +402,7 @@ struct FoodAmountView: View {
                     Label(note, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(product.perPortion ? "Hodnoty na porci." : "Hodnoty ze 100 \(product.unit) přepočtené na množství.")
+                Text(product.perPortion ? L10n.tr("Hodnoty na porci.") : L10n.f("Hodnoty ze 100 %@ přepočtené na množství.", product.unit))
                     .font(Typo.caption).foregroundStyle(Palette.faint)
 
                 Button { withAnimation(.easeOut(duration: 0.2)) { edit.toggle() } } label: {
@@ -415,8 +415,10 @@ struct FoodAmountView: View {
                 }
                 .buttonStyle(.plain)
                 if edit {
-                    let basis = product.perPortion ? "na porci" : "na 100 " + product.unit
-                    SettingsGroup(footer: "Hodnoty " + basis + ". Uloží se k potravině, příště je najdeš opravené.") {
+                    let footer = product.perPortion
+                        ? L10n.tr("Hodnoty na porci. Uloží se k potravině, příště je najdeš opravené.")
+                        : L10n.f("Hodnoty na 100 %@. Uloží se k potravině, příště je najdeš opravené.", product.unit)
+                    SettingsGroup(footer: footer) {
                         SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Potravina")
                         SettingsDivider()
                         SettingsField(title: "Výrobce, značka", text: $brand, keyboard: .default, placeholder: "nepovinné")
@@ -437,7 +439,7 @@ struct FoodAmountView: View {
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 Button { Task { await save() } } label: {
-                    Text(saving ? "Ukládám…" : "Přidat " + MealSlot.toMeal(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || value == nil || current.name.isEmpty)
@@ -529,8 +531,8 @@ struct NutritionCells: View {
     /// "z toho cukry 5,6 g · vláknina 2 g", for what the food has.
     private var extras: [String] {
         var out: [String] = []
-        if let g = product.grams(product.sugars_100g, for: amount) { out.append("z toho cukry " + Self.grams(g)) }
-        if let g = product.grams(product.fiber_100g, for: amount) { out.append("vláknina " + Self.grams(g)) }
+        if let g = product.grams(product.sugars_100g, for: amount) { out.append(L10n.f("z toho cukry %@", Self.grams(g))) }
+        if let g = product.grams(product.fiber_100g, for: amount) { out.append(L10n.f("vláknina %@", Self.grams(g))) }
         return out
     }
 
@@ -588,7 +590,7 @@ struct ManualFoodView: View {
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 Button { Task { await save() } } label: {
-                    Text(saving ? "Ukládám…" : "Přidat " + MealSlot.toMeal(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || number(kcal) == nil)

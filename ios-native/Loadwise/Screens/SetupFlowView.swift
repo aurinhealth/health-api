@@ -8,7 +8,7 @@ struct SetupFlowView: View {
     @State private var step = 0
     @State private var sex = ""
     @State private var age = 35
-    @State private var height = 175
+    @State private var height = 175.0
     @State private var weight = 75.0
     @State private var activity = "light"
     @State private var goal = "maintain"
@@ -44,7 +44,7 @@ struct SetupFlowView: View {
                         }
                     }
                     .padding(.top, 12)
-                    SectionLabel(text: "Krok \(step) z \(steps.count) · " + steps[step - 1]).padding(.top, 16)
+                    SectionLabel(text: L10n.f("Krok %@ z %@", String(step), String(steps.count)) + " · " + L10n.tr(steps[step - 1])).padding(.top, 16)
                 }
 
                 ScrollView {
@@ -83,8 +83,11 @@ struct SetupFlowView: View {
                 ChoiceCard(title: "Žena", systemImage: "figure.stand.dress", selected: sex == "female") { sex = "female" }
             }
             NumberStepper(title: "Věk", value: Binding(get: { Double(age) }, set: { age = Int($0) }), range: 18...100, step: 1, unit: "let")
-            NumberStepper(title: "Výška", value: Binding(get: { Double(height) }, set: { height = Int($0) }), range: 120...230, step: 1, unit: "cm")
-            NumberStepper(title: "Váha", value: $weight, range: 35...250, step: 0.5, unit: "kg", digits: 1)
+            // Shown in the chosen units, kept in cm and kg.
+            NumberStepper(title: "Výška", value: Binding(get: { Units.length(height) }, set: { height = Units.cm(Units.imperial ? $0.rounded() : $0) }),
+                          range: Units.length(120)...Units.length(230), step: 1, unit: Units.lengthUnit)
+            NumberStepper(title: "Váha", value: Binding(get: { Units.weight(weight) }, set: { weight = Units.kg(Units.imperial ? $0.rounded() : $0) }),
+                          range: Units.weight(35)...Units.weight(250), step: Units.imperial ? 1 : 0.5, unit: Units.weightUnit, digits: Units.imperial ? 0 : 1)
         case 2:
             title("Jak vypadá tvůj den?", "Bez sportu. Sport se přičte podle tréninků.")
             ForEach(Self.activities.indices, id: \.self) { i in
@@ -158,7 +161,7 @@ struct SetupFlowView: View {
         let p = s.savedProfile ?? [:]
         if let v = p["sex"]?.string { sex = v }
         if let v = p["age"]?.number { age = Int(v) }
-        if let v = p["height"]?.number { height = Int(v) }
+        if let v = p["height"]?.number { height = v.rounded() }
         if let v = s.weightKg { weight = (v * 2).rounded() / 2 }
         if let v = p["activity"]?.string { activity = v }
         if let v = p["goal"]?.string { goal = v }
@@ -171,12 +174,12 @@ struct SetupFlowView: View {
         saving = true
         defer { saving = false }
         let profile: JSONObject = [
-            "sex": .string(sex), "age": .number(Double(age)), "height": .number(Double(height)),
+            "sex": .string(sex), "age": .number(Double(age)), "height": .number(height.rounded()),
             "activity": .string(activity), "goal": .string(goal), "sportHours": .string(sportHours), "mainSport": .string(mainSport),
             "sleepGoal": sleepGoal == 0 ? .null : .number(Double(sleepGoal)), "wakeTime": .string(SleepSettingsForm.text(wake))
         ]
         do {
-            try await model.api.completeOnboarding(profile: profile, weightKg: weight, training: ["equipment": .string(equipment), "experience": .string(experience)])
+            try await model.api.completeOnboarding(profile: profile, weightKg: (weight * 10).rounded() / 10, training: ["equipment": .string(equipment), "experience": .string(experience)])
             await model.finishSetup()
         } catch {
             self.error = error.localizedDescription

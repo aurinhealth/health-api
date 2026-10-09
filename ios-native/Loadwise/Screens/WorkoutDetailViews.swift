@@ -58,8 +58,8 @@ struct SessionRow: View {
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
         if let t = session.time { parts.append(t) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
-        if session.status == "missed" { parts.append("nesplněno") }
-        if session.status == "done" { parts.append("hotovo") }
+        if session.status == "missed" { parts.append(L10n.tr("nesplněno")) }
+        if session.status == "done" { parts.append(L10n.tr("hotovo")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -127,12 +127,12 @@ struct ActivityDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
                 if let t = a.moving_time { stat("Čas", Fmt.duration(Int(t / 60))) }
-                if let d = a.distance, d > 0 { stat("Vzdálenost", Fmt.decimal(d / 1000) + " km") }
+                if let d = a.distance, d > 0 { stat("Vzdálenost", Units.distanceText(d / 1000)) }
                 if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
                 if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
                 if let hr = a.average_heartrate { stat("Tep", Fmt.int(hr) + (a.max_heartrate.map { " / " + Fmt.int($0) } ?? "")) }
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
-                if let pace = runPace { stat("Tempo", pace) }
+                if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
                 if let c = a.calories { stat("Energie", Fmt.int(c) + " kcal") }
             }
@@ -178,7 +178,7 @@ struct ActivityDetailContent: View {
             }
 
             if let hrr = detail.hrr, let drop = hrr.drop {
-                StatRow(title: "Zotavení tepu", value: Fmt.int(drop), unit: "tepů za " + Fmt.int(hrr.seconds ?? 60) + " s")
+                StatRow(title: "Zotavení tepu", value: Fmt.int(drop), unit: L10n.f("tepů za %@ s", Fmt.int(hrr.seconds ?? 60)))
                     .padding(.top, 18)
             }
         }
@@ -187,8 +187,7 @@ struct ActivityDetailContent: View {
     private var runPace: String? {
         let a = detail.activity
         guard (a.type ?? "").lowercased().contains("run"), let v = a.average_speed, v > 0 else { return nil }
-        let s = Int((1000 / v).rounded())
-        return "\(s / 60):" + String(format: "%02d", s % 60) + " /km"
+        return Units.paceText(1000 / v)
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -349,7 +348,7 @@ struct StepBlockRow: View {
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
         else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " %") }
-        if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(fast) + "–" + ZonesSettingsView.pace(slow) + " /km") }
+        if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(Units.pace(fast)) + "–" + ZonesSettingsView.pace(Units.pace(slow)) + " " + Units.paceUnit) }
         if let note = s.note { parts.append(note) }
         return parts.joined(separator: " · ")
     }
@@ -433,7 +432,7 @@ struct ManualWorkoutSheet: View {
                 }
                 .pickerStyle(.segmented)
                 SettingsGroup(footer: completed ? "Zapíše se jako odcvičený a pošle do Intervals.icu." : "Budoucí den: zapíše se jako plán do Intervals.icu.") {
-                    SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna")
+                    SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna"))
                     SettingsDivider()
                     SettingsField(title: "Délka", text: $minutes, unit: "min", keyboard: .numberPad)
                     SettingsDivider()
@@ -472,7 +471,7 @@ struct ManualWorkoutSheet: View {
         if model.demo { dismiss(); return }
         saving = true
         defer { saving = false }
-        let title = name.trimmingCharacters(in: .whitespaces).isEmpty ? (sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna") : name
+        let title = name.trimmingCharacters(in: .whitespaces).isEmpty ? L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna") : name
         do {
             try await model.api.manualWorkout(name: title, date: AppModel.localDate(date), sport: sport, minutes: m, completed: completed, rpe: completed ? Int(rpe) : nil, notes: notes)
             await model.refreshTraining()

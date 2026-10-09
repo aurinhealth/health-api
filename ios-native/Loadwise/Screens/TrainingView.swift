@@ -40,9 +40,9 @@ struct TrainingContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                SectionLabel(text: "Trénink · týden \(training.week)")
+                SectionLabel(text: L10n.f("Trénink · týden %@", String(training.week)))
                 Spacer()
-                CircleButton(systemImage: "plus", label: "Zapsat trénink", action: addWorkout)
+                CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
             }
 
             TrainingCalendarCard(today: training.date)
@@ -107,7 +107,7 @@ struct StrainHero: View {
                     .font(Typo.number(104))
                     .foregroundStyle(Palette.ink)
                 if let target = training.strain.target {
-                    Pill(text: "cíl ~" + Fmt.decimal(target), foreground: Palette.amber, background: Palette.amberSoft)
+                    Pill(text: L10n.f("cíl ~%@", Fmt.decimal(target)), foreground: Palette.amber, background: Palette.amberSoft)
                 }
             }
             if let sentence {
@@ -125,13 +125,13 @@ struct StrainHero: View {
     private var sentence: String? {
         let score = training.strain.score ?? 0
         if let target = training.strain.target, target > score + 0.5, let next = training.next, next.date == training.date {
-            return "\(next.title) tě dostane zhruba na \(Fmt.decimal(target)). " + (target >= 18 ? "Náročný den, večer počítej s delší regenerací." : "Přesně podle plánu.")
+            return L10n.f("%@ tě dostane zhruba na %@.", next.title, Fmt.decimal(target)) + " " + L10n.tr(target >= 18 ? "Náročný den, večer počítej s delší regenerací." : "Přesně podle plánu.")
         }
         if let band = training.strain.band, let target = training.strain.target, score >= target - 0.5 {
-            return "Dnešní plán je splněný, zátěž je \(band)."
+            return L10n.f("Dnešní plán je splněný, zátěž je %@.", band)
         }
         if training.strain.target == nil {
-            return score > 0 ? "Dnes nemáš nic v plánu, zátěž je jen z běžného pohybu." : "Dnes je volno. Lehká procházka regeneraci pomůže."
+            return L10n.tr(score > 0 ? "Dnes nemáš nic v plánu, zátěž je jen z běžného pohybu." : "Dnes je volno. Lehká procházka regeneraci pomůže.")
         }
         return nil
     }
@@ -246,7 +246,7 @@ struct NextSession: View {
     }
 
     private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, session.strain.map { "+" + Fmt.decimal($0) + " zátěže" }]
+        [session.minutes.map { Fmt.duration($0) }, session.strain.map { L10n.f("+%@ zátěže", Fmt.decimal($0)) }]
             .compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -254,7 +254,7 @@ struct NextSession: View {
         if !session.exercises.isEmpty {
             let shown = session.exercises.prefix(3).joined(separator: " · ")
             let rest = session.exercises.count - 3
-            return rest > 0 ? shown + " · a \(rest) " + Fmt.plural(rest, "další", "další", "dalších") : shown
+            return rest > 0 ? shown + " · " + L10n.f("a %@ %@", String(rest), Fmt.plural(rest, "další", "další", "dalších")) : shown
         }
         return session.description
     }
@@ -268,7 +268,7 @@ struct EventCard: View {
     var body: some View {
         Card {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Závod" + (event.date.map { " · " + Fmt.dayMonth($0) } ?? ""))
+                SectionLabel(text: L10n.tr("Závod") + (event.date.map { " · " + Fmt.dayMonth($0) } ?? ""))
                 Spacer()
             }
             HStack(alignment: .lastTextBaseline) {
@@ -307,9 +307,9 @@ struct EventCard: View {
 
     private func caption(_ phase: TrainingSnapshot.Phase) -> String {
         switch phase.state {
-        case "done": return "hotovo"
-        case "now": return phase.week.map { w in "teď · týden \(w)/\(phase.weeks ?? w)" } ?? "teď"
-        default: return phase.from.map { "od " + Fmt.dayMonth($0) } ?? ""
+        case "done": return L10n.tr("hotovo")
+        case "now": return phase.week.map { w in L10n.f("teď · týden %@/%@", String(w), String(phase.weeks ?? w)) } ?? L10n.tr("teď")
+        default: return phase.from.map { L10n.f("od %@", Fmt.dayMonth($0)) } ?? ""
         }
     }
 }
@@ -369,7 +369,7 @@ struct VO2maxWidget: View {
             VStack(alignment: .leading, spacing: 4) {
                 NumberText(value: Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1))
                 if let change = vo2.change, change != 0 {
-                    Text((change > 0 ? "↑ " : "↓ ") + Fmt.decimal(abs(change)) + " za 4 týdny")
+                    Text((change > 0 ? "↑ " : "↓ ") + L10n.f("%@ za 4 týdny", Fmt.decimal(abs(change))))
                         .font(Typo.caption).foregroundStyle(change > 0 ? Palette.green : Palette.rust)
                 } else {
                     Text("půl roku").font(Typo.caption).foregroundStyle(Palette.faint)
@@ -387,14 +387,14 @@ struct ThisWeekWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Tento týden", color: Palette.ink, trailing: week.plannedLoad > 0 ? Fmt.int(week.doneLoad) + " z " + Fmt.int(week.plannedLoad) + " TSS" : nil)
+            WidgetHeader(title: "Tento týden", color: Palette.ink, trailing: week.plannedLoad > 0 ? L10n.f("%@ z %@ TSS", Fmt.int(week.doneLoad), Fmt.int(week.plannedLoad)) : nil)
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("\(week.done)").font(Typo.number(34)).foregroundStyle(Palette.ink)
-                        Text("z \(week.planned)").font(Typo.number(17)).foregroundStyle(Palette.faint)
+                        Text(L10n.f("z %@", String(week.planned))).font(Typo.number(17)).foregroundStyle(Palette.faint)
                     }
-                    Text(Fmt.plural(week.planned, "tréninku", "tréninků", "tréninků") + " hotovo")
+                    Text(L10n.f("%@ hotovo", Fmt.plural(week.planned, "tréninku", "tréninků", "tréninků")))
                         .font(Typo.caption).foregroundStyle(Palette.amber)
                 }
                 .frame(width: 120, alignment: .leading)
@@ -425,7 +425,7 @@ struct ActiveCaloriesWidget: View {
                 VStack(alignment: .leading, spacing: 4) {
                     NumberText(value: Fmt.int(active.today), unit: "kcal")
                     if let usual = active.usual {
-                        Text("obvykle " + Fmt.int(usual) + " kcal").font(Typo.caption).foregroundStyle(Palette.faint)
+                        Text(L10n.f("obvykle %@ kcal", Fmt.int(usual))).font(Typo.caption).foregroundStyle(Palette.faint)
                     }
                 }
                 .frame(width: 120, alignment: .leading)
@@ -446,7 +446,7 @@ struct ZonesWidget: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: "4 týdny · " + Fmt.hoursMinutesLong(zones.minutes))
+            WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + " · " + Fmt.hoursMinutesLong(zones.minutes))
             ZoneBar(parts: parts)
         }
     }
@@ -484,6 +484,6 @@ struct ZoneBar: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(parts.map { $0.0 + " " + Fmt.int($0.1 / total * 100) + " %" }.joined(separator: ", "))
+        .accessibilityLabel(parts.map { L10n.tr($0.0) + " " + Fmt.int($0.1 / total * 100) + " %" }.joined(separator: ", "))
     }
 }

@@ -82,6 +82,11 @@ enum MealSlot {
         default: return "ke svačině"
         }
     }
+
+    /// "Přidat ke snídani" in the app's language.
+    static func addText(_ type: String) -> String {
+        L10n.tr("Přidat " + toMeal(type))
+    }
 }
 
 /// The Food screen without the scroll view, so tests can render it whole.
@@ -102,7 +107,7 @@ struct FoodContent: View {
             HStack(alignment: .lastTextBaseline, spacing: 12) {
                 Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).foregroundStyle(Palette.ink)
                 if let target = food.target {
-                    Text("z " + Fmt.int(target) + "\nkcal").font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
+                    Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
                 }
             }
             .padding(.top, 34)
@@ -253,19 +258,29 @@ struct DrinksCard: View {
 
     /// "ještě 1,3 l do cíle", "cíl splněn".
     static func remaining(ml: Double, target: Double) -> String {
-        ml >= target ? "cíl splněn" : "ještě " + Fmt.decimal((target - ml) / 1000) + " l do cíle"
+        ml >= target ? L10n.tr("cíl splněn") : L10n.f("ještě %@ do cíle", litres(target - ml))
+    }
+
+    /// "1,3 l", or "44 fl oz" in imperial units.
+    static func litres(_ ml: Double) -> String {
+        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.decimal(ml / 1000) + " l"
+    }
+
+    /// The big number: litres, or fluid ounces in imperial units.
+    private static func bigNumber(_ ml: Double) -> String {
+        Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000)
     }
 
     private func amount(_ size: CGFloat) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(Fmt.decimal((water.ml ?? 0) / 1000)).font(Typo.number(size)).foregroundStyle(Palette.ink)
-            Text("/ " + Fmt.decimal(target / 1000) + " l").font(Typo.number(size / 2)).foregroundStyle(Palette.faint)
+            Text(Self.bigNumber(water.ml ?? 0)).font(Typo.number(size)).foregroundStyle(Palette.ink)
+            Text("/ " + Self.litres(target)).font(Typo.number(size / 2)).foregroundStyle(Palette.faint)
         }
     }
 
     @ViewBuilder private var drunkNote: some View {
         if let drunk = water.drunkMl, abs(drunk - (water.ml ?? 0)) >= 20 {
-            Text("vypito " + Fmt.decimal(drunk / 1000) + " l").font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(L10n.f("vypito %@", Self.litres(drunk))).font(Typo.caption).foregroundStyle(Palette.muted)
         }
     }
 
@@ -351,9 +366,9 @@ struct DrinkLine: View {
             Text(kind?.label ?? drink.kind).font(Typo.small).foregroundStyle(Palette.secondary)
             if let t = drink.time { Text(t).font(Typo.tiny).foregroundStyle(Palette.faint) }
             Spacer()
-            Text(Fmt.int(drink.ml) + " ml").font(Typo.number(16)).foregroundStyle(Palette.ink)
+            Text(Units.volumeText(drink.ml)).font(Typo.number(16)).foregroundStyle(Palette.ink)
             if let h = drink.hydrationMl, let ml = drink.ml, abs(h - ml) >= 1 {
-                Text("→ " + Fmt.int(h)).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text("→ " + Fmt.int(Units.volume(h))).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
         .padding(.vertical, 8)
@@ -414,7 +429,7 @@ struct MealRow: View {
                 .overlay(Circle().stroke(Palette.ink.opacity(ring), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Přidat " + MealSlot.toMeal(meal.type))
+        .accessibilityLabel(MealSlot.addText(meal.type))
     }
 }
 
@@ -453,7 +468,7 @@ struct MacroBar: View {
                 .frame(width: 72, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title + " " + FiberRow.text(eaten: eaten, target: target, limit: false))
+        .accessibilityLabel(L10n.tr(title) + " " + FiberRow.text(eaten: eaten, target: target, limit: false))
     }
 }
 

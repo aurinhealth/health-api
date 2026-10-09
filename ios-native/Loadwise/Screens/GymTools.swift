@@ -170,7 +170,7 @@ struct SecondaryButton: View {
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage ?? "")
+            Label(L10n.tr(title), systemImage: systemImage ?? "")
                 .labelStyle(TitleAndOptionalIcon(hasIcon: systemImage != nil))
                 .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .frame(maxWidth: .infinity).frame(height: 46)
@@ -259,7 +259,7 @@ struct GymBuilderView: View {
 
             if focus == "muscles" {
                 Card {
-                    Text(muscles.isEmpty ? "Klepni na partie, které chceš procvičit (1 až 5)." : "Vybráno \(muscles.count) z 5")
+                    Text(muscles.isEmpty ? L10n.tr("Klepni na partie, které chceš procvičit (1 až 5).") : L10n.f("Vybráno %@ z 5", String(muscles.count)))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     BodyMap(selected: muscles, onTap: toggle, height: 280)
                     ChipFlow(items: BodyFigure.muscles.map { $0.id }, label: BodyFigure.label, isOn: { muscles.contains($0) }, toggle: toggle)
@@ -317,7 +317,7 @@ struct GymBuilderView: View {
                             Text(muscleLine(p.muscles[ex.name])).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                         }
                         Spacer(minLength: 8)
-                        Text("\(ex.sets) × " + ex.reps + (ex.kg.isEmpty ? "" : " · " + ex.kg + " kg"))
+                        Text("\(ex.sets) × " + ex.reps + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
                             .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
                     }
                     .padding(.vertical, 12)
@@ -488,7 +488,7 @@ struct EquipmentView: View {
                 if kind != "bodyweight" {
                     if kind == "custom" {
                         SettingsGroup(title: "Název") {
-                            SettingsField(title: "Posilovna", text: $gymName, keyboard: .default, placeholder: "třeba Fitko u nádraží")
+                            SettingsField(title: "Posilovna", text: $gymName, keyboard: .default, placeholder: L10n.tr("třeba Fitko u nádraží"))
                         }
                         .padding(.top, 22)
                     }
@@ -512,7 +512,7 @@ struct EquipmentView: View {
             SectionLabel(text: "Poznat z fotky nebo webu").padding(.top, 26)
             Card {
                 PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
-                    Label(busy == "photo" ? "Čtu fotky…" : "Vybrat fotky posilovny", systemImage: "photo.on.rectangle.angled")
+                    Label(L10n.tr(busy == "photo" ? "Čtu fotky…" : "Vybrat fotky posilovny"), systemImage: "photo.on.rectangle.angled")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 44)
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
@@ -543,25 +543,31 @@ struct EquipmentView: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Jednoručky")
                 Spacer()
-                Text(weights.isEmpty ? "plán navrhne jakoukoli váhu" : "\(weights.count) " + Fmt.plural(weights.count, "váha", "váhy", "vah"))
+                Text(weights.isEmpty ? L10n.tr("plán navrhne jakoukoli váhu") : L10n.f("%@ %@", String(weights.count), Fmt.plural(weights.count, "váha", "váhy", "vah")))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
             HStack(spacing: 8) {
-                preset("2–40 po 2") { weights = Set(stride(from: 2.0, through: 40, by: 2)) }
-                preset("2,5–25 po 2,5") { weights = Set(stride(from: 2.5, through: 25, by: 2.5)) }
-                preset("Zrušit") { weights = [] }
+                if Units.imperial {
+                    preset(L10n.f("%@ po %@", "5–50 lb", "5")) { weights = Set(stride(from: 5.0, through: 50, by: 5).map(Self.kgFromPounds)) }
+                    preset(L10n.f("%@ po %@", "10–100 lb", "10")) { weights = Set(stride(from: 10.0, through: 100, by: 10).map(Self.kgFromPounds)) }
+                } else {
+                    preset("2–40 po 2") { weights = Set(stride(from: 2.0, through: 40, by: 2)) }
+                    preset("2,5–25 po 2,5") { weights = Set(stride(from: 2.5, through: 25, by: 2.5)) }
+                }
+                preset(L10n.isEnglish ? "Clear" : "Zrušit") { weights = [] }
             }
-            ChipFlow(items: Array(Set(Self.weightOptions).union(weights)).sorted(), label: { Self.kg($0) },
+            ChipFlow(items: Array(Set(Self.shownOptions).union(weights)).sorted(), label: { Self.kg($0) },
                      isOn: { weights.contains($0) },
                      toggle: { w in if weights.contains(w) { weights.remove(w) } else { weights.insert(w) }; saved = false })
             HStack(spacing: 8) {
-                TextField("Jiná váha, kg", text: $customWeight)
+                TextField(L10n.f("Jiná váha, %@", Units.weightUnit), text: $customWeight)
                     .keyboardType(.decimalPad)
                     .padding(.horizontal, 12).frame(height: 40)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 Button("Přidat") {
-                    if let kg = Double(customWeight.replacingOccurrences(of: ",", with: ".")), kg > 0, kg <= 100 {
-                        weights.insert((kg * 4).rounded() / 4)
+                    if let shown = Double(customWeight.replacingOccurrences(of: ",", with: ".")), shown > 0, Units.kg(shown) <= 100 {
+                        let kg = Units.kg(shown)
+                        weights.insert(Units.imperial ? (kg * 100).rounded() / 100 : (kg * 4).rounded() / 4)
                         customWeight = ""
                         saved = false
                     }
@@ -585,9 +591,9 @@ struct EquipmentView: View {
     private var stations: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: kind == "home" ? "Co máš doma" : "Co tam je")
+                SectionLabel(text: L10n.tr(kind == "home" ? "Co máš doma" : "Co tam je"))
                 Spacer()
-                Button(selected.count == (data?.stations?.count ?? 0) ? "Odebrat vše" : "Vybrat vše") {
+                Button(L10n.tr(selected.count == (data?.stations?.count ?? 0) ? "Odebrat vše" : "Vybrat vše")) {
                     selected = selected.count == (data?.stations?.count ?? 0) ? [] : Set((data?.stations ?? []).map(\.id))
                     saved = false
                 }
@@ -704,7 +710,7 @@ struct EquipmentView: View {
             if r.found == true, let found = r.stations {
                 selected = Set(found).union(selected.intersection(["floor_mats"]))
                 if gymName.isEmpty, let name = r.gymName?.nilIfBlank { gymName = name }
-                note = "Našel jsem \(found.count) " + Fmt.plural(found.count, "stroj", "stroje", "strojů") + ". Zkontroluj seznam a ulož." + (r.note?.nilIfBlank.map { " " + $0 } ?? "")
+                note = L10n.f("Našel jsem %@ %@. Zkontroluj seznam a ulož.", String(found.count), Fmt.plural(found.count, "stroj", "stroje", "strojů")) + (r.note?.nilIfBlank.map { " " + $0 } ?? "")
                 error = nil
                 saved = false
             } else {
@@ -716,19 +722,34 @@ struct EquipmentView: View {
     }
 
     static func kg(_ value: Double) -> String {
-        Fmt.decimal(value, digits: value.rounded() == value ? 0 : (value * 2).rounded() == value * 2 ? 1 : 2) + " kg"
+        if Units.imperial {
+            let lb = (Units.weight(value) * 10).rounded() / 10
+            return Units.weightText(value, digits: lb.rounded() == lb ? 0 : 1)
+        }
+        return Fmt.decimal(value, digits: value.rounded() == value ? 0 : (value * 2).rounded() == value * 2 ? 1 : 2) + " kg"
+    }
+
+    /// The usual dumbbells in pounds, kept in kg.
+    static let poundOptions: [Double] = [3, 5, 8, 10, 12, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100]
+
+    /// The dumbbell choices in the chosen unit's usual steps, as kg.
+    static var shownOptions: [Double] { Units.imperial ? poundOptions.map(kgFromPounds) : weightOptions }
+
+    /// 5 lb → 2.27 kg (two decimals, so the same pounds always give the same kg).
+    static func kgFromPounds(_ pounds: Double) -> Double {
+        (pounds / 2.2046226218 * 100).rounded() / 100
     }
 
     /// "Posilovna · 14 strojů" for the builder and the library.
     static func summary(_ e: GymEquipment?) -> String {
-        guard let e else { return "posilovna" }
-        let count = " · \(e.selected.count) " + Fmt.plural(e.selected.count, "věc", "věci", "věcí")
+        guard let e else { return L10n.tr("posilovna") }
+        let count = " · " + L10n.f("%@ %@", String(e.selected.count), Fmt.plural(e.selected.count, "věc", "věci", "věcí"))
         switch e.equipment {
-        case "custom": return (e.gymName.nilIfBlank ?? "Posilovna") + count
-        case "home": return "Domácí posilovna" + count
-        case "dumbbells": return "doma s jednoručkami"
-        case "bodyweight": return "jen vlastní váha"
-        default: return "posilovna"
+        case "custom": return (e.gymName.nilIfBlank ?? L10n.tr("Posilovna")) + count
+        case "home": return L10n.tr("Domácí posilovna") + count
+        case "dumbbells": return L10n.tr("doma s jednoručkami")
+        case "bodyweight": return L10n.tr("jen vlastní váha")
+        default: return L10n.tr("posilovna")
         }
     }
 
@@ -798,5 +819,45 @@ struct StepsProfile: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Lifted weight
+
+/// Lifted weight between the gym sheet (kg as text, "62,5" or "62.5") and
+/// what is shown and typed in (kg, or lb with imperial units).
+enum LiftWeight {
+    /// The sheet's kg text in the chosen unit: unchanged in kg, "137.8" in lb.
+    static func shown(_ kgText: String?) -> String? {
+        guard let kgText else { return nil }
+        guard Units.imperial, let kg = number(kgText) else { return kgText }
+        return text(shownValue(kg))
+    }
+
+    /// kg → the chosen unit, to one decimal (dumbbells, steppers).
+    static func shownValue(_ kg: Double) -> Double {
+        Units.imperial ? (Units.weight(kg) * 10).rounded() / 10 : kg
+    }
+
+    /// What was typed (in the chosen unit) as kg text for the sheet, with a
+    /// decimal period as the sets were always recorded.
+    static func kgText(_ typed: String) -> String {
+        let t = typed.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        guard Units.imperial, let pounds = Double(t) else { return t }
+        // Pounds shown to 0.1 lb come back as whole quarter kilos (60 kg →
+        // 132.3 lb → 60 kg), anything else to two decimals.
+        let exact = Units.kg(pounds)
+        let quarter = (exact * 4).rounded() / 4
+        let kg = abs(exact - quarter) < 0.03 ? quarter : (exact * 100).rounded() / 100
+        return kg.rounded() == kg ? String(Int(kg)) : String(kg)
+    }
+
+    static func number(_ text: String) -> Double? {
+        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+
+    private static func text(_ value: Double) -> String {
+        let s = value.rounded() == value ? String(Int(value)) : String(value)
+        return L10n.isEnglish ? s : s.replacingOccurrences(of: ".", with: ",")
     }
 }

@@ -84,9 +84,9 @@ struct PlanEditorSheet: View {
 
     /// "3 série × 8-12 · hotovo 1".
     static func summary(sets: Int, reps: String?, done: Int) -> String {
-        var text = "\(sets) " + Fmt.plural(sets, "série", "série", "sérií")
+        var text = L10n.f("%@ %@", String(sets), Fmt.plural(sets, "série", "série", "sérií"))
         if let reps { text += " × " + reps }
-        if done > 0 { text += " · hotovo \(done)" }
+        if done > 0 { text += " · " + L10n.f("hotovo %@", String(done)) }
         return text
     }
 

@@ -23,7 +23,7 @@ struct GymSessionView: View {
     /// The plan note starts with "Zvolené partie: …." the figure shows instead.
     static func withoutMuscleList(_ note: String?) -> String? {
         guard var text = note else { return nil }
-        if text.hasPrefix("Zvolené partie:"), let end = text.firstIndex(of: ".") {
+        if text.hasPrefix("Zvolené partie:") || text.hasPrefix("Chosen muscle groups:"), let end = text.firstIndex(of: ".") {
             text = String(text[text.index(after: end)...]).trimmingCharacters(in: .whitespaces)
         }
         return text.nilIfBlank
@@ -47,7 +47,7 @@ struct GymSessionView: View {
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Posilovna · " + Fmt.relativeDay(date, today: AppModel.localDate(Date()))).padding(.top, 24)
+            SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date()))).padding(.top, 24)
             if loading && day == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else if let day, !day.exercises.isEmpty {
@@ -110,7 +110,8 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text("\(done) z \(total) " + Fmt.plural(total, "série", "sérií", "sérií") + " · \(day.exercises.count) " + Fmt.plural(day.exercises.count, "cvik", "cviky", "cviků"))
+            Text(L10n.f("%@ z %@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
+                        String(day.exercises.count), Fmt.plural(day.exercises.count, "cvik", "cviky", "cviků")))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
         }
@@ -139,7 +140,7 @@ struct GymSessionView: View {
             try await model.api.saveGym(day, date: date)
             error = nil
         } catch {
-            self.error = "Nepodařilo se uložit: " + error.localizedDescription
+            self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
         }
     }
 
@@ -189,7 +190,7 @@ struct ExerciseCard: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name).font(.headline).foregroundStyle(Palette.ink)
-                    Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií") + (exercise.superset.map { " · supersérie " + $0 } ?? ""))
+                    Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií") + (exercise.superset.map { " · " + L10n.f("supersérie %@", $0) } ?? ""))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 Spacer()
@@ -224,20 +225,20 @@ struct SetRow: View {
         HStack(spacing: 8) {
             Text(set.warmup ? "R" : set.number).font(Typo.number(17)).foregroundStyle(set.warmup ? Palette.faint : Palette.muted)
                 .frame(width: 22, alignment: .leading)
-                .accessibilityLabel(set.warmup ? "Rozcvičovací série" : "Série \(set.number)")
-            field($kg, placeholder: set.plannedKg ?? "kg", unit: "kg", width: 64)
+                .accessibilityLabel(set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number))
+            field($kg, placeholder: LiftWeight.shown(set.plannedKg) ?? Units.weightUnit, unit: Units.weightUnit, width: 64)
             Text("×").foregroundStyle(Palette.faint)
-            field($reps, placeholder: set.plannedReps ?? "op.", unit: nil, width: 54)
+            field($reps, placeholder: set.plannedReps ?? L10n.tr("op."), unit: nil, width: 54)
             field($rpe, placeholder: "RPE", unit: nil, width: 46)
             Spacer(minLength: 4)
             Button {
-                if set.done { onUndo() } else { onDone(value(kg, set.plannedKg), value(reps, firstNumber(set.plannedReps)), rpe) }
+                if set.done { onUndo() } else { onDone(kgValue(kg, set.plannedKg), value(reps, firstNumber(set.plannedReps)), rpe) }
             } label: {
                 Image(systemName: set.done ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 26))
                     .foregroundStyle(set.done ? Palette.green : Palette.faint)
             }
-            .accessibilityLabel(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou")
+            .accessibilityLabel(L10n.tr(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou"))
         }
         .opacity(set.done ? 0.75 : 1)
         .onAppear { fill(set) }
@@ -246,7 +247,7 @@ struct SetRow: View {
     }
 
     private func fill(_ set: GymSet) {
-        kg = set.kg ?? ""
+        kg = LiftWeight.shown(set.kg) ?? ""
         reps = set.reps ?? ""
         rpe = set.rpe ?? ""
     }
@@ -259,6 +260,12 @@ struct SetRow: View {
             .frame(width: width, height: 34)
             .background(Palette.track, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
             .disabled(set.done)
+    }
+
+    /// Typed in the chosen unit (kg or lb), recorded in kg.
+    private func kgValue(_ typed: String, _ planned: String?) -> String {
+        let t = typed.trimmingCharacters(in: .whitespaces)
+        return t.isEmpty ? (planned ?? "") : LiftWeight.kgText(t)
     }
 
     private func value(_ typed: String, _ planned: String?) -> String {
@@ -349,7 +356,7 @@ struct AlternativesSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Místo: " + exercise).font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Text(L10n.f("Místo: %@", exercise)).font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }

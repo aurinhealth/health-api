@@ -27,29 +27,29 @@ enum SystemAlarm {
             do {
                 let manager = AlarmManager.shared
                 switch manager.authorizationState {
-                case .denied: return "Budík nemá povolení. Zapni ho v Nastavení iPhonu → Loadwise → Budíky."
+                case .denied: return L10n.tr("Budík nemá povolení. Zapni ho v Nastavení iPhonu → Loadwise → Budíky.")
                 case .authorized: break
                 default:
                     guard try await manager.requestAuthorization() == .authorized else {
-                        return "Bez povolení budík nastavit nejde."
+                        return L10n.tr("Bez povolení budík nastavit nejde.")
                     }
                 }
                 cancelSaved(manager)
                 var ids: [String] = []
-                if let work, let id = try await schedule(manager, at: work, days: [.monday, .tuesday, .wednesday, .thursday, .friday], title: "Budík · pracovní den") {
+                if let work, let id = try await schedule(manager, at: work, days: [.monday, .tuesday, .wednesday, .thursday, .friday], title: L10n.tr("Budík · pracovní den")) {
                     ids.append(id.uuidString)
                 }
-                if let weekend, let id = try await schedule(manager, at: weekend, days: [.saturday, .sunday], title: "Budík · víkend") {
+                if let weekend, let id = try await schedule(manager, at: weekend, days: [.saturday, .sunday], title: L10n.tr("Budík · víkend")) {
                     ids.append(id.uuidString)
                 }
                 UserDefaults.standard.set(ids, forKey: idsKey)
                 return nil
             } catch {
-                return "Budík se nepodařilo nastavit: " + error.localizedDescription
+                return L10n.f("Budík se nepodařilo nastavit: %@", error.localizedDescription)
             }
         }
         #endif
-        return "Budík v iPhonu potřebuje iOS 26."
+        return L10n.tr("Budík v iPhonu potřebuje iOS 26.")
     }
 
     /// Takes the app's alarms away.
@@ -74,7 +74,7 @@ enum SystemAlarm {
         guard parts.count == 2 else { return nil }
         let schedule = Alarm.Schedule.relative(.init(time: .init(hour: parts[0], minute: parts[1]), repeats: .weekly(days)))
         let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title),
-                                            stopButton: AlarmButton(text: "Vstávám", textColor: .white, systemImageName: "sun.max.fill"))
+                                            stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"))
         let attributes = AlarmAttributes<WakeAlarm>(presentation: AlarmPresentation(alert: alert), tintColor: Palette.indigo)
         let id = UUID()
         _ = try await manager.schedule(id: id, configuration: .alarm(schedule: schedule, attributes: attributes))

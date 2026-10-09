@@ -54,7 +54,7 @@ struct TodayContent: View {
             HStack(spacing: 10) {
                 DayNavigator(date: today.date)
                 Spacer()
-                CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
+                CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
                 Button(action: openSettings) {
                     Group { if initial.isEmpty { Image(systemName: "person") } else { Text(initial) } }
                         .font(.footnote.weight(.medium))
@@ -223,10 +223,10 @@ struct KeyNumbers: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { "index \($0)" }, Palette.indigo) }
+            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
             Button { model.tab = .training } label: {
-                cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { "plán ~" + Fmt.decimal($0) }, Palette.amber)
+                cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, Palette.amber)
             }
             .buttonStyle(PressableCardStyle())
             Divider().overlay(Palette.hairline)
@@ -283,7 +283,7 @@ struct TodayLayoutSheet: View {
 
     var body: some View {
         NavigationStack {
-            SettingsPage(title: "Upravit přehled") {
+            SettingsPage(title: L10n.tr("Upravit přehled")) {
                 SettingsGroup(footer: "Skryté karty najdeš dál v sekcích Trénink, Jídlo a Zdraví.") {
                     ForEach(Array(TodayWidget.allCases.enumerated()), id: \.element) { index, widget in
                         if index > 0 { SettingsDivider() }

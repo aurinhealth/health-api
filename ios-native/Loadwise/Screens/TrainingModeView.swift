@@ -66,13 +66,13 @@ struct TrainingModeView: View {
 
     private var header: some View {
         HStack {
-            CircleButton(systemImage: "xmark", label: "Ukončit režim tréninku") { dismiss() }
+            CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { dismiss() }
             Spacer()
             if let day {
                 let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
                 Text("\(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií")).font(Typo.small).foregroundStyle(Palette.muted)
                 if !day.exercises.isEmpty {
-                    CircleButton(systemImage: "list.bullet", label: "Upravit plán") { editing = true }
+                    CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
                         .padding(.leading, 8)
                 }
             }
@@ -84,7 +84,7 @@ struct TrainingModeView: View {
     private func session(_ day: GymDay, _ exercise: GymExercise) -> some View {
         let set = nextSet(exercise)
         return VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Cvik \(index + 1) z \(day.exercises.count)" + (exercise.superset.map { " · supersérie " + $0 } ?? ""))
+            SectionLabel(text: L10n.f("Cvik %@ z %@", String(index + 1), String(day.exercises.count)) + (exercise.superset.map { " · " + L10n.f("supersérie %@", $0) } ?? ""))
                 .padding(.top, 18)
             HStack(alignment: .firstTextBaseline) {
                 Text(exercise.name).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
@@ -113,11 +113,11 @@ struct TrainingModeView: View {
                 rest(until: restEnd)
             } else if let set {
                 VStack(spacing: 14) {
-                    Text((set.warmup ? "Rozcvičovací série" : "Série \(set.number)") + plan(set))
+                    Text((set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number)) + plan(set))
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     HStack(spacing: 12) {
-                        stepper(uses(exercise, "dumbbells") && !dumbbells.isEmpty ? "kg na ruku" : "kg", $kg, step: 2.5,
-                                weights: uses(exercise, "dumbbells") ? dumbbells : [])
+                        stepper(uses(exercise, "dumbbells") && !dumbbells.isEmpty ? L10n.f("%@ na ruku", Units.weightUnit) : Units.weightUnit, $kg, step: Units.weightStep,
+                                weights: uses(exercise, "dumbbells") ? dumbbells.map { LiftWeight.shownValue($0) } : [])
                         stepper("opakování", $reps, step: 1)
                     }
                     effort
@@ -176,7 +176,8 @@ struct TrainingModeView: View {
             Image(systemName: "checkmark.seal.fill").font(.system(size: 48)).foregroundStyle(Palette.green)
             Text("Trénink je hotový").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
             let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
-            Text("\(sets) " + Fmt.plural(sets, "série", "série", "sérií") + " v \(day.exercises.count) " + Fmt.plural(day.exercises.count, "cviku", "cvicích", "cvicích") + ". Série jsou uložené i pro příští plán.")
+            Text(L10n.f("%@ %@ v %@ %@. Série jsou uložené i pro příští plán.", String(sets), Fmt.plural(sets, "série", "série", "sérií"),
+                        String(day.exercises.count), Fmt.plural(day.exercises.count, "cviku", "cvicích", "cvicích")))
                 .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 220, legend: true)
             Spacer()
@@ -216,7 +217,7 @@ struct TrainingModeView: View {
     /// "V zásobě zbývala 2 opakování · RPE 8".
     static func reserve(_ e: Effort) -> String {
         let reps = e.rpe == 10 ? "" : " opakování"
-        return "V zásobě " + e.hint + reps + " · RPE \(e.rpe)"
+        return L10n.tr("V zásobě " + e.hint + reps) + " · RPE \(e.rpe)"
     }
 
     private var effort: some View {
@@ -231,7 +232,7 @@ struct TrainingModeView: View {
                             .background(rpe == e.rpe ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityHint(e.hint + " opakování")
+                    .accessibilityHint(L10n.tr(e.hint + " opakování"))
                     .accessibilityAddTraits(rpe == e.rpe ? .isSelected : [])
                 }
             }
@@ -277,8 +278,8 @@ struct TrainingModeView: View {
     }
 
     private func plan(_ set: GymSet) -> String {
-        let reps = set.plannedReps.map { " · plán " + $0 } ?? ""
-        let kg = set.plannedKg.map { " × " + $0 + " kg" } ?? ""
+        let reps = set.plannedReps.map { " · " + L10n.f("plán %@", $0) } ?? ""
+        let kg = set.plannedKg.map { " × " + (LiftWeight.shown($0) ?? $0) + " " + Units.weightUnit } ?? ""
         return reps + kg
     }
 
@@ -295,7 +296,7 @@ struct TrainingModeView: View {
 
     private func prefill(_ set: GymSet?) {
         guard let set else { return }
-        kg = set.kg ?? set.plannedKg ?? ""
+        kg = LiftWeight.shown(set.kg ?? set.plannedKg) ?? ""
         reps = set.reps ?? set.plannedReps.map { String($0.prefix { $0.isNumber }) } ?? ""
     }
 
@@ -355,13 +356,13 @@ struct TrainingModeView: View {
             try await model.api.saveGym(edited, date: date)
             error = nil
         } catch {
-            self.error = "Plán se nepodařilo uložit: " + error.localizedDescription
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
-        let k = kg.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        let k = LiftWeight.kgText(kg)
         let r = reps.trimmingCharacters(in: .whitespaces)
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
@@ -382,7 +383,7 @@ struct TrainingModeView: View {
             try await model.api.saveGym(next, date: date)
             error = nil
         } catch {
-            self.error = "Sérii se nepodařilo uložit: " + error.localizedDescription
+            self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 }

@@ -39,11 +39,12 @@ struct SleepSettingsForm: View {
     @State private var saved = false
     @AppStorage("systemAlarm") private var systemAlarm = false
     @State private var alarmNote: String?
+    @State private var alarmOK = false
 
     static let goals: [Int] = Array(stride(from: 360, through: 600, by: 15))
 
     var body: some View {
-        SettingsPage(title: "Spánek") {
+        SettingsPage(title: L10n.tr("Spánek")) {
             if let tonight = model.today?.tonight, let bed = tonight.bedtime {
                 Card {
                     WidgetHeader(title: "Dnešní večerka", color: Palette.indigo)
@@ -56,7 +57,7 @@ struct SleepSettingsForm: View {
                         }
                     }
                     if let need = tonight.need {
-                        Text("Potřeba na dnešní noc " + Fmt.duration(need) + ". Počítá se z cíle, dnešní zátěže, HRV a spánkového dluhu.")
+                        Text(L10n.f("Potřeba na dnešní noc %@. Počítá se z cíle, dnešní zátěže, HRV a spánkového dluhu.", Fmt.duration(need)))
                             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -88,7 +89,7 @@ struct SleepSettingsForm: View {
                     SettingsToggle(title: "Budit mě v iPhonu", subtitle: "budík od Loadwise, pracovní dny i víkend", isOn: $systemAlarm)
                 }
                 if let alarmNote {
-                    Text(alarmNote).font(Typo.small).foregroundStyle(alarmNote.hasPrefix("Budík zvoní") ? Palette.green : Palette.rust)
+                    Text(alarmNote).font(Typo.small).foregroundStyle(alarmOK ? Palette.green : Palette.rust)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
@@ -151,15 +152,18 @@ struct SleepSettingsForm: View {
     private func syncAlarm(_ on: Bool) async {
         guard on else { SystemAlarm.cancel(); return }
         let work = workAlarm ? Self.text(workTime) : nil, weekend = weekendAlarm ? Self.text(weekendTime) : nil
-        guard work != nil || weekend != nil else { alarmNote = "Nejdřív zapni budík na pracovní dny nebo víkend."; return }
+        guard work != nil || weekend != nil else { alarmOK = false; alarmNote = L10n.tr("Nejdřív zapni budík na pracovní dny nebo víkend."); return }
         if let problem = await SystemAlarm.sync(work: work, weekend: weekend) {
+            alarmOK = false
             alarmNote = problem
             systemAlarm = false
         } else {
             var when: [String] = []
-            if let work { when.append("v pracovní dny v " + work) }
-            if let weekend { when.append("o víkendu v " + weekend) }
-            alarmNote = "Budík zvoní " + when.joined(separator: " a ") + "."
+            if let work { when.append(L10n.f("v pracovní dny v %@", work)) }
+            if let weekend { when.append(L10n.f("o víkendu v %@", weekend)) }
+            let joined = when.count > 1 ? L10n.f("%@ a %@", when[0], when[1]) : when.joined()
+            alarmOK = true
+            alarmNote = L10n.f("Budík zvoní %@.", joined)
         }
     }
 
@@ -186,9 +190,9 @@ struct SleepSettingsCard: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     if let bed = tonight.bedtime {
-                        Text("Do postele v " + bed).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                        Text([tonight.wake.map { "budík " + $0 + (tonight.wakeSet == true ? "" : " (obvyklé vstávání)") },
-                              "cíl " + Fmt.duration(tonight.base) + (tonight.goalSet == true ? "" : " podle věku")]
+                        Text(L10n.f("Do postele v %@", bed)).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                        Text([tonight.wake.map { tonight.wakeSet == true ? L10n.f("budík %@", $0) : L10n.f("budík %@ (obvyklé vstávání)", $0) },
+                              tonight.goalSet == true ? L10n.f("cíl %@", Fmt.duration(tonight.base)) : L10n.f("cíl %@ podle věku", Fmt.duration(tonight.base))]
                             .compactMap { $0 }.joined(separator: " · "))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     } else {

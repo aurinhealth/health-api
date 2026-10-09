@@ -140,7 +140,7 @@ struct TrendDotsChart: View {
                         .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         .frame(height: 1)
                         .offset(y: y(goal))
-                    Text("cíl \(goal.formatted(.number.precision(.fractionLength(0))))")
+                    Text(L10n.f("cíl %@", goal.formatted(.number.precision(.fractionLength(0)).locale(Fmt.locale))))
                         .font(.system(size: 9))
                         .foregroundStyle(Palette.green)
                         .frame(maxWidth: .infinity, alignment: .trailing)

@@ -118,7 +118,7 @@ struct EmailLoginSheet: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(sent ? "Zadej kód z e-mailu" : "Přihlášení e-mailem").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 if sent {
-                    Text("Poslali jsme ho na " + email + ". Platí 10 minut.").font(Typo.small).foregroundStyle(Palette.muted)
+                    Text(L10n.f("Poslali jsme ho na %@. Platí 10 minut.", email)).font(Typo.small).foregroundStyle(Palette.muted)
                     TextField("123456", text: $code)
                         .keyboardType(.numberPad).textContentType(.oneTimeCode)
                         .font(Typo.number(34)).multilineTextAlignment(.center)

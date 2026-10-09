@@ -94,7 +94,7 @@ struct DrinkPresetRow: View {
                 .frame(width: 18)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(kind?.label ?? p.kind).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
-                    Text("\(p.ml) ml").font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
+                    Text(Units.volumeText(Double(p.ml))).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
                 }
             }
             .padding(.leading, 12).padding(.trailing, 14)
@@ -103,7 +103,7 @@ struct DrinkPresetRow: View {
         }
         .buttonStyle(.plain)
         .disabled(busy != nil)
-        .accessibilityLabel("Přidat " + (kind?.label.lowercased() ?? p.kind) + " \(p.ml) mililitrů")
+        .accessibilityLabel(L10n.f("Přidat %@ %@", L10n.tr(kind?.label ?? p.kind).lowercased(with: L10n.locale), Units.volumeText(Double(p.ml))))
     }
 }
 
@@ -132,7 +132,7 @@ struct DrinkQuickRow: View {
                         chip(more ? "chevron.left" : "plus", more ? "Méně" : "Další", filled: more) {
                             withAnimation(.easeOut(duration: 0.2)) { more.toggle() }
                         }
-                        .accessibilityLabel(more ? "Skrýt další nápoje" : "Ukázat další nápoje")
+                        .accessibilityLabel(L10n.tr(more ? "Skrýt další nápoje" : "Ukázat další nápoje"))
                     }
                     if more {
                         ForEach(rest) { drink($0, favorite: false) }
@@ -154,7 +154,7 @@ struct DrinkQuickRow: View {
                             }
                         } label: {
                             Group {
-                                if busy == ml { ProgressView().tint(Palette.onButton) } else { Text("\(ml) ml").font(.footnote.weight(.semibold)) }
+                                if busy == ml { ProgressView().tint(Palette.onButton) } else { Text(Units.volumeText(Double(ml))).font(.footnote.weight(.semibold)) }
                             }
                             .foregroundStyle(Palette.onButton)
                             .frame(maxWidth: .infinity).frame(height: 38)
@@ -162,7 +162,7 @@ struct DrinkQuickRow: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(busy != nil)
-                        .accessibilityLabel("Přidat \(d.label.lowercased()) \(ml) mililitrů")
+                        .accessibilityLabel(L10n.f("Přidat %@ %@", L10n.tr(d.label).lowercased(with: L10n.locale), Units.volumeText(Double(ml))))
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -200,7 +200,7 @@ struct DrinkQuickRow: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button { toggleFavorite(d.id) } label: {
-                Label(favorite ? "Odebrat z oblíbených" : "Do oblíbených", systemImage: favorite ? "star.slash" : "star")
+                Label(L10n.tr(favorite ? "Odebrat z oblíbených" : "Do oblíbených"), systemImage: favorite ? "star.slash" : "star")
             }
         }
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -237,8 +237,8 @@ struct DrinkSettingsView: View {
             ForEach(DrinkPrefs.list(favorites), id: \.self) { id in
                 if let d = DrinkKind.find(id) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Label(d.label + ": množství", systemImage: d.symbol).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        ChipFlow(items: DrinkPrefs.choices, label: { "\($0) ml" },
+                        Label(L10n.f("%@: množství", L10n.tr(d.label)), systemImage: d.symbol).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        ChipFlow(items: DrinkPrefs.choices, label: { Units.volumeText(Double($0)) },
                                  isOn: { (amounts[id] ?? DrinkPrefs.amounts(id)).contains($0) },
                                  toggle: { ml in
                                      var list = amounts[id] ?? DrinkPrefs.amounts(id)

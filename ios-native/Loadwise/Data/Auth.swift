@@ -29,7 +29,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         let callback = try await openBrowser(start.url!)
         guard let token = URLComponents(url: callback, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "token" })?.value else {
-            throw APIError.message("Přihlášení se nepodařilo dokončit. Zkus to znovu.")
+            throw APIError.message(L10n.tr("Přihlášení se nepodařilo dokončit. Zkus to znovu."))
         }
         try await api.exchangeHandoff(token: token, verifier: verifier)
     }
@@ -49,7 +49,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
                 } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
                     continuation.resume(throwing: CancellationError())
                 } else {
-                    continuation.resume(throwing: error ?? APIError.message("Přihlášení se nepodařilo."))
+                    continuation.resume(throwing: error ?? APIError.message(L10n.tr("Přihlášení se nepodařilo.")))
                 }
             }
             session.presentationContextProvider = self

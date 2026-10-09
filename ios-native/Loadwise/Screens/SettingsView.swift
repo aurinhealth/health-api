@@ -162,7 +162,7 @@ struct SettingsMenu: View {
                 .buttonStyle(.plain)
             }
 
-            Text("Loadwise \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+            Text(verbatim: "Loadwise \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
         }
@@ -181,7 +181,7 @@ struct SettingsMenu: View {
     }
 
     private var sleepValue: String? {
-        if let wake = store.profile["wakeTime"]?.string { return "budík " + wake }
+        if let wake = store.profile["wakeTime"]?.string { return L10n.f("budík %@", wake) }
         return store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" }
     }
 

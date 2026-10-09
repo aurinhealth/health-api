@@ -71,7 +71,7 @@ struct LibrarySportPanel: View {
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(sport.label + ", " + sport.subtitle)
+        .accessibilityLabel(L10n.tr(sport.label) + ", " + L10n.tr(sport.subtitle))
     }
 }
 
@@ -178,7 +178,7 @@ struct WorkoutLibrarySection: View {
                 Text("Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text("\(workouts.count) " + Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků"))
+                Text(L10n.f("%@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků")))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
@@ -372,7 +372,7 @@ struct LibraryWorkoutSheet: View {
                 list(sport == "run" ? "Jak ho běžet" : "Jak ho jet", workout.guide?.how, "figure." + (sport == "run" ? "run" : "outdoor.cycle"), Palette.amber)
                 list("Jídlo a pití", workout.guide?.fueling, "fork.knife", Palette.brown)
                 list("Kde", workout.guide?.environment, "map", Palette.indigo)
-                if let source = workout.source_name { Text("Zdroj: " + source).font(Typo.caption).foregroundStyle(Palette.faint) }
+                if let source = workout.source_name { Text(L10n.f("Zdroj: %@", source)).font(Typo.caption).foregroundStyle(Palette.faint) }
 
                 Card {
                     DatePicker("Den", selection: $date, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
@@ -397,7 +397,7 @@ struct LibraryWorkoutSheet: View {
     private func list(_ title: String, _ lines: [String]?, _ symbol: String, _ color: Color) -> some View {
         if let lines, !lines.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Label(title, systemImage: symbol).font(Typo.bodyStrong).foregroundStyle(color)
+                Label(L10n.tr(title), systemImage: symbol).font(Typo.bodyStrong).foregroundStyle(color)
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Circle().fill(color.opacity(0.6)).frame(width: 5, height: 5).offset(y: -2)
@@ -492,7 +492,7 @@ struct ExerciseCatalog: View {
             } else if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
             } else {
-                Text("\(filtered.count) " + Fmt.plural(filtered.count, "cvik", "cviky", "cviků"))
+                Text(L10n.f("%@ %@", String(filtered.count), Fmt.plural(filtered.count, "cvik", "cviky", "cviků")))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 16)
                 LazyVStack(spacing: 0) {
                     ForEach(filtered) { ex in

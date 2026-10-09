@@ -111,7 +111,7 @@ struct TabBar: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel(label)
+        .accessibilityLabel(L10n.tr(label))
         .accessibilityAddTraits(tab == value ? .isSelected : [])
     }
 }

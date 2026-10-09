@@ -69,15 +69,27 @@ enum W {
         guard let v else { return "–" }
         return v.formatted(.number.precision(.fractionLength(1)).locale(L10n.locale))
     }
+
+    /// "1,2 / 2,8 l" or "41 / 95 fl oz".
+    static func water(_ ml: Double?, _ target: Double?) -> String {
+        if Units.imperial {
+            return int(Units.volume(ml ?? 0)) + (target.map { " / " + int(Units.volume($0)) } ?? "") + " " + Units.volumeUnit
+        }
+        return decimal((ml ?? 0) / 1000) + (target.map { " / " + decimal($0 / 1000) } ?? "") + " l"
+    }
+
+    /// The widget's water buttons: a glass and a bottle, 250/500 ml or 8/16 fl oz.
+    static var glass: Int { Units.imperial ? Units.roundedMl(fluidOunces: 8) : 250 }
+    static var bottle: Int { Units.imperial ? Units.roundedMl(fluidOunces: 16) : 500 }
 }
 
 /// Without a saved snapshot (not signed in yet, or the App Group is missing).
 struct EmptyWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Loadwise").font(.caption.weight(.semibold)).foregroundStyle(W.muted)
+            Text(verbatim: "Loadwise").font(.caption.weight(.semibold)).foregroundStyle(W.muted)
             Spacer()
-            Text("Otevři aplikaci, ať se data načtou.").font(.caption).foregroundStyle(W.ink)
+            Text(L10n.tr("Otevři aplikaci, ať se data načtou.")).font(.caption).foregroundStyle(W.ink)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
@@ -99,8 +111,8 @@ struct ReadinessWidget: Widget {
                 .widgetURL(URL(string: "loadwise://open/readiness"))
                 .widgetCard()
         }
-        .configurationDisplayName("Připravenost")
-        .description("Dnešní připravenost, spánek a zátěž.")
+        .configurationDisplayName(Text(verbatim: L10n.tr("Připravenost")))
+        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a zátěž.")))
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -114,22 +126,22 @@ struct ReadinessWidgetView: View {
             switch family {
             case .accessoryCircular:
                 Gauge(value: Double(s.readiness ?? 0), in: 0...100) {
-                    Text("PŘ")
+                    Text(L10n.tr("PŘ"))
                 } currentValueLabel: {
                     Text(s.readiness.map(String.init) ?? "–")
                 }
                 .gaugeStyle(.accessoryCircular)
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Připravenost " + (s.readiness.map(String.init) ?? "–")).font(.headline)
-                    Text("Spánek " + W.hm(s.sleepMinutes) + " · zátěž " + W.decimal(s.strain)).font(.caption)
-                    if let bed = s.bedtime { Text("Do postele " + bed).font(.caption) }
+                    Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
+                    Text(L10n.f("Spánek %@ · zátěž %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
+                    if let bed = s.bedtime { Text(L10n.f("Do postele %@", bed)).font(.caption) }
                 }
             default:
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Circle().fill(W.zoneColor(s.zone)).frame(width: 7, height: 7)
-                        Text("Připravenost").font(.caption.weight(.medium)).foregroundStyle(W.muted)
+                        Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
                     }
                     Text(s.readiness.map(String.init) ?? "–").font(W.number(54)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
                     Spacer(minLength: 0)
@@ -157,8 +169,8 @@ struct SleepWidget: Widget {
                 .widgetURL(URL(string: "loadwise://open/sleep"))
                 .widgetCard()
         }
-        .configurationDisplayName("Spánek")
-        .description("Poslední noc a kdy dnes jít spát.")
+        .configurationDisplayName(Text(verbatim: L10n.tr("Spánek")))
+        .description(Text(verbatim: L10n.tr("Poslední noc a kdy dnes jít spát.")))
         .supportedFamilies([.systemSmall, .accessoryInline])
     }
 }
@@ -170,18 +182,18 @@ struct SleepWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             if family == .accessoryInline {
-                Text("Spánek " + W.hm(s.sleepMinutes) + (s.bedtime.map { " · postel " + $0 } ?? ""))
+                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { " · " + L10n.f("postel %@", $0) } ?? ""))
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
                         Circle().fill(W.indigo).frame(width: 7, height: 7)
-                        Text("Spánek").font(.caption.weight(.medium)).foregroundStyle(W.muted)
+                        Text(L10n.tr("Spánek")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
                     }
                     Text(W.hm(s.sleepMinutes)).font(W.number(46)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
-                    if let index = s.sleepIndex { Text("index \(index)").font(.caption2).foregroundStyle(W.indigo) }
+                    if let index = s.sleepIndex { Text(L10n.f("index %@", String(index))).font(.caption2).foregroundStyle(W.indigo) }
                     Spacer(minLength: 0)
                     if let bed = s.bedtime {
-                        Label("postel " + bed, systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
+                        Label(L10n.f("postel %@", bed), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
                     }
                 }
             }
@@ -200,8 +212,8 @@ struct DayWidget: Widget {
                 .widgetURL(URL(string: "loadwise://open/today"))
                 .widgetCard()
         }
-        .configurationDisplayName("Můj den")
-        .description("Připravenost, spánek, zátěž, jídlo, pití a další trénink.")
+        .configurationDisplayName(Text(verbatim: L10n.tr("Můj den")))
+        .description(Text(verbatim: L10n.tr("Připravenost, spánek, zátěž, jídlo, pití a další trénink.")))
         .supportedFamilies([.systemMedium])
     }
 }
@@ -214,7 +226,7 @@ struct DayWidgetView: View {
             HStack(alignment: .top, spacing: 14) {
                 Link(destination: URL(string: "loadwise://open/readiness")!) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Připravenost").font(.caption.weight(.medium)).foregroundStyle(W.muted)
+                        Text(L10n.tr("Připravenost")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
                         Text(s.readiness.map(String.init) ?? "–").font(W.number(50)).foregroundStyle(W.ink)
                         Circle().fill(W.zoneColor(s.zone)).frame(width: 8, height: 8)
                         Spacer(minLength: 0)
@@ -227,7 +239,7 @@ struct DayWidgetView: View {
                     Link(destination: URL(string: "loadwise://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
                     Link(destination: URL(string: "loadwise://open/training")!) { row("flame.fill", W.amber, "Zátěž", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
                     Link(destination: URL(string: "loadwise://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
-                    Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", .blue, "Pití", W.decimal((s.waterMl ?? 0) / 1000) + (s.waterTarget.map { " / " + W.decimal($0 / 1000) } ?? "") + " l") }
+                    Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", .blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
                     if let bed = s.bedtime {
                         Link(destination: URL(string: "loadwise://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", bed) }
                     }
@@ -242,7 +254,7 @@ struct DayWidgetView: View {
     private func row(_ symbol: String, _ color: Color, _ title: String, _ value: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: symbol).font(.caption2).foregroundStyle(color).frame(width: 14)
-            Text(title).font(.caption2).foregroundStyle(W.muted)
+            Text(L10n.tr(title)).font(.caption2).foregroundStyle(W.muted)
             Spacer(minLength: 4)
             Text(value).font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -258,8 +270,8 @@ struct FoodWaterWidget: Widget {
                 .widgetURL(URL(string: "loadwise://open/food"))
                 .widgetCard()
         }
-        .configurationDisplayName("Jídlo a pití")
-        .description("Kalorie, živiny a pití. Vodu přidáš jedním klepnutím.")
+        .configurationDisplayName(Text(verbatim: L10n.tr("Jídlo a pití")))
+        .description(Text(verbatim: L10n.tr("Kalorie, živiny a pití. Vodu přidáš jedním klepnutím.")))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
@@ -285,8 +297,8 @@ struct FoodWaterWidgetView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         water(s)
                         HStack(spacing: 6) {
-                            add(250)
-                            add(500)
+                            add(W.glass)
+                            add(W.bottle)
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -296,7 +308,7 @@ struct FoodWaterWidgetView: View {
                     kcal(s)
                     Spacer(minLength: 0)
                     water(s)
-                    add(250)
+                    add(W.glass)
                 }
             }
         } else {
@@ -306,7 +318,7 @@ struct FoodWaterWidgetView: View {
 
     private func kcal(_ s: WidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Jídlo").font(.caption.weight(.medium)).foregroundStyle(W.muted)
+            Text(L10n.tr("Jídlo")).font(.caption.weight(.medium)).foregroundStyle(W.muted)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(W.int(s.kcal)).font(W.number(30)).foregroundStyle(W.ink).minimumScaleFactor(0.6)
                 if let target = s.kcalTarget { Text("/ " + W.int(target)).font(.caption2).foregroundStyle(W.muted) }
@@ -318,7 +330,7 @@ struct FoodWaterWidgetView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
                 Image(systemName: "drop.fill").font(.caption2).foregroundStyle(.blue)
-                Text(W.decimal((s.waterMl ?? 0) / 1000) + (s.waterTarget.map { " / " + W.decimal($0 / 1000) } ?? "") + " l")
+                Text(W.water(s.waterMl, s.waterTarget))
                     .font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
             bar(s.waterMl, s.waterTarget, .blue)
@@ -328,7 +340,7 @@ struct FoodWaterWidgetView: View {
     private func macro(_ title: String, _ eaten: Double?, _ target: Double?, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack {
-                Text(title).font(.caption2).foregroundStyle(W.muted)
+                Text(L10n.tr(title)).font(.caption2).foregroundStyle(W.muted)
                 Spacer(minLength: 2)
                 Text(W.int(eaten) + (target.map { "/" + W.int($0) } ?? "") + " g").font(.caption2.weight(.semibold)).foregroundStyle(W.ink)
             }
@@ -348,7 +360,7 @@ struct FoodWaterWidgetView: View {
 
     private func add(_ ml: Int) -> some View {
         Button(intent: AddWaterIntent(ml: ml)) {
-            Label("\(ml) ml", systemImage: "plus")
+            Label(Units.imperial ? W.int(Units.volume(Double(ml))) + " " + Units.volumeUnit : Units.volumeText(Double(ml)), systemImage: "plus")
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
         }
