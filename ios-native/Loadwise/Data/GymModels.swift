@@ -105,6 +105,13 @@ struct GymAdjustResponse: Decodable {
 
 // MARK: - Workout library (GET /app/api/workouts/search, POST /schedule)
 
+struct GeneratedWorkout: Decodable {
+    let status: String?
+    let message: String?
+    let workout: LibraryWorkout?
+    let variantCount: Int?
+}
+
 struct WorkoutSearchResponse: Decodable {
     let workouts: [LibraryWorkout]
     let total: Int?

@@ -121,6 +121,10 @@ struct WorkoutLibrarySection: View {
     @State private var loading = false
     @State private var error: String?
     @State private var open: LibraryWorkout?
+    @State private var proposal: GeneratedWorkout?
+    @State private var variant = 0
+    @State private var proposing = false
+    @State private var proposalError: String?
 
     enum Level: String, CaseIterable, Identifiable {
         case any, easy, medium, hard
@@ -153,6 +157,7 @@ struct WorkoutLibrarySection: View {
             .pickerStyle(.segmented)
             .padding(.top, 16)
 
+            coachPick
             lengthFilter
             SectionLabel(text: "Typ").padding(.top, 20)
             ChipFlow(items: [""] + LibraryWorkout.systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
@@ -187,6 +192,41 @@ struct WorkoutLibrarySection: View {
         .onAppear { slider = Double(presets.first ?? (sport == "run" ? 45 : 90)) }
         .task(id: "\(minutes ?? 0)|\(tolerance.wrappedValue)|\(system ?? "")|\(indoor)|\(level.rawValue)") { await load() }
         .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor) }
+    }
+
+    /// The coach's one workout for today, from the length chosen below.
+    private var coachPick: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let workout = proposal?.workout {
+                SectionLabel(text: "Návrh kouče")
+                Button { open = workout } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
+                if (proposal?.variantCount ?? 0) > 1 {
+                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { variant += 1; await propose() } }
+                        .disabled(proposing)
+                }
+            } else {
+                PrimaryButton(title: proposing ? "Hledám…" : "Navrhnout trénink na dnes", systemImage: "sparkles", busy: proposing) {
+                    Task { variant = 0; await propose() }
+                }
+                .disabled(model.demo)
+            }
+            if let message = proposalError ?? (proposal?.workout == nil ? proposal?.message : nil) {
+                Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 20)
+        .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil }
+    }
+
+    private func propose() async {
+        proposing = true
+        defer { proposing = false }
+        do {
+            proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant)
+            proposalError = nil
+        } catch {
+            proposalError = error.localizedDescription
+        }
     }
 
     /// "Doporučená" or the own length: presets to tap, a slider, and how far

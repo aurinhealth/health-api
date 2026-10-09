@@ -77,6 +77,16 @@ extension APIClient {
         return r.workouts
     }
 
+    /// The coach's workout for today (POST /app/api/workouts/generate): the
+    /// library workout that fits the readiness, load and week plan best.
+    /// Another variant gives the next of its few best picks.
+    func generateWorkout(sport: String, minutes: Int?, indoor: Bool, variant: Int) async throws -> GeneratedWorkout {
+        var body: JSONObject = ["date": .string(AppModel.localDate(Date())), "sport": .string(sport),
+                                "environment": .string(indoor ? "indoor" : "outdoor"), "variant": .number(Double(variant))]
+        if let minutes { body["availabilityMinutes"] = .number(Double(minutes)); body["userInitiated"] = .bool(true) }
+        return try await send("/app/api/workouts/generate", method: "POST", body: body)
+    }
+
     func scheduleWorkout(id: String, date: String, indoor: Bool) async throws {
         let _: JSONValue = try await send("/app/api/workouts/schedule", method: "POST",
                                           body: ["workoutId": JSONValue.string(id), "date": .string(date), "confirm": .bool(true),
