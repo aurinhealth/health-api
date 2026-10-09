@@ -45,7 +45,11 @@ export const PERSONAL_TABLES = {
   // Sign-in: linked Apple IDs (apple-login.js) and passkeys (passkeys.js),
   // created with user_id.
   user_identities: {},
-  user_passkeys: {}
+  user_passkeys: {},
+  // Problems reported from the app (support-report.js) and replayed offline
+  // writes (idempotency.js).
+  support_reports: {},
+  client_requests: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

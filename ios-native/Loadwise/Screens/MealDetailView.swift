@@ -98,12 +98,28 @@ struct MealDetailContent: View {
     }
 }
 
-/// One food of the meal with every value it has.
+/// One food of the meal with every value it has. A tap or a swipe opens its
+/// edit (amount, meal, day, copy); deleting asks first.
 struct FoodEntryCard: View {
     @Environment(AppModel.self) private var model
     let entry: FoodSnapshot.Entry
+    @State private var editing = false
+    @State private var confirmDelete = false
 
     var body: some View {
+        SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
+            card.onTapGesture { editing = true }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .sheet(isPresented: $editing) {
+            FoodEntryEditSheet(entry: entry, date: model.food?.date ?? AppModel.localDate(Date()))
+        }
+        .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Smazat", role: .destructive) { Task { await model.deleteFood(id: entry.id) } }
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -127,11 +143,9 @@ struct FoodEntryCard: View {
         }
         .padding(14)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .contextMenu {
-            Button(role: .destructive) { Task { await model.deleteFood(id: entry.id) } } label: { Label("Smazat", systemImage: "trash") }
-        }
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Podržením smažeš")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func value(_ letter: String, _ grams: Double?, _ color: Color) -> some View {

@@ -54,3 +54,44 @@ test('food changes reject invalid identifiers, dates, meals and nutrition',async
   await assert.rejects(deleteFoodEntry(owner,'7 OR 1=1'),/Neplatné jídlo/);
   assert.equal(raw.sqlite.prepare('SELECT COUNT(*) n FROM food_logs').get().n,1);
 });
+
+test('a new amount rescales energy, macros, fibre, sugar, salt and the stored amounts',async()=>{
+  const {raw,owner}=database();
+  const note={product:{name:'Jogurt'},amount:150,unit:'g',enteredQuantity:150,enteredUnit:'g',mealType:'snack_am',sugar_g:9,salt_g:0.3};
+  raw.sqlite.prepare("INSERT INTO food_logs(id,user_id,consumed_date,consumed_at,recipe_title,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (8,1,'2026-09-28','2026-09-28T09:00:00.000Z','Jogurt',150,6,12,7.5,1,'package_label',?)").run(JSON.stringify(note));
+  await updateFoodEntry(owner,8,{amount_g:300,mealType:'breakfast'});
+  const r=row(raw,8),n=JSON.parse(r.note);
+  assert.deepEqual([r.kcal,r.protein_g,r.carbs_g,r.fat_g,r.fiber_g],[300,12,24,15,2]);
+  assert.equal(n.enteredQuantity,300);
+  assert.equal(n.amount,300);
+  assert.equal(n.sugar_g,18);
+  assert.equal(n.salt_g,0.6);
+  assert.equal(n.mealType,'breakfast');
+  assert.equal(n.product.name,'Jogurt');
+});
+
+test('pieces scale their resolved grams too, and amount_g alone works for quick entries',async()=>{
+  const {raw,owner}=database();
+  raw.sqlite.prepare("INSERT INTO food_logs(id,user_id,consumed_date,recipe_title,kcal,protein_g,carbs_g,fat_g,note) VALUES (9,1,'2026-09-28','Vejce',140,12,1,10,?)").run(JSON.stringify({amount:100,unit:'g',enteredQuantity:2,enteredUnit:'piece'}));
+  raw.sqlite.prepare("INSERT INTO food_logs(id,user_id,consumed_date,recipe_title,kcal,protein_g,carbs_g,fat_g,note) VALUES (10,1,'2026-09-28','Rohlík',150,5,28,2,?)").run(JSON.stringify({mealType:'breakfast',amount_g:50}));
+  await updateFoodEntry(owner,9,{amount_g:3});
+  assert.equal(row(raw,9).kcal,210);
+  assert.equal(JSON.parse(row(raw,9).note).amount,150);
+  assert.equal(JSON.parse(row(raw,9).note).enteredQuantity,3);
+  await updateFoodEntry(owner,10,{amount_g:25});
+  assert.equal(row(raw,10).kcal,75);
+  assert.equal(row(raw,10).fiber_g,null);
+  assert.equal(JSON.parse(row(raw,10).note).amount_g,25);
+});
+
+test('an amount cannot be changed without a known original or out of range, and explicit values win',async()=>{
+  const {raw,owner}=database();
+  await assert.rejects(updateFoodEntry(owner,7,{amount_g:200}),/neznám původní množství/);
+  raw.sqlite.prepare("INSERT INTO food_logs(id,user_id,consumed_date,recipe_title,kcal,protein_g,carbs_g,fat_g,note) VALUES (11,1,'2026-09-28','Rýže',130,3,28,0.3,?)").run(JSON.stringify({amount_g:100}));
+  await assert.rejects(updateFoodEntry(owner,11,{amount_g:0}),/množství/);
+  await assert.rejects(updateFoodEntry(owner,11,{amount_g:'abc'}),/množství/);
+  assert.equal(row(raw,11).kcal,130);
+  await updateFoodEntry(owner,11,{amount_g:200,kcal:250});
+  assert.equal(row(raw,11).kcal,250);
+  assert.equal(row(raw,11).carbs_g,56);
+});

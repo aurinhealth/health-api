@@ -27,11 +27,23 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         start.queryItems = [URLQueryItem(name: "app", value: challenge)]
 
         let callback = try await openBrowser(start.url!)
-        guard let token = URLComponents(url: callback, resolvingAgainstBaseURL: false)?
-            .queryItems?.first(where: { $0.name == "token" })?.value else {
+        let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        if let error = items.first(where: { $0.name == "error" })?.value { throw Self.signInError(error) }
+        guard let token = items.first(where: { $0.name == "token" })?.value else {
             throw APIError.message(L10n.tr("Přihlášení se nepodařilo dokončit. Zkus to znovu."))
         }
         try await api.exchangeHandoff(token: token, verifier: verifier)
+    }
+
+    /// loadwise://auth?error=<code> from a failed Google sign-in (src/google-login.js).
+    static func signInError(_ code: String) -> Error {
+        switch code {
+        case "cancelled": return APIError.message(L10n.tr("Přihlášení přes Google bylo zrušeno."))
+        case "not_invited": return APIError.message(L10n.tr("Tento Google účet nemá do Loadwise pozvánku. Požádej o ni správce, nebo se přihlas jiným účtem."))
+        case "expired": return APIError.message(L10n.tr("Přihlášení vypršelo. Zkus to znovu."))
+        case "unavailable": return APIError.message(L10n.tr("Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem."))
+        default: return APIError.message(L10n.tr("Google přihlášení se nepodařilo ověřit. Zkus to znovu."))
+        }
     }
 
     /// Connects Google or Intervals.icu: the provider's page in the browser

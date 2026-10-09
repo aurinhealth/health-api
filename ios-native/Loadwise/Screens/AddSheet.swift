@@ -55,7 +55,7 @@ struct AddSheet: View {
                 section("Trénink", "figure.run", Palette.rust)
                 LazyVGrid(columns: columns, spacing: 10) {
                     tile("Zapsat trénink", "square.and.pencil") { workout = true }
-                    tile("Posilovna s AI", "sparkles") { open(.gymBuilder) }
+                    tile("Sestavit posilovnu", "sparkles") { open(.gymBuilder) }
                     tile("Režim tréninku", "play.fill") { open(.trainingMode(AppModel.localDate(Date()))) }
                     tile("Knihovna", "books.vertical") { open(.library) }
                 }

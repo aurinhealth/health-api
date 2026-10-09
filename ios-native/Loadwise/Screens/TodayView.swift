@@ -65,6 +65,10 @@ struct TodayContent: View {
                 .accessibilityLabel("Profil a nastavení")
             }
 
+            if model.selectedDate == nil && !model.demo {
+                ConnectionProblemCard()
+            }
+
             RouteLink(route: .readiness) {
                 ReadinessHero(readiness: today.readiness, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -334,6 +338,95 @@ struct BedtimeSetupCard: View {
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+        }
+    }
+}
+
+// MARK: - Connections
+
+/// A data source that stopped working (Google or Intervals.icu refused the
+/// stored access, or Google permissions are missing), with a way to connect
+/// it again right here. Loads the connections itself, like the coach's check-in.
+struct ConnectionProblemCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var problems: [ConnectionsResponse.Provider] = []
+    @State private var working: String?
+    @State private var message: String?
+    @State private var googleDisclosure = false
+    @State private var intervalsKey = false
+
+    var body: some View {
+        Group {
+            if !problems.isEmpty {
+                Card {
+                    WidgetHeader(title: "Propojení", color: Palette.rust)
+                    ForEach(problems) { provider in
+                        HStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 16)).foregroundStyle(Palette.rust)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(provider.name ?? provider.id).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                if let problem = provider.problemText {
+                                    Text(problem).font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Button { start(provider.id) } label: {
+                                Group {
+                                    if working == provider.id { ProgressView().tint(Palette.onButton) } else { Text("Připojit znovu") }
+                                }
+                                .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                                .padding(.horizontal, 14).frame(height: 34)
+                                .background(Palette.button, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(working != nil)
+                        }
+                    }
+                    if let message {
+                        Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.top, 20)
+            }
+        }
+        .task(id: model.loading) {
+            guard !model.loading else { return }
+            await load()
+        }
+        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
+            googleDisclosure = false
+            // The browser sheet opens once this one has closed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
+        } }
+        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await load() } }
+    }
+
+    private func load() async {
+        guard !model.demo, let response = try? await model.api.connections() else { return }
+        withAnimation { problems = response.providers.filter(\.needsAttention) }
+    }
+
+    /// Google first shows what Loadwise does with the data (Google's policy).
+    private func start(_ provider: String) {
+        if provider == "google" { googleDisclosure = true } else { connect(provider) }
+    }
+
+    private func connect(_ provider: String) {
+        Task {
+            working = provider
+            defer { working = nil }
+            do {
+                guard let event = try await model.connect(provider: provider) else { return }
+                switch event {
+                case "google", "intervals": message = nil
+                case "intervals-failed": intervalsKey = true
+                case "expired": message = L10n.tr("Odkaz vypršel, zkus to znovu.")
+                default: message = L10n.tr("Připojení se nedokončilo.")
+                }
+                await load()
+            } catch {
+                message = error.localizedDescription
             }
         }
     }

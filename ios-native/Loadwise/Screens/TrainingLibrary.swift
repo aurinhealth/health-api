@@ -86,7 +86,7 @@ struct GymLibrarySection: View {
                         .frame(width: 38, height: 38)
                         .background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Sestavit trénink s AI").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text("podle únavy, partií a tvého vybavení").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer()

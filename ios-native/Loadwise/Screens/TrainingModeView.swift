@@ -191,7 +191,7 @@ struct TrainingModeView: View {
             Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                 .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             NavigationLink(value: AppRoute.gymBuilder) {
-                Label("Sestavit s AI", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                Label("Sestavit trénink", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
@@ -320,7 +320,7 @@ struct TrainingModeView: View {
         loading = true
         defer { loading = false }
         do {
-            day = try await model.api.gym(date: date)
+            day = try await model.gymDay(date: date)
             startAtFirstOpen()
         } catch {
             self.error = error.localizedDescription
@@ -353,7 +353,7 @@ struct TrainingModeView: View {
         await loadMuscles(edited)
         guard !model.demo else { return }
         do {
-            try await model.api.saveGym(edited, date: date)
+            try await model.saveGym(edited, date: date)
             error = nil
         } catch {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
@@ -380,7 +380,7 @@ struct TrainingModeView: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.saveGym(next, date: date)
+            try await model.saveGym(next, date: date)
             error = nil
         } catch {
             self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)

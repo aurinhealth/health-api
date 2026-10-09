@@ -193,7 +193,7 @@ struct TitleAndOptionalIcon: LabelStyle {
 
 // MARK: - AI gym builder
 
-/// "Sestavit s AI": the length and either the whole body, upper or lower body,
+/// "Sestavit trénink": the length and either the whole body, upper or lower body,
 /// or the muscles chosen on the figure; then the proposal with the muscles it
 /// works, changes in words ("bez dřepů, víc ramen") and saving to the plan.
 struct GymBuilderView: View {
@@ -216,7 +216,7 @@ struct GymBuilderView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · sestavit s AI").padding(.top, 24)
+                SectionLabel(text: "Posilovna · sestavit trénink").padding(.top, 24)
                 Text(proposal == nil ? "Jaký trénink chceš?" : proposal!.planName)
                     .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)

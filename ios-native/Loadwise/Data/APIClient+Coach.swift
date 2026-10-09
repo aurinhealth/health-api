@@ -33,9 +33,11 @@ struct WeekProposalResponse: Decodable {
         let label: String?
         let reason: String?
         let role: String?
-        var id: String { date + "|" + sport + "|" + (role ?? "") }
+        /// The n-th session of this sport that day in the week plan.
+        let slot: Int?
+        var id: String { date + "|" + sport + "|" + String(slot ?? 0) + "|" + (role ?? "") }
 
-        enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, label, reason, role }
+        enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, label, reason, role, slot }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -46,12 +48,29 @@ struct WeekProposalResponse: Decodable {
             label = try? c.decodeIfPresent(String.self, forKey: .label)
             reason = try? c.decodeIfPresent(String.self, forKey: .reason)
             role = try? c.decodeIfPresent(String.self, forKey: .role)
+            slot = (try? c.decodeIfPresent(Double.self, forKey: .slot)).flatMap { $0 }.map { Int($0) }
         }
     }
 
     struct Warning: Decodable, Hashable {
         let date: String?
         let text: String?
+    }
+}
+
+/// GET /app/api/week-plan (src/week-planner.js): the week's plan with the
+/// time per weekday, and the load the week aims for.
+struct WeekPlanResponse: Decodable {
+    let start: String?
+    /// Kept whole: the editor changes a few keys and sends the object back.
+    let prefs: JSONValue?
+    let targets: Targets?
+
+    struct Targets: Decodable {
+        let status: String?
+        let target: Double?
+        let committed: Double?
+        let recovery: Bool?
     }
 }
 
@@ -141,9 +160,22 @@ extension APIClient {
         try await send("/app/api/coach/week", method: "POST", body: ["start": JSONValue.string(start)])
     }
 
-    /// Saves the week's plan (days and roles) the proposal came with.
-    func saveWeekPlan(start: String, prefs: JSONValue) async throws {
-        let _: JSONValue = try await send("/app/api/week-plan?start=" + start, method: "POST", body: prefs)
+    /// The usual week's plan, or with `start` the plan of that one week.
+    func weekPlan(start: String?) async throws -> WeekPlanResponse {
+        try await get("/app/api/week-plan" + (start.map { "?start=" + $0 } ?? ""))
+    }
+
+    /// Saves the plan (days, roles and time per weekday): for one week with
+    /// `start`, else as the usual week.
+    @discardableResult
+    func saveWeekPlan(start: String?, prefs: JSONValue) async throws -> WeekPlanResponse {
+        try await send("/app/api/week-plan" + (start.map { "?start=" + $0 } ?? ""), method: "POST", body: prefs)
+    }
+
+    /// Drops one week's own plan, so the usual week applies again.
+    @discardableResult
+    func resetWeekPlan(start: String) async throws -> WeekPlanResponse {
+        try await send("/app/api/week-plan?start=" + start, method: "DELETE", body: JSONObject())
     }
 
     /// One planned ride or run of the week: the coach's pick for its day and length.

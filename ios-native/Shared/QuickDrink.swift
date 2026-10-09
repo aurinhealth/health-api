@@ -3,8 +3,9 @@ import Foundation
 import WidgetKit
 
 /// Water added from the home-screen widget. The widget has no session of its
-/// own, so the drink waits in the App Group and the app sends it with its next
-/// refresh (AppModel.refresh); the widget shows it at once.
+/// own, so the drink waits in the App Group; the app moves it into its outbox
+/// of writes on the next refresh (AppModel.sendOutbox), which sends it when
+/// there is signal. The widget shows it at once.
 enum PendingDrinks {
     struct Drink: Codable, Equatable {
         let date: String

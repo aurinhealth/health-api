@@ -87,7 +87,17 @@ struct SettingsMenu: View {
                 SettingsDivider()
                 NavigationLink { SourcesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "arrow.triangle.2.circlepath", color: Palette.indigo), title: "Zdroje dat",
-                                value: store.loaded ? "\(store.connectedCount) " + Fmt.plural(store.connectedCount, "připojený", "připojené", "připojených") : nil)
+                                value: !store.problems.isEmpty ? L10n.tr("připojit znovu")
+                                    : store.loaded ? "\(store.connectedCount) " + Fmt.plural(store.connectedCount, "připojený", "připojené", "připojených") : nil)
+                        // A source to connect again: a red dot on the icon.
+                        .overlay(alignment: .topLeading) {
+                            if !store.problems.isEmpty {
+                                Circle().fill(Palette.rust).frame(width: 10, height: 10)
+                                    .overlay(Circle().stroke(Palette.card, lineWidth: 2))
+                                    .offset(x: 40, y: 8)
+                                    .accessibilityLabel("Připojit znovu")
+                            }
+                        }
                 }
                 SettingsDivider()
                 NavigationLink { SleepSettingsView(given: store) } label: {
@@ -147,6 +157,10 @@ struct SettingsMenu: View {
             SettingsGroup(title: "Ostatní") {
                 NavigationLink { PrivacySettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.faint), title: "Soukromí a data")
+                }
+                SettingsDivider()
+                NavigationLink { ReportProblemView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "ladybug.fill", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
                 Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {

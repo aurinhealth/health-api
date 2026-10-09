@@ -61,9 +61,17 @@ struct LoginView: View {
                 .padding(.bottom, 22)
 
                 if let message = model.errorMessage {
-                    Text(message).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 12)
+                    // A failed Google sign-in (not invited, cancelled, expired) says why here.
+                    Label(message, systemImage: "exclamationmark.circle.fill")
+                        .font(Typo.small).foregroundStyle(Palette.rust)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Palette.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.bottom, 12)
                 }
                 Button {
+                    model.errorMessage = nil
                     Task { await model.signIn() }
                 } label: {
                     HStack(spacing: 10) {

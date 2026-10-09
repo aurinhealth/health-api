@@ -554,9 +554,8 @@ struct WeightEntrySheet: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.addWeight(kg: value)
-            await model.refreshHealth()
-            await model.refresh()
+            // Without signal the weigh-in waits on the phone (AppModel outbox).
+            try await model.addWeight(kg: value)
             dismiss()
         } catch {
             self.error = error.localizedDescription

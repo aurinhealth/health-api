@@ -13,23 +13,102 @@ private func sportSymbol(_ sport: String) -> String {
 
 // MARK: - The week
 
-/// "Naplánovat týden": the coach proposes the rest of the week from the
-/// readiness, load, plan and free time; one tap prepares every session
-/// (rides and runs from the library, gym days as a plan) into the calendar.
+/// One proposed session as the athlete leaves it before preparing: the sport,
+/// length and place can change, or it goes from the list.
+struct WeekDraft: Identifiable, Equatable {
+    let item: WeekProposalResponse.Item
+    var sport: String
+    var minutes: Int
+    var environment: String?
+    var id: String { item.id }
+
+    init(_ item: WeekProposalResponse.Item) {
+        self.item = item
+        sport = item.sport == "strength" ? "gym" : item.sport
+        minutes = item.minutes ?? (item.sport == "run" ? 45 : 60)
+        environment = item.sport == "gym" || item.sport == "strength" ? nil : item.environment
+    }
+
+    /// The sport the coach proposed (its gym is "gym").
+    var proposedSport: String { item.sport == "strength" ? "gym" : item.sport }
+
+    var edited: Bool {
+        sport != proposedSport || minutes != item.minutes || (sport != "gym" && environment != item.environment)
+    }
+
+    /// The lengths a plan chip offers (src/week-planner.js SESSION_MINUTES).
+    static func lengths(_ sport: String, including current: Int) -> [Int] {
+        let list = ["gym": [30, 45, 60, 75, 90], "run": [20, 30, 45, 60, 75, 90, 120]][sport] ?? [30, 45, 60, 75, 90, 120, 150, 180, 240, 300]
+        return list.contains(current) ? list : (list + [current]).sorted()
+    }
+}
+
+/// Sessions this phone prepared a moment ago. The calendar and the coach learn
+/// about them only after Intervals.icu syncs, so a second "Připravit" in the
+/// meantime would schedule them twice.
+enum PreparedSessions {
+    struct Entry: Codable {
+        let date: String
+        let sport: String
+        /// Sessions of the sport that day in the calendar before this one.
+        let before: Int
+        let at: Double
+    }
+
+    private static let key = "weekPlan.prepared"
+    /// Long enough for the sync, short enough for a session deleted on purpose to come back.
+    private static let lifetime: TimeInterval = 600
+
+    static func all() -> [Entry] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let list = try? JSONDecoder().decode([Entry].self, from: data) else { return [] }
+        let now = Date().timeIntervalSince1970
+        return list.filter { now - $0.at < lifetime }
+    }
+
+    static func remember(date: String, sport: String, before: Int) {
+        let list = all() + [Entry(date: date, sport: sport, before: before, at: Date().timeIntervalSince1970)]
+        if let data = try? JSONEncoder().encode(list) { UserDefaults.standard.set(data, forKey: key) }
+    }
+}
+
+/// "Naplánovat týden": the coach proposes the rest of this week or the next
+/// one from the readiness, load, plan and free time; the athlete can change or
+/// drop a session, then one tap prepares the rest (rides and runs from the
+/// library, gym days as a plan) into the calendar.
 struct WeekPlanView: View {
     @Environment(AppModel.self) private var model
+    @State private var weekStart = WeekPlanView.monday()
     @State private var response: WeekProposalResponse?
+    @State private var plan: WeekPlanResponse?
+    @State private var drafts: [WeekDraft] = []
     @State private var loading = false
     @State private var error: String?
     /// Per item: "busy", "done" or the error.
     @State private var progress: [String: String] = [:]
     @State private var preparing = false
+    /// Sessions of each "date|sport" in the calendar when the proposal came.
+    @State private var baseline: [String: Int] = [:]
+
+    private var thisWeek: String { Self.monday() }
+    private var nextWeek: String { ISODay.shift(Self.monday(), 7) }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · týden").padding(.top, 24)
-                Text("Plán na zbytek týdne").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(weekStart == nextWeek ? "Plán na příští týden" : "Plán na zbytek týdne")
+                    .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+
+                Picker("Týden", selection: $weekStart) {
+                    Text("Tento týden").tag(thisWeek)
+                    Text("Příští týden").tag(nextWeek)
+                }
+                .pickerStyle(.segmented)
+                .disabled(preparing)
+                .padding(.top, 18)
+
+                availabilityLink.padding(.top, 14)
 
                 if loading {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -41,51 +120,107 @@ struct WeekPlanView: View {
             }
         }
         .task { if response == nil { await load() } }
+        .onChange(of: weekStart) { _, _ in
+            Task { await load() }
+        }
+    }
+
+    /// "Kdy mám čas": the week's time for training, and the load it aims for.
+    private var availabilityLink: some View {
+        NavigationLink {
+            AvailabilityView(weekStart: weekStart, onSave: { Task { await load() } })
+        } label: {
+            Card(padding: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: "clock").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.amber)
+                        .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Kdy mám čas").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        if let summary = availabilitySummary {
+                            Text(verbatim: summary).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        if let load = loadSummary {
+                            Text(verbatim: load).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var availabilitySummary: String? {
+        guard let prefs = plan?.prefs else { return nil }
+        let total = WeekPlanPrefs.minutes(prefs).filter { $0 > 0 }.reduce(0, +)
+        var parts = [total > 0 ? L10n.f("%@ týdně", Fmt.duration(total)) : L10n.tr("Nenastaveno")]
+        if WeekPlanPrefs.source(prefs) == "week" { parts.append(L10n.tr("jen tento týden")) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var loadSummary: String? {
+        guard let t = plan?.targets, t.status == "ok", let target = t.target, target > 0 else { return nil }
+        let text = L10n.f("Zátěž týdne %@ z %@", Fmt.int(t.committed ?? 0), Fmt.int(target))
+        return t.recovery == true ? text + " · " + L10n.tr("odpočinkový týden") : text
     }
 
     @ViewBuilder
     private func content(_ proposal: WeekProposalResponse.Proposal) -> some View {
-        let items = proposal.items ?? []
         ForEach(proposal.warnings ?? [], id: \.self) { w in
             if let text = w.text {
                 Text((w.date.map { Fmt.dayHeading($0) + " · " } ?? "") + text)
                     .font(Typo.small).foregroundStyle(Palette.amber).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
             }
         }
-        if items.isEmpty {
-            Text(proposal.missingAvailability == true ? "Nejdřív nastav, kdy máš na trénink čas." : "Na zbytek týdne není co připravit.")
-                .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).padding(.top, 20)
+        if drafts.isEmpty {
+            if proposal.missingAvailability == true {
+                Text("Nejdřív nastav, kdy máš na trénink čas.")
+                    .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).padding(.top, 20)
+                NavigationLink {
+                    AvailabilityView(weekStart: weekStart, onSave: { Task { await load() } })
+                } label: {
+                    Label("Nastavit čas", systemImage: "clock").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
+            } else {
+                Text(weekStart == nextWeek ? "Na příští týden není co připravit." : "Na zbytek týdne není co připravit.")
+                    .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).padding(.top, 20)
+            }
         } else {
             VStack(spacing: 10) {
-                ForEach(items) { item in row(item) }
+                ForEach(drafts) { draft in row(draft) }
             }
             .padding(.top, 20)
-            let finished = items.allSatisfy { progress[$0.id] == "done" }
+            let finished = drafts.allSatisfy { progress[$0.id] == "done" }
             PrimaryButton(title: finished ? "Hotovo, je v kalendáři" : preparing ? "Připravuji…" : "Připravit tyto tréninky",
                           systemImage: finished ? "checkmark" : "calendar.badge.plus", busy: preparing) {
-                Task { await prepare(items, prefs: proposal.prefs) }
+                Task { await prepare(prefs: proposal.prefs) }
             }
             .disabled(preparing || finished || model.demo)
             .padding(.top, 20)
         }
     }
 
-    private func row(_ item: WeekProposalResponse.Item) -> some View {
-        Card {
+    private func row(_ draft: WeekDraft) -> some View {
+        let item = draft.item
+        return Card {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: sportSymbol(item.sport)).font(.system(size: 18)).foregroundStyle(Palette.amber)
+                Image(systemName: sportSymbol(draft.sport)).font(.system(size: 18)).foregroundStyle(Palette.amber)
                     .frame(width: 40, height: 40).background(Palette.amberSoft, in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Fmt.capitalized(Fmt.dayHeading(item.date))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text([sportLabel(item.sport), item.minutes.map { Fmt.duration($0) }, item.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }]
+                    Text([sportLabel(draft.sport), Fmt.duration(draft.minutes), draft.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }]
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
-                    if let why = item.reason ?? item.label {
+                    if draft.sport == draft.proposedSport, let why = item.reason ?? item.label {
                         Text(why).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 4)
-                if let state = progress[item.id] {
+                if let state = progress[draft.id] {
                     if state == "busy" {
                         ProgressView()
                     } else if state == "done" {
@@ -94,50 +229,184 @@ struct WeekPlanView: View {
                         Image(systemName: "exclamationmark.circle").foregroundStyle(Palette.rust)
                     }
                 }
+                if !preparing && progress[draft.id] != "done" && progress[draft.id] != "busy" {
+                    editMenu(draft)
+                }
             }
-            if let message = progress[item.id], message != "busy", message != "done" {
+            if let message = progress[draft.id], message != "busy", message != "done" {
                 Text(message).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
+    /// Sport, length and place of one session, or away with it.
+    private func editMenu(_ draft: WeekDraft) -> some View {
+        Menu {
+            Picker("Sport", selection: Binding(get: { draft.sport }, set: { setSport(draft.id, $0) })) {
+                ForEach(WeekPlanPrefs.sports, id: \.self) { s in
+                    Label(sportLabel(s), systemImage: sportSymbol(s)).tag(s)
+                }
+            }
+            .pickerStyle(.menu)
+            Picker("Délka", selection: Binding(get: { draft.minutes }, set: { v in update(draft.id) { $0.minutes = v } })) {
+                ForEach(WeekDraft.lengths(draft.sport, including: draft.minutes), id: \.self) { m in
+                    Text(verbatim: Fmt.duration(m)).tag(m)
+                }
+            }
+            .pickerStyle(.menu)
+            if draft.sport != "gym" {
+                Picker("Kde", selection: Binding(get: { draft.environment ?? "outdoor" }, set: { v in update(draft.id) { $0.environment = v } })) {
+                    Text("Venku").tag("outdoor")
+                    Text("Uvnitř").tag("indoor")
+                }
+                .pickerStyle(.menu)
+            }
+            Divider()
+            Button(role: .destructive) {
+                withAnimation { drafts.removeAll { $0.id == draft.id } }
+            } label: {
+                Label("Odebrat", systemImage: "trash")
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.ink)
+                .frame(width: 36, height: 36).overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+        }
+        .accessibilityLabel(L10n.tr("Upravit trénink"))
+    }
+
+    private func update(_ id: String, _ change: (inout WeekDraft) -> Void) {
+        guard let i = drafts.firstIndex(where: { $0.id == id }) else { return }
+        change(&drafts[i])
+        progress[id] = nil
+    }
+
+    private func setSport(_ id: String, _ sport: String) {
+        update(id) { d in
+            d.sport = sport
+            let lengths = WeekDraft.lengths(sport, including: 0).filter { $0 > 0 }
+            if !lengths.contains(d.minutes) {
+                d.minutes = lengths.min(by: { abs($0 - d.minutes) < abs($1 - d.minutes) }) ?? d.minutes
+            }
+            d.environment = sport == "gym" ? nil : d.environment ?? "outdoor"
+        }
+    }
+
     private func load() async {
-        guard !model.demo else { error = "V ukázce se týden neplánuje."; return }
+        guard !model.demo else { error = L10n.tr("V ukázce se týden neplánuje."); return }
+        let start = weekStart
         loading = true
         defer { loading = false }
         do {
-            response = try await model.api.weekProposal(start: Self.monday())
+            let r = try await model.api.weekProposal(start: start)
+            let weekPlan = try? await model.api.weekPlan(start: start)
+            await model.loadCalendar(from: start, to: ISODay.shift(start, 6), force: true)
+            guard start == weekStart else { return }
+            response = r
+            plan = weekPlan
+            progress = [:]
+            drafts = (r.proposal?.items ?? []).map(WeekDraft.init)
+            baseline = [:]
+            // Only days the calendar has: a day it could not load is not compared later.
+            for d in drafts where model.calendar[d.item.date] != nil {
+                for sport in WeekPlanPrefs.sports { baseline[d.item.date + "|" + sport] = sessions(on: d.item.date, sport: sport) }
+            }
+            // What this phone prepared and the calendar does not show yet is done already.
+            var pending = PreparedSessions.all().filter { sessions(on: $0.date, sport: $0.sport) <= $0.before }
+            for d in drafts {
+                if let i = pending.firstIndex(where: { $0.date == d.item.date && $0.sport == d.sport }) {
+                    pending.remove(at: i)
+                    progress[d.id] = "done"
+                }
+            }
             error = nil
         } catch {
+            guard start == weekStart else { return }
             self.error = error.localizedDescription
         }
     }
 
+    /// Planned and done sessions of a sport on a day in the training calendar.
+    private func sessions(on date: String, sport: String) -> Int {
+        (model.calendar[date]?.activities ?? []).filter { ($0.sport == "strength" ? "gym" : $0.sport) == sport }.count
+    }
+
     /// One session at a time: the server builds each one from the whole week.
-    private func prepare(_ items: [WeekProposalResponse.Item], prefs: JSONValue?) async {
+    private func prepare(prefs: JSONValue?) async {
         preparing = true
         defer { preparing = false }
-        if let prefs, let start = response?.start { try? await model.api.saveWeekPlan(start: start, prefs: prefs) }
-        for item in items where progress[item.id] != "done" {
-            progress[item.id] = "busy"
+        let start = response?.start ?? weekStart
+        if let prefs { try? await model.api.saveWeekPlan(start: start, prefs: adjusted(prefs)) }
+        // Sessions that reached the calendar since the proposal (another tap,
+        // the web or another device) are not scheduled again.
+        await model.loadCalendar(from: start, to: ISODay.shift(start, 6), force: true)
+        var added: [String: Int] = [:]
+        for draft in drafts where progress[draft.id] != "done" {
+            let key = draft.item.date + "|" + draft.sport
+            let known = baseline[key]
+            let before = (known ?? sessions(on: draft.item.date, sport: draft.sport)) + (added[key] ?? 0)
+            added[key, default: 0] += 1
+            if known != nil && sessions(on: draft.item.date, sport: draft.sport) > before {
+                progress[draft.id] = "done"
+                continue
+            }
+            progress[draft.id] = "busy"
             do {
-                if item.sport == "gym" || item.sport == "strength" {
-                    let proposal = try await model.api.previewGym(date: item.date, minutes: item.minutes ?? 60,
-                                                                  focus: item.role == "gym_upper" ? "upper" : nil, muscles: [])
-                    if let draft = proposal.draftId { try await model.api.confirmGym(draftId: draft, rows: proposal.rows) }
+                if draft.sport == "gym" {
+                    let proposal = try await model.api.previewGym(date: draft.item.date, minutes: draft.minutes,
+                                                                  focus: draft.item.role == "gym_upper" ? "upper" : nil, muscles: [])
+                    if let id = proposal.draftId { try await model.api.confirmGym(draftId: id, rows: proposal.rows) }
                 } else {
-                    let generated = try await model.api.generateWorkout(date: item.date, sport: item.sport, minutes: item.minutes, environment: item.environment)
+                    let generated = try await model.api.generateWorkout(date: draft.item.date, sport: draft.sport, minutes: draft.minutes, environment: draft.environment)
                     guard let workout = generated.workout else { throw APIError.message(generated.message ?? L10n.tr("Bez návrhu.")) }
-                    try await model.api.scheduleWorkout(id: workout.id, date: item.date, indoor: item.environment == "indoor")
+                    try await model.api.scheduleWorkout(id: workout.id, date: draft.item.date, indoor: draft.environment == "indoor")
                 }
-                progress[item.id] = "done"
+                PreparedSessions.remember(date: draft.item.date, sport: draft.sport, before: before)
+                progress[draft.id] = "done"
             } catch {
-                progress[item.id] = error.localizedDescription
+                progress[draft.id] = error.localizedDescription
             }
         }
         await model.refreshTraining()
-        let today = AppModel.localDate(Date())
-        await model.loadCalendar(from: today, to: AppModel.shift(today, by: 7) ?? today, force: true)
+        await model.loadCalendar(from: start, to: ISODay.shift(start, 6), force: true)
+    }
+
+    /// The proposal's plan with the athlete's changes: a dropped session leaves
+    /// its day, a changed sport takes its place, and a changed length or place
+    /// is kept for its plan chip ("weekday|sport|slot").
+    private func adjusted(_ prefs: JSONValue) -> JSONValue {
+        guard let items = response?.proposal?.items else { return prefs }
+        var object = WeekPlanPrefs.object(prefs)
+        var days = WeekPlanPrefs.days(prefs)
+        let kept = Set(drafts.map(\.id))
+        for item in items where !kept.contains(item.id) {
+            let w = ISODay.weekdayIndex(item.date)
+            let sport = item.sport == "strength" ? "gym" : item.sport
+            if let k = days[w].lastIndex(of: sport) { days[w].remove(at: k) }
+        }
+        for d in drafts where d.sport != d.proposedSport {
+            let w = ISODay.weekdayIndex(d.item.date)
+            if let k = days[w].lastIndex(of: d.proposedSport) { days[w].remove(at: k) }
+            if days[w].count < WeekPlanPrefs.maxPerDay { days[w].append(d.sport) }
+        }
+        var sessions: JSONObject = [:]
+        if case .object(let o)? = object["sessions"] { sessions = o }
+        for w in 0..<7 {
+            for sport in WeekPlanPrefs.sports {
+                // The open chips are the last of the sport that day.
+                let mine = drafts.filter { ISODay.weekdayIndex($0.item.date) == w && $0.sport == sport }.sorted { ($0.item.slot ?? 0) < ($1.item.slot ?? 0) }
+                let total = days[w].filter { $0 == sport }.count
+                for (k, d) in mine.enumerated() where d.edited {
+                    let slot = total - mine.count + k
+                    guard (0..<WeekPlanPrefs.maxPerDay).contains(slot) else { continue }
+                    var entry: JSONObject = ["minutes": .number(Double(d.minutes))]
+                    if sport != "gym", let env = d.environment, env == "indoor" || env == "outdoor" { entry["environment"] = .string(env) }
+                    sessions["\(w)|\(sport)|\(slot)"] = .object(entry)
+                }
+            }
+        }
+        object["days"] = WeekPlanPrefs.daysValue(days)
+        object["sessions"] = .object(sessions)
+        return .object(object)
     }
 
     /// This week's Monday (the plan's weeks start on Monday).

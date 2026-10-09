@@ -25,10 +25,17 @@ struct RootView: View {
                     case .health: HealthView()
                     }
                 }
-                if model.offline {
-                    OfflineBanner()
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 4)
+                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil {
+                    VStack(spacing: 6) {
+                        if model.offline || !model.outbox.isEmpty {
+                            OfflineBanner(offline: model.offline, waiting: model.outbox.count)
+                        }
+                        if let note = model.outboxNote {
+                            OutboxNote(text: note) { model.outboxNote = nil }
+                        }
+                    }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.top, 4)
                 }
                 if !model.immersive {
                     TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), onAdd: { showAdd = true })
@@ -48,9 +55,10 @@ struct RootView: View {
             .sheet(isPresented: $showCoach) { CoachView() }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView() }
             .task { await model.checkSetup(); await model.loadAccountInitial() }
-            // Back in the app: new data, and water added from the widget goes out.
+            // Back in the app: new data, and what waited for signal (and water
+            // added from the widget) goes out.
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active, model.today != nil { Task { await model.refresh() } }
+                if phase == .active, model.today != nil || !model.outbox.isEmpty { Task { await model.refresh() } }
             }
         }
     }
@@ -62,16 +70,51 @@ struct RootView: View {
     }
 }
 
-/// "Bez připojení": the screens show what was saved on the phone.
+/// "Bez připojení": the screens show what was saved on the phone, and how
+/// many writes wait for signal (Outbox).
 struct OfflineBanner: View {
+    var offline = true
+    var waiting = 0
+
+    private var text: String {
+        let parts = [offline ? L10n.tr("Bez připojení · uložená data") : nil, waiting > 0 ? Self.waitingText(waiting) : nil]
+        return parts.compactMap { $0 }.joined(separator: " · ")
+    }
+
+    static func waitingText(_ n: Int) -> String {
+        if n == 1 { return L10n.f("%@ zápis čeká na signál", String(n)) }
+        if (2...4).contains(n) { return L10n.f("%@ zápisy čekají na signál", String(n)) }
+        return L10n.f("%@ zápisů čeká na signál", String(n))
+    }
+
     var body: some View {
-        Label("Bez připojení · uložená data", systemImage: "wifi.slash")
+        Label(text, systemImage: offline ? "wifi.slash" : "arrow.triangle.2.circlepath")
             .font(.footnote.weight(.medium))
             .foregroundStyle(Palette.ink)
             .padding(.horizontal, 14).frame(height: 32)
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
             .allowsHitTesting(false)
+    }
+}
+
+/// A waiting write the server turned down; a tap puts it away.
+struct OutboxNote: View {
+    let text: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        Button(action: dismiss) {
+            Label(text, systemImage: "exclamationmark.circle")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Palette.rust)
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+                .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
     }
 }
 

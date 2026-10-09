@@ -116,11 +116,30 @@ export async function saveWeekPlan(db, input, date = null) {
   await ensure(db);
   if (date) {
     await ensureWeekOverrides(db);
-    await db.prepare('INSERT INTO week_plan_overrides(user_id,week_start,prefs_json) VALUES(?,?,?) ON CONFLICT(user_id,week_start) DO UPDATE SET prefs_json=excluded.prefs_json').bind(db.userId, weekStartOf(date), JSON.stringify(prefs)).run();
+    // A week keeps only what differs from the usual week, so a later change of
+    // the usual week (the time for a weekday, the place) still reaches it.
+    const own = weekOverride(prefs, await getWeekPlan(db));
+    if (!Object.keys(own).length) {
+      await db.prepare('DELETE FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).run();
+      return { ...prefs, source: 'default' };
+    }
+    await db.prepare('INSERT INTO week_plan_overrides(user_id,week_start,prefs_json) VALUES(?,?,?) ON CONFLICT(user_id,week_start) DO UPDATE SET prefs_json=excluded.prefs_json').bind(db.userId, weekStartOf(date), JSON.stringify(own)).run();
     return { ...prefs, source: 'week' };
   }
   await db.prepare("INSERT INTO week_plan_preferences(user_id,prefs_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET prefs_json=excluded.prefs_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(prefs)).run();
   return prefs;
+}
+
+// The keys of a week's plan that differ from the usual week. The lengths of
+// the plan chips belong to the days they are keyed by, so they go together.
+export function weekOverride(prefs, defaults = {}) {
+  const same = key => JSON.stringify(prefs[key] ?? null) === JSON.stringify(defaults[key] ?? null);
+  const own = {};
+  for (const key of ['days', 'location', 'availability', 'weeklyActivities', 'sessions', 'availabilityMode']) if (key in prefs && !same(key)) own[key] = prefs[key];
+  if ('days' in own || 'sessions' in own) Object.assign(own, { days: prefs.days, sessions: prefs.sessions });
+  // Time for a weekday set by hand is the athlete's, not the starting template's.
+  if ('availability' in own && prefs.availabilityMode) own.availabilityMode = prefs.availabilityMode;
+  return own;
 }
 
 export async function addWeekSport(db,date,sport) {

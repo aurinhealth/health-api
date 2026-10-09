@@ -91,5 +91,15 @@ final class SettingsStore {
         }
     }
 
+    /// After a reconnect: only the data sources and the sync state.
+    func reloadConnections() async {
+        guard !demo else { return }
+        if let response = try? await api.connections() { connections = response.providers }
+        if let status = try? await api.syncStatus() { sync = status }
+    }
+
     var connectedCount: Int { connections.filter { $0.connected == true }.count }
+
+    /// Connected sources to connect again or grant permissions (Settings badge).
+    var problems: [ConnectionsResponse.Provider] { connections.filter(\.needsAttention) }
 }

@@ -14,6 +14,7 @@ import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, sk
 import { pairSessions } from "./activity-match.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -362,6 +363,8 @@ export async function googleToken(env, scopes = healthScopes(env)) {
   const data = await response.json();
 
   if (!response.ok) {
+    // A revoked or expired grant asks the user to connect Google again (connection-health.js).
+    if (isGoogleAuthFailure(data)) await markConnectionBroken(env, "google", data.error_description || data.error);
     if (data?.error === "invalid_grant") {
       throw new Error(
         "Google OAuth refresh token is invalid or expired. Reauthorize at /oauth/google and replace the GOOGLE_REFRESH_TOKEN secret with the newly issued token."
@@ -370,6 +373,7 @@ export async function googleToken(env, scopes = healthScopes(env)) {
     throw new Error("Google OAuth error: " + JSON.stringify(data));
   }
 
+  await markConnectionOk(env, "google");
   return data.access_token;
 }
 
@@ -420,6 +424,8 @@ async function intervalsGet(
   }
 
   if (!response.ok) {
+    // A refused key or token asks the user to connect Intervals.icu again (connection-health.js).
+    if (isIntervalsAuthFailure(response.status)) await markConnectionBroken(env, "intervals", "Intervals.icu HTTP " + response.status);
     throw new Error(
       "Intervals.icu HTTP " +
       response.status +
@@ -427,6 +433,7 @@ async function intervalsGet(
     );
   }
 
+  await markConnectionOk(env, "intervals");
   return data;
 }
 

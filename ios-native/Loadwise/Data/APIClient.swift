@@ -46,6 +46,13 @@ final class APIClient: @unchecked Sendable {
         return try await get(path, cacheKey: date == nil ? "today" : nil)
     }
 
+    /// Today with the answer as it came, for the writes waiting for signal (OutboxPatch).
+    func todayData(date: String? = nil) async throws -> (TodaySnapshot, Data) {
+        var path = "/app/api/today"
+        if let date { path += "?date=" + date }
+        return try await getWithData(path, cacheKey: date == nil ? "today" : nil)
+    }
+
     func training() async throws -> TrainingSnapshot {
         try await get("/app/api/training", cacheKey: "training")
     }
@@ -174,9 +181,13 @@ final class APIClient: @unchecked Sendable {
 
     /// Saves the whole plan (the server keeps the sheet and the history of sets).
     func saveGym(_ day: GymDay, date: String) async throws {
+        let _: JSONValue = try await send("/app/api/gym", method: "POST", body: Self.gymBody(day, date: date))
+    }
+
+    static func gymBody(_ day: GymDay, date: String) -> JSONObject {
         var body = day.saveBody
         body["date"] = .string(date)
-        let _: JSONValue = try await send("/app/api/gym", method: "POST", body: body)
+        return body
     }
 
     /// Builds the day's gym plan (deterministic, not AI) and puts it in Intervals.icu.
@@ -263,6 +274,10 @@ final class APIClient: @unchecked Sendable {
 
     func food(date: String? = nil) async throws -> FoodSnapshot {
         try await get("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
+    }
+
+    func foodData(date: String? = nil) async throws -> (FoodSnapshot, Data) {
+        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
     }
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
@@ -427,6 +442,12 @@ final class APIClient: @unchecked Sendable {
 
     /// With a cache key the answer is also kept on disk (SnapshotCache).
     func get<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> T {
+        let (value, _): (T, Data) = try await getWithData(path, cacheKey: cacheKey)
+        return value
+    }
+
+    /// The decoded answer and its JSON as it came.
+    func getWithData<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> (T, Data) {
         let (data, response) = try await session.data(for: makeRequest(path))
         try check(response, data)
         let value: T
@@ -436,7 +457,27 @@ final class APIClient: @unchecked Sendable {
             throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
         if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
-        return value
+        return (value, data)
+    }
+
+    /// Sends a write that may have waited for signal (Outbox). A missing
+    /// connection throws the URLError; an answer other than 2xx throws
+    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).
+    func sendQueued(_ item: OutboxItem) async throws {
+        var request = makeRequest(item.path, method: item.method)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = item.body
+        request.timeoutInterval = 20
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw OutboxRefusal.retry(L10n.tr("Server neodpověděl.")) }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let message = json?["message"] as? String ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
+            // A timeout or too many requests at the server: later, as with a server error.
+            if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
+            throw OutboxRefusal.retry(message)
+        }
     }
 
     func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B) async throws -> T {

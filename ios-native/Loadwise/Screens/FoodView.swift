@@ -475,8 +475,22 @@ struct MacroBar: View {
 struct EntryRow: View {
     @Environment(AppModel.self) private var model
     let entry: FoodSnapshot.Entry
+    @State private var editing = false
+    @State private var confirmDelete = false
 
     var body: some View {
+        SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
+            line.onTapGesture { editing = true }
+        }
+        .sheet(isPresented: $editing) {
+            FoodEntryEditSheet(entry: entry, date: model.food?.date ?? AppModel.localDate(Date()))
+        }
+        .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Smazat", role: .destructive) { Task { await model.deleteFood(id: entry.id) } }
+        }
+    }
+
+    private var line: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.name).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(2)
@@ -490,9 +504,6 @@ struct EntryRow: View {
         .padding(.leading, 66)
         .padding(.bottom, 10)
         .contentShape(Rectangle())
-        .contextMenu {
-            Button(role: .destructive) { Task { await model.deleteFood(id: entry.id) } } label: { Label("Smazat", systemImage: "trash") }
-        }
     }
 
     private var detail: String? {

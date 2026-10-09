@@ -43,7 +43,7 @@ export function dayStrain(rows, date) {
 // Planned training on the same 0–21 scale, from TSS (as the web dashboard).
 const plannedStrain = tss => (tss > 0 ? Math.round(21 * (1 - Math.exp(-tss / 90)) * 10) / 10 : null);
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {} }) {
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -115,6 +115,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   return {
     status: "ok",
     date,
+    // Connected services that need the user (connection-health.js), shown at the top.
+    connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [] },
     sleep: night ? {
       minutes: num(night.durationMin),

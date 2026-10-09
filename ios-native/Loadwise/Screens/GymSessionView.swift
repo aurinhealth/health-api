@@ -96,7 +96,7 @@ struct GymSessionView: View {
                 .disabled(saving || model.demo || day?.cancelled == true)
                 .padding(.top, 14)
                 NavigationLink(value: AppRoute.gymBuilder) {
-                    Label("Vybrat partie a sestavit s AI", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Label("Vybrat partie a sestavit trénink", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 46)
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
                 }
@@ -123,7 +123,7 @@ struct GymSessionView: View {
         loading = true
         defer { loading = false }
         do {
-            day = try await model.api.gym(date: date)
+            day = try await model.gymDay(date: date)
             if let names = day?.exercises.map(\.name), !names.isEmpty {
                 muscles = (try? await model.api.gymMuscles(names: names)) ?? [:]
             }
@@ -137,7 +137,7 @@ struct GymSessionView: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.saveGym(day, date: date)
+            try await model.saveGym(day, date: date)
             error = nil
         } catch {
             self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)

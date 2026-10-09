@@ -26,6 +26,7 @@ import {getCookbookRecipeByPage,useCookbookDatabase,saveCookbook} from './cookbo
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday} from './app-today.js';
+import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
 import {buildCalendar} from './app-calendar.js';
 import {buildHealth} from './app-health.js';
@@ -108,6 +109,9 @@ import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, 
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
 import { handleEmailLogin, handleEmailChange, emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
 import { emailConfigured } from "./email-sender.js";
+import { needsAIAccess } from "./ai-routes.js";
+import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
+import { handleSupportReport } from "./support-report.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
@@ -120,7 +124,7 @@ const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:"
 
 // Requests that read or preview only and so keep the cache.
 // Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
-const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|passkeys$|passkeys\/options$)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|support\/report$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -216,7 +220,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
-    if(signedIn&&request.method==='POST'&&/^\/app\/api\/(assistant(?:\/stream)?$|gym\/adjust$|food\/(ai-lookup|photo|chat)$|review(?:\/|$))/.test(url.pathname)){
+    if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }
 
@@ -235,10 +239,10 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     }
     if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
-    if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
+    if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
     // A new Intervals.icu connection imports its history, the same as a pasted key.
-    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
+    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });
     if (nativeConnect) return nativeConnect;
@@ -252,7 +256,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
-      const response = await handleDashboardApi(request, env, ctx, url, { user, signedIn });
+      // A write the app replays after a lost signal is stored once (idempotency.js).
+      const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
       // A change by the user makes the cached coach inputs outdated.
       if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
       return response;
@@ -796,7 +801,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
         const body=await request.json().catch(()=>({})),date=validDay(body.date)?body.date:localToday();
         const notes=typeof body.notes==='string'&&body.notes.trim()?body.notes.trim().slice(0,1000):null,rpe=Number.isFinite(Number(body.rpe))&&Number(body.rpe)>=1&&Number(body.rpe)<=10?Number(body.rpe):null;
-        const reflection=await createReflection(env,{date,rpe,notes},day=>reflectionData(env,ctx,internalAuth,day));
+        // Without AI access (consent, subscription) the note is the rule-based one, never sent to OpenAI.
+        const aiAllowed=(await subscriptionStatus(env).catch(()=>({aiAccess:false}))).aiAccess;
+        const ruleEnv={...env};if(!aiAllowed)delete ruleEnv.OPENAI_API_KEY;
+        const reflection=await createReflection(ruleEnv,{date,rpe,notes},day=>reflectionData(env,ctx,internalAuth,day));
         return Response.json({status:'ok',reflection},{headers:{'Cache-Control':'no-store'}});
       }
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
@@ -1114,6 +1122,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }catch{return Response.json({message:L('Jídlo se nepodařilo uložit. Zkontroluj hodnoty a zkus to znovu.', 'The meal couldn\'t be saved. Check the values and try again.')},{status:500});}
   }
 
+  // "Nahlásit problém": the user's report with a screenshot and diagnostics (support-report.js).
+  if (url.pathname === "/app/api/support/report") return handleSupportReport(request, env, { signedIn: session.signedIn, origin: url.origin });
   if (url.pathname === "/app/api/connections" && request.method === "GET") {
     return Response.json(await connectionStatus(env), {headers:{"Cache-Control":"no-store"}});
   }
@@ -1127,6 +1137,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
       await deleteConnectionSecret(env,body.provider);
       if(body.provider==='google') await deleteConnectionSecret(env,'google_scopes');
+      await clearConnectionHealth(env,body.provider);
       return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});
     }
     if(body.provider!=='intervals'||typeof body.key!=='string'||body.key.trim().length<8||body.key.length>512) return Response.json({message:L('Zadej platný API klíč Intervals.icu.', 'Enter a valid Intervals.icu API key.')},{status:400});
@@ -1135,6 +1146,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!check.ok) return Response.json({message:L('Intervals klíč nepřijal. Zkontroluj klíč v nastavení Intervals.', 'Intervals didn\'t accept the key. Check the key in your Intervals settings.')},{status:400});
     const athlete=await check.json().catch(()=>({}));
     await saveConnectionSecret(env,'intervals',apiKey);
+    await clearConnectionHealth(env,'intervals');
     await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();
     await initialImport(await connectionEnvironment(env),ctx);
     return Response.json({status:'ok',athleteId:athlete.id||null,message:'Intervals.icu je připojené'+(athlete.name?' ('+athlete.name+')':'')+'.'},{headers:{'Cache-Control':'no-store'}});
@@ -1161,8 +1173,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null)
       ]);
+      // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
+      const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);
-      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

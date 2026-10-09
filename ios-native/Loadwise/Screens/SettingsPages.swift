@@ -247,6 +247,21 @@ struct SourcesSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Zdroje dat") {
+            // Access refused at the last sync, or Google permissions missing.
+            if !store.problems.isEmpty {
+                SettingsGroup(title: "Připojit znovu") {
+                    ForEach(Array(store.problems.enumerated()), id: \.element.id) { index, provider in
+                        if index > 0 { SettingsDivider() }
+                        Button { start(provider.id) } label: {
+                            SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.triangle.fill", color: Palette.rust), title: provider.name ?? provider.id,
+                                        subtitle: provider.problemText, value: working == provider.id ? L10n.tr("připojuji…") : nil)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(working != nil || store.demo)
+                    }
+                }
+            }
+
             SettingsGroup(title: "Připojené", footer: "Přihlášení proběhne na stránce Googlu nebo Intervals.icu a pak se vrátíš sem.") {
                 ForEach(Array(store.connections.enumerated()), id: \.element.id) { index, provider in
                     if index > 0 { SettingsDivider() }
@@ -262,7 +277,7 @@ struct SourcesSettingsView: View {
                         }
                     } label: {
                         SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
-                                    value: working == provider.id ? "připojuji…" : provider.connected == true ? "připojeno" : "připojit")
+                                    value: working == provider.id ? "připojuji…" : provider.needsAttention ? "připojit znovu" : provider.connected == true ? "připojeno" : "připojit")
                     }
                     .disabled(working != nil || store.demo)
                 }
@@ -285,6 +300,12 @@ struct SourcesSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(syncing || store.demo)
+                // The last sync left a source out (src/dashboard-sync.js results, googleStatus).
+                if !syncing, let failed = store.sync?.failedSources, !failed.isEmpty {
+                    SettingsDivider()
+                    SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou",
+                                subtitle: failed.joined(separator: ", "), chevron: false)
+                }
             }
 
             if let message {
@@ -346,6 +367,7 @@ struct SourcesSettingsView: View {
     }
 
     private func subtitle(_ provider: ConnectionsResponse.Provider) -> String? {
+        if provider.needsReconnect == true, provider.connected == true { return provider.problemText }
         let missing = provider.missingPermissions?.count ?? 0
         if missing > 0 { return missing == 1 ? L10n.tr("chybí 1 oprávnění") : L10n.f("chybí %@ oprávnění", String(missing)) }
         return provider.metrics.map { $0.joined(separator: ", ").lowercased() }
