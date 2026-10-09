@@ -44,7 +44,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testFoodScreens() throws {
-        try render("food", glow: Palette.Glow.food) { NavigationStack { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40) }.environment(AppModel(demo: true)) }
+        try render("food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("food-amount", height: 700) { NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_pm") }.environment(AppModel(demo: true)) }
     }
 
