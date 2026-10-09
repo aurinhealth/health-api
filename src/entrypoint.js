@@ -92,6 +92,7 @@ import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZO
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
 import legacyHealthApi, { googleToken } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
+import { handleNativeConnect } from "./native-connect.js";
 import { handleAppleLogin, appleConfigured, appleIdentity, unlinkAppleIdentity } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -239,6 +240,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // A new Intervals.icu connection imports its history, the same as a pasted key.
     if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
+    const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });
+    if (nativeConnect) return nativeConnect;
     const googleLogin = await handleGoogleLogin(request, rawEnv, url.pathname);
     if (googleLogin) return googleLogin;
     const appleLogin = await handleAppleLogin(request, rawEnv, url.pathname, { user: signedIn ? user : null });

@@ -34,6 +34,13 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         try await api.exchangeHandoff(token: token, verifier: verifier)
     }
 
+    /// Connects Google or Intervals.icu: the provider's page in the browser
+    /// sheet, back at loadwise://connected?event=… (src/connect-return.js).
+    func connect(provider: String) async throws -> String {
+        let callback = try await openBrowser(try await api.connectLink(provider: provider))
+        return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
+    }
+
     private func openBrowser(_ url: URL) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: "loadwise") { callback, error in

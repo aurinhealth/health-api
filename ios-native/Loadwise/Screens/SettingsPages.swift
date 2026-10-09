@@ -217,16 +217,35 @@ struct GoalsSettingsView: View {
 // MARK: - Data sources
 
 struct SourcesSettingsView: View {
+    @Environment(AppModel.self) private var model
     let store: SettingsStore
     @State private var syncing = false
+    @State private var working: String?
+    @State private var message: String?
+    @State private var googleDisclosure = false
+    @State private var intervalsKey = false
+    @State private var disconnecting: ConnectionsResponse.Provider?
 
     var body: some View {
         SettingsPage(title: "Zdroje dat") {
-            SettingsGroup(title: "Připojené", footer: "Připojit nebo odpojit zdroj jde zatím ve webové aplikaci: přihlášení probíhá na stránkách Googlu a Intervals.icu.") {
+            SettingsGroup(title: "Připojené", footer: "Přihlášení proběhne na stránce Googlu nebo Intervals.icu a pak se vrátíš sem.") {
                 ForEach(Array(store.connections.enumerated()), id: \.element.id) { index, provider in
                     if index > 0 { SettingsDivider() }
-                    SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
-                                value: provider.connected == true ? "připojeno" : "nepřipojeno", chevron: false)
+                    Menu {
+                        Button { start(provider.id) } label: {
+                            Label(provider.connected == true ? "Připojit znovu" : "Připojit", systemImage: "link")
+                        }
+                        if provider.id == "intervals" {
+                            Button { intervalsKey = true } label: { Label("Vložit API klíč", systemImage: "key") }
+                        }
+                        if provider.connected == true {
+                            Button(role: .destructive) { disconnecting = provider } label: { Label("Odpojit", systemImage: "link.badge.minus") }
+                        }
+                    } label: {
+                        SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
+                                    value: working == provider.id ? "připojuji…" : provider.connected == true ? "připojeno" : "připojit")
+                    }
+                    .disabled(working != nil || store.demo)
                 }
                 if !store.connections.isEmpty { SettingsDivider() }
                 SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
@@ -249,11 +268,53 @@ struct SourcesSettingsView: View {
                 .disabled(syncing || store.demo)
             }
 
-            Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
-                Text("Otevřít připojení ve webové aplikaci").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            if let message {
+                Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet { googleDisclosure = false; connect("google") } }
+        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await store.load() ; message = "Intervals.icu je připojené." } }
+        .confirmationDialog("Odpojit \(disconnecting?.name ?? "")?", isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
+            Button("Odpojit", role: .destructive) { if let p = disconnecting { Task { await disconnect(p.id) } } }
+        } message: {
+            Text("Data, která už Loadwise má, zůstanou. Nová přestanou chodit.")
+        }
+    }
+
+    /// Google first shows what Loadwise does with the data (Google's policy).
+    private func start(_ provider: String) {
+        if provider == "google" { googleDisclosure = true } else { connect(provider) }
+    }
+
+    private func connect(_ provider: String) {
+        Task {
+            working = provider
+            defer { working = nil }
+            do {
+                guard let event = try await model.connect(provider: provider) else { return }
+                switch event {
+                case "google", "intervals":
+                    message = (provider == "google" ? "Google" : "Intervals.icu") + " je připojené, data se začínají stahovat."
+                case "intervals-failed":
+                    message = "Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč."
+                    intervalsKey = true
+                case "expired": message = "Odkaz vypršel, zkus to znovu."
+                default: message = "Připojení se nedokončilo."
+                }
+                await store.load()
+            } catch {
+                message = error.localizedDescription
+            }
+        }
+    }
+
+    private func disconnect(_ provider: String) async {
+        do {
+            try await model.api.disconnect(provider: provider)
+            message = "Odpojeno."
+            await store.load()
+        } catch {
+            message = error.localizedDescription
         }
     }
 
@@ -287,6 +348,87 @@ struct SourcesSettingsView: View {
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return f
     }()
+}
+
+/// What Loadwise reads and writes in Google Health, before Google's own consent.
+struct GoogleDisclosureSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var proceed: () -> Void
+    @State private var agree = false
+
+    private let items: [(String, String)] = [
+        ("Co čteme", "Z Google Health aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla."),
+        ("Co zapisujeme", "Do Google Health jen jídlo a pití, které si tady zapíšeš."),
+        ("K čemu", "Jen pro funkce aplikace: přehled dne, regenerace, kalorický cíl, plán tréninků a osobní asistent."),
+        ("Kdo data dostane", "Tvůj účet Intervals.icu, když ho připojíš. OpenAI, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě."),
+        ("Kdykoli", "Google Health odpojíš v Nastavení → Zdroje dat, v Soukromí smažeš účet i se všemi daty.")
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Připojení Google Health").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    ForEach(items, id: \.0) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.0).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(item.1).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Toggle("Souhlasím, aby Loadwise takto používal moje data z Google Health.", isOn: $agree)
+                        .font(Typo.small).tint(Palette.green).padding(.top, 6)
+                    Link("Zásady ochrany soukromí", destination: URL(string: "https://petrfitnessdata.eu/privacy")!).font(Typo.small)
+                    PrimaryButton(title: "Pokračovat na Google", systemImage: "arrow.up.forward") { proceed() }
+                        .disabled(!agree).opacity(agree ? 1 : 0.5).padding(.top, 6)
+                }
+                .padding(24)
+            }
+            .background(Palette.settingsBackground)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
+        }
+    }
+}
+
+/// Intervals.icu by its personal API key (Settings → Developer Settings there),
+/// when its sign-in is not set up for the app.
+struct IntervalsKeySheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var saved: () async -> Void
+    @State private var key = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("API klíč Intervals.icu").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Najdeš ho v Intervals.icu v Settings → Developer Settings.").font(Typo.small).foregroundStyle(Palette.muted)
+                SecureField("API klíč", text: $key)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                PrimaryButton(title: saving ? "Ověřuji…" : "Připojit", systemImage: "link", busy: saving) { Task { await save() } }
+                    .disabled(saving || key.trimmingCharacters(in: .whitespaces).count < 8)
+                Spacer()
+            }
+            .padding(24)
+            .background(Palette.settingsBackground)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await model.api.connectIntervalsKey(key.trimmingCharacters(in: .whitespacesAndNewlines))
+            await saved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
 }
 
 // MARK: - Appearance and units

@@ -21,6 +21,7 @@ const PUBLIC_PATHS = new Set([
   "/auth/google",
   "/auth/google/callback",
   "/auth/app/session",
+  "/auth/app/connect",
   "/auth/apple",
   "/auth/apple/callback",
   "/auth/passkey/options",

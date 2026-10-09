@@ -381,6 +381,36 @@ final class APIClient: @unchecked Sendable {
         guard hasSession else { throw APIError.message("Server nevrátil přihlášení. Zkus to znovu.") }
     }
 
+    /// E-mail sign-in, step 1: a six-digit code goes to the address (when it has access).
+    func startEmailLogin(email: String) async throws {
+        let _: JSONValue = try await send("/auth/email/start", method: "POST", body: ["email": JSONValue.string(email)])
+    }
+
+    /// Step 2: the code for the session cookie.
+    func verifyEmailLogin(email: String, code: String) async throws {
+        let _: JSONValue = try await send("/auth/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
+        guard hasSession else { throw APIError.message("Server nevrátil přihlášení. Zkus to znovu.") }
+    }
+
+    // MARK: - Data sources
+
+    /// A short-lived link that opens the provider's consent in the browser
+    /// sheet, signed in as this user (src/native-connect.js).
+    func connectLink(provider: String) async throws -> URL {
+        struct Response: Decodable { let url: String }
+        let r: Response = try await send("/app/api/connect/start", method: "POST", body: ["provider": JSONValue.string(provider)])
+        guard let url = URL(string: r.url) else { throw APIError.message("Odkaz na připojení je neplatný.") }
+        return url
+    }
+
+    func connectIntervalsKey(_ key: String) async throws {
+        let _: JSONValue = try await send("/app/api/connections", method: "POST", body: ["provider": JSONValue.string("intervals"), "key": .string(key)])
+    }
+
+    func disconnect(provider: String) async throws {
+        let _: JSONValue = try await send("/app/api/connections", method: "DELETE", body: ["provider": JSONValue.string(provider)])
+    }
+
     /// Ends the session on the server too; the cookie goes either way.
     func logout() async {
         _ = try? await session.data(for: makeRequest("/app/logout", method: "POST"))
@@ -432,7 +462,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue("cs", forHTTPHeaderField: "X-Interface-Language")
         // Writes with the session cookie must come from the site's own origin.
-        if method != "GET" && path.hasPrefix("/app/") {
+        if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
         }
         return request

@@ -144,6 +144,22 @@ final class AppModel {
         }
     }
 
+    /// Signs in with the code from the e-mail.
+    func signIn(email: String, code: String) async throws {
+        try await api.verifyEmailLogin(email: email, code: code)
+        demo = false
+        phase = .signedIn
+        errorMessage = nil
+        await checkSetup()
+        await refresh()
+    }
+
+    /// Connects a data source; the event says how it went ("intervals",
+    /// "google-cancelled", "intervals-failed"…), nil when the sheet was closed.
+    func connect(provider: String) async throws -> String? {
+        do { return try await auth.connect(provider: provider) } catch is CancellationError { return nil }
+    }
+
     func showDemo() {
         demo = true
         today = DemoData.today

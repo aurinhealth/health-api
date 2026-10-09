@@ -4,6 +4,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var page = 0
+    @State private var emailLogin = false
 
     private let pages: [(symbol: String, color: Color, title: String, text: String)] = [
         ("sun.max.fill", Palette.green, "Každé ráno víš, jak na tom jsi.", "Připravenost z HRV, tepu a spánku. Jedno číslo a jedna věta, co dnes dává smysl."),
@@ -76,12 +77,19 @@ struct LoginView: View {
                     .background(Palette.button, in: Capsule())
                 }
                 .disabled(model.signingIn)
+                Button { emailLogin = true } label: {
+                    Label("Přihlásit se e-mailem", systemImage: "envelope")
+                        .font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                }
+                .padding(.top, 10)
                 Button("Prohlédnout ukázku") { model.showDemo() }
                     .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                Text("Přihlášení se otevře v Safari. Přístup mají pozvaní uživatelé.")
+                Text("Přístup mají pozvaní uživatelé.")
                     .font(Typo.caption)
                     .foregroundStyle(Palette.faint)
                     .frame(maxWidth: .infinity)
@@ -89,6 +97,83 @@ struct LoginView: View {
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 24)
+        }
+        .sheet(isPresented: $emailLogin) { EmailLoginSheet() }
+    }
+}
+
+/// Sign-in with a six-digit code sent to the e-mail (src/email-login.js).
+struct EmailLoginSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var email = ""
+    @State private var code = ""
+    @State private var sent = false
+    @State private var busy = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(sent ? "Zadej kód z e-mailu" : "Přihlášení e-mailem").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                if sent {
+                    Text("Poslali jsme ho na " + email + ". Platí 10 minut.").font(Typo.small).foregroundStyle(Palette.muted)
+                    TextField("123456", text: $code)
+                        .keyboardType(.numberPad).textContentType(.oneTimeCode)
+                        .font(Typo.number(34)).multilineTextAlignment(.center)
+                        .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .focused($focused)
+                        .onChange(of: code) { _, value in
+                            code = String(value.filter(\.isNumber).prefix(6))
+                            if code.count == 6 { Task { await verify() } }
+                        }
+                } else {
+                    TextField("e-mail", text: $email)
+                        .keyboardType(.emailAddress).textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .focused($focused)
+                }
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                PrimaryButton(title: busy ? "Moment…" : sent ? "Přihlásit" : "Poslat kód", systemImage: sent ? "checkmark" : "envelope", busy: busy) {
+                    Task { if sent { await verify() } else { await send() } }
+                }
+                .disabled(busy || (sent ? code.count != 6 : !email.contains("@")))
+                if sent {
+                    Button("Poslat nový kód") { Task { code = ""; await send() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted).disabled(busy)
+                }
+                Spacer()
+            }
+            .padding(24)
+            .background(ScreenBackground(glow: Palette.Glow.today))
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
+            .onAppear { focused = true }
+        }
+    }
+
+    private func send() async {
+        busy = true
+        defer { busy = false }
+        do {
+            try await model.api.startEmailLogin(email: email.trimmingCharacters(in: .whitespaces))
+            sent = true
+            error = nil
+            focused = true
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func verify() async {
+        guard !busy else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            try await model.signIn(email: email.trimmingCharacters(in: .whitespaces), code: code)
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }
