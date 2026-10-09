@@ -134,6 +134,14 @@ final class APIClient: @unchecked Sendable {
         return me.consent?.aiAllowed ?? false
     }
 
+    /// The signed-in account's name or e-mail (GET /app/api/me → user).
+    func accountName() async throws -> String? {
+        struct User: Decodable { let name: String?; let email: String? }
+        struct Me: Decodable { let user: User? }
+        let me: Me = try await get("/app/api/me")
+        return me.user?.name ?? me.user?.email
+    }
+
     func setAI(_ allowed: Bool) async throws {
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
     }
@@ -324,8 +332,10 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// water, coffee, tea, juice, milk, sport or other.
-    func addFluid(ml: Int, kind: String = "water") async throws {
-        let _: JSONValue = try await send("/app/api/fluids", method: "POST", body: ["ml": JSONValue.number(Double(ml)), "kind": .string(kind)])
+    func addFluid(ml: Int, kind: String = "water", date: String? = nil) async throws {
+        var body: JSONObject = ["ml": .number(Double(ml)), "kind": .string(kind)]
+        if let date { body["date"] = .string(date) }
+        let _: JSONValue = try await send("/app/api/fluids", method: "POST", body: body)
     }
 
     // MARK: - Settings

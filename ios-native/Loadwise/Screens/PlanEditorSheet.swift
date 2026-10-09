@@ -30,8 +30,6 @@ struct PlanEditorSheet: View {
                     .onDelete { offsets in
                         for offset in offsets.sorted(by: >) { day.removeExercise(at: offset) }
                     }
-                } footer: {
-                    Text("Přetáhni cvik za úchyt, pro odebrání ho přejeď doleva. Hotové série zůstanou zapsané.")
                 }
                 Section {
                     Button { adding = true } label: {

@@ -231,9 +231,6 @@ struct GymBuilderView: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Sestavím ho podle únavy, svalů od posledního tréninku, cyklistické zátěže a tvého vybavení.")
-                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
-
             SectionLabel(text: "Kdy a jak dlouho").padding(.top, 26)
             Card {
                 DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
@@ -474,7 +471,6 @@ struct EquipmentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Posilovna · vybavení").padding(.top, 24)
                 Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                Text("Tréninky sestavím jen z toho, co máš k dispozici.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
 
                 VStack(spacing: 10) {
                     ForEach(Self.kinds.indices, id: \.self) { i in
@@ -511,8 +507,6 @@ struct EquipmentView: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: "Poznat z fotky nebo webu").padding(.top, 26)
             Card {
-                Text("Vyfoť posilovnu (až 4 fotky) nebo vlož odkaz na její web. AI vybere stroje, které tam jsou, a ty je pak jen zkontroluješ.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
                     Label(busy == "photo" ? "Čtu fotky…" : "Vybrat fotky posilovny", systemImage: "photo.on.rectangle.angled")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -548,8 +542,6 @@ struct EquipmentView: View {
                 Text(weights.isEmpty ? "plán navrhne jakoukoli váhu" : "\(weights.count) " + Fmt.plural(weights.count, "váha", "váhy", "vah"))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
-            Text("Vyber váhy, které máš (kg na ruku). Plán pak navrhne jen je, nejbližší lehčí, když přesná chybí.")
-                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 preset("2–40 po 2") { weights = Set(stride(from: 2.0, through: 40, by: 2)) }
                 preset("2,5–25 po 2,5") { weights = Set(stride(from: 2.5, through: 25, by: 2.5)) }

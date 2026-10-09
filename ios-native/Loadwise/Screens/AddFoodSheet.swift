@@ -61,8 +61,6 @@ struct AddFoodSheet: View {
                             .disabled(query.trimmingCharacters(in: .whitespaces).count < 2 || lookingUp || model.demo)
                     }
                     .padding(.top, 18)
-                    Text("Vyfoť talíř a AI odhadne porci, nebo vyfoť tabulku nutričních hodnot na obalu. „Dohledat AI“ najde potravinu podle napsaného názvu.")
-                        .font(Typo.tiny).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
                     if readingPhoto {
                         HStack(spacing: 8) { ProgressView(); Text("Čtu fotku…").font(Typo.small).foregroundStyle(Palette.muted) }.padding(.top, 12)
                     }

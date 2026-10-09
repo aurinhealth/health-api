@@ -41,6 +41,9 @@ struct TodayContent: View {
     let today: TodaySnapshot
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
+    /// The account's first letter on the settings button (GET /app/api/me).
+    @AppStorage(AppModel.accountInitialKey) private var initial = ""
+
     /// The widgets hidden in "Upravit přehled" (comma-separated TodayWidget).
     @AppStorage("todayHidden") private var hidden = ""
     @State private var editing = false
@@ -52,7 +55,8 @@ struct TodayContent: View {
                 Spacer()
                 CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
                 Button(action: openSettings) {
-                    Text("P").font(.footnote.weight(.medium))
+                    Group { if initial.isEmpty { Image(systemName: "person") } else { Text(initial) } }
+                        .font(.footnote.weight(.medium))
                         .frame(width: 36, height: 36)
                         .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 }

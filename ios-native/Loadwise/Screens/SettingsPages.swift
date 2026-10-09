@@ -219,7 +219,6 @@ struct GoalsSettingsView: View {
 struct SourcesSettingsView: View {
     let store: SettingsStore
     @State private var syncing = false
-    @AppStorage("mergeSources") private var merge = true
 
     var body: some View {
         SettingsPage(title: "Zdroje dat") {
@@ -248,10 +247,6 @@ struct SourcesSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(syncing || store.demo)
-            }
-
-            SettingsGroup(title: "Sloučení dat", footer: "Když stejnou noc nebo trénink pošle víc zdrojů, Loadwise je pozná podle času a započítá jen jednou.") {
-                SettingsToggle(title: "Automaticky sloučit", isOn: $merge, disabled: true)
             }
 
             Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
@@ -364,7 +359,7 @@ struct NotificationsSettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat, nic dalšího se neposílá. Upozornění ze serveru a widgety na ploše přijdou s placeným vývojářským účtem.") {
+            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat.") {
                 SettingsToggle(title: "Čas do postele", subtitle: "půl hodiny před doporučeným časem", isOn: $bedtime)
                 SettingsDivider()
                 SettingsToggle(title: "Trénink", subtitle: "hodinu před naplánovaným tréninkem", isOn: $workout)

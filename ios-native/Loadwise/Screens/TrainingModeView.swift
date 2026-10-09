@@ -54,7 +54,8 @@ struct TrainingModeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
+        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         .sheet(isPresented: $editing) {
             if let day {
@@ -159,7 +160,6 @@ struct TrainingModeView: View {
                 SecondaryButton(title: "+15 s") { shiftRest(15) }
             }
             PrimaryButton(title: "Přeskočit pauzu", systemImage: "forward.fill") { restEnd = nil }
-            Text("Výchozí délku pauzy nastavíš v Nastavení → Posilovna.").font(Typo.caption).foregroundStyle(Palette.faint)
         }
         .frame(maxWidth: .infinity)
         .task(id: end) {
@@ -189,7 +189,6 @@ struct TrainingModeView: View {
             Spacer()
             Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                 .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-            Text("Sestav si trénink a pak ho tady odcvičíš cvik po cviku.").font(Typo.small).foregroundStyle(Palette.muted)
             NavigationLink(value: AppRoute.gymBuilder) {
                 Label("Sestavit s AI", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())

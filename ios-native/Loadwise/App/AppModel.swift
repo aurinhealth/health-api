@@ -29,7 +29,7 @@ final class AppModel {
     /// The last refresh failed for lack of a connection: the screens show the
     /// data saved on the phone (SnapshotCache) with a note.
     private(set) var offline = false
-    /// The day on the Today screen, nil for today.
+    /// The day on the Today, Food and Health screens, nil for today.
     private(set) var selectedDate: String?
     /// The open tab and each tab's navigation stack, so cards, widgets and
     /// links (loadwise://open/sleep) can open any detail.
@@ -119,6 +119,13 @@ final class AppModel {
     }
 
     nonisolated static let setupDoneKey = "setupDone"
+    nonisolated static let accountInitialKey = "accountInitial"
+
+    /// The first letter of the account's name or e-mail for the settings button.
+    func loadAccountInitial() async {
+        guard !demo, phase == .signedIn, let name = try? await api.accountName(), let first = name.trimmingCharacters(in: .whitespaces).first else { return }
+        UserDefaults.standard.set(String(first).uppercased(), forKey: Self.accountInitialKey)
+    }
 
     func signIn() async {
         signingIn = true
@@ -183,7 +190,7 @@ final class AppModel {
     func refreshHealth() async {
         guard !demo, phase == .signedIn else { return }
         do {
-            health = try await api.health()
+            health = try await api.health(date: selectedDate)
             healthError = nil
             _ = noteConnection(nil)
         } catch APIError.unauthorized {
@@ -196,7 +203,7 @@ final class AppModel {
     func refreshFood() async {
         guard !demo, phase == .signedIn else { return }
         do {
-            food = try await api.food()
+            food = try await api.food(date: selectedDate)
             foodError = nil
             _ = noteConnection(nil)
         } catch APIError.unauthorized {
@@ -211,7 +218,7 @@ final class AppModel {
     func addDrink(ml: Int, kind: String) async -> Bool {
         guard !demo else { return true }
         do {
-            try await api.addFluid(ml: ml, kind: kind)
+            try await api.addFluid(ml: ml, kind: kind, date: selectedDate)
             await refreshFood()
             await refresh()
             return true
@@ -258,7 +265,7 @@ final class AppModel {
     func logFood(product: FoodProduct, amount: Double, meal: String) async -> String? {
         guard !demo else { return nil }
         do {
-            try await api.logFood(FoodLogRequest(date: Self.localDate(Date()), product: product.forLogging, quantity: amount, unit: product.unit, mealType: meal))
+            try await api.logFood(FoodLogRequest(date: selectedDate ?? Self.localDate(Date()), product: product.forLogging, quantity: amount, unit: product.unit, mealType: meal))
             await refreshFood()
             await refresh()
             return nil
@@ -288,13 +295,20 @@ final class AppModel {
         guard !demo, let shown = selectedDate ?? today?.date, let date = Self.shift(shown, by: offset) else { return }
         let todayDate = Self.localDate(Date())
         selectedDate = date >= todayDate ? nil : date
-        await refresh()
+        await refreshDay()
     }
 
     func showToday() async {
         guard selectedDate != nil else { return }
         selectedDate = nil
+        await refreshDay()
+    }
+
+    /// The day changed: Today, and Food and Health when they were opened.
+    private func refreshDay() async {
         await refresh()
+        if food != nil { await refreshFood() }
+        if health != nil { await refreshHealth() }
     }
 
     nonisolated static func localDate(_ date: Date) -> String {
@@ -329,6 +343,7 @@ final class AppModel {
         Reminders.cancelAll()
         WidgetBridge.clear()
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
+        UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
         paths = [:]
         tab = .today

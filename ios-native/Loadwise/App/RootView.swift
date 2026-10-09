@@ -46,7 +46,7 @@ struct RootView: View {
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showCoach) { CoachView() }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView() }
-            .task { await model.checkSetup() }
+            .task { await model.checkSetup(); await model.loadAccountInitial() }
         }
     }
 

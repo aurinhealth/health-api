@@ -56,6 +56,26 @@ enum Reminders {
         }
     }
 
+    /// The end of a rest in Režim tréninku, so it sounds with the phone locked
+    /// too (in the app a vibration says it). nil cancels it.
+    static func restEnds(at end: Date?) async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [restId])
+        guard let end, end.timeIntervalSinceNow > 1 else { return }
+        var status = await center.notificationSettings().authorizationStatus
+        if status == .notDetermined { status = await requestPermission() ? .authorized : .denied }
+        guard status == .authorized || status == .provisional else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Konec pauzy"
+        content.body = "Další série."
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: end.timeIntervalSinceNow, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: restId, content: content, trigger: trigger))
+    }
+
+    /// Outside the "loadwise." prefix, so planning the day keeps it.
+    private static let restId = "loadwise-rest"
+
     static func cancelAll() {
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { requests in

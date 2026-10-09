@@ -59,7 +59,7 @@ struct HealthContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Zdraví · " + Fmt.dayHeading(health.date))
+            DayNavigator(date: health.date)
                 .frame(height: 36)
 
             RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }

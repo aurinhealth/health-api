@@ -94,7 +94,7 @@ struct FoodContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                SectionLabel(text: "Jídlo · " + Fmt.capitalized(Fmt.dayHeading(food.date).components(separatedBy: " ").first?.lowercased() ?? ""))
+                DayNavigator(date: food.date)
                 Spacer()
                 CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
             }
@@ -134,9 +134,6 @@ struct FoodContent: View {
                 ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
                     MealRow(meal: meal, add: { add(meal.type) })
                     if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                }
-                if !food.meals.isEmpty {
-                    Text("Klepni na jídlo pro potraviny, vlákninu, cukry a sůl.").font(Typo.tiny).foregroundStyle(Palette.faint).padding(.top, 8)
                 }
                 if food.meals.isEmpty {
                     Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)

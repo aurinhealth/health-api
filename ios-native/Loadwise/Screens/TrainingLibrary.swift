@@ -146,9 +146,6 @@ struct WorkoutLibrarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Seřazené podle toho, co ti dnes sedí: připravenost, únava a předchozí tréninky.")
-                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
-
             Picker("Kde", selection: $indoor) {
                 Text(sport == "run" ? "Pás" : "Trenažér").tag(true)
                 Text("Venku").tag(false)
