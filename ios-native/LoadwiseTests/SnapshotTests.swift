@@ -407,6 +407,29 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    func testRoundFourLogic() {
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library")!), .library)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/gym")!), .workoutLibrary("gym"))
+        let presets = DrinkPrefs.presets(favorites: ["water", "coffee", "tea"], saved: { $0 == "tea" ? [300, 400, 500] : nil })
+        XCTAssertEqual(presets.map(\.id), ["water.250", "water.500", "coffee.200", "tea.300", "tea.400"])
+        XCTAssertEqual(DrinkPrefs.presets(favorites: DrinkKind.all.map(\.id), saved: { _ in nil }).count, 8, "at most eight choices")
+        XCTAssertEqual(LibrarySport.find("run")?.label, "Běh")
+        XCTAssertNil(LibrarySport.find("swim"))
+    }
+
+    func testRoundFourScreens() throws {
+        let model = AppModel(demo: true)
+        try render("training-tools", glow: Palette.Glow.training, height: 330) {
+            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }
+        }
+        try render("drinks-card", glow: Palette.Glow.food, height: 460) {
+            DrinksCard(water: DemoData.food.water).environment(model).padding(24)
+        }
+        try render("library-choice", glow: Palette.Glow.training, height: 520) {
+            NavigationStack { TrainingLibraryView() }.environment(model)
+        }
+    }
+
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {

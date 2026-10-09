@@ -247,7 +247,18 @@ struct DrinksCard: View {
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Pití a hydratace", color: Palette.blue)
+            HStack(spacing: 8) {
+                WidgetHeader(title: "Pití a hydratace", color: Palette.blue)
+                Button { other = true } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Palette.blue, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Přidat pití")
+            }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(Fmt.decimal((water.ml ?? 0) / 1000)).font(Typo.number(34)).foregroundStyle(Palette.ink)
                 Text("/ " + Fmt.decimal((water.target ?? 2500) / 1000) + " l").font(Typo.number(17)).foregroundStyle(Palette.faint)
@@ -266,7 +277,7 @@ struct DrinksCard: View {
                     }
                 }
             }
-            DrinkQuickRow(add: { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) }, other: { other = true })
+            DrinkPresetRow(add: { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) })
         }
         .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
         .sheet(item: $editing) { d in

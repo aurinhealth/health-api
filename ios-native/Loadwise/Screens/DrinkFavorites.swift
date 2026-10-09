@@ -28,6 +28,83 @@ enum DrinkPrefs {
     static func setAmounts(_ kind: String, _ values: [Int]) {
         UserDefaults.standard.set(Array(Set(values)).sorted().map(String.init).joined(separator: ","), forKey: amountsKey(kind))
     }
+
+    /// The glass a drink is usually drunk in, for the one-tap choices.
+    static let quick: [String: [Int]] = [
+        "water": [250, 500], "tea": [250], "coffee": [200], "juice": [250], "milk": [250],
+        "sport": [500], "soda": [330], "beer": [500], "wine": [150], "other": [250]
+    ]
+
+    /// The one-tap choices in Jídlo → Pití: the favourite drinks in the glasses
+    /// they are usually drunk in (the amounts saved for a drink win), at most 8.
+    static func presets(favorites: [String], saved: (String) -> [Int]? = DrinkPrefs.savedAmounts) -> [DrinkPreset] {
+        let all = favorites.flatMap { kind -> [DrinkPreset] in
+            let own = saved(kind) ?? []
+            let amounts = own.isEmpty ? quick[kind] ?? [250] : Array(own.prefix(2))
+            return amounts.map { DrinkPreset(kind: kind, ml: $0) }
+        }
+        return Array(all.prefix(8))
+    }
+
+    static func savedAmounts(_ kind: String) -> [Int]? {
+        UserDefaults.standard.string(forKey: amountsKey(kind)).map { $0.split(separator: ",").compactMap { Int($0) }.sorted() }
+    }
+}
+
+struct DrinkPreset: Hashable, Identifiable {
+    let kind: String
+    let ml: Int
+    var id: String { kind + "." + String(ml) }
+}
+
+/// Jídlo → Pití: the favourite drinks in their usual glasses, one tap adds one.
+struct DrinkPresetRow: View {
+    let add: (Int, String) async -> Void
+    @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
+    @State private var busy: String?
+    @State private var done: String?
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(DrinkPrefs.presets(favorites: DrinkPrefs.list(favorites))) { preset($0) }
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
+    private func preset(_ p: DrinkPreset) -> some View {
+        let kind = DrinkKind.find(p.kind)
+        return Button {
+            Task {
+                busy = p.id
+                await add(p.ml, p.kind)
+                busy = nil
+                withAnimation(.easeOut(duration: 0.2)) { done = p.id }
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                withAnimation(.easeOut(duration: 0.2)) { if done == p.id { done = nil } }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Group {
+                    if busy == p.id { ProgressView().controlSize(.small) }
+                    else { Image(systemName: done == p.id ? "checkmark" : kind?.symbol ?? "drop.fill").font(.system(size: 14, weight: .semibold)) }
+                }
+                .foregroundStyle(Palette.blue)
+                .frame(width: 18)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(kind?.label ?? p.kind).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted)
+                    Text("\(p.ml) ml").font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
+                }
+            }
+            .padding(.leading, 12).padding(.trailing, 14)
+            .frame(height: 48)
+            .background(Palette.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(busy != nil)
+        .accessibilityLabel("Přidat " + (kind?.label.lowercased() ?? p.kind) + " \(p.ml) mililitrů")
+    }
 }
 
 /// The favourite drinks in a row, then "Další" for every other drink right

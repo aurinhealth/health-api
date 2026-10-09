@@ -57,7 +57,7 @@ struct AddSheet: View {
                     tile("Zapsat trénink", "square.and.pencil") { workout = true }
                     tile("Posilovna s AI", "sparkles") { open(.gymBuilder) }
                     tile("Režim tréninku", "play.fill") { open(.trainingMode(AppModel.localDate(Date()))) }
-                    tile("Knihovna", "books.vertical") { open(.workoutLibrary("ride")) }
+                    tile("Knihovna", "books.vertical") { open(.library) }
                 }
             }
             .padding(24)

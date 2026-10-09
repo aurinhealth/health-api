@@ -16,6 +16,8 @@ enum AppRoute: Hashable {
     case sleepSettings
     case gymBuilder
     case exerciseLibrary
+    /// The library with the choice of sports; .workoutLibrary opens one sport.
+    case library
     case workoutLibrary(String)
     case equipment
     case trainingMode(String)
@@ -40,7 +42,7 @@ enum AppRoute: Hashable {
         case "weight": self = .weight
         case "form": self = .form
         case "vo2max": self = .vo2max
-        case "library": self = .workoutLibrary(parts.count > 1 ? parts[1] : "ride")
+        case "library": self = parts.count > 1 ? .workoutLibrary(parts[1]) : .library
         case "gym": self = .gym(parts.count > 1 ? parts[1] : AppModel.localDate(Date()))
         case "sleep-settings": self = .sleepSettings
         case "gym-builder": self = .gymBuilder
@@ -89,6 +91,7 @@ struct RouteScreen: View {
         case .sleepSettings: SleepSettingsView()
         case .gymBuilder: GymBuilderView(date: AppModel.localDate(Date()))
         case .exerciseLibrary: ExerciseLibraryView()
+        case .library: TrainingLibraryView()
         case .workoutLibrary(let sport): TrainingLibraryView(sport: sport)
         case .equipment: EquipmentView()
         case .trainingMode(let date): TrainingModeView(date: date)

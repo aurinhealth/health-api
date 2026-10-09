@@ -2,15 +2,15 @@ import SwiftUI
 
 // MARK: - Knihovna
 
-/// One library for all sports: ride and run workouts with filters (where, the
-/// length with its ± tolerance and own presets, the type, the difficulty), and
-/// for the gym the AI builder and the exercises.
+/// One library for all sports: first the choice of sport, then for ride and
+/// run the workouts with filters (where, the length with its ± tolerance and
+/// own presets, the type, the difficulty), and for the gym the AI builder and
+/// the exercises.
 struct TrainingLibraryView: View {
-    @Environment(AppModel.self) private var model
-    @State private var sport: String
+    @State private var sport: String?
 
-    init(sport: String = "ride") {
-        _sport = State(initialValue: ["ride", "run", "gym"].contains(sport) ? sport : "ride")
+    init(sport: String? = nil) {
+        _sport = State(initialValue: sport.flatMap { LibrarySport.find($0)?.id })
     }
 
     var body: some View {
@@ -19,21 +19,73 @@ struct TrainingLibraryView: View {
                 SectionLabel(text: "Trénink · knihovna").padding(.top, 24)
                 Text("Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
-                Picker("Sport", selection: $sport) {
-                    Text("Kolo").tag("ride")
-                    Text("Běh").tag("run")
-                    Text("Posilovna").tag("gym")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(LibrarySport.all) { s in
+                            LibrarySportChip(sport: s, selected: sport == s.id) {
+                                withAnimation(.easeOut(duration: 0.2)) { sport = sport == s.id ? nil : s.id }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
-                .pickerStyle(.segmented)
                 .padding(.top, 18)
 
-                if sport == "gym" {
+                switch sport {
+                case nil:
+                    Text("Vyber sport a ukážu filtry a navržené tréninky.")
+                        .font(Typo.sentence(19)).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 20)
+                case "gym"?:
                     GymLibrarySection()
-                } else {
-                    WorkoutLibrarySection(sport: sport).id(sport)
+                case let id?:
+                    WorkoutLibrarySection(sport: id).id(id)
                 }
             }
         }
+    }
+}
+
+/// The sports of the library, each with its icon and colour.
+struct LibrarySport: Identifiable {
+    let id: String
+    let label: String
+    let symbol: String
+    let color: Color
+
+    static let all = [
+        LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.amberBar),
+        LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.rust),
+        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.indigo)
+    ]
+
+    static func find(_ id: String) -> LibrarySport? { all.first { $0.id == id } }
+}
+
+/// A small rectangle with the sport; the chosen one is filled in its colour.
+struct LibrarySportChip: View {
+    let sport: LibrarySport
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: sport.symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(selected ? Color.white.opacity(0.22) : sport.color, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                Text(sport.label).font(Typo.bodyStrong).foregroundStyle(selected ? Color.white : Palette.ink)
+            }
+            .padding(.leading, 8).padding(.trailing, 14)
+            .frame(height: 46)
+            .background(selected ? sport.color : Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: .black.opacity(selected ? 0 : 0.04), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
