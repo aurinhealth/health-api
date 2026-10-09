@@ -27,6 +27,7 @@ import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday} from './app-today.js';
 import {buildTraining, weekStart} from './app-training.js';
+import {buildCalendar} from './app-calendar.js';
 import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
 import {normalizeProfile} from './energy-profile.js';
@@ -56,7 +57,7 @@ async function queueFoodGoogleSafely(env,ctx,id,options){
 import { lookupFoodWithAI } from "./food-ai.js";
 import { EXERCISE_STATIONS } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
-import { addFluid, deleteFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks, hydrationMl } from "./fluids.js";
+import { addFluid, deleteFluid, updateFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks, hydrationMl } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { loadRecoveryValidation } from "./recovery-validation.js";
@@ -1085,6 +1086,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       if(request.method==='POST'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await addFluid(env.DB,{date:validDay(body.date)?body.date:localToday(),ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='PATCH'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await updateFluid(env.DB,{id:body.id,ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400});}
@@ -1212,6 +1214,25 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // Training → the day strip and the month: done and planned per day (app-calendar.js).
+  if(url.pathname==='/app/api/training/calendar'&&request.method==='GET'){
+    try{
+      const today=localToday(),valid=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+      const start=valid(url.searchParams.get('start'))?url.searchParams.get('start'):shiftDate(today,-35);
+      let end=valid(url.searchParams.get('end'))?url.searchParams.get('end'):shiftDate(today,14);
+      if(end<start||end>shiftDate(start,92))end=shiftDate(start,92);
+      const result=await cached(env,ctx,'training-calendar:'+start+':'+end+':'+today,async()=>{
+        const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
+        const gym=await trainingGymPlans(env,today>start?today:start,end).catch(()=>({}));
+        return buildCalendar({start,end,today,gym,
+          activities:rows.filter(r=>r.data_type==='activity'),
+          google:rows.filter(r=>r.data_type==='exercise'),
+          planned:rows.filter(r=>r.data_type==='planned-workout')});
+      },{ttl:120});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
 
   if(url.pathname==='/app/api/coaches'&&request.method==='GET'){

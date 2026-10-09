@@ -54,6 +54,19 @@ export async function addFluid(db, { date, ml, kind = "water", at = null }) {
   return { id: r.meta?.last_row_id ?? null, date, consumedAt, ml: amount, kind: KINDS.includes(kind) ? kind : "other" };
 }
 
+// A drink changed afterwards: another amount, kind or time.
+export async function updateFluid(db, { id, ml, kind, at }) {
+  await ensure(db);
+  const row = await db.prepare("SELECT id,date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND id=?").bind(db.userId, Number(id)).first();
+  if (!row) throw new Error(L("Pití nenalezeno.", "Drink not found."));
+  const amount = ml == null ? Number(row.ml) : Math.round(Number(ml));
+  if (!(amount >= 10 && amount <= 3000)) throw new Error(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
+  const type = kind == null ? row.kind : KINDS.includes(kind) ? kind : "other";
+  const consumedAt = at && /^\d{2}:\d{2}$/.test(String(at)) ? `${row.date}T${at}` : row.consumed_at;
+  await db.prepare("UPDATE fluid_log SET ml=?,kind=?,consumed_at=? WHERE user_id=? AND id=?").bind(amount, type, consumedAt, db.userId, Number(id)).run();
+  return { id: Number(id), date: row.date, consumedAt, ml: amount, kind: type };
+}
+
 export async function deleteFluid(db, id) {
   await ensure(db);
   await db.prepare("DELETE FROM fluid_log WHERE user_id=? AND id=?").bind(db.userId, Number(id)).run();

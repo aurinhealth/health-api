@@ -17,7 +17,7 @@ struct TrainingLibraryView: View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · knihovna").padding(.top, 24)
-                Text("Knihovna").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 Picker("Sport", selection: $sport) {
                     Text("Kolo").tag("ride")

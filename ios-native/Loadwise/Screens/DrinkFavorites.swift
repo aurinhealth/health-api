@@ -30,32 +30,38 @@ enum DrinkPrefs {
     }
 }
 
-/// The favourite drinks in a row; the chosen one shows its amounts below.
+/// The favourite drinks in a row, then "Další" for every other drink right
+/// there and "Vlastní" for any amount; the chosen drink shows its amounts
+/// below. Holding a drink adds it to the favourites or takes it away.
 struct DrinkQuickRow: View {
     let add: (Int, String) async -> Void
     var other: () -> Void = {}
     @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
     @State private var open: String?
     @State private var busy: Int?
+    @State private var more = false
+
+    private var favoriteList: [String] { DrinkPrefs.list(favorites) }
+    private var rest: [DrinkKind] { DrinkKind.all.filter { !favoriteList.contains($0.id) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(DrinkPrefs.list(favorites), id: \.self) { id in
-                        if let d = DrinkKind.find(id) { drink(d) }
+                    ForEach(favoriteList, id: \.self) { id in
+                        if let d = DrinkKind.find(id) { drink(d, favorite: true) }
                     }
-                    Button(action: other) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold))
-                            Text("Jiný").font(.caption2.weight(.medium))
+                    if !rest.isEmpty {
+                        chip(more ? "chevron.left" : "plus", more ? "Méně" : "Další", filled: more) {
+                            withAnimation(.easeOut(duration: 0.2)) { more.toggle() }
                         }
-                        .foregroundStyle(Palette.ink)
-                        .frame(width: 64, height: 58)
-                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Palette.ink.opacity(0.15), lineWidth: 1))
+                        .accessibilityLabel(more ? "Skrýt další nápoje" : "Ukázat další nápoje")
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Jiný nápoj a množství")
+                    if more {
+                        ForEach(rest) { drink($0, favorite: false) }
+                    }
+                    chip("slider.horizontal.3", "Vlastní", filled: false, action: other)
+                        .accessibilityLabel("Jiný nápoj a vlastní množství")
                 }
                 .padding(.vertical, 1)
             }
@@ -87,21 +93,47 @@ struct DrinkQuickRow: View {
         }
     }
 
-    private func drink(_ d: DrinkKind) -> some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.2)) { open = open == d.id ? nil : d.id }
+    private func chip(_ symbol: String, _ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 16, weight: .semibold))
+                Text(title).font(.caption2.weight(.medium))
+            }
+            .foregroundStyle(Palette.ink)
+            .frame(width: 64, height: 58)
+            .background(filled ? Palette.track : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Palette.ink.opacity(0.15), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func drink(_ d: DrinkKind, favorite: Bool) -> some View {
+        let on = open == d.id
+        return Button {
+            withAnimation(.easeOut(duration: 0.2)) { open = on ? nil : d.id }
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: d.symbol).font(.system(size: 17))
                 Text(d.label).font(.caption2.weight(.medium)).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .foregroundStyle(open == d.id ? Palette.onButton : Palette.ink)
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
             .frame(width: 64, height: 58)
-            .background(open == d.id ? Palette.blue : Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(on ? Palette.blue : favorite ? Palette.card : Palette.track, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityAddTraits(open == d.id ? .isSelected : [])
-        .accessibilityHint("Ukáže obvyklá množství")
+        .contextMenu {
+            Button { toggleFavorite(d.id) } label: {
+                Label(favorite ? "Odebrat z oblíbených" : "Do oblíbených", systemImage: favorite ? "star.slash" : "star")
+            }
+        }
+        .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityHint("Ukáže obvyklá množství, podržením ho přidáš do oblíbených nebo odebereš")
+    }
+
+    private func toggleFavorite(_ id: String) {
+        var list = favoriteList.filter { $0 != id }
+        if !favoriteList.contains(id) { list.append(id) }
+        favorites = list.joined(separator: ",")
     }
 }
 

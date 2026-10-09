@@ -105,3 +105,15 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/onboarding", method: "POST", body: body)
     }
 }
+
+// The training calendar and drinks changed afterwards.
+extension APIClient {
+    func trainingCalendar(start: String, end: String) async throws -> TrainingCalendar {
+        try await get("/app/api/training/calendar?start=" + start + "&end=" + end)
+    }
+
+    func updateFluid(id: Int, ml: Int, kind: String) async throws {
+        let _: JSONValue = try await send("/app/api/fluids", method: "PATCH",
+                                          body: ["id": JSONValue.number(Double(id)), "ml": .number(Double(ml)), "kind": .string(kind)])
+    }
+}

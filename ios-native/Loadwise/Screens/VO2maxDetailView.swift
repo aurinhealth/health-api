@@ -138,25 +138,9 @@ struct VO2maxContent: View {
                 .padding(.top, 14)
             }
 
-            SectionLabel(text: "Hodnoty").padding(.top, 30)
-            VStack(spacing: 0) {
-                ForEach(Array(samples.reversed().prefix(12).enumerated()), id: \.element.id) { i, s in
-                    let older = samples.reversed().dropFirst(i + 1).first
-                    HStack {
-                        Text(Fmt.dayHeading(s.iso)).font(Typo.small).foregroundStyle(Palette.ink)
-                        Spacer()
-                        if let older {
-                            let d = s.value - older.value
-                            Text(d == 0 ? "beze změny" : Fmt.signed(d, digits: 1))
-                                .font(Typo.caption).foregroundStyle(d > 0 ? Palette.green : d < 0 ? Palette.rust : Palette.faint)
-                        }
-                        Text(Self.text(s.value)).font(Typo.number(18)).foregroundStyle(Palette.ink).frame(width: 52, alignment: .trailing)
-                    }
-                    .padding(.vertical, 10)
-                    Rectangle().fill(Palette.hairline).frame(height: 1)
-                }
-            }
-            .padding(.top, 6)
+            SectionLabel(text: "Historie po měsících").padding(.top, 30)
+            VO2maxMonths(months: Self.months(all.map { ($0.iso, $0.value) }))
+                .padding(.top, 10)
 
             SectionLabel(text: "Co to je").padding(.top, 30)
             VStack(alignment: .leading, spacing: 10) {
@@ -182,6 +166,34 @@ struct VO2maxContent: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    struct Month: Identifiable, Equatable {
+        let month: String
+        let average: Double
+        let low: Double
+        let high: Double
+        /// Against the month before.
+        let change: Double?
+        let days: Int
+        var id: String { month }
+    }
+
+    /// The values month by month, newest first: the average, the range and
+    /// the change against the month before (the daily estimate repeats a lot).
+    static func months(_ samples: [(String, Double)]) -> [Month] {
+        var groups: [String: [Double]] = [:]
+        for (iso, value) in samples { groups[ISODay.monthStart(iso), default: []].append(value) }
+        var out: [Month] = []
+        var previous: Double?
+        for key in groups.keys.sorted() {
+            let values = groups[key] ?? []
+            let average = values.reduce(0, +) / Double(max(values.count, 1))
+            let change: Double? = previous.map { average - $0 }
+            out.append(Month(month: key, average: average, low: values.min() ?? average, high: values.max() ?? average, change: change, days: values.count))
+            previous = average
+        }
+        return out.reversed()
+    }
+
     static func text(_ value: Double) -> String {
         Fmt.decimal(value, digits: value.rounded() == value ? 0 : 1)
     }
@@ -202,4 +214,62 @@ struct VO2maxContent: View {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
+}
+
+/// VO2max month by month: the average, its range on one shared scale and the
+/// change against the month before.
+struct VO2maxMonths: View {
+    let months: [VO2maxContent.Month]
+
+    var body: some View {
+        let lo = (months.map(\.low).min() ?? 0) - 0.5
+        let hi = (months.map(\.high).max() ?? 1) + 0.5
+        VStack(spacing: 0) {
+            ForEach(months) { m in
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(ISODay.monthTitle(m.month)).font(Typo.small).foregroundStyle(Palette.ink)
+                        Text(Self.range(m)).font(Typo.tiny).foregroundStyle(Palette.faint)
+                    }
+                    .frame(width: 104, alignment: .leading)
+                    GeometryReader { geo in
+                        let w = Double(geo.size.width), span = max(hi - lo, 0.1)
+                        let x0 = w * (m.low - lo) / span, x1 = w * (m.high - lo) / span, xa = w * (m.average - lo) / span
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Palette.track).frame(height: 6)
+                            Capsule().fill(Palette.green.opacity(0.35)).frame(width: max(6, x1 - x0), height: 6).offset(x: x0)
+                            Circle().fill(Palette.green).frame(width: 10, height: 10).offset(x: max(0, xa - 5))
+                        }
+                        .frame(maxHeight: .infinity)
+                    }
+                    .frame(height: 20)
+                    Text(VO2maxContent.text((m.average * 10).rounded() / 10)).font(Typo.number(18)).foregroundStyle(Palette.ink)
+                        .frame(width: 40, alignment: .trailing)
+                    Text(Self.change(m.change)).font(Typo.caption.weight(.semibold))
+                        .foregroundStyle(Self.color(m.change)).frame(width: 40, alignment: .trailing)
+                }
+                .padding(.vertical, 10)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(ISODay.monthTitle(m.month) + ", průměr " + Fmt.decimal(m.average) + ", " + Self.range(m))
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+            }
+        }
+    }
+
+    /// "47,8–48,6 · 21 dní".
+    static func range(_ m: VO2maxContent.Month) -> String {
+        let span = m.high - m.low < 0.05 ? Fmt.decimal(m.low) : Fmt.decimal(m.low) + "–" + Fmt.decimal(m.high)
+        return span + " · \(m.days) " + Fmt.plural(m.days, "den", "dny", "dní")
+    }
+
+    static func change(_ value: Double?) -> String {
+        guard let value else { return "" }
+        if abs(value) < 0.05 { return "=" }
+        return (value > 0 ? "↑" : "↓") + Fmt.decimal(abs(value))
+    }
+
+    static func color(_ value: Double?) -> Color {
+        guard let value, abs(value) >= 0.05 else { return Palette.faint }
+        return value > 0 ? Palette.green : Palette.rust
+    }
 }

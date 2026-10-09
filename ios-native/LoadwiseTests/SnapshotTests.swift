@@ -44,7 +44,7 @@ final class SnapshotTests: XCTestCase {
     }
 
     func testFoodScreens() throws {
-        try render("food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        try render("food", glow: Palette.Glow.food) { NavigationStack { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40) }.environment(AppModel(demo: true)) }
         try render("food-amount", height: 700) { NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_pm") }.environment(AppModel(demo: true)) }
     }
 
@@ -328,6 +328,82 @@ final class SnapshotTests: XCTestCase {
         try render("gym-rest-settings", height: 500) { NavigationStack { GymRestSettingsView() } }
         try render("food-amount-edit", height: 1100) {
             NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_late", editing: true) }.environment(AppModel(demo: true))
+        }
+    }
+
+    func testCalendarData() throws {
+        let json = """
+        {"status":"ok","start":"2026-10-05","end":"2026-10-06","today":"2026-10-06","days":[
+         {"date":"2026-10-05","primary":"ride","count":2,"minutes":125,"kcal":1250,"planned":0,"activities":[
+          {"id":"activity:i1","sport":"ride","status":"done","title":"Ranní kolo","date":"2026-10-05","time":"07:00","minutes":90,"km":42.3,"kcal":1100,"activityId":"i1","eventId":null},
+          {"id":"g2","sport":"walk","status":"done","title":"Chůze","date":"2026-10-05","time":"17:00","minutes":35,"km":3.1,"kcal":150,"activityId":null,"eventId":null}]},
+         {"date":"2026-10-06","primary":"rest","count":0,"minutes":0,"kcal":0,"planned":0,"activities":[]}]}
+        """
+        let calendar = try JSONDecoder().decode(TrainingCalendar.self, from: Data(json.utf8))
+        let ride = try XCTUnwrap(calendar.days.first?.activities.first)
+        XCTAssertEqual(ride.session.kind, "activity")
+        XCTAssertEqual(CalendarDayList.route(ride), .activity(ride.session))
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo · 07:00 · 1 h 30 min · 42,3 km")
+        XCTAssertEqual(MonthGrid.value(calendar.days.first, .count), "2")
+        XCTAssertEqual(MonthGrid.value(calendar.days.first, .time), "2:05")
+        XCTAssertEqual(MonthGrid.value(calendar.days.first, .kcal), Fmt.int(1250))
+        XCTAssertEqual(MonthGrid.value(calendar.days.last, .count), " ")
+        // October 2026 starts on a Thursday: three empty cells first.
+        let grid = ISODay.monthGrid("2026-10-15")
+        XCTAssertEqual(grid.first?.prefix(4).map { $0 ?? "" }, ["", "", "", "2026-10-01"])
+        XCTAssertEqual(grid.flatMap { $0 }.compactMap { $0 }.count, 31)
+        XCTAssertEqual(ISODay.addMonths("2026-12-20", 1), "2027-01-01")
+        XCTAssertEqual(ISODay.monthEnd("2026-02-10"), "2026-02-28")
+        XCTAssertEqual(ISODay.weekdayIndex("2026-10-12"), 0)
+        XCTAssertEqual(ISODay.monthTitle("2026-10-01"), "Říjen 2026")
+        XCTAssertFalse(DemoData.calendarByDate.isEmpty)
+    }
+
+    func testRoundThreeLogic() {
+        let months = VO2maxContent.months([("2026-08-30", 47), ("2026-09-01", 47.5), ("2026-09-20", 48.5), ("2026-10-02", 48)])
+        XCTAssertEqual(months.map(\.month), ["2026-10-01", "2026-09-01", "2026-08-01"])
+        XCTAssertEqual(months[1].average, 48)
+        XCTAssertEqual(months[1].change, 1)
+        XCTAssertNil(months[2].change)
+        XCTAssertEqual(VO2maxMonths.change(0), "=")
+        XCTAssertEqual(StageTotals.note(share: 0.19, wakeups: 3), "19 %")
+        XCTAssertEqual(StageTotals.note(share: nil, wakeups: 3), "3×")
+        let entry = FoodSnapshot.Entry(id: 1, name: "Jogurt", time: "08:00", meal: "breakfast", kcal: 133, protein: 14, carbs: 6, fat: 5,
+                                       amount: "140 g", brand: "Madeta", fiber: nil, sugar: 6, salt: 0.15)
+        XCTAssertEqual(FoodEntryCard.detail(entry), "140 g · Madeta · 08:00")
+        XCTAssertEqual(FoodEntryCard.extras(entry), "vláknina – · cukry 6,0 g · sůl 0,15 g")
+    }
+
+    func testRoundThreeScreens() throws {
+        let model = AppModel(demo: true)
+        let today = DemoData.training.date
+        try render("training-calendar", glow: Palette.Glow.training, height: 700) {
+            NavigationStack {
+                VStack(spacing: 16) {
+                    MonthGrid(month: ISODay.monthStart(today), today: today, selected: today, mode: .time, days: DemoData.calendarByDate, pick: { _ in }, move: { _ in })
+                    CalendarDayList(date: ISODay.shift(today, -2), today: today, day: DemoData.calendarByDate[ISODay.shift(today, -2)])
+                }
+                .padding(.vertical, 14)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 24))
+                .padding(24)
+            }
+            .environment(model)
+        }
+        try render("calendar-days", glow: Palette.Glow.training, height: 140) {
+            HStack(spacing: 0) {
+                ForEach(-2...2, id: \.self) { i in
+                    let date = ISODay.shift(today, i)
+                    DayCircle(date: date, today: today, selected: i == 0, day: DemoData.calendarByDate[date])
+                }
+            }
+            .padding(20)
+        }
+        let breakfast = try XCTUnwrap(DemoData.food.meals.first)
+        try render("meal-detail", glow: Palette.Glow.food, height: 1100) {
+            MealDetailContent(meal: breakfast).environment(model)
+        }
+        try render("library-widget", glow: Palette.Glow.training, height: 220) {
+            NavigationStack { LibraryWidget().padding(24) }
         }
     }
 
