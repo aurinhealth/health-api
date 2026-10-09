@@ -78,6 +78,7 @@ export function parseWorkoutSearchFilters(params) {
     targetLoad: num("load") ?? num("targetLoad"),
     loadTolerance: num("loadTolerance"),
     maxDifficulty: num("maxDifficulty"),
+    minDifficulty: num("minDifficulty"),
     sort: get("sort"),
     source: get("source"),
     limit: num("limit")
@@ -91,7 +92,7 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const system = String(filters.system || "").toLowerCase(), duration = n(filters.durationMinutes), durationTolerance = n(filters.durationTolerance, 15);
   // A soft length (the coach's suggestion) only ranks; nothing is filtered out by length.
   const softDuration = filters.durationSoft === true && duration != null, durationScale = softDuration ? Math.max(30, duration * .6) : durationTolerance;
-  const targetLoad = n(filters.targetLoad), loadTolerance = n(filters.loadTolerance, 35), maxDifficulty = n(filters.maxDifficulty);
+  const targetLoad = n(filters.targetLoad), loadTolerance = n(filters.loadTolerance, 35), maxDifficulty = n(filters.maxDifficulty), minDifficulty = n(filters.minDifficulty);
   const readiness = String(context.readiness || "green").toLowerCase(), hardDays = n(context.hardBikeDaysRolling7d, 0), phase = String(context.phase || "").toLowerCase();
   const recentFamilies = new Set(context.recentFamilies || []);
   const source = filters.source ? String(filters.source) : null;
@@ -103,6 +104,7 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const ranked = workouts.filter(w => (!system || w.primary_system === system || w.secondary_system === system)
     && (duration == null || softDuration || Math.abs(n(w.duration_minutes, 0) - duration) <= durationTolerance)
     && (maxDifficulty == null || n(w.difficulty, 99) <= maxDifficulty)
+    && (minDifficulty == null || n(w.difficulty, 0) >= minDifficulty)
     && (filters.environment !== "outdoor" || !n(w.indoor_only, 0))
     && (!source || w.source_kind === source)).map(w => {
     let score = 25; const reasons = [];

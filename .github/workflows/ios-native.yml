@@ -35,6 +35,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # The newest Xcode on the runner: with Xcode 26 the iOS 26 SDK brings
+      # AlarmKit (the alarm in Nastavení → Spánek); older Xcode builds without it.
+      - name: Pick Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
+          xcodebuild -version
+
       - name: Generate the Xcode project
         run: |
           brew install xcodegen

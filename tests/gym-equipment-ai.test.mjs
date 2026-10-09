@@ -5,7 +5,10 @@ import { normalizeTraining } from "../src/onboarding.js";
 import { METAGYM_KUTNA_HORA } from "../src/gym-equipment.js";
 
 test("every gym station has a generic name", () => {
-  assert.equal(GYM_STATIONS.length, Object.keys(METAGYM_KUTNA_HORA.stations).length);
+  for (const id of Object.keys(METAGYM_KUTNA_HORA.stations)) assert.ok(GYM_STATIONS.some(s => s.id === id), id);
+  assert.ok(GYM_STATIONS.some(s => s.id === "pullup_bar"), "the usual equipment of other gyms too");
+  assert.equal(new Set(GYM_STATIONS.map(s => s.id)).size, GYM_STATIONS.length);
+  assert.deepEqual(normalizeTraining({ equipment: "home", stations: ["pullup_bar", "kettlebells", "laser"] }).stations, ["pullup_bar", "kettlebells"], "the usual others are kept");
   assert.ok(equipmentCatalog().every(s => s.id && s.label && s.group));
 });
 

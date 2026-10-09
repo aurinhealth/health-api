@@ -37,24 +37,7 @@ struct AddSheet: View {
                 }
 
                 section("Pití", "drop.fill", Palette.blue)
-                HStack(spacing: 8) {
-                    quickDrink("Voda", 250, "water")
-                    quickDrink("Voda", 500, "water")
-                    quickDrink("Káva", 200, "coffee")
-                }
-                Button { drink = true } label: {
-                    HStack {
-                        Image(systemName: "cup.and.saucer").foregroundStyle(Palette.blue)
-                        Text("Jiný nápoj a množství").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Spacer()
-                        Text("čaj, džus, pivo…").font(Typo.caption).foregroundStyle(Palette.muted)
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-                    }
-                    .padding(.horizontal, 14).frame(height: 50)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 8)
+                DrinkQuickRow(add: { ml, kind in await save(ml: ml, kind: kind) }, other: { drink = true })
                 if let added { Label(added, systemImage: "checkmark.circle.fill").font(Typo.caption).foregroundStyle(Palette.green).padding(.top, 8) }
                 if let failed { Text(failed).font(Typo.caption).foregroundStyle(Palette.rust).padding(.top, 8) }
 
@@ -73,6 +56,7 @@ struct AddSheet: View {
                 LazyVGrid(columns: columns, spacing: 10) {
                     tile("Zapsat trénink", "square.and.pencil") { workout = true }
                     tile("Posilovna s AI", "sparkles") { open(.gymBuilder) }
+                    tile("Režim tréninku", "play.fill") { open(.trainingMode(AppModel.localDate(Date()))) }
                     tile("Knihovna", "books.vertical") { open(.workoutLibrary("ride")) }
                 }
             }
@@ -80,7 +64,7 @@ struct AddSheet: View {
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
-        .sheet(item: $food, onDismiss: { dismiss() }) { start in AddFoodSheet(meal: MealSlot.now(), start: start) }
+        .sheet(item: $food, onDismiss: { dismiss() }) { start in AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start) }
         .sheet(isPresented: $weight, onDismiss: { dismiss() }) { WeightEntrySheet() }
         .sheet(isPresented: $workout, onDismiss: { dismiss() }) { ManualWorkoutSheet() }
         .sheet(isPresented: $drink) { DrinkSheet { ml, kind in await save(ml: ml, kind: kind) } }
@@ -105,19 +89,6 @@ struct AddSheet: View {
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(PressableCardStyle())
-    }
-
-    private func quickDrink(_ title: String, _ ml: Int, _ kind: String) -> some View {
-        Button { Task { await save(ml: ml, kind: kind) } } label: {
-            VStack(spacing: 2) {
-                Text(title).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                Text("\(ml) ml").font(Typo.number(18)).foregroundStyle(Palette.blue)
-            }
-            .frame(maxWidth: .infinity).frame(height: 58)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .buttonStyle(PressableCardStyle())
-        .accessibilityLabel("Přidat \(title.lowercased()) \(ml) mililitrů")
     }
 
     private func save(ml: Int, kind: String) async {
@@ -173,6 +144,8 @@ struct DrinkSheet: View {
     @State private var kind = "water"
     @State private var ml = 250
     @State private var saving = false
+    @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
+    @State private var presetSaved = false
 
     private let amounts = [100, 150, 200, 250, 330, 500, 750]
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
@@ -210,7 +183,28 @@ struct DrinkSheet: View {
                     Button { ml = min(2000, ml + 50) } label: { Image(systemName: "plus.circle").font(.system(size: 28)) }
                 }
                 .foregroundStyle(Palette.ink)
-                ChipFlow(items: amounts, label: { "\($0) ml" }, isOn: { $0 == ml }, toggle: { ml = $0 })
+                ChipFlow(items: Array(Set(amounts + DrinkPrefs.amounts(kind))).sorted(), label: { "\($0) ml" }, isOn: { $0 == ml }, toggle: { ml = $0 })
+                HStack(spacing: 16) {
+                    Button {
+                        var list = DrinkPrefs.list(favorites).filter { $0 != kind }
+                        if !DrinkPrefs.list(favorites).contains(kind) { list.append(kind) }
+                        favorites = list.joined(separator: ",")
+                    } label: {
+                        Label(DrinkPrefs.list(favorites).contains(kind) ? "V oblíbených" : "Do oblíbených",
+                              systemImage: DrinkPrefs.list(favorites).contains(kind) ? "star.fill" : "star")
+                    }
+                    Button {
+                        DrinkPrefs.setAmounts(kind, Array((DrinkPrefs.amounts(kind) + [ml]).suffix(5)))
+                        presetSaved = true
+                    } label: {
+                        Label(DrinkPrefs.amounts(kind).contains(ml) || presetSaved ? "Množství uložené" : "Uložit \(ml) ml jako předvolbu", systemImage: "bookmark")
+                    }
+                    .disabled(DrinkPrefs.amounts(kind).contains(ml))
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Palette.ink)
+                .onChange(of: kind) { _, _ in presetSaved = false }
+                .onChange(of: ml) { _, _ in presetSaved = false }
 
                 if let d = DrinkKind.find(kind) {
                     Card {

@@ -37,6 +37,8 @@ struct SleepSettingsForm: View {
     @State private var weekendTime = SleepSettingsForm.clock("08:30")
     @State private var original: JSONObject = [:]
     @State private var saved = false
+    @AppStorage("systemAlarm") private var systemAlarm = false
+    @State private var alarmNote: String?
 
     static let goals: [Int] = Array(stride(from: 360, through: 600, by: 15))
 
@@ -81,6 +83,19 @@ struct SleepSettingsForm: View {
                 alarmRow("Víkend", subtitle: "sobota a neděle", isOn: $weekendAlarm, time: $weekendTime)
             }
 
+            if SystemAlarm.supported {
+                SettingsGroup(footer: "iPhone pak v tyto časy zazvoní jako budík v Hodinách, i v tichém režimu. Když časy změníš a uložíš, budík se posune.") {
+                    SettingsToggle(title: "Budit mě v iPhonu", subtitle: "budík od Loadwise, pracovní dny i víkend", isOn: $systemAlarm)
+                }
+                if let alarmNote {
+                    Text(alarmNote).font(Typo.small).foregroundStyle(alarmNote.hasPrefix("Budík zvoní") ? Palette.green : Palette.rust)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                Text("Budík tady počítá večerku. Aby iPhone podle něj i zvonil, potřebuje iOS 26; do té doby si stejný čas nastav v Hodinách.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+
             if saved {
                 Label("Uloženo. Večerka se přepočítala.", systemImage: "checkmark.circle.fill")
                     .font(Typo.small).foregroundStyle(Palette.green)
@@ -91,6 +106,7 @@ struct SleepSettingsForm: View {
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
         .onAppear(perform: fill)
+        .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
     }
 
     private func alarmRow(_ title: String, subtitle: String, isOn: Binding<Bool>, time: Binding<Date>) -> some View {
@@ -126,8 +142,22 @@ struct SleepSettingsForm: View {
         guard await store.saveProfile(changes) else { return }
         fill()
         saved = true
+        if systemAlarm { await syncAlarm(true) }
         await model.refresh()
         await model.refreshHealth()
+    }
+
+    /// The iPhone alarm at the times on screen, or none.
+    private func syncAlarm(_ on: Bool) async {
+        guard on else { SystemAlarm.cancel(); return }
+        let work = workAlarm ? Self.text(workTime) : nil, weekend = weekendAlarm ? Self.text(weekendTime) : nil
+        guard work != nil || weekend != nil else { alarmNote = "Nejdřív zapni budík na pracovní dny nebo víkend."; return }
+        if let problem = await SystemAlarm.sync(work: work, weekend: weekend) {
+            alarmNote = problem
+            systemAlarm = false
+        } else {
+            alarmNote = "Budík zvoní " + [work.map { "v pracovní dny v " + $0 }, weekend.map { "o víkendu v " + $0 }].compactMap { $0 }.joined(separator: " a ") + "."
+        }
     }
 
     static func clock(_ text: String) -> Date {

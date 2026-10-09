@@ -26,7 +26,7 @@ struct FoodView: View {
         }
         .task { if model.food == nil { await model.refreshFood() } }
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
-        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: MealSlot.now()) }
+        .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots)) }
     }
 }
 
@@ -36,13 +36,32 @@ struct AddFoodTarget: Identifiable {
 }
 
 enum MealSlot {
-    static let labels = ["breakfast": "Snídaně", "snack_am": "Dopolední svačina", "lunch": "Oběd", "snack_pm": "Odpolední svačina", "dinner": "Večeře"]
+    /// Every meal a day can have, in its order (src/app-food.js MEALS).
+    struct Slot: Identifiable {
+        let id: String
+        let label: String
+    }
 
-    /// The meal for the time of day, as the server sorts entries (app-food.js mealOf).
-    static func now(_ date: Date = Date()) -> String {
+    static let all: [Slot] = [
+        Slot(id: "breakfast", label: "Snídaně"), Slot(id: "snack_am", label: "Dopolední svačina"), Slot(id: "lunch", label: "Oběd"),
+        Slot(id: "snack_pm", label: "Odpolední svačina"), Slot(id: "dinner", label: "Večeře"), Slot(id: "snack_late", label: "Druhá večeře")
+    ]
+    static let usual = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"]
+    static let labels = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0.label) })
+
+    /// The meal for the time of day, as the server sorts entries (app-food.js
+    /// mealOf): late in the evening the second dinner, when the day has one.
+    static func now(_ date: Date = Date(), slots: [String]? = nil) -> String {
         let c = Calendar.current.dateComponents([.hour, .minute], from: date)
         let t = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-        return t < 600 ? "breakfast" : t < 690 ? "snack_am" : t < 870 ? "lunch" : t < 1050 ? "snack_pm" : "dinner"
+        let chosen = slots ?? usual
+        if t >= 1230, chosen.contains("snack_late") { return "snack_late" }
+        let type = t < 600 ? "breakfast" : t < 690 ? "snack_am" : t < 870 ? "lunch" : t < 1050 ? "snack_pm" : "dinner"
+        if chosen.contains(type) { return type }
+        // A meal the day has not got: the nearest one it has.
+        let order = all.map(\.id)
+        let at = order.firstIndex(of: type) ?? 0
+        return chosen.min { abs((order.firstIndex(of: $0) ?? 0) - at) < abs((order.firstIndex(of: $1) ?? 0) - at) } ?? type
     }
 
     /// "ke svačině", "k obědu": the end of "Přidat …".
@@ -51,6 +70,7 @@ enum MealSlot {
         case "breakfast": return "ke snídani"
         case "lunch": return "k obědu"
         case "dinner": return "k večeři"
+        case "snack_late": return "k druhé večeři"
         default: return "ke svačině"
         }
     }
@@ -85,7 +105,10 @@ struct FoodContent: View {
 
             MacroCells(macros: food.macros).padding(.top, 26)
             if let fiber = food.macros.fiber {
-                FiberRow(fiber: fiber).padding(.top, 12)
+                FiberRow(title: "Vláknina", amount: fiber, color: Palette.green).padding(.top, 12)
+            }
+            if let sugar = food.macros.sugar, (sugar.eaten ?? 0) > 0 {
+                FiberRow(title: "Cukry", amount: sugar, color: Palette.amberBar, limit: true).padding(.top, 8)
             }
 
             DrinksCard(water: food.water).padding(.top, 18)
@@ -93,6 +116,10 @@ struct FoodContent: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Jídla dne")
                 Spacer()
+                NavigationLink { MealSlotsSettingsView() } label: {
+                    Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                }
+                .accessibilityLabel("Upravit jídla dne")
             }
             .padding(.top, 28)
             VStack(spacing: 0) {
@@ -106,7 +133,7 @@ struct FoodContent: View {
             }
             .padding(.top, 6)
 
-            Button { add(MealSlot.now()) } label: {
+            Button { add(MealSlot.now(slots: food.mealSlots)) } label: {
                 Label("Přidat jídlo", systemImage: "plus")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 50)
@@ -158,16 +185,32 @@ struct MacroCells: View {
     }
 }
 
-/// "Vláknina 12 / 30 g" under the macros.
+/// "Vláknina 12 / 30 g" under the macros; sugar against its limit ("nejvýš 66 g").
 struct FiberRow: View {
-    let fiber: FoodSnapshot.Amount
+    var title = "Vláknina"
+    let amount: FoodSnapshot.Amount
+    var color: Color = Palette.green
+    var limit = false
+
+    init(title: String = "Vláknina", amount: FoodSnapshot.Amount, color: Color = Palette.green, limit: Bool = false) {
+        self.title = title
+        self.amount = amount
+        self.color = color
+        self.limit = limit
+    }
+
+    init(fiber: FoodSnapshot.Amount) {
+        self.init(amount: fiber)
+    }
 
     var body: some View {
+        let eaten = amount.eaten ?? 0, target = amount.target ?? 30
+        let over = limit && eaten > target
         HStack(spacing: 12) {
-            Text("Vláknina").font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 70, alignment: .leading)
-            ProgressLine(fraction: (fiber.eaten ?? 0) / max(fiber.target ?? 30, 1), color: Palette.green, height: 3)
-            Text(Fmt.int(fiber.eaten ?? 0) + (fiber.target.map { " / " + Fmt.int($0) } ?? "") + " g")
-                .font(Typo.number(16)).foregroundStyle(Palette.ink).lineLimit(1)
+            Text(title).font(Typo.caption).foregroundStyle(Palette.muted).frame(width: 70, alignment: .leading)
+            ProgressLine(fraction: eaten / max(target, 1), color: over ? Palette.rust : color, height: 3)
+            Text(Fmt.int(eaten) + (amount.target.map { (limit ? " / max " : " / ") + Fmt.int($0) } ?? "") + " g")
+                .font(Typo.number(16)).foregroundStyle(over ? Palette.rust : Palette.ink).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
     }
@@ -178,7 +221,6 @@ struct FiberRow: View {
 struct DrinksCard: View {
     @Environment(AppModel.self) private var model
     let water: FoodSnapshot.Water
-    @State private var adding = false
     @State private var other = false
 
     var body: some View {
@@ -214,31 +256,8 @@ struct DrinksCard: View {
                     }
                 }
             }
-            HStack(spacing: 8) {
-                Button {
-                    Task {
-                        adding = true
-                        await model.addWater(ml: 250)
-                        adding = false
-                    }
-                } label: {
-                    Label(adding ? "Přidávám…" : "Voda 250 ml", systemImage: "plus")
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 38)
-                        .background(Palette.button, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(adding)
-                .accessibilityLabel("Přidat 250 mililitrů vody")
-                Button { other = true } label: {
-                    Label("Jiný nápoj", systemImage: "cup.and.saucer")
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 38)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-            Text("Káva se počítá z 90 %, pivo napůl, víno vůbec. Podržením nápoj smažeš.")
+            DrinkQuickRow(add: { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) }, other: { other = true })
+            Text("Klepni na nápoj a pak na množství. Káva se počítá z 90 %, pivo napůl, víno vůbec. Podržením nápoj smažeš. Oblíbené nápoje upravíš v Nastavení.")
                 .font(Typo.tiny).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
         }
         .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
@@ -294,20 +313,24 @@ struct MealRow: View {
         .accessibilityLabel("Přidat " + MealSlot.toMeal(meal.type))
     }
 
-    /// What to aim for: "cíl ~520 kcal · B 30 · S 60 · T 18 g" before the meal,
-    /// then what it has: "B 22 · S 40 · T 12 g z ~520 kcal".
+    /// What to aim for before the meal: "Cíl 560 kcal: bílkoviny 60 g,
+    /// sacharidy 55 g, tuky 15 g" (what is left of the day shared out, else the
+    /// meal's part of the day); then what it has against its target:
+    /// "Bílkoviny 42 z 60 g · sacharidy 50 z 55 g · tuky 12 z 15 g".
     private var targets: String? {
-        let s = meal.suggestion
+        let aim = meal.suggestion ?? meal.target
         if empty {
-            guard let s else { return nil }
-            var parts = ["cíl ~" + Fmt.int(s.kcal) + " kcal"]
-            let macros = [("B", s.protein), ("S", s.carbs), ("T", s.fat)].compactMap { label, value in value.map { label + " " + Fmt.int($0) } }
-            if !macros.isEmpty { parts.append(macros.joined(separator: " · ") + " g") }
-            return parts.joined(separator: " · ")
+            guard let aim else { return nil }
+            let macros = [("bílkoviny", aim.protein), ("sacharidy", aim.carbs), ("tuky", aim.fat)]
+                .compactMap { label, value in value.map { label + " " + Fmt.int($0) + " g" } }
+            return "Cíl " + Fmt.int(aim.kcal) + " kcal" + (macros.isEmpty ? "" : ": " + macros.joined(separator: ", "))
         }
         let sum = { (key: KeyPath<FoodSnapshot.Entry, Double?>) in meal.entries.compactMap { $0[keyPath: key] }.reduce(0, +) }
-        var text = "B " + Fmt.int(sum(\.protein)) + " · S " + Fmt.int(sum(\.carbs)) + " · T " + Fmt.int(sum(\.fat)) + " g"
-        if let s { text += " z ~" + Fmt.int(s.kcal) + " kcal" }
+        let goal = meal.target ?? meal.suggestion
+        let part = { (label: String, eaten: Double, target: Double?) in label + " " + Fmt.int(eaten) + (target.map { " z " + Fmt.int($0) } ?? "") }
+        var text = [part("Bílkoviny", sum(\.protein), goal?.protein), part("sacharidy", sum(\.carbs), goal?.carbs), part("tuky", sum(\.fat), goal?.fat)]
+            .joined(separator: " · ") + " g"
+        if let goal { text += " · cíl " + Fmt.int(goal.kcal) + " kcal" }
         return text
     }
 }

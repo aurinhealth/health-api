@@ -46,6 +46,8 @@ struct SettingsMenu: View {
     let store: SettingsStore
     var signOut: () -> Void = {}
     @AppStorage("appearance") private var appearance = "system"
+    @AppStorage("restSets") private var restSets = 90
+    @AppStorage("restExercises") private var restExercises = 120
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -94,9 +96,25 @@ struct SettingsMenu: View {
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.text.square", color: Palette.rust), title: "Tréninkové zóny", value: "běh, kolo")
                 }
-                SettingsDivider()
+            }
+            .buttonStyle(.plain)
+
+            SettingsGroup(title: "Posilovna, jídlo a pití") {
                 NavigationLink { EquipmentView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "dumbbell.fill", color: Palette.brown), title: "Vybavení na posilování")
+                }
+                SettingsDivider()
+                NavigationLink { GymRestSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "timer", color: Palette.amberBar), title: "Pauzy v posilovně",
+                                value: GymRestSettingsView.label(restSets) + " / " + GymRestSettingsView.label(restExercises))
+                }
+                SettingsDivider()
+                NavigationLink { MealSlotsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
+                }
+                SettingsDivider()
+                NavigationLink { DrinkSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "cup.and.saucer.fill", color: Palette.blue), title: "Oblíbené nápoje")
                 }
             }
             .buttonStyle(.plain)

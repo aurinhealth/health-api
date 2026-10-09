@@ -71,7 +71,7 @@ struct TrainingContent: View {
                             RouteLink(route: .form) { FormWidget(form: form) }
                         } else { Color.clear }
                     } right: {
-                        if let vo2 = training.vo2max { RouteLink(route: .form) { VO2maxWidget(vo2: vo2) } } else { Color.clear }
+                        if let vo2 = training.vo2max { RouteLink(route: .vo2max) { VO2maxWidget(vo2: vo2) } } else { Color.clear }
                     }
                 }
                 ThisWeekWidget(week: training.thisWeek, loads: training.load.weeks)

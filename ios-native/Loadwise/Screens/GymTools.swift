@@ -4,8 +4,8 @@ import UIKit
 
 // MARK: - Training → tools
 
-/// Training: the AI gym builder, the workout mode, the exercise library, the
-/// equipment and the ride and run libraries.
+/// Training: the gym (the workout mode and the equipment), then one library
+/// for ride, run and gym workouts.
 struct TrainingTools: View {
     let today: String
     var addWorkout: () -> Void = {}
@@ -16,15 +16,28 @@ struct TrainingTools: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Posilovna")
             LazyVGrid(columns: columns, spacing: 10) {
-                tile(.gymBuilder, "sparkles", "Sestavit s AI", "podle únavy a partií", Palette.green)
                 tile(.trainingMode(today), "play.fill", "Režim tréninku", "cvik po cviku s pauzou", Palette.amberBar)
-                tile(.exerciseLibrary, "books.vertical", "Knihovna cviků", "filtry a technika", Palette.brown)
-                tile(.equipment, "dumbbell", "Vybavení", "posilovna nebo doma", Palette.indigo)
+                tile(.equipment, "dumbbell", "Vybavení", "posilovna, doma, vlastní váha", Palette.indigo)
             }
-            SectionLabel(text: "Kolo a běh").padding(.top, 10)
-            LazyVGrid(columns: columns, spacing: 10) {
-                tile(.workoutLibrary("ride"), "bicycle", "Tréninky na kolo", "knihovna s filtry", Palette.amber)
-                tile(.workoutLibrary("run"), "figure.run", "Tréninky na běh", "knihovna s filtry", Palette.rust)
+            SectionLabel(text: "Knihovna").padding(.top, 10)
+            RouteLink(route: .workoutLibrary("ride")) {
+                HStack(spacing: 12) {
+                    HStack(spacing: -6) {
+                        icon("bicycle", Palette.amber)
+                        icon("figure.run", Palette.rust)
+                        icon("dumbbell.fill", Palette.green)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Kolo, běh a posilovna").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text("délka, obtížnost, venku nebo doma, cviky a AI").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.85)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
             }
             Button(action: addWorkout) {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")
@@ -35,6 +48,15 @@ struct TrainingTools: View {
             .buttonStyle(.plain)
             .padding(.top, 2)
         }
+    }
+
+    private func icon(_ symbol: String, _ color: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 30, height: 30)
+            .background(color, in: Circle())
+            .overlay(Circle().stroke(Palette.card, lineWidth: 2))
     }
 
     private func tile(_ route: AppRoute, _ symbol: String, _ title: String, _ subtitle: String, _ color: Color) -> some View {
@@ -402,174 +424,21 @@ struct GymBuilderView: View {
     }()
 }
 
-// MARK: - Exercise library
-
-struct ExerciseLibraryView: View {
-    @Environment(AppModel.self) private var model
-    @State private var exercises: [GymCatalogExercise] = []
-    @State private var equipment: GymEquipment?
-    @State private var query = ""
-    @State private var muscle: String?
-    @State private var mine = true
-    @State private var loading = true
-    @State private var error: String?
-    @State private var open: GymCatalogExercise?
-
-    var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · knihovna cviků").padding(.top, 24)
-                Text("Cviky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-
-                HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
-                    TextField("Hledat cvik nebo stroj", text: $query).autocorrectionDisabled()
-                    if !query.isEmpty {
-                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.faint) }
-                            .accessibilityLabel("Smazat hledání")
-                    }
-                }
-                .padding(.horizontal, 14).frame(height: 46)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(.top, 16)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        chip("Vše", muscle == nil) { muscle = nil }
-                        ForEach(BodyFigure.muscles.indices, id: \.self) { i in
-                            let m = BodyFigure.muscles[i]
-                            chip(m.label, muscle == m.id) { muscle = muscle == m.id ? nil : m.id }
-                        }
-                    }
-                }
-                .padding(.top, 12)
-
-                PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
-                    .padding(.top, 12)
-
-                if loading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                } else if let error {
-                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
-                } else {
-                    Text("\(filtered.count) " + Fmt.plural(filtered.count, "cvik", "cviky", "cviků"))
-                        .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 16)
-                    VStack(spacing: 0) {
-                        ForEach(filtered) { ex in
-                            Button { open = ex } label: { row(ex) }.buttonStyle(.plain)
-                            Rectangle().fill(Palette.hairline).frame(height: 1)
-                        }
-                    }
-                    .padding(.top, 4)
-                }
-            }
-        }
-        .task { await load() }
-        .sheet(item: $open) { ex in ExerciseSheet(exercise: ex) }
-    }
-
-    private var filtered: [GymCatalogExercise] {
-        let words = Self.fold(query).split(separator: " ")
-        return exercises.filter { ex in
-            let text = Self.fold([ex.name, ex.muscle ?? "", ex.station ?? "", ex.note ?? ""].joined(separator: " "))
-            guard words.allSatisfy({ text.contains($0) }) else { return false }
-            if let muscle, (ex.muscles?[muscle] ?? 0) < 0.5 { return false }
-            if mine, !EquipmentView.fits(ex, equipment) { return false }
-            return true
-        }
-    }
-
-    private func row(_ ex: GymCatalogExercise) -> some View {
-        HStack(spacing: 12) {
-            BodyMap(load: ex.muscles ?? [:], height: 54).frame(width: 64).allowsHitTesting(false)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-        }
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-    }
-
-    private func chip(_ title: String, _ on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title).font(.footnote.weight(.medium))
-                .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(on ? Palette.button : Palette.card, in: Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func load() async {
-        guard exercises.isEmpty else { return }
-        defer { loading = false }
-        guard !model.demo else { error = "V ukázce se knihovna nenačítá."; return }
-        do {
-            async let list = model.api.gymExercises()
-            async let eq = model.api.gymEquipment()
-            exercises = try await list
-            equipment = try? await eq
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
-    static func fold(_ text: String) -> String {
-        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "cs_CZ"))
-    }
-}
-
-/// One exercise: the muscles on the figure, then its technique.
-struct ExerciseSheet: View {
-    let exercise: GymCatalogExercise
-    @State private var technique = false
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                Text(exercise.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))
-                    .font(Typo.small).foregroundStyle(Palette.muted)
-                BodyMap(load: exercise.muscles ?? [:], height: 260)
-                if let note = exercise.note?.nilIfBlank {
-                    Text(note).font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 18) {
-                    if let sets = exercise.sets?.string { meta("Série", sets) }
-                    if let reps = exercise.reps?.string { meta("Opakování", reps) }
-                }
-                SecondaryButton(title: "Jak na to", systemImage: "figure.strengthtraining.traditional") { technique = true }
-            }
-            .padding(24)
-        }
-        .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.background)
-        .sheet(isPresented: $technique) { TechniqueSheet(exercise: exercise.name) }
-    }
-
-    private func meta(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
-        }
-    }
-}
-
 // MARK: - Equipment
 
-/// Where the athlete trains: a usual gym, their own gym (the stations it has,
-/// which AI can pick from photos or the gym's web page), home with dumbbells,
-/// or the body weight only.
+/// Where the athlete trains: a gym (the usual stations, all of them until the
+/// athlete unticks what theirs lacks, or AI picks them from photos or the
+/// gym's web page), a home gym (the few things there are), or the body weight
+/// only. With dumbbells, the weights there are, so the plan asks for one of them.
 struct EquipmentView: View {
     @Environment(AppModel.self) private var model
     @State private var data: GymEquipment?
-    @State private var kind = "gym"
+    @State private var kind = "custom"
     @State private var selected: Set<String> = []
+    @State private var weights: Set<Double> = []
     @State private var gymName = ""
     @State private var gymUrl = ""
+    @State private var customWeight = ""
     @State private var photos: [PhotosPickerItem] = []
     @State private var busy: String?
     @State private var note: String?
@@ -577,11 +446,21 @@ struct EquipmentView: View {
     @State private var saved = false
 
     static let kinds: [(String, String, String)] = [
-        ("gym", "Běžná posilovna", "Stroje, kladky i volné váhy"),
-        ("custom", "Moje posilovna", "Jen stroje, které tam opravdu jsou"),
-        ("dumbbells", "Doma s jednoručkami", "Jednoručky, lavice a podložka"),
+        ("custom", "Posilovna", "Stroje, kladky a volné váhy, odškrtneš, co tam chybí"),
+        ("home", "Domácí posilovna", "Jen to, co máš doma: jednoručky, lavice, hrazda…"),
         ("bodyweight", "Vlastní váha", "Bez vybavení")
     ]
+
+    /// The first setup asks only roughly; the stations are set here later.
+    static let setupKinds: [(String, String, String)] = [
+        ("gym", "Posilovna", "Stroje, kladky a volné váhy"),
+        ("dumbbells", "Domácí posilovna", "Jednoručky, lavice a podložka"),
+        ("bodyweight", "Vlastní váha", "Bez vybavení")
+    ]
+
+    static let homeDefault: Set<String> = ["dumbbells", "adjustable_bench", "floor_mats"]
+    /// The usual dumbbells, kg per hand.
+    static let weightOptions: [Double] = [1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 12, 12.5, 14, 15, 16, 17.5, 18, 20, 22, 22.5, 24, 25, 26, 27.5, 28, 30, 32, 32.5, 34, 35, 36, 38, 40, 42, 44, 45, 46, 48, 50]
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
@@ -593,17 +472,27 @@ struct EquipmentView: View {
                 VStack(spacing: 10) {
                     ForEach(Self.kinds.indices, id: \.self) { i in
                         let k = Self.kinds[i]
-                        ChoiceCard(title: k.1, subtitle: k.2, selected: kind == k.0) { kind = k.0 }
+                        ChoiceCard(title: k.1, subtitle: k.2, selected: kind == k.0) { choose(k.0) }
                     }
                 }
                 .padding(.top, 18)
 
-                if kind == "custom" { custom }
+                if kind == "custom" { detection }
+                if kind != "bodyweight" {
+                    if kind == "custom" {
+                        SettingsGroup(title: "Název") {
+                            SettingsField(title: "Posilovna", text: $gymName, keyboard: .default, placeholder: "třeba Fitko u nádraží")
+                        }
+                        .padding(.top, 22)
+                    }
+                    if selected.contains("dumbbells") { dumbbells }
+                    stations
+                }
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
                 if saved { Label("Uloženo", systemImage: "checkmark.circle.fill").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 14) }
                 PrimaryButton(title: busy == "save" ? "Ukládám…" : "Uložit vybavení", busy: busy == "save") { Task { await save() } }
-                    .disabled(busy != nil || model.demo || (kind == "custom" && selected.isEmpty))
+                    .disabled(busy != nil || model.demo || (kind != "bodyweight" && selected.isEmpty))
                     .padding(.top, 22)
             }
         }
@@ -611,7 +500,7 @@ struct EquipmentView: View {
         .onChange(of: photos) { _, items in if !items.isEmpty { Task { await detect(items) } } }
     }
 
-    private var custom: some View {
+    private var detection: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: "Poznat z fotky nebo webu").padding(.top, 26)
             Card {
@@ -640,12 +529,68 @@ struct EquipmentView: View {
                 if let note { Text(note).font(Typo.caption).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true) }
             }
             .padding(.top, 10)
+        }
+    }
 
-            SettingsGroup(title: "Název") {
-                SettingsField(title: "Posilovna", text: $gymName, keyboard: .default, placeholder: "třeba Fitko u nádraží")
+    /// The dumbbells there are: tap the weights, or add an odd one.
+    private var dumbbells: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Jednoručky")
+                Spacer()
+                Text(weights.isEmpty ? "plán navrhne jakoukoli váhu" : "\(weights.count) " + Fmt.plural(weights.count, "váha", "váhy", "vah"))
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
             }
-            .padding(.top, 22)
+            Text("Vyber váhy, které máš (kg na ruku). Plán pak navrhne jen je, nejbližší lehčí, když přesná chybí.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                preset("2–40 po 2") { weights = Set(stride(from: 2.0, through: 40, by: 2)) }
+                preset("2,5–25 po 2,5") { weights = Set(stride(from: 2.5, through: 25, by: 2.5)) }
+                preset("Zrušit") { weights = [] }
+            }
+            ChipFlow(items: Array(Set(Self.weightOptions).union(weights)).sorted(), label: { Self.kg($0) },
+                     isOn: { weights.contains($0) },
+                     toggle: { w in if weights.contains(w) { weights.remove(w) } else { weights.insert(w) }; saved = false })
+            HStack(spacing: 8) {
+                TextField("Jiná váha, kg", text: $customWeight)
+                    .keyboardType(.decimalPad)
+                    .padding(.horizontal, 12).frame(height: 40)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                Button("Přidat") {
+                    if let kg = Double(customWeight.replacingOccurrences(of: ",", with: ".")), kg > 0, kg <= 100 {
+                        weights.insert((kg * 4).rounded() / 4)
+                        customWeight = ""
+                        saved = false
+                    }
+                }
+                .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .disabled(customWeight.isEmpty)
+            }
+        }
+        .padding(.top, 26)
+    }
 
+    private func preset(_ title: String, _ action: @escaping () -> Void) -> some View {
+        Button { action(); saved = false } label: {
+            Text(title).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 12).frame(height: 30)
+                .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var stations: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: kind == "home" ? "Co máš doma" : "Co tam je")
+                Spacer()
+                Button(selected.count == (data?.stations?.count ?? 0) ? "Odebrat vše" : "Vybrat vše") {
+                    selected = selected.count == (data?.stations?.count ?? 0) ? [] : Set((data?.stations ?? []).map(\.id))
+                    saved = false
+                }
+                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+            }
+            .padding(.top, 26)
             ForEach(groups, id: \.self) { group in
                 SettingsGroup(title: group) {
                     let items = (data?.stations ?? []).filter { $0.group == group }
@@ -664,7 +609,7 @@ struct EquipmentView: View {
                         .accessibilityAddTraits(selected.contains(station.id) ? .isSelected : [])
                     }
                 }
-                .padding(.top, 22)
+                .padding(.top, 14)
             }
         }
     }
@@ -673,6 +618,17 @@ struct EquipmentView: View {
         var out: [String] = []
         for s in data?.stations ?? [] where !out.contains(s.group) { out.append(s.group) }
         return out
+    }
+
+    /// A gym starts with everything a gym usually has, a home gym with
+    /// dumbbells, a bench and a mat.
+    private func choose(_ next: String) {
+        guard next != kind else { return }
+        kind = next
+        saved = false
+        let all = Set((data?.stations ?? []).map(\.id))
+        if next == "custom", selected.isEmpty || selected.isSubset(of: Self.homeDefault) { selected = all }
+        if next == "home", selected.isEmpty || selected == all { selected = Self.homeDefault.intersection(all.isEmpty ? Self.homeDefault : all) }
     }
 
     private func toggle(_ id: String) {
@@ -685,8 +641,14 @@ struct EquipmentView: View {
         do {
             let d = try await model.api.gymEquipment()
             data = d
-            kind = d.equipment
-            selected = Set(d.selected)
+            let all = Set((d.stations ?? []).map(\.id))
+            switch d.equipment {
+            case "gym": kind = "custom"; selected = all
+            case "dumbbells": kind = "home"; selected = Self.homeDefault
+            default: kind = d.equipment; selected = Set(d.selected)
+            }
+            if kind == "custom", selected.isEmpty { selected = all }
+            weights = Set(d.dumbbellWeights ?? [])
             gymName = d.gymName
             gymUrl = d.gymUrl
         } catch {
@@ -698,9 +660,13 @@ struct EquipmentView: View {
         busy = "save"
         defer { busy = nil }
         do {
-            let r = try await model.api.saveGymEquipment(equipment: kind, stations: kind == "custom" ? Array(selected) : [], gymName: gymName, gymUrl: gymUrl)
+            let stations = kind == "bodyweight" ? [] : Array(selected)
+            let r = try await model.api.saveGymEquipment(equipment: kind, stations: stations, gymName: kind == "custom" ? gymName : "",
+                                                         gymUrl: kind == "custom" ? gymUrl : "",
+                                                         dumbbellWeights: selected.contains("dumbbells") ? weights.sorted() : [])
             data?.equipment = r.equipment
             data?.selected = r.selected
+            data?.dumbbellWeights = r.dumbbellWeights
             saved = true
             error = nil
         } catch {
@@ -727,14 +693,17 @@ struct EquipmentView: View {
         await apply { try await model.api.detectGymEquipment(photos: [], url: gymUrl.trimmingCharacters(in: .whitespaces)) }
     }
 
+    /// What AI saw replaces the list: the stations it found, the floor and
+    /// the dumbbells kept when they were ticked.
     private func apply(_ work: () async throws -> GymDetectResult) async {
         do {
             let r = try await work()
-            if r.found == true, let stations = r.stations {
-                selected.formUnion(stations)
+            if r.found == true, let found = r.stations {
+                selected = Set(found).union(selected.intersection(["floor_mats"]))
                 if gymName.isEmpty, let name = r.gymName?.nilIfBlank { gymName = name }
-                note = "Našel jsem \(stations.count) " + Fmt.plural(stations.count, "stroj", "stroje", "strojů") + ". Zkontroluj seznam a ulož." + (r.note?.nilIfBlank.map { " " + $0 } ?? "")
+                note = "Našel jsem \(found.count) " + Fmt.plural(found.count, "stroj", "stroje", "strojů") + ". Zkontroluj seznam a ulož." + (r.note?.nilIfBlank.map { " " + $0 } ?? "")
                 error = nil
+                saved = false
             } else {
                 error = r.message ?? "Vybavení se nepodařilo poznat."
             }
@@ -743,14 +712,20 @@ struct EquipmentView: View {
         }
     }
 
-    /// "Moje posilovna · 14 strojů" for the builder and the library.
+    static func kg(_ value: Double) -> String {
+        Fmt.decimal(value, digits: value.rounded() == value ? 0 : (value * 2).rounded() == value * 2 ? 1 : 2) + " kg"
+    }
+
+    /// "Posilovna · 14 strojů" for the builder and the library.
     static func summary(_ e: GymEquipment?) -> String {
-        guard let e else { return "běžná posilovna" }
+        guard let e else { return "posilovna" }
+        let count = " · \(e.selected.count) " + Fmt.plural(e.selected.count, "věc", "věci", "věcí")
         switch e.equipment {
-        case "custom": return (e.gymName.nilIfBlank ?? "Moje posilovna") + " · \(e.selected.count) " + Fmt.plural(e.selected.count, "stroj", "stroje", "strojů")
+        case "custom": return (e.gymName.nilIfBlank ?? "Posilovna") + count
+        case "home": return "Domácí posilovna" + count
         case "dumbbells": return "doma s jednoručkami"
         case "bodyweight": return "jen vlastní váha"
-        default: return "běžná posilovna"
+        default: return "posilovna"
         }
     }
 
@@ -760,8 +735,8 @@ struct EquipmentView: View {
         let needs = Set(ex.stations ?? [])
         guard let e else { return true }
         switch e.equipment {
-        case "custom": return needs.isSubset(of: Set(e.selected).union(["floor_mats"]))
-        case "dumbbells": return needs.isSubset(of: ["dumbbells", "adjustable_bench", "floor_mats"])
+        case "custom", "home": return needs.isSubset(of: Set(e.selected).union(["floor_mats"]))
+        case "dumbbells": return needs.isSubset(of: homeDefault)
         case "bodyweight": return needs.isSubset(of: ["floor_mats"])
         default: return true
         }
@@ -800,95 +775,6 @@ struct ChoiceCard: View {
     }
 }
 
-// MARK: - Ride and run library
-
-struct WorkoutLibraryView: View {
-    @Environment(AppModel.self) private var model
-    let sport: String
-    @State private var minutes: Int? = nil
-    @State private var system: String? = nil
-    @State private var indoor = true
-    @State private var workouts: [LibraryWorkout] = []
-    @State private var loading = false
-    @State private var error: String?
-    @State private var open: LibraryWorkout?
-
-    private var lengths: [Int] { sport == "run" ? [30, 45, 60, 75, 90] : [45, 60, 90, 120, 180] }
-
-    var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: sport == "run" ? "Běh · knihovna" : "Kolo · knihovna").padding(.top, 24)
-                Text(sport == "run" ? "Běžecké tréninky" : "Tréninky na kolo").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                Text("Seřazené podle toho, co ti dnes sedí: připravenost, únava a předchozí tréninky.")
-                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
-
-                Picker("Kde", selection: $indoor) {
-                    Text(sport == "run" ? "Pás" : "Trenažér").tag(true)
-                    Text("Venku").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .padding(.top, 18)
-
-                SectionLabel(text: "Délka").padding(.top, 18)
-                ChipFlow(items: [0] + lengths, label: { $0 == 0 ? "Doporučená" : Fmt.duration($0) }, isOn: { ($0 == 0 && minutes == nil) || $0 == minutes },
-                         toggle: { minutes = $0 == 0 ? nil : $0 })
-                    .padding(.top, 8)
-                SectionLabel(text: "Typ").padding(.top, 18)
-                ChipFlow(items: [""] + LibraryWorkout.systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
-                         isOn: { ($0.isEmpty && system == nil) || $0 == system }, toggle: { system = $0.isEmpty ? nil : $0 })
-                    .padding(.top, 8)
-
-                if loading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                } else if let error {
-                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
-                } else if workouts.isEmpty {
-                    Text("Těmto filtrům nic neodpovídá.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 20)
-                } else {
-                    VStack(spacing: 10) {
-                        ForEach(workouts) { w in
-                            Button { open = w } label: { card(w) }.buttonStyle(PressableCardStyle())
-                        }
-                    }
-                    .padding(.top, 20)
-                }
-            }
-        }
-        .task(id: "\(minutes ?? 0)|\(system ?? "")|\(indoor)") { await load() }
-        .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor) }
-    }
-
-    private func card(_ w: LibraryWorkout) -> some View {
-        Card {
-            HStack(alignment: .firstTextBaseline) {
-                Text(w.name).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
-                Spacer(minLength: 8)
-                if let d = w.duration_minutes { Text(Fmt.duration(Int(d))).font(Typo.number(19)).foregroundStyle(Palette.ink) }
-            }
-            HStack(spacing: 8) {
-                if let s = w.primary_system { Pill(text: LibraryWorkout.systemLabel(s), foreground: Palette.amber, background: Palette.amberSoft) }
-                if let load = w.target_load { Text(Fmt.int(load) + " TSS").font(Typo.caption).foregroundStyle(Palette.muted) }
-                if let f = w.intensity_factor { Text("IF " + Fmt.decimal(f, digits: 2)).font(Typo.caption).foregroundStyle(Palette.muted) }
-            }
-            if let blocks = w.steps, !blocks.isEmpty { StepsProfile(blocks: blocks).frame(height: 36) }
-        }
-    }
-
-    private func load() async {
-        guard !model.demo else { error = "V ukázce se knihovna nenačítá."; return }
-        loading = true
-        defer { loading = false }
-        do {
-            workouts = try await model.api.searchWorkouts(sport: sport, minutes: minutes, system: system, indoor: indoor)
-            error = nil
-        } catch is CancellationError {
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}
-
 /// The intensity of the steps over time, as bars.
 struct StepsProfile: View {
     let blocks: [PlannedWorkout.Block]
@@ -909,81 +795,5 @@ struct StepsProfile: View {
             .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .accessibilityHidden(true)
-    }
-}
-
-struct LibraryWorkoutSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    let workout: LibraryWorkout
-    let sport: String
-    let indoor: Bool
-    @State private var date = Date()
-    @State private var saving = false
-    @State private var done = false
-    @State private var error: String?
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(workout.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-                }
-                HStack(spacing: 18) {
-                    if let d = workout.duration_minutes { meta("Délka", Fmt.duration(Int(d))) }
-                    if let l = workout.target_load { meta("Zátěž", Fmt.int(l) + " TSS") }
-                    if let s = workout.primary_system { meta("Typ", LibraryWorkout.systemLabel(s)) }
-                }
-                if let blocks = workout.steps, !blocks.isEmpty {
-                    StepsProfile(blocks: blocks).frame(height: 54)
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in StepBlockRow(block: block) }
-                    }
-                }
-                if let d = workout.description?.nilIfBlank {
-                    Text(d).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-                }
-                if let source = workout.source_name { Text("Zdroj: " + source).font(Typo.caption).foregroundStyle(Palette.faint) }
-
-                Card {
-                    DatePicker("Den", selection: $date, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
-                        .environment(\.locale, Fmt.locale)
-                    if done {
-                        Label("Naplánováno, najdeš ho v týdnu i v Intervals.icu.", systemImage: "checkmark.circle.fill")
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.green)
-                    } else {
-                        PrimaryButton(title: saving ? "Plánuji…" : "Naplánovat", systemImage: "calendar.badge.plus", busy: saving) { Task { await schedule() } }
-                            .disabled(saving || model.demo)
-                    }
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                }
-            }
-            .padding(24)
-        }
-        .presentationDetents([.large])
-        .presentationBackground(Palette.background)
-    }
-
-    private func meta(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
-        }
-    }
-
-    private func schedule() async {
-        saving = true
-        defer { saving = false }
-        do {
-            try await model.api.scheduleWorkout(id: workout.id, date: AppModel.localDate(date), indoor: indoor)
-            done = true
-            error = nil
-            await model.refreshTraining()
-            await model.refresh()
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 }

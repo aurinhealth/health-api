@@ -5,7 +5,7 @@ import { localToday } from "./user-time.js";
 const BASE='https://health.googleapis.com/v4/';
 const COLLECTION='users/me/dataTypes/nutrition-log/dataPoints';
 const RESOURCE=/^users\/[^/]+\/dataTypes\/nutrition-log\/dataPoints\/[^/?#]+$/;
-const MEALS={breakfast:'BREAKFAST',snack_am:'SNACK',snack_pm:'SNACK',snack:'SNACK',lunch:'LUNCH',dinner:'DINNER'};
+const MEALS={breakfast:'BREAKFAST',snack_am:'SNACK',snack_pm:'SNACK',snack_late:'SNACK',snack:'SNACK',lunch:'LUNCH',dinner:'DINNER'};
 const today=()=>localToday();
 async function ensure(db){await db.prepare(`CREATE TABLE IF NOT EXISTS food_google_exports (
   user_id INTEGER NOT NULL,entry_id INTEGER NOT NULL,desired_json TEXT,revision INTEGER NOT NULL DEFAULT 1,

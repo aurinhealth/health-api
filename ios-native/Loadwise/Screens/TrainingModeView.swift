@@ -3,8 +3,10 @@ import UIKit
 
 /// Režim tréninku: one exercise and one set at a time, big enough to use
 /// between sets. "Hotovo" records the set (the planned weight and reps unless
-/// changed) and starts the rest timer; after the last set comes the next
-/// exercise. The screen stays on meanwhile.
+/// changed, how hard it was in words) and starts the rest (the lengths from
+/// Nastavení, longer before the next exercise); after the last set comes the
+/// next exercise. The plan can be reordered, shortened or extended on the way.
+/// The screen stays on meanwhile.
 struct TrainingModeView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -16,8 +18,12 @@ struct TrainingModeView: View {
     @State private var kg = ""
     @State private var reps = ""
     @State private var rpe = 8
-    @State private var restSeconds = 90
+    @AppStorage("restSets") private var restSets = 90
+    @AppStorage("restExercises") private var restExercises = 120
     @State private var restEnd: Date?
+    @State private var catalog: [GymCatalogExercise] = []
+    @State private var dumbbells: [Double] = []
+    @State private var editing = false
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var technique: String?
     @State private var saving = false
@@ -50,6 +56,11 @@ struct TrainingModeView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+        .sheet(isPresented: $editing) {
+            if let day {
+                PlanEditorSheet(day: day, catalog: catalog) { edited in Task { await saveEdited(edited) } }
+            }
+        }
     }
 
     private var header: some View {
@@ -59,6 +70,10 @@ struct TrainingModeView: View {
             if let day {
                 let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
                 Text("\(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií")).font(Typo.small).foregroundStyle(Palette.muted)
+                if !day.exercises.isEmpty {
+                    CircleButton(systemImage: "list.bullet", label: "Upravit plán") { editing = true }
+                        .padding(.leading, 8)
+                }
             }
         }
     }
@@ -81,7 +96,7 @@ struct TrainingModeView: View {
             .padding(.top, 6)
 
             if let map = muscles[exercise.name], !map.isEmpty {
-                BodyMap(load: map, height: 130).padding(.top, 10)
+                BodyMap(load: map, height: 170, legend: true).padding(.top, 10)
             }
 
             HStack(spacing: 6) {
@@ -100,21 +115,11 @@ struct TrainingModeView: View {
                     Text((set.warmup ? "Rozcvičovací série" : "Série \(set.number)") + plan(set))
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     HStack(spacing: 12) {
-                        stepper("kg", $kg, step: 2.5)
+                        stepper(uses(exercise, "dumbbells") && !dumbbells.isEmpty ? "kg na ruku" : "kg", $kg, step: 2.5,
+                                weights: uses(exercise, "dumbbells") ? dumbbells : [])
                         stepper("opakování", $reps, step: 1)
                     }
-                    HStack(spacing: 6) {
-                        Text("RPE").font(Typo.caption).foregroundStyle(Palette.muted)
-                        ForEach(6...10, id: \.self) { value in
-                            Button { rpe = value } label: {
-                                Text("\(value)").font(Typo.number(18))
-                                    .foregroundStyle(rpe == value ? Palette.onButton : Palette.ink)
-                                    .frame(maxWidth: .infinity).frame(height: 36)
-                                    .background(rpe == value ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
+                    effort
                     PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
                         Task { await complete(set) }
                     }
@@ -153,7 +158,8 @@ struct TrainingModeView: View {
                 SecondaryButton(title: "−15 s") { shiftRest(-15) }
                 SecondaryButton(title: "+15 s") { shiftRest(15) }
             }
-            PrimaryButton(title: "Pokračovat", systemImage: "forward.fill") { restEnd = nil }
+            PrimaryButton(title: "Přeskočit pauzu", systemImage: "forward.fill") { restEnd = nil }
+            Text("Výchozí délku pauzy nastavíš v Nastavení → Posilovna.").font(Typo.caption).foregroundStyle(Palette.faint)
         }
         .frame(maxWidth: .infinity)
         .task(id: end) {
@@ -172,7 +178,7 @@ struct TrainingModeView: View {
             let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
             Text("\(sets) " + Fmt.plural(sets, "série", "série", "sérií") + " v \(day.exercises.count) " + Fmt.plural(day.exercises.count, "cviku", "cvicích", "cvicích") + ". Série jsou uložené i pro příští plán.")
                 .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 200)
+            BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 220, legend: true)
             Spacer()
             PrimaryButton(title: "Zavřít") { dismiss() }
         }
@@ -195,16 +201,57 @@ struct TrainingModeView: View {
 
     // MARK: Parts
 
-    private func stepper(_ unit: String, _ text: Binding<String>, step: Double) -> some View {
+    /// How hard the set was, in words (stored as RPE 6–10 for the next plan).
+    struct Effort {
+        let rpe: Int
+        let label: String
+        let hint: String
+    }
+
+    static let efforts: [Effort] = [
+        Effort(rpe: 6, label: "Lehké", hint: "zbývaly 4 a víc"), Effort(rpe: 7, label: "Akorát", hint: "zbývala 3"),
+        Effort(rpe: 8, label: "Těžké", hint: "zbývala 2"), Effort(rpe: 9, label: "Na hraně", hint: "zbývalo 1"),
+        Effort(rpe: 10, label: "Selhání", hint: "už ani jedno")
+    ]
+
+    private var effort: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Jak to šlo?").font(Typo.caption).foregroundStyle(Palette.muted)
+            HStack(spacing: 6) {
+                ForEach(Self.efforts, id: \.rpe) { e in
+                    Button { rpe = e.rpe } label: {
+                        Text(e.label).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                            .foregroundStyle(rpe == e.rpe ? Palette.onButton : Palette.ink)
+                            .frame(maxWidth: .infinity).frame(height: 40)
+                            .background(rpe == e.rpe ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(e.hint + " opakování")
+                    .accessibilityAddTraits(rpe == e.rpe ? .isSelected : [])
+                }
+            }
+            if let e = Self.efforts.first(where: { $0.rpe == rpe }) {
+                Text("V zásobě " + e.hint + (rpe == 10 ? "" : " opakování") + " · RPE \(rpe)")
+                    .font(Typo.caption).foregroundStyle(Palette.faint)
+            }
+        }
+    }
+
+    private func uses(_ exercise: GymExercise, _ station: String) -> Bool {
+        catalog.first { $0.name == exercise.name }?.stations?.contains(station) == true
+    }
+
+    /// kg with − and +: by 2.5, or through the dumbbells there are.
+    private func stepper(_ unit: String, _ text: Binding<String>, step: Double, weights: [Double] = []) -> some View {
         VStack(spacing: 6) {
             HStack(spacing: 0) {
-                Button { bump(text, -step) } label: { Image(systemName: "minus").frame(width: 40, height: 56) }
+                Button { bump(text, -step, weights) } label: { Image(systemName: "minus").frame(width: 40, height: 56) }
                 TextField("–", text: text)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.center)
                     .font(Typo.number(40))
                     .frame(maxWidth: .infinity)
-                Button { bump(text, step) } label: { Image(systemName: "plus").frame(width: 40, height: 56) }
+                Button { bump(text, step, weights) } label: { Image(systemName: "plus").frame(width: 40, height: 56) }
             }
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(Palette.ink)
@@ -213,9 +260,14 @@ struct TrainingModeView: View {
         }
     }
 
-    private func bump(_ text: Binding<String>, _ by: Double) {
+    private func bump(_ text: Binding<String>, _ by: Double, _ weights: [Double] = []) {
         let value = Double(text.wrappedValue.replacingOccurrences(of: ",", with: ".")) ?? 0
-        let next = max(0, value + by)
+        let next: Double
+        if !weights.isEmpty {
+            next = (by > 0 ? weights.first { $0 > value + 0.01 } : weights.last { $0 < value - 0.01 }) ?? value
+        } else {
+            next = max(0, value + by)
+        }
         text.wrappedValue = next.rounded() == next ? String(Int(next)) : String(next)
     }
 
@@ -248,9 +300,11 @@ struct TrainingModeView: View {
         restEnd = nil
     }
 
+    /// Only this rest: the default stays as set.
     private func shiftRest(_ seconds: Int) {
-        restSeconds = min(max(30, restSeconds + seconds), 300)
-        restEnd = restEnd.map { $0.addingTimeInterval(TimeInterval(seconds)) }
+        guard let end = restEnd else { return }
+        let next = end.addingTimeInterval(TimeInterval(seconds))
+        restEnd = next.timeIntervalSinceNow <= 0 ? nil : next
     }
 
     // MARK: Server
@@ -274,8 +328,30 @@ struct TrainingModeView: View {
     }
 
     private func loadMuscles(_ day: GymDay) async {
-        guard !model.demo, muscles.isEmpty else { return }
-        muscles = (try? await model.api.gymMuscles(names: day.exercises.map(\.name))) ?? [:]
+        guard !model.demo else { return }
+        let missing = day.exercises.map(\.name).filter { muscles[$0] == nil }
+        if !missing.isEmpty, let more = try? await model.api.gymMuscles(names: missing) { muscles.merge(more) { $1 } }
+        guard catalog.isEmpty else { return }
+        async let list = model.api.gymExercises()
+        async let equipment = model.api.gymEquipment()
+        catalog = (try? await list) ?? []
+        dumbbells = (try? await equipment)?.dumbbellWeights ?? []
+    }
+
+    /// The plan as changed in "Upravit plán": saved, and back on the first
+    /// exercise with a set left.
+    private func saveEdited(_ edited: GymDay) async {
+        day = edited
+        restEnd = nil
+        startAtFirstOpen()
+        await loadMuscles(edited)
+        guard !model.demo else { return }
+        do {
+            try await model.api.saveGym(edited, date: date)
+            error = nil
+        } catch {
+            self.error = "Plán se nepodařilo uložit: " + error.localizedDescription
+        }
     }
 
     private func complete(_ set: GymSet) async {
@@ -285,12 +361,14 @@ struct TrainingModeView: View {
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        // The last set of the exercise: on to the next one after the rest.
+        // The last set of the exercise: on to the next one after a longer rest.
+        var rest = set.warmup ? 60 : restSets
         if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {
             index += 1
+            rest = restExercises
         }
-        if next.exercises.contains(where: { $0.sets.contains { !$0.done } }) {
-            restEnd = Date().addingTimeInterval(TimeInterval(set.warmup ? 60 : restSeconds))
+        if next.exercises.contains(where: { $0.sets.contains { !$0.done } }), rest > 0 {
+            restEnd = Date().addingTimeInterval(TimeInterval(rest))
         }
         guard !model.demo else { return }
         saving = true

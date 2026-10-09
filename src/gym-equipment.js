@@ -37,6 +37,10 @@ export const METAGYM_KUTNA_HORA = {
   }
 };
 
+// Equipment other gyms and home gyms usually have, beyond Kutná Hora: the
+// athlete can mark it (src/gym-equipment-ai.js GYM_STATIONS has the names).
+export const OTHER_STATION_IDS = ["pullup_bar", "dip_bars", "kettlebells", "ez_bar", "resistance_bands", "rowing_ergometer", "exercise_bike"];
+
 // Station names in English (lang.js); names that are already English stay.
 const STATION_EN = {
  "Činkárna – sada jednoruček": "Dumbbell rack",

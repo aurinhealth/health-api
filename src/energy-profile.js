@@ -55,6 +55,9 @@ export function sleepSettings(profile = {}) {
   return { goal: goal >= 360 && goal <= 600 ? goal : null, wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend) } };
 }
 
+export const MEAL_SLOTS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner", "snack_late"];
+const mealSlots = v => { const chosen = new Set(Array.isArray(v) ? v.map(String) : []); return MEAL_SLOTS.filter(m => chosen.has(m)); };
+
 export function normalizeProfile(p = {}) {
   const inRange = (v, lo, hi) => { const x = num(v); return Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
   const birthDate = ageFrom(p.birthDate) != null ? p.birthDate : "";
@@ -74,6 +77,8 @@ export function normalizeProfile(p = {}) {
     sleepGoal: inRange(p.sleepGoal, 360, 600),
     wakeTime: clockText(p.wakeTime),
     wakeTimeWeekend: clockText(p.wakeTimeWeekend),
+    // The meals of the day the app plans (app-food.js MEALS); empty is the usual five.
+    meals: mealSlots(p.meals),
     ...normalizeFocus(p)
   };
 }

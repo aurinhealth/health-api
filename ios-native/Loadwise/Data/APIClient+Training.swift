@@ -8,10 +8,11 @@ extension APIClient {
         try await get("/app/api/gym/equipment")
     }
 
-    func saveGymEquipment(equipment: String, stations: [String], gymName: String, gymUrl: String) async throws -> GymEquipment {
+    func saveGymEquipment(equipment: String, stations: [String], gymName: String, gymUrl: String, dumbbellWeights: [Double] = []) async throws -> GymEquipment {
         try await send("/app/api/gym/equipment", method: "POST",
                        body: ["equipment": JSONValue.string(equipment), "stations": .array(stations.map { .string($0) }),
-                              "gymName": .string(gymName), "gymUrl": .string(gymUrl)])
+                              "gymName": .string(gymName), "gymUrl": .string(gymUrl),
+                              "dumbbellWeights": .array(dumbbellWeights.map { .number($0) })])
     }
 
     /// AI reads photos of the gym (JPEG) or its web page and picks the stations.
@@ -63,10 +64,15 @@ extension APIClient {
 
     // MARK: Workout library
 
-    func searchWorkouts(sport: String, minutes: Int?, system: String?, indoor: Bool) async throws -> [LibraryWorkout] {
+    /// The ride or run library: a length with its ± tolerance, the type and a
+    /// difficulty band (1–10, src/workout-model.js difficultyFromStructure).
+    func searchWorkouts(sport: String, minutes: Int?, tolerance: Int? = nil, system: String?, indoor: Bool,
+                        difficulty: ClosedRange<Double>? = nil) async throws -> [LibraryWorkout] {
         var path = "/app/api/workouts/search?sport=" + sport + "&environment=" + (indoor ? "indoor" : "outdoor") + "&limit=40"
         if let minutes { path += "&duration=\(minutes)" }
+        if let tolerance, minutes != nil { path += "&durationTolerance=\(tolerance)" }
         if let system { path += "&system=" + system }
+        if let difficulty { path += "&minDifficulty=\(difficulty.lowerBound)&maxDifficulty=\(difficulty.upperBound)" }
         let r: WorkoutSearchResponse = try await get(path)
         return r.workouts
     }

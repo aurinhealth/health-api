@@ -78,5 +78,30 @@ test("Food stays usable without data", () => {
 test("The server answers GET /app/api/food-today with buildFood", () => {
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /url\.pathname==='\/app\/api\/food-today'&&request\.method==='GET'/);
-  assert.match(src, /buildFood\(\{date,hour:date===localToday\(\)\?localHour\(\):null,daily,food,fluids\}\)/);
+  assert.match(src, /buildFood\(\{date,hour:date===localToday\(\)\?localHour\(\):null,daily,food,fluids,slots:profile\?\.meals\}\)/);
+});
+
+test("Every meal has its part of the day's target, in the slots the athlete chose", () => {
+  const f = buildFood(input);
+  const lunch = f.meals.find(m => m.type === "lunch");
+  assert.deepEqual(lunch.target, { kcal: Math.round(2650 * 0.3 / 10) * 10, protein: Math.round(150 * 0.3 / 5) * 5, carbs: Math.round(330 * 0.3 / 5) * 5, fat: Math.round(80 * 0.3) });
+  assert.deepEqual(f.mealSlots, ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"]);
+
+  const three = buildFood({ ...input, hour: null, food: { entries: [], totals: {} }, slots: ["breakfast", "lunch", "dinner", "snack_late"] });
+  assert.deepEqual(three.meals.map(m => m.type), ["breakfast", "lunch", "dinner", "snack_late"]);
+  const shares = 0.25 + 0.3 + 0.25 + 0.08;
+  assert.equal(three.meals[1].target.kcal, Math.round(2650 * 0.3 / shares / 10) * 10, "shares renormalised over the chosen meals");
+  assert.equal(three.meals.reduce((s, m) => s + m.suggestion.kcal, 0) >= 2600, true, "the whole day is shared out");
+
+  const kept = buildFood({ ...input, slots: ["breakfast", "lunch", "dinner"] });
+  assert.ok(kept.meals.some(m => m.type === "lunch" && m.entries.length), "a meal logged to a slot stays");
+  assert.equal(mealOf({}, "21:30", ["breakfast", "lunch", "dinner", "snack_late"]), "snack_late");
+  assert.equal(mealOf({}, "21:30"), "dinner", "without the second dinner late food is dinner");
+});
+
+test("Sugar from the entries against a tenth of the energy", () => {
+  const withSugar = { ...input, food: { ...input.food, entries: [entry(9, "Jogurt", DATE + "T07:40:00", 150, { mealType: "breakfast", sugar_g: 12.5 }), ...input.food.entries] } };
+  const f = buildFood(withSugar);
+  assert.deepEqual(f.macros.sugar, { eaten: 12.5, target: Math.round(2650 * 0.1 / 4) });
+  assert.equal(f.meals[0].entries.find(e => e.name === "Jogurt").sugar, 12.5);
 });

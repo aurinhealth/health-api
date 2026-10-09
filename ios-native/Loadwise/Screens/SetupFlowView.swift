@@ -106,11 +106,11 @@ struct SetupFlowView: View {
                      label: { id in ProfileSettingsView.sportHourOptions.first { $0.0 == id }?.1 ?? id },
                      isOn: { $0 == sportHours }, toggle: { sportHours = $0 })
             Text("Posilování").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
-            ForEach(EquipmentView.kinds.indices, id: \.self) { i in
-                let k = EquipmentView.kinds[i]
-                if k.0 != "custom" { ChoiceCard(title: k.1, subtitle: k.2, selected: equipment == k.0) { equipment = k.0 } }
+            ForEach(EquipmentView.setupKinds.indices, id: \.self) { i in
+                let k = EquipmentView.setupKinds[i]
+                ChoiceCard(title: k.1, subtitle: k.2, selected: equipment == k.0) { equipment = k.0 }
             }
-            Text("Vlastní posilovnu se stroji, které tam jsou, nastavíš v Trénink → Vybavení, i z fotky.")
+            Text("Které stroje v posilovně jsou a jaké máš doma jednoručky, nastavíš v Trénink → Vybavení, i z fotky.")
                 .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             Text("Zkušenosti s posilováním").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
             ChipFlow(items: ["auto", "beginner", "regular", "experienced"],
@@ -164,7 +164,7 @@ struct SetupFlowView: View {
         if let v = p["goal"]?.string { goal = v }
         if let v = p["sportHours"]?.string, v != "auto" { sportHours = v }
         if let v = p["mainSport"]?.string { mainSport = v }
-        if let v = s.training?.equipment, v != "custom" { equipment = v }
+        if let v = s.training?.equipment { equipment = v == "custom" ? "gym" : v == "home" ? "dumbbells" : v }
     }
 
     private func finish() async {

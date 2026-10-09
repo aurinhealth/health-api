@@ -259,6 +259,78 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.readiness, 78)
     }
 
+    func testPlanEditing() {
+        var day = DemoData.gym
+        day.moveExercise(from: 2, to: 0)
+        XCTAssertEqual(day.exercises.map(\.name), ["Přítahy v předklonu", "Dřep", "Tlak na lavici"])
+        day.moveExercise(from: 0, to: 3)
+        XCTAssertEqual(day.exercises.map(\.name), ["Dřep", "Tlak na lavici", "Přítahy v předklonu"])
+        XCTAssertEqual(day.planName, "Celé tělo", "the head of the sheet stays")
+
+        let sets = day.exercises[1].sets.count
+        day.addSet(at: 1)
+        XCTAssertEqual(day.exercises[1].sets.count, sets + 1)
+        XCTAssertEqual(day.exercises[1].sets.last?.done, false)
+        day.removeSet(at: 1)
+        XCTAssertEqual(day.exercises[1].sets.count, sets)
+
+        day.removeExercise(at: 0)
+        XCTAssertEqual(day.exercises.first?.name, "Dřep", "a done set stays recorded")
+        XCTAssertTrue(day.exercises[0].sets.allSatisfy(\.done))
+        day.addExercise("Leg press", sets: 3, reps: "10-12")
+        XCTAssertEqual(day.exercises.last?.name, "Leg press")
+        XCTAssertEqual(day.exercises.last?.sets.map(\.plannedReps), ["10-12", "10-12", "10-12"])
+        guard case .array(let rows) = day.saveBody["values"] else { return XCTFail("body") }
+        XCTAssertEqual(rows.count, day.exercises.reduce(0) { $0 + $1.sets.count })
+    }
+
+    func testMealSlotsAndTargets() {
+        let late = Calendar.current.date(bySettingHour: 21, minute: 15, second: 0, of: Date())!
+        XCTAssertEqual(MealSlot.now(late), "dinner")
+        XCTAssertEqual(MealSlot.now(late, slots: ["breakfast", "lunch", "dinner", "snack_late"]), "snack_late")
+        let morning = Calendar.current.date(bySettingHour: 10, minute: 30, second: 0, of: Date())!
+        XCTAssertTrue(["breakfast", "lunch"].contains(MealSlot.now(morning, slots: ["breakfast", "lunch", "dinner"])), "a meal the day has")
+        XCTAssertEqual(MealSlot.toMeal("snack_late"), "k druhé večeři")
+        let food = DemoData.food
+        XCTAssertEqual(food.mealSlots?.count, 5)
+        XCTAssertEqual(food.meals.first { $0.type == "lunch" }?.target?.kcal, 800)
+        XCTAssertEqual(food.macros.sugar?.target, 66)
+        XCTAssertEqual(food.meals[0].entries[0].sugar, 14)
+        let recipe = try? JSONDecoder().decode(FoodRecipe.self, from: Data(#"{"id":"r1","name":"Rizoto","servings":2,"ingredients":[{"name":"Rýže","quantity":150,"unit":"g","calories":540}],"portion":{"name":"Rizoto","nutrition_basis":"portion","calories_100g":420,"protein_100g":30,"carbs_100g":50,"fat_100g":9},"calories":840}"#.utf8))
+        XCTAssertEqual(recipe?.product.kcal(for: 1), 420)
+        XCTAssertEqual(recipe?.product.source, "composed", "a recipe portion is not saved again as a food")
+    }
+
+    func testEquipmentAndLibrary() throws {
+        let home = GymEquipment(equipment: "home", selected: ["dumbbells", "adjustable_bench"], gymName: "", gymUrl: "", dumbbellWeights: [5, 10])
+        let curl = try JSONDecoder().decode(GymCatalogExercise.self, from: Data(#"{"name":"DB curl","muscle":"Biceps","stations":["dumbbells"]}"#.utf8))
+        let press = try JSONDecoder().decode(GymCatalogExercise.self, from: Data(#"{"name":"Leg press","muscle":"Přední stehna","stations":["pivot_leg_press"],"muscles":{"quads":1,"hips":0.5}}"#.utf8))
+        XCTAssertTrue(EquipmentView.fits(curl, home))
+        XCTAssertFalse(EquipmentView.fits(press, home))
+        XCTAssertTrue(ExerciseCatalog.works(curl, "biceps"), "an older server without the muscle map: by the muscle name")
+        XCTAssertFalse(ExerciseCatalog.works(curl, "upper_back"))
+        XCTAssertTrue(ExerciseCatalog.works(press, "quads"))
+        XCTAssertFalse(ExerciseCatalog.works(press, "calves"))
+        XCTAssertEqual(EquipmentView.summary(home), "Domácí posilovna · 2 věci")
+        XCTAssertEqual(EquipmentView.kg(2.5), "2,5 kg")
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/vo2max")!), .vo2max)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/library/run")!), .workoutLibrary("run"))
+    }
+
+    func testRoundTwoScreens() throws {
+        let vo2 = try XCTUnwrap(DemoData.training.vo2max)
+        try render("training-vo2max", glow: Palette.Glow.training) { VO2maxContent(vo2: vo2).padding(.top, 50).padding(.bottom, 40) }
+        try render("plan-editor", height: 700) { PlanEditorSheet(day: DemoData.gym, catalog: [], save: { _ in }) }
+        try render("body-map-legend", height: 360) {
+            BodyMap(load: ["quads": 1, "hips": 0.6, "hamstrings": 0.35, "calves": 0.2], height: 280, legend: true).padding(20)
+        }
+        try render("drink-settings", height: 1000) { NavigationStack { DrinkSettingsView() } }
+        try render("gym-rest-settings", height: 500) { NavigationStack { GymRestSettingsView() } }
+        try render("food-amount-edit", height: 1100) {
+            NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_late", editing: true) }.environment(AppModel(demo: true))
+        }
+    }
+
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
