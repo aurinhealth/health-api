@@ -87,8 +87,16 @@ struct SettingsMenu: View {
                                 value: store.loaded ? "\(store.connectedCount) " + Fmt.plural(store.connectedCount, "připojený", "připojené", "připojených") : nil)
                 }
                 SettingsDivider()
+                NavigationLink { SleepSettingsView(given: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "moon.zzz.fill", color: Palette.indigo), title: "Spánek a budík", value: sleepValue)
+                }
+                SettingsDivider()
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.text.square", color: Palette.rust), title: "Tréninkové zóny", value: "běh, kolo")
+                }
+                SettingsDivider()
+                NavigationLink { EquipmentView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "dumbbell.fill", color: Palette.brown), title: "Vybavení na posilování")
                 }
             }
             .buttonStyle(.plain)
@@ -142,6 +150,11 @@ struct SettingsMenu: View {
     private var remindersValue: String {
         let on = [r1, r2, r3, r4].filter { $0 }.count
         return on == 0 ? "vypnutá" : "\(on) " + Fmt.plural(on, "zapnuté", "zapnutá", "zapnutých")
+    }
+
+    private var sleepValue: String? {
+        if let wake = store.profile["wakeTime"]?.string { return "budík " + wake }
+        return store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" }
     }
 
     private var goalsValue: String? {

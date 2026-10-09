@@ -11,6 +11,8 @@ struct LoadwiseApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                // loadwise://open/sleep from the home-screen widgets.
+                .onOpenURL { model.handle($0) }
                 .tint(Palette.ink)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
         }

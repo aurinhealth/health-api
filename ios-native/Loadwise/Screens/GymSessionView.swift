@@ -14,6 +14,20 @@ struct GymSessionView: View {
     @State private var technique: String?
     @State private var alternativesFor: String?
     @State private var minutes = 60
+    @State private var muscles: [String: [String: Double]] = [:]
+
+    private var load: [String: Double] {
+        muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }
+    }
+
+    /// The plan note starts with "Zvolené partie: …." the figure shows instead.
+    static func withoutMuscleList(_ note: String?) -> String? {
+        guard var text = note else { return nil }
+        if text.hasPrefix("Zvolené partie:"), let end = text.firstIndex(of: ".") {
+            text = String(text[text.index(after: end)...]).trimmingCharacters(in: .whitespaces)
+        }
+        return text.nilIfBlank
+    }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
@@ -39,9 +53,22 @@ struct GymSessionView: View {
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
-                if let note = day.note {
+                if !muscles.isEmpty {
+                    Card {
+                        WidgetHeader(title: "Co procvičíš", color: Palette.amberBar)
+                        BodyMap(load: load, height: 220)
+                    }
+                    .padding(.top, 16)
+                }
+                if let note = Self.withoutMuscleList(day.note) {
                     Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 }
+                NavigationLink(value: AppRoute.trainingMode(date)) {
+                    Label("Režim tréninku", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 16)
                 VStack(spacing: 12) {
                     ForEach(day.exercises) { exercise in
                         ExerciseCard(exercise: exercise,
@@ -68,6 +95,13 @@ struct GymSessionView: View {
                 }
                 .disabled(saving || model.demo || day?.cancelled == true)
                 .padding(.top, 14)
+                NavigationLink(value: AppRoute.gymBuilder) {
+                    Label("Vybrat partie a sestavit s AI", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 10)
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
         }
@@ -87,7 +121,14 @@ struct GymSessionView: View {
         if model.demo { day = DemoData.gym; loading = false; return }
         loading = true
         defer { loading = false }
-        do { day = try await model.api.gym(date: date) } catch { self.error = error.localizedDescription }
+        do {
+            day = try await model.api.gym(date: date)
+            if let names = day?.exercises.map(\.name), !names.isEmpty {
+                muscles = (try? await model.api.gymMuscles(names: names)) ?? [:]
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     private func save() async {
@@ -199,11 +240,15 @@ struct SetRow: View {
             .accessibilityLabel(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou")
         }
         .opacity(set.done ? 0.75 : 1)
-        .onAppear {
-            kg = set.kg ?? ""
-            reps = set.reps ?? ""
-            rpe = set.rpe ?? ""
-        }
+        .onAppear { fill(set) }
+        // The plan reloads after a swap or a save: show what is stored now.
+        .onChange(of: set) { _, next in fill(next) }
+    }
+
+    private func fill(_ set: GymSet) {
+        kg = set.kg ?? ""
+        reps = set.reps ?? ""
+        rpe = set.rpe ?? ""
     }
 
     private func field(_ text: Binding<String>, placeholder: String, unit: String?, width: CGFloat) -> some View {

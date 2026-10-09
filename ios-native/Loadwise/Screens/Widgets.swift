@@ -48,31 +48,53 @@ struct FoodWidget: View {
 }
 
 struct PlanWidget: View {
+    @Environment(AppModel.self) private var model
     let items: [TodaySnapshot.PlanItem]
+    var today: String = ""
 
     var body: some View {
         Card {
             WidgetHeader(title: "Plán dne", color: Palette.ink)
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    HStack(spacing: 14) {
-                        Text(item.time ?? "–").font(Typo.number(19))
-                            .foregroundStyle(item.done ? Palette.faint : Palette.ink)
-                            .frame(width: 46, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
-                            if let detail = item.detail {
-                                Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
-                            }
-                        }
-                        Spacer(minLength: 8)
-                        trailing(item)
-                    }
-                    .padding(.vertical, 11)
+                    row(item)
                     if index < items.count - 1 { Divider().overlay(Palette.hairline) }
                 }
             }
         }
+    }
+
+    /// Bedtime opens Nastavení spánku, a gym session its workout mode, a ride
+    /// or run the Training tab.
+    @ViewBuilder
+    private func row(_ item: TodaySnapshot.PlanItem) -> some View {
+        if item.kind == "bedtime" {
+            NavigationLink(value: AppRoute.sleepSettings) { line(item) }.buttonStyle(.plain)
+        } else if item.kind == "workout", item.sport == "strength", !item.done {
+            NavigationLink(value: AppRoute.trainingMode(today.isEmpty ? AppModel.localDate(Date()) : today)) { line(item) }.buttonStyle(.plain)
+        } else if item.kind == "workout" {
+            Button { model.tab = .training } label: { line(item) }.buttonStyle(.plain)
+        } else {
+            line(item)
+        }
+    }
+
+    private func line(_ item: TodaySnapshot.PlanItem) -> some View {
+        HStack(spacing: 14) {
+            Text(item.time ?? "–").font(Typo.number(19))
+                .foregroundStyle(item.done ? Palette.faint : Palette.ink)
+                .frame(width: 46, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
+                if let detail = item.detail {
+                    Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+            Spacer(minLength: 8)
+            trailing(item)
+        }
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -81,9 +103,12 @@ struct PlanWidget: View {
             Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
                 .accessibilityLabel("Hotovo")
         } else if item.kind == "workout" {
-            Text("Začít").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+            Text(item.sport == "strength" ? "Začít" : "Detail").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                 .padding(.horizontal, 14).frame(height: 30)
                 .background(Palette.button, in: Capsule())
+        } else if item.kind == "bedtime" {
+            Image(systemName: "alarm").font(.footnote.weight(.semibold)).foregroundStyle(Palette.indigo)
+                .accessibilityLabel("Nastavit budík a cíl spánku")
         }
     }
 }
@@ -108,7 +133,7 @@ struct StepsWidget: View {
                     weekChart
                 }
             }
-            Text(steps.hourly == nil ? "7 dní · čárkovaně = cíl" : steps.usual == nil ? "kroky během dne · čárkovaně = cíl" : "kroky během dne · čárkovaně = tvůj obvyklý průběh")
+            Text(steps.hourly == nil ? "7 dní" : "kroky během dne")
                 .font(Typo.tiny).foregroundStyle(Palette.faint)
         }
     }

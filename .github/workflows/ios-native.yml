@@ -39,6 +39,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
+          cat Loadwise/Loadwise.entitlements
 
       - name: Pick a simulator
         id: sim
@@ -85,6 +86,11 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
           mkdir -p ipa/Payload
           cp -R build/Build/Products/Release-iphoneos/Loadwise.app ipa/Payload/
+          # Ad-hoc signatures carry the App Group the widgets share with the
+          # app; Sideloadly re-signs with the user's Apple ID and keeps them.
+          app=ipa/Payload/Loadwise.app
+          codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
+          codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Loadwise-native-unsigned.ipa" Payload)
 
       - name: Upload the app

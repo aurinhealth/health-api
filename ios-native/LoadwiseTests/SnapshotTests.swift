@@ -204,6 +204,61 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(t.thisWeek.planned, 0)
     }
 
+    func testNewScreens() throws {
+        try render("add-sheet", height: 1000) { AddSheet().environment(AppModel(demo: true)) }
+        try render("body-map", height: 320) {
+            BodyMap(load: ["chest": 1, "biceps": 0.6, "quads": 0.3], selected: ["chest"]).padding(20)
+        }
+        try render("sleep-settings", height: 800) { NavigationStack { SleepSettingsView(given: SettingsStore(api: APIClient(), demo: true)) }.environment(AppModel(demo: true)) }
+    }
+
+    func testCoachMarkdownBlocks() {
+        let text = "## Shrnutí\nDnes **lehce**.\n\n- spánek\n- HRV\n\n1. rozjezd\n2. klid\n\n| den | km |\n|---|---|\n| po | 10 |\n\n---"
+        let blocks = CoachMarkdown.blocks(text)
+        XCTAssertEqual(blocks.first, .heading(2, "Shrnutí"))
+        XCTAssertTrue(blocks.contains(.bullets(["spánek", "HRV"])))
+        XCTAssertTrue(blocks.contains(.numbered(["rozjezd", "klid"])))
+        XCTAssertTrue(blocks.contains(.table([["den", "km"], ["po", "10"]])))
+        XCTAssertEqual(blocks.last, .rule)
+    }
+
+    func testBodyFigurePaths() {
+        for part in BodyFigure.front + BodyFigure.back {
+            let box = SVGPath.parse(part.path).boundingRect
+            XCTAssertFalse(box.isEmpty, part.id)
+            XCTAssertLessThanOrEqual(box.maxX, BodyFigure.size.width + 1, part.id)
+            XCTAssertLessThanOrEqual(box.maxY, BodyFigure.size.height + 1, part.id)
+        }
+        XCTAssertEqual(BodyFigure.label("biceps"), BodyFigure.muscles.first { $0.id == "biceps" }?.label)
+    }
+
+    func testDeepLinks() {
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/sleep")!), .sleep)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-08")!), .gym("2026-10-08"))
+        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/food")!))
+        XCTAssertNil(AppRoute(url: URL(string: "https://open/sleep")!))
+        XCTAssertEqual(TabLink.tab(URL(string: "loadwise://open/food")!), .food)
+        let model = AppModel(demo: true)
+        model.handle(URL(string: "loadwise://open/sleep")!)
+        XCTAssertEqual(model.tab, .health)
+        XCTAssertEqual(model.paths[.health], [.sleep])
+    }
+
+    func testNewFieldsDecode() throws {
+        let food = DemoData.food
+        XCTAssertEqual(food.macros.fiber?.target, 32)
+        XCTAssertEqual(food.water.drinks?.count, 3)
+        XCTAssertEqual(food.water.drunkMl, 1600)
+        XCTAssertEqual(DemoData.today.plan.first?.sport, "strength")
+        XCTAssertEqual(DemoData.today.tonight?.wakeSet, true)
+        let result = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ahoj","visuals":["sleep","form"]}"#.utf8))
+        XCTAssertEqual(result.visuals, ["sleep", "form"])
+        let old = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ahoj"}"#.utf8))
+        XCTAssertNil(old.visuals)
+        let snapshot = WidgetSnapshot.sample
+        XCTAssertEqual(snapshot.readiness, 78)
+    }
+
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {

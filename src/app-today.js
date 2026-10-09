@@ -102,6 +102,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const planItems = [
     ...planned.map(w => ({
       kind: "workout",
+      // ride, run or strength: the app opens the gym session for strength.
+      sport: /weight|strength|gym/i.test(String(w.type || "")) ? "strength" : /run/i.test(String(w.type || "")) ? "run" : /ride|cycl|bike/i.test(String(w.type || "")) ? "ride" : "other",
       time: clockOf(w.start),
       title: w.name || w.type || "Trénink",
       detail: [num(w.durationHours) ? Math.round(num(w.durationHours) * 60) + " min" : null, num(w.tss) ? Math.round(num(w.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null,

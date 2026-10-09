@@ -29,20 +29,28 @@ struct SettingsPicker: View {
     @Binding var selection: String
     let options: [(String, String)]
 
+    /// A menu with its own one-line label: the system menu picker wraps long
+    /// names over the title.
     var body: some View {
-        HStack {
-            Text(title).font(.body).foregroundStyle(Palette.ink)
+        HStack(spacing: 12) {
+            Text(title).font(.body).foregroundStyle(Palette.ink).layoutPriority(1)
             Spacer(minLength: 8)
-            Picker(title, selection: $selection) {
-                if !options.contains(where: { $0.0 == selection }) { Text("nevybráno").tag(selection) }
-                ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
+            Menu {
+                Picker(title, selection: $selection) {
+                    if !options.contains(where: { $0.0 == selection }) { Text("nevybráno").tag(selection) }
+                    ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(options.first { $0.0 == selection }?.1 ?? "nevybráno")
+                        .font(.subheadline).foregroundStyle(Palette.muted)
+                        .lineLimit(1).truncationMode(.tail)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
             }
-            .pickerStyle(.menu)
-            .tint(Palette.muted)
-            .labelsHidden()
         }
         .padding(.leading, 16)
-        .padding(.trailing, 8)
+        .padding(.trailing, 14)
         .frame(minHeight: 50)
     }
 }
@@ -396,7 +404,7 @@ struct PrivacySettingsView: View {
     var body: some View {
         SettingsPage(title: "Soukromí a data") {
             SettingsGroup(footer: "Kouč, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
-                SettingsToggle(title: "AI funkce", isOn: $ai, disabled: !aiLoaded || model.demo)
+                SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
             }
             SettingsGroup(footer: "Soubor JSON se vším, co o tobě Loadwise ukládá.") {
                 if let exportURL {
@@ -421,12 +429,6 @@ struct PrivacySettingsView: View {
             ai = (try? await model.api.aiAllowed()) ?? false
             aiLoaded = true
         }
-        .onChange(of: ai) { _, value in
-            guard aiLoaded else { return }
-            Task {
-                do { try await model.api.setAI(value); error = nil } catch { self.error = "Změna se neuložila: " + error.localizedDescription }
-            }
-        }
         .alert("Smazat účet?", isPresented: $confirmDelete) {
             TextField("SMAZAT", text: $deleteText).textInputAutocapitalization(.characters)
             Button("Smazat", role: .destructive) { Task { await delete() } }
@@ -440,6 +442,15 @@ struct PrivacySettingsView: View {
         exporting = true
         defer { exporting = false }
         do { exportURL = try await model.api.exportData() } catch { self.error = error.localizedDescription }
+    }
+
+    /// Only a change by the user is saved (not the value loaded from the server).
+    private func setAI(_ value: Bool) {
+        let before = ai
+        ai = value
+        Task {
+            do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = "Změna se neuložila: " + error.localizedDescription }
+        }
     }
 
     private func delete() async {

@@ -6,13 +6,6 @@ enum AppTab: Hashable {
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    // "-tab training" (simulator screenshots) opens another tab first.
-    @State private var tab: AppTab = {
-        let args = ProcessInfo.processInfo.arguments
-        guard let i = args.firstIndex(of: "-tab"), i + 1 < args.count else { return .today }
-        let tabs: [String: AppTab] = ["training": .training, "food": .food, "health": .health]
-        return tabs[args[i + 1]] ?? .today
-    }()
     @State private var showAdd = false
     @State private var showSettings = false
     @State private var showCoach = false
@@ -24,7 +17,7 @@ struct RootView: View {
         case .signedIn:
             ZStack(alignment: .bottom) {
                 Group {
-                    switch tab {
+                    switch model.tab {
                     case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
                     case .training: TrainingView()
                     case .food: FoodView()
@@ -36,14 +29,31 @@ struct RootView: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.top, 4)
                 }
-                TabBar(tab: $tab, onAdd: { showAdd = true })
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
+                if !model.immersive {
+                    TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), onAdd: { showAdd = true })
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
-            .sheet(isPresented: $showAdd) { AddSheet() }
+            .sheet(isPresented: $showAdd) {
+                AddSheet(openCoach: {
+                    showAdd = false
+                    // One sheet at a time: the coach opens once "+" has closed.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showCoach = true }
+                })
+            }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showCoach) { CoachView() }
+            .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView() }
+            .task { await model.checkSetup() }
         }
+    }
+
+    /// The tab again: back to its first screen.
+    private func select(_ tab: AppTab) {
+        if model.tab == tab { model.paths[tab] = [] }
+        model.tab = tab
     }
 }
 
@@ -101,54 +111,3 @@ struct TabBar: View {
     }
 }
 
-/// The "+" in the tab bar: food, water or weight.
-struct AddSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var food = false
-    @State private var weight = false
-    @State private var workout = false
-    @State private var water: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Co přidáme?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-            }
-            HStack(spacing: 10) {
-                tile("Jídlo", "fork.knife") { food = true }
-                tile(water ?? "Voda 250 ml", "drop.fill") {
-                    Task {
-                        water = "Přidávám…"
-                        await model.addWater(ml: 250)
-                        water = "Přidáno ✓"
-                    }
-                }
-                tile("Váha", "scalemass") { weight = true }
-                tile("Trénink", "figure.run") { workout = true }
-            }
-            Spacer()
-        }
-        .padding(24)
-        .presentationDetents([.height(240)])
-        .presentationBackground(Palette.background)
-        .sheet(isPresented: $food, onDismiss: { dismiss() }) { AddFoodSheet(meal: MealSlot.now()) }
-        .sheet(isPresented: $weight, onDismiss: { dismiss() }) { WeightEntrySheet() }
-        .sheet(isPresented: $workout, onDismiss: { dismiss() }) { ManualWorkoutSheet() }
-    }
-
-    private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 21))
-                Text(title).font(.footnote.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .foregroundStyle(Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 84)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}

@@ -5,7 +5,7 @@ struct TrainingView: View {
     @State private var addingWorkout = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: model.path(.training)) {
             ZStack {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
@@ -25,25 +25,11 @@ struct TrainingView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: TrainingDetail.self) { detail in
-                switch detail {
-                case .form: if let training = model.training { FormDetailView(training: training) }
-                case .gym(let date): GymSessionView(date: date)
-                case .activity(let session): ActivityDetailView(session: session)
-                case .planned(let session): PlannedWorkoutView(session: session)
-                }
-            }
+            .appRoutes()
         }
         .task { if model.training == nil { await model.refreshTraining() } }
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
     }
-}
-
-enum TrainingDetail: Hashable {
-    case form
-    case gym(String)
-    case activity(WeekSession)
-    case planned(WeekSession)
 }
 
 /// The Training screen without the scroll view, so tests can render it whole.
@@ -75,14 +61,17 @@ struct TrainingContent: View {
                     .padding(.top, 28)
             }
 
+            TrainingTools(today: training.date, addWorkout: addWorkout)
+                .padding(.top, 28)
+
             VStack(spacing: 12) {
                 if training.form != nil || training.vo2max != nil {
                     WidgetRow {
                         if let form = training.form {
-                            NavigationLink(value: TrainingDetail.form) { FormWidget(form: form) }.buttonStyle(.plain)
+                            RouteLink(route: .form) { FormWidget(form: form) }
                         } else { Color.clear }
                     } right: {
-                        if let vo2 = training.vo2max { VO2maxWidget(vo2: vo2) } else { Color.clear }
+                        if let vo2 = training.vo2max { RouteLink(route: .form) { VO2maxWidget(vo2: vo2) } } else { Color.clear }
                     }
                 }
                 ThisWeekWidget(week: training.thisWeek, loads: training.load.weeks)
@@ -236,7 +225,7 @@ struct NextSession: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if session.sport == "strength" && session.date == today {
-                NavigationLink(value: TrainingDetail.gym(session.date)) {
+                NavigationLink(value: AppRoute.trainingMode(session.date)) {
                     Text("Začít trénink").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 52)
                         .background(Palette.button, in: Capsule())
@@ -402,7 +391,7 @@ struct ThisWeekWidget: View {
                         Text("\(week.done)").font(Typo.number(34)).foregroundStyle(Palette.ink)
                         Text("z \(week.planned)").font(Typo.number(17)).foregroundStyle(Palette.faint)
                     }
-                    Text(Fmt.plural(week.planned, "trénink", "tréninků", "tréninků") + " hotovo")
+                    Text(Fmt.plural(week.planned, "tréninku", "tréninků", "tréninků") + " hotovo")
                         .font(Typo.caption).foregroundStyle(Palette.amber)
                 }
                 .frame(width: 120, alignment: .leading)
@@ -418,7 +407,7 @@ struct ThisWeekWidget: View {
                              height: 52)
                 }
             }
-            Text("zátěž po týdnech (TSS) · čárkovaně = plán").font(Typo.tiny).foregroundStyle(Palette.faint)
+            Text("zátěž po týdnech (TSS)").font(Typo.tiny).foregroundStyle(Palette.faint)
         }
     }
 }

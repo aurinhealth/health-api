@@ -23,6 +23,7 @@ struct CoachView: View {
         var text: String
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
+        var visuals: [String] = []
     }
 
     var body: some View {
@@ -165,6 +166,7 @@ struct CoachView: View {
                 case .done(let result):
                     if let a = result.answer { messages[index].text = a }
                     messages[index].actions = result.actions ?? []
+                    messages[index].visuals = result.visuals ?? []
                     if let id = result.chatId { chatId = id }
                 }
             }
@@ -213,12 +215,22 @@ struct BubbleView: View {
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
             if !bubble.text.isEmpty {
-                Text(LocalizedStringKey(bubble.text))
-                    .font(bubble.mine ? .body : Typo.sentence(18))
-                    .foregroundStyle(bubble.mine ? Palette.onButton : Palette.ink)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(bubble.mine ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .textSelection(.enabled)
+                if bubble.mine {
+                    Text(bubble.text)
+                        .font(.body)
+                        .foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(Palette.button, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .textSelection(.enabled)
+                } else {
+                    CoachMarkdown(text: bubble.text)
+                        .padding(.horizontal, 16).padding(.vertical, 14)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .textSelection(.enabled)
+                }
+            }
+            ForEach(bubble.visuals, id: \.self) { kind in
+                CoachVisual(kind: kind)
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] }, decide: { decide(action, $0) })
