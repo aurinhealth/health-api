@@ -127,55 +127,97 @@ struct FigureShape: Shape {
 }
 
 /// The body zepředu and zezadu: chosen muscles green, the muscles a plan works
-/// amber by how much, a tap on a muscle chooses it (when onTap is set).
+/// warm by how much (the main ones strong, the helping ones light), a tap on a
+/// muscle chooses it (when onTap is set). Compact drops the titles and the
+/// anatomy lines for small rows; legend explains the colours below.
 struct BodyMap: View {
     var load: [String: Double] = [:]
     var selected: Set<String> = []
     var onTap: ((String) -> Void)? = nil
     var height: CGFloat = 260
+    var compact = false
+    var legend = false
+
+    static let primary = 0.7
+    static let secondary = 0.3
 
     var body: some View {
-        HStack(spacing: 8) {
-            figure("Zepředu", BodyFigure.front, BodyFigure.frontLines)
-            figure("Zezadu", BodyFigure.back, BodyFigure.backLines)
+        VStack(spacing: 10) {
+            HStack(spacing: compact ? 2 : 10) {
+                figure("Zepředu", BodyFigure.front, BodyFigure.frontLines)
+                figure("Zezadu", BodyFigure.back, BodyFigure.backLines)
+            }
+            .frame(height: height)
+            if legend && (!load.isEmpty || !selected.isEmpty) {
+                HStack(spacing: 14) {
+                    if !selected.isEmpty { key("Zvolené", Palette.green) }
+                    if load.values.contains(where: { $0 >= Self.primary }) { key("Hlavně", Palette.rust) }
+                    if load.values.contains(where: { $0 >= Self.secondary && $0 < Self.primary }) { key("Pomocně", Palette.amberBar) }
+                    if load.values.contains(where: { $0 > 0 && $0 < Self.secondary }) { key("Trochu", Palette.sand) }
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
-        .frame(height: height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibility)
+    }
+
+    private func key(_ title: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(title).font(Typo.tiny).foregroundStyle(Palette.muted)
+        }
     }
 
     private func figure(_ title: String, _ regions: [(id: String, path: String)], _ lines: String) -> some View {
         VStack(spacing: 6) {
             ZStack {
                 ForEach(BodyFigure.outline, id: \.self) { d in
-                    FigureShape(d: d).fill(Palette.ink.opacity(0.07))
+                    FigureShape(d: d)
+                        .fill(LinearGradient(colors: [Palette.ink.opacity(0.11), Palette.ink.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+                    FigureShape(d: d).stroke(Palette.ink.opacity(compact ? 0.14 : 0.2), lineWidth: compact ? 0.6 : 1)
                 }
                 ForEach(regions.indices, id: \.self) { i in
                     let region = regions[i]
                     FigureShape(d: region.path)
-                        .fill(color(region.id))
-                        .overlay(FigureShape(d: region.path).stroke(Palette.background.opacity(0.6), lineWidth: 0.6))
+                        .fill(fill(region.id))
+                        .overlay(FigureShape(d: region.path).stroke(Palette.background.opacity(0.75), lineWidth: compact ? 0.4 : 0.8))
+                        .shadow(color: glow(region.id), radius: compact ? 0 : 4)
                         .onTapGesture { onTap?(region.id) }
                         .allowsHitTesting(onTap != nil)
                 }
-                FigureShape(d: lines).stroke(Palette.ink.opacity(0.16), lineWidth: 0.7).allowsHitTesting(false)
+                if !compact {
+                    FigureShape(d: lines).stroke(Palette.ink.opacity(0.14), lineWidth: 0.7).allowsHitTesting(false)
+                }
             }
-            Text(title).font(Typo.tiny).foregroundStyle(Palette.faint)
+            if !compact { Text(title).font(Typo.tiny).foregroundStyle(Palette.faint) }
         }
         .frame(maxWidth: .infinity)
     }
 
-    private func color(_ id: String) -> Color {
-        if selected.contains(id) { return Palette.green }
-        if let w = load[id], w > 0 { return Palette.amberBar.opacity(0.25 + 0.65 * min(w, 1)) }
-        return Palette.ink.opacity(0.08)
+    private func fill(_ id: String) -> AnyShapeStyle {
+        if selected.contains(id) {
+            return AnyShapeStyle(LinearGradient(colors: [Palette.green, Palette.green.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+        }
+        guard let w = load[id], w > 0 else { return AnyShapeStyle(Palette.ink.opacity(0.07)) }
+        let color = w >= Self.primary ? Palette.rust : w >= Self.secondary ? Palette.amberBar : Palette.sand
+        let strength = w >= Self.primary ? 0.75 + 0.25 * min(w, 1) : w >= Self.secondary ? 0.55 + 0.4 * w : 0.85
+        return AnyShapeStyle(LinearGradient(colors: [color.opacity(strength), color.opacity(strength * 0.78)], startPoint: .top, endPoint: .bottom))
+    }
+
+    private func glow(_ id: String) -> Color {
+        if selected.contains(id) { return Palette.green.opacity(0.35) }
+        if let w = load[id], w >= Self.primary { return Palette.rust.opacity(0.25) }
+        return .clear
     }
 
     private var accessibility: String {
         let chosen = selected.map(BodyFigure.label)
-        let worked = load.filter { $0.value >= 0.5 }.keys.map(BodyFigure.label)
+        let main = load.filter { $0.value >= Self.primary }.keys.map(BodyFigure.label)
+        let helping = load.filter { $0.value >= Self.secondary && $0.value < Self.primary }.keys.map(BodyFigure.label)
         if !chosen.isEmpty { return "Zvolené partie: " + chosen.joined(separator: ", ") }
-        if !worked.isEmpty { return "Procvičí hlavně: " + worked.joined(separator: ", ") }
+        if !main.isEmpty { return "Procvičí hlavně: " + main.joined(separator: ", ") + (helping.isEmpty ? "" : ", pomocně: " + helping.joined(separator: ", ")) }
+        if !helping.isEmpty { return "Procvičí: " + helping.joined(separator: ", ") }
         return "Postava zepředu a zezadu"
     }
 }

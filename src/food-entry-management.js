@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-const MEALS=new Set(['breakfast','snack_am','lunch','snack_pm','dinner','snack']);
+const MEALS=new Set(['breakfast','snack_am','lunch','snack_pm','dinner','snack_late','snack']);
 const FIELDS={kcal:10000,protein_g:1000,carbs_g:1000,fat_g:1000};
 
 function dateValue(value){

@@ -45,6 +45,10 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSCameraUsageDescription: Loadwise čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku.
         NSPhotoLibraryUsageDescription: Loadwise načte fotku jídla nebo posilovny, kterou vybereš.
+        # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
+        NSAlarmKitUsageDescription: Loadwise tě vzbudí v čase budíku, podle kterého počítá večerku.
+        # Built with the iOS 26 SDK for AlarmKit, the app keeps its own design.
+        UIDesignRequiresCompatibility: true
         # loadwise://open/sleep: the widgets open a screen of the app.
         CFBundleURLTypes:
           - CFBundleURLName: eu.petrfitnessdata.loadwise.native

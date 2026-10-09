@@ -28,6 +28,6 @@ export function foodIntake(product,quantity,unit,options={}){
   if(amountUnit!==meta.basis&&amountUnit!=='portion'){const density=parseFoodQuantity(options.density);if(!density)throw new Error(L('Převod g ↔ ml vyžaduje hustotu v g/ml. Nebo použij jednotku nutriční tabulky.', 'Converting g ↔ ml needs the density in g/ml. Or use the unit of the nutrition table.'));amount=amountUnit==='ml'?amount*density:amount/density;amountUnit=meta.basis;}
   if(amount>100000)throw new Error(L('Množství je příliš velké.', 'The amount is too large.'));
   const factor=amountUnit==='portion'?q:amount/100,result={amount,unit:amountUnit,factor};
-  for(const [key,field]of [['calories','calories_100g'],['protein_g','protein_100g'],['carbs_g','carbs_100g'],['fat_g','fat_100g'],['fiber_g','fiber_100g'],['salt_g','salt_100g']])result[key]=product?.[field]==null||product[field]===''?null:Number(product[field])*factor;
+  for(const [key,field]of [['calories','calories_100g'],['protein_g','protein_100g'],['carbs_g','carbs_100g'],['fat_g','fat_100g'],['sugar_g','sugars_100g'],['fiber_g','fiber_100g'],['salt_g','salt_100g']])result[key]=product?.[field]==null||product[field]===''?null:Number(product[field])*factor;
   return result;
 }

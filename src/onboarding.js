@@ -1,4 +1,4 @@
-import {METAGYM_KUTNA_HORA} from './gym-equipment.js';
+import {METAGYM_KUTNA_HORA,OTHER_STATION_IDS} from './gym-equipment.js';
 import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile.js';
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
@@ -33,13 +33,16 @@ export async function onboardingStatus(env){
 }
 export function normalizeTraining(input={}){
   const experience=['beginner','regular','experienced'].includes(input.experience)?input.experience:'auto';
-  const equipment=['gym','custom','dumbbells','bodyweight'].includes(input.equipment)?input.equipment:'bodyweight';
+  const equipment=['gym','custom','home','dumbbells','bodyweight'].includes(input.equipment)?input.equipment:'bodyweight';
   const limitations=String(input.limitations||'').trim().slice(0,500);
   const availability=normalizeAvailability(input.availability);
-  // Own gym: the stations it has (ids of METAGYM_KUTNA_HORA.stations), its name and web page.
-  const stations=[...new Set((Array.isArray(input.stations)?input.stations:[]).map(String).filter(id=>Object.hasOwn(METAGYM_KUTNA_HORA.stations,id)))];
+  // Own gym: the stations it has (ids of METAGYM_KUTNA_HORA.stations and the usual others), its name and web page.
+  const stations=[...new Set((Array.isArray(input.stations)?input.stations:[]).map(String).filter(id=>Object.hasOwn(METAGYM_KUTNA_HORA.stations,id)||OTHER_STATION_IDS.includes(id)))];
   const gymName=String(input.gymName||'').trim().slice(0,120),gymUrl=/^https?:\/\/\S+$/i.test(String(input.gymUrl||'').trim())?String(input.gymUrl).trim().slice(0,300):'';
-  return {experience,equipment:equipment==='custom'&&!stations.length?'gym':equipment,limitations,availability,stations,gymName,gymUrl};
+  // The dumbbells there are (kg per hand), so the plan asks for a weight that exists.
+  const dumbbellWeights=[...new Set((Array.isArray(input.dumbbellWeights)?input.dumbbellWeights:[]).map(Number).filter(kg=>Number.isFinite(kg)&&kg>0&&kg<=100).map(kg=>Math.round(kg*4)/4))].sort((a,b)=>a-b).slice(0,60);
+  const kind=equipment==='custom'&&!stations.length?'gym':equipment==='home'&&!stations.length?'dumbbells':equipment;
+  return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights};
 }
 export async function updateTrainingSetup(db,input={}){
   await ensureOnboarding(db);

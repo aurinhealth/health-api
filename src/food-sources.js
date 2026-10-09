@@ -30,6 +30,7 @@ export function productFromLabel(input = {}) {
     protein_100g: protein,
     carbs_100g: carbs,
     fat_100g: fat,
+    sugars_100g: num(input.sugars_100g ?? input.sugar_g),
     fiber_100g: num(input.fiber_100g ?? input.fiber_g),
     salt_100g: num(input.salt_100g ?? input.salt_g),
     source: "package_label",
@@ -49,6 +50,7 @@ export function calculateAmount(product, grams) {
     protein_g: product.protein_100g == null ? null : product.protein_100g * factor,
     carbs_g: product.carbs_100g == null ? null : product.carbs_100g * factor,
     fat_g: product.fat_100g == null ? null : product.fat_100g * factor,
+    sugar_g: product.sugars_100g == null ? null : product.sugars_100g * factor,
     fiber_g: product.fiber_100g == null ? null : product.fiber_100g * factor,
     salt_g: product.salt_100g == null ? null : product.salt_100g * factor
   };

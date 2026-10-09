@@ -265,11 +265,27 @@ final class APIClient: @unchecked Sendable {
         return response.candidates ?? response.product.map { [$0] } ?? []
     }
 
-    /// Foods saved before (newest first).
-    func personalFoods() async throws -> [FoodProduct] {
+    /// Foods saved before: the newest first, or the most often logged.
+    func personalFoods(frequent: Bool = false) async throws -> [FoodProduct] {
         struct Response: Decodable { let products: [FoodProduct]? }
-        let response: Response = try await get("/app/api/food/personal")
+        let response: Response = try await get("/app/api/food/personal" + (frequent ? "?sort=frequent" : ""))
         return response.products ?? []
+    }
+
+    func recipes() async throws -> [FoodRecipe] {
+        struct Response: Decodable { let recipes: [FoodRecipe]? }
+        let response: Response = try await get("/app/api/food/recipes")
+        return response.recipes ?? []
+    }
+
+    /// A new recipe: the ingredients with their values for the amount used.
+    func saveRecipe(name: String, servings: Double, ingredients: [JSONValue]) async throws {
+        let _: JSONValue = try await send("/app/api/food/recipes", method: "POST",
+                                          body: ["name": JSONValue.string(name), "servings": .number(servings), "ingredients": .array(ingredients)])
+    }
+
+    func deleteRecipe(id: String) async throws {
+        let _: JSONValue = try await send("/app/api/food/recipes", method: "DELETE", body: ["id": JSONValue.string(id)])
     }
 
     /// AI lookup of a food by name or barcode (counts against the AI allowance).
@@ -283,7 +299,7 @@ final class APIClient: @unchecked Sendable {
     /// Reads a photo with AI: "label" (the nutrition table, per 100 g/ml) or
     /// "portion" (a plate of food or a portion, the whole portion).
     func readFoodPhoto(_ jpeg: Data, mode: String) async throws -> (product: FoodProduct, note: String?) {
-        struct Values: Decodable { let calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, salt_100g: Double? }
+        struct Values: Decodable { let calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g: Double? }
         struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string(mode)]
         let r: Response = try await send("/app/api/food/photo", method: "POST", body: body)
@@ -294,6 +310,7 @@ final class APIClient: @unchecked Sendable {
                                   serving_size: r.servingSize.flatMap { $0.isEmpty ? nil : JSONValue.string($0) },
                                   source: mode == "portion" ? "photo" : "package_label")
         product.fiber_100g = v.fiber_100g
+        product.sugars_100g = v.sugars_100g
         product.salt_100g = v.salt_100g
         return (product, [r.note, r.warning].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " ").nilIfBlank)
     }

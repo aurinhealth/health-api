@@ -10,6 +10,8 @@ struct FoodSnapshot: Decodable, Equatable {
     let macros: Macros
     let meals: [Meal]
     let water: Water
+    /// The meals of the day the athlete chose (Nastavení → Jídla dne).
+    var mealSlots: [String]? = nil
 
     struct Amount: Decodable, Equatable {
         let eaten: Double?
@@ -21,6 +23,8 @@ struct FoodSnapshot: Decodable, Equatable {
         let protein: Amount
         let fat: Amount
         var fiber: Amount? = nil
+        /// Sugars, against at most a tenth of the day's energy.
+        var sugar: Amount? = nil
     }
 
     struct Entry: Decodable, Equatable, Identifiable {
@@ -35,6 +39,7 @@ struct FoodSnapshot: Decodable, Equatable {
         let amount: String?
         let brand: String?
         var fiber: Double? = nil
+        var sugar: Double? = nil
     }
 
     /// What to aim for in this meal (its share of the day's targets).
@@ -46,13 +51,16 @@ struct FoodSnapshot: Decodable, Equatable {
     }
 
     struct Meal: Decodable, Equatable, Identifiable {
-        /// breakfast, snack_am, lunch, snack_pm or dinner.
+        /// breakfast, snack_am, lunch, snack_pm, dinner or snack_late.
         let type: String
         let label: String
         let time: String
         let kcal: Double?
         let entries: [Entry]
+        /// What is left for this meal, while it is still ahead.
         let suggestion: Suggestion?
+        /// The meal's part of the whole day's target.
+        var target: Suggestion? = nil
         var id: String { type }
     }
 
@@ -86,6 +94,7 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     var carbs_100g: Double?
     var fat_100g: Double?
     var fiber_100g: Double?
+    var sugars_100g: Double?
     var salt_100g: Double?
     /// "g", "ml" or "portion".
     var nutrition_basis: String?
@@ -97,7 +106,7 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     var source_url: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, salt_100g
+        case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g
         case nutrition_basis, serving_size, quantity, barcode, source, source_url
     }
 
@@ -126,6 +135,7 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         carbs_100g = value(.carbs_100g)?.number
         fat_100g = value(.fat_100g)?.number
         fiber_100g = value(.fiber_100g)?.number
+        sugars_100g = value(.sugars_100g)?.number
         salt_100g = value(.salt_100g)?.number
         nutrition_basis = value(.nutrition_basis)?.string
         serving_size = value(.serving_size)
@@ -196,4 +206,32 @@ struct FoodLogRequest: Encodable {
     let quantity: Double
     let unit: String
     let mealType: String
+}
+
+/// A saved recipe (GET /app/api/food/recipes, src/personal-recipes.js): the
+/// ingredients with their values for the amount used, and one portion.
+struct FoodRecipe: Decodable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let servings: Double?
+    let ingredients: [Ingredient]?
+    let portion: FoodProduct?
+    let calories: Double?
+
+    struct Ingredient: Decodable, Equatable {
+        let name: String
+        let quantity: Double?
+        let unit: String?
+        let calories: Double?
+    }
+
+    /// One portion to log, named as the recipe.
+    var product: FoodProduct {
+        var p = portion ?? FoodProduct(name: name, nutrition_basis: "portion")
+        p.name = name
+        p.nutrition_basis = "portion"
+        // "composed": logged as the recipe, not saved again as a food.
+        p.source = "composed"
+        return p
+    }
 }

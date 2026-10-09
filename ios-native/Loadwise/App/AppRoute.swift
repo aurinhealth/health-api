@@ -9,6 +9,7 @@ enum AppRoute: Hashable {
     case heart
     case weight
     case form
+    case vo2max
     case gym(String)
     case activity(WeekSession)
     case planned(WeekSession)
@@ -38,6 +39,8 @@ enum AppRoute: Hashable {
         case "heart": self = .heart
         case "weight": self = .weight
         case "form": self = .form
+        case "vo2max": self = .vo2max
+        case "library": self = .workoutLibrary(parts.count > 1 ? parts[1] : "ride")
         case "gym": self = .gym(parts.count > 1 ? parts[1] : AppModel.localDate(Date()))
         case "sleep-settings": self = .sleepSettings
         case "gym-builder": self = .gymBuilder
@@ -78,13 +81,15 @@ struct RouteScreen: View {
             HealthRoute(route: route)
         case .form:
             if let training = model.training { FormDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
+        case .vo2max:
+            if let training = model.training { VO2maxDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
         case .gym(let date): GymSessionView(date: date)
         case .activity(let session): ActivityDetailView(session: session)
         case .planned(let session): PlannedWorkoutView(session: session)
         case .sleepSettings: SleepSettingsView()
         case .gymBuilder: GymBuilderView(date: AppModel.localDate(Date()))
         case .exerciseLibrary: ExerciseLibraryView()
-        case .workoutLibrary(let sport): WorkoutLibraryView(sport: sport)
+        case .workoutLibrary(let sport): TrainingLibraryView(sport: sport)
         case .equipment: EquipmentView()
         case .trainingMode(let date): TrainingModeView(date: date)
         }

@@ -10,6 +10,7 @@ import {foodLookupLanguages,lookupFoodWithAI} from '../src/food-ai.js';
 import {walkingEnergyCheck,activityTelemetryEnergy} from '../src/activity-energy-check.js';
 import {foodGooglePayload,queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from '../src/food-google-sync.js';
 const food={name:'Řecký jogurt',brand:'Test',nutrition_basis:'g',calories_100g:80,protein_100g:10,carbs_100g:6,fat_100g:2,quantity:'450 g',serving_size:'150 g',piece_size:'150 g',preferred_unit:'pack'};
+function scopedDbs(){return db();}
 function db(){const raw=createD1();raw.sqlite.exec('CREATE TABLE food_logs(id INTEGER PRIMARY KEY,user_id INTEGER,consumed_date TEXT,consumed_at TEXT,recipe_title TEXT,kcal REAL,protein_g REAL,carbs_g REAL,fat_g REAL,note TEXT,source TEXT)');raw.sqlite.prepare("INSERT INTO food_logs VALUES(1,1,'2026-09-28','2026-10-04T12:00:00Z','Jogurt',120,15,9,3,?, 'package_label')").run(JSON.stringify({mealType:'snack_pm',enteredQuantity:1}));return {raw,owner:scopedDb(raw,1),other:scopedDb(raw,2)};}
 const token=async()=> 'test-token';
 const resource='users/123/dataTypes/nutrition-log/dataPoints/abc';
@@ -147,4 +148,17 @@ test("the gym plan's nutrition gets the app's calorie target: same kcal, app pro
   const gateway = readFileSync(new URL("../src/strength-gateway.js", import.meta.url), "utf8");
   assert.equal((gateway.match(/buildNutritionPlan\(/g) || []).length, 1);
   assert.equal((gateway.match(/await nutritionFor\(/g) || []).length, 1);
+});
+
+test("logged foods are counted for the frequent list", async () => {
+  const { savePersonalFood, listPersonalFoods } = await import("../src/personal-foods.js");
+  const { owner: db } = scopedDbs();
+  const food = name => ({ name, calories_100g: 100, protein_100g: 5, carbs_100g: 10, fat_100g: 2, nutrition_basis: "g" });
+  await savePersonalFood(db, food("Jogurt"), { used: true });
+  await savePersonalFood(db, food("Jogurt"), { used: true });
+  await savePersonalFood(db, food("Rohlík"), { used: true });
+  await savePersonalFood(db, food("Rohlík"));
+  const frequent = await listPersonalFoods(db, { sort: "frequent" });
+  assert.deepEqual(frequent.map(p => [p.name, p.uses]), [["Jogurt", 2], ["Rohlík", 1]]);
+  assert.equal((await listPersonalFoods(db)).length, 2, "the recent list has them all");
 });

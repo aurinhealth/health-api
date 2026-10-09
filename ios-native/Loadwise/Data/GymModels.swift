@@ -2,14 +2,17 @@ import Foundation
 
 // MARK: - Equipment (GET/POST /app/api/gym/equipment, src/gym-equipment-ai.js)
 
-/// What the athlete trains with: "gym" (a usual gym), "custom" (the stations
-/// of their own gym), "dumbbells" (home) or "bodyweight".
+/// What the athlete trains with: "custom" (a gym, the stations it has), "home"
+/// (a home gym, the few things there), "bodyweight", or from the first setup
+/// "gym" (any gym) and "dumbbells" (home with dumbbells).
 struct GymEquipment: Decodable, Equatable {
     var stations: [Station]? = nil
     var equipment: String
     var selected: [String]
     var gymName: String
     var gymUrl: String
+    /// The dumbbells there are, kg per hand (the plan asks for one of them).
+    var dumbbellWeights: [Double]? = nil
 
     struct Station: Decodable, Equatable, Identifiable, Hashable {
         let id: String
@@ -119,6 +122,24 @@ struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
     let source_name: String?
     let environment: String?
     let steps: [PlannedWorkout.Block]?
+    /// Why it suits today (src/workout-library.js rankWorkoutCandidates).
+    var reasons: [String]? = nil
+    var suitability: Double? = nil
+    /// How to ride or run it, fuelling and terrain (src/workout-explanation.js).
+    var guide: Guide? = nil
+
+    struct Guide: Decodable, Equatable {
+        let title: String?
+        let how: [String]?
+        let fueling: [String]?
+        let environment: [String]?
+    }
+
+    /// "Lehký", "Střední" or "Těžký" from the difficulty (1–10).
+    var difficultyLabel: String? {
+        guard let d = difficulty else { return nil }
+        return d < 4 ? "lehký" : d < 6.5 ? "střední" : "těžký"
+    }
 
     static func == (a: Self, b: Self) -> Bool { a.id == b.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

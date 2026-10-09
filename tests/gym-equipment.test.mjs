@@ -27,3 +27,21 @@ test("an exercise needing equipment the gym lacks is not offered", () => {
   assert.equal(catalog.length, Object.keys(EXERCISES).length);
   assert.equal(catalog.find(x => x.name === "Standing multi flight").muscle, "Boční ramena");
 });
+
+test("home equipment keeps its stations and the dumbbells there are", async () => {
+  const { normalizeTraining } = await import("../src/onboarding.js");
+  const t = normalizeTraining({ equipment: "home", stations: ["dumbbells", "adjustable_bench", "nope"], dumbbellWeights: [10, "2,5", 5, 5, 0, 200, 7.5] });
+  assert.equal(t.equipment, "home");
+  assert.deepEqual(t.stations, ["dumbbells", "adjustable_bench"]);
+  assert.deepEqual(t.dumbbellWeights, [5, 7.5, 10]);
+  assert.equal(normalizeTraining({ equipment: "home" }).equipment, "dumbbells", "home without stations is dumbbells");
+});
+
+test("dumbbell exercises ask for a dumbbell the athlete has", async () => {
+  const { snapDumbbells } = await import("../src/strength-generator.js");
+  const rows = [["WORK", "DB bench press", "1", "13,5", "8–12"], ["WORK", "Lat pulldown", "1", "42,5", "10"], ["WORK", "DB curl", "1", "9", "10"]];
+  snapDumbbells(rows, [6, 8, 10, 12, 14]);
+  assert.equal(rows[0][3], "14");
+  assert.equal(rows[1][3], "42,5", "machines stay");
+  assert.equal(rows[2][3], "8", "between two, the lighter one");
+});

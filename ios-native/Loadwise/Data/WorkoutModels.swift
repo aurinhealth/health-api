@@ -107,6 +107,77 @@ struct GymDay: Decodable, Equatable {
         }
     }
 
+    // MARK: Editing the plan (Režim tréninku → Upravit plán)
+
+    /// The rows of each exercise in the plan's order, and the empty rows after them.
+    private var blocks: (exercises: [[[JSONValue]]], rest: [[JSONValue]]) {
+        var out: [[[JSONValue]]] = [], rest: [[JSONValue]] = [], last: String?
+        for index in values.indices where index >= Self.firstSetRow {
+            let row = values[index]
+            guard let name = cell(row, 1), !name.isEmpty else { rest.append(row); continue }
+            if name == last, !out.isEmpty { out[out.count - 1].append(row) } else { out.append([row]) }
+            last = name
+        }
+        return (out, rest)
+    }
+
+    private mutating func write(_ exercises: [[[JSONValue]]], _ rest: [[JSONValue]]) {
+        var head = Array(values.prefix(Self.firstSetRow))
+        while head.count < Self.firstSetRow { head.append([]) }
+        values = head + exercises.flatMap { $0 } + rest
+    }
+
+    /// Moves an exercise with all its sets, as List.onMove reports it.
+    mutating func moveExercise(from source: Int, to destination: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(source) else { return }
+        let block = list.remove(at: source)
+        list.insert(block, at: min(max(0, destination > source ? destination - 1 : destination), list.count))
+        write(list, rest)
+    }
+
+    /// Takes an exercise out of the plan. Sets already done stay recorded.
+    mutating func removeExercise(at offset: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(offset) else { return }
+        let kept = list[offset].filter { Self.isDone(cell($0, 8)) }
+        if kept.isEmpty { list.remove(at: offset) } else { list[offset] = kept }
+        write(list, rest)
+    }
+
+    /// One more set like the last one of the exercise.
+    mutating func addSet(at offset: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(offset), var row = list[offset].last(where: { (cell($0, 0) ?? "WORK").uppercased() != "WARMUP" }) ?? list[offset].last else { return }
+        while row.count < Self.columns.count { row.append(.string("")) }
+        let work = list[offset].filter { (cell($0, 0) ?? "WORK").uppercased() != "WARMUP" }.count
+        row[0] = .string("WORK")
+        row[2] = .string(String(work + 1))
+        for column in [5, 6, 7] { row[column] = .string("") }
+        row[8] = .string("FALSE")
+        row[11] = .string("FALSE")
+        list[offset].append(row)
+        write(list, rest)
+    }
+
+    /// One set fewer: the last one not done yet.
+    mutating func removeSet(at offset: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(offset), let last = list[offset].lastIndex(where: { !Self.isDone(cell($0, 8)) }) else { return }
+        guard list[offset].count > 1 else { removeExercise(at: offset); return }
+        list[offset].remove(at: last)
+        write(list, rest)
+    }
+
+    /// Adds an exercise at the end: its work sets with the planned reps.
+    mutating func addExercise(_ name: String, sets: Int, reps: String, kg: String = "") {
+        var (list, rest) = blocks
+        list.append((1...max(1, min(sets, 10))).map { n in
+            ["WORK", name, String(n), kg, reps, "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) }
+        })
+        write(list, rest)
+    }
+
     /// The body of POST /app/api/gym: the sets and the whole sheet.
     var saveBody: JSONObject {
         var full = values

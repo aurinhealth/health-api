@@ -4,7 +4,7 @@
 // gym's web page (web search). The athlete checks the list before saving.
 import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
-import { METAGYM_KUTNA_HORA } from "./gym-equipment.js";
+import { METAGYM_KUTNA_HORA, OTHER_STATION_IDS } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
 
 // Generic names and groups, in the order the app lists them.
@@ -34,7 +34,17 @@ export const GYM_STATIONS = [
   { id: "roman_chair", group: "Střed těla", label: "Hyperextenze (roman chair)", en: "Roman chair" },
   { id: "treadmill", group: "Kardio", label: "Běžecký pás", en: "Treadmill" },
   { id: "stairmaster", group: "Kardio", label: "Schodový trenažér", en: "Stair climber" }
-].filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id));
+].filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id)).concat([
+  // What other gyms and home gyms usually have too. No catalog exercise needs
+  // them yet, so they only describe the place.
+  { id: "pullup_bar", group: "Volné váhy", label: "Hrazda", en: "Pull-up bar" },
+  { id: "dip_bars", group: "Volné váhy", label: "Bradla", en: "Dip bars" },
+  { id: "kettlebells", group: "Volné váhy", label: "Kettlebelly", en: "Kettlebells" },
+  { id: "ez_bar", group: "Volné váhy", label: "EZ osa", en: "EZ bar" },
+  { id: "resistance_bands", group: "Volné váhy", label: "Odporové gumy", en: "Resistance bands" },
+  { id: "rowing_ergometer", group: "Kardio", label: "Veslovací trenažér", en: "Rowing ergometer" },
+  { id: "exercise_bike", group: "Kardio", label: "Rotoped", en: "Exercise bike" }
+]).filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id) || OTHER_STATION_IDS.includes(s.id));
 
 export const GYM_STATION_IDS = GYM_STATIONS.map(s => s.id);
 

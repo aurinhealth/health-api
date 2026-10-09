@@ -45,7 +45,7 @@ const DIARY_MEALS = [[/break|snída|snida/i, "breakfast"], [/lunch|oběd|obed/i,
 // The app's meal for a free-text meal type ("oběd", "snack") and time.
 function diaryMealType(type, time) {
   const value = text(type);
-  if (["breakfast", "snack_am", "lunch", "snack_pm", "dinner"].includes(value)) return value;
+  if (["breakfast", "snack_am", "lunch", "snack_pm", "dinner", "snack_late"].includes(value)) return value;
   const hit = DIARY_MEALS.find(([re]) => re.test(value));
   if (!hit) return null;
   if (hit[1]) return hit[1];
@@ -54,7 +54,7 @@ function diaryMealType(type, time) {
 }
 function noteOf(row) { try { const note = JSON.parse(row?.note || "{}"); return note && typeof note === "object" && !Array.isArray(note) ? note : { text: String(row.note) }; } catch { return row?.note ? { text: String(row.note) } : {}; } }
 // When a meal is logged for another day than today, it gets its slot's usual time.
-export const MEAL_DEFAULT_TIMES = { breakfast: "07:00", snack_am: "10:00", lunch: "12:00", snack_pm: "16:00", dinner: "19:00" };
+export const MEAL_DEFAULT_TIMES = { breakfast: "07:00", snack_am: "10:00", lunch: "12:00", snack_pm: "16:00", dinner: "19:00", snack_late: "21:00" };
 export function mealConsumedAt(date, mealType) {
   return date === localToday() ? null : date + "T" + (MEAL_DEFAULT_TIMES[mealType] || "12:00") + ":00";
 }

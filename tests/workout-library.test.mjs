@@ -198,3 +198,9 @@ test("a system filter ranks workouts of that primary system first", () => {
     assert.ok(top.every(w => w.primary_system === system), system + ": " + top.map(w => w.id).join(","));
   }
 });
+
+test("the library filters by a difficulty band", () => {
+  const rows = rankWorkoutCandidates(CYCLING_WORKOUTS, { minDifficulty: 4, maxDifficulty: 6.5 });
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every(w => w.difficulty >= 4 && w.difficulty <= 6.5));
+});
