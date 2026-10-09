@@ -48,4 +48,65 @@ enum Fmt {
         let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
         return ["N", "P", "Ú", "S", "Č", "P", "S"][weekday - 1]
     }
+
+    /// "1. listopadu" for 2026-11-01.
+    static func dayMonth(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return isoDate }
+        let out = DateFormatter()
+        out.locale = locale
+        out.timeZone = utc
+        out.dateFormat = "d. MMMM"
+        return out.string(from: date)
+    }
+
+    /// Two-letter Czech weekday: "Po", "Út", "St", "Čt", "Pá", "So", "Ne".
+    static func weekdayShort(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return "" }
+        return ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"][utcCalendar.component(.weekday, from: date) - 1]
+    }
+
+    /// "dnes", "zítra", "v sobotu" relative to today's date.
+    static func relativeDay(_ isoDate: String, today: String) -> String {
+        guard let a = parse(today), let b = parse(isoDate) else { return isoDate }
+        let days = Int((b.timeIntervalSince(a) / 86400).rounded())
+        if days == 0 { return "dnes" }
+        if days == 1 { return "zítra" }
+        let weekday = utcCalendar.component(.weekday, from: b)
+        let name = ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][weekday - 1]
+        return days < 7 ? name : dayMonth(isoDate)
+    }
+
+    /// Minutes as "1 h 15 min" or "45 min".
+    static func duration(_ minutes: Int) -> String {
+        minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : "") : "\(minutes) min"
+    }
+
+    /// 860 → "14 h 20 min".
+    static func hoursMinutesLong(_ minutes: Double) -> String {
+        duration(Int(minutes.rounded()))
+    }
+
+    static func capitalized(_ text: String) -> String {
+        text.prefix(1).uppercased() + String(text.dropFirst())
+    }
+
+    /// Czech plural: 1 den, 2 dny, 5 dní.
+    static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
+        n == 1 ? one : (2...4).contains(n) ? few : many
+    }
+
+    private static let utc = TimeZone(identifier: "UTC")!
+    private static var utcCalendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = utc
+        return c
+    }
+
+    private static func parse(_ isoDate: String) -> Date? {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = utc
+        parser.dateFormat = "yyyy-MM-dd"
+        return parser.date(from: isoDate)
+    }
 }

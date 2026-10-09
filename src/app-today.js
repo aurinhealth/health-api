@@ -13,17 +13,17 @@ const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** 
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const nightDate = s => s?.date || String(s?.endTime || "").slice(0, 10);
 const clock = minutes => (minutes == null ? null : String(Math.floor(minutes / 60) % 24).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0"));
-const clockOf = iso => {
+export const clockOf = iso => {
   const local = iso ? localDateTime(iso) : "";
   return /T\d{2}:\d{2}/.test(local) ? local.slice(11, 16) : null;
 };
-const minutesOf = iso => {
+export const minutesOf = iso => {
   const c = clockOf(iso);
   return c ? Number(c.slice(0, 2)) * 60 + Number(c.slice(3, 5)) : null;
 };
 
 // The main night of each day (naps and short fragments left out).
-function primaryNights(sessions) {
+export function primaryNights(sessions) {
   const byDay = new Map();
   for (const s of sessions || []) {
     if (!s || s.nap || !(num(s.durationMin) >= 180)) continue;
@@ -33,7 +33,7 @@ function primaryNights(sessions) {
   return byDay;
 }
 
-function dayStrain(rows, date) {
+export function dayStrain(rows, date) {
   const row = rows.find(r => r.id === date);
   const load = heartRateLoad(row?.hrZoneMinutes);
   return load == null ? null : strainScore(load);

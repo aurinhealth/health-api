@@ -11,8 +11,9 @@ const ORIGIN = "https://petrfitnessdata.eu";
 const STATE_COOKIE = "pfd_intervals_oauth_state";
 // What the app reads and writes: activities (RPE on a ride), wellness (weight,
 // sleep, HRV), the calendar (planned workouts, gym, nutrition notes) and the
-// athlete settings (FTP, zones). Intervals.icu joins scopes with commas.
-export const INTERVALS_SCOPES = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:READ"];
+// athlete settings (FTP, zones; written back from Nastavení → Tréninkové zóny,
+// intervals-zones.js). Intervals.icu joins scopes with commas.
+export const INTERVALS_SCOPES = ["ACTIVITY:WRITE", "WELLNESS:WRITE", "CALENDAR:WRITE", "SETTINGS:WRITE"];
 
 export function intervalsOAuthConfigured(env) {
   return Boolean(String(env.INTERVALS_CLIENT_ID || "").trim() && String(env.INTERVALS_CLIENT_SECRET || "").trim());

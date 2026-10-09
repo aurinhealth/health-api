@@ -18,9 +18,30 @@ installed side by side (different bundle IDs).
   - steps;
   - resting heart rate;
   - weight.
+- The Training screen (`/app/api/training`):
+  - today's strain and where the plan takes it;
+  - the week Monday to Sunday;
+  - the next session;
+  - the main event and the phase of the preparation;
+  - form, VO2max, this week, active energy and heart-rate zones;
+  - tap Form for the detail (fitness and fatigue, weekly load, intensity).
+- The Health screen (`/app/api/health`): readiness and what makes it up,
+  sleep with the need and debt, heart, breathing, skin temperature, oxygen,
+  weight and body fat. Tap for details: readiness, the night (stages from
+  `/app/api/night`), HRV and resting heart rate, weight (log a weighing).
+- The Food screen (`/app/api/food-today`): eaten against the target, macros,
+  water (+250 ml), the day's meals with a suggestion for the meals ahead.
+  Adding food: search your foods and the catalog, AI lookup, typing it in,
+  and the barcode scanner (VisionKit, camera permission).
+- The "+" in the tab bar: food, water, weight.
+- Settings (the "P" on Today), a closed menu with pages:
+  - Profil: sex, age, height, heart rate, activity and the weight goal;
+  - Cíle: main sport, weekly hours and the main event;
+  - Zdroje dat: connected sources and "Synchronizovat teď";
+  - Tréninkové zóny: run and bike separately, thresholds, presets and zones;
+  - Vzhled (automatic, light, dark), Jednotky, signing out.
 - "Prohlédnout ukázku" on the sign-in screen shows sample data without an
   account.
-- Training, Food and Health are placeholders that link to the web app.
 
 ## Build without a Mac
 

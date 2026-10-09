@@ -6,6 +6,8 @@ import UIKit
 // views never check the colour scheme themselves.
 enum Palette {
     static let background = Color(light: 0xF3EFE8, dark: 0x0A0B0C)
+    /// Settings pages: flat, a touch greyer than the other screens.
+    static let settingsBackground = Color(light: 0xF1EDE5, dark: 0x0A0B0C)
     static let card = Color(light: 0xFBFAF7, dark: 0x1C1E1F)
     static let ink = Color(light: 0x1B1A17, dark: 0xECEAE6)
     static let secondary = Color(light: 0x3B3832, dark: 0xD9D6D0)

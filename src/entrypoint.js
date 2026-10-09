@@ -26,6 +26,9 @@ import {getCookbookRecipeByPage,useCookbookDatabase,saveCookbook} from './cookbo
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
 import {buildToday} from './app-today.js';
+import {buildTraining, weekStart} from './app-training.js';
+import {buildHealth} from './app-health.js';
+import {buildFood} from './app-food.js';
 import {normalizeProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
 import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
@@ -95,6 +98,7 @@ import { internalHeaders } from "./internal-auth.js";
 import { aiAllowance } from "./ai-usage.js";
 import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
+import { writeIntervalsZones } from "./intervals-zones.js";
 import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
 import { handleEmailLogin, handleEmailChange, emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
@@ -813,10 +817,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
       if(request.method==='POST'&&url.pathname.endsWith('/estimate')){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...(body.kind==='pace'?estimateThresholdPace(String(body.method||''),body.inputs||{}):estimateFtp(String(body.method||''),body.inputs||{}))});}
-      if(request.method==='POST'){await saveTrainingProfile(env.DB,await request.json().catch(()=>({})));}
+      let body=null;
+      if(request.method==='POST'){body=await request.json().catch(()=>({}));await saveTrainingProfile(env.DB,body);}
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const t=await athleteThresholds(env);
-      return Response.json({status:'ok',profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr},powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
+      // Saved zones go to Intervals.icu too, unless the form says not to.
+      const intervals=body&&body.writeIntervals!==false?await writeIntervalsZones(env,t):null;
+      return Response.json({status:'ok',intervals,intervalsConnected:Boolean(env.INTERVALS_API_KEY),profile:t.profile,resolved:{ftp:t.ftp,ftpSource:t.source,indoorFtp:t.indoorFtp,intervalsFtp:t.intervalsFtp,latestRideFtp:t.latestRideFtp,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,runThresholdPace:t.runThresholdPace,runPaceSource:t.runPaceSource,intervalsRunPace:t.intervalsRunPace,runLthr:t.runLthr},powerZones:t.powerZones,hrZones:t.hrZones,paceZones:t.paceZones,runHrZones:t.runHrZones,
         ftpMethods:Object.entries(FTP_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
         paceMethods:Object.entries(PACE_METHODS).map(([id,m])=>({id,label:m.label,inputs:m.inputs.map(([key,label])=>({key,label}))})),
         paceZoneModels:Object.entries(PACE_ZONE_MODELS).map(([id,m])=>({id,label:m.label,bounds:m.bounds})),
@@ -1132,6 +1139,59 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       applyEnergyBudget(daily,profile,health);
       return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // The native app's Food screen (app-food.js): the day's food log against the
+  // same target as Today (energy budget), with water.
+  if(url.pathname==='/app/api/food-today'&&request.method==='GET'){
+    try{
+      const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const [daily,food,fluids,health,profile]=await Promise.all([
+        read('/analysis/daily?date='+date),read('/food/log?date='+date),api('/app/api/fluids?date='+date),
+        googleHealthFor(env,ctx,date).catch(()=>({})),dashboardProfile(env).catch(()=>null)
+      ]);
+      applyEnergyBudget(daily,profile,health);
+      return Response.json(buildFood({date,hour:date===localToday()?localHour():null,daily,food,fluids}),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // The native app's Health screen (app-health.js).
+  if(url.pathname==='/app/api/health'&&request.method==='GET'){
+    try{
+      const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const from=shiftDate(date,-30),to=shiftDate(date,1);
+      const [health,fitness,sleep,weight,profile]=await Promise.all([
+        googleHealthFor(env,ctx,date).catch(()=>({})),
+        cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
+        read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
+        read('/health/weight'),dashboardProfile(env).catch(()=>null)
+      ]);
+      return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // The native app's Training screen (app-training.js): the week Monday to
+  // Sunday and the coming week for the next session, cached for two minutes.
+  if(url.pathname==='/app/api/training'&&request.method==='GET'){
+    try{
+      const date=localToday(),start=weekStart(date),end=shiftDate(date,7)>shiftDate(start,6)?shiftDate(date,7):shiftDate(start,6);
+      const dates=[];for(let d=start;d<=end;d=shiftDate(d,1))dates.push(d);
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const [days,gym,health,fitness,insights,coaches,profile]=await Promise.all([
+        cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
+        trainingGymPlans(env,start,end).catch(()=>({})),
+        googleHealthFor(env,ctx,date).catch(()=>({})),
+        cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
+        loadFitnessInsights(env.DB,date).catch(()=>({})),
+        api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null)
+      ]);
+      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -1686,6 +1746,23 @@ function userWeekStart() {
   return shiftDate(`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`, -index);
 }
 // Like Promise.all over items, with at most `limit` running at a time; keeps order.
+// Saved gym plans per day (not cancelled): the name and the exercises in order.
+async function trainingGymPlans(env,from,to){
+  await ensureGymPlans(env.DB);
+  const [plans,cancelled]=await Promise.all([
+    env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
+    env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all()
+  ]);
+  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={};
+  for(const r of plans.results||[]){
+    if(skip.has(r.workout_date))continue;
+    let v=[];try{v=JSON.parse(r.values_json);}catch{}
+    const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))]};
+  }
+  return out;
+}
+
 async function mapLimit(items, limit, fn) {
   const out = new Array(items.length);let next = 0;
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); } }));

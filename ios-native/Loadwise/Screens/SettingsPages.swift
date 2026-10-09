@@ -1,0 +1,336 @@
+import SwiftUI
+
+// The pages behind the Settings menu. Each edits a copy and saves with the
+// "Uložit" button in the bar; the server checks the values again.
+
+/// "Uložit" in the navigation bar, greyed out until something changed.
+struct SaveButton: ToolbarContent {
+    let enabled: Bool
+    let saving: Bool
+    let action: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            if saving {
+                ProgressView()
+            } else {
+                Button("Uložit", action: action)
+                    .font(.subheadline.weight(.semibold))
+                    .disabled(!enabled)
+            }
+        }
+    }
+}
+
+/// A picker row: title on the left, the chosen option on the right (menu).
+struct SettingsPicker: View {
+    let title: String
+    @Binding var selection: String
+    let options: [(String, String)]
+
+    var body: some View {
+        HStack {
+            Text(title).font(.body).foregroundStyle(Palette.ink)
+            Spacer(minLength: 8)
+            Picker(title, selection: $selection) {
+                if !options.contains(where: { $0.0 == selection }) { Text("nevybráno").tag(selection) }
+                ForEach(options.indices, id: \.self) { i in Text(options[i].1).tag(options[i].0) }
+            }
+            .pickerStyle(.menu)
+            .tint(Palette.muted)
+            .labelsHidden()
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .frame(minHeight: 50)
+    }
+}
+
+// MARK: - Profile
+
+struct ProfileSettingsView: View {
+    let store: SettingsStore
+    @State private var sex = ""
+    @State private var age = ""
+    @State private var height = ""
+    @State private var hrmax = ""
+    @State private var rhr = ""
+    @State private var activity = ""
+    @State private var sportHours = ""
+    @State private var goal = ""
+    @State private var targetWeight = ""
+    @State private var original: JSONObject = [:]
+
+    static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]
+    static let sportHourOptions = [("auto", "podle záznamů"), ("0", "žádný"), ("1-3", "1–3 h"), ("3-6", "3–6 h"), ("6-10", "6–10 h"), ("10+", "víc než 10 h")]
+    static let goals = [("lose_0.25", "hubnout 0,25 kg týdně"), ("lose_0.5", "hubnout 0,5 kg týdně"), ("lose_0.75", "hubnout 0,75 kg týdně"), ("lose_1", "hubnout 1 kg týdně"), ("maintain", "udržovat váhu")]
+
+    var body: some View {
+        SettingsPage(title: "Profil") {
+            SettingsGroup(title: "Tělo", footer: "Z pohlaví, věku, výšky a váhy se počítá klidový výdej a denní cíl kalorií.") {
+                SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "muž"), ("female", "žena")])
+                SettingsDivider()
+                if hasBirthDate {
+                    SettingsRow(title: "Věk", value: age.isEmpty ? "–" : age + " let", chevron: false)
+                } else {
+                    SettingsField(title: "Věk", text: $age, unit: "let", keyboard: .numberPad)
+                }
+                SettingsDivider()
+                SettingsField(title: "Výška", text: $height, unit: "cm", keyboard: .numberPad)
+            }
+            SettingsGroup(title: "Tep", footer: "Prázdné hodnoty dopočítá Loadwise z tvých tréninků a nocí.") {
+                SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad)
+                SettingsDivider()
+                SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad)
+            }
+            SettingsGroup(title: "Aktivita a cíl") {
+                SettingsPicker(title: "Běžný den", selection: $activity, options: Self.activities)
+                SettingsDivider()
+                SettingsPicker(title: "Sport týdně", selection: $sportHours, options: Self.sportHourOptions)
+                SettingsDivider()
+                SettingsPicker(title: "Cíl", selection: $goal, options: Self.goals)
+                SettingsDivider()
+                SettingsField(title: "Cílová váha", text: $targetWeight, unit: "kg")
+            }
+        }
+        .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .onAppear(perform: fill)
+    }
+
+    private var hasBirthDate: Bool { store.profile["birthDate"]?.string != nil }
+
+    private func fill() {
+        let p = store.profile
+        sex = p["sex"]?.string ?? ""
+        age = p["age"]?.string ?? ""
+        height = p["height"]?.string ?? ""
+        hrmax = p["hrmax"]?.string ?? ""
+        rhr = p["rhr"]?.string ?? ""
+        activity = p["activity"]?.string ?? ""
+        sportHours = p["sportHours"]?.string ?? ""
+        goal = p["goal"]?.string ?? ""
+        targetWeight = (p["targetWeight"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
+        original = changes
+    }
+
+    private var changes: JSONObject {
+        var c: JSONObject = [
+            "sex": .string(sex), "height": .field(height), "hrmax": .field(hrmax), "rhr": .field(rhr),
+            "activity": .string(activity), "sportHours": .string(sportHours), "goal": .string(goal), "targetWeight": .field(targetWeight)
+        ]
+        if !hasBirthDate { c["age"] = .field(age) }
+        return c
+    }
+
+    private func save() async {
+        if await store.saveProfile(changes) { fill() }
+    }
+}
+
+// MARK: - Goals
+
+struct GoalsSettingsView: View {
+    let store: SettingsStore
+    @State private var mainSport = "general"
+    @State private var sportGoal = ""
+    @State private var eventName = ""
+    @State private var hasEvent = false
+    @State private var eventDate = Date()
+    @State private var weeklyHours = ""
+    @State private var original: JSONObject = [:]
+
+    static let sports = [("cycling", "cyklistika"), ("running", "běh"), ("triathlon", "triatlon"), ("strength", "silový trénink"), ("general", "všeobecná kondice")]
+
+    var body: some View {
+        SettingsPage(title: "Cíle") {
+            SettingsGroup(title: "Sport", footer: "Trenér podle hlavního sportu volí tréninky a ostatní sporty bere jako doplněk.") {
+                SettingsPicker(title: "Hlavní sport", selection: $mainSport, options: Self.sports)
+                SettingsDivider()
+                SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h")
+                SettingsDivider()
+                TextField("Cíl vlastními slovy, třeba „zaběhnout půlmaraton pod 1:40“", text: $sportGoal, axis: .vertical)
+                    .lineLimit(2...4)
+                    .font(.body)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+            }
+            SettingsGroup(title: "Hlavní závod", footer: "Podle data závodu se plánují fáze přípravy: základ, rozvoj v posledních 12 týdnech a ladění v posledním týdnu.") {
+                SettingsToggle(title: "Mám hlavní závod", isOn: $hasEvent)
+                if hasEvent {
+                    SettingsDivider()
+                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: "Pražský půlmaraton")
+                    SettingsDivider()
+                    DatePicker("Datum", selection: $eventDate, in: Date()..., displayedComponents: .date)
+                        .environment(\.locale, Fmt.locale)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 50)
+                }
+            }
+        }
+        .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .onAppear(perform: fill)
+    }
+
+    private static let isoDay: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private func fill() {
+        let p = store.profile
+        mainSport = p["mainSport"]?.string ?? "general"
+        sportGoal = p["sportGoal"]?.string ?? ""
+        eventName = p["eventName"]?.string ?? ""
+        let date = p["eventDate"]?.string.flatMap { Self.isoDay.date(from: $0) }
+        hasEvent = date != nil || !eventName.isEmpty
+        eventDate = date ?? Calendar.current.date(byAdding: .month, value: 3, to: Date()) ?? Date()
+        weeklyHours = (p["weeklyHours"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
+        original = changes
+    }
+
+    private var changes: JSONObject {
+        [
+            "mainSport": .string(mainSport),
+            "sportGoal": .string(sportGoal),
+            "eventName": .string(hasEvent ? eventName : ""),
+            "eventDate": .string(hasEvent ? Self.isoDay.string(from: eventDate) : ""),
+            "weeklyHours": .field(weeklyHours)
+        ]
+    }
+
+    private func save() async {
+        if await store.saveProfile(changes) { fill() }
+    }
+}
+
+// MARK: - Data sources
+
+struct SourcesSettingsView: View {
+    let store: SettingsStore
+    @State private var syncing = false
+    @AppStorage("mergeSources") private var merge = true
+
+    var body: some View {
+        SettingsPage(title: "Zdroje dat") {
+            SettingsGroup(title: "Připojené", footer: "Připojit nebo odpojit zdroj jde zatím ve webové aplikaci: přihlášení probíhá na stránkách Googlu a Intervals.icu.") {
+                ForEach(Array(store.connections.enumerated()), id: \.element.id) { index, provider in
+                    if index > 0 { SettingsDivider() }
+                    SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
+                                value: provider.connected == true ? "připojeno" : "nepřipojeno", chevron: false)
+                }
+                if !store.connections.isEmpty { SettingsDivider() }
+                SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
+                            subtitle: "přímé čtení z iPhonu přijde v dalším kroku; data z hodinek zatím chodí přes Intervals.icu", value: nil, chevron: false)
+            }
+
+            SettingsGroup {
+                Button {
+                    Task { syncing = true; await store.syncNow(); syncing = false }
+                } label: {
+                    HStack {
+                        Text(syncing ? "Synchronizuji…" : "Synchronizovat teď").font(.body).foregroundStyle(Palette.ink)
+                        Spacer()
+                        if syncing { ProgressView() } else if let at = lastSync { Text(at).font(.subheadline).foregroundStyle(Palette.muted) }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 50)
+                }
+                .buttonStyle(.plain)
+                .disabled(syncing || store.demo)
+            }
+
+            SettingsGroup(title: "Sloučení dat", footer: "Když stejnou noc nebo trénink pošle víc zdrojů, Loadwise je pozná podle času a započítá jen jednou.") {
+                SettingsToggle(title: "Automaticky sloučit", isOn: $merge, disabled: true)
+            }
+
+            Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
+                Text("Otevřít připojení ve webové aplikaci").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            }
+        }
+    }
+
+    private func icon(_ id: String) -> SettingsIcon {
+        id == "google" ? SettingsIcon(systemImage: "g.circle.fill", color: Palette.blue) : SettingsIcon(systemImage: "waveform.path.ecg", color: Palette.rust)
+    }
+
+    private func subtitle(_ provider: ConnectionsResponse.Provider) -> String? {
+        let missing = provider.missingPermissions?.count ?? 0
+        if missing > 0 { return "chybí \(missing) " + Fmt.plural(missing, "oprávnění", "oprávnění", "oprávnění") }
+        return provider.metrics.map { $0.joined(separator: ", ").lowercased() }
+    }
+
+    private var lastSync: String? {
+        guard let at = store.sync?.updatedAt else { return nil }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = iso.date(from: at) ?? ISO8601DateFormatter().date(from: at) ?? Self.sqlite.date(from: at)
+        guard let date else { return nil }
+        let out = DateFormatter()
+        out.locale = Fmt.locale
+        out.dateFormat = Calendar.current.isDateInToday(date) ? "'dnes' H:mm" : "d. M. H:mm"
+        return out.string(from: date)
+    }
+
+    /// "2026-10-08 12:02:00" (SQLite CURRENT_TIMESTAMP, UTC).
+    private static let sqlite: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return f
+    }()
+}
+
+// MARK: - Appearance and units
+
+struct AppearanceSettingsView: View {
+    @AppStorage("appearance") private var appearance = "system"
+
+    static func label(_ value: String) -> String {
+        switch value {
+        case "light": return "světlý"
+        case "dark": return "tmavý"
+        default: return "automaticky"
+        }
+    }
+
+    var body: some View {
+        SettingsPage(title: "Vzhled") {
+            SettingsGroup(footer: "Automaticky se vzhled řídí nastavením iPhonu.") {
+                ForEach(Array(["system", "light", "dark"].enumerated()), id: \.element) { index, value in
+                    if index > 0 { SettingsDivider() }
+                    Button { appearance = value } label: {
+                        HStack {
+                            Text(Fmt.capitalized(Self.label(value))).font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            if appearance == value { Image(systemName: "checkmark").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.green) }
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 50)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(appearance == value ? .isSelected : [])
+                }
+            }
+        }
+    }
+}
+
+struct UnitsSettingsView: View {
+    var body: some View {
+        SettingsPage(title: "Jednotky") {
+            SettingsGroup(footer: "Zatím jen metrické jednotky.") {
+                let units = [("Vzdálenost", "km"), ("Výška", "cm"), ("Váha", "kg"), ("Teplota", "°C"), ("Energie", "kcal"), ("Voda", "ml"), ("Čas", "24 hodin")]
+                ForEach(Array(units.enumerated()), id: \.offset) { index, unit in
+                    if index > 0 { SettingsDivider() }
+                    SettingsRow(title: unit.0, value: unit.1, chevron: false)
+                }
+            }
+        }
+    }
+}

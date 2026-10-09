@@ -12,6 +12,12 @@ final class AppModel {
 
     private(set) var phase: Phase
     private(set) var today: TodaySnapshot?
+    private(set) var training: TrainingSnapshot?
+    var trainingError: String?
+    private(set) var health: HealthSnapshot?
+    var healthError: String?
+    private(set) var food: FoodSnapshot?
+    var foodError: String?
     private(set) var loading = false
     private(set) var signingIn = false
     var errorMessage: String?
@@ -30,6 +36,9 @@ final class AppModel {
         if demo {
             phase = .signedIn
             today = DemoData.today
+            training = DemoData.training
+            health = DemoData.health
+            food = DemoData.food
         } else {
             phase = api.hasSession ? .signedIn : .signedOut
         }
@@ -54,6 +63,9 @@ final class AppModel {
     func showDemo() {
         demo = true
         today = DemoData.today
+        training = DemoData.training
+        health = DemoData.health
+        food = DemoData.food
         phase = .signedIn
     }
 
@@ -68,6 +80,77 @@ final class AppModel {
             signOut()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshTraining() async {
+        guard !demo, phase == .signedIn else { return }
+        do {
+            training = try await api.training()
+            trainingError = nil
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            trainingError = error.localizedDescription
+        }
+    }
+
+    func refreshHealth() async {
+        guard !demo, phase == .signedIn else { return }
+        do {
+            health = try await api.health()
+            healthError = nil
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            healthError = error.localizedDescription
+        }
+    }
+
+    func refreshFood() async {
+        guard !demo, phase == .signedIn else { return }
+        do {
+            food = try await api.food()
+            foodError = nil
+        } catch APIError.unauthorized {
+            signOut()
+        } catch {
+            foodError = error.localizedDescription
+        }
+    }
+
+    /// Logs a food; nil when it worked, else the message to show.
+    func logFood(product: FoodProduct, amount: Double, meal: String) async -> String? {
+        guard !demo else { return nil }
+        do {
+            try await api.logFood(FoodLogRequest(date: Self.localDate(Date()), product: product.forLogging, quantity: amount, unit: product.unit, mealType: meal))
+            await refreshFood()
+            await refresh()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    func deleteFood(id: Int) async {
+        guard !demo else { return }
+        do {
+            try await api.deleteFoodEntry(id: id)
+            await refreshFood()
+            await refresh()
+        } catch {
+            foodError = error.localizedDescription
+        }
+    }
+
+    func addWater(ml: Int) async {
+        guard !demo else { return }
+        do {
+            try await api.addFluid(ml: ml)
+            await refreshFood()
+            await refresh()
+        } catch {
+            foodError = error.localizedDescription
         }
     }
 
@@ -105,10 +188,19 @@ final class AppModel {
         return f.string(from: moved)
     }
 
+    /// Settings → "Odhlásit se": ends the session on the server as well.
+    func logout() async {
+        if !demo { await api.logout() }
+        signOut()
+    }
+
     func signOut() {
         api.signOut()
         demo = false
         today = nil
+        training = nil
+        health = nil
+        food = nil
         selectedDate = nil
         phase = .signedOut
     }
