@@ -16,29 +16,10 @@ struct TrainingTools: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Posilovna")
             LazyVGrid(columns: columns, spacing: 10) {
-                tile(.trainingMode(today), "play.fill", "Režim tréninku", "cvik po cviku s pauzou", Palette.amberBar)
-                tile(.equipment, "dumbbell", "Vybavení", "posilovna, doma, vlastní váha", Palette.indigo)
+                tile(.trainingMode(today), "play.fill", "Režim tréninku", Palette.amberBar)
+                tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
             }
-            SectionLabel(text: "Knihovna").padding(.top, 10)
-            RouteLink(route: .workoutLibrary("ride")) {
-                HStack(spacing: 12) {
-                    HStack(spacing: -6) {
-                        icon("bicycle", Palette.amber)
-                        icon("figure.run", Palette.rust)
-                        icon("dumbbell.fill", Palette.green)
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Kolo, běh a posilovna").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text("délka, obtížnost, venku nebo doma, cviky a AI").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.85)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
-            }
+            LibraryWidget()
             Button(action: addWorkout) {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -50,31 +31,57 @@ struct TrainingTools: View {
         }
     }
 
-    private func icon(_ symbol: String, _ color: Color) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 30, height: 30)
-            .background(color, in: Circle())
-            .overlay(Circle().stroke(Palette.card, lineWidth: 2))
-    }
-
-    private func tile(_ route: AppRoute, _ symbol: String, _ title: String, _ subtitle: String, _ color: Color) -> some View {
+    private func tile(_ route: AppRoute, _ symbol: String, _ title: String, _ color: Color) -> some View {
         RouteLink(route: route) {
-            VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
                 Image(systemName: symbol)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 34, height: 34)
                     .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.85)
-                Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.85)
+                Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
             }
             .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
+    }
+}
+
+/// Training → "Knihovna tréninků": one wide widget; a tap opens the library
+/// with the choice of sports.
+struct LibraryWidget: View {
+    static let sports: [(id: String, symbol: String, color: Color)] = [
+        ("ride", "bicycle", Palette.amberBar), ("run", "figure.run", Palette.rust), ("gym", "dumbbell.fill", Palette.indigo)
+    ]
+
+    var body: some View {
+        RouteLink(route: .library) {
+            HStack(spacing: 14) {
+                HStack(spacing: -8) {
+                    ForEach(Self.sports.indices, id: \.self) { i in
+                        Image(systemName: Self.sports[i].symbol)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 34, height: 34)
+                            .background(Self.sports[i].color, in: Circle())
+                            .overlay(Circle().stroke(Palette.card, lineWidth: 2.5))
+                    }
+                }
+                Text("Knihovna tréninků").font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.85)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Knihovna tréninků")
+        .accessibilityAddTraits(.isButton)
     }
 }
 

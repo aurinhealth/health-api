@@ -2,38 +2,76 @@ import SwiftUI
 
 // MARK: - Knihovna
 
-/// One library for all sports: ride and run workouts with filters (where, the
-/// length with its ± tolerance and own presets, the type, the difficulty), and
-/// for the gym the AI builder and the exercises.
+/// One library for all sports. Opened from the widget it shows the sports as
+/// panels; a sport opens on its own screen: for ride and run the workouts with
+/// filters (where, the length with its ± tolerance and own presets, the type,
+/// the difficulty), for the gym the AI builder and the exercises.
 struct TrainingLibraryView: View {
-    @Environment(AppModel.self) private var model
-    @State private var sport: String
+    let sport: LibrarySport?
 
-    init(sport: String = "ride") {
-        _sport = State(initialValue: ["ride", "run", "gym"].contains(sport) ? sport : "ride")
+    init(sport: String? = nil) {
+        self.sport = sport.flatMap { LibrarySport.find($0) }
     }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · knihovna").padding(.top, 24)
-                Text("Knihovna").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text(sport?.label ?? "Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
-                Picker("Sport", selection: $sport) {
-                    Text("Kolo").tag("ride")
-                    Text("Běh").tag("run")
-                    Text("Posilovna").tag("gym")
-                }
-                .pickerStyle(.segmented)
-                .padding(.top, 18)
-
-                if sport == "gym" {
-                    GymLibrarySection()
+                if let sport {
+                    if sport.id == "gym" { GymLibrarySection() } else { WorkoutLibrarySection(sport: sport.id) }
                 } else {
-                    WorkoutLibrarySection(sport: sport).id(sport)
+                    HStack(spacing: 10) {
+                        ForEach(LibrarySport.all) { LibrarySportPanel(sport: $0) }
+                    }
+                    .padding(.top, 20)
                 }
             }
         }
+    }
+}
+
+/// The sports of the library, each with its icon and colour.
+struct LibrarySport: Identifiable {
+    let id: String
+    let label: String
+    let subtitle: String
+    let symbol: String
+    let color: Color
+
+    static let all = [
+        LibrarySport(id: "ride", label: "Kolo", subtitle: "jízdy a intervaly", symbol: "bicycle", color: Palette.amberBar),
+        LibrarySport(id: "run", label: "Běh", subtitle: "tempo a výběhy", symbol: "figure.run", color: Palette.rust),
+        LibrarySport(id: "gym", label: "Posilovna", subtitle: "cviky a AI", symbol: "dumbbell.fill", color: Palette.indigo)
+    ]
+
+    static func find(_ id: String) -> LibrarySport? { all.first { $0.id == id } }
+}
+
+/// A sport's panel in the library; a tap opens the sport.
+struct LibrarySportPanel: View {
+    let sport: LibrarySport
+
+    var body: some View {
+        RouteLink(route: .workoutLibrary(sport.id)) {
+            VStack(alignment: .leading, spacing: 6) {
+                Image(systemName: sport.symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(sport.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .padding(.bottom, 4)
+                Text(sport.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(sport.subtitle).font(.caption2).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(sport.label + ", " + sport.subtitle)
     }
 }
 

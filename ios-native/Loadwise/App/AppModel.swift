@@ -15,6 +15,8 @@ final class AppModel {
     private(set) var today: TodaySnapshot?
     private(set) var training: TrainingSnapshot?
     var trainingError: String?
+    /// The training calendar's days by date (Training → the strip and month).
+    private(set) var calendar: [String: CalendarDay] = [:]
     private(set) var health: HealthSnapshot?
     var healthError: String?
     private(set) var food: FoodSnapshot?
@@ -51,6 +53,7 @@ final class AppModel {
             training = DemoData.training
             health = DemoData.health
             food = DemoData.food
+            calendar = DemoData.calendarByDate
         } else {
             phase = api.hasSession ? .signedIn : .signedOut
             if phase == .signedIn { loadSaved() }
@@ -140,6 +143,7 @@ final class AppModel {
         training = DemoData.training
         health = DemoData.health
         food = DemoData.food
+        calendar = DemoData.calendarByDate
         phase = .signedIn
     }
 
@@ -208,6 +212,28 @@ final class AppModel {
         guard !demo else { return true }
         do {
             try await api.addFluid(ml: ml, kind: kind)
+            await refreshFood()
+            await refresh()
+            return true
+        } catch {
+            foodError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Loads the calendar days that are not here yet (all of them with force).
+    func loadCalendar(from start: String, to end: String, force: Bool = false) async {
+        let days = ISODay.range(start, end)
+        guard force || days.contains(where: { calendar[$0] == nil }) else { return }
+        if demo { return }
+        guard phase == .signedIn, let result = try? await api.trainingCalendar(start: start, end: end) else { return }
+        for day in result.days { calendar[day.date] = day }
+    }
+
+    func updateDrink(id: Int, ml: Int, kind: String) async -> Bool {
+        guard !demo else { return true }
+        do {
+            try await api.updateFluid(id: id, ml: ml, kind: kind)
             await refreshFood()
             await refresh()
             return true

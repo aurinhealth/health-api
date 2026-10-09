@@ -45,8 +45,11 @@ struct TrainingContent: View {
                 CircleButton(systemImage: "plus", label: "Zapsat trénink", action: addWorkout)
             }
 
+            TrainingCalendarCard(today: training.date)
+                .padding(.top, 18)
+
             StrainHero(training: training)
-                .padding(.top, 30)
+                .padding(.top, 26)
 
             WeekStrainBars(days: training.days)
                 .padding(.top, 22)

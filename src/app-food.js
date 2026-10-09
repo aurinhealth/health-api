@@ -70,6 +70,7 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         fat: round(num(e.fat_g), 1),
         fiber: round(num(e.fiber_g), 1),
         sugar: round(num(note.sugar_g), 1),
+        salt: round(num(note.salt_g), 2),
         amount: amount != null && unit ? round(amount, 1) + " " + (unit === "portion" ? "porce" : unit === "piece" ? "ks" : unit) : null,
         brand: note.brand || null
       };

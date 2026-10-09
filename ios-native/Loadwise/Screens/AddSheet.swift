@@ -57,7 +57,7 @@ struct AddSheet: View {
                     tile("Zapsat trénink", "square.and.pencil") { workout = true }
                     tile("Posilovna s AI", "sparkles") { open(.gymBuilder) }
                     tile("Režim tréninku", "play.fill") { open(.trainingMode(AppModel.localDate(Date()))) }
-                    tile("Knihovna", "books.vertical") { open(.workoutLibrary("ride")) }
+                    tile("Knihovna", "books.vertical") { open(.library) }
                 }
             }
             .padding(24)
@@ -141,9 +141,18 @@ struct DrinkKind: Identifiable {
 struct DrinkSheet: View {
     @Environment(\.dismiss) private var dismiss
     let save: (Int, String) async -> Void
+    /// Changing a drink already logged (swiped left → pencil).
+    var editing = false
     @State private var kind = "water"
     @State private var ml = 250
     @State private var saving = false
+
+    init(kind: String = "water", ml: Int = 250, editing: Bool = false, save: @escaping (Int, String) async -> Void) {
+        self.save = save
+        self.editing = editing
+        _kind = State(initialValue: kind)
+        _ml = State(initialValue: ml)
+    }
     @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
     @State private var presetSaved = false
 
@@ -154,7 +163,7 @@ struct DrinkSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Co piješ?").font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Text(editing ? "Upravit pití" : "Co piješ?").font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
@@ -217,7 +226,7 @@ struct DrinkSheet: View {
                     }
                 }
 
-                PrimaryButton(title: saving ? "Ukládám…" : "Přidat", systemImage: "plus", busy: saving) {
+                PrimaryButton(title: saving ? "Ukládám…" : editing ? "Uložit" : "Přidat", systemImage: editing ? "checkmark" : "plus", busy: saving) {
                     Task {
                         saving = true
                         await save(ml, kind)

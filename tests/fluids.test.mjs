@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { hydrationTarget, addFluid, listFluids, deleteFluid, dayActivityHours, drinkFromFoodEntry, foodDrinks } from "../src/fluids.js";
+import { hydrationTarget, addFluid, listFluids, deleteFluid, updateFluid, dayActivityHours, drinkFromFoodEntry, foodDrinks } from "../src/fluids.js";
 
 test("drink target: 30 ml/kg plus 0.5 l per training hour, rounded and bounded", () => {
   assert.deepEqual(hydrationTarget({ weightKg: 81.4, trainingHours: 2 }), { ml: 3400, baseMl: 2400, exerciseMl: 1000, weightKg: 81.4, trainingHours: 2, walkHours: 0 });
@@ -24,6 +24,16 @@ test("drinks are stored per user and day, and can be deleted", async () => {
   assert.equal((await listFluids(db, "2026-10-03")).length, 1);
   await assert.rejects(addFluid(db, { date: "2026-10-03", ml: 5000 }), /10–3000 ml/);
   await assert.rejects(addFluid(db, { date: "zítra", ml: 200 }), /datum/);
+});
+
+test("a drink can be changed afterwards, only by its owner", async () => {
+  const raw = createD1(), db = scopedDb(raw, 7), other = scopedDb(raw, 8);
+  const a = await addFluid(db, { date: "2026-10-03", ml: 250, kind: "water", at: "2026-10-03T08:05" });
+  const changed = await updateFluid(db, { id: a.id, ml: 330, kind: "tea", at: "09:30" });
+  assert.deepEqual([changed.ml, changed.kind, changed.consumedAt], [330, "tea", "2026-10-03T09:30"]);
+  assert.deepEqual((await listFluids(db, "2026-10-03")).map(e => [e.ml, e.kind]), [[330, "tea"]]);
+  await assert.rejects(updateFluid(other, { id: a.id, ml: 500 }), /nenalezeno/);
+  await assert.rejects(updateFluid(db, { id: a.id, ml: 4 }), /10–3000 ml/);
 });
 
 test("training hours count done sessions, or the plan when more is planned", async () => {

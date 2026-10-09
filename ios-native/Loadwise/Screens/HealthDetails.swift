@@ -271,27 +271,46 @@ struct Hypnogram: View {
     }
 }
 
+/// The night's stages one under the other: a bar of each one's share of the
+/// sleep, the time and the percentage, and the awakenings.
 struct StageTotals: View {
     let stages: HealthSnapshot.Stages
     let wakeups: Int?
 
     var body: some View {
         let asleep = max(stages.deep + stages.light + stages.rem, 1)
-        HStack(alignment: .top, spacing: 8) {
-            cell("DEEP", stages.deep, "hluboký · " + Fmt.int(stages.deep / asleep * 100) + " %")
-            cell("LIGHT", stages.light, "lehký · " + Fmt.int(stages.light / asleep * 100) + " %")
-            cell("REM", stages.rem, "REM · " + Fmt.int(stages.rem / asleep * 100) + " %")
-            cell("AWAKE", stages.awake, "bdění" + (wakeups.map { " · \($0)×" } ?? ""))
+        let longest = max(stages.deep, stages.light, stages.rem, stages.awake, 1)
+        VStack(spacing: 12) {
+            row("DEEP", "Hluboký", stages.deep, share: stages.deep / asleep, longest: longest)
+            row("REM", "REM", stages.rem, share: stages.rem / asleep, longest: longest)
+            row("LIGHT", "Lehký", stages.light, share: stages.light / asleep, longest: longest)
+            row("AWAKE", "Bdění", stages.awake, share: nil, longest: longest)
         }
+        .padding(.top, 6)
     }
 
-    private func cell(_ type: String, _ minutes: Double, _ caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Capsule().fill(StageStyle.color(type)).frame(width: 18, height: 4)
-            Text(Fmt.hoursMinutes(minutes)).font(Typo.number(22)).foregroundStyle(Palette.ink)
-            Text(caption).font(.system(size: 11)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+    private func row(_ type: String, _ label: String, _ minutes: Double, share: Double?, longest: Double) -> some View {
+        HStack(spacing: 10) {
+            Text(label).font(Typo.small).foregroundStyle(Palette.secondary).frame(width: 64, alignment: .leading)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    Capsule().fill(StageStyle.color(type)).frame(width: max(6, Double(geo.size.width) * minutes / longest))
+                }
+            }
+            .frame(height: 10)
+            Text(Fmt.hoursMinutes(minutes)).font(Typo.number(18)).foregroundStyle(Palette.ink).frame(width: 46, alignment: .trailing)
+            Text(Self.note(share: share, wakeups: wakeups)).font(Typo.caption).foregroundStyle(Palette.muted)
+                .frame(width: 40, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label + " " + Fmt.hoursMinutes(minutes) + ", " + Self.note(share: share, wakeups: wakeups))
+    }
+
+    /// "19 %", or the awakenings for the awake row ("3×").
+    static func note(share: Double?, wakeups: Int?) -> String {
+        if let share { return Fmt.int(share * 100) + " %" }
+        return wakeups.map { "\($0)×" } ?? ""
     }
 }
 
@@ -313,12 +332,9 @@ struct HeartDetailContent: View {
                 Text(sentence(hrv)).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 Card {
-                    let values = hrv.series.map(\.value)
-                    LineChart(values: values, color: Palette.green,
-                              lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
-                              band: (hrv.low != nil && hrv.high != nil) ? hrv.low!...hrv.high! : nil, height: 150)
-                    Text("30 dní · pásmo = tvoje norma" + (hrv.low.map { " " + Fmt.int($0) + "–" + Fmt.int(hrv.high) + " ms" } ?? ""))
-                        .font(Typo.tiny).foregroundStyle(Palette.faint)
+                    WidgetHeader(title: "HRV po nocích", color: Palette.green, trailing: "\(hrv.series.count) dní")
+                    TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
+                               band: Self.range(hrv.low, hrv.high), bandLabel: Self.normLabel(hrv.low, hrv.high))
                 }
                 .padding(.top, 20)
                 ThreeCells(cells: [("7 dní", Fmt.int(hrv.week)), ("Norma (60 dní)", Fmt.int(hrv.baseline)), ("Trend", trend(hrv.trend))])
@@ -331,10 +347,15 @@ struct HeartDetailContent: View {
                     Text("bpm" + (rhr.baseline.map { " · norma " + Fmt.decimal($0) } ?? "")).font(Typo.small).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 8)
-                let values = rhr.series.map(\.value)
-                LineChart(values: values, color: Palette.rust, lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
-                          band: rhr.baseline.map { ($0 - 2)...($0 + 2) }, height: 80)
-                    .padding(.top, 8)
+                Card {
+                    WidgetHeader(title: "Klidový tep po dnech", color: Palette.rust, trailing: "\(rhr.series.count) dní")
+                    TrendChart(points: rhr.series, color: Palette.rust, unit: "bpm",
+                               band: rhr.baseline.map { ($0 - 2)...($0 + 2) },
+                               bandLabel: "norma ± 2 bpm", height: 160)
+                }
+                .padding(.top, 12)
+                Text(Self.restingSentence(rhr)).font(Typo.small).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
             }
             SectionLabel(text: "Srdce a návyky").padding(.top, 32)
             VStack(spacing: 0) {
@@ -345,6 +366,26 @@ struct HeartDetailContent: View {
             }
             .padding(.top, 8)
         }
+    }
+
+    /// "norma 56–66 ms".
+    static func normLabel(_ low: Double?, _ high: Double?) -> String {
+        guard let low, let high else { return "tvoje norma" }
+        return "norma " + Fmt.int(low) + "–" + Fmt.int(high) + " ms"
+    }
+
+    static func range(_ low: Double?, _ high: Double?) -> ClosedRange<Double>? {
+        guard let low, let high, high > low else { return nil }
+        return low...high
+    }
+
+    /// What the resting heart rate says against its normal.
+    static func restingSentence(_ rhr: HealthSnapshot.RestingHR) -> String {
+        guard let value = rhr.value, let base = rhr.baseline else { return "Klidový tep se měří v noci, nejnižší hodnota dne." }
+        let d = value - base
+        if d >= 4 { return "O \(Fmt.int(d)) tepů nad normou. Bývá to únavou, nemocí, alkoholem nebo pozdním jídlem." }
+        if d <= -3 { return "Pod normou, dobré znamení zotavení a rostoucí kondice." }
+        return "V normě. Klidový tep je nejnižší tep za noc, sleduj hlavně jeho dlouhý trend."
     }
 
     private func status(_ hrv: HealthSnapshot.HRV) -> (String, Color, Color)? {

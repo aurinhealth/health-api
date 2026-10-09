@@ -40,6 +40,7 @@ struct FoodSnapshot: Decodable, Equatable {
         let brand: String?
         var fiber: Double? = nil
         var sugar: Double? = nil
+        var salt: Double? = nil
     }
 
     /// What to aim for in this meal (its share of the day's targets).
