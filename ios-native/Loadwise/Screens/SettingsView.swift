@@ -87,7 +87,17 @@ struct SettingsMenu: View {
                 SettingsDivider()
                 NavigationLink { SourcesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "arrow.triangle.2.circlepath", color: Palette.indigo), title: "Zdroje dat",
-                                value: store.loaded ? "\(store.connectedCount) " + Fmt.plural(store.connectedCount, "připojený", "připojené", "připojených") : nil)
+                                value: !store.problems.isEmpty ? L10n.tr("připojit znovu")
+                                    : store.loaded ? "\(store.connectedCount) " + Fmt.plural(store.connectedCount, "připojený", "připojené", "připojených") : nil)
+                        // A source to connect again: a red dot on the icon.
+                        .overlay(alignment: .topLeading) {
+                            if !store.problems.isEmpty {
+                                Circle().fill(Palette.rust).frame(width: 10, height: 10)
+                                    .overlay(Circle().stroke(Palette.card, lineWidth: 2))
+                                    .offset(x: 40, y: 8)
+                                    .accessibilityLabel("Připojit znovu")
+                            }
+                        }
                 }
                 SettingsDivider()
                 NavigationLink { SleepSettingsView(given: store) } label: {
@@ -135,16 +145,22 @@ struct SettingsMenu: View {
                 }
                 SettingsDivider()
                 NavigationLink { UnitsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Color(light: 0x5B7FA6, dark: 0x8FB1D6)), title: "Jednotky", value: "metrické")
+                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Color(light: 0x5B7FA6, dark: 0x8FB1D6)), title: "Jednotky", value: UnitsSettingsView.label(units))
                 }
                 SettingsDivider()
-                SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk", value: "čeština", chevron: false)
+                NavigationLink { LanguageSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk", value: LanguageSettingsView.label(language))
+                }
             }
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Ostatní") {
                 NavigationLink { PrivacySettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.faint), title: "Soukromí a data")
+                }
+                SettingsDivider()
+                NavigationLink { ReportProblemView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "ladybug.fill", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
                 Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
@@ -160,12 +176,14 @@ struct SettingsMenu: View {
                 .buttonStyle(.plain)
             }
 
-            Text("Loadwise \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+            Text(verbatim: "Loadwise \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
         }
     }
 
+    @AppStorage(Units.key) private var units = "metric"
+    @AppStorage(L10n.key) private var language = "cs"
     @AppStorage(Reminders.bedtimeKey) private var r1 = true
     @AppStorage(Reminders.workoutKey) private var r2 = true
     @AppStorage(Reminders.waterKey) private var r3 = true
@@ -177,7 +195,7 @@ struct SettingsMenu: View {
     }
 
     private var sleepValue: String? {
-        if let wake = store.profile["wakeTime"]?.string { return "budík " + wake }
+        if let wake = store.profile["wakeTime"]?.string { return L10n.f("budík %@", wake) }
         return store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" }
     }
 

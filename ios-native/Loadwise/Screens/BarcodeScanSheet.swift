@@ -100,7 +100,7 @@ struct BarcodeScanSheet: View {
                         .padding(.horizontal, 14).frame(height: 50)
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                         Button { Task { await save(product) } } label: {
-                            Text(saving ? "Ukládám…" : "Přidat " + MealSlot.toMeal(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                                 .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                         }
                         .disabled(saving || amountValue == nil)

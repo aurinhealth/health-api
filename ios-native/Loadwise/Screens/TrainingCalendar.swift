@@ -103,7 +103,7 @@ struct TrainingCalendarCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(expanded ? "Zavřít měsíc" : "Ukázat celý měsíc")
+        .accessibilityLabel(L10n.tr(expanded ? "Zavřít měsíc" : "Ukázat celý měsíc"))
     }
 
     private func toggle() {
@@ -176,13 +176,13 @@ struct SportStyle {
             tint = Palette.faint
             fill = date <= today ? Palette.track : .clear
             dashed = false
-            label = day == nil ? "bez dat" : "volno"
+            label = L10n.tr(day == nil ? "bez dat" : "volno")
         } else {
             symbol = SportIcon.symbol(sport)
             tint = done ? .white : Self.color(sport)
             fill = done ? Self.color(sport) : Self.color(sport).opacity(0.1)
             dashed = !done
-            label = (done ? "" : "v plánu ") + Self.name(sport)
+            label = done ? L10n.tr(Self.name(sport)) : L10n.f("v plánu %@", L10n.tr(Self.name(sport)))
         }
     }
 
@@ -220,7 +220,9 @@ struct MonthGrid: View {
     let pick: (String) -> Void
     let move: (Int) -> Void
 
-    private let names = ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+    private var names: [String] {
+        L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -239,7 +241,7 @@ struct MonthGrid: View {
             .foregroundStyle(Palette.ink)
             .buttonStyle(.plain)
             HStack(spacing: 0) {
-                ForEach(names, id: \.self) { Text($0).font(.caption2.weight(.semibold)).foregroundStyle(Palette.faint).frame(maxWidth: .infinity) }
+                ForEach(names, id: \.self) { Text(verbatim: $0).font(.caption2.weight(.semibold)).foregroundStyle(Palette.faint).frame(maxWidth: .infinity) }
             }
             let grid = ISODay.monthGrid(month)
             ForEach(grid.indices, id: \.self) { row in
@@ -300,8 +302,8 @@ struct MonthGrid: View {
         let count = list.reduce(0) { $0 + $1.count }
         let minutes = list.reduce(0.0) { $0 + $1.minutes }
         let kcal = list.reduce(0.0) { $0 + $1.kcal }
-        guard count > 0 else { return "zatím bez aktivit" }
-        let head = "\(count) " + Fmt.plural(count, "aktivita", "aktivity", "aktivit")
+        guard count > 0 else { return L10n.tr("zatím bez aktivit") }
+        let head = L10n.f("%@ %@", String(count), Fmt.plural(count, "aktivita", "aktivity", "aktivit"))
         return head + " · " + Fmt.hoursMinutesLong(minutes) + " · " + Fmt.int(kcal) + " kcal"
     }
 }
@@ -341,10 +343,9 @@ struct CalendarDayList: View {
     }
 
     private var heading: String {
-        let relative = Fmt.relativeDay(date, today: today)
-        if date == today { return "Dnes" }
-        if date == ISODay.shift(today, -1) { return "Včera" }
-        if relative == "zítra" { return "Zítra" }
+        if date == today { return L10n.tr("Dnes") }
+        if date == ISODay.shift(today, -1) { return L10n.tr("Včera") }
+        if date == ISODay.shift(today, 1) { return L10n.tr("Zítra") }
         return Fmt.weekdayShort(date) + " " + Fmt.dayMonth(date)
     }
 
@@ -388,10 +389,10 @@ struct CalendarActivityRow: View {
 
     /// "Kolo · 1 h 30 min · 42,3 km" or "v plánu · 45 min".
     static func detail(_ a: CalendarActivity) -> String {
-        var parts: [String] = [a.status == "done" ? Fmt.capitalized(SportStyle.name(a.sport)) : "V plánu"]
+        var parts: [String] = [a.status == "done" ? Fmt.capitalized(L10n.tr(SportStyle.name(a.sport))) : L10n.tr("V plánu")]
         if let t = a.time { parts.append(t) }
         if let m = a.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
-        if let km = a.km, km > 0 { parts.append(Fmt.decimal(km) + " km") }
+        if let km = a.km, km > 0 { parts.append(Units.distanceText(km)) }
         return parts.joined(separator: " · ")
     }
 }

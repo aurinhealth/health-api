@@ -72,7 +72,14 @@ struct ProfileSettingsView: View {
 
     static let activities = [("sedentary", "Sedavá práce"), ("light", "Lehce aktivní"), ("active", "Aktivní"), ("heavy", "Fyzicky náročná práce")]
     static let sportHourOptions = [("auto", "podle záznamů"), ("0", "žádný"), ("1-3", "1–3 h"), ("3-6", "3–6 h"), ("6-10", "6–10 h"), ("10+", "víc než 10 h")]
-    static let goals = [("lose_0.25", "hubnout 0,25 kg týdně"), ("lose_0.5", "hubnout 0,5 kg týdně"), ("lose_0.75", "hubnout 0,75 kg týdně"), ("lose_1", "hubnout 1 kg týdně"), ("maintain", "udržovat váhu")]
+    /// "hubnout 0,5 kg týdně", in pounds when the units are imperial.
+    static var goals: [(String, String)] {
+        func lose(_ kg: Double, _ digits: Int) -> String {
+            L10n.f("hubnout %@ týdně", Units.weightText(kg, digits: Units.imperial ? 1 : digits))
+        }
+        return [("lose_0.25", lose(0.25, 2)), ("lose_0.5", lose(0.5, 1)), ("lose_0.75", lose(0.75, 2)), ("lose_1", lose(1, 0)),
+                ("maintain", L10n.tr("udržovat váhu"))]
+    }
 
     var body: some View {
         SettingsPage(title: "Profil") {
@@ -80,12 +87,12 @@ struct ProfileSettingsView: View {
                 SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "muž"), ("female", "žena")])
                 SettingsDivider()
                 if hasBirthDate {
-                    SettingsRow(title: "Věk", value: age.isEmpty ? "–" : age + " let", chevron: false)
+                    SettingsRow(title: "Věk", value: age.isEmpty ? "–" : L10n.f("%@ let", age), chevron: false)
                 } else {
                     SettingsField(title: "Věk", text: $age, unit: "let", keyboard: .numberPad)
                 }
                 SettingsDivider()
-                SettingsField(title: "Výška", text: $height, unit: "cm", keyboard: .numberPad)
+                SettingsField(title: "Výška", text: $height, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
             }
             SettingsGroup(title: "Tep", footer: "Prázdné hodnoty dopočítá Loadwise z tvých tréninků a nocí.") {
                 SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad)
@@ -99,7 +106,7 @@ struct ProfileSettingsView: View {
                 SettingsDivider()
                 SettingsPicker(title: "Cíl", selection: $goal, options: Self.goals)
                 SettingsDivider()
-                SettingsField(title: "Cílová váha", text: $targetWeight, unit: "kg")
+                SettingsField(title: "Cílová váha", text: $targetWeight, unit: Units.weightUnit)
             }
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
@@ -112,23 +119,35 @@ struct ProfileSettingsView: View {
         let p = store.profile
         sex = p["sex"]?.string ?? ""
         age = p["age"]?.string ?? ""
-        height = p["height"]?.string ?? ""
+        height = Units.imperial
+            ? (p["height"]?.number).map { Fmt.decimal(Units.length($0), digits: 1) } ?? ""
+            : p["height"]?.string ?? ""
         hrmax = p["hrmax"]?.string ?? ""
         rhr = p["rhr"]?.string ?? ""
         activity = p["activity"]?.string ?? ""
         sportHours = p["sportHours"]?.string ?? ""
         goal = p["goal"]?.string ?? ""
-        targetWeight = (p["targetWeight"]?.number).map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) } ?? ""
+        targetWeight = (p["targetWeight"]?.number).map { (kg: Double) -> String in
+            let shown = Units.weight(kg)
+            return Fmt.decimal(shown, digits: shown.rounded() == shown ? 0 : 1)
+        } ?? ""
         original = changes
     }
 
     private var changes: JSONObject {
         var c: JSONObject = [
-            "sex": .string(sex), "height": .field(height), "hrmax": .field(hrmax), "rhr": .field(rhr),
-            "activity": .string(activity), "sportHours": .string(sportHours), "goal": .string(goal), "targetWeight": .field(targetWeight)
+            "sex": .string(sex), "height": Self.metric(height, Units.cm, scale: 1), "hrmax": .field(hrmax), "rhr": .field(rhr),
+            "activity": .string(activity), "sportHours": .string(sportHours), "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10)
         ]
         if !hasBirthDate { c["age"] = .field(age) }
         return c
+    }
+
+    /// A value typed in the chosen unit, sent in metric (rounded to 1/scale).
+    private static func metric(_ text: String, _ toMetric: (Double) -> Double, scale: Double) -> JSONValue {
+        let value = JSONValue.field(text)
+        guard Units.imperial, case .number(let shown) = value else { return value }
+        return .number((toMetric(shown) * scale).rounded() / scale)
     }
 
     private func save() async {
@@ -167,7 +186,7 @@ struct GoalsSettingsView: View {
                 SettingsToggle(title: "Mám hlavní závod", isOn: $hasEvent)
                 if hasEvent {
                     SettingsDivider()
-                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: "Pražský půlmaraton")
+                    SettingsField(title: "Název", text: $eventName, keyboard: .default, placeholder: L10n.tr("Pražský půlmaraton"))
                     SettingsDivider()
                     DatePicker("Datum", selection: $eventDate, in: Date()..., displayedComponents: .date)
                         .environment(\.locale, Fmt.locale)
@@ -217,17 +236,50 @@ struct GoalsSettingsView: View {
 // MARK: - Data sources
 
 struct SourcesSettingsView: View {
+    @Environment(AppModel.self) private var model
     let store: SettingsStore
     @State private var syncing = false
-    @AppStorage("mergeSources") private var merge = true
+    @State private var working: String?
+    @State private var message: String?
+    @State private var googleDisclosure = false
+    @State private var intervalsKey = false
+    @State private var disconnecting: ConnectionsResponse.Provider?
 
     var body: some View {
         SettingsPage(title: "Zdroje dat") {
-            SettingsGroup(title: "Připojené", footer: "Připojit nebo odpojit zdroj jde zatím ve webové aplikaci: přihlášení probíhá na stránkách Googlu a Intervals.icu.") {
+            // Access refused at the last sync, or Google permissions missing.
+            if !store.problems.isEmpty {
+                SettingsGroup(title: "Připojit znovu") {
+                    ForEach(Array(store.problems.enumerated()), id: \.element.id) { index, provider in
+                        if index > 0 { SettingsDivider() }
+                        Button { start(provider.id) } label: {
+                            SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.triangle.fill", color: Palette.rust), title: provider.name ?? provider.id,
+                                        subtitle: provider.problemText, value: working == provider.id ? L10n.tr("připojuji…") : nil)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(working != nil || store.demo)
+                    }
+                }
+            }
+
+            SettingsGroup(title: "Připojené", footer: "Přihlášení proběhne na stránce Googlu nebo Intervals.icu a pak se vrátíš sem.") {
                 ForEach(Array(store.connections.enumerated()), id: \.element.id) { index, provider in
                     if index > 0 { SettingsDivider() }
-                    SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
-                                value: provider.connected == true ? "připojeno" : "nepřipojeno", chevron: false)
+                    Menu {
+                        Button { start(provider.id) } label: {
+                            Label(L10n.tr(provider.connected == true ? "Připojit znovu" : "Připojit"), systemImage: "link")
+                        }
+                        if provider.id == "intervals" {
+                            Button { intervalsKey = true } label: { Label("Vložit API klíč", systemImage: "key") }
+                        }
+                        if provider.connected == true {
+                            Button(role: .destructive) { disconnecting = provider } label: { Label("Odpojit", systemImage: "link.badge.minus") }
+                        }
+                    } label: {
+                        SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
+                                    value: working == provider.id ? "připojuji…" : provider.needsAttention ? "připojit znovu" : provider.connected == true ? "připojeno" : "připojit")
+                    }
+                    .disabled(working != nil || store.demo)
                 }
                 if !store.connections.isEmpty { SettingsDivider() }
                 SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
@@ -248,17 +300,65 @@ struct SourcesSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(syncing || store.demo)
+                // The last sync left a source out (src/dashboard-sync.js results, googleStatus).
+                if !syncing, let failed = store.sync?.failedSources, !failed.isEmpty {
+                    SettingsDivider()
+                    SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou",
+                                subtitle: failed.joined(separator: ", "), chevron: false)
+                }
             }
 
-            SettingsGroup(title: "Sloučení dat", footer: "Když stejnou noc nebo trénink pošle víc zdrojů, Loadwise je pozná podle času a započítá jen jednou.") {
-                SettingsToggle(title: "Automaticky sloučit", isOn: $merge, disabled: true)
+            if let message {
+                Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
+            googleDisclosure = false
+            // The browser sheet opens once this one has closed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
+        } }
+        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await store.load() ; message = "Intervals.icu je připojené." } }
+        .confirmationDialog(L10n.f("Odpojit %@?", disconnecting?.name ?? ""), isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
+            Button("Odpojit", role: .destructive) { if let p = disconnecting { Task { await disconnect(p.id) } } }
+        } message: {
+            Text("Data, která už Loadwise má, zůstanou. Nová přestanou chodit.")
+        }
+    }
 
-            Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
-                Text("Otevřít připojení ve webové aplikaci").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+    /// Google first shows what Loadwise does with the data (Google's policy).
+    private func start(_ provider: String) {
+        if provider == "google" { googleDisclosure = true } else { connect(provider) }
+    }
+
+    private func connect(_ provider: String) {
+        Task {
+            working = provider
+            defer { working = nil }
+            do {
+                guard let event = try await model.connect(provider: provider) else { return }
+                switch event {
+                case "google", "intervals":
+                    message = L10n.f("%@ je připojené, data se začínají stahovat.", provider == "google" ? "Google" : "Intervals.icu")
+                case "intervals-failed":
+                    message = "Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč."
+                    intervalsKey = true
+                case "expired": message = "Odkaz vypršel, zkus to znovu."
+                default: message = "Připojení se nedokončilo."
+                }
+                await store.load()
+            } catch {
+                message = error.localizedDescription
             }
+        }
+    }
+
+    private func disconnect(_ provider: String) async {
+        do {
+            try await model.api.disconnect(provider: provider)
+            message = "Odpojeno."
+            await store.load()
+        } catch {
+            message = error.localizedDescription
         }
     }
 
@@ -267,8 +367,9 @@ struct SourcesSettingsView: View {
     }
 
     private func subtitle(_ provider: ConnectionsResponse.Provider) -> String? {
+        if provider.needsReconnect == true, provider.connected == true { return provider.problemText }
         let missing = provider.missingPermissions?.count ?? 0
-        if missing > 0 { return "chybí \(missing) " + Fmt.plural(missing, "oprávnění", "oprávnění", "oprávnění") }
+        if missing > 0 { return missing == 1 ? L10n.tr("chybí 1 oprávnění") : L10n.f("chybí %@ oprávnění", String(missing)) }
         return provider.metrics.map { $0.joined(separator: ", ").lowercased() }
     }
 
@@ -280,7 +381,11 @@ struct SourcesSettingsView: View {
         guard let date else { return nil }
         let out = DateFormatter()
         out.locale = Fmt.locale
-        out.dateFormat = Calendar.current.isDateInToday(date) ? "'dnes' H:mm" : "d. M. H:mm"
+        if L10n.isEnglish {
+            out.dateFormat = Calendar.current.isDateInToday(date) ? "'today' h:mm a" : "MMM d, h:mm a"
+        } else {
+            out.dateFormat = Calendar.current.isDateInToday(date) ? "'dnes' H:mm" : "d. M. H:mm"
+        }
         return out.string(from: date)
     }
 
@@ -292,6 +397,87 @@ struct SourcesSettingsView: View {
         f.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return f
     }()
+}
+
+/// What Loadwise reads and writes in Google Health, before Google's own consent.
+struct GoogleDisclosureSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    var proceed: () -> Void
+    @State private var agree = false
+
+    private let items: [(String, String)] = [
+        ("Co čteme", "Z Google Health aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla."),
+        ("Co zapisujeme", "Do Google Health jen jídlo a pití, které si tady zapíšeš."),
+        ("K čemu", "Jen pro funkce aplikace: přehled dne, regenerace, kalorický cíl, plán tréninků a osobní asistent."),
+        ("Kdo data dostane", "Tvůj účet Intervals.icu, když ho připojíš. OpenAI, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě."),
+        ("Kdykoli", "Google Health odpojíš v Nastavení → Zdroje dat, v Soukromí smažeš účet i se všemi daty.")
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Připojení Google Health").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    ForEach(items, id: \.0) { item in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.0).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(item.1).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Toggle("Souhlasím, aby Loadwise takto používal moje data z Google Health.", isOn: $agree)
+                        .font(Typo.small).tint(Palette.green).padding(.top, 6)
+                    Link("Zásady ochrany soukromí", destination: URL(string: "https://petrfitnessdata.eu/privacy")!).font(Typo.small)
+                    PrimaryButton(title: "Pokračovat na Google", systemImage: "arrow.up.forward") { proceed() }
+                        .disabled(!agree).opacity(agree ? 1 : 0.5).padding(.top, 6)
+                }
+                .padding(24)
+            }
+            .background(Palette.settingsBackground)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
+        }
+    }
+}
+
+/// Intervals.icu by its personal API key (Settings → Developer Settings there),
+/// when its sign-in is not set up for the app.
+struct IntervalsKeySheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    var saved: () async -> Void
+    @State private var key = ""
+    @State private var saving = false
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("API klíč Intervals.icu").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Najdeš ho v Intervals.icu v Settings → Developer Settings.").font(Typo.small).foregroundStyle(Palette.muted)
+                SecureField("API klíč", text: $key)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                PrimaryButton(title: saving ? "Ověřuji…" : "Připojit", systemImage: "link", busy: saving) { Task { await save() } }
+                    .disabled(saving || key.trimmingCharacters(in: .whitespaces).count < 8)
+                Spacer()
+            }
+            .padding(24)
+            .background(Palette.settingsBackground)
+            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await model.api.connectIntervalsKey(key.trimmingCharacters(in: .whitespacesAndNewlines))
+            await saved()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
 }
 
 // MARK: - Appearance and units
@@ -314,7 +500,7 @@ struct AppearanceSettingsView: View {
                     if index > 0 { SettingsDivider() }
                     Button { appearance = value } label: {
                         HStack {
-                            Text(Fmt.capitalized(Self.label(value))).font(.body).foregroundStyle(Palette.ink)
+                            Text(verbatim: Fmt.capitalized(L10n.tr(Self.label(value)))).font(.body).foregroundStyle(Palette.ink)
                             Spacer()
                             if appearance == value { Image(systemName: "checkmark").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.green) }
                         }
@@ -330,14 +516,77 @@ struct AppearanceSettingsView: View {
     }
 }
 
+/// One choice of a short list, ticked.
+struct SettingsChoiceList: View {
+    let options: [(value: String, label: String)]
+    let selected: String
+    let choose: (String) -> Void
+
+    var body: some View {
+        ForEach(Array(options.enumerated()), id: \.element.value) { index, option in
+            if index > 0 { SettingsDivider() }
+            Button { choose(option.value) } label: {
+                HStack {
+                    Text(option.label).font(.body).foregroundStyle(Palette.ink)
+                    Spacer()
+                    if selected == option.value { Image(systemName: "checkmark").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.green) }
+                }
+                .padding(.horizontal, 16)
+                .frame(minHeight: 50)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected == option.value ? .isSelected : [])
+        }
+    }
+}
+
 struct UnitsSettingsView: View {
+    @AppStorage(Units.key) private var units = "metric"
+
+    static func label(_ value: String) -> String {
+        value == "imperial" ? "imperiální" : "metrické"
+    }
+
     var body: some View {
         SettingsPage(title: "Jednotky") {
-            SettingsGroup(footer: "Zatím jen metrické jednotky.") {
-                let units = [("Vzdálenost", "km"), ("Výška", "cm"), ("Váha", "kg"), ("Teplota", "°C"), ("Energie", "kcal"), ("Voda", "ml"), ("Čas", "24 hodin")]
-                ForEach(Array(units.enumerated()), id: \.offset) { index, unit in
+            SettingsGroup {
+                SettingsChoiceList(options: [("metric", "Metrické"), ("imperial", "Imperiální")], selected: units) { value in
+                    Units.setSystem(value)
+                    units = value
+                    WidgetBridge.reload()
+                }
+            }
+            SettingsGroup(footer: "Server ukládá hodnoty metricky, převádí se jen to, co vidíš a zadáváš.") {
+                let imperial = units == "imperial"
+                let rows = [("Vzdálenost", imperial ? "mi" : "km"), ("Výška", imperial ? "in" : "cm"), ("Váha", imperial ? "lb" : "kg"),
+                            ("Teplota", imperial ? "°F" : "°C"), ("Energie", "kcal"), ("Pití", imperial ? "fl oz" : "ml")]
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, unit in
                     if index > 0 { SettingsDivider() }
                     SettingsRow(title: unit.0, value: unit.1, chevron: false)
+                }
+            }
+        }
+    }
+}
+
+struct LanguageSettingsView: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(L10n.key) private var language = "cs"
+
+    static func label(_ value: String) -> String {
+        value == "en" ? "English" : "čeština"
+    }
+
+    var body: some View {
+        SettingsPage(title: "Jazyk") {
+            SettingsGroup(footer: "Texty od kouče a ze serveru přijdou v novém jazyce s dalším načtením.") {
+                SettingsChoiceList(options: [("cs", "Čeština"), ("en", "English")], selected: language) { value in
+                    guard value != language else { return }
+                    L10n.setLanguage(value)
+                    language = value
+                    WidgetBridge.reload()
+                    Task { await model.refresh() }
                 }
             }
         }
@@ -364,7 +613,7 @@ struct NotificationsSettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat, nic dalšího se neposílá. Upozornění ze serveru a widgety na ploše přijdou s placeným vývojářským účtem.") {
+            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat.") {
                 SettingsToggle(title: "Čas do postele", subtitle: "půl hodiny před doporučeným časem", isOn: $bedtime)
                 SettingsDivider()
                 SettingsToggle(title: "Trénink", subtitle: "hodinu před naplánovaným tréninkem", isOn: $workout)
@@ -449,12 +698,12 @@ struct PrivacySettingsView: View {
         let before = ai
         ai = value
         Task {
-            do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = "Změna se neuložila: " + error.localizedDescription }
+            do { try await model.api.setAI(value); error = nil } catch { ai = before; self.error = L10n.f("Změna se neuložila: %@", error.localizedDescription) }
         }
     }
 
     private func delete() async {
-        guard deleteText.trimmingCharacters(in: .whitespaces).uppercased() == "SMAZAT" else {
+        guard ["SMAZAT", "DELETE"].contains(deleteText.trimmingCharacters(in: .whitespaces).uppercased()) else {
             error = "Účet zůstal: pro smazání je potřeba napsat SMAZAT."
             return
         }

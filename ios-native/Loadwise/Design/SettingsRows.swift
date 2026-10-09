@@ -124,7 +124,7 @@ struct SettingsField: View {
         HStack(spacing: 8) {
             Text(title).font(.body).foregroundStyle(Palette.ink)
             Spacer(minLength: 8)
-            TextField(placeholder, text: $text)
+            TextField(L10n.tr(placeholder), text: $text)
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.trailing)
                 .font(.body)
@@ -154,7 +154,7 @@ struct SettingsPage<Content: View>: View {
                 .padding(.bottom, 48)
         }
         .background(Palette.settingsBackground.ignoresSafeArea())
-        .navigationTitle(title)
+        .navigationTitle(L10n.tr(title))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -191,7 +191,7 @@ struct LoadwiseToggleStyle: ToggleStyle {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityValue(configuration.isOn ? "zapnuto" : "vypnuto")
+        .accessibilityValue(L10n.tr(configuration.isOn ? "zapnuto" : "vypnuto"))
         .accessibilityAddTraits(.isButton)
     }
 }

@@ -39,18 +39,18 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// "Přesunout „Dlouhý běh“ na sobotu 10. října".
     var title: String {
         let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""
-        let name = eventSnapshot?.name.map { "„" + $0 + "“" } ?? "trénink"
+        let name = eventSnapshot?.name.map { L10n.f("„%@“", $0) } ?? L10n.tr("trénink")
         switch type {
-        case "move": return "Přesunout \(name) na \(day)"
-        case "rest": return "Volno místo \(name) (\(day))"
+        case "move": return L10n.f("Přesunout %@ na %@", name, day)
+        case "rest": return L10n.f("Volno místo %@ (%@)", name, day)
         case "workout":
-            let sportName = ["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink"
-            return "Naplánovat: " + (workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
-        case "gym_swap": return "V posilovně vyměnit \(fromExercise ?? "cvik") za \(toExercise ?? "jiný")"
-        case "week_sport": return "Týdenní plán: \(day) " + (["ride": "kolo", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? (sport ?? ""))
+            let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
+            return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
+        case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
+        case "week_sport": return L10n.f("Týdenní plán: %@ %@", day, L10n.tr(["ride": "kolo", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? (sport ?? "")))
         case "status":
-            let label = ["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? "")
-            return "Stav: " + label
+            let label = L10n.tr(["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? ""))
+            return L10n.f("Stav: %@", label)
         default: return type
         }
     }

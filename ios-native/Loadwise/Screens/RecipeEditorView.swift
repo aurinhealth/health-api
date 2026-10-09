@@ -34,7 +34,7 @@ struct RecipeEditorView: View {
         let protein: Double = total { p, q in p.grams(p.protein_100g, for: q) } / servings
         let carbs: Double = total { p, q in p.grams(p.carbs_100g, for: q) } / servings
         let fat: Double = total { p, q in p.grams(p.fat_100g, for: q) } / servings
-        return "bílkoviny \(Fmt.int(protein)) g · sacharidy \(Fmt.int(carbs)) g · tuky \(Fmt.int(fat)) g"
+        return L10n.f("bílkoviny %@ g · sacharidy %@ g · tuky %@ g", Fmt.int(protein), Fmt.int(carbs), Fmt.int(fat))
     }
 
     var body: some View {

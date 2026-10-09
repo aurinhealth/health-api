@@ -29,7 +29,7 @@ struct SectionLabel: View {
     let text: String
 
     var body: some View {
-        Text(text.uppercased())
+        Text(verbatim: L10n.tr(text).uppercased(with: Fmt.locale))
             .font(.system(size: 12, weight: .medium))
             .tracking(1.9)
             .foregroundStyle(Palette.muted)

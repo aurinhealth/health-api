@@ -16,7 +16,7 @@ struct FoodWidget: View {
                 }
                 Spacer()
                 if let bonus = nutrition.trainingBonus, bonus > 0 {
-                    Text("+" + Fmt.int(bonus) + " trénink").font(Typo.caption).foregroundStyle(Palette.amber)
+                    Text(L10n.f("+%@ trénink", Fmt.int(bonus))).font(Typo.caption).foregroundStyle(Palette.amber)
                 }
             }
             ProgressLine(fraction: fraction(nutrition.kcal, nutrition.target), height: 5)
@@ -24,7 +24,7 @@ struct FoodWidget: View {
                 macro("Bílkoviny", nutrition.protein.eaten, "g", fraction(nutrition.protein.eaten, nutrition.protein.target), Palette.brown)
                 macro("Sacharidy", nutrition.carbs.eaten, "g", fraction(nutrition.carbs.eaten, nutrition.carbs.target), Palette.amberBar)
                 macro("Tuky", nutrition.fat.eaten, "g", fraction(nutrition.fat.eaten, nutrition.fat.target), Palette.gold)
-                macro("Voda", nutrition.water.ml.map { $0 / 1000 }, "l", fraction(nutrition.water.ml, nutrition.water.target), Palette.blue, digits: 1)
+                macro("Voda", nutrition.water.ml.map { Units.imperial ? Units.volume($0) : $0 / 1000 }, Units.imperial ? Units.volumeUnit : "l", fraction(nutrition.water.ml, nutrition.water.target), Palette.blue, digits: Units.imperial ? 0 : 1)
             }
         }
     }
@@ -124,7 +124,7 @@ struct StepsWidget: View {
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(Fmt.int(steps.today)).font(Typo.number(34)).foregroundStyle(Palette.ink).lineLimit(1)
-                    Text("kroků z " + Fmt.int(steps.goal) + percent).font(Typo.caption).foregroundStyle(Palette.amber)
+                    Text(L10n.f("kroků z %@", Fmt.int(steps.goal)) + percent).font(Typo.caption).foregroundStyle(Palette.amber)
                 }
                 .frame(width: 120, alignment: .leading)
                 if let hourly = steps.hourly, hourly.count == 24 {
@@ -195,8 +195,8 @@ struct RestingHRWidget: View {
     private var note: (text: String, good: Bool)? {
         guard let value = restingHR.value, let base = restingHR.baseline else { return nil }
         let d = (value - base).rounded()
-        if d == 0 { return ("v normě", true) }
-        return ((d < 0 ? "↓ " : "↑ ") + Fmt.int(abs(d)) + (d < 0 ? " pod normou" : " nad normou"), d < 0)
+        if d == 0 { return (L10n.tr("v normě"), true) }
+        return (L10n.f(d < 0 ? "↓ %@ pod normou" : "↑ %@ nad normou", Fmt.int(abs(d))), d < 0)
     }
 }
 
@@ -236,16 +236,17 @@ struct WeightWidget: View {
             WidgetHeader(title: "Váha", color: Palette.brown)
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    NumberText(value: Fmt.decimal(weight.latest), unit: "kg")
+                    NumberText(value: Fmt.decimal(Units.weight(weight.latest)), unit: Units.weightUnit)
                     if let change {
-                        Text((change <= 0 ? "↓ " : "↑ ") + Fmt.decimal(abs(change)) + " kg za 30 dní")
+                        Text(L10n.f("%@ %@ za 30 dní", change <= 0 ? "↓" : "↑", Units.weightText(abs(change))))
                             .font(Typo.caption).foregroundStyle(change <= 0 ? Palette.green : Palette.amber)
                     }
                 }
                 .frame(width: 120, alignment: .leading)
-                let raw = weight.series.map(\.value)
-                let all = raw + [weight.goal].compactMap { $0 }
-                TrendDotsChart(raw: raw, trend: trend(raw), goal: weight.goal,
+                let raw = weight.series.map { Units.weight($0.value) }
+                let goal = weight.goal.map { Units.weight($0) }
+                let all = raw + [goal].compactMap { $0 }
+                TrendDotsChart(raw: raw, trend: trend(raw), goal: goal,
                                lo: (all.min() ?? 70) - 0.4, hi: (all.max() ?? 90) + 0.4, height: 64)
             }
             Text("30 dní · body = vážení, čára = trend").font(Typo.tiny).foregroundStyle(Palette.faint)

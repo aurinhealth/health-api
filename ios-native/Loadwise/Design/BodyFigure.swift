@@ -49,7 +49,7 @@ extension BodyFigure {
         ("calves", "Lýtka")
     ]
 
-    static func label(_ id: String) -> String { muscles.first { $0.id == id }?.label ?? id }
+    static func label(_ id: String) -> String { muscles.first { $0.id == id }.map { L10n.tr($0.label) } ?? id }
 }
 
 /// An SVG path with absolute M, L, Q, C and Z commands (what the figure uses).
@@ -215,9 +215,12 @@ struct BodyMap: View {
         let chosen = selected.map(BodyFigure.label)
         let main = load.filter { $0.value >= Self.primary }.keys.map(BodyFigure.label)
         let helping = load.filter { $0.value >= Self.secondary && $0.value < Self.primary }.keys.map(BodyFigure.label)
-        if !chosen.isEmpty { return "Zvolené partie: " + chosen.joined(separator: ", ") }
-        if !main.isEmpty { return "Procvičí hlavně: " + main.joined(separator: ", ") + (helping.isEmpty ? "" : ", pomocně: " + helping.joined(separator: ", ")) }
-        if !helping.isEmpty { return "Procvičí: " + helping.joined(separator: ", ") }
-        return "Postava zepředu a zezadu"
+        if !chosen.isEmpty { return L10n.f("Zvolené partie: %@", chosen.joined(separator: ", ")) }
+        if !main.isEmpty {
+            let mainText = L10n.f("Procvičí hlavně: %@", main.joined(separator: ", "))
+            return helping.isEmpty ? mainText : mainText + L10n.f(", pomocně: %@", helping.joined(separator: ", "))
+        }
+        if !helping.isEmpty { return L10n.f("Procvičí: %@", helping.joined(separator: ", ")) }
+        return L10n.tr("Postava zepředu a zezadu")
     }
 }

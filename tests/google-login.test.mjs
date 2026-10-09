@@ -142,3 +142,28 @@ test("a handoff token is not a session and an invalid app challenge is ignored",
   const form = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "token=x&verifier=y" }), env, "/auth/app/session");
   assert.equal(form.status, 401);
 });
+
+// A failed sign-in started by the app goes back to it, so its browser sheet
+// closes and the app can say why; the web keeps its HTML pages.
+test("a failed app sign-in returns to the app with an error code", async () => {
+  _resetJwksCacheForTest();
+  const e = freshEnv();
+  const challenge = "c".repeat(43), appCookie = "pfd_google_login=s1.n1.verifier." + challenge;
+  const back = response => {
+    assert.equal(response.status, 302);
+    assert.match(response.headers.getSetCookie().join("\n"), /pfd_google_login=; Max-Age=0/);
+    assert.ok(!response.headers.getSetCookie().some(c => c.startsWith("pfd_session=")));
+    return response.headers.get("Location");
+  };
+  assert.equal(back(await _finishLoginForTest(callback("code=c1&state=s1", appCookie), e, googleFetch(await idToken({ sub: "g9", email: "stranger@example.com" })))), "loadwise://auth?error=not_invited");
+  assert.equal(back(await _finishLoginForTest(callback("error=access_denied&state=s1", appCookie), e, googleFetch())), "loadwise://auth?error=cancelled");
+  assert.equal(back(await _finishLoginForTest(callback("code=c1&state=other", appCookie), e, googleFetch())), "loadwise://auth?error=expired");
+  assert.equal(back(await _finishLoginForTest(callback("code=c1&state=s1", appCookie), e, googleFetch())), "loadwise://auth?error=failed");
+  assert.equal(back(await _finishLoginForTest(callback("code=c1&state=s1", appCookie), e, googleFetch(await idToken({ nonce: "other" })))), "loadwise://auth?error=failed");
+  assert.equal(back(await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google?app=" + challenge), { ...e, OWNER_EMAIL: "" }, "/auth/google")), "loadwise://auth?error=unavailable");
+
+  const web = await _finishLoginForTest(callback("code=c1&state=s1"), e, googleFetch(await idToken({ sub: "g9", email: "stranger@example.com" })));
+  assert.equal(web.status, 403);
+  assert.match(web.headers.get("content-type"), /text\/html/);
+  assert.equal((await _finishLoginForTest(callback("error=access_denied&state=s1"), e, googleFetch())).status, 400);
+});

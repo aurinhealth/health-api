@@ -62,7 +62,7 @@ struct VO2maxContent: View {
 
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                CircleButton(systemImage: "chevron.left", label: "Zpět", action: back)
+                CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět"), action: back)
                 Spacer()
                 SectionLabel(text: "VO2max")
                 Spacer()
@@ -75,7 +75,7 @@ struct VO2maxContent: View {
                 Text("ml/kg/min").font(Typo.small).foregroundStyle(Palette.muted)
             }
             if let change = vo2.change, change != 0 {
-                Pill(text: (change > 0 ? "↑ " : "↓ ") + Fmt.decimal(abs(change)) + " za 4 týdny",
+                Pill(text: L10n.f("%@ %@ za 4 týdny", change > 0 ? "↑" : "↓", Fmt.decimal(abs(change))),
                      foreground: change > 0 ? Palette.green : Palette.rust,
                      background: change > 0 ? Palette.greenSoft : Palette.rust.opacity(0.14))
             }
@@ -131,7 +131,7 @@ struct VO2maxContent: View {
 
             if let first = samples.first, let last = samples.last {
                 HStack(spacing: 10) {
-                    stat("Změna", Fmt.signed(last.value - first.value, digits: 1), "od " + Fmt.dayMonth(first.iso))
+                    stat("Změna", Fmt.signed(last.value - first.value, digits: 1), L10n.f("od %@", Fmt.dayMonth(first.iso)))
                     stat("Nejvýš", Self.text(values.max() ?? last.value), Fmt.dayMonth(samples.max { $0.value < $1.value }?.iso ?? last.iso))
                     stat("Nejníž", Self.text(values.min() ?? last.value), Fmt.dayMonth(samples.min { $0.value < $1.value }?.iso ?? first.iso))
                 }
@@ -203,7 +203,7 @@ struct VO2maxContent: View {
         let whole = vo2.value - first
         if let change = vo2.change, change >= 0.5 { return "Za poslední měsíc roste, trénink zabírá." }
         if let change = vo2.change, change <= -0.5 { return "Za poslední měsíc mírně klesá. Častá příčina je únava, nemoc nebo méně intenzity." }
-        if whole >= 1 { return "Za celé období je výš o " + Fmt.decimal(whole) + ", poslední týdny se drží." }
+        if whole >= 1 { return L10n.f("Za celé období je výš o %@, poslední týdny se drží.", Fmt.decimal(whole)) }
         return "Drží se stabilně. Na posun nahoru pomohou intervaly v pásmu VO2max."
     }
 
@@ -250,7 +250,7 @@ struct VO2maxMonths: View {
                 }
                 .padding(.vertical, 10)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(ISODay.monthTitle(m.month) + ", průměr " + Fmt.decimal(m.average) + ", " + Self.range(m))
+                .accessibilityLabel(L10n.f("%@, průměr %@, %@", ISODay.monthTitle(m.month), Fmt.decimal(m.average), Self.range(m)))
                 Rectangle().fill(Palette.hairline).frame(height: 1)
             }
         }

@@ -54,6 +54,6 @@ struct SwipeRow<Content: View>: View {
                 .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(L10n.tr(label))
     }
 }

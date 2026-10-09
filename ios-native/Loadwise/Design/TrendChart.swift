@@ -37,7 +37,7 @@ struct TrendChart: View {
                 Text(shown.map { Fmt.decimal($0.value, digits: digits) } ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
                 Text(unit).font(Typo.caption).foregroundStyle(Palette.faint)
                 Spacer()
-                Text(shown.map { (selected == nil ? "naposledy · " : "") + Fmt.dayMonth($0.iso) } ?? "")
+                Text(shown.map { selected == nil ? L10n.f("naposledy · %@", Fmt.dayMonth($0.iso)) : Fmt.dayMonth($0.iso) } ?? "")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Chart {
@@ -97,9 +97,11 @@ struct TrendChart: View {
     /// "30 dní, od 56 do 66 ms, naposledy 64 ms" for VoiceOver.
     static func summary(_ points: [Point], unit: String, digits: Int) -> String {
         let values = points.map(\.value)
-        guard let last = values.last, let lo = values.min(), let hi = values.max() else { return "Bez dat" }
-        let span = "od " + Fmt.decimal(lo, digits: digits) + " do " + Fmt.decimal(hi, digits: digits) + " " + unit
-        let latest = "naposledy " + Fmt.decimal(last, digits: digits) + " " + unit
-        return ["\(values.count) dní", span, latest].joined(separator: ", ")
+        guard let last = values.last, let lo = values.min(), let hi = values.max() else { return L10n.tr("Bez dat") }
+        let shownUnit = L10n.tr(unit)
+        let span = L10n.f("od %@ do %@", Fmt.decimal(lo, digits: digits), Fmt.decimal(hi, digits: digits)) + " " + shownUnit
+        let latest = L10n.f("naposledy %@", Fmt.decimal(last, digits: digits)) + " " + shownUnit
+        let days = String(values.count) + " " + Fmt.plural(values.count, "den", "dny", "dní")
+        return [days, span, latest].joined(separator: ", ")
     }
 }

@@ -8,7 +8,7 @@ enum APIError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: return "Přihlášení vypršelo. Přihlas se znovu."
+        case .unauthorized: return L10n.tr("Přihlášení vypršelo. Přihlas se znovu.")
         case .message(let text): return text
         case .aiConsentRequired(let text): return text
         }
@@ -44,6 +44,13 @@ final class APIClient: @unchecked Sendable {
         var path = "/app/api/today"
         if let date { path += "?date=" + date }
         return try await get(path, cacheKey: date == nil ? "today" : nil)
+    }
+
+    /// Today with the answer as it came, for the writes waiting for signal (OutboxPatch).
+    func todayData(date: String? = nil) async throws -> (TodaySnapshot, Data) {
+        var path = "/app/api/today"
+        if let date { path += "?date=" + date }
+        return try await getWithData(path, cacheKey: date == nil ? "today" : nil)
     }
 
     func training() async throws -> TrainingSnapshot {
@@ -83,7 +90,7 @@ final class APIClient: @unchecked Sendable {
                         switch object["type"] as? String {
                         case "progress": continuation.yield(.progress(object["message"] as? String ?? ""))
                         case "answer": continuation.yield(.answer(object["answer"] as? String ?? ""))
-                        case "error": throw APIError.message(object["message"] as? String ?? "Kouč teď neodpověděl.")
+                        case "error": throw APIError.message(object["message"] as? String ?? L10n.tr("Kouč teď neodpověděl."))
                         case "done":
                             let result = try JSONSerialization.data(withJSONObject: object["result"] ?? [:])
                             continuation.yield(.done(try decoder.decode(AssistantResult.self, from: result)))
@@ -134,6 +141,14 @@ final class APIClient: @unchecked Sendable {
         return me.consent?.aiAllowed ?? false
     }
 
+    /// The signed-in account's name or e-mail (GET /app/api/me → user).
+    func accountName() async throws -> String? {
+        struct User: Decodable { let name: String?; let email: String? }
+        struct Me: Decodable { let user: User? }
+        let me: Me = try await get("/app/api/me")
+        return me.user?.name ?? me.user?.email
+    }
+
     func setAI(_ allowed: Bool) async throws {
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
     }
@@ -166,9 +181,13 @@ final class APIClient: @unchecked Sendable {
 
     /// Saves the whole plan (the server keeps the sheet and the history of sets).
     func saveGym(_ day: GymDay, date: String) async throws {
+        let _: JSONValue = try await send("/app/api/gym", method: "POST", body: Self.gymBody(day, date: date))
+    }
+
+    static func gymBody(_ day: GymDay, date: String) -> JSONObject {
         var body = day.saveBody
         body["date"] = .string(date)
-        let _: JSONValue = try await send("/app/api/gym", method: "POST", body: body)
+        return body
     }
 
     /// Builds the day's gym plan (deterministic, not AI) and puts it in Intervals.icu.
@@ -257,6 +276,10 @@ final class APIClient: @unchecked Sendable {
         try await get("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
     }
 
+    func foodData(date: String? = nil) async throws -> (FoodSnapshot, Data) {
+        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
+    }
+
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
     func searchFood(name: String, barcode: String? = nil) async throws -> [FoodProduct] {
         var body: JSONObject = ["name": .string(name)]
@@ -303,8 +326,8 @@ final class APIClient: @unchecked Sendable {
         struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string(mode)]
         let r: Response = try await send("/app/api/food/photo", method: "POST", body: body)
-        guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? "Na fotce se hodnoty nepodařilo přečíst.") }
-        var product = FoodProduct(name: (r.name?.isEmpty == false ? r.name! : "Jídlo z fotky"), calories_100g: v.calories_100g, protein_100g: v.protein_100g,
+        guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? L10n.tr("Na fotce se hodnoty nepodařilo přečíst.")) }
+        var product = FoodProduct(name: (r.name?.isEmpty == false ? r.name! : L10n.tr("Jídlo z fotky")), calories_100g: v.calories_100g, protein_100g: v.protein_100g,
                                   carbs_100g: v.carbs_100g, fat_100g: v.fat_100g,
                                   nutrition_basis: r.basis == "portion" ? "portion" : r.basis == "100ml" ? "ml" : "g",
                                   serving_size: r.servingSize.flatMap { $0.isEmpty ? nil : JSONValue.string($0) },
@@ -324,8 +347,10 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// water, coffee, tea, juice, milk, sport or other.
-    func addFluid(ml: Int, kind: String = "water") async throws {
-        let _: JSONValue = try await send("/app/api/fluids", method: "POST", body: ["ml": JSONValue.number(Double(ml)), "kind": .string(kind)])
+    func addFluid(ml: Int, kind: String = "water", date: String? = nil) async throws {
+        var body: JSONObject = ["ml": .number(Double(ml)), "kind": .string(kind)]
+        if let date { body["date"] = .string(date) }
+        let _: JSONValue = try await send("/app/api/fluids", method: "POST", body: body)
     }
 
     // MARK: - Settings
@@ -368,7 +393,37 @@ final class APIClient: @unchecked Sendable {
         request.httpBody = try JSONSerialization.data(withJSONObject: ["token": token, "verifier": verifier])
         let (data, response) = try await session.data(for: request)
         try check(response, data)
-        guard hasSession else { throw APIError.message("Server nevrátil přihlášení. Zkus to znovu.") }
+        guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
+    }
+
+    /// E-mail sign-in, step 1: a six-digit code goes to the address (when it has access).
+    func startEmailLogin(email: String) async throws {
+        let _: JSONValue = try await send("/auth/email/start", method: "POST", body: ["email": JSONValue.string(email)])
+    }
+
+    /// Step 2: the code for the session cookie.
+    func verifyEmailLogin(email: String, code: String) async throws {
+        let _: JSONValue = try await send("/auth/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
+        guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
+    }
+
+    // MARK: - Data sources
+
+    /// A short-lived link that opens the provider's consent in the browser
+    /// sheet, signed in as this user (src/native-connect.js).
+    func connectLink(provider: String) async throws -> URL {
+        struct Response: Decodable { let url: String }
+        let r: Response = try await send("/app/api/connect/start", method: "POST", body: ["provider": JSONValue.string(provider)])
+        guard let url = URL(string: r.url) else { throw APIError.message(L10n.tr("Odkaz na připojení je neplatný.")) }
+        return url
+    }
+
+    func connectIntervalsKey(_ key: String) async throws {
+        let _: JSONValue = try await send("/app/api/connections", method: "POST", body: ["provider": JSONValue.string("intervals"), "key": .string(key)])
+    }
+
+    func disconnect(provider: String) async throws {
+        let _: JSONValue = try await send("/app/api/connections", method: "DELETE", body: ["provider": JSONValue.string(provider)])
     }
 
     /// Ends the session on the server too; the cookie goes either way.
@@ -387,16 +442,42 @@ final class APIClient: @unchecked Sendable {
 
     /// With a cache key the answer is also kept on disk (SnapshotCache).
     func get<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> T {
+        let (value, _): (T, Data) = try await getWithData(path, cacheKey: cacheKey)
+        return value
+    }
+
+    /// The decoded answer and its JSON as it came.
+    func getWithData<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> (T, Data) {
         let (data, response) = try await session.data(for: makeRequest(path))
         try check(response, data)
         let value: T
         do {
             value = try decoder.decode(T.self, from: data)
         } catch {
-            throw APIError.message("Odpověď serveru se nepodařilo přečíst.")
+            throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
         if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
-        return value
+        return (value, data)
+    }
+
+    /// Sends a write that may have waited for signal (Outbox). A missing
+    /// connection throws the URLError; an answer other than 2xx throws
+    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).
+    func sendQueued(_ item: OutboxItem) async throws {
+        var request = makeRequest(item.path, method: item.method)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = item.body
+        request.timeoutInterval = 20
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw OutboxRefusal.retry(L10n.tr("Server neodpověděl.")) }
+        if http.statusCode == 401 { throw APIError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let message = json?["message"] as? String ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
+            // A timeout or too many requests at the server: later, as with a server error.
+            if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
+            throw OutboxRefusal.retry(message)
+        }
     }
 
     func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B) async throws -> T {
@@ -410,7 +491,7 @@ final class APIClient: @unchecked Sendable {
         } catch {
             // Writes whose answer the app does not read may answer with nothing.
             if let ignored = JSONValue.null as? T { return ignored }
-            throw APIError.message("Odpověď serveru se nepodařilo přečíst.")
+            throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
     }
 
@@ -420,24 +501,24 @@ final class APIClient: @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         // The server counts days in the user's zone and answers in Czech.
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
-        request.setValue("cs", forHTTPHeaderField: "X-Interface-Language")
+        request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
         // Writes with the session cookie must come from the site's own origin.
-        if method != "GET" && path.hasPrefix("/app/") {
+        if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
         }
         return request
     }
 
     private func check(_ response: URLResponse, _ data: Data) throws {
-        guard let http = response as? HTTPURLResponse else { throw APIError.message("Server neodpověděl.") }
+        guard let http = response as? HTTPURLResponse else { throw APIError.message(L10n.tr("Server neodpověděl.")) }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let message = json?["message"] as? String
             if json?["status"] as? String == "ai_consent_required" {
-                throw APIError.aiConsentRequired(message ?? "AI funkce potřebují tvůj souhlas.")
+                throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
             }
-            throw APIError.message(message ?? "Server odpověděl chybou \(http.statusCode).")
+            throw APIError.message(message ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode)))
         }
     }
 }

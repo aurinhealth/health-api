@@ -24,7 +24,7 @@ struct FormDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                CircleButton(systemImage: "chevron.left", label: "Zpět", action: back)
+                CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět"), action: back)
                 Spacer()
                 SectionLabel(text: "Forma a kondice")
                 Spacer()
@@ -63,13 +63,13 @@ struct FormDetailContent: View {
             }
 
             if training.load.weeks.count > 1 {
-                header("Zátěž po týdnech", trailing: "týden \(training.week)")
+                header("Zátěž po týdnech", trailing: L10n.f("týden %@", "\(training.week)"))
                 WeeklyLoadChart(weeks: training.load.weeks)
                     .padding(.top, 14)
             }
 
             if let vo2 = training.vo2max {
-                header("VO2max", trailing: vo2.change.map { ($0 >= 0 ? "↑ " : "↓ ") + Fmt.decimal(abs($0)) + " za 4 týdny" })
+                header("VO2max", trailing: vo2.change.map { L10n.f("%@ %@ za 4 týdny", $0 >= 0 ? "↑" : "↓", Fmt.decimal(abs($0))) })
                 HStack(alignment: .bottom, spacing: 16) {
                     Text(Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1)).font(Typo.number(56)).foregroundStyle(Palette.ink)
                     let values = vo2.series.map(\.value)
@@ -136,7 +136,7 @@ struct WeeklyLoadChart: View {
             HStack(spacing: 14) {
                 Text("TSS za týden").font(Typo.caption).foregroundStyle(Palette.muted)
                 if let current = weeks.last {
-                    Text("tento týden " + Fmt.int(current.load) + (current.planned.map { $0 > current.load ? " z " + Fmt.int($0) : "" } ?? ""))
+                    Text(L10n.f("tento týden %@", Fmt.int(current.load)) + (current.planned.map { $0 > current.load ? " " + L10n.f("z %@", Fmt.int($0)) : "" } ?? ""))
                         .font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             }

@@ -96,7 +96,7 @@ struct CircleButton: View {
                 .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
         }
         .foregroundStyle(Palette.ink)
-        .accessibilityLabel(label)
+        .accessibilityLabel(L10n.tr(label))
     }
 }
 

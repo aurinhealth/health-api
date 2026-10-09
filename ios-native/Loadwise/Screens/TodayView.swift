@@ -38,9 +38,13 @@ struct TodayView: View {
 
 /// The Today screen without the scroll view, so tests can render it whole.
 struct TodayContent: View {
+    @Environment(AppModel.self) private var model
     let today: TodaySnapshot
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
+    /// The account's first letter on the settings button (GET /app/api/me).
+    @AppStorage(AppModel.accountInitialKey) private var initial = ""
+
     /// The widgets hidden in "Upravit přehled" (comma-separated TodayWidget).
     @AppStorage("todayHidden") private var hidden = ""
     @State private var editing = false
@@ -50,14 +54,19 @@ struct TodayContent: View {
             HStack(spacing: 10) {
                 DayNavigator(date: today.date)
                 Spacer()
-                CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
+                CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
                 Button(action: openSettings) {
-                    Text("P").font(.footnote.weight(.medium))
+                    Group { if initial.isEmpty { Image(systemName: "person") } else { Text(initial) } }
+                        .font(.footnote.weight(.medium))
                         .frame(width: 36, height: 36)
                         .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 }
                 .foregroundStyle(Palette.ink)
                 .accessibilityLabel("Profil a nastavení")
+            }
+
+            if model.selectedDate == nil && !model.demo {
+                ConnectionProblemCard()
             }
 
             RouteLink(route: .readiness) {
@@ -69,6 +78,10 @@ struct TodayContent: View {
 
             KeyNumbers(today: today)
                 .padding(.top, 28)
+
+            if model.selectedDate == nil {
+                CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
+            }
 
             if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
                 VStack(alignment: .leading, spacing: 12) {
@@ -214,10 +227,10 @@ struct KeyNumbers: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { "index \($0)" }, Palette.indigo) }
+            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
             Button { model.tab = .training } label: {
-                cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { "plán ~" + Fmt.decimal($0) }, Palette.amber)
+                cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, Palette.amber)
             }
             .buttonStyle(PressableCardStyle())
             Divider().overlay(Palette.hairline)
@@ -274,7 +287,7 @@ struct TodayLayoutSheet: View {
 
     var body: some View {
         NavigationStack {
-            SettingsPage(title: "Upravit přehled") {
+            SettingsPage(title: L10n.tr("Upravit přehled")) {
                 SettingsGroup(footer: "Skryté karty najdeš dál v sekcích Trénink, Jídlo a Zdraví.") {
                     ForEach(Array(TodayWidget.allCases.enumerated()), id: \.element) { index, widget in
                         if index > 0 { SettingsDivider() }
@@ -325,6 +338,95 @@ struct BedtimeSetupCard: View {
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+        }
+    }
+}
+
+// MARK: - Connections
+
+/// A data source that stopped working (Google or Intervals.icu refused the
+/// stored access, or Google permissions are missing), with a way to connect
+/// it again right here. Loads the connections itself, like the coach's check-in.
+struct ConnectionProblemCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var problems: [ConnectionsResponse.Provider] = []
+    @State private var working: String?
+    @State private var message: String?
+    @State private var googleDisclosure = false
+    @State private var intervalsKey = false
+
+    var body: some View {
+        Group {
+            if !problems.isEmpty {
+                Card {
+                    WidgetHeader(title: "Propojení", color: Palette.rust)
+                    ForEach(problems) { provider in
+                        HStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 16)).foregroundStyle(Palette.rust)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(provider.name ?? provider.id).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                                if let problem = provider.problemText {
+                                    Text(problem).font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            Button { start(provider.id) } label: {
+                                Group {
+                                    if working == provider.id { ProgressView().tint(Palette.onButton) } else { Text("Připojit znovu") }
+                                }
+                                .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
+                                .padding(.horizontal, 14).frame(height: 34)
+                                .background(Palette.button, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(working != nil)
+                        }
+                    }
+                    if let message {
+                        Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.top, 20)
+            }
+        }
+        .task(id: model.loading) {
+            guard !model.loading else { return }
+            await load()
+        }
+        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
+            googleDisclosure = false
+            // The browser sheet opens once this one has closed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
+        } }
+        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await load() } }
+    }
+
+    private func load() async {
+        guard !model.demo, let response = try? await model.api.connections() else { return }
+        withAnimation { problems = response.providers.filter(\.needsAttention) }
+    }
+
+    /// Google first shows what Loadwise does with the data (Google's policy).
+    private func start(_ provider: String) {
+        if provider == "google" { googleDisclosure = true } else { connect(provider) }
+    }
+
+    private func connect(_ provider: String) {
+        Task {
+            working = provider
+            defer { working = nil }
+            do {
+                guard let event = try await model.connect(provider: provider) else { return }
+                switch event {
+                case "google", "intervals": message = nil
+                case "intervals-failed": intervalsKey = true
+                case "expired": message = L10n.tr("Odkaz vypršel, zkus to znovu.")
+                default: message = L10n.tr("Připojení se nedokončilo.")
+                }
+                await load()
+            } catch {
+                message = error.localizedDescription
             }
         }
     }

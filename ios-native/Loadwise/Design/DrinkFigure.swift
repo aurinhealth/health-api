@@ -12,7 +12,9 @@ enum DrinkFigureKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var label: String {
+    var label: String { L10n.tr(czechLabel) }
+
+    private var czechLabel: String {
         switch self {
         case .bottle: return "Láhev"
         case .whale: return "Velryba"
@@ -26,7 +28,9 @@ enum DrinkFigureKind: String, CaseIterable, Identifiable {
     }
 
     /// What it does when the goal is reached.
-    var goal: String {
+    var goal: String { L10n.tr(czechGoal) }
+
+    private var czechGoal: String {
         switch self {
         case .bottle: return "zajiskří a ukáže fajfku"
         case .whale: return "vyfoukne gejzír"
@@ -59,7 +63,7 @@ struct DrinkFigure: View {
         }
         .frame(width: size, height: size)
         .accessibilityElement()
-        .accessibilityLabel(kind.label + ", " + Fmt.int(min(fraction, 9.99) * 100) + " % cíle")
+        .accessibilityLabel(L10n.f("%@, %@ %% cíle", kind.label, Fmt.int(min(fraction, 9.99) * 100)))
     }
 }
 
@@ -356,8 +360,8 @@ struct DrinkFigureCanvas: View, Animatable {
             mouth.move(to: pt(50, 80))
             mouth.addLine(to: pt(60, 80))
             stroke(&ctx, mouth, face, 2)
-            ctx.draw(Text("z").font(.system(size: 11)).foregroundStyle(Palette.faint), at: pt(80, 30))
-            ctx.draw(Text("z").font(.system(size: 8)).foregroundStyle(Palette.faint), at: pt(88, 22))
+            ctx.draw(Text(verbatim: "z").font(.system(size: 11)).foregroundStyle(Palette.faint), at: pt(80, 30))
+            ctx.draw(Text(verbatim: "z").font(.system(size: 8)).foregroundStyle(Palette.faint), at: pt(88, 22))
         } else if !done {
             ctx.fill(circle(44, 64, 3.4), with: .color(face))
             ctx.fill(circle(66, 64, 3.4), with: .color(face))
@@ -492,7 +496,7 @@ struct DrinkFigurePicker: View {
                 }
             }
             if DrinkFigureKind.from(chosen) != .line {
-                Text("Po splnění cíle: " + DrinkFigureKind.from(chosen).goal + ".").font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(L10n.f("Po splnění cíle: %@.", DrinkFigureKind.from(chosen).goal)).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             SettingsGroup {
                 SettingsToggle(title: "Animace", subtitle: "Vlnky ve vodě a efekt po splnění cíle", isOn: $animate)

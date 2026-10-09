@@ -58,8 +58,8 @@ struct SessionRow: View {
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
         if let t = session.time { parts.append(t) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
-        if session.status == "missed" { parts.append("nesplněno") }
-        if session.status == "done" { parts.append("hotovo") }
+        if session.status == "missed" { parts.append(L10n.tr("nesplněno")) }
+        if session.status == "done" { parts.append(L10n.tr("hotovo")) }
         return parts.joined(separator: " · ")
     }
 }
@@ -108,7 +108,7 @@ struct ActivityDetailView: View {
                 .padding(.top, 28)
             }
         }
-        .sheet(isPresented: $feedback) { FeedbackSheet(date: session.date, title: session.title) }
+        .sheet(isPresented: $feedback) { FeedbackSheet(session: session) }
         .task {
             guard detail == nil, let id = session.activityId, !model.demo else {
                 if model.demo { error = "V ukázce se detail nenačítá." }
@@ -127,12 +127,12 @@ struct ActivityDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
                 if let t = a.moving_time { stat("Čas", Fmt.duration(Int(t / 60))) }
-                if let d = a.distance, d > 0 { stat("Vzdálenost", Fmt.decimal(d / 1000) + " km") }
+                if let d = a.distance, d > 0 { stat("Vzdálenost", Units.distanceText(d / 1000)) }
                 if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
                 if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
                 if let hr = a.average_heartrate { stat("Tep", Fmt.int(hr) + (a.max_heartrate.map { " / " + Fmt.int($0) } ?? "")) }
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
-                if let pace = runPace { stat("Tempo", pace) }
+                if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
                 if let c = a.calories { stat("Energie", Fmt.int(c) + " kcal") }
             }
@@ -178,7 +178,7 @@ struct ActivityDetailContent: View {
             }
 
             if let hrr = detail.hrr, let drop = hrr.drop {
-                StatRow(title: "Zotavení tepu", value: Fmt.int(drop), unit: "tepů za " + Fmt.int(hrr.seconds ?? 60) + " s")
+                StatRow(title: "Zotavení tepu", value: Fmt.int(drop), unit: L10n.f("tepů za %@ s", Fmt.int(hrr.seconds ?? 60)))
                     .padding(.top, 18)
             }
         }
@@ -187,8 +187,7 @@ struct ActivityDetailContent: View {
     private var runPace: String? {
         let a = detail.activity
         guard (a.type ?? "").lowercased().contains("run"), let v = a.average_speed, v > 0 else { return nil }
-        let s = Int((1000 / v).rounded())
-        return "\(s / 60):" + String(format: "%02d", s % 60) + " /km"
+        return Units.paceText(1000 / v)
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
@@ -225,6 +224,10 @@ struct PlannedWorkoutView: View {
     @State private var working = false
     @State private var error: String?
     @State private var confirmDelete = false
+    @State private var rating = false
+
+    /// Today's or a past session can be rated: it may be done without being paired yet.
+    private var ratable: Bool { session.date <= AppModel.localDate(Date()) && !model.demo }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
@@ -248,6 +251,17 @@ struct PlannedWorkoutView: View {
                         }
                     }
                     .padding(.top, 10)
+                }
+
+                if ratable {
+                    Button { rating = true } label: {
+                        Label("Ohodnotit", systemImage: "text.bubble")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 28)
                 }
 
                 SectionLabel(text: "Změnit").padding(.top, 30)
@@ -274,6 +288,7 @@ struct PlannedWorkoutView: View {
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
             }
         }
+        .sheet(isPresented: $rating) { FeedbackSheet(session: session, workoutId: plan?.source == "library" ? plan?.workout.id?.string : nil) }
         .confirmationDialog("Smazat „\(session.title)“ z plánu?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { Task { await delete() } }
         } message: {
@@ -349,7 +364,7 @@ struct StepBlockRow: View {
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
         else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " %") }
-        if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(fast) + "–" + ZonesSettingsView.pace(slow) + " /km") }
+        if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(Units.pace(fast)) + "–" + ZonesSettingsView.pace(Units.pace(slow)) + " " + Units.paceUnit) }
         if let note = s.note { parts.append(note) }
         return parts.joined(separator: " · ")
     }
@@ -357,53 +372,157 @@ struct StepBlockRow: View {
 
 // MARK: - Feedback and manual entry
 
-/// "Jak to šlo?": RPE 1–10 and a note for the coach (/app/api/coach/reflections).
+/// "Jak to šlo?": RPE 1–10 and a note. A library workout from the calendar is
+/// rated through /app/api/workouts/feedback (paired with its activity, the RPE
+/// written to Intervals.icu, the coach asked in the background); any other
+/// session goes to the coach directly (/app/api/coach/reflections). The
+/// coach's note on the session shows under the form.
 struct FeedbackSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    let date: String
-    let title: String
+    let session: WeekSession
+    /// The library workout of a planned session, when its plan names one.
+    var workoutId: String? = nil
     @State private var rpe = 6.0
     @State private var notes = ""
+    @State private var link: ScheduledWorkout?
+    @State private var reflection: CoachReflection?
+    @State private var known = 0
+    @State private var loading = true
     @State private var saving = false
+    @State private var saved = false
+    @State private var waiting = false
+    @State private var status: String?
     @State private var error: String?
 
+    /// The library workout and its calendar day, when the session has one.
+    private var target: (id: String, date: String)? {
+        if let link, !link.workoutId.isEmpty { return (link.workoutId, link.scheduledDate) }
+        if let workoutId, !workoutId.isEmpty { return (workoutId, session.date) }
+        return nil
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Jak to šlo?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-            Text(title).font(Typo.small).foregroundStyle(Palette.muted)
-            HStack(alignment: .firstTextBaseline) {
-                Text("Náročnost").font(.body)
-                Spacer()
-                Text("\(Int(rpe)) / 10").font(Typo.number(24))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Jak to šlo?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(session.title).font(Typo.small).foregroundStyle(Palette.muted)
+                if loading {
+                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Náročnost").font(.body)
+                        Spacer()
+                        Text("\(Int(rpe)) / 10").font(Typo.number(24))
+                    }
+                    Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar).disabled(saved)
+                    TextField("Poznámka pro trenéra (nohy těžké, spal jsem málo…)", text: $notes, axis: .vertical)
+                        .lineLimit(3...6)
+                        .padding(12)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .disabled(saved)
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                    if let status { Text(status).font(Typo.small).foregroundStyle(Palette.muted) }
+                    if saved {
+                        PrimaryButton(title: "Hotovo") { dismiss() }
+                    } else {
+                        PrimaryButton(title: saving ? "Ukládám…" : "Uložit", busy: saving) { Task { await save() } }
+                            .disabled(saving)
+                    }
+                    coachNote
+                }
             }
-            Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar)
-            TextField("Poznámka pro trenéra (nohy těžké, spal jsem málo…)", text: $notes, axis: .vertical)
-                .lineLimit(3...6)
-                .padding(12)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            Button { Task { await save() } } label: {
-                Text(saving ? "Ukládám…" : "Uložit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-            }
-            .disabled(saving)
-            Spacer()
+            .padding(24)
         }
-        .padding(24)
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
+        .task { await load() }
+    }
+
+    @ViewBuilder private var coachNote: some View {
+        if waiting {
+            HStack(spacing: 10) {
+                ProgressView()
+                Text("Trenér píše zpětnou vazbu…").font(Typo.small).foregroundStyle(Palette.muted)
+            }
+            .padding(.top, 8)
+        } else if let text = reflection?.text {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Trenér")
+                CoachMarkdown(text: text)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.top, 8)
+        }
+    }
+
+    /// The calendar link (with a rating saved before) and the coach's notes on the day.
+    private func load() async {
+        defer { loading = false }
+        guard !model.demo else { return }
+        let api = model.api, date = session.date
+        async let links = try? api.scheduledWorkouts()
+        async let notesOfDay = try? api.coachReflections(date: date)
+        let allLinks: [ScheduledWorkout] = (await links) ?? []
+        let reflections: [CoachReflection] = (await notesOfDay) ?? []
+        link = ScheduledWorkout.link(for: session, in: allLinks)
+        known = reflections.count
+        let id = target?.id
+        reflection = reflections.first(where: { id != nil && $0.workoutId == id }) ?? reflections.first
+        if let r = link?.feedbackRpe ?? reflection?.rpe { rpe = min(10, max(1, r.rounded())) }
+        if let n = reflection?.notes?.nilIfBlank { notes = n }
     }
 
     private func save() async {
         if model.demo { dismiss(); return }
         saving = true
+        error = nil
         defer { saving = false }
+        let text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            try await model.api.reflection(date: date, rpe: Int(rpe), notes: notes)
-            dismiss()
+            if let target, link?.rated != true {
+                do {
+                    // A session kept only in the app has no activity: its planned length counts.
+                    let minutes: Int? = link?.local == true ? (session.minutes ?? link?.durationMinutes.map { Int($0) }) : nil
+                    let result = try await model.api.workoutFeedback(workoutId: target.id, scheduledDate: target.date, rpe: Int(rpe), notes: text, minutes: minutes)
+                    saved = true
+                    status = Self.intervalsText(result.intervals)
+                    await model.refreshTraining()
+                    if result.reflection == "pending" { await awaitReflection(date: target.date) }
+                    return
+                } catch where session.kind == "activity" {
+                    // The plan did not pair with this activity: the note still goes to the coach.
+                }
+            }
+            if let note = try await model.api.coachReflection(date: session.date, rpe: Int(rpe), notes: text) { reflection = note }
+            saved = true
+            await model.refreshTraining()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// The coach writes in the background: the day's notes are asked again for a while.
+    private func awaitReflection(date: String) async {
+        waiting = true
+        defer { waiting = false }
+        for _ in 0..<8 {
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if Task.isCancelled { return }
+            if let list = try? await model.api.coachReflections(date: date), list.count > known, let newest = list.first {
+                reflection = newest
+                return
+            }
+        }
+    }
+
+    static func intervalsText(_ intervals: WorkoutFeedbackResult.Intervals?) -> String? {
+        switch intervals?.status {
+        case "ok": return L10n.tr("RPE je uložené i v Intervals.icu.")
+        case "error": return L10n.f("RPE je uložené, zápis do Intervals.icu selhal: %@", intervals?.message ?? "")
+        default: return nil
         }
     }
 }
@@ -433,7 +552,7 @@ struct ManualWorkoutSheet: View {
                 }
                 .pickerStyle(.segmented)
                 SettingsGroup(footer: completed ? "Zapíše se jako odcvičený a pošle do Intervals.icu." : "Budoucí den: zapíše se jako plán do Intervals.icu.") {
-                    SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna")
+                    SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna"))
                     SettingsDivider()
                     SettingsField(title: "Délka", text: $minutes, unit: "min", keyboard: .numberPad)
                     SettingsDivider()
@@ -472,7 +591,7 @@ struct ManualWorkoutSheet: View {
         if model.demo { dismiss(); return }
         saving = true
         defer { saving = false }
-        let title = name.trimmingCharacters(in: .whitespaces).isEmpty ? (sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna") : name
+        let title = name.trimmingCharacters(in: .whitespaces).isEmpty ? L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna") : name
         do {
             try await model.api.manualWorkout(name: title, date: AppModel.localDate(date), sport: sport, minutes: m, completed: completed, rpe: completed ? Int(rpe) : nil, notes: notes)
             await model.refreshTraining()

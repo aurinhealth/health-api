@@ -10,9 +10,17 @@ enum WidgetBridge {
                                       strain: today.strain.score, strainPlanned: today.strain.planned, hrv: today.hrv?.value,
                                       kcal: today.nutrition.kcal, kcalTarget: today.nutrition.target,
                                       waterMl: today.nutrition.water.ml, waterTarget: today.nutrition.water.target,
+                                      protein: today.nutrition.protein.eaten, proteinTarget: today.nutrition.protein.target,
+                                      carbs: today.nutrition.carbs.eaten, carbsTarget: today.nutrition.carbs.target,
+                                      fat: today.nutrition.fat.eaten, fatTarget: today.nutrition.fat.target,
                                       steps: today.steps.today, stepsGoal: today.steps.goal,
                                       bedtime: today.tonight?.bedtime, nextTitle: next?.title, nextTime: next?.time)
         snapshot.save()
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// Redraws the widgets in a new language or new units.
+    static func reload() {
         WidgetCenter.shared.reloadAllTimelines()
     }
 

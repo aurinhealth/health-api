@@ -45,8 +45,8 @@ function configured(env) {
 const NOT_CONFIGURED = ["Přihlášení přes Google není nastavené", "Chybí GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET nebo OWNER_EMAIL.", 503];
 
 async function startLogin(env, request) {
-  if (!configured(env)) return page(...NOT_CONFIGURED);
   const app = new URL(request.url).searchParams.get("app") || "";
+  if (!configured(env)) return APP_CHALLENGE.test(app) ? appError("unavailable") : page(...NOT_CONFIGURED);
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
@@ -63,13 +63,16 @@ async function startLogin(env, request) {
 }
 
 async function finishLogin(request, env, fetchImpl = fetch) {
-  if (!configured(env)) return page(...NOT_CONFIGURED);
   const url = new URL(request.url);
-  if (url.searchParams.get("error")) return page("Přihlášení zrušeno", "Google přihlášení nebylo dokončeno.", 400);
-  const code = url.searchParams.get("code"), state = url.searchParams.get("state");
   const match = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
   const [expectedState, nonce, verifier, app] = (match?.[1] || "").split(".");
-  if (!code || !state || !expectedState || state !== expectedState || !nonce || !verifier) return page("Přihlášení selhalo", "Neplatný nebo prošlý požadavek. Zkus to znovu.", 400);
+  // Started by the iPhone app: every failure goes back to it as loadwise://auth?error=…,
+  // so its browser sheet closes and the app says what happened.
+  const fail = (reason, title, message, status) => APP_CHALLENGE.test(app || "") ? appError(reason) : page(title, message, status);
+  if (!configured(env)) return fail("unavailable", ...NOT_CONFIGURED);
+  if (url.searchParams.get("error")) return fail("cancelled", "Přihlášení zrušeno", "Google přihlášení nebylo dokončeno.", 400);
+  const code = url.searchParams.get("code"), state = url.searchParams.get("state");
+  if (!code || !state || !expectedState || state !== expectedState || !nonce || !verifier) return fail("expired", "Přihlášení selhalo", "Neplatný nebo prošlý požadavek. Zkus to znovu.", 400);
 
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -77,17 +80,17 @@ async function finishLogin(request, env, fetchImpl = fetch) {
     body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleLoginRedirectUri(env), grant_type: "authorization_code", code_verifier: verifier })
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.id_token) return page("Přihlášení selhalo", "Google nevrátil identitu účtu.", 502);
+  if (!response.ok || !data.id_token) return fail("failed", "Přihlášení selhalo", "Google nevrátil identitu účtu.", 502);
 
   let claims;
   try { claims = await verifyGoogleIdToken(data.id_token, env.GOOGLE_CLIENT_ID, nonce, fetchImpl); }
-  catch (error) { console.error("Google ID token rejected", error.message); return page("Přihlášení selhalo", "Identitu Google účtu se nepodařilo ověřit.", 401); }
+  catch (error) { console.error("Google ID token rejected", error.message); return fail("failed", "Přihlášení selhalo", "Identitu Google účtu se nepodařilo ověřit.", 401); }
 
   await ensureTenancy(env.DB, env, { request });
   const user = await signInGoogleUser(env.DB, env, { sub: claims.sub, email: claims.email, name: claims.name });
   if (!user) {
     console.warn("Google login denied for an account without an invitation");
-    return page("Přístup odepřen", "Tento Google účet nemá do aplikace pozvánku. Požádej správce o přístup.", 403);
+    return fail("not_invited", "Přístup odepřen", "Tento Google účet nemá do aplikace pozvánku. Požádej správce o přístup.", 403);
   }
 
   if (app) return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env)));
@@ -102,6 +105,15 @@ export { finishLogin as _finishLoginForTest, page as loginPage };
 async function appHandoffToken(uid, challenge, secret) {
   const payload = base64url(new TextEncoder().encode(JSON.stringify({ uid, ch: challenge, exp: Math.floor(Date.now() / 1000) + APP_HANDOFF_SECONDS })));
   return payload + "." + await signText("app-handoff." + payload, secret);
+}
+
+// A failed sign-in started by the app: back to it with a code it explains
+// (cancelled, not_invited, expired, failed, unavailable). A redirect, not a page,
+// so ASWebAuthenticationSession sees the loadwise:// address and closes.
+function appError(code) {
+  const headers = new Headers({ Location: APP_RETURN_URL + "?error=" + encodeURIComponent(code), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
+  return new Response(null, { status: 302, headers });
 }
 
 // Safari asks before opening another app, so the page keeps a button for it.

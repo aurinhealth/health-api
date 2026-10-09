@@ -26,7 +26,7 @@ final class SnapshotTests: XCTestCase {
 
     func testHealthScreens() throws {
         let health = DemoData.health
-        try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40) }
+        try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil).padding(24).padding(.top, 30) }
         try render("health-heart", glow: Palette.Glow.health) { HeartDetailContent(health: health).padding(24).padding(.top, 30) }
@@ -124,11 +124,39 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    func testEnglishAndImperial() throws {
+        L10n.setLanguage("en")
+        Units.setSystem("imperial")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+            Units.setSystem("metric")
+        }
+        XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
+        XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
+        XCTAssertEqual(Fmt.plural(5, "den", "dny", "dní"), "days")
+        XCTAssertEqual(Units.weightText(100, digits: 0), "220 lb")
+        XCTAssertEqual(Units.distanceText(10), "6.2 mi")
+        // Every translation keeps the placeholders of its Czech key.
+        let path = try XCTUnwrap(Bundle(for: AppModel.self).path(forResource: "en", ofType: "lproj"))
+        let table = try XCTUnwrap(NSDictionary(contentsOfFile: path + "/Localizable.strings") as? [String: String])
+        XCTAssertGreaterThan(table.count, 1000)
+        let specifier = try NSRegularExpression(pattern: "%(?:[0-9]+\\$)?(@|lld|lf|d|%)")
+        func specifiers(_ s: String) -> [String] {
+            specifier.matches(in: s, range: NSRange(s.startIndex..., in: s)).map { (s as NSString).substring(with: $0.range(at: 1)) }.sorted()
+        }
+        for (key, value) in table { XCTAssertEqual(specifiers(key), specifiers(value), key) }
+        try render("today-en", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+        try render("health-weight-en", glow: Palette.Glow.health) { WeightDetailContent(health: DemoData.health).padding(24).padding(.top, 30) }
+        let store = SettingsStore(api: APIClient(), demo: true)
+        try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
     func testSettingsScreens() throws {
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
-        try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) } }
-        try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) } }
+        try render("settings-profile", height: 900) { NavigationStack { ProfileSettingsView(store: store) }.environment(AppModel(demo: true)) }
+        try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
     }
 
     func testJSONValueKeepsUnknownKeys() throws {

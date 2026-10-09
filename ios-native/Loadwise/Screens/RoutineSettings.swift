@@ -24,7 +24,7 @@ struct GymRestSettingsView: View {
         HStack {
             Text(title).font(.body).foregroundStyle(Palette.ink)
             Spacer(minLength: 8)
-            Picker(title, selection: value) {
+            Picker(L10n.tr(title), selection: value) {
                 ForEach(Self.options, id: \.self) { Text(Self.label($0)).tag($0) }
             }
             .pickerStyle(.menu)
@@ -35,7 +35,7 @@ struct GymRestSettingsView: View {
     }
 
     static func label(_ seconds: Int) -> String {
-        if seconds == 0 { return "bez pauzy" }
+        if seconds == 0 { return L10n.tr("bez pauzy") }
         if seconds < 60 { return "\(seconds) s" }
         return seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds / 60) min \(seconds % 60) s"
     }

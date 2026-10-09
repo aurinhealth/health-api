@@ -45,15 +45,15 @@ struct MealDetailContent: View {
             HStack {
                 CircleButton(systemImage: "chevron.left", label: "Zpět", action: back)
                 Spacer()
-                SectionLabel(text: "Jídlo · " + meal.time)
+                SectionLabel(text: L10n.f("Jídlo · %@", meal.time))
                 Spacer()
-                CircleButton(systemImage: "plus", label: "Přidat " + MealSlot.toMeal(meal.type), action: add)
+                CircleButton(systemImage: "plus", label: MealSlot.addText(meal.type), action: add)
             }
 
             Text(meal.label).font(Typo.sentence(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 28)
             HStack(alignment: .lastTextBaseline, spacing: 10) {
                 Text(Fmt.int(meal.kcal ?? 0)).font(Typo.number(76)).foregroundStyle(Palette.ink)
-                if let goal { Text("z " + Fmt.int(goal.kcal) + " kcal").font(Typo.small).foregroundStyle(Palette.muted) }
+                if let goal { Text(L10n.f("z %@ kcal", Fmt.int(goal.kcal))).font(Typo.small).foregroundStyle(Palette.muted) }
             }
             if let goal {
                 ProgressLine(fraction: (meal.kcal ?? 0) / max(goal.kcal, 1), color: Palette.amberBar, height: 5).padding(.top, 4)
@@ -71,10 +71,10 @@ struct MealDetailContent: View {
             }
             .padding(.top, 22)
 
-            SectionLabel(text: meal.entries.isEmpty ? "Zatím nic" : "Potraviny · \(meal.entries.count)").padding(.top, 28)
+            SectionLabel(text: meal.entries.isEmpty ? "Zatím nic" : L10n.f("Potraviny · %@", String(meal.entries.count))).padding(.top, 28)
             if meal.entries.isEmpty {
                 Text("Do tohoto jídla zatím nic není. Přidej první potravinu.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
-                PrimaryButton(title: "Přidat " + MealSlot.toMeal(meal.type), systemImage: "plus", action: add).padding(.top, 16)
+                PrimaryButton(title: MealSlot.addText(meal.type), systemImage: "plus", action: add).padding(.top, 16)
             } else {
                 VStack(spacing: 10) {
                     ForEach(meal.entries) { FoodEntryCard(entry: $0) }
@@ -98,12 +98,28 @@ struct MealDetailContent: View {
     }
 }
 
-/// One food of the meal with every value it has.
+/// One food of the meal with every value it has. A tap or a swipe opens its
+/// edit (amount, meal, day, copy); deleting asks first.
 struct FoodEntryCard: View {
     @Environment(AppModel.self) private var model
     let entry: FoodSnapshot.Entry
+    @State private var editing = false
+    @State private var confirmDelete = false
 
     var body: some View {
+        SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
+            card.onTapGesture { editing = true }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .sheet(isPresented: $editing) {
+            FoodEntryEditSheet(entry: entry, date: model.food?.date ?? AppModel.localDate(Date()))
+        }
+        .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Smazat", role: .destructive) { Task { await model.deleteFood(id: entry.id) } }
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -119,24 +135,22 @@ struct FoodEntryCard: View {
                 }
             }
             HStack(spacing: 6) {
-                value("S", entry.carbs, Palette.carbs)
-                value("B", entry.protein, Palette.protein)
-                value("T", entry.fat, Palette.fat)
+                value(L10n.isEnglish ? "C" : "S", entry.carbs, Palette.carbs)
+                value(L10n.isEnglish ? "P" : "B", entry.protein, Palette.protein)
+                value(L10n.isEnglish ? "F" : "T", entry.fat, Palette.fat)
             }
             Text(Self.extras(entry)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
         .padding(14)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .contextMenu {
-            Button(role: .destructive) { Task { await model.deleteFood(id: entry.id) } } label: { Label("Smazat", systemImage: "trash") }
-        }
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Podržením smažeš")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func value(_ letter: String, _ grams: Double?, _ color: Color) -> some View {
         HStack(spacing: 4) {
-            Text(letter).font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+            Text(verbatim: letter).font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
                 .frame(width: 18, height: 18).background(color, in: Circle())
             Text(Fmt.decimal(grams ?? 0, digits: (grams ?? 0) < 10 ? 1 : 0) + " g").font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
         }
@@ -152,9 +166,12 @@ struct FoodEntryCard: View {
 
     /// "vláknina 3 g · cukry 12 g · sůl 0,4 g".
     static func extras(_ e: FoodSnapshot.Entry) -> String {
-        let fiber = "vláknina " + (e.fiber.map { Fmt.decimal($0) + " g" } ?? "–")
-        let sugar = "cukry " + (e.sugar.map { Fmt.decimal($0) + " g" } ?? "–")
-        let salt = "sůl " + (e.salt.map { Fmt.decimal($0, digits: 2) + " g" } ?? "–")
+        let fiberGrams: String = e.fiber.map { Fmt.decimal($0) + " g" } ?? "–"
+        let sugarGrams: String = e.sugar.map { Fmt.decimal($0) + " g" } ?? "–"
+        let saltGrams: String = e.salt.map { Fmt.decimal($0, digits: 2) + " g" } ?? "–"
+        let fiber = L10n.f("vláknina %@", fiberGrams)
+        let sugar = L10n.f("cukry %@", sugarGrams)
+        let salt = L10n.f("sůl %@", saltGrams)
         return [fiber, sugar, salt].joined(separator: " · ")
     }
 }

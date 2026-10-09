@@ -32,29 +32,50 @@ enum Reminders {
 
         // Bedtime: 30 minutes before, with the night's need.
         if isOn(bedtimeKey), let bed = today.tonight?.bedtime, let need = today.tonight?.need, let at = minutes(bed) {
-            add(center, "bedtime", at: (at - 30 + 1440) % 1440, title: "Za půl hodiny do postele",
-                body: "Na dnešní noc potřebuješ " + Fmt.duration(need) + ". Jdi spát do " + bed + ".")
+            add(center, "bedtime", at: (at - 30 + 1440) % 1440, title: L10n.tr("Za půl hodiny do postele"),
+                body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), bed))
         }
         // Today's planned workout: an hour before its start.
         if isOn(workoutKey) {
             for item in today.plan where item.kind == "workout" && !item.done {
                 guard let time = item.time, let at = minutes(time), at >= 60 else { continue }
-                add(center, "workout." + time, at: at - 60, title: "Za hodinu: " + item.title,
-                    body: item.detail.map { $0 + ". Dej si něco malého a připrav se." } ?? "Dej si něco malého a připrav se.")
+                add(center, "workout." + time, at: at - 60, title: L10n.f("Za hodinu: %@", item.title),
+                    body: item.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))
             }
         }
         // Water at 10, 13 and 16 while below the day's target.
         if isOn(waterKey), let target = today.nutrition.water.target, (today.nutrition.water.ml ?? 0) < target {
+            let amount = Units.imperial ? Units.volumeText(target) : Fmt.decimal(target / 1000) + " l"
             for hour in [10, 13, 16] {
-                add(center, "water.\(hour)", at: hour * 60, title: "Napij se",
-                    body: "Dnešní cíl je " + Fmt.decimal(target / 1000) + " l vody.")
+                add(center, "water.\(hour)", at: hour * 60, title: L10n.tr("Napij se"),
+                    body: L10n.f("Dnešní cíl je %@ vody.", amount))
             }
         }
         // The evening: log what was eaten.
         if isOn(foodKey) {
-            add(center, "food", at: 20 * 60 + 30, title: "Zapiš jídlo", body: "Ať sedí dnešní příjem a zítřejší doporučení.")
+            add(center, "food", at: 20 * 60 + 30, title: L10n.tr("Zapiš jídlo"), body: L10n.tr("Ať sedí dnešní příjem a zítřejší doporučení."))
         }
     }
+
+    /// The end of a rest in Režim tréninku, so it sounds with the phone locked
+    /// too (in the app a vibration says it). nil cancels it.
+    static func restEnds(at end: Date?) async {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [restId])
+        guard let end, end.timeIntervalSinceNow > 1 else { return }
+        var status = await center.notificationSettings().authorizationStatus
+        if status == .notDetermined { status = await requestPermission() ? .authorized : .denied }
+        guard status == .authorized || status == .provisional else { return }
+        let content = UNMutableNotificationContent()
+        content.title = L10n.tr("Konec pauzy")
+        content.body = L10n.tr("Další série.")
+        content.sound = .default
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: end.timeIntervalSinceNow, repeats: false)
+        try? await center.add(UNNotificationRequest(identifier: restId, content: content, trigger: trigger))
+    }
+
+    /// Outside the "loadwise." prefix, so planning the day keeps it.
+    private static let restId = "loadwise-rest"
 
     static func cancelAll() {
         let center = UNUserNotificationCenter.current()

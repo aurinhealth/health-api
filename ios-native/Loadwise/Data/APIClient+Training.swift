@@ -45,7 +45,7 @@ extension APIClient {
         if !muscles.isEmpty { body["focusMuscles"] = .array(muscles.map { .string($0) }) }
         else if let focus { body["focus"] = .string(focus) }
         let r: GymPreviewResponse = try await send("/app/api/gym/generate", method: "POST", body: body)
-        guard let plan = r.plan else { throw APIError.message(r.message ?? "Trénink se nepodařilo sestavit.") }
+        guard let plan = r.plan else { throw APIError.message(r.message ?? L10n.tr("Trénink se nepodařilo sestavit.")) }
         return GymProposal(draftId: r.draftId, planName: plan.planName ?? "Silový trénink", rationale: plan.rationale, rows: plan.rows, muscles: r.muscles ?? [:])
     }
 
@@ -75,6 +75,16 @@ extension APIClient {
         if let difficulty { path += "&minDifficulty=\(difficulty.lowerBound)&maxDifficulty=\(difficulty.upperBound)" }
         let r: WorkoutSearchResponse = try await get(path)
         return r.workouts
+    }
+
+    /// The coach's workout for today (POST /app/api/workouts/generate): the
+    /// library workout that fits the readiness, load and week plan best.
+    /// Another variant gives the next of its few best picks.
+    func generateWorkout(sport: String, minutes: Int?, indoor: Bool, variant: Int) async throws -> GeneratedWorkout {
+        var body: JSONObject = ["date": .string(AppModel.localDate(Date())), "sport": .string(sport),
+                                "environment": .string(indoor ? "indoor" : "outdoor"), "variant": .number(Double(variant))]
+        if let minutes { body["availabilityMinutes"] = .number(Double(minutes)); body["userInitiated"] = .bool(true) }
+        return try await send("/app/api/workouts/generate", method: "POST", body: body)
     }
 
     func scheduleWorkout(id: String, date: String, indoor: Bool) async throws {

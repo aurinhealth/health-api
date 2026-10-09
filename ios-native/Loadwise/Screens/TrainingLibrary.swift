@@ -71,7 +71,7 @@ struct LibrarySportPanel: View {
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(sport.label + ", " + sport.subtitle)
+        .accessibilityLabel(L10n.tr(sport.label) + ", " + L10n.tr(sport.subtitle))
     }
 }
 
@@ -86,7 +86,7 @@ struct GymLibrarySection: View {
                         .frame(width: 38, height: 38)
                         .background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Sestavit trénink s AI").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         Text("podle únavy, partií a tvého vybavení").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer()
@@ -121,6 +121,10 @@ struct WorkoutLibrarySection: View {
     @State private var loading = false
     @State private var error: String?
     @State private var open: LibraryWorkout?
+    @State private var proposal: GeneratedWorkout?
+    @State private var variant = 0
+    @State private var proposing = false
+    @State private var proposalError: String?
 
     enum Level: String, CaseIterable, Identifiable {
         case any, easy, medium, hard
@@ -146,9 +150,6 @@ struct WorkoutLibrarySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Seřazené podle toho, co ti dnes sedí: připravenost, únava a předchozí tréninky.")
-                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
-
             Picker("Kde", selection: $indoor) {
                 Text(sport == "run" ? "Pás" : "Trenažér").tag(true)
                 Text("Venku").tag(false)
@@ -156,6 +157,7 @@ struct WorkoutLibrarySection: View {
             .pickerStyle(.segmented)
             .padding(.top, 16)
 
+            coachPick
             lengthFilter
             SectionLabel(text: "Typ").padding(.top, 20)
             ChipFlow(items: [""] + LibraryWorkout.systems.map { $0.0 }, label: { $0.isEmpty ? "Doporučený" : LibraryWorkout.systemLabel($0) },
@@ -176,7 +178,7 @@ struct WorkoutLibrarySection: View {
                 Text("Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text("\(workouts.count) " + Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků"))
+                Text(L10n.f("%@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků")))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
@@ -190,6 +192,41 @@ struct WorkoutLibrarySection: View {
         .onAppear { slider = Double(presets.first ?? (sport == "run" ? 45 : 90)) }
         .task(id: "\(minutes ?? 0)|\(tolerance.wrappedValue)|\(system ?? "")|\(indoor)|\(level.rawValue)") { await load() }
         .sheet(item: $open) { w in LibraryWorkoutSheet(workout: w, sport: sport, indoor: indoor) }
+    }
+
+    /// The coach's one workout for today, from the length chosen below.
+    private var coachPick: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let workout = proposal?.workout {
+                SectionLabel(text: "Návrh kouče")
+                Button { open = workout } label: { LibraryWorkoutCard(workout: workout) }.buttonStyle(PressableCardStyle())
+                if (proposal?.variantCount ?? 0) > 1 {
+                    SecondaryButton(title: proposing ? "Hledám…" : "Jiný návrh") { Task { variant += 1; await propose() } }
+                        .disabled(proposing)
+                }
+            } else {
+                PrimaryButton(title: proposing ? "Hledám…" : "Navrhnout trénink na dnes", systemImage: "sparkles", busy: proposing) {
+                    Task { variant = 0; await propose() }
+                }
+                .disabled(model.demo)
+            }
+            if let message = proposalError ?? (proposal?.workout == nil ? proposal?.message : nil) {
+                Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, 20)
+        .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil }
+    }
+
+    private func propose() async {
+        proposing = true
+        defer { proposing = false }
+        do {
+            proposal = try await model.api.generateWorkout(sport: sport, minutes: minutes, indoor: indoor, variant: variant)
+            proposalError = nil
+        } catch {
+            proposalError = error.localizedDescription
+        }
     }
 
     /// "Doporučená" or the own length: presets to tap, a slider, and how far
@@ -335,7 +372,7 @@ struct LibraryWorkoutSheet: View {
                 list(sport == "run" ? "Jak ho běžet" : "Jak ho jet", workout.guide?.how, "figure." + (sport == "run" ? "run" : "outdoor.cycle"), Palette.amber)
                 list("Jídlo a pití", workout.guide?.fueling, "fork.knife", Palette.brown)
                 list("Kde", workout.guide?.environment, "map", Palette.indigo)
-                if let source = workout.source_name { Text("Zdroj: " + source).font(Typo.caption).foregroundStyle(Palette.faint) }
+                if let source = workout.source_name { Text(L10n.f("Zdroj: %@", source)).font(Typo.caption).foregroundStyle(Palette.faint) }
 
                 Card {
                     DatePicker("Den", selection: $date, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
@@ -360,7 +397,7 @@ struct LibraryWorkoutSheet: View {
     private func list(_ title: String, _ lines: [String]?, _ symbol: String, _ color: Color) -> some View {
         if let lines, !lines.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Label(title, systemImage: symbol).font(Typo.bodyStrong).foregroundStyle(color)
+                Label(L10n.tr(title), systemImage: symbol).font(Typo.bodyStrong).foregroundStyle(color)
                 ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Circle().fill(color.opacity(0.6)).frame(width: 5, height: 5).offset(y: -2)
@@ -455,7 +492,7 @@ struct ExerciseCatalog: View {
             } else if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
             } else {
-                Text("\(filtered.count) " + Fmt.plural(filtered.count, "cvik", "cviky", "cviků"))
+                Text(L10n.f("%@ %@", String(filtered.count), Fmt.plural(filtered.count, "cvik", "cviky", "cviků")))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 16)
                 LazyVStack(spacing: 0) {
                     ForEach(filtered) { ex in

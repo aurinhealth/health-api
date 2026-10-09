@@ -361,6 +361,8 @@ struct PlannedWorkout: Decodable, Equatable {
     }
 
     struct Workout: Decodable, Equatable {
+        /// The library workout's id (source "library"); null for an Intervals.icu event.
+        var id: JSONValue? = nil
         let name: String?
         let sport: String?
         let environment: String?
@@ -369,5 +371,82 @@ struct PlannedWorkout: Decodable, Equatable {
         let intensity_factor: Double?
         let description: String?
         let steps: [Block]?
+    }
+}
+
+// MARK: - Ratings (GET /app/api/workouts/scheduled, POST /app/api/workouts/feedback)
+
+/// A library workout put in the calendar (workout-library.js getScheduledWorkouts).
+struct ScheduledWorkout: Decodable, Equatable {
+    let workoutId: String
+    let sport: String?
+    let scheduledDate: String
+    /// The Intervals.icu event id ("local-…" for a session kept only in the app).
+    let eventId: String?
+    let feedbackId: Int?
+    let feedbackRpe: Double?
+    let durationMinutes: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case workout_id, sport, scheduled_date, intervals_event_id, feedback_id, feedback_rpe, duration_minutes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let value = { (key: CodingKeys) in (try? c.decodeIfPresent(JSONValue.self, forKey: key)) ?? nil }
+        workoutId = value(.workout_id)?.string ?? ""
+        sport = value(.sport)?.string
+        scheduledDate = value(.scheduled_date)?.string ?? ""
+        eventId = value(.intervals_event_id)?.string
+        feedbackId = value(.feedback_id)?.number.map { Int($0) }
+        feedbackRpe = value(.feedback_rpe)?.number
+        durationMinutes = value(.duration_minutes)?.number
+    }
+
+    var rated: Bool { feedbackId != nil }
+    var local: Bool { eventId?.hasPrefix("local-") == true }
+
+    /// The calendar link of a week session: by its event, else the day and sport.
+    static func link(for session: WeekSession, in links: [ScheduledWorkout]) -> ScheduledWorkout? {
+        let event = session.eventId.map { String($0.dropFirst($0.hasPrefix("planned:") ? 8 : 0)) }
+        if let event, let byEvent = links.first(where: { $0.eventId == event }) { return byEvent }
+        let sameDay = links.filter { $0.scheduledDate == session.date && !$0.workoutId.isEmpty }
+        return sameDay.first { $0.sport == session.sport } ?? (sameDay.count == 1 ? sameDay.first : nil)
+    }
+}
+
+/// What POST /app/api/workouts/feedback answers.
+struct WorkoutFeedbackResult: Decodable {
+    let completedPercent: Double?
+    let intervals: Intervals?
+    /// "pending" while the coach writes the note, else "unavailable".
+    let reflection: String?
+
+    struct Intervals: Decodable {
+        let status: String?
+        let message: String?
+    }
+}
+
+/// The coach's note on a day (coach-reflection.js listReflections).
+struct CoachReflection: Decodable, Equatable, Identifiable {
+    let id: String
+    let date: String?
+    let workoutId: String?
+    let rpe: Double?
+    let notes: String?
+    let text: String?
+
+    enum CodingKeys: String, CodingKey { case id, date, workoutId, rpe, notes, text }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let value = { (key: CodingKeys) in (try? c.decodeIfPresent(JSONValue.self, forKey: key)) ?? nil }
+        date = value(.date)?.string
+        workoutId = value(.workoutId)?.string
+        rpe = value(.rpe)?.number
+        notes = value(.notes)?.string
+        text = value(.text)?.string
+        id = value(.id)?.string ?? ((date ?? "") + "|" + (text ?? ""))
     }
 }

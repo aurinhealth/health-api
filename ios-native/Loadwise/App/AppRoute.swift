@@ -21,12 +21,16 @@ enum AppRoute: Hashable {
     case workoutLibrary(String)
     case equipment
     case trainingMode(String)
+    /// The coach's sessions for the rest of the week, the review of today, the records.
+    case weekPlan
+    case dayReview
+    case insights
 
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .heart, .weight: return .health
-        case .sleepSettings: return .today
+        case .sleepSettings, .dayReview: return .today
         default: return .training
         }
     }
@@ -47,6 +51,9 @@ enum AppRoute: Hashable {
         case "sleep-settings": self = .sleepSettings
         case "gym-builder": self = .gymBuilder
         case "exercises": self = .exerciseLibrary
+        case "week-plan": self = .weekPlan
+        case "day-review": self = .dayReview
+        case "records": self = .insights
         default: return nil
         }
     }
@@ -95,6 +102,9 @@ struct RouteScreen: View {
         case .workoutLibrary(let sport): TrainingLibraryView(sport: sport)
         case .equipment: EquipmentView()
         case .trainingMode(let date): TrainingModeView(date: date)
+        case .weekPlan: WeekPlanView()
+        case .dayReview: DayReviewView()
+        case .insights: InsightsView()
         }
     }
 }

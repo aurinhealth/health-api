@@ -1,8 +1,9 @@
 import Foundation
 
-/// Czech number and time formatting: decimal comma, space between thousands.
+/// Number and time formatting in the app's language: in Czech a decimal comma
+/// and a space between thousands.
 enum Fmt {
-    static let locale = Locale(identifier: "cs_CZ")
+    static var locale: Locale { L10n.locale }
 
     static func int(_ value: Double?) -> String {
         guard let value else { return "–" }
@@ -35,7 +36,7 @@ enum Fmt {
         guard let date = parser.date(from: isoDate) else { return isoDate }
         let out = DateFormatter()
         out.locale = locale
-        out.dateFormat = "EEEE d. MMMM"
+        out.dateFormat = L10n.isEnglish ? "EEEE, MMMM d" : "EEEE d. MMMM"
         return out.string(from: date).uppercased(with: locale)
     }
 
@@ -46,7 +47,7 @@ enum Fmt {
         parser.dateFormat = "yyyy-MM-dd"
         guard let date = parser.date(from: isoDate) else { return "" }
         let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
-        return ["N", "P", "Ú", "S", "Č", "P", "S"][weekday - 1]
+        return (L10n.isEnglish ? ["S", "M", "T", "W", "T", "F", "S"] : ["N", "P", "Ú", "S", "Č", "P", "S"])[weekday - 1]
     }
 
     /// "1. listopadu" for 2026-11-01.
@@ -55,24 +56,28 @@ enum Fmt {
         let out = DateFormatter()
         out.locale = locale
         out.timeZone = utc
-        out.dateFormat = "d. MMMM"
+        out.dateFormat = L10n.isEnglish ? "MMMM d" : "d. MMMM"
         return out.string(from: date)
     }
 
     /// Two-letter Czech weekday: "Po", "Út", "St", "Čt", "Pá", "So", "Ne".
     static func weekdayShort(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return "" }
-        return ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"][utcCalendar.component(.weekday, from: date) - 1]
+        let names = L10n.isEnglish ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] : ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"]
+        return names[utcCalendar.component(.weekday, from: date) - 1]
     }
 
     /// "dnes", "zítra", "v sobotu" relative to today's date.
     static func relativeDay(_ isoDate: String, today: String) -> String {
         guard let a = parse(today), let b = parse(isoDate) else { return isoDate }
         let days = Int((b.timeIntervalSince(a) / 86400).rounded())
-        if days == 0 { return "dnes" }
-        if days == 1 { return "zítra" }
+        if days == 0 { return L10n.tr("dnes") }
+        if days == 1 { return L10n.tr("zítra") }
         let weekday = utcCalendar.component(.weekday, from: b)
-        let name = ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][weekday - 1]
+        let names = L10n.isEnglish
+            ? ["on Sunday", "on Monday", "on Tuesday", "on Wednesday", "on Thursday", "on Friday", "on Saturday"]
+            : ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"]
+        let name = names[weekday - 1]
         return days < 7 ? name : dayMonth(isoDate)
     }
 
@@ -90,9 +95,10 @@ enum Fmt {
         text.prefix(1).uppercased() + String(text.dropFirst())
     }
 
-    /// Czech plural: 1 den, 2 dny, 5 dní.
+    /// Czech plural: 1 den, 2 dny, 5 dní. In English "many" is the plural.
     static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
-        n == 1 ? one : (2...4).contains(n) ? few : many
+        if L10n.isEnglish { return L10n.tr(n == 1 ? one : many) }
+        return n == 1 ? one : (2...4).contains(n) ? few : many
     }
 
     private static let utc = TimeZone(identifier: "UTC")!
