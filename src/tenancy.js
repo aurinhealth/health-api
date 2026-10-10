@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { routedUserDb } from './user-data-routing.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
 
@@ -113,7 +114,8 @@ export function scopedDb(db, userId) {
 // to the owner's legacy global credentials unless this is the owner.
 export function userEnv(env, user) {
   // CONSENT_REQUIRED: AI for this user runs only with their consent (consent.js).
-  const scoped = { ...env, DB: scopedDb(env.DB, user.id), RAW_DB: env.DB, USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
+  const data = env.USER_DATA_DB ? routedUserDb(env.DB, env.USER_DATA_DB, PERSONAL_TABLES) : env.DB;
+  const scoped = { ...env, DB: scopedDb(data, user.id), RAW_DB: env.DB, USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
   if (!scoped.USER_IS_OWNER) {
     delete scoped.GOOGLE_REFRESH_TOKEN;
     delete scoped.INTERVALS_API_KEY;

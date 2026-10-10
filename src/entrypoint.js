@@ -105,7 +105,8 @@ import { aiAllowance } from "./ai-usage.js";
 import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
-import { ensureTenancy, TenancyUpgradeInProgress, userEnv, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
+import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
 import { handleEmailLogin, handleEmailChange, emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
 import { emailConfigured } from "./email-sender.js";
@@ -133,7 +134,7 @@ async function forEachUser(env, providers, fn) {
   const results = [];
   for (const user of await usersWithProviders(env.DB, env, providers)) {
     try {
-      const scoped = await connectionEnvironment(userEnv(env, user));
+      const scoped = await connectionEnvironment(await userDataEnvironment(env, user));
       // Texts written by a job (workouts sent to Intervals.icu, …) use the user's
       // app language, and its days the user's time zone.
       if (providers.some(p => (scoped.CONNECTED_PROVIDERS || []).includes(p))) {
@@ -154,12 +155,12 @@ const worker = {
     await ensureTenancy(env.DB, env);
     useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
-    if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB).catch(error => console.error("Account deletion failed", error.message));
+    if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB, env.USER_DATA_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Account deletion failed", error.message));
     // Accounts unused for two years go with their data (privacy policy). Tried
     // every ten minutes between 2:00 and 3:00 UTC, as a cron minute can be missed.
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 0) {
       for (const user of await inactiveAccounts(env.DB, env).catch(error => { console.error("Inactive accounts read failed", error.message); return []; })) {
-        await deleteAccount(await connectionEnvironment(userEnv(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
+        await deleteAccount(await connectionEnvironment(await userDataEnvironment(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
       }
     }
     await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
@@ -190,7 +191,11 @@ const worker = {
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     const principal = await resolvePrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
-    if (!isPublic && !principal) return unauthorizedResponse();
+    if (!isPublic && !principal) {
+      const response = unauthorizedResponse();
+      if (env.USER_DATA_ROUTING === 'true') response.headers.set('X-Storage-Routing', '1');
+      return response;
+    }
     let user = null;
     if (principal?.kind === "user") {
       user = await findUser(env.DB, principal.userId, env);
@@ -199,7 +204,13 @@ const worker = {
       // The owner API key and GitHub automations act as the owner.
       user = await ownerUser(env.DB, env);
     }
-    if (user) env = await connectionEnvironment(userEnv(rawEnv, user));
+    if (user) {
+      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user)); }
+      catch (error) {
+        if (error instanceof UserDataUnavailable) return Response.json({status:'storage_unavailable',message:'Úložiště je dočasně nedostupné. Zkus to prosím později.'},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
+        throw error;
+      }
+    }
     else env = { ...rawEnv, DB: null, RAW_DB: rawEnv.DB };
     // Everything written for the user in this request follows the app language:
     // the app sends it with each request; otherwise the remembered choice.

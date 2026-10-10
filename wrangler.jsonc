@@ -63,6 +63,10 @@
   "workers_dev": true,
   // The owner is the first admin; existing single-user data belongs to this account.
   "vars": {
+    // Provisioned by scripts/provision-user-shards.mjs in the deploy jobs.
+    // 20 groups of at most 10 accounts; capacity is also checked in bytes.
+    "USER_DATA_ROUTING": "true",
+    "USER_DATA_SHARD_COUNT": "20",
     "OWNER_EMAIL": "chelseafc.czsk@gmail.com"
   },
   "env": {
@@ -100,6 +104,8 @@
         { "name": "EMAIL" }
       ],
       "vars": {
+        "USER_DATA_ROUTING": "true",
+        "USER_DATA_SHARD_COUNT": "2",
         "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
         "ENVIRONMENT": "staging",
         "APP_ORIGIN": "https://staging.petrfitnessdata.eu"
