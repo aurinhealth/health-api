@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
@@ -516,7 +517,13 @@ function pointStatement(env, source, type, payload, value = null, unit = null, s
         value_numeric = excluded.value_numeric,
         value_unit = excluded.value_unit,
         payload_json = excluded.payload_json,
-        updated_at = CURRENT_TIMESTAMP`
+        updated_at = CURRENT_TIMESTAMP
+      WHERE health_datapoints.sample_time IS NOT excluded.sample_time
+        OR health_datapoints.start_time IS NOT excluded.start_time
+        OR health_datapoints.end_time IS NOT excluded.end_time
+        OR health_datapoints.value_numeric IS NOT excluded.value_numeric
+        OR health_datapoints.value_unit IS NOT excluded.value_unit
+        OR health_datapoints.payload_json IS NOT excluded.payload_json`
     )
     .bind(
       env.USER_ID,
@@ -528,7 +535,7 @@ function pointStatement(env, source, type, payload, value = null, unit = null, s
       endTime,
       value,
       unit,
-      JSON.stringify(payload)
+      healthPointJson(payload)
     );
 }
 
@@ -869,7 +876,13 @@ async function saveGooglePointsBatch(env, family, type, points) {
         value_numeric = excluded.value_numeric,
         value_unit = excluded.value_unit,
         payload_json = excluded.payload_json,
-        updated_at = CURRENT_TIMESTAMP`
+        updated_at = CURRENT_TIMESTAMP
+      WHERE health_datapoints.sample_time IS NOT excluded.sample_time
+        OR health_datapoints.start_time IS NOT excluded.start_time
+        OR health_datapoints.end_time IS NOT excluded.end_time
+        OR health_datapoints.value_numeric IS NOT excluded.value_numeric
+        OR health_datapoints.value_unit IS NOT excluded.value_unit
+        OR health_datapoints.payload_json IS NOT excluded.payload_json`
     ).bind(
       env.USER_ID,
       family,
@@ -880,7 +893,7 @@ async function saveGooglePointsBatch(env, family, type, points) {
       i.end,
       i.value,
       i.unit,
-      JSON.stringify(point)
+      healthPointJson(point)
     );
   });
 

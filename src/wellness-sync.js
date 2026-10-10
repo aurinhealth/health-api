@@ -9,6 +9,7 @@
 
 import { heartRateFromSamples } from "./index.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { healthPointJson } from './health-point-json.js';
 import { localDate } from "./user-time.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
@@ -82,7 +83,8 @@ async function remember(db, userId, date, fields) {
   let merged = {};
   try { merged = { ...JSON.parse(row?.payload_json || "{}"), ...fields }; } catch { merged = fields; }
   await db.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, payload_json) VALUES (?, 'wellness-sync', 'wellness-written', ?, ?, ?)
-    ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET payload_json = excluded.payload_json`).bind(userId, date, date + "T12:00:00Z", JSON.stringify(merged)).run();
+    ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET payload_json = excluded.payload_json
+    WHERE health_datapoints.payload_json IS NOT excluded.payload_json`).bind(userId, date, date + "T12:00:00Z", healthPointJson(merged)).run();
 }
 
 const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });

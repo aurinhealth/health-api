@@ -54,7 +54,8 @@ export async function writtenLedger(db, userId, since) {
 
 async function remember(db, userId, target, date, value) {
   await db.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, value_unit, payload_json)
-    VALUES (?, 'weight-sync', 'weight-written', ?, ?, ?, 'kg', '{}') ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET value_numeric = excluded.value_numeric, sample_time = excluded.sample_time`)
+    VALUES (?, 'weight-sync', 'weight-written', ?, ?, ?, 'kg', '{}') ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET value_numeric = excluded.value_numeric, sample_time = excluded.sample_time
+    WHERE health_datapoints.value_numeric IS NOT excluded.value_numeric OR health_datapoints.sample_time IS NOT excluded.sample_time`)
     .bind(userId, `${target}:${date}`, date + "T12:00:00Z", value).run();
 }
 
@@ -89,7 +90,8 @@ export async function writeGoogleWeight(token, date, value, fetchImpl = fetch) {
 function appWeightStatement(db, userId, date, value) {
   const { at } = localNoon(date);
   return db.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json)
-    VALUES (?, 'intervals', 'weight', ?, ?, ?, ?, ?, 'kg', ?) ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET value_numeric = excluded.value_numeric, payload_json = excluded.payload_json`)
+    VALUES (?, 'intervals', 'weight', ?, ?, ?, ?, ?, 'kg', ?) ON CONFLICT(user_id, source_family, data_type, external_id) DO UPDATE SET value_numeric = excluded.value_numeric, payload_json = excluded.payload_json
+    WHERE health_datapoints.value_numeric IS NOT excluded.value_numeric OR health_datapoints.payload_json IS NOT excluded.payload_json`)
     .bind(userId, "intervals-weight:" + date, at, at, at, value, JSON.stringify({ value_kg: value, source: "intervals" }));
 }
 
