@@ -53,6 +53,14 @@ async function copy(live, staging, options = {}) {
   return result;
 }
 
+test("refreshing staging personal history preserves the independently managed food catalogue", async () => {
+  const live=liveDatabase(),staging=stagingDatabase();
+  staging.exec("INSERT INTO schema_meta(key,value) VALUES('food_catalog_state','ready'); INSERT INTO shared_foods(food_key,search_name,product_json) VALUES('staging-food','staging food','{}')");
+  const result=await copy(live,staging,{refresh:true});
+  assert.equal(result.counts.shared_foods,undefined);
+  assert.deepEqual(staging.prepare('SELECT food_key FROM shared_foods').all().map(r=>r.food_key),['staging-food']);
+});
+
 test("SQL literals survive quotes, newlines, semicolons and emoji", () => {
   const db = new DatabaseSync(":memory:");
   const values = [TRICKY, "", null, 0, -1.25, 1e21, true, false, Infinity];

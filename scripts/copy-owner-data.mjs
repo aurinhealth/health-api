@@ -149,7 +149,12 @@ export async function buildCopy({ query, source, target, ownerEmail, refresh = f
   // Until the copy has finished, a later run continues it.
   if (refresh) files.statement(`DELETE FROM schema_meta WHERE key = ${sqlLiteral(DONE_KEY)}`);
   const tables = [...OWNER_TABLES.map(name => ({ name, owner: true })), ...SHARED_TABLES.map(name => ({ name, owner: false }))];
+  const catalogue = await query(target, "SELECT value FROM schema_meta WHERE key = ?", ['food_catalog_state']);
   for (const table of tables) {
+    if (table.name === 'shared_foods' && ['ready','copying'].includes(catalogue.rows[0]?.[0])) {
+      log('shared_foods: separate staging catalogue, skipped');
+      continue;
+    }
     const sourceColumns = await columnNames(query, source, table.name);
     const targetColumns = new Set(await columnNames(query, target, table.name));
     const columns = sourceColumns.filter(name => targetColumns.has(name));

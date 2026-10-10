@@ -107,6 +107,7 @@ import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
+import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
 import { handleEmailLogin, handleEmailChange, emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
 import { emailConfigured } from "./email-sender.js";
@@ -155,7 +156,7 @@ const worker = {
     await ensureTenancy(env.DB, env);
     useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
-    if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB, env.USER_DATA_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Account deletion failed", error.message));
+    if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Account deletion failed", error.message));
     // Accounts unused for two years go with their data (privacy policy). Tried
     // every ten minutes between 2:00 and 3:00 UTC, as a cron minute can be missed.
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 0) {
@@ -194,6 +195,7 @@ const worker = {
     if (!isPublic && !principal) {
       const response = unauthorizedResponse();
       if (env.USER_DATA_ROUTING === 'true') response.headers.set('X-Storage-Routing', '1');
+      if (env.FOOD_CATALOG_ROUTING === 'true') response.headers.set('X-Food-Catalog-Routing', '1');
       return response;
     }
     let user = null;
@@ -207,7 +209,7 @@ const worker = {
     if (user) {
       try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user)); }
       catch (error) {
-        if (error instanceof UserDataUnavailable) return Response.json({status:'storage_unavailable',message:'Úložiště je dočasně nedostupné. Zkus to prosím později.'},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
+        if (error instanceof UserDataUnavailable || error instanceof FoodCatalogUnavailable) return Response.json({status:'storage_unavailable',message:error instanceof FoodCatalogUnavailable?error.message:'Úložiště je dočasně nedostupné. Zkus to prosím později.'},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
         throw error;
       }
     }
@@ -267,6 +269,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
+      if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
       // A change by the user makes the cached coach inputs outdated.

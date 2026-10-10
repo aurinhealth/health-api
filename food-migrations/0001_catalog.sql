@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS shared_foods (food_key TEXT PRIMARY KEY,search_name TEXT NOT NULL,product_json TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS shared_recipes (catalog_id TEXT PRIMARY KEY,recipe_json TEXT NOT NULL,search_name TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS food_contributions (user_id INTEGER NOT NULL,personal_id TEXT NOT NULL,catalog_id TEXT NOT NULL,PRIMARY KEY(user_id,personal_id));
+CREATE TABLE IF NOT EXISTS recipe_contributions (user_id INTEGER NOT NULL,recipe_id TEXT NOT NULL,catalog_id TEXT NOT NULL,PRIMARY KEY(user_id,recipe_id));
+CREATE TABLE IF NOT EXISTS food_reports (user_id INTEGER NOT NULL,catalog_id TEXT NOT NULL,reason TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,catalog_id));
+CREATE TABLE IF NOT EXISTS food_catalog_meta (key TEXT PRIMARY KEY,value TEXT NOT NULL);
+INSERT INTO food_catalog_meta(key,value) VALUES('schema_version','1') ON CONFLICT(key) DO NOTHING;
+CREATE INDEX IF NOT EXISTS shared_foods_barcode ON shared_foods(json_extract(product_json,'$.barcode'));
+CREATE INDEX IF NOT EXISTS shared_foods_recent ON shared_foods(updated_at DESC);
+CREATE INDEX IF NOT EXISTS shared_recipes_recent ON shared_recipes(updated_at DESC);
+CREATE INDEX IF NOT EXISTS food_contributions_catalog ON food_contributions(catalog_id);
+CREATE INDEX IF NOT EXISTS recipe_contributions_catalog ON recipe_contributions(catalog_id);
+CREATE INDEX IF NOT EXISTS food_reports_catalog ON food_reports(catalog_id);

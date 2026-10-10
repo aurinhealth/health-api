@@ -1,5 +1,6 @@
 import { userEnv, PERSONAL_TABLES } from './tenancy.js';
 import { routedUserDb } from './user-data-routing.js';
+import { foodCatalogEnvironment, FoodCatalogUnavailable } from './food-catalog-storage.js';
 
 const LEGACY = 'legacy';
 const ALLOCATION_ATTEMPTS = 100;
@@ -65,10 +66,13 @@ export async function resolveUserData(env, userId, { existingOnly = false } = {}
 
 export async function userDataEnvironment(env, user) {
   const resolved = await resolveUserData(env, user.id);
-  return userEnv({ ...env, USER_DATA_DB: resolved.db, USER_DATA_SHARD: resolved.key }, user);
+  const catalogue = await foodCatalogEnvironment(env);
+  return userEnv({ ...catalogue, USER_DATA_DB: resolved.db, USER_DATA_SHARD: resolved.key }, user);
 }
 
 export async function deletionDatabase(env, userId) {
   const { db } = await resolveUserData(env, userId, { existingOnly: true });
-  return routedUserDb(env.DB, db, PERSONAL_TABLES);
+  const catalogue = await foodCatalogEnvironment(env);
+  if (catalogue.FOOD_CATALOG_STATE === 'copying') throw new FoodCatalogUnavailable();
+  return routedUserDb(env.DB, db, PERSONAL_TABLES, catalogue.FOOD_CATALOG_DB);
 }

@@ -31,7 +31,7 @@ export async function saveRecipe(db,input){
   if(recipe.shared){
     const publicRecipe={name:recipe.name,servings:recipe.servings,ingredients:recipe.ingredients,portion:{...recipe.portion,source:'shared_recipe',confidence:'user',label_verified:false}};
     const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(publicRecipe))),key=Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');
-    await db.prepare('INSERT INTO shared_recipes(catalog_id,recipe_json,search_name) VALUES(?,?,?) ON CONFLICT(catalog_id) DO UPDATE SET updated_at=CURRENT_TIMESTAMP').bind(key,JSON.stringify(publicRecipe),recipe.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()).run();
+    await db.prepare('INSERT INTO shared_recipes(catalog_id,recipe_json,search_name) VALUES(?,?,?) ON CONFLICT(catalog_id) DO NOTHING').bind(key,JSON.stringify(publicRecipe),recipe.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()).run();
     await db.prepare('INSERT INTO recipe_contributions(user_id,recipe_id,catalog_id) VALUES(?,?,?)').bind(db.userId,id,key).run();
   }
   return {...recipe,id};

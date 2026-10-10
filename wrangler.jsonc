@@ -66,6 +66,7 @@
     // Provisioned by scripts/provision-user-shards.mjs in the deploy jobs.
     // 20 groups of at most 10 accounts; capacity is also checked in bytes.
     "USER_DATA_ROUTING": "true",
+    "FOOD_CATALOG_ROUTING": "true",
     "USER_DATA_SHARD_COUNT": "20",
     "OWNER_EMAIL": "chelseafc.czsk@gmail.com"
   },
@@ -105,6 +106,7 @@
       ],
       "vars": {
         "USER_DATA_ROUTING": "true",
+        "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",
         "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
         "ENVIRONMENT": "staging",

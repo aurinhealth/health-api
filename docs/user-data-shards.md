@@ -16,7 +16,9 @@ An existing account's subsequent growth is not capped by this allocation check.
 
 The central database keeps users, invitations, sessions/authentication state,
 encrypted provider credentials, consents, language/time zone, subscriptions,
-AI spending, contribution/support records and shared catalogues. Remaining
+AI spending, support records, the cookbook and workout catalogues. The common
+food/recipe catalogue, contributions and reports use the separate `FOODS`
+database (see [food catalogue](food-catalog-database.md)). Remaining
 `PERSONAL_TABLES` in `src/tenancy.js` stay together in the assigned database:
 health history, diary, training/profile, workouts, chat, sync and cache state.
 The user_id filter guard still applies. The router refuses joins or atomic
