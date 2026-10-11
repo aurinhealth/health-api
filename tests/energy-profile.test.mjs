@@ -141,7 +141,7 @@ test("the dashboard works without connections", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.doesNotMatch(entry, /status:"onboarding"/);
-  assert.match(entry, /source:"none",connected:false/);
+  assert.match(entry, /source:"loadwise",connected:false/);
   assert.match(client, /Přeskočit a otevřít aplikaci/);
   assert.match(client, /me\.onboarding\?\.completed===true/);
 });

@@ -45,6 +45,7 @@ import {assistantAppContext,selectedAssistantContext} from './assistant-app-cont
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
 import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
+import { loadSeries, dailyLoads, sessionsFrom } from "./training-load.js";
 import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
 import {listPersonalFoods} from './personal-foods.js';
 import {queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from './food-google-sync.js';
@@ -532,6 +533,26 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
   return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB)};
+}
+
+// CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
+// connected. 120 days before `from` warm the averages up, so CTL is close to
+// what it would be with the full history.
+async function ownFitness(env,from,to){
+  const warmup=120,start=shiftDate(from,-warmup);
+  const [rows,gymDays,thresholds,profile,rest]=await Promise.all([
+    env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,shiftDate(to,1)).all().then(r=>r.results||[]).catch(()=>[]),
+    env.DB.prepare('SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,to).all().then(r=>(r.results||[]).map(x=>x.workout_date)).catch(()=>[]),
+    athleteThresholds(env).catch(()=>({})),
+    dashboardProfile(env).catch(()=>null),
+    env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(to,-30)).all().then(r=>(r.results||[]).map(x=>Number(x.value_numeric)).sort((a,b)=>a-b)).catch(()=>[])
+  ]);
+  const byActivity=new Map(),activities=[];
+  for(const row of rows){const a=activityFromRow(row);if(a){byActivity.set(a,row);activities.push(a);}}
+  const kept=dedupeActivities(activities);
+  const age=Number(profile?.age)||null;
+  const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
+  return loadSeries(dailyLoads(sessionsFrom(kept,byActivity,gymDays),athlete),{from,to,warmup});
 }
 
 async function planningHistory(env,date,days=84){
@@ -1428,7 +1449,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const oldest = new Date(newest.getTime() - days * 86400000);
       const isoDate = d => d.toISOString().slice(0,10);
       const apiKey = String(env.INTERVALS_API_KEY || "");
-      if (!apiKey) return Response.json({status:"ok",source:"none",connected:false,days,wellness:[]},{headers:{"Cache-Control":"no-store"}});
+      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js).
+      if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,isoDate(oldest),isoDate(newest))},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(isoDate(oldest))+"&newest="+encodeURIComponent(isoDate(newest));
       const response = await fetch(target,{headers:{Authorization:auth,Accept:"application/json"}});
