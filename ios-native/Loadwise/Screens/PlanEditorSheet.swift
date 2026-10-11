@@ -98,7 +98,7 @@ struct PlanEditorSheet: View {
 }
 
 /// The catalog to pick an exercise to add, with search and the muscle chips;
-/// "i" shows how to do it.
+/// "i" shows how to do it. Exercises given a thumb down come last.
 struct ExercisePicker: View {
     @Environment(\.dismiss) private var dismiss
     let catalog: [GymCatalogExercise]
@@ -110,12 +110,13 @@ struct ExercisePicker: View {
 
     private var filtered: [GymCatalogExercise] {
         let words = ExerciseCatalog.fold(query).split(separator: " ")
-        return catalog.filter { ex in
+        let found: [GymCatalogExercise] = catalog.filter { ex in
             let text = ExerciseCatalog.fold([ex.name, ex.muscle ?? "", ex.station ?? ""].joined(separator: " "))
             guard words.allSatisfy({ text.contains($0) }) else { return false }
             if let muscle, !ExerciseCatalog.works(ex, muscle) { return false }
             return true
         }
+        return found.filter { $0.liked != false } + found.filter { $0.liked == false }
     }
 
     var body: some View {
@@ -144,6 +145,11 @@ struct ExercisePicker: View {
                                 }
                                 Spacer()
                                 if used.contains(ex.name) { Text("v plánu").font(Typo.caption).foregroundStyle(Palette.faint) }
+                                if let liked = ex.liked {
+                                    Image(systemName: liked ? "hand.thumbsup" : "hand.thumbsdown").font(.system(size: 13))
+                                        .foregroundStyle(liked ? Palette.green : Palette.faint)
+                                        .accessibilityLabel(L10n.tr(liked ? "Baví mě" : "Nebaví mě"))
+                                }
                             }
                             .contentShape(Rectangle())
                         }

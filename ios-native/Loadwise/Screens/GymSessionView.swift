@@ -18,6 +18,8 @@ struct GymSessionView: View {
     @State private var minutes = 60
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var changing = false
+    @State private var rating = false
+    @State private var finishing = false
 
     private var load: [String: Double] {
         muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }
@@ -47,6 +49,10 @@ struct GymSessionView: View {
         }
         .sheet(isPresented: $changing) {
             GymPlanActionsSheet(date: date, title: day?.planName, cancelled: day?.cancelled == true) { Task { await load() } }
+        }
+        // Rated or skipped: the workout is done, back to where it was opened.
+        .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
+            GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
         .keyboardDoneButton()
     }
@@ -89,6 +95,11 @@ struct GymSessionView: View {
                 .padding(.top, 16)
                 exerciseCards(day)
                     .padding(.top, 20)
+                PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
+                    Task { await finish() }
+                }
+                .disabled(finishing)
+                .padding(.top, 24)
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
@@ -136,12 +147,18 @@ struct GymSessionView: View {
     }
 
     private func card(_ day: GymDay, _ exercise: GymExercise) -> some View {
-        ExerciseCard(exercise: exercise,
-                     failure: Set(exercise.sets.map { $0.row }.filter { day.isToFailure(row: $0) }),
-                     onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
-                     onUndo: { set in Task { await undo(set) } },
-                     onTechnique: { technique = exercise.name },
-                     onAlternatives: { alternativesFor = exercise.name })
+        // The exercise's place in the plan (the cards may be regrouped by superset).
+        let offset: Int? = day.exercises.firstIndex { $0.id == exercise.id }
+        let add: (() -> Void)? = offset.map { (at: Int) -> () -> Void in { Task { await changeSets(at: at, by: 1) } } }
+        let remove: (() -> Void)? = offset.map { (at: Int) -> () -> Void in { Task { await changeSets(at: at, by: -1) } } }
+        return ExerciseCard(exercise: exercise,
+                            failure: Set(exercise.sets.map { $0.row }.filter { day.isToFailure(row: $0) }),
+                            onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
+                            onUndo: { set in Task { await undo(set) } },
+                            onTechnique: { technique = exercise.name },
+                            onAlternatives: { alternativesFor = exercise.name },
+                            onAddSet: add,
+                            onRemoveSet: remove)
     }
 
     private func progress(_ day: GymDay) -> some View {
@@ -191,6 +208,23 @@ struct GymSessionView: View {
         await save()
     }
 
+    /// One set more (like the last one) or one fewer (the last one not done).
+    private func changeSets(at offset: Int, by step: Int) async {
+        if step > 0 { day?.addSet(at: offset) } else { day?.removeSet(at: offset) }
+        await save()
+    }
+
+    /// Everything ticked is saved already; the last save goes out, the week
+    /// shows the session done, then the rating.
+    private func finish() async {
+        finishing = true
+        defer { finishing = false }
+        await save()
+        guard error == nil else { return }
+        if !model.demo { await model.refreshTraining() }
+        rating = true
+    }
+
     private func replace(_ exercise: String, with name: String) async {
         day?.replace(exercise: exercise, with: name)
         await save()
@@ -223,6 +257,11 @@ struct ExerciseCard: View {
     var onUndo: (GymSet) -> Void
     var onTechnique: () -> Void
     var onAlternatives: () -> Void
+    var onAddSet: (() -> Void)? = nil
+    var onRemoveSet: (() -> Void)? = nil
+
+    /// A set can go while one is not done and another stays.
+    private var canRemoveSet: Bool { exercise.sets.count > 1 && exercise.sets.contains { !$0.done } }
 
     var body: some View {
         Card {
@@ -248,6 +287,19 @@ struct ExerciseCard: View {
                 ForEach(exercise.sets) { set in
                     SetRow(set: set, failure: failure.contains(set.row), onDone: { kg, reps, rpe in onSet(set, kg, reps, rpe) }, onUndo: { onUndo(set) })
                 }
+            }
+            if let onAddSet {
+                HStack(spacing: 16) {
+                    Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
+                    Spacer()
+                    if let onRemoveSet, canRemoveSet {
+                        Button(action: onRemoveSet) { Label("Odebrat sérii", systemImage: "minus") }
+                    }
+                }
+                .font(Typo.caption.weight(.semibold))
+                .foregroundStyle(Palette.muted)
+                .buttonStyle(.borderless)
+                .padding(.top, 2)
             }
         }
     }

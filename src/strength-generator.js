@@ -7,6 +7,7 @@ export function fitsEquipment(name,setup){const equipment=typeof setup==='string
 import { L } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { withoutDisliked } from './exercise-feedback.js';
 import { isIntensity } from "./strength-context.js";
 import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
 // A catalog exercise of any gym the app knows (Kutná Hora or the usual
@@ -436,6 +437,13 @@ export function stalledExercises(rows, date) {
   return new Set([...byExercise].filter(([ex, list]) => progressionDecision(list, ex, EXERCISES[ex].reps, 1, date)?.stalled).map(([ex]) => ex));
 }
 
+// The athlete's thumbs (exercise-feedback.js): disliked exercises are left
+// out while the pattern or group has another one; a liked one wins a close call.
+const LIKED_BONUS = 0.4;
+function taste(options) {
+  return { liked: new Set((options.likedExercises || []).map(normalizeExerciseName)), disliked: new Set((options.dislikedExercises || []).map(normalizeExerciseName)) };
+}
+
 function choosePlan(context, options = {}) {
   const history = selectionHistory(context);
   const muscleLoad = recentMuscleLoad(history, context.date);
@@ -471,7 +479,7 @@ function choosePlan(context, options = {}) {
   const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + groupRecency(ex) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0);
+    return recent + groupRecency(ex) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -481,6 +489,7 @@ function choosePlan(context, options = {}) {
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper"&&options.focusSource!=='week';
   const forceLower = options.focus === "lower";
+  const { liked, disliked } = taste(options);
   const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
 
   const candidatesByPattern = {
@@ -529,7 +538,8 @@ function choosePlan(context, options = {}) {
   // A movement already in the session (e.g. a hip thrust) counts against its twin.
   const usedPatterns = new Set();
   function pick(patterns) {
-    const pool = [].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup) && !used.has(ex));
+    // A disliked exercise only when the pattern has nothing else.
+    const pool = withoutDisliked([].concat(patterns).flatMap(p => (candidatesByPattern[p] || []).map((ex, rank) => ({ ex, rank }))).filter(({ ex }) => EXERCISES[ex] && availableAt(ex) && fitsEquipment(ex,context.trainingSetup) && !used.has(ex)), disliked, x => x.ex);
     const ex = pool.slice().sort((a, b) => score(a.ex, a.rank) - score(b.ex, b.rank))[0]?.ex;
     const plain = pool.slice().sort((a, b) => score(a.ex, a.rank, false) - score(b.ex, b.rank, false))[0]?.ex;
     if (ex && plain !== ex && stalled.has(plain)) stallSwaps[ex] = plain;
@@ -698,6 +708,7 @@ export function generateStrengthPlan(context, options = {}) {
   const focusMuscles = options.focusMuscles == null ? null : validateFocusMuscles(options.focusMuscles);
   if (options.focusMuscles != null && !focusMuscles) throw new Error(L('Vyber 1 až 5 známých partií.', 'Choose 1 to 5 known muscle groups.'));
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
+  const { liked, disliked } = taste(options);
   const selection = selectionHistory(context);
   const weeklyExposure = recentMuscleExposure(selection, context.date);
   const weeklyLoad = recentMuscleLoad(selection, context.date);
@@ -709,7 +720,7 @@ export function generateStrengthPlan(context, options = {}) {
   const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
   // The group's exercises, best first (the first one may carry a stall swap).
   const rankedExercises = group => {
-    const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name));
+    const candidates = withoutDisliked(FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name)), disliked);
     if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
@@ -718,7 +729,7 @@ export function generateStrengthPlan(context, options = {}) {
       // The group's list is curated main movement first (hip thrust before
       // abduction), so its order breaks near ties.
       const order = FOCUS_GROUPS[group].exercises.indexOf(name) * .05;
-      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0);
+      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) - (liked.has(name) ? LIKED_BONUS : 0);
     };
     const ranked = candidates.slice().sort((a, b) => score(a) - score(b)), best = ranked[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;

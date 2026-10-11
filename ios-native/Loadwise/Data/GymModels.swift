@@ -69,6 +69,8 @@ struct GymCatalogExercise: Decodable, Equatable, Identifiable, Hashable {
     /// How tiring it is (about 0.25 a wrist curl, 1.4 a squat): the big lifts
     /// go first in a session (nil from an older server).
     var fatigue: Double? = nil
+    /// The athlete's thumb up (true) or down (false) after a workout, nil without one.
+    var liked: Bool? = nil
     var id: String { name }
 
     static func == (a: Self, b: Self) -> Bool { a.name == b.name }

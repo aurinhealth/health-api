@@ -641,7 +641,8 @@ struct StepBlockRow: View {
 /// rated through /app/api/workouts/feedback (paired with its activity, the RPE
 /// written to Intervals.icu, the coach asked in the background); any other
 /// session goes to the coach directly (/app/api/coach/reflections). The
-/// coach's note on the session shows under the form.
+/// coach's note on the session shows under the form. Below the note: how well
+/// the generated workout fitted (/app/api/feedback/workout), for any sport.
 struct FeedbackSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -659,6 +660,8 @@ struct FeedbackSheet: View {
     @State private var waiting = false
     @State private var status: String?
     @State private var error: String?
+    @State private var fit: String?
+    @State private var fitText = ""
 
     /// The library workout and its calendar day, when the session has one.
     private var target: (id: String, date: String)? {
@@ -686,6 +689,15 @@ struct FeedbackSheet: View {
                         .padding(12)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .disabled(saved)
+                    Text("Sedělo ti sestavení tréninku?").font(.body).padding(.top, 4)
+                    PlanFitPicker(rating: $fit).disabled(saved)
+                    if fit != nil {
+                        TextField("Co nesedělo? (nepovinné)", text: $fitText, axis: .vertical)
+                            .lineLimit(2...5)
+                            .padding(12)
+                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .disabled(saved)
+                    }
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                     if let status { Text(status).font(Typo.small).foregroundStyle(Palette.muted) }
                     if saved {
@@ -730,8 +742,14 @@ struct FeedbackSheet: View {
         let api = model.api, date = session.date
         async let links = try? api.scheduledWorkouts()
         async let notesOfDay = try? api.coachReflections(date: date)
+        async let ratingsOfDay = try? api.workoutRatings(date: date)
         let allLinks: [ScheduledWorkout] = (await links) ?? []
         let reflections: [CoachReflection] = (await notesOfDay) ?? []
+        let ratings: [WorkoutRating] = (await ratingsOfDay) ?? []
+        if let own = ratings.first(where: { $0.sessionId == session.id }) {
+            fit = own.rating
+            fitText = own.text ?? ""
+        }
         link = ScheduledWorkout.link(for: session, in: allLinks)
         known = reflections.count
         let id = target?.id
@@ -747,6 +765,10 @@ struct FeedbackSheet: View {
         defer { saving = false }
         let text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
+            if let fit {
+                try await model.api.rateWorkout(date: session.date, sessionId: session.id, sport: session.sport, rating: fit,
+                                                text: fitText.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
             if let target, link?.rated != true {
                 do {
                     // A session kept only in the app has no activity: its planned length counts.

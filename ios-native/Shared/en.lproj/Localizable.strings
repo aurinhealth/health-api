@@ -1543,3 +1543,15 @@
 "Přehrát video" = "Play video";
 "Otevřít v YouTube" = "Open in YouTube";
 "K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
+"Přidat sérii" = "Add set";
+"Odebrat sérii" = "Remove set";
+"Dokončit trénink" = "Finish workout";
+"Jak se ti trénink líbil?" = "How was the workout?";
+"Sedělo ti sestavení tréninku?" = "Did the workout's plan suit you?";
+"Co nesedělo? (nepovinné)" = "What didn't suit you? (optional)";
+"Sedělo" = "Suited me";
+"Ujde" = "It's OK";
+"Nesedělo" = "Didn't suit me";
+"Baví mě" = "I like it";
+"Nebaví mě" = "I don't like it";
+"Trénink se nepodařilo uložit: %@" = "The workout couldn't be saved: %@";

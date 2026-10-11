@@ -27,6 +27,7 @@ struct TrainingModeView: View {
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var technique: String?
     @State private var saving = false
+    @State private var rating = false
 
     var body: some View {
         ZStack {
@@ -60,6 +61,10 @@ struct TrainingModeView: View {
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+        // Rated or skipped: the workout is done, the mode closes.
+        .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
+            GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
+        }
         .sheet(isPresented: $editing) {
             if let day {
                 PlanEditorSheet(day: day, catalog: catalog) { edited in Task { await saveEdited(edited) } }
@@ -117,6 +122,11 @@ struct TrainingModeView: View {
                 ForEach(exercise.sets.filter { !$0.warmup }) { s in
                     Capsule().fill(s.done ? Palette.green : s.row == set?.row ? Palette.amberBar : Palette.track).frame(height: 6)
                 }
+                setButton("minus", label: "O sérii méně") { Task { await changeSets(by: -1) } }
+                    .disabled(saving || exercise.sets.count < 2 || set == nil)
+                    .padding(.leading, 4)
+                setButton("plus", label: "O sérii víc") { Task { await changeSets(by: 1) } }
+                    .disabled(saving)
             }
             .padding(.top, 16)
 
@@ -148,8 +158,12 @@ struct TrainingModeView: View {
                 Button { move(-1) } label: { Label("Předchozí", systemImage: "chevron.left") }
                     .disabled(index == 0)
                 Spacer()
-                Button { move(1) } label: { Label("Další cvik", systemImage: "chevron.right").labelStyle(TrailingIcon()) }
-                    .disabled(index >= day.exercises.count - 1)
+                if index >= day.exercises.count - 1 {
+                    Button { Task { await finish() } } label: { Label("Dokončit trénink", systemImage: "flag.checkered").labelStyle(TrailingIcon()) }
+                        .disabled(saving)
+                } else {
+                    Button { move(1) } label: { Label("Další cvik", systemImage: "chevron.right").labelStyle(TrailingIcon()) }
+                }
             }
             .font(Typo.bodyStrong)
             .foregroundStyle(Palette.ink)
@@ -194,7 +208,9 @@ struct TrainingModeView: View {
                 .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 220, legend: true)
             Spacer()
-            PrimaryButton(title: "Zavřít") { dismiss() }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
+                .disabled(saving)
         }
     }
 
@@ -254,6 +270,16 @@ struct TrainingModeView: View {
                     .font(Typo.caption).foregroundStyle(Palette.faint)
             }
         }
+    }
+
+    private func setButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage).font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 28).background(Palette.track, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Palette.ink)
+        .accessibilityLabel(L10n.tr(label))
     }
 
     private func uses(_ exercise: GymExercise, _ station: String) -> Bool {
@@ -371,6 +397,42 @@ struct TrainingModeView: View {
         } catch {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
+    }
+
+    /// One set more for the current exercise (like its last one), or one fewer
+    /// (the last one not done).
+    private func changeSets(by step: Int) async {
+        guard var next = day, next.exercises.indices.contains(index) else { return }
+        if step > 0 { next.addSet(at: index) } else { next.removeSet(at: index) }
+        day = next
+        guard !model.demo else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
+    /// The sets are saved as they are ticked: the week shows the session done,
+    /// then the rating.
+    private func finish() async {
+        restEnd = nil
+        if !model.demo, let day {
+            saving = true
+            defer { saving = false }
+            do {
+                try await model.saveGym(day, date: date)
+                error = nil
+            } catch {
+                self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
+                return
+            }
+            await model.refreshTraining()
+        }
+        rating = true
     }
 
     private func complete(_ set: GymSet) async {
