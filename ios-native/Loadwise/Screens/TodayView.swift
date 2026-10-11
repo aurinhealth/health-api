@@ -47,101 +47,77 @@ struct TodayContent: View {
     var openCoach: () -> Void = {}
     /// The account's first letter on the settings button (GET /app/api/me).
 
-    /// The widgets hidden in "Upravit přehled" (comma-separated TodayWidget).
-    @AppStorage("todayHidden") private var hidden = ""
+    /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
     @State private var editing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                DayNavigator(date: today.date)
-                Spacer()
-                CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
-                Button(action: openSettings) { AvatarView(size: 36) }
-                    .buttonStyle(.plain)
-                .accessibilityLabel("Profil a nastavení")
+            if !editing {
+                header
             }
 
-            if model.selectedDate == nil && !model.demo {
-                ConnectionProblemCard()
-            }
-
-            RouteLink(route: .readiness) {
-                ReadinessHero(readiness: today.readiness, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .padding(.top, 40)
-
-            // Today's weather at the week plan's place (or the offer to set
-            // it) with the athlete's status, above the key numbers.
-            if model.selectedDate == nil {
-                TodayWeatherCard(weather: today.weather).padding(.top, 28)
-            }
-
-            KeyNumbers(today: today)
-                .padding(.top, model.selectedDate == nil ? 12 : 28)
-
-            if model.selectedDate == nil {
-                CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
-            }
-
-            if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        SectionLabel(text: "Co to znamená pro dnešek")
-                        Spacer()
-                        Button(action: openCoach) {
-                            Label("Zeptat se", systemImage: "bubble.left").font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
-                        }
-                    }
-                    summaryText(summary)
-                        .font(Typo.sentence(22))
-                        .foregroundStyle(Palette.ink)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 32)
-            }
-
-            VStack(spacing: 12) {
-                if shows(.food) { TabLinkCard(tab: .food) { FoodWidget(nutrition: today.nutrition) } }
-                if shows(.plan) {
-                    if !today.plan.isEmpty { PlanWidget(items: today.plan, today: today.date) }
-                    if today.tonight == nil, today.steps.hour != nil {
-                        RouteLink(route: .sleepSettings) { BedtimeSetupCard() }
-                    }
-                }
-                if shows(.steps) { RouteLink(route: .steps) { StepsWidget(steps: today.steps) } }
-                if shows(.heart), today.restingHR != nil || today.hrv != nil {
-                    WidgetRow {
-                        if let rhr = today.restingHR { RouteLink(route: .heart) { RestingHRWidget(restingHR: rhr) } } else { Color.clear }
-                    } right: {
-                        if let hrv = today.hrv { RouteLink(route: .heart) { HRVWidget(hrv: hrv) } } else { Color.clear }
-                    }
-                }
-                if shows(.weight), let weight = today.weight { RouteLink(route: .weight) { WeightWidget(weight: weight) } }
-            }
-            .padding(.top, 28)
-
-            Button { editing = true } label: {
-                Label("Upravit přehled", systemImage: "slider.horizontal.3")
-                    .font(Typo.bodyStrong)
-                    .foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 18)
-                    .frame(height: 40)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 28)
+            WidgetBoard(panel: .today,
+                        data: WidgetData(panel: .today, today: today, health: model.health, training: model.training, food: model.food),
+                        editing: $editing,
+                        editTitle: "Upravit přehled")
+                .padding(.top, editing ? 0 : 28)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .sheet(isPresented: $editing) { TodayLayoutSheet(hidden: $hidden) }
     }
 
-    private func shows(_ widget: TodayWidget) -> Bool {
-        !hidden.split(separator: ",").contains(Substring(widget.rawValue))
+    /// Everything above the widgets: the day, readiness, weather and the coach.
+    @ViewBuilder private var header: some View {
+        HStack(spacing: 10) {
+            DayNavigator(date: today.date)
+            Spacer()
+            CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
+            Button(action: openSettings) { AvatarView(size: 36) }
+                .buttonStyle(.plain)
+            .accessibilityLabel("Profil a nastavení")
+        }
+
+        if model.selectedDate == nil && !model.demo {
+            ConnectionProblemCard()
+        }
+
+        RouteLink(route: .readiness) {
+            ReadinessHero(readiness: today.readiness, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .padding(.top, 40)
+
+        // Today's weather at the week plan's place (or the offer to set
+        // it) with the athlete's status, above the key numbers.
+        if model.selectedDate == nil {
+            TodayWeatherCard(weather: today.weather).padding(.top, 28)
+        }
+
+        KeyNumbers(today: today)
+            .padding(.top, model.selectedDate == nil ? 12 : 28)
+
+        if model.selectedDate == nil {
+            CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
+        }
+
+        if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    SectionLabel(text: "Co to znamená pro dnešek")
+                    Spacer()
+                    Button(action: openCoach) {
+                        Label("Zeptat se", systemImage: "bubble.left").font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
+                    }
+                }
+                summaryText(summary)
+                    .font(Typo.sentence(22))
+                    .foregroundStyle(Palette.ink)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 32)
+        }
     }
 
     private func summaryText(_ s: TodaySnapshot.Summary) -> Text {
@@ -265,53 +241,6 @@ struct KeyNumbers: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// The widgets "Upravit přehled" can hide.
-enum TodayWidget: String, CaseIterable {
-    case food, plan, steps, heart, weight
-
-    var title: String {
-        switch self {
-        case .food: return "Jídlo a pití"
-        case .plan: return "Plán dne a večerka"
-        case .steps: return "Pohyb"
-        case .heart: return "Klidový tep a HRV"
-        case .weight: return "Váha"
-        }
-    }
-}
-
-struct TodayLayoutSheet: View {
-    @Binding var hidden: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            SettingsPage(title: L10n.tr("Upravit přehled")) {
-                SettingsGroup(footer: "Skryté karty najdeš dál v sekcích Trénink, Jídlo a Zdraví.") {
-                    ForEach(Array(TodayWidget.allCases.enumerated()), id: \.element) { index, widget in
-                        if index > 0 { SettingsDivider() }
-                        SettingsToggle(title: widget.title, isOn: binding(widget))
-                    }
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("Hotovo") { dismiss() }.font(.subheadline.weight(.semibold)) }
-            }
-        }
-        .tint(Palette.ink)
-        .presentationDetents([.medium, .large])
-    }
-
-    private func binding(_ widget: TodayWidget) -> Binding<Bool> {
-        Binding(get: { !hidden.split(separator: ",").contains(Substring(widget.rawValue)) },
-                set: { on in
-                    var set = Set(hidden.split(separator: ",").map(String.init))
-                    if on { set.remove(widget.rawValue) } else { set.insert(widget.rawValue) }
-                    hidden = TodayWidget.allCases.map(\.rawValue).filter(set.contains).joined(separator: ",")
-                })
     }
 }
 
