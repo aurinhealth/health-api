@@ -232,10 +232,9 @@ struct KeyNumbers: View {
         HStack(spacing: 0) {
             RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
-            Button { model.tab = .training } label: {
+            RouteLink(route: .strain) {
                 cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, Palette.amber)
             }
-            .buttonStyle(PressableCardStyle())
             Divider().overlay(Palette.hairline)
             RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
         }
