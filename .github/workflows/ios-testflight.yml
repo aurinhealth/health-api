@@ -11,9 +11,18 @@ name: iOS TestFlight
 # - ASC_ISSUER_ID: the Issuer ID above the list of keys
 # - ASC_KEY_P8: the whole contents of the downloaded AuthKey_XXXX.p8
 # Without them the workflow skips the upload and stays green.
+#
+# Every build gets "What to Test" in TestFlight: the app's commits since the
+# last build uploaded from main (.github/scripts/testflight_notes.py), or the
+# text typed in when the workflow is run by hand.
 
 on:
   workflow_dispatch:
+    inputs:
+      what_to_test:
+        description: "What to Test (empty: the changes since the last build)"
+        required: false
+        default: ""
   push:
     branches:
       - main
@@ -27,6 +36,8 @@ on:
 
 permissions:
   contents: read
+  # Finds the last build uploaded from main for "What to Test".
+  actions: read
 
 concurrency:
   group: ios-testflight
@@ -63,6 +74,8 @@ jobs:
       - name: Checkout repository
         if: steps.secrets.outputs.ready == 'true'
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       # The same Xcode as ios-native.yml: Xcode 26 for the iOS 26 SDK, which
       # App Store Connect also requires for new uploads.
@@ -79,6 +92,34 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
+      # The app's commits since the last build: the base of the pull request,
+      # or the commit of the last successful upload from main.
+      - name: Write What to Test
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TYPED: ${{ github.event.inputs.what_to_test }}
+        run: |
+          mkdir -p ios-native/build
+          notes=ios-native/build/WhatToTest.txt
+          if [ -n "$TYPED" ]; then
+            printf '%s\n' "$TYPED" > "$notes"
+          else
+            if [ "${{ github.event_name }}" = pull_request ]; then
+              base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+            else
+              base=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main \
+                --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
+            fi
+            # Unknown, gone, or this very commit again: just the last commit.
+            if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null || [ "$(git rev-parse "$base")" = "$(git rev-parse HEAD)" ]; then
+              base=$(git rev-parse HEAD~1)
+            fi
+            python3 .github/scripts/testflight_notes.py write "$base" "$notes"
+          fi
+          { echo "### What to Test"; echo; cat "$notes"; } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Write the API key
         if: steps.secrets.outputs.ready == 'true'
         env:
@@ -92,6 +133,7 @@ jobs:
       # The build number is this workflow's run number, so every upload is
       # higher than the last.
       - name: Archive
+        id: archive
         if: steps.secrets.outputs.ready == 'true'
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -103,6 +145,7 @@ jobs:
           app=build/Loadwise.xcarchive/Products/Applications/Loadwise.app
           codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
           codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
+          echo "version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Info.plist")" >> "$GITHUB_OUTPUT"
 
       # Cloud-managed Apple Distribution certificate, App Store profiles
       # created on the fly, and the upload straight to App Store Connect.
@@ -134,6 +177,17 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           echo "Uploaded build ${{ github.run_number }}; it shows in TestFlight once Apple finishes processing it." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set What to Test in TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          BUNDLE_ID: eu.petrfitnessdata.loadwise.native
+          MARKETING_VERSION: ${{ steps.archive.outputs.version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: python3 ../.github/scripts/testflight_notes.py upload build/WhatToTest.txt
 
       - name: Remove the API key
         if: always()
