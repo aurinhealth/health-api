@@ -8,7 +8,7 @@ import UIKit
 // and nothing can be bought; the purchase (App Store) comes with the Apple
 // Developer Program. The server decides who has AI (src/subscription.js).
 
-/// The plans of the offer. Prices are not set yet: nil shows "cena bude oznámena".
+/// The plans of the offer, prices with VAT in Czech crowns (App Store).
 enum ProPlans {
     struct Plan: Identifiable, Equatable {
         let id: String
@@ -19,14 +19,10 @@ enum ProPlans {
     }
 
     static let main: [Plan] = [
-        Plan(id: "annual", title: "Ročně", price: nil, note: nil, best: true),
-        Plan(id: "monthly", title: "Měsíčně", price: nil, note: nil)
+        Plan(id: "annual", title: "Ročně", price: "2 190 Kč / rok", note: "182,50 Kč měsíčně", best: true),
+        Plan(id: "monthly", title: "Měsíčně", price: "249 Kč / měsíc", note: "placeno měsíčně")
     ]
-    static let all: [Plan] = [
-        Plan(id: "annual", title: "Ročně", price: nil, note: nil, best: true),
-        Plan(id: "annual-monthly", title: "Ročně, placeno měsíčně", price: nil, note: nil),
-        Plan(id: "monthly", title: "Měsíčně", price: nil, note: nil)
-    ]
+    static let all: [Plan] = main
 }
 
 /// One thing Pro adds, with its icon.
