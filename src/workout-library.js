@@ -7,6 +7,8 @@ import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-
 import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
+import { getTestWorkout } from "./threshold-check.js";
+import { raceWorkout } from "./training-plans.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { workoutEn } from "./workout-i18n.js";
@@ -51,6 +53,10 @@ export async function catalog(db, sport = "ride") {
 }
 export async function getWorkout(db, id) {
   if (builtInById().has(id)) return builtInById().get(id);
+  // The threshold tests (threshold-check.js) are planned by id, never picked by the generator.
+  if (/^test-/.test(String(id))) return getTestWorkout(id);
+  // Race day of a running plan (training-plans.js): "race-run-<km>-<minutes>".
+  if (/^race-run-/.test(String(id))) return raceWorkout(id);
   // "<id>~<minutes>": a workout resized to another length (see resizeWorkout).
   const resized = String(id).match(/^(.+)~(\d{2,3})$/);
   if (resized) { const base = await getWorkout(db, resized[1]); return base ? resizeWorkout(base, Number(resized[2])) : null; }
@@ -418,12 +424,16 @@ export function buildIntervalsEvent(workout, date, environment = "indoor") {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
   const rendered = renderForEnvironment(workout, environment);
   const externalId = "pfd-library:" + workout.id + ":" + date + (rendered.environment === "outdoor" ? ":outdoor" : "");
-  const tags = (() => { try { return JSON.parse(workout.tags_json || "[]"); } catch { return []; } })();
+  // Intervals shows event tags as #hashtags after the name, so it gets only
+  // where (indoor/outdoor) and the training type. The type is what the coaches
+  // read back to tell a hard planned session from an easy one; library tags
+  // (source, family, length, placement) stay internal in tags_json.
+  const tags = [rendered.environment, workout.primary_system].filter(Boolean);
   const notes = rendered.environment_notes.join(" ");
   return {
     external_id: externalId, category: "WORKOUT", start_date_local: date + "T00:00:00", type: rendered.intervals_type, name: workout.name,
     description: (workout.description ? workout.description + "\n" + notes + "\n\n" : notes + "\n\n") + rendered.intervals_description,
-    load_target: Math.round(n(workout.target_load, 0)), tags: [...new Set(["PFD Workout Library", rendered.environment, ...tags])]
+    load_target: Math.round(n(workout.target_load, 0)), tags: [...new Set(tags)]
   };
 }
 

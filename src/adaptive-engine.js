@@ -1,6 +1,6 @@
 import { L } from './lang.js';
 import { trainingStatus } from './training-status.js';
-import { recoveryReadiness, sleepNeedFor } from './recovery-model.js';
+import { recoveryReadiness, sleepNeedFor, applyCheckin } from './recovery-model.js';
 const n=(v,d=0)=>Number.isFinite(Number(v))?Number(v):d;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function latestRecovery(recovery,keyMatchers){
@@ -35,10 +35,11 @@ function recoveryMetrics(context){
     const main=sessions?sessions.filter(x=>x.date===context.date&&!x.nap&&x.durationMin>=180).sort((a,b)=>b.durationMin-a.durationMin)[0]:null;
     const night=main||(sleep?{date:nightDate(sleep.time),durationMin:sleep.value}:null);
     const sleepNeed=sessions?sleepNeedFor({date:context.date,age:context.profile?.age??null,rows,sessions}).need:480;
-    const r=recoveryReadiness({rows,date:context.date,night,sleepNeed});
+    const r=applyCheckin(recoveryReadiness({rows,date:context.date,night,sleepNeed}),context.checkin);
     if(r.score!=null)return {score:r.score,zone:r.zone,model:"shared",flags:r.flags,sleepNeed,sleepMinutes:night?.durationMin??sleep?.value??null,hrv:r.components.hrv?.value??null,hrvBaseline:r.components.hrv?Math.round(r.components.hrv.baseline*10)/10:null,restingHr:r.components.restingHR?.value??null,restingHrBaseline:r.components.restingHR?Math.round(r.components.restingHR.baseline*10)/10:null};
   }
-  return legacyRecoveryMetrics(context);
+  const legacy=legacyRecoveryMetrics(context),cap={tired:60,sick:25}[context?.checkin];
+  return cap!=null?{...legacy,score:Math.min(legacy.score,cap)}:legacy;
 }
 function legacyRecoveryMetrics(context){
   const sleep=latestRecovery(context?.recovery,["sleep"]);

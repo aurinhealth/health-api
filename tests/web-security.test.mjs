@@ -68,5 +68,5 @@ test("Cloudflare runs the secured app", () => {
   const main = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
   assert.match(wrangler, /"main": "src\/main\.js"/);
   assert.match(main, /import app from "\.\/entrypoint\.js"/);
-  assert.match(main, /export default secured\(app\)/);
+  assert.match(main, /export default secured\(webAppClosed\(app\)\)/);
 });

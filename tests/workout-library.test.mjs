@@ -133,6 +133,9 @@ test("Intervals event is deterministic per environment", () => {
   assert.equal(outdoor.type, "Ride");
   assert.match(indoor.description, /5x/);
   assert.ok(indoor.load_target > 0);
+  // Only the key tags go out: Intervals prints them after the name.
+  assert.deepEqual(indoor.tags, ["indoor", "vo2max"]);
+  assert.deepEqual(outdoor.tags, ["outdoor", "vo2max"]);
 });
 
 // Real SQL through the user-scoped facade.

@@ -1722,10 +1722,14 @@ function recoveryReadiness(input) {
   const rows = (input && input.rows) || [], date = input && input.date, night = input && input.night, need = (input && input.sleepNeed) || 480;
   const today = rows.find(r => r && r.id === date) || {};
   const end = Date.parse(date + "T12:00:00Z"), components = {}, flags = [];
-  const hb = personalBaseline(rows, date, "hrv", { log: true });
+  // HRV only against days measured the same way: Apple Watch reports SDNN,
+  // Google's watches RMSSD, so one baseline over both mixes two scales. A new
+  // source starts its own baseline.
+  const hrvRows = rows.filter(r => r && (r.hrvSource || null) === (today.hrvSource || null));
+  const hb = personalBaseline(hrvRows, date, "hrv", { log: true });
   if (Number(today.hrv) > 0 && hb.mean != null) {
     const sd = Math.max(hb.sd, 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
-    const week = rows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
+    const week = hrvRows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
     const diff = week.length >= 3 ? week.reduce((s, v) => s + v, 0) / week.length - hb.mean : null, swc = 0.5 * sd;
     components.hrv = { value: Number(today.hrv), baseline: Math.exp(hb.mean), low: Math.exp(hb.mean - sd), high: Math.exp(hb.mean + sd), z, score: recoveryComponentScore(z), trend: diff == null ? null : diff < -swc ? "down" : diff > swc ? "up" : "stable", days: hb.count };
     if (components.hrv.trend === "down") flags.push("hrv_trend_down");
@@ -2419,7 +2423,7 @@ function planChips(i,date){
 }
 function weekTargetText(){
   const t=state.weekPlan?.targets;if(!t||t.status!=='ok')return '';
-  return (t.recovery?uiText('Regenerační týden ', 'Recovery week ')+(t.recoveryReason==='three_weeks'?uiText('po třech týdnech nad udržovací zátěží', 'after three weeks above maintenance load'):t.recoveryReason==='hrv_trend'?uiText('· HRV za poslední týden pod tvým běžným pásmem','· HRV over the last week below your usual range'):uiText('po náročném týdnu (', 'after a hard week (')+t.lastWeekLoad+' TSS)')+uiText(' · platí i pro posilovnu · cíl ≈ ', ' · applies to the gym too · goal ≈ ')+t.target+uiText(' TSS (70 % z udržovacích ', ' TSS (70 % of maintenance ')+t.base+')':uiText('Cíl týdne ≈ ', 'Weekly goal ≈ ')+t.target+' TSS ('+(t.rampHold?uiText('CTL roste o víc než 8 za týden, proto jen udržení CTL ','CTL is rising by more than 8 a week, so only maintaining CTL ')+t.ctl+' × 7':uiText('udržení kondice CTL ','maintaining fitness CTL ')+t.ctl+' × 7 + 5 %')+')')+uiText(' · hotovo a v plánu ', ' · done and planned ')+t.committed+' TSS'+(t.shortfall?uiText(' · do cíle chybí ~', ' · ~')+t.shortfall+uiText(' TSS, přidej další den', ' TSS short of the goal, add another day'):'')+(t.runCap?.limited?uiText(' · běh tento týden nejvýš ', ' · running this week at most ')+hm(t.runCap.cap)+uiText(' (+10 % proti posledním týdnům, ', ' (+10 % over recent weeks, ')+hm(t.runCap.base)+uiText('); návrhy běhu jsou kratší', '); run proposals are shorter'):'');
+  return (t.recovery?uiText('Regenerační týden ', 'Recovery week ')+(t.recoveryReason==='plan'?uiText('podle tréninkového plánu','from your training plan'):t.recoveryReason==='three_weeks'?uiText('po třech týdnech nad udržovací zátěží', 'after three weeks above maintenance load'):t.recoveryReason==='hrv_trend'?uiText('· HRV za poslední týden pod tvým běžným pásmem','· HRV over the last week below your usual range'):uiText('po náročném týdnu (', 'after a hard week (')+t.lastWeekLoad+' TSS)')+uiText(' · platí i pro posilovnu · cíl ≈ ', ' · applies to the gym too · goal ≈ ')+t.target+uiText(' TSS (70 % z udržovacích ', ' TSS (70 % of maintenance ')+t.base+')':uiText('Cíl týdne ≈ ', 'Weekly goal ≈ ')+t.target+' TSS ('+(t.rampHold?uiText('CTL roste o víc než 8 za týden, proto jen udržení CTL ','CTL is rising by more than 8 a week, so only maintaining CTL ')+t.ctl+' × 7':uiText('udržení kondice CTL ','maintaining fitness CTL ')+t.ctl+' × 7 + 5 %')+')')+uiText(' · hotovo a v plánu ', ' · done and planned ')+t.committed+' TSS'+(t.shortfall?uiText(' · do cíle chybí ~', ' · ~')+t.shortfall+uiText(' TSS, přidej další den', ' TSS short of the goal, add another day'):'')+(t.runCap?.limited?uiText(' · běh tento týden nejvýš ', ' · running this week at most ')+hm(t.runCap.cap)+uiText(' (+10 % proti posledním týdnům, ', ' (+10 % over recent weeks, ')+hm(t.runCap.base)+uiText('); návrhy běhu jsou kratší', '); run proposals are shorter'):'');
 }
 // IF from load and length (TSS = h × IF² × 100); gym load has no IF.
 function intensityOf(tss,minutes){const t=num(tss),h=num(minutes)/60;return t>0&&h>0?Math.sqrt(t/(h*100)):null}

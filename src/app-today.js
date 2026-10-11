@@ -4,7 +4,7 @@
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { environmentFor } from "./adaptive-week.js";
-import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore } from "./recovery-model.js";
+import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore } from "./recovery-model.js";
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
@@ -80,7 +80,7 @@ export function todayWeather(location, forecast, date) {
   };
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null }) {
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -92,7 +92,9 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // synced they stay empty: an earlier day is a tap away (?date=).
   const night = nights.get(date) || null;
   const need = sleepNeedFor({ date, age, goal: sleepSet.goal, strain: dayStrain(google, shift(date, -1)), rows, sessions }).need;
-  const readiness = recoveryReadiness({ rows, date, night, sleepNeed: need });
+  // The morning check-in can lower it, as it does for the coach.
+  const body = recoveryReadiness({ rows, date, night, sleepNeed: need });
+  const readiness = applyCheckin(body, checkin);
   const hrv = readiness.components?.hrv || null;
 
   // The coming night: the need from the strain of the day before it and the
@@ -197,6 +199,9 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     // Connected services that need the user (connection-health.js), shown at the top.
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [] },
+    // The morning check-in: fresh, normal, tired, sick or null (not answered).
+    checkin: checkin || null,
+    trainingPlan: trainingPlan || null,
     sleep: night ? {
       minutes: num(night.durationMin),
       inBedMinutes: num(night.timeInBedMin),

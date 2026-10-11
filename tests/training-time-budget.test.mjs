@@ -39,7 +39,7 @@ async function api(minutes) {
     buildCyclingCoachV2, generateWorkout, getCapabilities, scheduleWorkoutInIntervals,
     storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan,
     readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles, exercisePreferences,
-    weekWeather: async () => ({}), computeWeekTargets: async () => ({ items: [] }),
+    weekWeather: async () => ({}), computeWeekTargets: async () => ({ items: [] }), planForWeek: async () => ({ plan: null, pw: null, roles: {}, load: null, apply: t => t }), activePlan: async () => null, gymPhaseFor: () => null,
     cached: async (_env, _ctx, _key, load) => load(), athleteThresholds: async () => ({ ftp: 250 }),
     loadCoachInputs: async (_env, _ctx, _auth, date) => ({
       date, week: { days: [] }, fitness: { wellness: [{ id: date, ctl: 60, atl: 50 }] },

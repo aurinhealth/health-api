@@ -1,5 +1,5 @@
-import { sessionCookie, sessionSecret, SESSION_SECONDS, signText, timingSafeEqualString } from "./dashboard-auth.js";
-import { ensureTenancy, normalizeEmail, ownerEmail, publicUser } from "./tenancy.js";
+import { sessionCookie, sessionSecret, SESSION_SECONDS, signText, timingSafeEqualString, signedInResponse } from "./dashboard-auth.js";
+import { ensureTenancy, normalizeEmail, ownerEmail, publicUser, mayCreateAccount } from "./tenancy.js";
 import { loginPage } from "./google-login.js";
 
 // "Sign in with Apple" for the dashboard, next to Google. It stays off (no button, no routes)
@@ -91,10 +91,88 @@ async function finishLogin(request, env, fetchImpl) {
   return new Response(null, { status: 302, headers });
 }
 
-// The client secret is a short-lived JWT signed with the Apple key (ES256).
-export async function appleClientSecret(env, now = Math.floor(Date.now() / 1000)) {
+// The iPhone app signs in natively (AuthenticationServices): POST /auth/app/apple
+// { identityToken, authorizationCode, nonce, name }. The token's audience is the app's bundle ID
+// and its nonce claim is the SHA-256 (hex) of the nonce the app sends. It needs no Apple keys;
+// with APPLE_TEAM_ID, APPLE_KEY_ID and APPLE_PRIVATE_KEY set, the authorization code is also
+// traded for a refresh token, which deleting the account revokes (App Store rule 5.1.1(v)).
+// The body must be JSON, so another site cannot post a form here to sign someone in.
+const APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
+export const appBundleId = env => String(env?.APPLE_APP_BUNDLE_ID || APP_BUNDLE_ID).trim();
+const canRevoke = env => Boolean(env?.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
+const appJson = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+
+// saveRefreshToken(user, token) stores the token with the user's connection keys (entrypoint.js).
+export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl = fetch, saveRefreshToken = null } = {}) {
+  if (pathname !== "/auth/app/apple") return null;
+  if (request.method !== "POST") return appJson({ message: "Použij POST." }, 405);
+  if (!(sessionSecret(env) && env.OWNER_EMAIL && env.DB)) return appJson({ message: NOT_CONFIGURED[0] }, 503);
+  if (!String(request.headers.get("Content-Type") || "").startsWith("application/json")) return appJson({ message: "Neplatný požadavek." }, 415);
+  const body = await request.json().catch(() => ({}));
+  const token = String(body?.identityToken || ""), nonce = String(body?.nonce || "");
+  if (!token || token.length > 8000 || nonce.length < 16 || nonce.length > 200) return appJson({ message: "Neplatný požadavek." }, 400);
+  let claims;
+  try { claims = await verifyAppleIdToken(token, appBundleId(env), await sha256Hex(nonce), fetchImpl); }
+  catch (error) { console.error("Apple app ID token rejected", error.message); return appJson({ error: "failed", message: "Identitu Apple účtu se nepodařilo ověřit." }, 401); }
+  const verified = claims.email_verified === true || claims.email_verified === "true";
+  await ensureTenancy(env.DB, env, { request });
+  const user = await signInAppleUser(env.DB, env, { sub: String(claims.sub), email: verified ? claims.email : null, name: cleanName(body?.name) });
+  if (!user) {
+    console.warn("Apple app login denied for an account without an invitation");
+    return appJson({ error: "not_invited", message: "Tento Apple účet nemá do Loadwise pozvánku. Pokud u Apple používáš Skrýt můj e-mail, přihlas se přes Google nebo e-mailem a Apple si připoj na webu v Nastavení, nebo požádej správce o pozvánku." }, 403);
+  }
+  const code = String(body?.authorizationCode || "");
+  if (saveRefreshToken && canRevoke(env) && code && code.length < 2000) {
+    try {
+      const refresh = await exchangeAppCode(env, code, fetchImpl);
+      if (refresh) await saveRefreshToken(user, refresh);
+    } catch (error) { console.error("Apple refresh token not stored", error.message); }
+  }
+  return signedInResponse(user.id, env, { status: "ok" });
+}
+
+async function exchangeAppCode(env, code, fetchImpl) {
+  const response = await fetchImpl(APPLE + "/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: appBundleId(env), client_secret: await appleClientSecret(env, undefined, appBundleId(env)), code, grant_type: "authorization_code" })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error("Apple token HTTP " + response.status + " " + (data.error || ""));
+  return data.refresh_token || null;
+}
+
+// Deleting the account (or unlinking Apple) gives the app's Apple sign-in back.
+// env.APPLE_REFRESH_TOKEN comes from the user's connection keys (connection-secrets.js).
+export async function revokeApple(env, fetchImpl = fetch) {
+  if (!env?.APPLE_REFRESH_TOKEN) return "none";
+  if (!canRevoke(env)) return "failed";
+  try {
+    const response = await fetchImpl(APPLE + "/auth/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: appBundleId(env), client_secret: await appleClientSecret(env, undefined, appBundleId(env)), token: env.APPLE_REFRESH_TOKEN, token_type_hint: "refresh_token" })
+    });
+    return response.ok ? "revoked" : "failed";
+  } catch {
+    return "failed";
+  }
+}
+
+function cleanName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 120) || null;
+}
+
+async function sha256Hex(text) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", utf8(text)));
+  return Array.from(digest, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// The client secret is a short-lived JWT signed with the Apple key (ES256). Its subject is the
+// Services ID for the web sign-in, the app's bundle ID for tokens the app got.
+export async function appleClientSecret(env, now = Math.floor(Date.now() / 1000), subject = clientId(env)) {
   const data = base64url(utf8(JSON.stringify({ alg: "ES256", kid: String(env.APPLE_KEY_ID).trim() }))) + "."
-    + base64url(utf8(JSON.stringify({ iss: String(env.APPLE_TEAM_ID).trim(), iat: now, exp: now + 300, aud: APPLE, sub: clientId(env) })));
+    + base64url(utf8(JSON.stringify({ iss: String(env.APPLE_TEAM_ID).trim(), iat: now, exp: now + 300, aud: APPLE, sub: subject })));
   const key = await crypto.subtle.importKey("pkcs8", pemToDer(env.APPLE_PRIVATE_KEY), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
   // WebCrypto returns the raw r||s signature, which is what JWS wants.
   const signature = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, utf8(data));
@@ -147,7 +225,7 @@ async function ensureIdentities(db) {
 }
 
 // A verified Apple identity signs in: a linked Apple ID, else an existing user, an invited e-mail
-// or the owner by the e-mail Apple confirmed. The invitation is consumed on first login.
+// or the owner by the e-mail Apple confirmed (anyone, with OPEN_SIGNUP). The invitation is consumed on first login.
 export async function signInAppleUser(db, env, { sub, email, name = null }) {
   if (!sub) return null;
   await ensureIdentities(db);
@@ -158,8 +236,7 @@ export async function signInAppleUser(db, env, { sub, email, name = null }) {
     // An account that already has another Apple ID does not take a second one by e-mail.
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;
     if (!row) {
-      const invite = await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first();
-      if (!invite && address !== ownerEmail(env)) return null;
+      if (!(await mayCreateAccount(db, env, address))) return null;
       await db.prepare("INSERT INTO users(email, name, role) VALUES(?, ?, ?)").bind(address, name, address === ownerEmail(env) ? "admin" : "user").run();
       row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
     }
