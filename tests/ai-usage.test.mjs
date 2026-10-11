@@ -26,7 +26,7 @@ test("every AI answer is recorded with its feature, tokens and cost", async () =
     await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
     const row = db.sqlite.prepare("SELECT user_id, feature, model, input_tokens, output_tokens, cost_usd FROM ai_usage").get();
     assert.deepEqual({ ...row }, { user_id: 7, feature: "food-lookup", model: "gpt-6-sol", input_tokens: 100000, output_tokens: 50000, cost_usd: 0.7 });
-    assert.deepEqual(await aiAllowance(env), { spentUsd: 0.7, limitUsd: 1, monthSpentUsd: 0.7, monthLimitUsd: 5 });
+    assert.deepEqual(await aiAllowance(env), { spentUsd: 0.7, limitUsd: null, monthSpentUsd: 0.7, monthLimitUsd: 5 });
   });
 });
 
@@ -42,10 +42,10 @@ test("web searches are counted on top of the tokens, failed ones are not", async
   assert.equal(usageCost("gpt-6-luna", { input_tokens: 10000, output_tokens: 1000 }), 0.0015);
 });
 
-test("the daily limit stops the next call once it is spent; the owner has none", async () => {
+test("a daily limit, when set, stops the next call once it is spent; the owner has none", async () => {
   const db = createD1();
   await withOpenAI(async calls => {
-    const env = envFor(db);
+    const env = envFor(db, { AI_DAILY_LIMIT_USD: "1" });
     await callOpenAI(env, { instructions: "x", input: "y" });
     await callOpenAI(env, { instructions: "x", input: "y" });
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && error.status === 429 && /Denní limit AI/.test(error.message));
@@ -89,7 +89,9 @@ test("settings show this month's AI spending against the limit in the app langua
 
 test("the limit is set per deployment, and 0 turns AI off for everyone but the owner", async () => {
   assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "2.5" }), 2.5);
-  assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "nonsense" }), 1);
+  // Without the setting there is no daily limit, only the monthly one.
+  assert.equal(aiDailyLimitUsd({}), null);
+  assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "nonsense" }), null);
   await withOpenAI(async calls => {
     const env = envFor(createD1(), { AI_DAILY_LIMIT_USD: "0" });
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), /nejsou pro tento účet zapnuté/);

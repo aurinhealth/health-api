@@ -1,9 +1,9 @@
-// What every AI answer cost, per user and day, and a monthly and a daily limit
-// per user. Every model call goes through callOpenAI (coach-assistant.js), which
-// checks the limits before asking and records the cost after. The monthly limit
-// is the user's AI budget and the lever a paid tier would raise:
-// AI_MONTHLY_LIMIT_USD (default 5 USD a month). The daily limit stops one day
-// from using up the month: AI_DAILY_LIMIT_USD (default 1 USD). 0 in either turns
+// What every AI answer cost, per user and day, and a monthly limit per user.
+// Every model call goes through callOpenAI (coach-assistant.js), which checks
+// the limit before asking and records the cost after. The monthly limit is the
+// user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
+// (default 5 USD a month). How it is spread over the month is up to the user;
+// a daily limit applies only when AI_DAILY_LIMIT_USD is set. 0 in either turns
 // AI off for everyone but the owner. The owner is never limited.
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
@@ -21,11 +21,10 @@ export function usageCost(model, usage, webSearches = 0) {
   return Math.round(((n(usage.input_tokens) || 0) * i + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
-export const DEFAULT_AI_DAILY_LIMIT_USD = 1;
 export function aiDailyLimitUsd(env) {
   if (env.USER_IS_OWNER === true) return null;
   const limit = n(env.AI_DAILY_LIMIT_USD);
-  return limit != null && limit >= 0 ? limit : DEFAULT_AI_DAILY_LIMIT_USD;
+  return limit != null && limit >= 0 ? limit : null;
 }
 
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
