@@ -30,7 +30,9 @@ struct TrainingModeView: View {
 
     var body: some View {
         ZStack {
+            // A tap beside the fields puts the keyboard away.
             ScreenBackground(glow: Palette.Glow.training)
+                .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if loading && day == nil {
@@ -52,6 +54,7 @@ struct TrainingModeView: View {
             .padding(.bottom, 24)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .keyboardDoneButton()
         .task { await load() }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
@@ -84,7 +87,7 @@ struct TrainingModeView: View {
     private func session(_ day: GymDay, _ exercise: GymExercise) -> some View {
         let set = nextSet(exercise)
         return VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.f("Cvik %@ z %@", String(index + 1), String(day.exercises.count)) + (exercise.superset.map { " · " + L10n.f("supersérie %@", $0) } ?? ""))
+            SectionLabel(text: L10n.f("Cvik %@ z %@", String(index + 1), String(day.exercises.count)))
                 .padding(.top, 18)
             HStack(alignment: .firstTextBaseline) {
                 Text(exercise.name).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
@@ -95,6 +98,16 @@ struct TrainingModeView: View {
                     .accessibilityLabel("Technika")
             }
             .padding(.top, 6)
+
+            let superset = ExerciseOrder.letter(exercise.superset)
+            let failure = set.map { day.isToFailure(row: $0.row) } ?? false
+            if superset != nil || failure {
+                HStack(spacing: 6) {
+                    if let superset { GymTag.superset(superset) }
+                    if failure { GymTag.failure }
+                }
+                .padding(.top, 8)
+            }
 
             if let map = muscles[exercise.name], !map.isEmpty {
                 BodyMap(load: map, height: 170, legend: true).padding(.top, 10)

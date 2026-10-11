@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Today's gym session: the exercises and their sets. Tick a set to record it
 /// (the planned weight and reps unless changed), swap an exercise, see how to
@@ -46,6 +47,7 @@ struct GymSessionView: View {
         .sheet(isPresented: $changing) {
             GymPlanActionsSheet(date: date, title: day?.planName, cancelled: day?.cancelled == true) { Task { await load() } }
         }
+        .keyboardDoneButton()
     }
 
     @ViewBuilder
@@ -84,16 +86,8 @@ struct GymSessionView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 16)
-                VStack(spacing: 12) {
-                    ForEach(day.exercises) { exercise in
-                        ExerciseCard(exercise: exercise,
-                                     onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
-                                     onUndo: { set in Task { await undo(set) } },
-                                     onTechnique: { technique = exercise.name },
-                                     onAlternatives: { alternativesFor = exercise.name })
-                    }
-                }
-                .padding(.top, 20)
+                exerciseCards(day)
+                    .padding(.top, 20)
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
@@ -120,6 +114,33 @@ struct GymSessionView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
         }
+    }
+
+    /// The exercises in order, a superset's together under its mark.
+    private func exerciseCards(_ day: GymDay) -> some View {
+        let all = day.exercises
+        let list: [GymExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { all[$0] }
+        let groups: [String?] = list.map { $0.superset }
+        return VStack(spacing: 12) {
+            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
+                if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
+                    SupersetGroup(letter: letter, spacing: 12) {
+                        ForEach(list[run]) { (exercise: GymExercise) in card(day, exercise) }
+                    }
+                } else {
+                    ForEach(list[run]) { (exercise: GymExercise) in card(day, exercise) }
+                }
+            }
+        }
+    }
+
+    private func card(_ day: GymDay, _ exercise: GymExercise) -> some View {
+        ExerciseCard(exercise: exercise,
+                     failure: Set(exercise.sets.map { $0.row }.filter { day.isToFailure(row: $0) }),
+                     onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
+                     onUndo: { set in Task { await undo(set) } },
+                     onTechnique: { technique = exercise.name },
+                     onAlternatives: { alternativesFor = exercise.name })
     }
 
     private func progress(_ day: GymDay) -> some View {
@@ -195,6 +216,8 @@ struct Named: Identifiable {
 
 struct ExerciseCard: View {
     let exercise: GymExercise
+    /// The rows of the sets that go to failure.
+    var failure: Set<Int> = []
     var onSet: (GymSet, String, String, String) -> Void
     var onUndo: (GymSet) -> Void
     var onTechnique: () -> Void
@@ -205,10 +228,12 @@ struct ExerciseCard: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name).font(.headline).foregroundStyle(Palette.ink)
-                    Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií") + (exercise.superset.map { " · " + L10n.f("supersérie %@", $0) } ?? ""))
+                    Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií"))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
+                    if !failure.isEmpty { GymTag.failure.padding(.top, 4) }
                 }
                 Spacer()
+                ExerciseInfoButton(name: exercise.name, action: onTechnique)
                 Menu {
                     Button { onTechnique() } label: { Label("Technika", systemImage: "figure.strengthtraining.traditional") }
                     Button { onAlternatives() } label: { Label("Nahradit cvik", systemImage: "arrow.triangle.swap") }
@@ -220,7 +245,7 @@ struct ExerciseCard: View {
             }
             VStack(spacing: 6) {
                 ForEach(exercise.sets) { set in
-                    SetRow(set: set, onDone: { kg, reps, rpe in onSet(set, kg, reps, rpe) }, onUndo: { onUndo(set) })
+                    SetRow(set: set, failure: failure.contains(set.row), onDone: { kg, reps, rpe in onSet(set, kg, reps, rpe) }, onUndo: { onUndo(set) })
                 }
             }
         }
@@ -230,6 +255,8 @@ struct ExerciseCard: View {
 /// One set: planned "8–10 × 60 kg", fields for what was done, and the tick.
 struct SetRow: View {
     let set: GymSet
+    /// To failure: a flame by the number.
+    var failure = false
     var onDone: (String, String, String) -> Void
     var onUndo: () -> Void
     @State private var kg = ""
@@ -238,9 +265,12 @@ struct SetRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(set.warmup ? "R" : set.number).font(Typo.number(17)).foregroundStyle(set.warmup ? Palette.faint : Palette.muted)
+            Text(set.warmup ? "R" : set.number).font(Typo.number(17)).foregroundStyle(set.warmup ? Palette.faint : failure ? Palette.rust : Palette.muted)
                 .frame(width: 22, alignment: .leading)
-                .accessibilityLabel(set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number))
+                .overlay(alignment: .topTrailing) {
+                    if failure { Image(systemName: "flame.fill").font(.system(size: 9)).foregroundStyle(Palette.rust).offset(x: -2, y: -1) }
+                }
+                .accessibilityLabel((set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number)) + (failure ? ", " + L10n.tr("do selhání") : ""))
             field($kg, placeholder: LiftWeight.shown(set.plannedKg) ?? Units.weightUnit, unit: Units.weightUnit, width: 64)
             Text("×").foregroundStyle(Palette.faint)
             field($reps, placeholder: set.plannedReps ?? L10n.tr("op."), unit: nil, width: 54)
@@ -372,6 +402,7 @@ struct AlternativesSheet: View {
     var chooseAlternative: ((GymAlternative) -> Void)? = nil
     @State private var items: [GymAlternative] = []
     @State private var loading = true
+    @State private var technique: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -402,10 +433,12 @@ struct AlternativesSheet: View {
                                 Image(systemName: "arrow.triangle.swap").foregroundStyle(Palette.faint)
                             }
                             .padding(.vertical, 12)
-                            .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .padding(.trailing, 36)
+                        .overlay(alignment: .trailing) { ExerciseInfoButton(name: alt.name) { technique = alt.name } }
+                        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     }
                 }
             }
@@ -414,10 +447,86 @@ struct AlternativesSheet: View {
         .padding(24)
         .presentationDetents([.medium, .large])
         .presentationBackground(Palette.background)
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
+            TechniqueSheet(exercise: item.name)
+        }
         .task {
             defer { loading = false }
             guard !model.demo else { return }
             items = (try? await model.api.gymAlternatives(date: date, exercise: exercise, inPlan: inPlan)) ?? []
+        }
+    }
+}
+
+/// "i" by an exercise: what it is and how to do it (TechniqueSheet).
+struct ExerciseInfoButton: View {
+    let name: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "info.circle").font(.system(size: 18)).foregroundStyle(Palette.muted)
+                .frame(width: 32, height: 32).contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(L10n.f("Jak na %@", name))
+    }
+}
+
+/// A small coloured mark: "Supersérie A" or "Do selhání".
+struct GymTag: View {
+    let text: String
+    let systemImage: String
+    let color: Color
+
+    static func superset(_ letter: String) -> GymTag {
+        GymTag(text: L10n.f("Supersérie %@", letter), systemImage: "link", color: Palette.indigo)
+    }
+
+    static var failure: GymTag { GymTag(text: L10n.tr("Do selhání"), systemImage: "flame.fill", color: Palette.rust) }
+
+    var body: some View {
+        Label(text, systemImage: systemImage)
+            .font(Typo.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(color.opacity(0.12), in: Capsule())
+    }
+}
+
+/// The exercises of a superset, one right after the other: a bar along them
+/// and the mark above.
+struct SupersetGroup<Content: View>: View {
+    let letter: String
+    var spacing: CGFloat = 0
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            HStack(spacing: 8) {
+                GymTag.superset(letter)
+                Text("Střídej cviky, pauza až po kole").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            .padding(.top, spacing == 0 ? 10 : 0)
+            content
+        }
+        .padding(.leading, 12)
+        .overlay(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Palette.indigo).frame(width: 4)
+        }
+    }
+}
+
+extension View {
+    /// "Hotovo" above the keyboard: the number pads have no return key.
+    func keyboardDoneButton() -> some View {
+        toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Hotovo") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                    .fontWeight(.semibold)
+            }
         }
     }
 }

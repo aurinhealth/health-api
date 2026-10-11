@@ -49,7 +49,7 @@ struct PlanEditorSheet: View {
             }
             .sheet(isPresented: $adding) {
                 ExercisePicker(catalog: catalog, used: Set(day.exercises.map(\.name))) { ex in
-                    day.addExercise(ex.name, sets: Self.count(ex.sets) ?? 3, reps: ex.reps?.string ?? "10")
+                    day.insertExercise(ex.name, sets: Self.count(ex.sets) ?? 3, reps: ex.reps?.string ?? "10", catalog: catalog)
                 }
             }
         }
@@ -97,7 +97,8 @@ struct PlanEditorSheet: View {
     }
 }
 
-/// The catalog to pick an exercise to add, with search and the muscle chips.
+/// The catalog to pick an exercise to add, with search and the muscle chips;
+/// "i" shows how to do it.
 struct ExercisePicker: View {
     @Environment(\.dismiss) private var dismiss
     let catalog: [GymCatalogExercise]
@@ -105,6 +106,7 @@ struct ExercisePicker: View {
     let pick: (GymCatalogExercise) -> Void
     @State private var query = ""
     @State private var muscle: String?
+    @State private var technique: String?
 
     private var filtered: [GymCatalogExercise] {
         let words = ExerciseCatalog.fold(query).split(separator: " ")
@@ -132,16 +134,21 @@ struct ExercisePicker: View {
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
                 ForEach(filtered) { ex in
-                    Button { pick(ex); dismiss() } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                                Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))
-                                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    HStack(spacing: 8) {
+                        Button { pick(ex); dismiss() } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                                    Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))
+                                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                                Spacer()
+                                if used.contains(ex.name) { Text("v plánu").font(Typo.caption).foregroundStyle(Palette.faint) }
                             }
-                            Spacer()
-                            if used.contains(ex.name) { Text("v plánu").font(Typo.caption).foregroundStyle(Palette.faint) }
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.borderless)
+                        ExerciseInfoButton(name: ex.name) { technique = ex.name }
                     }
                 }
             }
@@ -149,6 +156,9 @@ struct ExercisePicker: View {
             .navigationTitle("Přidat cvik")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
+            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
+                TechniqueSheet(exercise: item.name)
+            }
         }
     }
 
