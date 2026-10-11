@@ -3,10 +3,15 @@
 // share the app's session cookie, so:
 // 1. the app asks POST /app/api/connect/start for a short-lived signed ticket,
 // 2. the sheet opens /auth/app/connect?ticket=…, which signs the browser in as
-//    the same user and continues to /oauth/<provider>?return=native,
+//    the same user and continues to /oauth/<provider>?return=native. A browser
+//    signed in as someone else, or not at all, first sees whose account it is
+//    and confirms with a POST: a ticket link sent by another user could
+//    otherwise sign the reader in as that user and put their Google data in
+//    the sender's account. Each ticket works once,
 // 3. the provider's callback ends at loadwise://connected?event=…, which
 //    closes the sheet (connect-return.js).
 import { signText, sessionCookie, sessionSecret, SESSION_SECONDS, timingSafeEqualString } from "./dashboard-auth.js";
+import { findUser } from "./tenancy.js";
 
 const TICKET_SECONDS = 120;
 const PROVIDERS = new Set(["google", "intervals"]);
@@ -15,7 +20,8 @@ const b64 = bytes => { let s = ""; for (const b of bytes) s += String.fromCharCo
 const unb64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 
 export async function connectTicket(uid, provider, secret, now = Date.now()) {
-  const payload = b64(new TextEncoder().encode(JSON.stringify({ uid, p: provider, exp: Math.floor(now / 1000) + TICKET_SECONDS })));
+  const id = b64(crypto.getRandomValues(new Uint8Array(12)));
+  const payload = b64(new TextEncoder().encode(JSON.stringify({ uid, p: provider, exp: Math.floor(now / 1000) + TICKET_SECONDS, id })));
   return payload + "." + await signText("app-connect." + payload, secret);
 }
 
@@ -27,7 +33,43 @@ export async function readConnectTicket(ticket, secret, now = Date.now()) {
   try { data = JSON.parse(new TextDecoder().decode(unb64(payload))); } catch { return null; }
   const uid = Number(data?.uid);
   if (!Number.isInteger(uid) || uid <= 0 || !PROVIDERS.has(data?.p) || !(Number(data?.exp) > Math.floor(now / 1000))) return null;
-  return { uid, provider: data.p };
+  return { uid, provider: data.p, id: typeof data.id === "string" ? data.id : null, exp: Number(data.exp) };
+}
+
+// Marks the ticket used (auth_challenges, purpose app-connect); false when it was used before.
+async function useTicket(db, ticket) {
+  if (!db || !ticket.id) return false;
+  const now = Math.floor(Date.now() / 1000);
+  const [, used] = await db.batch([
+    db.prepare("DELETE FROM auth_challenges WHERE purpose = 'app-connect' AND expires_at <= ?").bind(now),
+    db.prepare("INSERT INTO auth_challenges(challenge, purpose, user_id, expires_at) VALUES (?, 'app-connect', ?, ?) ON CONFLICT(challenge) DO NOTHING").bind(ticket.id, ticket.uid, ticket.exp)
+  ]);
+  return Number(used?.meta?.changes) > 0;
+}
+
+const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const expired = () => new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=expired", "Cache-Control": "no-store" } });
+
+function confirmPage(request, ticketText, ticket, email) {
+  const en = /^en\b/i.test(request.headers.get("Accept-Language") || "");
+  const service = ticket.provider === "google" ? "Google Health" : "Intervals.icu";
+  const t = en
+    ? { title: "Connect " + service, body: "Connect " + service + " to the Loadwise account", note: "If this isn't your account, close this page.", go: "Continue", lang: "en" }
+    : { title: "Připojit " + service, body: "Připojit " + service + " k účtu Loadwise", note: "Pokud to není tvůj účet, zavři tuto stránku.", go: "Pokračovat", lang: "cs" };
+  const html = `<!doctype html><html lang="${t.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(t.title)}</title>
+<style>body{font:17px -apple-system,system-ui,sans-serif;margin:0;padding:32px 20px;background:#fff;color:#111}@media(prefers-color-scheme:dark){body{background:#000;color:#eee}}main{max-width:420px;margin:auto}b{word-break:break-all}p.n{opacity:.7;font-size:15px}button{width:100%;padding:14px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font:600 17px -apple-system,system-ui,sans-serif;margin-top:16px}</style></head>
+<body><main><p>${escapeHtml(t.body)}</p><p><b>${escapeHtml(email)}</b></p><p class="n">${escapeHtml(t.note)}</p>
+<form method="post" action="/auth/app/connect"><input type="hidden" name="ticket" value="${escapeHtml(ticketText)}"><button type="submit">${escapeHtml(t.go)}</button></form></main></body></html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
+}
+
+async function continueToProvider(env, ticket) {
+  if (!(await useTicket(env.DB, ticket))) return expired();
+  // Google's data policy: the app showed its own disclosure right before this (consent=1).
+  const next = ticket.provider === "google" ? "/oauth/google?consent=1&return=native" : "/oauth/intervals?return=native";
+  const headers = new Headers({ Location: next, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  headers.append("Set-Cookie", await sessionCookie(ticket.uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, sessionSecret(env)));
+  return new Response(null, { status: 303, headers });
 }
 
 export async function handleNativeConnect(request, env, url, { user, signedIn }) {
@@ -40,13 +82,22 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     return Response.json({ status: "ok", url: url.origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.pathname === "/auth/app/connect" && request.method === "GET") {
-    const ticket = await readConnectTicket(url.searchParams.get("ticket"), sessionSecret(env));
-    if (!ticket) return new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=expired", "Cache-Control": "no-store" } });
-    // Google's data policy: the app showed its own disclosure right before this (consent=1).
-    const next = ticket.provider === "google" ? "/oauth/google?consent=1&return=native" : "/oauth/intervals?return=native";
-    const headers = new Headers({ Location: next, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-    headers.append("Set-Cookie", await sessionCookie(ticket.uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, sessionSecret(env)));
-    return new Response(null, { status: 302, headers });
+    const ticketText = url.searchParams.get("ticket");
+    const ticket = await readConnectTicket(ticketText, sessionSecret(env));
+    if (!ticket) return expired();
+    // Already signed in here as the ticket's user: nothing to confirm.
+    if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket);
+    const owner = await findUser(env.DB, ticket.uid, env).catch(() => null);
+    if (!owner) return expired();
+    return confirmPage(request, ticketText, ticket, owner.email);
+  }
+  if (url.pathname === "/auth/app/connect" && request.method === "POST") {
+    // Only the confirm button on this site's own page, never a form posted from elsewhere.
+    if (request.headers.get("Origin") !== url.origin) return Response.json({ message: "Neplatný původ požadavku." }, { status: 403 });
+    const form = await request.formData().catch(() => null);
+    const ticket = await readConnectTicket(form?.get("ticket"), sessionSecret(env));
+    if (!ticket) return expired();
+    return continueToProvider(env, ticket);
   }
   return null;
 }
