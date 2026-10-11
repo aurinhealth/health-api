@@ -64,6 +64,30 @@ export function eventPlan(event, date) {
   return { name: event.name || null, date: event.date, daysLeft: left, phase, phases };
 }
 
+// How a done session kept to its plan (Training → Tréninky týdne colours it):
+// "good" when its length and load (TSS) are within ±15 % of the plan and, in
+// the gym, at least 80 % of the planned sets were logged; "off" with a short
+// reason otherwise. Nothing to compare (a stub without data) counts as good.
+const PLAN_MARGIN = 0.15, GYM_SETS = 0.8;
+const hm = minutes => minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + String(minutes % 60).padStart(2, "0") : "") : minutes + " min";
+export function adherenceOf(done = {}, plan = {}, gym = null) {
+  const sets = num(gym?.sets), logged = num(gym?.logged);
+  if (sets > 0 && logged > 0) {
+    return logged >= sets * GYM_SETS ? { adherence: "good" } : { adherence: "off", adherenceReason: L("jen " + logged + " z " + sets + (sets === 1 ? " série" : " sérií"), "only " + logged + " of " + sets + (sets === 1 ? " set" : " sets")) };
+  }
+  const ratio = (a, p) => (a > 0 && p > 0 ? a / p - 1 : null);
+  const planMinutes = num(plan.durationHours) ? Math.round(num(plan.durationHours) * 60) : null;
+  const length = ratio(num(done.durationHours), num(plan.durationHours));
+  const load = ratio(num(done.tss), num(plan.tss));
+  if (length != null && Math.abs(length) > PLAN_MARGIN) {
+    return { adherence: "off", adherenceReason: length < 0 ? L("kratší než plán (" + hm(planMinutes) + ")", "shorter than planned (" + hm(planMinutes) + ")") : L("delší než plán (" + hm(planMinutes) + ")", "longer than planned (" + hm(planMinutes) + ")") };
+  }
+  if (load != null && Math.abs(load) > PLAN_MARGIN) {
+    return { adherence: "off", adherenceReason: load > 0 ? L("vyšší intenzita než plán", "harder than planned") : L("nižší intenzita než plán", "easier than planned") };
+  }
+  return { adherence: "good" };
+}
+
 const isWorkout = a => a && (num(a.durationHours) ?? 0) >= 0.15;
 
 // One day's sessions (Training → Tréninky týdne, Today → Plán dne): what was
@@ -93,10 +117,13 @@ export function daySessions(d, date, training = {}, gymDay = null) {
     // A Strava stub has neither name nor sport: the plan it was paired with names it.
     const plan = planOf.get(String(a.id ?? ""));
     const session = sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done");
-    sessions.push(plan?.id ? { ...session, plannedId: String(plan.id) } : session);
+    // A strength session done on a day with a gym plan saved in the app fulfils it.
+    const gymSets = session.sport === "strength" && gymDay?.exercises?.length ? gymDay : null;
+    const fit = plan ? adherenceOf(a, plan, gymSets) : gymSets ? adherenceOf(a, {}, gymSets) : { adherence: "offplan" };
+    sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit });
   }
   for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
-  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
+  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
   return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
 }
 
@@ -251,7 +278,8 @@ function sessionOf(w, date, status) {
     kind: done ? "activity" : "planned",
     status,
     date,
-    time: clockOf(w.start),
+    // A plan at midnight is the day without a time (Intervals.icu's "any time").
+    time: !done && clockOf(w.start) === "00:00" ? null : clockOf(w.start),
     title: String(w.name || w.type || L("Trénink", "Workout")).slice(0, 120),
     sport: sportOf(w),
     minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,

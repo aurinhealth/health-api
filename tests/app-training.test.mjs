@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildTraining, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
+import { adherenceOf, buildTraining, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
 
 const DATE = "2026-10-08"; // Thursday, week 41
 const day = n => new Date(Date.parse(DATE + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);

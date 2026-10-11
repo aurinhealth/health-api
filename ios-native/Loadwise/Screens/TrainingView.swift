@@ -3,6 +3,8 @@ import SwiftUI
 struct TrainingView: View {
     @Environment(AppModel.self) private var model
     @State private var addingWorkout = false
+    /// A moved or cancelled session with its undo (Tréninky týdne).
+    @State private var toast: PlanToast?
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -10,7 +12,7 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true })
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast)
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
@@ -27,8 +29,29 @@ struct TrainingView: View {
             .toolbar(.hidden, for: .navigationBar)
             .appRoutes()
         }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                PlanToastView(toast: toast) { undo(toast) }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 92)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: toast?.id)
+        .task(id: toast?.id) {
+            guard let current = toast else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if toast?.id == current.id { toast = nil }
+            // Also when the screen went away or another toast came: a cancel still reaches the server.
+            if let commit = current.settle(undo: false) { Task { await commit() } }
+        }
         .task { await model.refreshIfStale(.training) }
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
+    }
+
+    private func undo(_ t: PlanToast) {
+        toast = nil
+        if let work = t.settle(undo: true) { Task { await work() } }
     }
 }
 
@@ -36,6 +59,7 @@ struct TrainingView: View {
 struct TrainingContent: View {
     let training: TrainingSnapshot
     var addWorkout: () -> Void = {}
+    var toast: Binding<PlanToast?> = .constant(nil)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -80,8 +104,8 @@ struct TrainingContent: View {
                 ThisWeekWidget(week: training.thisWeek, loads: training.load.weeks)
                 if let sessions = training.sessions, !sessions.isEmpty {
                     Card {
-                        WidgetHeader(title: "Tréninky týdne", color: Palette.amberBar)
-                        WeekSessionsList(sessions: sessions, today: training.date)
+                        WeekSessionsHeader()
+                        WeekSessionsList(sessions: sessions, today: training.date, toast: toast)
                     }
                 }
                 if let active = training.activeCalories { RouteLink(route: .activeEnergy) { ActiveCaloriesWidget(active: active) } }

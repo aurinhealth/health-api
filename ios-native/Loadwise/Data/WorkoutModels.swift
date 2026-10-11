@@ -20,6 +20,18 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let eventId: String?
     /// On a done session: the plan it fulfils, for undoing a pairing.
     var plannedId: String? = nil
+    /// On a done session: "good" (kept to the plan), "off" (done differently)
+    /// or "offplan" (not in the plan, a walk for instance).
+    var adherence: String? = nil
+    /// With "off": why, in one line ("kratší než plán (1 h 30)").
+    var adherenceReason: String? = nil
+}
+
+/// The answer to POST /app/api/planned/move (src/planned-events.js).
+struct PlannedChange: Decodable {
+    let date: String?
+    /// Other changes the move brought to the plan, in one line, when the server says.
+    let note: String?
 }
 
 // MARK: - Gym (GET/POST /app/api/gym, src/gym-plan-store.js)

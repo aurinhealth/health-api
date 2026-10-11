@@ -242,6 +242,15 @@ final class APIClient: @unchecked Sendable {
         let _: JSONValue = try await send("/app/api/planned/move", method: "POST", body: ["eventId": JSONValue.string(eventId), "date": .string(date)])
     }
 
+    /// Another day and the time of day: time "" leaves the day without one,
+    /// "HH:MM" sets it, nil keeps it. The answer may carry a note about other changes.
+    func reschedulePlanned(eventId: String, to date: String, time: String?) async throws -> PlannedChange {
+        var body: JSONObject = ["eventId": .string(eventId), "date": .string(date)]
+        if let time { body["time"] = time.isEmpty ? JSONValue.null : JSONValue.string(time) }
+        let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body)
+        return change
+    }
+
     func deletePlanned(eventId: String) async throws {
         let _: JSONValue = try await send("/app/api/planned/delete", method: "POST", body: ["eventId": JSONValue.string(eventId)])
     }
