@@ -83,7 +83,7 @@ import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './
 import { getCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, saveCheck, upcomingTest, thresholdSessions, estimateRideFtp, estimateRunPace, thresholdOffer, recommendTestDay, testResult, getTestWorkout } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
-import { activePlan, reviewPlan, planWeek, planQuality, planLoad, applyPlan, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate } from './training-plans.js';
+import { activePlan, reviewPlan, savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planQuality, planLoad, applyPlan, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, dayHours, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
@@ -478,7 +478,7 @@ async function computeWeekTargets(env,ctx,start,prefs){
 async function planForWeek(env,ctx,start){
   const today=localToday();
   let plan=await syncedPlans(env,today).then(p=>p.active).catch(()=>null);
-  // Once a week: a past week's key sessions not done repeat the week (reviewPlan).
+  // Once a week: a past week's key sessions not done, the plan proposes what next (reviewPlan).
   const thisMonday=mondayOfDate(today);
   if(plan&&!plan.pauseFrom&&!(plan.reviewed>=thisMonday)){
     const last=shiftDate(thisMonday,-7);
@@ -488,9 +488,7 @@ async function planForWeek(env,ctx,start){
   const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
   if(!pw)return {plan:null,pw:null,roles:{},load:null,apply:t=>t};
   const [thresholds,capabilities]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),getCapabilities(env.DB,plan.sport).catch(()=>({}))]);
-  // This week: key sessions missed on past days move to the easy days ahead.
-  const done=start<=today&&today<shiftDate(start,7)?new Set(await planSportDates(env,plan.sport,start,today).catch(()=>[])):null;
-  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,done,today:done?today:null};
+  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities};
   return {plan,pw,roles:{quality:planQuality(pw),prefer:plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
 }
 // The endurance and the gym plan with the athlete's status applied: sick,
@@ -512,6 +510,21 @@ async function planKeyDates(env,plan,monday){
   if(!prefs?.days)return [];
   const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport});
   return roles.map((d,i)=>d.items.some(x=>x.sport===plan.sport&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
+}
+// What the active plan asks the athlete about now (training-plans.js): an
+// answer pending (back from a break, last week's key sessions missed) or a key
+// session of this week missed on a past day. In words, for Today's card.
+async function planProposal(env,ctx){
+  const today=localToday(),monday=mondayOfDate(today);
+  const pf=await planForWeek(env,ctx,monday).catch(()=>null);
+  const plan=pf?.plan??await syncedPlans(env,today).then(p=>p.active).catch(()=>null);
+  if(!plan||plan.pauseFrom)return null;
+  let proposal=plan.proposal||null;
+  if(!proposal&&pf?.plan){
+    const targets=await computeWeekTargets(env,ctx,monday).catch(()=>null);
+    proposal=missedSession(targets,plan,monday,today,await planSportDates(env,plan.sport,monday,today).catch(()=>[]));
+  }
+  return proposal?{...proposalView(proposal,plan,today),raw:proposal}:null;
 }
 const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
 // The weather place of the week plan and today's forecast for Today (app-today.js
@@ -1111,6 +1124,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
         const body=await request.json().catch(()=>({}));
         if(body.action==='stop')await stopPlan(env.DB,{gym:body.sport==='gym'});
+        // The answer to the plan's proposal (planProposal), and undoing it.
+        else if(body.action==='proposal'||body.action==='undo'){
+          const plan=(await syncedPlans(env,today)).active;
+          if(!plan)throw new Error(L('Nemáš aktivní plán.', 'You have no active plan.'));
+          if(body.action==='undo')await savePlanState(env.DB,planUndo(plan));
+          else{
+            const proposal=plan.proposal||(await planProposal(env,ctx))?.raw;
+            if(!proposal)throw new Error(L('Plán se mezitím změnil.', 'The plan changed in the meantime.'));
+            const choice=String(body.choice||'keep');
+            await savePlanState(env.DB,planChoice(plan,proposal,choice==='pick'?'move':choice,{today,date:body.date?String(body.date):null}));
+          }
+        }
         else if(body.action==='start'){
           const template=getTemplate(String(body.templateId||''));
           if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
@@ -1126,6 +1151,31 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const {active,gym}=await syncedPlans(env,today);
       return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:active?planSummary(active,today):null,activeGym:gym?planSummary(gym,today):null,...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  // One week of the active ride or run plan: its sessions with their steps
+  // (the plan detail's week, GET ?week=N).
+  if(url.pathname==='/app/api/plans/week'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      const plan=(await syncedPlans(env)).active,n=Number(url.searchParams.get('week'));
+      if(!plan)throw new Error(L('Nemáš aktivní plán.', 'You have no active plan.'));
+      const monday=shiftDate(plan.startDate,(Math.max(1,Math.round(n)||1)-1)*7),pw=planWeek(plan,monday);
+      if(!pw)throw new Error(L('Tento týden v plánu není.', 'This week is not in the plan.'));
+      const targets=await computeWeekTargets(env,ctx,monday).catch(()=>({items:[]}));
+      const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({}));
+      const sessions=[];
+      for(const x of (targets.items||[]).filter(x=>x.sport===plan.sport&&(x.slot||0)===0&&x.plan?.workoutId)){
+        const library=await getWorkout(env.DB,x.plan.workoutId).catch(()=>null);
+        let workout=null;
+        if(library){
+          const w=renderForEnvironment(library,'outdoor');let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+          w.steps=plan.sport==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+          workout={id:w.id,name:w.name,sport:w.sport,environment:w.environment,duration_minutes:w.duration_minutes,target_load:w.target_load,intensity_factor:w.intensity_factor,description:w.description,steps:w.steps};
+        }
+        sessions.push({date:x.date,label:x.label,kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout});
+      }
+      return Response.json({status:'ok',week:pw.week,weeksCount:pw.weeks,monday,phaseLabel:pw.spec.gym?.name??phaseLabel(pw.spec.phase),sessions},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/threshold-check'){
@@ -1499,7 +1549,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       ]);
       // The active training plan in one line (training-plans.js).
       const synced=await syncedPlans(env).catch(()=>({})),active=synced.active??synced.gym,summary=active?planSummary(active,date):null;
-      const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused}:null;
+      const proposal=date===localToday()&&synced.active?await planProposal(env,ctx).catch(()=>null):null;
+      const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused,canUndo:Boolean(active.undo),proposal:proposal?{type:proposal.type,title:proposal.title,text:proposal.text,options:proposal.options,days:proposal.days||null,button:proposal.button}:null}:null;
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);

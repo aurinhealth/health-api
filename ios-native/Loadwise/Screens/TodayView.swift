@@ -92,6 +92,11 @@ struct TodayContent: View {
                         .font(Typo.small).foregroundStyle(Palette.secondary)
                         .padding(.top, 24)
                 }
+                if today.trainingPlan?.paused == true {
+                    PlanPausedCard().padding(.top, 10)
+                } else if let proposal = today.trainingPlan?.proposal {
+                    PlanProposalCard(proposal: proposal).padding(.top, 10).id(proposal.type + proposal.text)
+                }
                 CoachCheckInCard(openCoach: openCoach).padding(.top, today.trainingPlan == nil ? 24 : 10)
                 ThresholdCheckCard().padding(.top, 12)
             }

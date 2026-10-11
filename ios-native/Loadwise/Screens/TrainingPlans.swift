@@ -231,7 +231,12 @@ struct PlanDetailView: View {
             SettingsGroup {
                 ForEach(Array(template.weeks.enumerated()), id: \.element.id) { index, week in
                     if index > 0 { SettingsDivider() }
-                    weekRow(week)
+                    if isActive && template.sport != "gym" {
+                        NavigationLink { PlanWeekView(week: week, sport: template.sport) } label: { weekRow(week) }
+                            .buttonStyle(.plain)
+                    } else {
+                        weekRow(week)
+                    }
                 }
             }
             if let started {
@@ -269,9 +274,13 @@ struct PlanDetailView: View {
                 }
             }
             Spacer(minLength: 0)
+            if isActive && template.sport != "gym" {
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
@@ -329,6 +338,308 @@ struct PlanDetailView: View {
             }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - The plan asks (Today)
+
+/// On Today: what the plan proposes (a missed session moved, last week
+/// repeated, a lighter week back from a break). Nothing changes until the
+/// athlete chooses; the change can be undone.
+struct PlanProposalCard: View {
+    @Environment(AppModel.self) private var model
+    let proposal: TodaySnapshot.PlanProposal
+    @State private var choice: String?
+    @State private var picking = false
+    @State private var busy = false
+    @State private var done: String?
+    @State private var error: String?
+
+    private var selected: TodaySnapshot.PlanProposal.Option? {
+        proposal.options.first { $0.id == (choice ?? proposal.options.first { $0.recommended == true }?.id ?? proposal.options.first?.id) }
+    }
+
+    var body: some View {
+        Card {
+            if let done {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.onAccent)
+                        .frame(width: 28, height: 28).background(Palette.green, in: Circle())
+                    Text(done).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button { Task { await undo() } } label: {
+                        Label("Zpět", systemImage: "arrow.uturn.backward").font(Typo.bodyStrong).foregroundStyle(Palette.amber)
+                    }
+                    .disabled(busy)
+                }
+            } else {
+                WidgetHeader(title: proposal.title, color: Palette.amberBar)
+                Text(proposal.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 0) {
+                    ForEach(Array(proposal.options.enumerated()), id: \.element.id) { index, option in
+                        if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                        Button { choice = option.id } label: { row(option) }.buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: 10) {
+                    PrimaryButton(title: selected?.id == "pick" ? L10n.tr("Vybrat den") : proposal.button, busy: busy) {
+                        if selected?.id == "pick" { picking = true } else { Task { await apply(selected) } }
+                    }
+                    SecondaryButton(title: "Nechat") { Task { await send(["choice": .string("keep")], done: nil) } }
+                        .frame(width: 120)
+                }
+                .disabled(busy || model.demo)
+            }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+        .sheet(isPresented: $picking) {
+            PlanDayPicker(title: proposal.text, days: proposal.days ?? []) { date in
+                picking = false
+                Task { await send(["choice": .string("move"), "date": .string(date)], done: L10n.f("Přesunuto na %@", Fmt.dayMonth(date))) }
+            }
+            .presentationDetents([.height(300)])
+        }
+    }
+
+    private func row(_ option: TodaySnapshot.PlanProposal.Option) -> some View {
+        let on = option.id == selected?.id
+        return HStack(spacing: 12) {
+            Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 21)).foregroundStyle(on ? Palette.amberBar : Palette.faint)
+            Text(option.label).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            if option.recommended == true {
+                Text("doporučeno").font(.caption2.weight(.medium)).foregroundStyle(Palette.amber)
+                    .padding(.horizontal, 7).padding(.vertical, 2).background(Palette.amberSoft, in: Capsule())
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func apply(_ option: TodaySnapshot.PlanProposal.Option?) async {
+        guard let option else { return }
+        var body: JSONObject = ["choice": .string(option.id)]
+        if let date = option.date { body["date"] = .string(date) }
+        await send(body, done: option.label)
+    }
+
+    private func send(_ body: JSONObject, done label: String?) async {
+        busy = true
+        defer { busy = false }
+        do {
+            var b = body
+            b["action"] = .string("proposal")
+            _ = try await model.api.trainingPlanAction(b)
+            error = nil
+            if let label { done = label } else { await model.refresh() }
+            await model.refreshTraining()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func undo() async {
+        busy = true
+        defer { busy = false }
+        do {
+            _ = try await model.api.trainingPlanAction(["action": .string("undo")])
+            done = nil
+            await model.refresh()
+            await model.refreshTraining()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// The days left in the week for a missed session, and its time (any time).
+struct PlanDayPicker: View {
+    let title: String
+    let days: [String]
+    let pick: (String) -> Void
+    @State private var day: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Přesunout trénink").font(.headline).foregroundStyle(Palette.ink)
+            HStack(spacing: 8) {
+                ForEach(days, id: \.self) { d in
+                    Button { day = d } label: {
+                        VStack(spacing: 2) {
+                            Text(Fmt.weekdayShort(d)).font(.caption.weight(.medium))
+                            Text(String(Int(d.suffix(2)) ?? 0)).font(Typo.number(22))
+                        }
+                        .foregroundStyle(day == d ? Palette.onAccent : Palette.ink)
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        .background(day == d ? Palette.amberBar : Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            PrimaryButton(title: day.map { L10n.f("Přesunout na %@", Fmt.weekdayShort($0)) } ?? L10n.tr("Vyber den")) {
+                if let day { pick(day) }
+            }
+            .disabled(day == nil)
+        }
+        .padding(20)
+        .onAppear { day = days.first }
+    }
+}
+
+/// On Today while sick, injured or on a break with a plan: the plan waits;
+/// back to training, or the status for longer.
+struct PlanPausedCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var editing = false
+    @State private var busy = false
+
+    var body: some View {
+        let status = model.athleteStatus ?? .active
+        let kind = AthleteStatusKind.from(status.status)
+        Card {
+            WidgetHeader(title: L10n.tr("Stav"), color: kind.color)
+            Text(kind.title + (status.statusUntil.map { " " + AthleteStatusSheet.untilText($0) } ?? ""))
+                .font(Typo.sentence(20)).foregroundStyle(Palette.ink)
+            HStack(spacing: 10) {
+                SecondaryButton(title: "Už jsem v pořádku") {
+                    Task {
+                        busy = true
+                        defer { busy = false }
+                        try? await model.setAthleteStatus("active", until: nil, note: nil)
+                    }
+                }
+                SecondaryButton(title: "Prodloužit") { editing = true }
+            }
+            .disabled(busy || model.demo)
+        }
+        .sheet(isPresented: $editing) { AthleteStatusSheet(current: status) }
+    }
+}
+
+// MARK: - One week of the plan
+
+/// GET /app/api/plans/week?week=N.
+struct PlanWeekDetail: Decodable, Equatable {
+    struct Session: Decodable, Equatable, Identifiable {
+        var id: String { date + (workoutId ?? "") }
+        let date: String
+        let label: String?
+        let kind: String
+        let minutes: Double?
+        let workoutId: String?
+        let workout: PlannedWorkout.Workout?
+    }
+    let week: Int
+    let weeksCount: Int
+    let monday: String
+    let phaseLabel: String?
+    let sessions: [Session]
+}
+
+extension APIClient {
+    func trainingPlanWeek(_ week: Int) async throws -> PlanWeekDetail {
+        try await get("/app/api/plans/week?week=\(week)")
+    }
+}
+
+/// A week of the plan: its sessions, each with its profile; tap for the session.
+struct PlanWeekView: View {
+    @Environment(AppModel.self) private var model
+    let week: TrainingPlans.Week
+    let sport: String
+    @State private var detail: PlanWeekDetail?
+    @State private var error: String?
+
+    var body: some View {
+        DetailScreen(glow: Palette.Glow.training) {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { " · " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
+                Text(Fmt.capitalized(week.phaseLabel)).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                if let detail {
+                    Card {
+                        ForEach(Array(detail.sessions.enumerated()), id: \.element.id) { index, s in
+                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                            NavigationLink { PlanSessionView(session: s, sport: sport) } label: { row(s) }
+                                .buttonStyle(.plain)
+                                .disabled(s.workout == nil)
+                        }
+                    }
+                    .padding(.top, 18)
+                } else if let error {
+                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 18)
+                } else {
+                    ProgressView().padding(.top, 30).frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .task {
+            guard detail == nil, !model.demo else { return }
+            do { detail = try await model.api.trainingPlanWeek(week.week) } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    private func row(_ s: PlanWeekDetail.Session) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(s.workout?.name ?? s.label ?? "").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text(Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date) + (s.minutes.map { " · " + Fmt.duration(Int($0)) } ?? ""))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
+                WorkoutProfile(blocks: blocks, sport: sport, compact: true)
+            }
+        }
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+    }
+}
+
+/// One session of the plan: its profile, steps and sending it to the watch.
+struct PlanSessionView: View {
+    @Environment(AppModel.self) private var model
+    let session: PlanWeekDetail.Session
+    let sport: String
+
+    var body: some View {
+        DetailScreen(glow: Palette.Glow.training) {
+            VStack(alignment: .leading, spacing: 0) {
+                SectionLabel(text: Fmt.capitalized(Fmt.weekdayShort(session.date)) + " " + Fmt.dayMonth(session.date)).padding(.top, 24)
+                Text(session.workout?.name ?? session.label ?? "").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                HStack(spacing: 18) {
+                    if let m = session.workout?.duration_minutes ?? session.minutes { meta("Délka", Fmt.duration(Int(m))) }
+                    if let t = session.workout?.target_load { meta("Zátěž", Fmt.int(t) + " TSS") }
+                    if let f = session.workout?.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
+                }
+                .padding(.top, 16)
+                if let blocks = session.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
+                    Card { WorkoutProfile(blocks: blocks, sport: sport) }.padding(.top, 16)
+                    SectionLabel(text: "Průběh").padding(.top, 26)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in StepBlockRow(block: block) }
+                    }
+                    .padding(.top, 10)
+                }
+                if let description = session.workout?.description, !description.isEmpty {
+                    Text(description).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
+                }
+                if let workout = session.workout, !model.demo {
+                    WatchWorkoutButton(workout: workout, title: workout.name ?? session.label ?? "").padding(.top, 18)
+                }
+            }
+        }
+    }
+
+    private func meta(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(LocalizedStringKey(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
         }
     }
 }

@@ -1,4 +1,4 @@
-import { L } from "./lang.js";
+import { L, plural } from "./lang.js";
 import { buildWorkout, step } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
@@ -258,13 +258,18 @@ export function raceWorkout(id) {
 export function planWeek(plan, date) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return null;
-  const index = Math.floor(daysBetween(plan.startDate, mondayOf(date)) / 7);
+  const raw = Math.floor(daysBetween(plan.startDate, mondayOf(date)) / 7);
+  // A lighter week chosen before repeating the first week falls before the start.
+  const index = raw === -1 && (plan.lightWeeks || []).includes(mondayOf(date)) ? 0 : raw;
   if (index < 0 || index >= template.weeks.length) return null;
-  const monday = shift(plan.startDate, index * 7), base = template.weeks[index];
+  const monday = mondayOf(date), base = template.weeks[index];
   // Back after an illness or a break in a race plan (the race date stays):
   // the first week or two are lighter, with one key session at most.
   const returning = !base.race && plan.returnFrom && monday >= plan.returnFrom && monday < shift(plan.returnFrom, 7 * (plan.returnWeeks || 1));
-  const spec = returning ? { ...base, load: Math.min(base.load, .8), q: base.q.slice(0, 1), returning: true } : base;
+  // A lighter week the athlete chose in a review, before repeating a week.
+  const light = !base.race && (plan.lightWeeks || []).includes(monday);
+  const spec = light ? { ...base, phase: "recovery", load: Math.min(base.load, .65), q: [], light: true }
+    : returning ? { ...base, load: Math.min(base.load, .8), q: base.q.slice(0, 1), returning: true } : base;
   return { template, index, week: index + 1, weeks: template.weeks.length, spec, monday };
 }
 // The quality days the week planner should make for the plan's week.
@@ -282,13 +287,18 @@ export { phaseLabel };
 // `today` the athlete's day: a key session (intervals, a test, the long one)
 // missed on an earlier day moves to the next easy day of the week that is
 // not next to another key day.
-export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasPower = true, shifts = {}, done = null, today = null } = {}) {
+export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasPower = true, shifts = {} } = {}) {
   const pw = planWeek(plan, weekStart);
   if (!pw || !targets?.items || pw.template.sport === "gym") return targets;
   const { template, spec } = pw, sport = template.sport;
   const race = template.race && plan.raceDate && plan.raceDate >= weekStart && plan.raceDate <= shift(weekStart, 6) ? plan.raceDate : null;
   const raceKm = Number(plan.raceKm) || template.race?.km;
   let items = targets.items.map(x => ({ ...x }));
+  // A missed key session moved to another day (the athlete's choice, planChoice):
+  // the day gets a session of the sport if it has none.
+  const moves = (plan.moves || []).filter(m => m.to && m.from >= weekStart && m.from < shift(weekStart, 7) && m.to >= weekStart && m.to < shift(weekStart, 7));
+  for (const m of moves) if (!items.some(x => x.sport === sport && (x.slot || 0) === 0 && x.date === m.to)) items.push({ date: m.to, sport, slot: 0, role: "endurance", minutes: items.find(x => x.sport === sport && x.date === m.from)?.minutes || 45, tss: 0, intensity: .7 });
+  items.sort((a, b) => a.date.localeCompare(b.date) || (a.slot || 0) - (b.slot || 0));
   // Nothing of the plan's sport after the race; the race day gets a chip if it has none.
   if (race) {
     items = items.filter(x => x.sport !== sport || x.date <= race);
@@ -313,20 +323,11 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     if (stridesLeft && sport === "run" && !spec.easy) { stridesLeft--; return { kind: "easy", family: "run-easy-strides" }; }
     return { kind: "easy", family: spec.easy?.family || (sport === "run" ? "run-easy" : "z2"), level: spec.easy?.level ?? null, minutes: spec.easy?.minutes ?? null };
   };
-  // Missed key sessions: the easy days ahead take them in order.
-  const KEY = ["quality", "test", "long"], moved = new Map();
-  let unplaced = 0;
-  if (done && today) {
-    const planned = own.map(x => ({ x, s: sessionFor(x) }));
+  const moved = new Map();
+  if (moves.length) {
+    const planned = new Map(own.map(x => [x.date, sessionFor(x)]));
     stridesLeft = spec.strides ? 1 : 0;
-    const missed = planned.filter(({ x, s }) => x.date < today && KEY.includes(s.kind) && !done.has(x.date)).map(p => p.s);
-    const keyDays = planned.filter(({ x, s }) => x.date >= today && KEY.includes(s.kind)).map(p => p.x.date);
-    for (const s of missed) {
-      const free = planned.find(({ x, s: f }) => x.date >= today && !KEY.includes(f.kind) && f.kind !== "race" && !moved.has(x) && !(race && daysBetween(x.date, race) <= 2) && keyDays.every(d => Math.abs(daysBetween(d, x.date)) >= 2));
-      if (!free) { unplaced++; continue; }
-      moved.set(free.x, { ...s, movedFrom: true });
-      keyDays.push(free.x.date);
-    }
+    for (const m of moves) { const s = planned.get(m.from), to = own.find(x => x.date === m.to); if (s && to) moved.set(to, { ...s, movedFrom: m.from }); }
   }
   const roleOf = s => s.kind === "quality" || s.kind === "test" ? "quality" : s.kind === "long" ? "long" : s.kind === "race" ? "race" : s.kind === "recovery" ? "recovery" : "endurance";
   const out = items.map(x => {
@@ -336,9 +337,29 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
     const label = s.kind === "test" ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : s.label || (workoutId && baseName(workoutId)) || x.label;
     const role = roleOf(s), intensity = x.intensity || .7;
-    return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(s.movedFrom ? { moved: true } : {}) } };
+    return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(s.movedFrom ? { movedFrom: s.movedFrom } : {}) } };
   });
-  return { ...targets, items: out, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase), load: spec.load, returning: Boolean(spec.returning), moved: moved.size, unplaced } };
+  return { ...targets, items: out, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase), load: spec.load, returning: Boolean(spec.returning) } };
+}
+
+const KEY_KINDS = ["quality", "test", "long"];
+// A key session of this week (intervals, a test, the long one) on a past day
+// with no session of the sport, not yet decided on: the latest one, with the
+// day the app suggests for it (the first easy day ahead not next to another
+// key day) and the days left in the week. `targets` are applyPlan's.
+export function missedSession(targets, plan, weekStart, today, doneDates = []) {
+  const sport = getTemplate(plan?.templateId)?.sport;
+  if (!sport || sport === "gym" || !targets?.items) return null;
+  const done = new Set(doneDates), decided = new Set((plan.moves || []).map(m => m.from));
+  const own = targets.items.filter(x => x.sport === sport && (x.slot || 0) === 0 && x.plan);
+  const missed = own.filter(x => x.date < today && x.date >= weekStart && KEY_KINDS.includes(x.plan.kind) && !x.plan.movedFrom && !done.has(x.date) && !decided.has(x.date)).at(-1);
+  if (!missed) return null;
+  const days = Array.from({ length: 7 }, (_, i) => shift(weekStart, i)).filter(d => d >= today);
+  if (!days.length) return null;
+  const keyDays = own.filter(x => x.date >= today && KEY_KINDS.includes(x.plan.kind)).map(x => x.date);
+  const race = own.find(x => x.plan.kind === "race")?.date;
+  const suggest = own.find(x => x.date >= today && !KEY_KINDS.includes(x.plan.kind) && x.plan.kind !== "race" && !(race && daysBetween(x.date, race) <= 2) && keyDays.every(d => Math.abs(daysBetween(d, x.date)) >= 2))?.date || null;
+  return { type: "missed", date: missed.date, label: missed.label, kind: missed.plan.kind, workoutId: missed.plan.workoutId, suggest, days };
 }
 
 // The week's load factor: the plan's, never above the safety rules (a
@@ -414,18 +435,18 @@ const parseState = text => { try { return JSON.parse(text || "{}") || {}; } catc
 // (weeks the plan moved later), returnFrom/returnWeeks (lighter weeks after a
 // break in a race plan) and reviewed (the last week checked for missed sessions).
 const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, startDate: r.start_date, raceDate: r.race_date || null, raceKm: r.race_km ?? null, status: r.status, ...parseState(r.state_json) } : null;
-const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed"];
+const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo"];
 async function savePlan(db, plan) {
   const state = Object.fromEntries(STATE_KEYS.filter(k => plan[k] != null).map(k => [k, plan[k]]));
   await db.prepare("UPDATE training_plans SET start_date=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(plan.startDate, JSON.stringify(state), db.userId, plan.id).run();
 }
 
 // ---- illness, a break, missed weeks --------------------------------------------
-// While the athlete's status is sick, injured or on a break the plan waits;
-// back to training, a plan without a race moves later by the weeks the break
-// took (rounded up), so it goes on from before the break instead of catching
-// up. A race plan keeps its race day: its first week or two back are lighter.
-// Breaks shorter than 4 days only cost their sessions.
+// While the athlete's status is sick, injured or on a break the plan waits.
+// Back to training after 4 days or more, the plan proposes what next
+// (planChoice): a lighter week, the plan moved later by the weeks away (not
+// with a race: its day stays) or going on unchanged. Shorter breaks only cost
+// their sessions.
 export function planPause(plan, state, today) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return { plan, changed: false };
@@ -438,26 +459,54 @@ export function planPause(plan, state, today) {
   const from = plan.pauseFrom > plan.startDate ? plan.pauseFrom : plan.startDate, end = plan.pauseUntil && plan.pauseUntil < today ? plan.pauseUntil : today;
   const days = daysBetween(from, end), out = { ...plan, pauseFrom: null, pauseUntil: null };
   if (days >= 4 && end > plan.startDate) {
-    const weeks = Math.min(6, Math.ceil(days / 7));
-    if (template.race) Object.assign(out, { returnFrom: mondayOf(end), returnWeeks: days >= 14 ? 2 : 1 });
-    else Object.assign(out, { startDate: shift(plan.startDate, weeks * 7), shiftedWeeks: (plan.shiftedWeeks || 0) + weeks });
+    const options = template.race ? ["light", "continue"] : ["light", "shift", "continue"];
+    out.proposal = { type: "return", days, weeks: Math.min(6, Math.ceil(days / 7)), from: mondayOf(today), options };
   }
   return { plan: out, changed: true };
 }
 // A finished week whose key sessions were not all done, not even on another
-// day of that week, is repeated: the rest of the plan moves a week later.
-// At most twice in a plan; a race plan keeps its race day and goes on.
+// day of that week: the plan proposes repeating it, going on, or a lighter
+// week before repeating it (planChoice). A race plan keeps its race day and
+// goes on without asking.
 // keyDates: the week's key session days; doneDates: days with a session of the sport.
 export function planReview(plan, weekStart, { keyDates = [], doneDates = [] } = {}) {
   const template = plan && getTemplate(plan.templateId);
-  if (!template || plan.reviewed >= weekStart) return { plan, changed: false, repeated: false };
+  if (!template || plan.reviewed >= weekStart) return { plan, changed: false, proposed: false };
   const out = { ...plan, reviewed: weekStart };
-  const done = new Set(doneDates), missed = keyDates.filter(d => !done.has(d)).sort();
+  const skipped = new Set((plan.moves || []).filter(m => !m.to).map(m => m.from));
+  const done = new Set(doneDates), missed = keyDates.filter(d => !done.has(d) && !skipped.has(d)).sort();
   // A missed session done later that week on a day without a key session counts.
   const madeUp = missed.length ? doneDates.filter(d => d > missed[0] && !keyDates.includes(d)).length : 0;
-  const repeat = !template.race && missed.length > madeUp && (plan.shiftedWeeks || 0) < 2 && planWeek(plan, weekStart) != null;
-  if (repeat) Object.assign(out, { startDate: shift(plan.startDate, 7), shiftedWeeks: (plan.shiftedWeeks || 0) + 1 });
-  return { plan: out, changed: true, repeated: repeat };
+  const last = planWeek(plan, shift(weekStart, -7));
+  const propose = !template.race && !plan.proposal && missed.length > madeUp && last != null && planWeek(plan, weekStart) != null;
+  if (propose) out.proposal = { type: "week", weekStart, week: last.week, next: last.week + 1, done: keyDates.length - missed.length + Math.min(madeUp, missed.length), total: keyDates.length, options: ["repeat", "continue", "light"] };
+  return { plan: out, changed: true, proposed: propose };
+}
+
+// The athlete's answer to a proposal ("keep" leaves the plan as it is).
+// missed: "move" to `date`, or "skip". week: "repeat" the last week,
+// "continue", or "light" (a lighter week now, then the last week again).
+// return: "light" (a lighter week or two now), "shift" (the plan moves later
+// by the weeks away) or "continue". The plan before the change is kept for undo.
+export function planChoice(plan, proposal, choice, { today, date = null } = {}) {
+  const snapshot = Object.fromEntries(["startDate", ...STATE_KEYS.filter(k => k !== "undo")].map(k => [k, plan[k] ?? null]));
+  const out = { ...plan, undo: snapshot, proposal: null };
+  const monday = mondayOf(today);
+  if (proposal.type === "missed") {
+    if (choice === "move" && !(date && date >= today && date < shift(monday, 7))) throw new Error(L("Vyber den do konce týdne.", "Pick a day before the week ends."));
+    out.moves = [...(plan.moves || []).filter(m => m.from >= shift(monday, -7)), { from: proposal.date, to: choice === "move" ? date : null }];
+  } else if (proposal.type === "week") {
+    if (choice === "repeat") Object.assign(out, { startDate: shift(plan.startDate, 7), shiftedWeeks: (plan.shiftedWeeks || 0) + 1 });
+    if (choice === "light") Object.assign(out, { startDate: shift(plan.startDate, 14), shiftedWeeks: (plan.shiftedWeeks || 0) + 2, lightWeeks: [...(plan.lightWeeks || []), monday] });
+  } else if (proposal.type === "return") {
+    if (choice === "light") Object.assign(out, { returnFrom: monday, returnWeeks: proposal.days >= 14 ? 2 : 1 });
+    if (choice === "shift" && !getTemplate(plan.templateId)?.race) Object.assign(out, { startDate: shift(plan.startDate, 7 * proposal.weeks), shiftedWeeks: (plan.shiftedWeeks || 0) + proposal.weeks });
+  }
+  return out;
+}
+export function planUndo(plan) {
+  if (!plan?.undo) return plan;
+  return { ...plan, ...plan.undo, undo: null };
 }
 // The active plan, or null; a plan past its last week is finished. An
 // endurance plan (ride or run) and a gym plan can run side by side.
@@ -480,6 +529,7 @@ export async function reviewPlan(db, plan, weekStart, data) {
   if (r.changed) await savePlan(db, r.plan);
   return r;
 }
+export async function savePlanState(db, plan) { await savePlan(db, plan); return plan; }
 export async function startPlan(db, { templateId, startDate, raceDate = null, raceKm = null }) {
   const template = getTemplate(templateId);
   if (!template) throw new Error(L("Neznámý plán.", "Unknown plan."));
@@ -507,5 +557,39 @@ export function planSummary(plan, today) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return null;
   const pw = planWeek(plan, today), started = today >= plan.startDate;
-  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning), template: templateSummary(template) };
+  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning || pw?.spec.light), template: templateSummary(template) };
+}
+
+// ---- a proposal in words (Today's plan card) -----------------------------------
+const ACC = () => [L("na pondělí", "to Monday"), L("na úterý", "to Tuesday"), L("na středu", "to Wednesday"), L("na čtvrtek", "to Thursday"), L("na pátek", "to Friday"), L("na sobotu", "to Saturday"), L("na neděli", "to Sunday")];
+const LOC = () => [L("V pondělí", "On Monday"), L("V úterý", "On Tuesday"), L("Ve středu", "On Wednesday"), L("Ve čtvrtek", "On Thursday"), L("V pátek", "On Friday"), L("V sobotu", "On Saturday"), L("V neděli", "On Sunday")];
+const weekdayOf = date => (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
+const dayMonth = date => { const d = new Date(date + "T12:00:00Z"); return d.getUTCDate() + ". " + (d.getUTCMonth() + 1) + "."; };
+// { type, title, text, options: [{ id, label, date?, recommended? }], button }
+export function proposalView(proposal, plan, today) {
+  if (!proposal) return null;
+  const race = plan?.raceDate && getTemplate(plan.templateId)?.race ? plan.raceDate : null;
+  if (proposal.type === "missed") {
+    const when = daysBetween(proposal.date, today) === 1 ? L("Včera", "Yesterday") : LOC()[weekdayOf(proposal.date)];
+    const options = [
+      ...(proposal.suggest ? [{ id: "move", date: proposal.suggest, label: L("Přesunout ", "Move ") + ACC()[weekdayOf(proposal.suggest)], recommended: true }] : []),
+      { id: "pick", label: L("Vybrat jiný den", "Pick another day") },
+      { id: "skip", label: L("Vynechat", "Skip it"), recommended: !proposal.suggest }
+    ];
+    return { type: "missed", title: L("Vynechaný trénink", "Missed session"), text: when + L(" jsi nestihl ", " you missed ") + proposal.label + ".", options, days: proposal.days, button: L("Přesunout", "Move") };
+  }
+  if (proposal.type === "week") {
+    return { type: "week", title: L("Revize plánu", "Plan review"), text: L("Minulý týden jsi stihl ", "Last week you did ") + proposal.done + L(" ze ", " of ") + proposal.total + L(" klíčových tréninků.", " key sessions."), button: L("Použít", "Apply"), options: [
+      { id: "repeat", label: L("Zopakovat týden ", "Repeat week ") + proposal.week, recommended: true },
+      { id: "continue", label: L("Pokračovat týdnem ", "Go on with week ") + proposal.next },
+      { id: "light", label: L("Odlehčený týden, pak týden ", "A lighter week, then week ") + proposal.week }] };
+  }
+  if (proposal.type === "return") {
+    const weeks = proposal.weeks;
+    return { type: "return", title: L("Návrat do tréninku", "Back to training"), text: proposal.days + L(" dní bez tréninku.", " days without training.") + (race ? L(" Závod ", " Race on ") + dayMonth(race) : ""), button: L("Použít", "Apply"), options: [
+      { id: "light", label: L("Lehčí týden, pak dál podle plánu", "A lighter week, then the plan as it is"), recommended: true },
+      ...(proposal.options.includes("shift") ? [{ id: "shift", label: L("Posunout plán o ", "Move the plan by ") + weeks + " " + plural(weeks, "týden", "týdny", "týdnů", "week", "weeks") }] : []),
+      { id: "continue", label: L("Pokračovat beze změny", "Go on unchanged") }] };
+  }
+  return null;
 }

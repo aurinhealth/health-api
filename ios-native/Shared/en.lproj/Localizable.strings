@@ -1607,3 +1607,14 @@
 "Do týdenního plánu jsem přidal: %@." = "Added to your week plan: %@.";
 "pozastaveno" = "paused";
 "návrat" = "return";
+"doporučeno" = "recommended";
+"Vybrat den" = "Pick a day";
+"Nechat" = "Leave it";
+"Přesunuto na %@" = "Moved to %@";
+"Přesunout trénink" = "Move the session";
+"Přesunout na %@" = "Move to %@";
+"Vyber den" = "Pick a day";
+"Stav" = "Status";
+"Už jsem v pořádku" = "I'm fine now";
+"Prodloužit" = "Extend";
+"Průběh tréninku, %@" = "Workout profile, %@";

@@ -505,6 +505,9 @@ struct PlannedWorkoutView: View {
                     if let f = plan?.workout.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
                 }
                 .padding(.top, 16)
+                if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, session.sport == "ride" || session.sport == "run" {
+                    Card { WorkoutProfile(blocks: blocks, sport: session.sport) }.padding(.top, 16)
+                }
                 if let description = plan?.workout.description, !description.isEmpty {
                     Text(description).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true).padding(.top, 14)
                 }

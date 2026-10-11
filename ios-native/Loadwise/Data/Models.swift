@@ -30,6 +30,25 @@ struct TodaySnapshot: Decodable, Equatable {
         let phaseLabel: String?
         /// Sick, injured or on a break: the plan waits.
         let paused: Bool?
+        /// What the plan asks now (a missed session, last week, back from a break).
+        let proposal: PlanProposal?
+    }
+
+    /// src/training-plans.js proposalView.
+    struct PlanProposal: Decodable, Equatable {
+        struct Option: Decodable, Equatable, Identifiable {
+            let id: String
+            let label: String
+            let date: String?
+            let recommended: Bool?
+        }
+        let type: String
+        let title: String
+        let text: String
+        let options: [Option]
+        /// For a missed session: the days left in the week.
+        let days: [String]?
+        let button: String
     }
 
     struct Readiness: Decodable, Equatable {
