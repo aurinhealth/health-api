@@ -86,23 +86,8 @@ struct TodayContent: View {
                 CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
             }
 
-            if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        SectionLabel(text: "Co to znamená pro dnešek")
-                        Spacer()
-                        Button(action: openCoach) {
-                            Label("Zeptat se", systemImage: "bubble.left").font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
-                        }
-                    }
-                    summaryText(summary)
-                        .font(Typo.sentence(22))
-                        .foregroundStyle(Palette.ink)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 32)
-            }
+            CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil).padding(.top, 32)
+            RecoveryTodayCard(today: today).padding(.top, 12)
 
             VStack(spacing: 12) {
                 if shows(.food) { TabLinkCard(tab: .food) { FoodWidget(nutrition: today.nutrition) } }
@@ -142,14 +127,6 @@ struct TodayContent: View {
 
     private func shows(_ widget: TodayWidget) -> Bool {
         !hidden.split(separator: ",").contains(Substring(widget.rawValue))
-    }
-
-    private func summaryText(_ s: TodaySnapshot.Summary) -> Text {
-        var text = Text(s.text ?? "")
-        if let rec = s.recommendation {
-            text = text + Text(s.text == nil ? "" : " ") + Text(rec).font(Typo.sentenceItalic(22)).foregroundColor(Palette.green)
-        }
-        return text
     }
 }
 

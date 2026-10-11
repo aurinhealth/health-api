@@ -43,6 +43,8 @@ export const PERSONAL_TABLES = {
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
+  // The coach's daily sentence per screen (screen-texts.js).
+  ai_screen_texts: {},
   // Sign-in: linked Apple IDs (apple-login.js) and passkeys (passkeys.js),
   // created with user_id.
   user_identities: {},

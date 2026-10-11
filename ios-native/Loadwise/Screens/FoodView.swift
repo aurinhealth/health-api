@@ -111,10 +111,7 @@ struct FoodContent: View {
                 }
             }
             .padding(.top, 34)
-            if let sentence = food.sentence {
-                Text(sentence).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 12)
-            }
+            CoachTextCard(screen: "food", fallbackText: food.sentence, live: model.selectedDate == nil).padding(.top, 16)
 
             MacroCells(macros: food.macros).padding(.top, 26)
             if let fiber = food.macros.fiber {

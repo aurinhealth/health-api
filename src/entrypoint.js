@@ -88,6 +88,7 @@ import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
+import { screenText, SCREENS } from "./screen-texts.js";
 import { nightDetail } from "./night-detail.js";
 import { applyGymSwap } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
@@ -851,13 +852,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
-  // Recovery sessions (stretching) the athlete adds to a day from the coach's note.
   if(url.pathname==='/app/api/night'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday();
     try{return Response.json(await nightDetail(env.DB,{date}),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }
+  // Recovery sessions (stretching, sauna) the athlete adds to a day from the
+  // coach's note or from Today's "Regenerace na dnes" (done: true saves it as done).
   if(url.pathname==='/app/api/recovery'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     const day=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))&&!Number.isNaN(Date.parse(v+'T12:00:00Z'));
@@ -868,8 +870,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({}));
       if(request.method==='POST'){
         if(!day(body.date)||body.date<shiftDate(localToday(),-1)||body.date>shiftDate(localToday(),14))return Response.json({message:L('Vyber den od včerejška do dvou týdnů dopředu.', 'Choose a day from yesterday up to two weeks ahead.')},{status:400});
-        const sport=['ride','run','gym'].includes(body.sport)?body.sport:null;
-        return Response.json({status:'ok',session:await addRecovery(env.DB,{date:body.date,sport,focus:String(body.focus||'').slice(0,200),note:String(body.note||'').slice(0,1000)})},{headers:{'Cache-Control':'no-store'}});
+        const sport=['ride','run','gym'].includes(body.sport)?body.sport:null,kind=body.kind==='sauna'?'sauna':'stretch';
+        return Response.json({status:'ok',session:await addRecovery(env.DB,{date:body.date,sport,kind,done:body.done===true,focus:String(body.focus||'').slice(0,200),note:String(body.note||'').slice(0,1000)})},{headers:{'Cache-Control':'no-store'}});
       }
       const id=Number(body.id);if(!Number.isInteger(id)||id<1)return Response.json({message:L('Chybí záznam.', 'The entry is missing.')},{status:400});
       if(request.method==='PATCH'){await updateRecovery(env.DB,id,{done:Boolean(body.done)});return Response.json({status:'ok'});}
@@ -1249,24 +1251,41 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
 
+  // The coach's sentence on the app's Today, Training and Food screens
+  // (screen-texts.js): written by the AI from the screen's own data once a
+  // day, else the screen's rule-based text.
+  if(url.pathname==='/app/api/coach-text'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const screen=String(url.searchParams.get('screen')||'');
+    if(!SCREENS.includes(screen))return Response.json({message:L('Neznámá obrazovka.', 'Unknown screen.')},{status:400});
+    const path={today:'/app/api/today',training:'/app/api/training',food:'/app/api/food-today'}[screen];
+    const load=()=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
+    try{return Response.json(await screenText(env,{screen,load}),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({status:'error',message:error.message},{status:500});}
+  }
+
   // Everything the native app's Today screen shows, in one response (app-today.js).
   if(url.pathname==='/app/api/today'&&request.method==='GET'){
     try{
       const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym]=await Promise.all([
+      const from=shiftDate(date,-30),to=shiftDate(date,1),isToday=date===localToday();
+      // Today only: yesterday's sessions and tomorrow's plan for "Regenerace na dnes" (recovery-today.js).
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
-        todayPlace(env,ctx,date),trainingGymPlans(env,date,date).catch(()=>({}))
+        todayPlace(env,ctx,date),trainingGymPlans(env,isToday?shiftDate(date,-1):date,isToday?shiftDate(date,1):date).catch(()=>({})),
+        isToday?read('/analysis/daily?date='+shiftDate(date,-1)):null,isToday?read('/analysis/daily?date='+shiftDate(date,1)):null,
+        listRecovery(env.DB,{from:date,to:date}).catch(()=>[])
       ]);
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);
-      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery}}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

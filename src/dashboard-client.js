@@ -2479,7 +2479,7 @@ async function renderWeekHub(){
     const openGym=d.date===gymDay()&&!state.gym?.cancelled&&(state.gym?.values||[]).slice(7).filter(r=>r?.[1]),gymPlan=openGym?.length?{name:state.gym.values[2]?.[3]||'',exercises:new Set(openGym.map(r=>r[1])).size,sets:openGym.filter(gymRowWork).length}:d.gymPlan;
     if(gymPlan&&!sports.has('gym')&&!d.gymCancelled&&d.date>=today){sports.add('gym');cover('gym');items.push('<div class="hub-item planned editable"'+detail({kind:'gym',date:d.date,done:false})+' draggable="true" data-gym-date="'+d.date+'" data-sport="gym" data-name="Gym" title="Klikni pro cviky, nebo přetáhni na jiný den">'+HUB_SPORTS.gym+' · '+esc(gymPlan.name||(d.date===today?'plán na dnes':'plán'))+'<span class="meta">'+czPlural(gymPlan.exercises,'cvik','cviky','cviků')+' · '+czPlural(gymPlan.sets,'série','série','sérií')+'</span></div>');}
     // Stretching belongs to the week plan too: its sessions show on their day.
-    for(const r of (state.recovery||[]).filter(r=>r.date===d.date))items.push('<div class="hub-item planned'+(r.done?' done':'')+'"'+detail({kind:'recovery',id:r.id})+'>🧘 '+esc(r.title)+'<span class="meta">'+r.minutes+' min · '+czPlural(r.items.length,'cvik','cviky','cviků')+(r.done?uiText(' · hotovo',' · done'):'')+'</span></div>');
+    for(const r of (state.recovery||[]).filter(r=>r.date===d.date))items.push('<div class="hub-item planned'+(r.done?' done':'')+'"'+detail({kind:'recovery',id:r.id})+'>🧘 '+esc(r.title)+'<span class="meta">'+r.minutes+' min'+(r.items.length?' · '+czPlural(r.items.length,'cvik','cviky','cviků'):'')+(r.done?uiText(' · hotovo',' · done'):'')+'</span></div>');
     // Planner suggestions for the days still ahead.
     // The weekly plan for this weekday: chips that move between days or come off with ✕.
     // A chip whose training is already planned or done gives way to the training itself.
@@ -3244,7 +3244,7 @@ function todayItems(date){
   if(date===localToday()&&(state.gym?.date||localToday())===date&&!gymCancelledOn(date)&&(state.gym?.values||[]).slice(7).some(r=>r?.[1])&&!sports.has('gym')){out.push({kind:'gymplan',sport:'gym',name:state.gym.values[2]?.[3]||state.gym.values[1]?.[0]||'Silový trénink',meta:czPlural(state.gym.values.slice(7).filter(r=>r?.[1]).length,'série','série','sérií')+' v plánu'});sports.add('gym');}
   const role=date>=localToday()&&!statusPausesTraining()?(state.weekPlan?.roles?.[weekdayOf(date)]?.items||[]):[];
   for(const x of role)if(!sports.has(x.sport)&&!(x.sport==='gym'&&gymCancelledOn(date)))out.push({kind:'role',sport:x.sport,name:x.label,meta:'podle plánu týdne'});
-  for(const r of (state.recovery||[]).filter(r=>r.date===date))out.push({kind:'recovery',sport:'recovery',name:r.title,meta:r.minutes+' min · '+r.items.length+uiText(' cviků',' moves')+(r.done?uiText(' · hotovo',' · done'):''),r});
+  for(const r of (state.recovery||[]).filter(r=>r.date===date))out.push({kind:'recovery',sport:'recovery',name:r.title,meta:r.minutes+' min'+(r.items.length?' · '+r.items.length+uiText(' cviků',' moves'):'')+(r.done?uiText(' · hotovo',' · done'):''),r});
   return out;
 }
 // A finished session already rated (RPE in Intervals.icu, a coach note that
