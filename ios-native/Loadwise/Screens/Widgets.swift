@@ -65,11 +65,15 @@ struct PlanWidget: View {
     }
 
     /// Bedtime opens Nastavení spánku, a gym session its workout mode, a ride
-    /// or run the Training tab.
+    /// or run its detail (done) or the planned workout.
     @ViewBuilder
     private func row(_ item: TodaySnapshot.PlanItem) -> some View {
         if item.kind == "bedtime" {
             NavigationLink(value: AppRoute.sleepSettings) { line(item) }.buttonStyle(.plain)
+        } else if item.kind == "workout", item.sport == "strength", !item.done, item.status != "missed" {
+            NavigationLink(value: AppRoute.trainingMode(today.isEmpty ? AppModel.localDate(Date()) : today)) { line(item) }.buttonStyle(.plain)
+        } else if item.kind == "workout", let session = item.session, let route = WeekSessionsList.destination(session) {
+            NavigationLink(value: route) { line(item) }.buttonStyle(.plain)
         } else if item.kind == "workout", item.sport == "strength", !item.done {
             NavigationLink(value: AppRoute.trainingMode(today.isEmpty ? AppModel.localDate(Date()) : today)) { line(item) }.buttonStyle(.plain)
         } else if item.kind == "workout" {
@@ -81,9 +85,17 @@ struct PlanWidget: View {
 
     private func line(_ item: TodaySnapshot.PlanItem) -> some View {
         HStack(spacing: 14) {
-            Text(item.time ?? "–").font(Typo.number(19))
-                .foregroundStyle(item.done ? Palette.faint : Palette.ink)
-                .frame(width: 46, alignment: .leading)
+            // A planned session has no clock: it comes after the last record.
+            Group {
+                if let time = item.time {
+                    Text(time).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
+                } else {
+                    Image(systemName: item.status == "missed" ? "xmark.circle" : "circle.dashed")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(item.status == "missed" ? Palette.rust : Palette.faint)
+                }
+            }
+            .frame(width: 46, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
                 if let detail = item.detail {
@@ -102,6 +114,8 @@ struct PlanWidget: View {
         if item.done {
             Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
                 .accessibilityLabel("Hotovo")
+        } else if item.status == "missed" {
+            Text("Nesplněno").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.rust)
         } else if item.kind == "workout" {
             Text(item.sport == "strength" ? "Začít" : "Detail").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                 .padding(.horizontal, 14).frame(height: 30)

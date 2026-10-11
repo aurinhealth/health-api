@@ -16,6 +16,7 @@ import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { getWeekPlan } from './week-planner.js';
 import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
 import { localToday } from "./user-time.js";
+import { exercisePreferences } from "./exercise-feedback.js";
 
 
 export default {
@@ -109,6 +110,10 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       focusMuscles: body?.focusMuscles,
       excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
     };
+    // The athlete's thumbs up and down on exercises.
+    const taste = await exercisePreferences(env.DB);
+    options.likedExercises = taste.liked;
+    options.dislikedExercises = taste.disliked;
 
     // "regenerate" means create a genuinely different workout, not write the
     // same deterministic plan again. Read today's current plan and exclude

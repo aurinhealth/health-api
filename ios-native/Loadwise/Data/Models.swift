@@ -91,8 +91,12 @@ struct TodaySnapshot: Decodable, Equatable {
         let done: Bool
         /// Workouts: ride, run, strength or other.
         var sport: String? = nil
+        /// Workouts: "done", "planned" or "missed".
+        var status: String? = nil
+        /// Workouts: the session as Training lists it, to open its detail.
+        var session: WeekSession? = nil
 
-        var id: String { kind + "|" + (time ?? "") + "|" + title }
+        var id: String { session.map { "session|" + $0.id } ?? kind + "|" + (time ?? "") + "|" + title }
     }
 
     struct Tonight: Decodable, Equatable {
@@ -113,6 +117,16 @@ struct TodaySnapshot: Decodable, Equatable {
         let usual: [Double]?
         /// The current hour for today, nil for a past day.
         let hour: Int?
+        var month: [Point]? = nil
+        var activeKcal: Double? = nil
+        var activeMinutes: ActiveMinutes? = nil
+
+        /// Minutes at moderate heart rate or above, vigorous counted twice.
+        struct ActiveMinutes: Decodable, Equatable {
+            let today: Double
+            let week: Double
+            var target: Double? = nil
+        }
     }
 
     struct Weight: Decodable, Equatable {
@@ -137,6 +151,14 @@ struct TodaySnapshot: Decodable, Equatable {
         /// Where a ride (outdoor) and a run (outdoorRun) belong today.
         let outdoor: Advice?
         let outdoorRun: Advice?
+        /// A few hours of the day (8, 11, 14, 17, 20 h).
+        var hours: [Hour]? = nil
+
+        struct Hour: Decodable, Equatable {
+            let hour: Int
+            let temp: Double
+            let code: Double?
+        }
     }
 
     struct Advice: Decodable, Equatable {

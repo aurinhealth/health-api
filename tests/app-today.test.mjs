@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildToday } from "../src/app-today.js";
+import { buildToday, activeMinutes } from "../src/app-today.js";
 import { googleHealthSummary } from "../src/google-dashboard.js";
 
 const DATE = "2026-10-08";
@@ -73,14 +73,32 @@ test("Today combines readiness, sleep, strain, food and plan for the app", () =>
 });
 
 test("Today's plan lists workouts and tonight's bedtime in time order", () => {
-  const t = buildToday(input);
+  const t = buildToday({ ...input, hour: 12 });
   assert.deepEqual(t.plan.map(p => p.kind), ["workout", "bedtime"]);
-  assert.equal(t.plan[0].time, "17:30");
+  assert.equal(t.plan[0].time, null, "a planned session has no clock: it comes after the last record");
+  assert.equal(t.plan[0].status, "planned");
   assert.equal(t.plan[0].detail, "45 min · 45 TSS");
   assert.equal(t.plan[0].done, false);
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
   assert.equal(t.tonight.wake, "07:02", "the usual wake time");
   assert.equal(t.tonight.bedtime, t.plan[1].time);
+});
+
+test("Today's plan shows what was done at its time, then the plan, a gym session outside the plan too", () => {
+  const training = {
+    planned: [{ id: "planned:1", start: DATE + "T17:30:00", durationHours: 1, tss: 60, name: "Endurance", type: "Ride" }],
+    completed: [{ id: "activity:i1", source: "intervals", start: DATE + "T07:10:00", durationHours: 0, name: null, type: null }],
+    matched: []
+  };
+  const t = buildToday({ ...input, hour: 12, daily: { ...input.daily, training }, gym: { name: "Push", exercises: ["Bench"], logged: 3 } });
+  const workouts = t.plan.filter(p => p.kind === "workout");
+  assert.deepEqual(workouts.map(p => [p.status, p.time]), [["done", "07:10"], ["done", null], ["planned", null]]);
+  assert.equal(workouts[0].session.kind, "activity");
+  assert.ok(workouts.some(p => p.session.kind === "gym" && p.done), "the gym session saved in the app");
+  assert.equal(workouts.find(p => p.status === "planned").title, "Endurance");
+  // Viewing a past day: what was not done is missed.
+  const past = buildToday({ ...input, date: DATE, hour: null, daily: { ...input.daily, training: { planned: training.planned, completed: [], matched: [] } } });
+  assert.equal(past.plan.find(p => p.kind === "workout").status, "missed");
 });
 
 test("Today stays usable without data", () => {
@@ -147,7 +165,7 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   const location = { name: "Brno", latitude: 49.1951, longitude: 16.6068, source: "search" };
   const sunny = buildToday({ ...input, location, forecast: { code: 1, max: 18.4, min: 7.2, wind: 12, rain: 0, rainProb: 10 } });
   assert.deepEqual(sunny.weather, {
-    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10,
+    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10, hours: null,
     outdoor: { environment: "outdoor", reason: "Podle dostupné předpovědi." },
     outdoorRun: { environment: "outdoor", reason: "Podle dostupné předpovědi." }
   });
@@ -155,6 +173,8 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   assert.equal(wet.weather.outdoor.environment, "indoor");
   assert.match(wet.weather.outdoor.reason, /nepřeje/);
   assert.equal(wet.weather.rain, 6.4);
+  const hourly = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, hours: [{ hour: 8, temp: 9, code: 3 }] } });
+  assert.deepEqual(hourly.weather.hours, [{ hour: 8, temp: 9, code: 3 }]);
   // A place without a forecast: the season decides, the numbers stay empty.
   const offline = buildToday({ ...input, location, forecast: null });
   assert.equal(offline.weather.place, "Brno");
@@ -165,4 +185,14 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /location:place\.location,forecast:place\.forecast/);
   assert.match(src, /cached\(env,ctx,'weather:'/);
+});
+
+test('active minutes count vigorous minutes twice, today and since Monday', () => {
+  const rows = [
+    { id: '2026-10-05', hrZoneMinutes: { light: 90, moderate: 20, vigorous: 10, peak: 0 } },
+    { id: '2026-10-04', hrZoneMinutes: { light: 0, moderate: 60, vigorous: 0, peak: 0 } },
+    { id: '2026-10-07', hrZoneMinutes: { light: 10, moderate: 15, vigorous: 2, peak: 1 } }
+  ];
+  assert.deepEqual(activeMinutes(rows, '2026-10-07'), { today: 21, week: 61, target: 150 });
+  assert.equal(activeMinutes([{ id: '2026-10-07', steps: 100 }], '2026-10-07'), null);
 });

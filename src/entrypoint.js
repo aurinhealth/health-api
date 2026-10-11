@@ -20,6 +20,8 @@ import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from
 import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
+import { setManualPair } from './manual-pairs.js';
+import { saveExerciseFeedback, exercisePreferences, saveWorkoutRating, workoutRatings } from './exercise-feedback.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail,rideIntervals} from './activity-detail.js';
@@ -78,9 +80,10 @@ import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
-import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
+import { capWeekTargets, weekProposal, weekWeather, dayHours, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
+import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile } from "./training-profile.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
@@ -92,7 +95,7 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import { writeStrengthPlanToIntervals } from './intervals-strength.js';
 import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, PACE_ZONE_MODELS, HR_ZONE_MODELS } from "./training-zones.js";
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
-import legacyHealthApi, { googleToken } from "./index.js";
+import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { handleAppleLogin, appleConfigured, appleIdentity, unlinkAppleIdentity } from "./apple-login.js";
@@ -115,6 +118,7 @@ import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
+import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth } from "./apple-health.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
@@ -442,13 +446,13 @@ async function computeWeekTargets(env,ctx,start,prefs){
   const wellness=(fitness.wellness||[]).filter(r=>r.id<=today),ctl=[...wellness].reverse().find(r=>Number(r.ctl)>0)?.ctl;
   const loadOn=date=>{const r=wellness.find(x=>x.id===date);return Number(r?.ctlLoad??r?.atlLoad)||0;};
   let lastWeekLoad=0;for(let i=-7;i<0;i++)lastWeekLoad+=loadOn(shiftDate(start,i));
-  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,1)).all().catch(()=>({results:[]}))).results||[];
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,1)).all().catch(()=>({results:[]}))).results||[];
   const gymDays=new Set(((await env.DB.prepare("SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<?").bind(env.USER_ID,start,end).all().catch(()=>({results:[]}))).results||[]).map(r=>r.workout_date));
   const days=Array.from({length:7},(_,i)=>({date:shiftDate(start,i),done:loadOn(shiftDate(start,i)),planned:0,sports:[]}));
   // Running this week so far: done runs, and planned ones still ahead.
   let runCommitted=0;
   for(const r of rows){let p={};try{p=JSON.parse(r.payload_json||'{}');}catch{}const d=days.find(x=>x.date===localDate(r.start_time));if(!d)continue;
-    const sport=sportOfType(r.source_family==='google-wearables'?{WEIGHTLIFTING:'weight',WEIGHTS:'weight',STRENGTH_TRAINING:'weight',RUNNING:'run',BIKING:'ride'}[p.exercise?.exerciseType]:p.type);
+    const sport=sportOfType((r.source_family==='google-wearables'||r.source_family==='apple-health')?{WEIGHTLIFTING:'weight',WEIGHTS:'weight',STRENGTH_TRAINING:'weight',RUNNING:'run',BIKING:'ride'}[p.exercise?.exerciseType]:p.type);
     if(r.data_type==='planned-workout'&&!/nutrition/i.test(String(p.name||'')+' '+String(p.category||''))){d.planned+=Number(p.icu_training_load)||0;}
     if(sport==='run')runCommitted+=r.data_type==='planned-workout'?(d.date>today?(Number(p.moving_time)||0)/60:0):activityFromRow(r)?.minutes||0;
     if(sport&&!/nutrition/i.test(String(p.name||'')))d.sports.push(sport);}
@@ -473,7 +477,12 @@ async function todayPlace(env,ctx,date){
       if(!Object.keys(w).length)throw new Error('no forecast');
       return w;
     },{ttl:1800}).catch(()=>({}));
-    return {location,forecast:week?.[date]||null};
+    const hours=await cached(env,ctx,'weather-hours:'+location.latitude+','+location.longitude+':'+date,async()=>{
+      const h=await dayHours(location,date);
+      if(!h.length)throw new Error('no forecast');
+      return h;
+    },{ttl:1800}).catch(()=>[]);
+    return {location,forecast:week?.[date]?{...week[date],hours}:null};
   }catch{return {location:null,forecast:null};}
 }
 
@@ -739,18 +748,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET'){
     // fits: possible with the athlete's equipment (the active place), so the app can offer those first.
-    const setup=await trainingSetup(env.DB).catch(()=>null);
-    return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup)}))},{headers:{'Cache-Control':'no-store'}});
+    // fatigue: how tiring it is, so the app puts an added exercise among the others (big lifts first).
+    // liked: the athlete's thumbs up (true) or down (false), so the picker offers the disliked ones last.
+    const [setup,taste]=await Promise.all([trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
+    const liked=new Set(taste.liked),disliked=new Set(taste.disliked);
+    return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup),fatigue:EXERCISE_INTELLIGENCE[e.name]?.fatigue??null,liked:liked.has(e.name)?true:disliked.has(e.name)?false:null}))},{headers:{'Cache-Control':'no-store'}});
   }
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,history,setup]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null)]);
+    const [plan,history,setup,taste]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null),exercisePreferences(env.DB)]);
     // The plan being built is sent along (not saved yet); else the saved day's.
     let sent=[];try{sent=JSON.parse(url.searchParams.get('inPlan')||'[]');}catch{/* none */}
     const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
     // Only what the athlete's gym has (the active place's stations).
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan).filter(a=>fitsEquipment(a.name,setup))},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste).filter(a=>fitsEquipment(a.name,setup))},{headers:{'Cache-Control':'no-store'}});
   }
   // Loads for exercises added by hand, or a plan's sets left without a weight.
   if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
@@ -774,8 +786,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({})),text=String(body.request||'').trim().slice(0,300);
       if(!text)throw new Error(L('Napiš, co v tréninku změnit.', 'Write what to change in the workout.'));
       const rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(Array.isArray(body.rows)?body.rows:[]).map(r=>String(r?.[1]??'').trim()).filter(Boolean)]));
-      const history=await getStrengthHistory(env.DB,300).catch(()=>[]);
-      const result=await adjustGymPlan(env,{rows,request:text,history});
+      const [history,taste]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB)]);
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}
@@ -797,6 +809,31 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(url.pathname.endsWith('/move')&&String(body.date||'')<localToday())return Response.json({status:'error',message:'Trénink jde přesunout jen na dnešek nebo pozdější den.'},{status:400});
       if(url.pathname.endsWith('/environment')){const result=await setPlannedEnvironment(env,body);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  // Pairing a planned session with the activity that fulfilled it by hand
+  // (manual-pairs.js); every view built from the day sees it after the bump.
+  if(url.pathname==='/app/api/training/pair'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const result=await setManualPair(env.DB,env.USER_ID,await request.json().catch(()=>({})));
+    if(result.code)return Response.json({status:'error',message:result.message},{status:result.code});
+    await bumpCacheVersion(env.DB);
+    return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+  }
+  // The athlete's thumbs up or down on an exercise (the gym plans follow it)
+  // and how well a generated workout of any sport fitted (exercise-feedback.js).
+  if(url.pathname==='/app/api/feedback/exercise'||url.pathname==='/app/api/feedback/workout'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const workout=url.pathname.endsWith('/workout');
+    if(workout&&request.method==='GET')return Response.json({status:'ok',ratings:await workoutRatings(env.DB,url.searchParams.get('date'))},{headers:{'Cache-Control':'no-store'}});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({}));
+      const result=workout?await saveWorkoutRating(env.DB,body):await saveExerciseFeedback(env.DB,body);
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // "Revize dne": the coach checks one planned day in the context of the week.
@@ -1183,6 +1220,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json().catch(()=>({}));
     if (request.method === 'DELETE') {
+      if(body.provider==='apple'){await disconnectAppleHealth(env.DB,env.USER_ID);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
@@ -1218,17 +1256,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place]=await Promise.all([
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
-        todayPlace(env,ctx,date)
+        todayPlace(env,ctx,date),trainingGymPlans(env,date,date).catch(()=>({}))
       ]);
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);
-      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -1293,7 +1331,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let end=valid(url.searchParams.get('end'))?url.searchParams.get('end'):shiftDate(today,14);
       if(end<start||end>shiftDate(start,92))end=shiftDate(start,92);
       const result=await cached(env,ctx,'training-calendar:'+start+':'+end+':'+today,async()=>{
-        const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
+        const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
         const gym=await trainingGymPlans(env,today>start?today:start,end).catch(()=>({}));
         return buildCalendar({start,end,today,gym,
           activities:rows.filter(r=>r.data_type==='activity'),
@@ -1404,6 +1442,29 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!(env.CONNECTED_PROVIDERS||[]).includes('intervals'))return Response.json({message:L('Nejdřív připoj Intervals.icu.', 'Connect Intervals.icu first.')},{status:409});
     const run=await initialImport(env,ctx,{provider:'intervals',force:true});
     return Response.json(run,{status:202,headers:{'Cache-Control':'no-store'}});
+  }
+
+  // Apple Health from the iPhone app (apple-health.js): the phone reads
+  // HealthKit and sends sums, nights and workouts; DELETE disconnects.
+  if(url.pathname==='/app/api/health/apple'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      if(request.method==='GET')return Response.json({status:'ok',...await appleHealthStatus(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
+      if(request.method==='POST'){
+        const body=await request.json().catch(()=>null);
+        if(!body||typeof body!=='object')return Response.json({message:L('Neplatná data.', 'Invalid data.')},{status:400});
+        const result=await saveAppleHealth(env.DB,env.USER_ID,body);
+        if(result.code)return Response.json({message:result.message},{status:result.code});
+        // Apple Watch workouts pair with Intervals.icu activities like Google's do.
+        const from=Date.parse(body.windows?.exercise?.from||'');
+        if(result.saved&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
+        // New resting and maximum heart rate reach the profile's automatic values now, not the next day.
+        if(result.saved)ctx.waitUntil(refreshSuggestions(env,{force:true}).catch(error=>console.error('Profile suggestions not refreshed',error.message)));
+        return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+      }
+      if(request.method==='DELETE')return Response.json(await disconnectAppleHealth(env.DB,env.USER_ID),{headers:{'Cache-Control':'no-store'}});
+      return Response.json({message:'Method not allowed'},{status:405});
+    }catch(error){console.error('Apple Health',error);return Response.json({message:error.message},{status:500});}
   }
 
   if(url.pathname==='/app/api/sync'&&['POST','GET'].includes(request.method)){
