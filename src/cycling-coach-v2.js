@@ -4,7 +4,7 @@ import { qualityDomain } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown } from './week-planner.js';
 import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
-import { recoveryReadiness } from "./recovery-model.js";
+import { recoveryReadiness, mergeWellnessRows, sleepNeedFor } from "./recovery-model.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -50,17 +50,6 @@ function allWeekActivities(week){
 function latestWellness(fitness,date){
   const rows=Array.isArray(fitness?.wellness)?fitness.wellness:[];
   return rows.filter(row=>{const age=diffDays(date,row.id);return age!=null&&age>=0&&age<=2}).at(-1)||{};
-}
-// Today's HRV or resting heart rate against the athlete's own 4-week
-// average from the Intervals.icu wellness (Google Health is synced there):
-// what is low for one athlete is normal for another.
-// HRV and resting HR from the Intervals.icu wellness through the shared model.
-// The newest of today and yesterday counts as the morning reading.
-function bodySignals(fitness,date){
-  const rows=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).filter(r=>r?.id).map(r=>({id:r.id,hrv:n(r.hrv),restingHR:n(r.restingHR),respiration:n(r.respiration)}));
-  const has=d=>rows.some(r=>r.id===d&&(r.hrv>0||r.restingHR>0)),y=new Date(Date.parse(date+"T12:00:00Z")-86400000).toISOString().slice(0,10);
-  const ref=has(date)?date:has(y)?y:null;
-  return ref?recoveryReadiness({rows,date:ref}):null;
 }
 export function wellnessTrend(fitness,date,key){
   const rows=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).map(r=>({age:diffDays(date,r.id),value:n(r[key])})).filter(r=>r.age!=null&&r.age>=0&&r.value!=null&&r.value>0);
@@ -221,7 +210,7 @@ const WORDS_EN={
 };
 
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
@@ -241,47 +230,49 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   const domains={low:0,moderate:0,high:0};
   for(const a of completed) domains[classifyDomain(a)]+=n(a.tss,Math.max(20,n(a.durationHours,1)*50));
 
-  let score=100; const readinessReasons=[];
-  if(tsb!=null){
-    if(tsb<=-30){score-=30;readinessReasons.push(L("forma/únava je hluboko v záporných hodnotách","form is deep in negative territory"));}
-    else if(tsb<=-20){score-=16;readinessReasons.push(L("výrazná kumulovaná únava","significant accumulated fatigue"));}
-    else if(tsb<=-10){score-=7;readinessReasons.push(L("mírná kumulovaná únava","mild accumulated fatigue"));}
-  }
-  if(ramp!=null&&ramp>8){score-=10;readinessReasons.push(L("rychlý růst tréninkové zátěže","training load rising fast"));}
-  // Body signals against the athlete's own baseline, with the shared recovery
-  // model (lnRMSSD and resting HR against 60 days, src/recovery-model.js): a
-  // value below the personal normal range says the body has not absorbed the
-  // load yet. The penalty grows with the distance from the athlete's mean.
-  const hrv=wellnessTrend(fitness,targetDate,"hrv"),rhr=wellnessTrend(fitness,targetDate,"restingHR");
-  const body=bodySignals(fitness,targetDate),bh=body?.components?.hrv,br=body?.components?.restingHR;
-  if(hrv&&bh&&bh.score<70){const p=Math.min(25,Math.round(.5*(70-bh.score)));score-=p;if(p>=5)readinessReasons.push(L("HRV "+Math.round(hrv.today)+" ms je pod tvým běžným pásmem "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms ("+Math.round(-hrv.deltaPct)+" % pod průměrem)","HRV "+Math.round(hrv.today)+" ms is below your usual range of "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms ("+Math.round(-hrv.deltaPct)+" % below average)"));}
-  if(rhr&&br&&br.score<70){const p=Math.min(20,Math.round(.33*(70-br.score)));score-=p;if(p>=5)readinessReasons.push(L("klidový tep "+Math.round(rhr.today)+" je o "+Math.round(rhr.delta)+" "+pluralWord(Math.round(rhr.delta),"tep","tepy","tepů")+" nad tvým průměrem","resting heart rate "+Math.round(rhr.today)+" is "+Math.round(rhr.delta)+" beats above your average"));}
+  // Readiness is the body's recovery from the shared model, the same number and
+  // zone the Today screen shows (src/recovery-model.js: HRV, resting HR and
+  // sleep against the athlete's own 60-day baseline, breathing and skin
+  // temperature as early signs of illness; Google Health, Apple Health and
+  // Intervals.icu wellness merged). Training load the body signals do not show
+  // yet, deep fatigue (TSB), can only lower it, and so can the athlete's own
+  // morning check-in.
+  const readinessReasons=[],ZONES=["red","yellow","green"],lower=(a,b)=>ZONES[Math.min(ZONES.indexOf(a),ZONES.indexOf(b))];
+  const rows=mergeWellnessRows(health?.wellness,fitness?.wellness);
+  const sessions=Array.isArray(health?.sleep)?health.sleep:[];
+  const mainNight=sessions.filter(x=>x&&(x.date||String(x.endTime||"").slice(0,10))===targetDate&&!x.nap&&n(x.durationMin,0)>=180).sort((a,b)=>n(b.durationMin,0)-n(a.durationMin,0))[0];
+  const night=mainNight||(sleepMinutes!=null?{date:targetDate,durationMin:sleepMinutes}:null);
+  const sleepNeed=sessions.length?sleepNeedFor({date:targetDate,age:profile?.age??null,rows,sessions}).need:480;
+  const body=recoveryReadiness({rows,date:targetDate,night,sleepNeed}),bh=body.components?.hrv,br=body.components?.restingHR,bs=body.components?.sleep;
+  const hrv=wellnessTrend({wellness:rows},targetDate,"hrv"),rhr=wellnessTrend({wellness:rows},targetDate,"restingHR");
+  if(body.score!=null)readinessReasons.push(L("připravenost těla "+body.score+" (HRV, klidový tep a spánek proti tvému průměru)","body readiness "+body.score+" (HRV, resting heart rate and sleep against your average)"));
+  if(bh&&bh.z<=-1)readinessReasons.push(L("HRV "+Math.round(bh.value)+" ms je pod tvým běžným pásmem "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms","HRV "+Math.round(bh.value)+" ms is below your usual range of "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms"));
+  if(br&&br.z>=1)readinessReasons.push(L("klidový tep "+Math.round(br.value)+" je o "+Math.round(br.value-br.baseline)+" "+pluralWord(Math.round(br.value-br.baseline),"tep","tepy","tepů")+" nad tvým průměrem","resting heart rate "+Math.round(br.value)+" is "+Math.round(br.value-br.baseline)+" beats above your average"));
   // Both at once is a strong sign of fatigue or a coming illness.
-  if(bh&&br&&bh.z<=-1&&br.z>=1){score-=8;readinessReasons.push(L("HRV i klidový tep zároveň ukazují na výraznou únavu","HRV and resting heart rate both point to significant fatigue"));}
-  if(bh?.trend==="down"){score-=5;readinessReasons.push(L("7denní průměr HRV klesl pod tvoje běžné pásmo","the 7-day HRV average has dropped below your usual range"));}
-  if(body?.components?.respiration?.elevated){score-=8;readinessReasons.push(L("dech ve spánku je výrazně nad tvým průměrem, může jít o nastupující nemoc","breathing during sleep is well above your average, which may be an oncoming illness"));}
-  if(sleepMinutes!=null){
-    if(sleepMinutes<360){score-=18;readinessReasons.push(L("spánek pod 6 h","sleep under 6 h"));}
-    else if(sleepMinutes<420){score-=8;readinessReasons.push(L("spánek pod 7 h","sleep under 7 h"));}
-    else if(sleepMinutes>=450) score+=3;
-  }
-  if(hard7>=3){score-=12;readinessReasons.push(W.hard3);}
-  else if(hard7===2){score-=5;readinessReasons.push(W.hard2);}
-  if(lowerGym.length){score-=8;readinessReasons.push(L("nedávná lower-body silová zátěž","recent lower-body strength work"));}
-  if(todayCompleted.length){score-=12;readinessReasons.push(W.today);}
+  if(bh&&br&&bh.z<=-1&&br.z>=1)readinessReasons.push(L("HRV i klidový tep zároveň ukazují na výraznou únavu","HRV and resting heart rate both point to significant fatigue"));
+  if(bh?.trend==="down")readinessReasons.push(L("7denní průměr HRV klesl pod tvoje běžné pásmo","the 7-day HRV average has dropped below your usual range"));
+  if(bs&&bs.performance<85)readinessReasons.push(L("spánek "+Math.round(bs.minutes/60*10)/10+" h z potřebných "+Math.round(bs.need/60*10)/10+" h","sleep "+Math.round(bs.minutes/60*10)/10+" h of the "+Math.round(bs.need/60*10)/10+" h you need"));
+  if(body.flags?.includes("respiration_elevated"))readinessReasons.push(L("dech ve spánku je výrazně nad tvým průměrem, může jít o nastupující nemoc","breathing during sleep is well above your average, which may be an oncoming illness"));
+  if(body.flags?.includes("skin_temp_elevated"))readinessReasons.push(L("teplota kůže ve spánku je zvýšená, může jít o nastupující nemoc","skin temperature during sleep is raised, which may be an oncoming illness"));
+  // Without the body's signals (no watch, or under 14 days of baseline) the
+  // load decides, and only fatigue data plus a full night allow green.
+  let readiness=body.zone||(tsb!=null&&sleepMinutes!=null&&sleepMinutes>=420?"green":"yellow");
+  if(!body.zone)readinessReasons.push(L("chybí HRV nebo klidový tep s aspoň 14denním průměrem, připravenost odhaduji ze zátěže","no HRV or resting heart rate with at least a 14-day average yet, so readiness comes from the training load"));
+  const loadCap=(zone,text)=>{readiness=lower(readiness,zone);readinessReasons.push(text);};
+  if(tsb!=null&&tsb<=-30)loadCap("red",L("forma/únava je hluboko v záporných hodnotách","form is deep in negative territory")+" (TSB "+Math.round(tsb)+")");
+  else if(tsb!=null&&tsb<=-20)loadCap("yellow",L("výrazná kumulovaná únava","significant accumulated fatigue")+" (TSB "+Math.round(tsb)+")");
+  // The rest of the load is said here and acts through its own rules below
+  // (two quality days a week, legs after the gym, the length of the session).
+  if(ramp!=null&&ramp>8)readinessReasons.push(L("rychlý růst tréninkové zátěže","training load rising fast"));
+  if(hard7>=3)readinessReasons.push(W.hard3);
+  else if(hard7===2)readinessReasons.push(W.hard2);
+  if(lowerGym.length)readinessReasons.push(L("nedávná lower-body silová zátěž","recent lower-body strength work"));
+  if(todayCompleted.length)readinessReasons.push(W.today);
   if(manualReadiness!=null){
     const m=clamp(n(manualReadiness,50),0,100);
-    score=Math.round(score*0.65+m*0.35);
-    readinessReasons.push(L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
+    loadCap(m<34?"red":m<67?"yellow":"green",L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
   }
-  // Missing data caps the score; when only the caps make it red, it is not fatigue.
-  const scoreWithData=Math.round(clamp(score,0,100));
-  if(tsb==null){score=Math.min(score,74);readinessReasons.push(L("chybí aktuální ukazatel tréninkové únavy","no current training fatigue metric"));}
-  if(sleepMinutes==null){score=Math.min(score,74);readinessReasons.push(L("chybí aktuální spánek","no current sleep data"));}
-  if(tsb==null&&sleepMinutes==null&&manualReadiness==null)score=Math.min(score,54);
-  score=Math.round(clamp(score,0,100));
-  const readiness=score<55?"red":score<75?"yellow":"green";
-  const onlyMissingData=readiness==="red"&&scoreWithData>=55;
+  const score=body.score;
   // A beginner: low fitness, or without fitness data only a few sessions of
   // this sport. Intervals, long sessions and the load-based recovery week wait
   // until the base is there.
@@ -388,8 +379,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if(readiness==="red")adaptations.push(L("nízká připravenost před závodem: aktivaci zkrať a hlavně odpočívej","low readiness before the race: shorten the openers and above all rest"));
   } else if(readiness==="red"){
     // A planned easy day stays easy; anything harder drops to endurance or recovery.
-    if(kind!=="recovery")kind=score<40?"recovery":"endurance";
-    adaptations.push(onlyMissingData?L("zatím málo dat: držím lehkou intenzitu","not enough data yet: keeping the intensity easy"):L("vysoká únava: bez intenzity","high fatigue: no intensity"));
+    if(kind!=="recovery")kind=(score!=null&&score<20)||(tsb!=null&&tsb<=-30)?"recovery":"endurance";
+    adaptations.push(L("nízká připravenost: bez intenzity","low readiness: no intensity"));
   } else if(readiness==="yellow"&&["vo2","threshold","sweet_spot"].includes(kind)){
     kind=requestedMinutes<=75?"endurance":"tempo";
     adaptations.push(L("střední readiness: snížit intenzitu nebo objem kvality","moderate readiness: lower the intensity or volume of the quality work"));
