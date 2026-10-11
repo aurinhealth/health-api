@@ -151,6 +151,14 @@ struct TodaySnapshot: Decodable, Equatable {
         /// Where a ride (outdoor) and a run (outdoorRun) belong today.
         let outdoor: Advice?
         let outdoorRun: Advice?
+        /// A few hours of the day (8, 11, 14, 17, 20 h).
+        var hours: [Hour]? = nil
+
+        struct Hour: Decodable, Equatable {
+            let hour: Int
+            let temp: Double
+            let code: Double?
+        }
     }
 
     struct Advice: Decodable, Equatable {

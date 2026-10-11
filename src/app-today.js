@@ -72,6 +72,7 @@ export function todayWeather(location, forecast, date) {
     wind: round(num(w?.wind)),
     rain: round(num(w?.rain), 1),
     rainProb: round(num(w?.rainProb)),
+    hours: Array.isArray(w?.hours) && w.hours.length ? w.hours : null,
     outdoor: advice("ride"),
     outdoorRun: advice("run")
   };

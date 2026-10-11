@@ -165,7 +165,7 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   const location = { name: "Brno", latitude: 49.1951, longitude: 16.6068, source: "search" };
   const sunny = buildToday({ ...input, location, forecast: { code: 1, max: 18.4, min: 7.2, wind: 12, rain: 0, rainProb: 10 } });
   assert.deepEqual(sunny.weather, {
-    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10,
+    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10, hours: null,
     outdoor: { environment: "outdoor", reason: "Podle dostupné předpovědi." },
     outdoorRun: { environment: "outdoor", reason: "Podle dostupné předpovědi." }
   });
@@ -173,6 +173,8 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   assert.equal(wet.weather.outdoor.environment, "indoor");
   assert.match(wet.weather.outdoor.reason, /nepřeje/);
   assert.equal(wet.weather.rain, 6.4);
+  const hourly = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, hours: [{ hour: 8, temp: 9, code: 3 }] } });
+  assert.deepEqual(hourly.weather.hours, [{ hour: 8, temp: 9, code: 3 }]);
   // A place without a forecast: the season decides, the numbers stay empty.
   const offline = buildToday({ ...input, location, forecast: null });
   assert.equal(offline.weather.place, "Brno");

@@ -79,7 +79,7 @@ import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
-import { capWeekTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
+import { capWeekTargets, weekProposal, weekWeather, dayHours, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
@@ -469,7 +469,12 @@ async function todayPlace(env,ctx,date){
       if(!Object.keys(w).length)throw new Error('no forecast');
       return w;
     },{ttl:1800}).catch(()=>({}));
-    return {location,forecast:week?.[date]||null};
+    const hours=await cached(env,ctx,'weather-hours:'+location.latitude+','+location.longitude+':'+date,async()=>{
+      const h=await dayHours(location,date);
+      if(!h.length)throw new Error('no forecast');
+      return h;
+    },{ttl:1800}).catch(()=>[]);
+    return {location,forecast:week?.[date]?{...week[date],hours}:null};
   }catch{return {location:null,forecast:null};}
 }
 

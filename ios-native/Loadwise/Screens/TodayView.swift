@@ -32,7 +32,10 @@ struct TodayView: View {
                 ProgressView()
             }
         }
-        .task { await model.refreshIfStale(.today) }
+        .task {
+            await model.refreshIfStale(.today)
+            await DeviceLocation.refreshIfFollowing(model)
+        }
     }
 }
 
@@ -59,16 +62,6 @@ struct TodayContent: View {
                 .accessibilityLabel("Profil a nastavení")
             }
 
-            // The athlete's status and today's weather at the week plan's place
-            // (or the offer to set it), side by side when they fit.
-            if model.selectedDate == nil {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) { AthleteStatusPill(); WeatherPill(weather: today.weather) }
-                    VStack(alignment: .leading, spacing: 8) { AthleteStatusPill(); WeatherPill(weather: today.weather) }
-                }
-                .padding(.top, 14)
-            }
-
             if model.selectedDate == nil && !model.demo {
                 ConnectionProblemCard()
             }
@@ -80,8 +73,14 @@ struct TodayContent: View {
             }
             .padding(.top, 40)
 
+            // Today's weather at the week plan's place (or the offer to set
+            // it) with the athlete's status, above the key numbers.
+            if model.selectedDate == nil {
+                TodayWeatherCard(weather: today.weather).padding(.top, 28)
+            }
+
             KeyNumbers(today: today)
-                .padding(.top, 28)
+                .padding(.top, model.selectedDate == nil ? 12 : 28)
 
             if model.selectedDate == nil {
                 CoachCheckInCard(openCoach: openCoach).padding(.top, 24)

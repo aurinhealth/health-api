@@ -49,11 +49,31 @@ enum AthleteStatusKind: String, CaseIterable, Identifiable {
 /// On Today under the date: the state and how long it lasts; a tap changes it.
 struct AthleteStatusPill: View {
     @Environment(AppModel.self) private var model
+    /// A small coloured tag (the weather card on Today) instead of the full pill.
+    var compact = false
     @State private var editing = false
 
     var body: some View {
         let status = model.athleteStatus ?? .active
         let kind = AthleteStatusKind.from(status.status)
+        if compact {
+            Button { editing = true } label: {
+                HStack(spacing: 5) {
+                    Circle().fill(kind.color).frame(width: 7, height: 7)
+                    Text(kind.title).font(.caption.weight(.semibold)).foregroundStyle(kind.color)
+                }
+                .padding(.horizontal, 10).frame(height: 26)
+                .background(kind.color.opacity(0.14), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.f("Stav sportovce: %@, %@", kind.title, AthleteStatusSheet.untilText(status.statusUntil)))
+            .sheet(isPresented: $editing) { AthleteStatusSheet(current: status) }
+        } else {
+            full(status, kind)
+        }
+    }
+
+    private func full(_ status: AthleteStatus, _ kind: AthleteStatusKind) -> some View {
         Button { editing = true } label: {
             HStack(spacing: 10) {
                 Image(systemName: kind.symbol)
