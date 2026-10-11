@@ -10,7 +10,8 @@ test('the overview keeps what Google verification reads on the homepage',async()
   for(const page of [overviewPage,privacyPage,termsPage,supportPage])assert.doesNotMatch(await page().text(),/sheet/i,'Google Sheets is gone; the public pages must not mention it');
   assert.match(html,/may read fitness, health-metric, sleep, and nutrition data from Google Health/);
   assert.match(html,/add nutrition logs to Google Health when you ask/);
-  for(const href of ['/privacy','/terms','/support','/app'])assert.match(html,new RegExp('href="'+href+'"'),href);
+  for(const href of ['/privacy','/terms','/support'])assert.match(html,new RegExp('href="'+href+'"'),href);
+  assert.doesNotMatch(html,/href="\/app"/,'the web app is switched off');
 });
 
 test('public pages follow the Vzhled switch like the app',async()=>{
@@ -51,7 +52,8 @@ test('every public page has the CZ / EN switch and an English version',async()=>
     assert.notEqual(cs,en);
   }
   const en=await overviewPage(visit('/',{'accept-language':'en'})).text();
-  assert.match(en,/Sign in/);
+  assert.match(en,/An iPhone app, invite only for now/);
+  assert.doesNotMatch(en,/href="\/app"/);
   assert.match(en,/Google Health data disclosure/);
   assert.match(await privacyPage(visit('/',{'accept-language':'en'})).text(),/Google user data is used only to provide/);
 });

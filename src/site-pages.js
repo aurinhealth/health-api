@@ -229,7 +229,7 @@ ${index ? '' : '<meta name="robots" content="noindex">'}
 <header class="site-head"><nav class="pill-nav" aria-label="${t('Hlavní', 'Main')}">
 <a class="logo" href="/"><img src="/logo.svg" alt="" width="24" height="24"><span>Loadwise</span></a>
 <div class="links"><a href="/#funkce">${t('Funkce', 'Features')}</a><a href="/#asistent">${t('AI', 'AI')}</a><a href="/#jak">${t('Jak to funguje', 'How it works')}</a><a href="/#soukromi">${t('Soukromí', 'Privacy')}</a></div>
-${langSwitch(lang)}${themeSwitch(lang)}<a class="btn solid" href="/app">${t('Přihlásit se', 'Sign in')}</a>
+${langSwitch(lang)}${themeSwitch(lang)}
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
@@ -270,7 +270,7 @@ export function overviewPage(request) {
 <div class="wrap">
 <h1>${t('Trénuj podle toho, <span>jak se dnes máš.</span>', 'Train for how <span>you feel today.</span>')}</h1>
 <p class="sub">${t('Loadwise spojí tréninky, spánek a jídlo do jednoho přehledu a každý den ti poradí, kolik zvládneš, kolik sníst a kdy ubrat.', 'Loadwise brings your workouts, sleep and food into one view and tells you every day how much you can handle, how much to eat and when to back off.')}</p>
-<div class="hero-cta"><a class="btn primary big" href="/app">${t('Přihlásit se', 'Sign in')}</a><small>${t('Zatím jen na pozvánku', 'Invite only for now')}</small></div>
+<div class="hero-cta"><small>${t('Aplikace pro iPhone, zatím jen na pozvánku', 'An iPhone app, invite only for now')}</small></div>
 </div>
 <div class="stage reveal">
 <div class="laptop">${shot('today', t('Loadwise na počítači: obrazovka Dnes se spánkem, námahou, kaloriemi, pitím a tréninky', 'Loadwise on a computer: the Today screen with sleep, strain, calories, hydration and workouts'), lang, {eager:true, width:1440, height:900})}</div>
@@ -332,11 +332,21 @@ ${check(t('Účet i se všemi daty kdykoli smažeš v Nastavení.', 'You can del
 
 <section class="final"><div class="wrap reveal">
 <h2>${t('Máš pozvánku?', 'Got an invitation?')}</h2>
-<p>${t('Loadwise je zatím jen pro pozvané. Přihlas se Google účtem, na který pozvánka přišla.', 'Loadwise is invite only for now. Sign in with the Google account the invitation was sent to.')}</p>
-<a class="btn primary big" href="/app">${t('Přihlásit se', 'Sign in')}</a>
+<p>${t('Loadwise je zatím jen pro pozvané a běží v aplikaci pro iPhone. Přihlas se v ní účtem, na který pozvánka přišla.', 'Loadwise is invite only for now and runs in the iPhone app. Sign in there with the account the invitation was sent to.')}</p>
 </div></section>
 </main>`
   });
+}
+
+// What /app shows now that the web app is switched off (web-app-closed.js).
+export function webAppClosedPage(request) {
+  const {lang, device} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
+  return sitePage({lang, device, path: '/app', index: false,
+    title: t('Webová aplikace je vypnutá · Loadwise', 'The web app is switched off · Loadwise'),
+    description: t('Loadwise teď běží jen v aplikaci pro iPhone.', 'Loadwise now runs only in the iPhone app.'),
+    body: `<main class="wrap doc"><h1>${t('Webová aplikace je vypnutá', 'The web app is switched off')}</h1>
+<p>${t('Loadwise teď běží jen v aplikaci pro iPhone. Tvoje data zůstávají uložená a uvidíš je tam, když se přihlásíš stejným účtem.', 'Loadwise now runs only in the iPhone app. Your data stays saved, and you will see it there when you sign in with the same account.')}</p>
+<p><a href="/">${t('Zpět na úvod', 'Back to the overview')}</a></p></main>`});
 }
 
 // Policy pages. The English text is the reference version (Google verification reads it);
