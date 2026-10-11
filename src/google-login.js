@@ -21,7 +21,7 @@ const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 // loadwise:// link gets nothing without the verifier.
 const APP_RETURN_URL = "loadwise://auth";
 const APP_HANDOFF_SECONDS = 300;
-const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
+export const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 
 let cachedJwks = null;
 let cachedJwksAt = 0;

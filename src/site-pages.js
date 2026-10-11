@@ -202,7 +202,7 @@ var c=b.dataset.langChoice,dev=document.documentElement.dataset.deviceLang;
 document.cookie=c===dev?'lw-lang=; path=/; max-age=0; samesite=lax':'lw-lang='+c+'; path=/; max-age=31536000; samesite=lax';
 var u=new URL(location.href);u.searchParams.delete('lang');location.replace(u.pathname+u.search+u.hash);});})();</script>`;
 
-function sitePage({title, description, lang, device, path, body, index=true}) {
+function sitePage({title, description, lang, device, path, body, index=true, signIn=true}) {
   const t = (cs, en) => lang === 'en' ? en : cs;
   const html = `<!doctype html>
 <html lang="${lang}" data-device-lang="${device}">
@@ -229,7 +229,7 @@ ${index ? '' : '<meta name="robots" content="noindex">'}
 <header class="site-head"><nav class="pill-nav" aria-label="${t('Hlavní', 'Main')}">
 <a class="logo" href="/"><img src="/logo.svg" alt="" width="24" height="24"><span>Loadwise</span></a>
 <div class="links"><a href="/#funkce">${t('Funkce', 'Features')}</a><a href="/#asistent">${t('AI', 'AI')}</a><a href="/#jak">${t('Jak to funguje', 'How it works')}</a><a href="/#soukromi">${t('Soukromí', 'Privacy')}</a></div>
-${langSwitch(lang)}${themeSwitch(lang)}<a class="btn solid" href="/app">${t('Přihlásit se', 'Sign in')}</a>
+${langSwitch(lang)}${themeSwitch(lang)}${signIn ? `<a class="btn solid" href="/app">${t('Přihlásit se', 'Sign in')}</a>` : ''}
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
@@ -337,6 +337,17 @@ ${check(t('Účet i se všemi daty kdykoli smažeš v Nastavení.', 'You can del
 </div></section>
 </main>`
   });
+}
+
+// What /app shows now that the web app is switched off (web-app-closed.js).
+export function webAppClosedPage(request) {
+  const {lang, device} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
+  return sitePage({lang, device, path: '/app', index: false, signIn: false,
+    title: t('Webová aplikace je vypnutá · Loadwise', 'The web app is switched off · Loadwise'),
+    description: t('Loadwise teď běží jen v aplikaci pro iPhone.', 'Loadwise now runs only in the iPhone app.'),
+    body: `<main class="wrap doc"><h1>${t('Webová aplikace je vypnutá', 'The web app is switched off')}</h1>
+<p>${t('Loadwise teď běží jen v aplikaci pro iPhone. Tvoje data zůstávají uložená a uvidíš je tam, když se přihlásíš stejným účtem.', 'Loadwise now runs only in the iPhone app. Your data stays saved, and you will see it there when you sign in with the same account.')}</p>
+<p><a href="/">${t('Zpět na úvod', 'Back to the overview')}</a></p></main>`});
 }
 
 // Policy pages. The English text is the reference version (Google verification reads it);
