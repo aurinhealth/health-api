@@ -142,3 +142,27 @@ test("Before tonight's sleep has synced, Today stays empty and the coming night 
   assert.ok(before.readiness.score > 0);
   assert.equal(before.sleep.minutes, 412);
 });
+
+test("Today's weather at the week plan's place with the indoor/outdoor advice", () => {
+  const location = { name: "Brno", latitude: 49.1951, longitude: 16.6068, source: "search" };
+  const sunny = buildToday({ ...input, location, forecast: { code: 1, max: 18.4, min: 7.2, wind: 12, rain: 0, rainProb: 10 } });
+  assert.deepEqual(sunny.weather, {
+    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10,
+    outdoor: { environment: "outdoor", reason: "Podle dostupné předpovědi." },
+    outdoorRun: { environment: "outdoor", reason: "Podle dostupné předpovědi." }
+  });
+  const wet = buildToday({ ...input, location, forecast: { code: 63, max: 11, min: 6, wind: 20, rain: 6.4, rainProb: 90 } });
+  assert.equal(wet.weather.outdoor.environment, "indoor");
+  assert.match(wet.weather.outdoor.reason, /nepřeje/);
+  assert.equal(wet.weather.rain, 6.4);
+  // A place without a forecast: the season decides, the numbers stay empty.
+  const offline = buildToday({ ...input, location, forecast: null });
+  assert.equal(offline.weather.place, "Brno");
+  assert.equal(offline.weather.max, null);
+  assert.match(offline.weather.outdoor.reason, /není dostupná/);
+  // No place chosen: no weather, the app offers to set it.
+  assert.equal(buildToday(input).weather, null);
+  const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.match(src, /location:place\.location,forecast:place\.forecast/);
+  assert.match(src, /cached\(env,ctx,'weather:'/);
+});

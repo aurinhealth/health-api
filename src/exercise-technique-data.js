@@ -1898,5 +1898,442 @@ export const TECHNIQUE = {
    "title": "Good Mornings - Barbell Good Morning Exercise"
   },
   "query": "barbell good morning proper form"
+ },
+ "Pull-up": {
+  "setup": [
+   "Chyť hrazdu nadhmatem o něco šířeji než ramena.",
+   "Vis s propnutými pažemi, ramena stáhni lehce dolů od uší.",
+   "Zpevni břicho a hýždě, nohy drž u sebe."
+  ],
+  "steps": [
+   "Táhni lokty dolů k bokům, hrudník jde k hrazdě.",
+   "Bradu dostaň nad hrazdu bez záklonu hlavy.",
+   "Spouštěj se pomalu do plného visu."
+  ],
+  "mistakes": [
+   "Houpání a švih nohama.",
+   "Poloviční rozsah – nahoře ani dole nedotažené.",
+   "Ramena vytažená k uším."
+  ],
+  "breathing": "Výdech při tahu nahoru, nádech při spouštění.",
+  "query": "pull up proper form"
+ },
+ "Chin-up": {
+  "setup": [
+   "Chyť hrazdu podhmatem na šířku ramen.",
+   "Vis s propnutými pažemi, ramena lehce dolů.",
+   "Zpevni břicho, nohy u sebe."
+  ],
+  "steps": [
+   "Táhni lokty dolů a dozadu, hrudník k hrazdě.",
+   "Bradu dostaň nad hrazdu.",
+   "Pomalu se spusť do plného visu."
+  ],
+  "mistakes": [
+   "Švih nohama.",
+   "Spuštění pádem do visu.",
+   "Záklon hlavy místo dotažení."
+  ],
+  "breathing": "Výdech při tahu nahoru, nádech při spouštění.",
+  "query": "chin up proper form"
+ },
+ "Assisted pull-up": {
+  "setup": [
+   "Nastav protizávaží (kg = pomoc stroje, víc kg je lehčí).",
+   "Klekni nebo stoupni na plošinu a chyť madla nadhmatem.",
+   "Ramena stáhni lehce dolů, břicho zpevni."
+  ],
+  "steps": [
+   "Táhni lokty dolů k bokům, hrudník k madlům.",
+   "Bradu dostaň nad úroveň madel.",
+   "Pomalu se vrať do natažení paží."
+  ],
+  "mistakes": [
+   "Moc velké protizávaží – série je příliš lehká.",
+   "Škubání a odrážení nohama.",
+   "Ramena u uší."
+  ],
+  "breathing": "Výdech při tahu, nádech při spouštění.",
+  "query": "assisted pull up machine proper form"
+ },
+ "Hanging leg raise": {
+  "setup": [
+   "Chyť hrazdu nadhmatem na šířku ramen a zavěs se.",
+   "Ramena lehce stáhni dolů, ať nevisíš jen v kloubech.",
+   "Zastav houpání, nohy u sebe."
+  ],
+  "steps": [
+   "Podsaď pánev a zvedni kolena (lehčí) nebo propnuté nohy před sebe.",
+   "Nahoru jdi, dokud pánev drží podsazení, krátce podrž.",
+   "Spouštěj pomalu, bez rozhoupání."
+  ],
+  "mistakes": [
+   "Švih místo práce břicha.",
+   "Prohnutá bedra – nohy zvedají jen kyčelní flexory.",
+   "Rychlé spouštění."
+  ],
+  "breathing": "Výdech při zvedání, nádech při spouštění.",
+  "query": "hanging leg raise proper form"
+ },
+ "Dips": {
+  "setup": [
+   "Opři se o bradla s propnutými pažemi, ramena dolů od uší.",
+   "Nohy pokrč nebo zkřiž, břicho zpevni.",
+   "Trup drž spíš vzpřímeně (víc triceps), mírný předklon zapojí prsa."
+  ],
+  "steps": [
+   "Pomalu pokrč lokty, směřují dozadu.",
+   "Klesej, dokud ramena nebolí – zhruba do pravého úhlu v loktech.",
+   "Vytlač se zpět do propnutí."
+  ],
+  "mistakes": [
+   "Moc hluboko – přetěžuje přední část ramene.",
+   "Lokty roztažené do stran.",
+   "Ramena vytažená k uším."
+  ],
+  "breathing": "Nádech při spouštění, výdech při vytlačení.",
+  "query": "parallel bar dips proper form"
+ },
+ "Assisted dip": {
+  "setup": [
+   "Nastav protizávaží (víc kg je lehčí).",
+   "Klekni nebo stoupni na plošinu, chyť madla a propni paže.",
+   "Ramena dolů od uší, trup spíš vzpřímeně."
+  ],
+  "steps": [
+   "Pomalu pokrč lokty, směřují dozadu.",
+   "Klesej zhruba do pravého úhlu v loktech, ramena nebolí.",
+   "Vytlač se zpět do propnutí."
+  ],
+  "mistakes": [
+   "Moc hluboko.",
+   "Lokty do stran.",
+   "Moc velké protizávaží – série je příliš lehká."
+  ],
+  "breathing": "Nádech při spouštění, výdech při vytlačení.",
+  "query": "assisted dip machine proper form"
+ },
+ "Kettlebell swing": {
+  "setup": [
+   "Kettlebell polož asi 30 cm před sebe, chodidla o něco šířeji než boky.",
+   "Pánev dozadu, záda rovná, chyť madlo oběma rukama.",
+   "Zpevni břicho a lopatky stáhni dolů."
+  ],
+  "steps": [
+   "Kettlebell zhoupni dozadu mezi stehna, předklon z kyčlí.",
+   "Prudce vytlač pánev dopředu a zpevni hýždě – kettlebell vyletí do výšky hrudníku.",
+   "Nech ho padat zpět a plynule navaž další švih z kyčlí."
+  ],
+  "mistakes": [
+   "Dřep místo předklonu z kyčlí.",
+   "Zvedání kettlebellu rukama a rameny.",
+   "Kulatá záda nebo záklon nahoře."
+  ],
+  "breathing": "Výdech při vytlačení pánve, nádech při zhoupnutí dozadu.",
+  "query": "kettlebell swing proper form"
+ },
+ "EZ bar curl": {
+  "setup": [
+   "Chyť EZ osu podhmatem na vnitřních zalomeních.",
+   "Stoupni si vzpřímeně, chodidla na šířku boků.",
+   "Lokty u těla, ramena dolů."
+  ],
+  "steps": [
+   "Ohni lokty a zvedni osu k ramenům, lokty zůstávají na místě.",
+   "Nahoře krátce zatni biceps.",
+   "Spouštěj pomalu do téměř propnutých paží."
+  ],
+  "mistakes": [
+   "Záklon a švih trupem.",
+   "Lokty jdou dopředu.",
+   "Rychlé spouštění."
+  ],
+  "breathing": "Výdech při zvedání, nádech při spouštění.",
+  "query": "ez bar curl proper form"
+ },
+ "EZ bar skull crusher": {
+  "setup": [
+   "Lehni si na rovnou lavici, chodidla na zemi.",
+   "EZ osu drž nadhmatem na úzkých zalomeních nad hrudníkem, paže propnuté.",
+   "Paže lehce skloň k hlavě, lokty míří ke stropu."
+  ],
+  "steps": [
+   "Ohýbej jen lokty a pomalu spouštěj osu za čelo.",
+   "Nadloktí zůstává na místě.",
+   "Propni lokty zpět do výchozí polohy."
+  ],
+  "mistakes": [
+   "Lokty se rozjíždějí do stran.",
+   "Pohyb v ramenou místo v loktech.",
+   "Moc velká váha – začni lehce, ať máš osu pod kontrolou."
+  ],
+  "breathing": "Nádech při spouštění, výdech při propnutí.",
+  "query": "ez bar skull crusher proper form"
+ },
+ "Preacher curl": {
+  "setup": [
+   "Nastav sedák tak, aby podpaží bylo na horní hraně opěrky.",
+   "Zadní stranu paží polož na opěrku.",
+   "Chyť EZ osu podhmatem na zalomeních."
+  ],
+  "steps": [
+   "Ohni lokty a zvedni osu k ramenům.",
+   "Nahoře krátce zatni biceps.",
+   "Spouštěj pomalu, dole nech v loktech malou rezervu."
+  ],
+  "mistakes": [
+   "Prudké propnutí loktů dole.",
+   "Zvedání ramen a trupu z opěrky.",
+   "Moc velká váha."
+  ],
+  "breathing": "Výdech při zvedání, nádech při spouštění.",
+  "query": "ez bar preacher curl proper form"
+ },
+ "Band pull-apart": {
+  "setup": [
+   "Stoupni si vzpřímeně, gumu drž nadhmatem na šířku ramen.",
+   "Paže natažené před hrudníkem ve výšce ramen.",
+   "Ramena dolů, břicho zpevni."
+  ],
+  "steps": [
+   "Roztáhni gumu do stran, lopatky jdou k sobě.",
+   "Gumu dotáhni až k hrudníku a krátce podrž.",
+   "Vrať se pomalu do výchozí polohy."
+  ],
+  "mistakes": [
+   "Krčení ramen k uším.",
+   "Prohýbání beder.",
+   "Moc tuhá guma – nedotáhneš ji k hrudníku."
+  ],
+  "breathing": "Výdech při roztažení, nádech při návratu.",
+  "query": "band pull apart proper form"
+ },
+ "Hack squat": {
+  "setup": [
+   "Záda a ramena opři o opěrky, chodidla na plošinu na šířku boků.",
+   "Odjisti pojistky a propni kolena (ne do zámku).",
+   "Zpevni břicho, záda drž na opěrce."
+  ],
+  "steps": [
+   "Pomalu klesej, kolena jdou ve směru špiček.",
+   "Jdi tak hluboko, jak udržíš bedra na opěrce a paty na plošině.",
+   "Vytlač se přes celá chodidla nahoru."
+  ],
+  "mistakes": [
+   "Bedra se odlepují od opěrky.",
+   "Kolena padají dovnitř.",
+   "Propnutí kolen do zámku nahoře."
+  ],
+  "breathing": "Nádech při spouštění, výdech při vytlačení.",
+  "query": "hack squat machine proper form"
+ },
+ "Seated leg curl": {
+  "setup": [
+   "Nastav opěrku zad tak, aby kolena byla v ose otáčení stroje.",
+   "Spodní váleček měj nad patami, horní pevně přes stehna.",
+   "Chyť madla a pánev přitlač do sedáku."
+  ],
+  "steps": [
+   "Zakopni paty dolů pod sedák.",
+   "Dole krátce podrž.",
+   "Vracej se pomalu do natažení."
+  ],
+  "mistakes": [
+   "Kolena mimo osu stroje.",
+   "Zvedání pánve ze sedáku.",
+   "Švih a rychlý návrat."
+  ],
+  "breathing": "Výdech při zakopnutí, nádech při návratu.",
+  "query": "seated leg curl proper form"
+ },
+ "Glute kickback machine": {
+  "setup": [
+   "Opři se o hrudní opěrku nebo madla podle stroje.",
+   "Chodidlo pracující nohy dej na plotnu nebo za váleček.",
+   "Zpevni břicho, záda rovná."
+  ],
+  "steps": [
+   "Tlač nohu dozadu a nahoru z kyčle, ne z beder.",
+   "Nahoře krátce zatni hýždi.",
+   "Vracej se pomalu a pak vystřídej nohy."
+  ],
+  "mistakes": [
+   "Prohýbání beder.",
+   "Moc velký rozsah – trup se zaklání.",
+   "Švih."
+  ],
+  "breathing": "Výdech při zanožení, nádech při návratu.",
+  "query": "glute kickback machine proper form"
+ },
+ "Seated calf raise": {
+  "setup": [
+   "Sedni si, přední část chodidel dej na hranu plošiny.",
+   "Opěrku nastav těsně na kolena.",
+   "Odjisti pojistku."
+  ],
+  "steps": [
+   "Spusť paty co nejníž do protažení.",
+   "Zvedni se na špičky co nejvýš.",
+   "Nahoře krátce podrž a pomalu se vrať."
+  ],
+  "mistakes": [
+   "Pérování bez výdrže.",
+   "Malý rozsah.",
+   "Rychlé tempo."
+  ],
+  "breathing": "Výdech při zvednutí, nádech při spouštění.",
+  "query": "seated calf raise proper form"
+ },
+ "T-bar row": {
+  "setup": [
+   "Stoupni si nad osu nebo na plošinu stroje, chodidla na šířku boků.",
+   "Předklon z kyčlí, kolena lehce pokrčená, záda rovná.",
+   "Chyť madla a zpevni břicho."
+  ],
+  "steps": [
+   "Přitáhni madla k hrudníku, lokty jdou podél těla.",
+   "Nahoře stáhni lopatky k sobě.",
+   "Spouštěj pomalu do natažení paží, záda drž rovná."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Trhání trupem nahoru.",
+   "Ramena k uším."
+  ],
+  "breathing": "Výdech při přítahu, nádech při spouštění.",
+  "query": "t bar row proper form"
+ },
+ "Chest-supported row": {
+  "setup": [
+   "Nastav sedák tak, aby madla byla ve výšce spodní části hrudníku.",
+   "Hrudník opři o opěrku.",
+   "Chyť madla, paže propnuté."
+  ],
+  "steps": [
+   "Přitáhni madla k tělu, lokty jdou dozadu.",
+   "Stáhni lopatky k sobě a krátce podrž.",
+   "Vracej se pomalu do natažení."
+  ],
+  "mistakes": [
+   "Odlepování hrudníku od opěrky.",
+   "Ramena k uším.",
+   "Zkrácený rozsah."
+  ],
+  "breathing": "Výdech při přítahu, nádech při návratu.",
+  "query": "chest supported row machine proper form"
+ },
+ "TRX row": {
+  "setup": [
+   "Popruhy zkrať, chyť madla a zakloň se s propnutými pažemi.",
+   "Tělo drž v jedné linii od hlavy k patám.",
+   "Čím víc se zakloníš (níž), tím je to těžší."
+  ],
+  "steps": [
+   "Přitáhni hrudník k madlům, lokty jdou podél těla.",
+   "Nahoře stáhni lopatky k sobě.",
+   "Pomalu se spusť zpět do natažení."
+  ],
+  "mistakes": [
+   "Propadlé boky.",
+   "Ramena k uším.",
+   "Pád zpět místo kontrolovaného spouštění."
+  ],
+  "breathing": "Výdech při přítahu, nádech při spouštění.",
+  "query": "trx row proper form"
+ },
+ "Barbell incline bench press": {
+  "setup": [
+   "Lehni si na šikmou lavici, oči pod osou, chodidla pevně na zemi.",
+   "Úchop o něco širší než ramena, lopatky stáhni k sobě a dolů.",
+   "Osu vyndej ze stojanu nad horní hrudník (ideálně s dopomocí)."
+  ],
+  "steps": [
+   "Spouštěj osu pomalu k horní části hrudníku, lokty mírně k tělu.",
+   "Lehce se dotkni hrudníku bez odrazu.",
+   "Vytlač osu zpět nad ramena."
+  ],
+  "mistakes": [
+   "Odraz osy od hrudníku.",
+   "Zvednutý zadek z lavice.",
+   "Lokty roztažené do pravého úhlu."
+  ],
+  "breathing": "Nádech při spouštění, výdech při tlaku nahoru.",
+  "query": "barbell incline bench press proper form"
+ },
+ "Trap bar deadlift": {
+  "setup": [
+   "Stoupni si doprostřed trap baru, chodidla na šířku boků.",
+   "Pánev dozadu, kolena pokrč a chyť madla, záda rovná.",
+   "Ramena nad osou, zpevni břicho, hrudník nahoru."
+  ],
+  "steps": [
+   "Tlač nohama do země a zvedej osu, boky a ramena stoupají spolu.",
+   "Nahoře se narovnej a zatni hýždě, bez záklonu.",
+   "Pod kontrolou polož osu zpět, záda rovná."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Boky vyletí nahoru dřív než ramena.",
+   "Záklon nahoře."
+  ],
+  "breathing": "Nádech a zpevnění dole, výdech nahoře.",
+  "query": "trap bar deadlift proper form"
+ },
+ "Landmine press": {
+  "setup": [
+   "Jeden konec osy zasuň do landmine, na druhý nasaď kotouče (kg = kotouče).",
+   "Stoupni si čelem k ose v mírném výpadu, konec osy drž jednou rukou u ramene.",
+   "Zpevni břicho a hýždě."
+  ],
+  "steps": [
+   "Vytlač osu šikmo nahoru a dopředu do propnutí paže.",
+   "Nahoře nech lopatku jít s paží dopředu.",
+   "Pomalu ji vrať k rameni a po sérii vystřídej ruce."
+  ],
+  "mistakes": [
+   "Záklon a prohnutá bedra.",
+   "Vytáčení trupu.",
+   "Ramena k uším."
+  ],
+  "breathing": "Výdech při tlaku, nádech při spouštění.",
+  "query": "landmine press proper form"
+ },
+ "Medicine ball slam": {
+  "setup": [
+   "Použij medicinbal, který neskáče (slam ball).",
+   "Stoupni si na šířku ramen, míč drž oběma rukama u hrudníku.",
+   "Zpevni břicho."
+  ],
+  "steps": [
+   "Zvedni míč nad hlavu a protáhni se na špičky.",
+   "Prudce ho hoď o zem před sebe, pohyb vede břicho.",
+   "Míč zvedni s rovnými zády (pánev dozadu) a opakuj."
+  ],
+  "mistakes": [
+   "Kulatá záda při zvedání míče.",
+   "Hod jen rukama bez zapojení trupu.",
+   "Skákavý míč, který se vrací do obličeje."
+  ],
+  "breathing": "Nádech nahoře, prudký výdech při hodu.",
+  "query": "medicine ball slam proper form"
+ },
+ "Box step-up": {
+  "setup": [
+   "Bednu postav stabilně, výška zhruba ke kolenu.",
+   "Stoupni si čelem k bedně, celé chodidlo jedné nohy polož na ni.",
+   "Trup vzpřímeně, případně jednoručky podél těla."
+  ],
+  "steps": [
+   "Vytlač se přes patu nohy na bedně nahoru do stoje.",
+   "Nahoře se narovnej, druhou nohu jen přilož.",
+   "Pomalu sestup zpět stejnou nohou; po sérii vystřídej nohy."
+  ],
+  "mistakes": [
+   "Odrážení spodní nohou.",
+   "Koleno padá dovnitř.",
+   "Moc vysoká bedna."
+  ],
+  "breathing": "Výdech při výstupu, nádech při sestupu.",
+  "query": "box step up proper form"
  }
 };

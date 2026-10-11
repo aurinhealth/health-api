@@ -55,7 +55,11 @@ function diaryMealType(type, time) {
 function noteOf(row) { try { const note = JSON.parse(row?.note || "{}"); return note && typeof note === "object" && !Array.isArray(note) ? note : { text: String(row.note) }; } catch { return row?.note ? { text: String(row.note) } : {}; } }
 // When a meal is logged for another day than today, it gets its slot's usual time.
 export const MEAL_DEFAULT_TIMES = { breakfast: "07:00", snack_am: "10:00", lunch: "12:00", snack_pm: "16:00", dinner: "19:00", snack_late: "21:00" };
-export function mealConsumedAt(date, mealType) {
+// time: "HH:MM" the app logged the meal at, kept when the entry waited for
+// signal and is sent later; otherwise now for today, the meal's usual time before.
+export function mealConsumedAt(date, mealType, time) {
+  const t = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(time || "")) ? time : null;
+  if (t && /^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return date + "T" + t + ":00";
   return date === localToday() ? null : date + "T" + (MEAL_DEFAULT_TIMES[mealType] || "12:00") + ":00";
 }
 function consumedAt(date, time) {

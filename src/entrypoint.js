@@ -1,6 +1,7 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
 import {reportFood} from './shared-foods.js';
 import {onboardingStatus,completeOnboarding,trainingSetup,updateTrainingSetup} from './onboarding.js';
+import { fitsEquipment } from "./strength-generator.js";
 import {subscriptionStatus,markAiIntroSeen,assertAIAccess} from './subscription.js';
 import {consentStatus,saveConsent} from './consent.js';
 import {listRecipes,saveRecipe,deleteRecipe,searchRecipes} from './personal-recipes.js';
@@ -58,7 +59,7 @@ async function queueFoodGoogleSafely(env,ctx,id,options){
 import { lookupFoodWithAI } from "./food-ai.js";
 import { EXERCISE_STATIONS } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
-import { addFluid, deleteFluid, updateFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks, hydrationMl } from "./fluids.js";
+import { addFluid, deleteFluid, FluidInputError, updateFluid, listFluids, hydrationTarget, dayActivityHours, foodDrinks, hydrationMl } from "./fluids.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import dashboardClient from "./dashboard-client.js";
 import { loadRecoveryValidation } from "./recovery-validation.js";
@@ -118,6 +119,7 @@ import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
 import { lang, withLang, storedLanguage, rememberLanguage, L } from "./lang.js";
+import { appUpdateRequired } from "./app-version.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, dayStartUtc, localNow, localToday, localDate, localHour, timeZone } from "./user-time.js";
 
 // A month of Google Health samples summed per day: thousands of rows that only a
@@ -284,6 +286,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
 export default {
   scheduled: worker.scheduled,
   async fetch(request, env, ctx) {
+    // An installed iPhone app older than the API answers with 426 (app-version.js).
+    const outdated = appUpdateRequired(request);
+    if (outdated) return isStaging(env) ? markStaging(outdated) : outdated;
     const response = await worker.fetch(request, env, ctx);
     return isStaging(env) ? markStaging(response) : response;
   }
@@ -391,9 +396,9 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 async function matchScheduledActivity(env,ctx,internalAuth,link){
   const response=await app.fetch(new Request('https://internal/analysis/daily?date='+link.scheduled_date,{headers:internalAuth}),env,ctx);
   if(!response.ok)return null;const daily=await response.json().catch(()=>({})),matched=daily.training?.matched||[],completed=daily.training?.completed||[];
-  const match=matched.find(m=>String(m.planned?.id||'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
+  const match=matched.find(m=>String(m.planned?.id||'').replace(/^planned:/,'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
   if(!match)return null;
-  const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>String(a.pairedEventId||a.plannedEventId||'')===String(link.intervals_event_id||''));
+  const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>a.pairedEventId!=null&&String(a.pairedEventId)===String(link.intervals_event_id||''));
   if(!actual)return null;
   const actualMinutes=Number(actual.durationHours)>0?Number(actual.durationHours)*60:null;
   if(actualMinutes==null)return null;
@@ -447,6 +452,23 @@ async function computeWeekTargets(env,ctx,start,prefs){
   return capWeekTargets(capRunVolume(weekTargets({roles:planWeekRoles(prefs.days),ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown:hrvWeekTrendDown(wellness,start),rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start}),runCap,runCommitted),prefs,[],weather);
 }
 const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
+// The weather place of the week plan and today's forecast for Today (app-today.js
+// todayWeather). The forecast is cached for 30 minutes per place and week; a
+// failed fetch is not cached. Only for today: past days show no weather.
+async function todayPlace(env,ctx,date){
+  try{
+    if(date!==localToday())return {location:null,forecast:null};
+    const location=(await getWeekPlan(env.DB,date).catch(()=>null))?.location||null;
+    if(!location)return {location:null,forecast:null};
+    const monday=mondayOfDate(date);
+    const week=await cached(env,ctx,'weather:'+location.latitude+','+location.longitude+':'+monday,async()=>{
+      const w=await weekWeather(location,monday);
+      if(!Object.keys(w).length)throw new Error('no forecast');
+      return w;
+    },{ttl:1800}).catch(()=>({}));
+    return {location,forecast:week?.[date]||null};
+  }catch{return {location:null,forecast:null};}
+}
 
 // Everything the coaches look at for one day: the day, fitness, three weeks
 // around it, gym history, sleep and Google Health.
@@ -694,10 +716,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // The athlete's gym: the stations it has (equipment "custom"), and AI that
   // picks them from a photo of the gym or its web page (nothing is saved there).
   if(url.pathname==='/app/api/gym/equipment'){
-    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[]},{headers:{'Cache-Control':'no-store'}});}
+    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'},{headers:{'Cache-Control':'no-store'}});}
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      try{const body=await request.json().catch(()=>({}));const training=await updateTrainingSetup(env.DB,{equipment:body.equipment,stations:body.stations,gymName:body.gymName,gymUrl:body.gymUrl,...(Array.isArray(body.dumbbellWeights)?{dumbbellWeights:body.dumbbellWeights}:{})});await bumpCacheVersion(env.DB);return Response.json({status:'ok',equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[]});}
+      // Places (several gyms, home) with the active one; or the flat fields of older clients.
+      try{const body=await request.json().catch(()=>({}));const input=Array.isArray(body.places)?{places:body.places,activePlace:body.activePlace}:{equipment:body.equipment,stations:body.stations,gymName:body.gymName,gymUrl:body.gymUrl,...(Array.isArray(body.dumbbellWeights)?{dumbbellWeights:body.dumbbellWeights}:{})};const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);return Response.json({status:'ok',equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'});}
       catch(error){return Response.json({message:error.message},{status:400});}
     }
   }
@@ -707,13 +730,20 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{const body=await request.json().catch(()=>({}));const r=await detectGymEquipment(env,{images:body.images||(body.image?[body.image]:[]),url:body.url});return Response.json({status:r.found?'ok':'not_found',...r,message:r.found?null:L('Vybavení se nepodařilo poznat. Zkus jinou fotku nebo vyber stroje ručně.', 'The equipment couldn\'t be recognised. Try another photo or pick the machines by hand.')},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.limit?error.message:String(error.message).slice(0,200)},{status:error.limit?(error.status||429):400});}
   }
-  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET')return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name)}))},{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/gym/exercises'&&request.method==='GET'){
+    // fits: possible with the athlete's equipment (the active place), so the app can offer those first.
+    const setup=await trainingSetup(env.DB).catch(()=>null);
+    return Response.json({status:'ok',exercises:gymExerciseCatalog().map(e=>({...e,stations:EXERCISE_STATIONS[e.name]||[],muscles:exerciseMuscles(e.name),fits:fitsEquipment(e.name,setup)}))},{headers:{'Cache-Control':'no-store'}});
+  }
   // Replacements for one exercise of a day's plan (workout mode, gym table).
   if(url.pathname==='/app/api/gym/alternatives'&&request.method==='GET'){
     const date=/^\d{4}-\d{2}-\d{2}$/.test(String(url.searchParams.get('date')||''))?url.searchParams.get('date'):localToday(),exercise=String(url.searchParams.get('exercise')||'').slice(0,120);
-    const [plan,history]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[])]);
-    const inPlan=[...new Set((plan?.values||[]).slice(7).map(r=>r?.[1]).filter(Boolean))];
-    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan)},{headers:{'Cache-Control':'no-store'}});
+    const [plan,history,setup]=await Promise.all([readGymPlan(env.DB,date).catch(()=>null),getStrengthHistory(env.DB,500).catch(()=>[]),trainingSetup(env.DB).catch(()=>null)]);
+    // The plan being built is sent along (not saved yet); else the saved day's.
+    let sent=[];try{sent=JSON.parse(url.searchParams.get('inPlan')||'[]');}catch{/* none */}
+    const inPlan=[...new Set([...(plan?.values||[]).slice(7).map(r=>r?.[1]),...(Array.isArray(sent)?sent:[])].filter(Boolean).map(String))];
+    // Only what the athlete's gym has (the active place's stations).
+    return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan).filter(a=>fitsEquipment(a.name,setup))},{headers:{'Cache-Control':'no-store'}});
   }
   // Loads for exercises added by hand, or a plan's sets left without a weight.
   if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
@@ -1114,7 +1144,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.method==='PATCH'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await updateFluid(env.DB,{id:body.id,ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
-    }catch(error){return Response.json({status:'error',message:error.message},{status:400});}
+    }catch(error){return Response.json({status:'error',message:error.message},{status:error instanceof FluidInputError?400:500});}
   }
   if(url.pathname==='/app/api/food/recipe'&&request.method==='GET'){
     const recipe=await getCookbookRecipeByPage(url.searchParams.get('page'));
@@ -1126,7 +1156,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:L('Doplň energii i všechna tři makra pro zvolený základ tabulky.', 'Fill in the energy and all three macros for the chosen table basis.')},{status:400});
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
       const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,consumed_at:mealConsumedAt(body.date,body.mealType)||undefined,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,sugar_g:amount.sugar_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,consumed_at:mealConsumedAt(body.date,body.mealType,body.time)||undefined,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,sugar_g:amount.sugar_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error(L('Uložení selhalo.', 'Saving failed.'));
       let personal=null,warning=null;
       if(p.source!=='composed'){try{personal=await savePersonalFood(env.DB,p,{used:true});}catch(error){warning=L('Jídlo je zapsané, ale potravinu pro příště se nepodařilo uložit: ', 'The meal is logged, but the food couldn\'t be saved for next time: ')+error.message;}}
@@ -1181,16 +1211,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [daily,health,fitness,sleep,fluids,weight,coaches,profile]=await Promise.all([
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
-        api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null)
+        api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
+        todayPlace(env,ctx,date)
       ]);
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);
-      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -1831,7 +1862,7 @@ async function trainingGymPlans(env,from,to){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))]};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],logged:rows.filter(x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))).length};
   }
   return out;
 }

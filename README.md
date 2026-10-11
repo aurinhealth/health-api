@@ -108,6 +108,8 @@ Na https://staging.petrfitnessdata.eu/app běží kopie aplikace s vlastní data
 
 `mobile/` je nativní obal (Capacitor) kolem živé `/app`. GitHub ho sestaví bez Macu a bez placeného účtu Apple (`ios-app.yml`) a do iPhonu se nainstaluje přes Sideloadly. Postup je v `mobile/README.md`. Přihlášení přes Google probíhá v Safari a do aplikace se vrací přes `loadwise://auth` s krátkodobým tokenem, který uplatní jen aplikace, jež přihlášení spustila (`/auth/app/session` v `src/google-login.js`).
 
+Kontrola verze (`src/app-version.js`): nativní aplikace posílá s každým požadavkem hlavičku `X-Loadwise-Api` s verzí API, pro kterou je postavená (`APIClient.apiLevel`). Když změna serveru rozbije to, co nainstalované aplikace čtou (přejmenované nebo odebrané pole, jiný význam), zvedni ve stejném pull requestu `MIN_APP_API` na serveru i `apiLevel` v aplikaci. Starší aplikace pak dostane 426 a místo obrazovek ukáže „Je potřeba nová verze“. Přidání nového pole nic nerozbije, verze se kvůli němu nezvedá. Požadavky bez hlavičky (web, skripty, GitHub Actions) se nekontrolují. Test `tests/app-version.test.mjs` hlídá, že aplikace není pod minimem serveru.
+
 ## Bezpečnost
 
 - Cloudflare spouští `src/main.js`: aplikaci z `entrypoint.js` za přesměrováním na HTTPS a bezpečnostními hlavičkami (`web-security.js`: HSTS, zákaz vložení do cizí stránky, `nosniff`, `Referrer-Policy`). Hlavičku, kterou si odpověď nastaví sama, nepřepisuje.

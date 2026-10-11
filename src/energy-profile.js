@@ -62,6 +62,8 @@ export function normalizeProfile(p = {}) {
   const inRange = (v, lo, hi) => { const x = num(v); return Number.isFinite(x) && x >= lo && x <= hi ? x : null; };
   const birthDate = ageFrom(p.birthDate) != null ? p.birthDate : "";
   return {
+    // The name the user typed in the app's Profil (the account name stays as signed in).
+    displayName: String(p.displayName ?? "").replace(/\s+/g, " ").trim().slice(0, 60),
     sex: ["male", "female"].includes(p.sex) ? p.sex : "",
     birthDate,
     age: birthDate ? ageFrom(birthDate) : inRange(p.age, 18, 100),

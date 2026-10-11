@@ -32,8 +32,10 @@ enum Reminders {
 
         // Bedtime: 30 minutes before, with the night's need.
         if isOn(bedtimeKey), let bed = today.tonight?.bedtime, let need = today.tonight?.need, let at = minutes(bed) {
-            add(center, "bedtime", at: (at - 30 + 1440) % 1440, title: L10n.tr("Za půl hodiny do postele"),
-                body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), bed))
+            let remind = (at - 30 + 1440) % 1440
+            // A bedtime after midnight (00:40) reminds at 00:10 tonight, which is "earlier" than now.
+            add(center, "bedtime", at: remind, title: L10n.tr("Za půl hodiny do postele"),
+                body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), bed), afterMidnight: remind < 6 * 60)
         }
         // Today's planned workout: an hour before its start.
         if isOn(workoutKey) {
@@ -53,7 +55,8 @@ enum Reminders {
         }
         // The evening: log what was eaten.
         if isOn(foodKey) {
-            add(center, "food", at: 20 * 60 + 30, title: L10n.tr("Zapiš jídlo"), body: L10n.tr("Ať sedí dnešní příjem a zítřejší doporučení."))
+            // Every evening, also on days the app is not opened.
+            add(center, "food", at: 20 * 60 + 30, title: L10n.tr("Zapiš jídlo"), body: L10n.tr("Ať sedí dnešní příjem a zítřejší doporučení."), repeats: true)
         }
     }
 
@@ -84,10 +87,14 @@ enum Reminders {
         }
     }
 
-    /// Only times still ahead today are planned.
-    private static func add(_ center: UNUserNotificationCenter, _ id: String, at minute: Int, title: String, body: String) {
+    /// Only times still ahead today are planned, unless the reminder repeats
+    /// daily or belongs to the coming night (afterMidnight: the next 00:10).
+    private static func add(_ center: UNUserNotificationCenter, _ id: String, at minute: Int, title: String, body: String,
+                            repeats: Bool = false, afterMidnight: Bool = false) {
         let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
-        guard minute > (now.hour ?? 0) * 60 + (now.minute ?? 0) else { return }
+        let nowMinute = (now.hour ?? 0) * 60 + (now.minute ?? 0)
+        // After midnight but before 6:00 the "coming night" reminder is the one ahead, not yesterday's.
+        guard repeats || minute > nowMinute || (afterMidnight && nowMinute >= 6 * 60) else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
@@ -95,7 +102,8 @@ enum Reminders {
         var when = DateComponents()
         when.hour = minute / 60
         when.minute = minute % 60
-        let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: false)
+        // The next matching time: later today, or after midnight for the coming night.
+        let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: repeats)
         center.add(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
     }
 

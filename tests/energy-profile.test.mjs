@@ -67,8 +67,8 @@ test("sleep settings: a goal of 6–10 h and alarm clock times", () => {
 });
 
 test("the profile endpoint keeps only known values", () => {
-  assert.deepEqual(normalizeProfile({ sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
-    { sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
+  assert.deepEqual(normalizeProfile({ displayName: "  Petr   Bouma ", sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
+    { displayName: "Petr Bouma", sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
       sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", meals: [],
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });

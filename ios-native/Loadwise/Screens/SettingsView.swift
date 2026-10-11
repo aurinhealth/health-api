@@ -60,16 +60,15 @@ struct SettingsMenu: View {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
             }
 
-            NavigationLink { ProfileSettingsView(store: store) } label: {
+            ProSettingsRow()
+
+            NavigationLink { ProfileSettingsView(store: store, signOut: signOut) } label: {
                 HStack(spacing: 14) {
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Palette.secondary)
-                        .frame(width: 56, height: 56)
-                        .background(Palette.sand.opacity(0.6), in: Circle())
+                    AvatarView(size: 56)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Profil").font(.headline).foregroundStyle(Palette.ink)
-                        Text("pohlaví, věk, výška a aktivita pro výpočty").font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(verbatim: profileName ?? L10n.tr("Profil")).font(.headline).foregroundStyle(Palette.ink).lineLimit(1)
+                        Text(verbatim: email.isEmpty ? L10n.tr("fotka, jméno, věk a výška") : email)
+                            .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
                     }
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -100,12 +99,21 @@ struct SettingsMenu: View {
                         }
                 }
                 SettingsDivider()
+                NavigationLink { HeartActivitySettingsView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Tep a aktivita",
+                                value: HeartActivitySettingsView.summary(store.profile))
+                }
+                SettingsDivider()
                 NavigationLink { SleepSettingsView(given: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "moon.zzz.fill", color: Palette.indigo), title: "Spánek a budík", value: sleepValue)
                 }
                 SettingsDivider()
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.text.square", color: Palette.rust), title: "Tréninkové zóny", value: "běh, kolo")
+                }
+                SettingsDivider()
+                NavigationLink { WeatherPlaceView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "cloud.sun.fill", color: Palette.blue), title: "Poloha pro počasí", value: model.today?.weather?.place)
                 }
             }
             .buttonStyle(.plain)
@@ -163,8 +171,8 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "ladybug.fill", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
-                Link(destination: URL(string: "https://petrfitnessdata.eu/app")!) {
-                    SettingsRow(icon: SettingsIcon(systemImage: "questionmark", color: Color(light: 0x8A5AA6, dark: 0xC79BE0)), title: "Nápověda a kontakt", subtitle: "ve webové aplikaci")
+                Link(destination: URL(string: "https://petrfitnessdata.eu/support")!) {
+                    SettingsRow(icon: SettingsIcon(systemImage: "questionmark", color: Color(light: 0x8A5AA6, dark: 0xC79BE0)), title: "Nápověda a kontakt", subtitle: "petrfitnessdata.eu/support")
                 }
             }
             .buttonStyle(.plain)
@@ -180,6 +188,14 @@ struct SettingsMenu: View {
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
         }
+    }
+
+    @AppStorage(AvatarStore.nameKey) private var accountName = ""
+    @AppStorage(AvatarStore.emailKey) private var email = ""
+
+    /// The name typed in Profil, else the account's.
+    private var profileName: String? {
+        store.profile["displayName"]?.string ?? accountName.nilIfBlank
     }
 
     @AppStorage(Units.key) private var units = "metric"

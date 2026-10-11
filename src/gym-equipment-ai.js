@@ -4,7 +4,7 @@
 // gym's web page (web search). The athlete checks the list before saving.
 import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
-import { METAGYM_KUTNA_HORA, OTHER_STATION_IDS } from "./gym-equipment.js";
+import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
 
 // Generic names and groups, in the order the app lists them.
@@ -23,28 +23,21 @@ export const GYM_STATIONS = [
   { id: "multi_flight", group: "Záda a ramena", label: "Upažování (stroj)", en: "Lateral raise machine" },
   { id: "pec_deck", group: "Záda a ramena", label: "Pec deck / zadní ramena", en: "Pec deck / rear delt" },
   { id: "chest_press", group: "Prsa", label: "Tlaky na prsa (stroj)", en: "Chest press machine" },
-  { id: "pendulum_squat", group: "Nohy a hýždě", label: "Pendulum / hack dřep", en: "Pendulum / hack squat" },
-  { id: "pivot_leg_press", group: "Nohy a hýždě", label: "Leg press", en: "Leg press" },
+  { id: "pendulum_squat", group: "Nohy a hýždě", label: "Pendulum dřep (kyvadlový stroj)", en: "Pendulum squat" },
+  { id: "pivot_leg_press", group: "Nohy a hýždě", label: "Leg press (i 45° saně)", en: "Leg press (incl. 45° sled)" },
   { id: "hip_thrust", group: "Nohy a hýždě", label: "Hip thrust (stroj)", en: "Hip thrust machine" },
   { id: "leg_extension", group: "Nohy a hýždě", label: "Předkopávání (leg extension)", en: "Leg extension" },
-  { id: "prone_leg_curl", group: "Nohy a hýždě", label: "Zakopávání (leg curl)", en: "Leg curl" },
-  { id: "calf_raise", group: "Nohy a hýždě", label: "Lýtka (stroj)", en: "Calf raise machine" },
+  { id: "prone_leg_curl", group: "Nohy a hýždě", label: "Zakopávání vleže (leg curl)", en: "Lying leg curl" },
+  { id: "calf_raise", group: "Nohy a hýždě", label: "Lýtka vestoje (stroj)", en: "Standing calf raise machine" },
   { id: "adduction_abduction", group: "Nohy a hýždě", label: "Přitahování a unožování (stroj)", en: "Adduction / abduction" },
   { id: "abs_bench", group: "Střed těla", label: "Lavice na břicho", en: "Abs bench" },
   { id: "roman_chair", group: "Střed těla", label: "Hyperextenze (roman chair)", en: "Roman chair" },
   { id: "treadmill", group: "Kardio", label: "Běžecký pás", en: "Treadmill" },
   { id: "stairmaster", group: "Kardio", label: "Schodový trenažér", en: "Stair climber" }
-].filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id)).concat([
-  // What other gyms and home gyms usually have too. No catalog exercise needs
-  // them yet, so they only describe the place.
-  { id: "pullup_bar", group: "Volné váhy", label: "Hrazda", en: "Pull-up bar" },
-  { id: "dip_bars", group: "Volné váhy", label: "Bradla", en: "Dip bars" },
-  { id: "kettlebells", group: "Volné váhy", label: "Kettlebelly", en: "Kettlebells" },
-  { id: "ez_bar", group: "Volné váhy", label: "EZ osa", en: "EZ bar" },
-  { id: "resistance_bands", group: "Volné váhy", label: "Odporové gumy", en: "Resistance bands" },
-  { id: "rowing_ergometer", group: "Kardio", label: "Veslovací trenažér", en: "Rowing ergometer" },
-  { id: "exercise_bike", group: "Kardio", label: "Rotoped", en: "Exercise bike" }
-]).filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id) || OTHER_STATION_IDS.includes(s.id));
+].filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id)).concat(
+  // What other gyms and home gyms usually have too (gym-equipment.js OTHER_STATIONS).
+  OTHER_STATION_IDS.map(id => ({ id, ...OTHER_STATIONS[id] }))
+);
 
 export const GYM_STATION_IDS = GYM_STATIONS.map(s => s.id);
 
@@ -70,7 +63,7 @@ export const GYM_DETECT_SCHEMA = {
 };
 
 const instructions = () => `Zjišťuješ, jaké vybavení má posilovna, aby aplikace sestavovala tréninky jen ze strojů, které tam jsou.
-Dostaneš fotku (nebo několik) posilovny, nebo odkaz na její web. U odkazu si stránku najdi a přečti (web search), včetně stránek s vybavením nebo fotogalerií.
+Dostaneš fotku (nebo několik) posilovny, nebo odkaz na její web. U odkazu si stránku najdi a přečti (web search), včetně stránek s vybavením nebo fotogalerií; fotky z webu dostaneš přiložené, stroje na nich počítej stejně jako ty uvedené v textu.
 Vrať id stanic z tohoto seznamu, které tam určitě jsou:
 ${GYM_STATIONS.map(s => `- ${s.id}: ${s.label}`).join("\n")}
 Pravidla: vybírej jen stanice, které na fotce vidíš nebo které web výslovně uvádí. Kladkový stroj s více stanicemi je "cables". Jednoručky a lavice v běžné posilovně bývají, ale vyber je jen, když je vidíš nebo jsou uvedené. Nic nevymýšlej.
@@ -86,14 +79,80 @@ export function parseDetectAnswer(text) {
   return { found: r.found === true && stations.length > 0, gymName: String(r.gymName || "").trim().slice(0, 120), stations, note: String(r.note || "").trim().slice(0, 300) };
 }
 
-export async function detectGymEquipment(env, { images = [], url = "" } = {}) {
+// Photos on a gym's web page (and its gallery page): the machines are often
+// only in the pictures, not in the text. Plain <img>, lazy-loaded data-src,
+// srcset and og:image; logos, icons and tracking pixels are left out.
+const SKIP_IMAGE = /logo|icon|favicon|sprite|avatar|emoji|pixel|badge|flag|payment|placeholder|blank|spacer/i;
+export function pageImages(html, base) {
+  const found = [];
+  const add = raw => {
+    const src = String(raw || "").trim().split(/\s+/)[0];
+    if (!src || src.startsWith("data:")) return;
+    let u; try { u = new URL(src.replace(/&amp;/g, "&"), base); } catch { return; }
+    if (!/^https?:$/.test(u.protocol) || !/\.(jpe?g|png|webp)$/i.test(u.pathname) || SKIP_IMAGE.test(u.pathname)) return;
+    if (!found.includes(u.href)) found.push(u.href);
+  };
+  const text = String(html || "");
+  for (const m of text.matchAll(/<meta[^>]+property=["']og:image["'][^>]*content=["']([^"']+)["']/gi)) add(m[1]);
+  for (const m of text.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = m[0];
+    const attr = name => (new RegExp(`\\b${name}=["']([^"']+)["']`, "i").exec(tag) || [])[1];
+    add(attr("data-src") || attr("data-lazy-src") || attr("src"));
+    const set = attr("srcset") || attr("data-srcset");
+    if (set) add(set.split(",").pop());
+  }
+  for (const m of text.matchAll(/<a\b[^>]*href=["']([^"']+\.(?:jpe?g|png|webp))["']/gi)) add(m[1]);
+  return found;
+}
+
+// A gallery or equipment page linked from the gym's page, on the same site.
+export function galleryLink(html, base) {
+  let origin; try { origin = new URL(base).host; } catch { return null; }
+  for (const m of String(html || "").matchAll(/<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]{0,200}?)<\/a>/gi)) {
+    const label = (m[1] + " " + m[2].replace(/<[^>]+>/g, " ")).toLowerCase();
+    if (!/galer|gallery|fotk|foto|vybaven|equipment|stroj|prostor/.test(label)) continue;
+    try { const u = new URL(m[1], base); if (u.host === origin && /^https?:$/.test(u.protocol) && u.href !== base) return u.href; } catch { /* next */ }
+  }
+  return null;
+}
+
+// Only public web pages: no local or private addresses.
+function publicUrl(link) {
+  let u; try { u = new URL(link); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol) || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[|169\.254\.)/i.test(u.hostname) || !u.hostname.includes(".")) return null;
+  return u.href;
+}
+
+async function fetchPage(link, fetchImpl) {
+  try {
+    const r = await fetchImpl(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; LoadwiseBot/1.0; +https://petrfitnessdata.eu)" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    if (!r.ok || !/html/i.test(r.headers.get("content-type") || "")) return "";
+    return (await r.text()).slice(0, 1_500_000);
+  } catch { return ""; }
+}
+
+// Up to 8 photos from the page and its gallery.
+export async function websitePhotos(link, fetchImpl = fetch) {
+  const page = publicUrl(link);
+  if (!page) return [];
+  const html = await fetchPage(page, fetchImpl);
+  let photos = pageImages(html, page);
+  const gallery = photos.length < 8 ? galleryLink(html, page) : null;
+  if (gallery) photos = [...new Set([...photos, ...pageImages(await fetchPage(gallery, fetchImpl), gallery)])];
+  return photos.slice(0, 8);
+}
+
+export async function detectGymEquipment(env, { images = [], url = "" } = {}, fetchImpl = fetch) {
   const pictures = (Array.isArray(images) ? images : [images]).filter(Boolean).slice(0, 4);
   const link = String(url || "").trim();
   if (!pictures.length && !/^https?:\/\/\S+$/i.test(link)) throw new Error(L("Pošli fotku posilovny nebo odkaz na její web.", "Send a photo of the gym or a link to its website."));
   if (pictures.some(p => !validFoodImage(p))) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));
+  // A web page: its text through web search, and its photos as pictures.
+  const sitePhotos = link ? await websitePhotos(link, fetchImpl) : [];
   const content = [
-    { type: "input_text", text: link ? "Web posilovny: " + link : "Fotky posilovny." },
-    ...pictures.map(image => ({ type: "input_image", image_url: image, detail: "high" }))
+    { type: "input_text", text: link ? "Web posilovny: " + link + (sitePhotos.length ? `\nFotky z webu posilovny (${sitePhotos.length}): poznej z nich stroje.` : "") : "Fotky posilovny." },
+    ...pictures.map(image => ({ type: "input_image", image_url: image, detail: "high" })),
+    ...sitePhotos.map(image => ({ type: "input_image", image_url: image, detail: "low" }))
   ];
   const r = await callOpenAI(env, {
     feature: "gym-equipment",
@@ -102,7 +161,7 @@ export async function detectGymEquipment(env, { images = [], url = "" } = {}) {
     ...(link ? { tools: [{ type: "web_search" }] } : {}),
     format: GYM_DETECT_SCHEMA,
     maxOutputTokens: 3000,
-    model: pictures.length ? env.OPENAI_VISION_MODEL || lightModel(env) : lightModel(env)
+    model: pictures.length || sitePhotos.length ? env.OPENAI_VISION_MODEL || lightModel(env) : lightModel(env)
   });
-  return { ...(parseDetectAnswer(r.text) || { found: false, gymName: "", stations: [], note: "" }), model: r.model };
+  return { ...(parseDetectAnswer(r.text) || { found: false, gymName: "", stations: [], note: "" }), photos: sitePhotos.length, model: r.model };
 }

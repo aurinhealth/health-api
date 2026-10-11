@@ -43,7 +43,9 @@ struct FoodEntryEditSheet: View {
         return kcal * typed / logged.value
     }
 
-    private var lastDay: Date { Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date() }
+    /// Today at most: the Food screen does not go past today, so an entry
+    /// moved or copied into the future could not be found again.
+    private var lastDay: Date { Date() }
     private var changed: Bool { amountChanged || meal != entry.meal || AppModel.localDate(day) != date }
 
     var body: some View {
@@ -146,9 +148,10 @@ struct FoodEntryEditSheet: View {
     private func delete() async {
         if model.demo { dismiss(); return }
         working = true
-        await model.deleteFood(id: entry.id)
+        let deleted = await model.deleteFood(id: entry.id)
         working = false
-        dismiss()
+        // On a refusal the sheet stays open with the reason.
+        if deleted { dismiss() } else { error = model.notice }
     }
 
     // MARK: Helpers

@@ -5,6 +5,7 @@
 import { mergeWellnessRows, heartRateLoad, strainScore } from "./recovery-model.js";
 import { athleteFocus } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
+import { L } from "./lang.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -34,11 +35,11 @@ function actualStrain(row) {
 // Intervals.icu's form zones (training stress balance = fitness − fatigue).
 export function formZone(tsb) {
   if (tsb == null) return null;
-  if (tsb > 25) return { key: "transition", label: "odpočatý", text: "Forma je vysoko nad nulou: tělo je odpočaté, ale kondice bez zátěže pomalu klesá." };
-  if (tsb > 5) return { key: "fresh", label: "čerstvý", text: "Čerstvá forma: únava je pod kondicí, dobrý čas na závod nebo test." };
-  if (tsb >= -10) return { key: "grey", label: "udržování", text: "Únava a kondice jsou vyrovnané: kondice se drží, ale moc neroste." };
-  if (tsb >= -30) return { key: "optimal", label: "budování", text: "Únava je nad kondicí, přesně jak má při budování být. Kondice roste." };
-  return { key: "risk", label: "vysoké riziko", text: "Únava je hodně nad kondicí. Zařaď lehčí dny, jinak hrozí přetížení." };
+  if (tsb > 25) return { key: "transition", label: L("odpočatý", "rested"), text: L("Forma je vysoko nad nulou: tělo je odpočaté, ale kondice bez zátěže pomalu klesá.", "Form is well above zero: your body is rested, but fitness slowly fades without training load.") };
+  if (tsb > 5) return { key: "fresh", label: L("čerstvý", "fresh"), text: L("Čerstvá forma: únava je pod kondicí, dobrý čas na závod nebo test.", "Fresh: fatigue is below fitness, a good time for a race or a test.") };
+  if (tsb >= -10) return { key: "grey", label: L("udržování", "maintaining"), text: L("Únava a kondice jsou vyrovnané: kondice se drží, ale moc neroste.", "Fatigue and fitness are balanced: fitness holds, but barely grows.") };
+  if (tsb >= -30) return { key: "optimal", label: L("budování", "building"), text: L("Únava je nad kondicí, přesně jak má při budování být. Kondice roste.", "Fatigue is above fitness, exactly as it should be while building. Fitness is growing.") };
+  return { key: "risk", label: L("vysoké riziko", "high risk"), text: L("Únava je hodně nad kondicí. Zařaď lehčí dny, jinak hrozí přetížení.", "Fatigue is far above fitness. Add easier days, or you risk overreaching.") };
 }
 
 // Periodization towards the main event, the same rule as the coach
@@ -52,9 +53,9 @@ export function eventPlan(event, date) {
   const now = phase === "race" ? 3 : order.indexOf(phase);
   const week = (from, to) => ({ week: Math.floor(daysBetween(from, date) / 7) + 1, weeks: Math.max(1, Math.ceil(daysBetween(from, to) / 7)) });
   const phases = [
-    { key: "base", label: "Základ", from: null, to: shift(buildFrom, -1) },
-    { key: "build", label: "Rozvoj", from: buildFrom, to: shift(taperFrom, -1) },
-    { key: "taper", label: "Ladění", from: taperFrom, to: shift(event.date, -1) }
+    { key: "base", label: L("Základ", "Base"), from: null, to: shift(buildFrom, -1) },
+    { key: "build", label: L("Rozvoj", "Build"), from: buildFrom, to: shift(taperFrom, -1) },
+    { key: "taper", label: L("Ladění", "Taper"), from: taperFrom, to: shift(event.date, -1) }
   ].map((p, i) => ({
     ...p,
     state: i < now ? "done" : i === now ? "now" : "next",
@@ -79,22 +80,36 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = shift(start, i), training = byDate.get(d)?.training || {};
     const planned = (training.planned || []).filter(Boolean);
-    const completed = (training.completed || []).filter(isWorkout);
+    const matchedPlans = (training.matched || []).filter(m => m?.planned);
+    // An activity paired with a plan counts even without a length (a Strava stub).
+    const pairedIds = new Set(matchedPlans.map(m => String(m.actualId ?? "")).filter(Boolean));
+    const completed = (training.completed || []).filter(a => isWorkout(a) || (a && pairedIds.has(String(a.id ?? ""))));
     const pTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
     const cTss = completed.reduce((s, w) => s + (num(w.tss) || 0), 0);
-    const gymOnly = !planned.length && gym[d]?.exercises?.length ? 1 : 0;
+    // A gym plan saved in the app is its own session unless the day already
+    // has a strength session, planned in Intervals.icu or done; other sports
+    // that day do not hide it. Sets logged in the app mean it was done.
+    const strengthDay = [...planned, ...matchedPlans.map(m => m.planned), ...(training.completed || [])].some(w => w && sportOf(w) === "strength");
+    const gymPlan = !strengthDay && gym[d]?.exercises?.length ? gym[d] : null;
+    const gymLogged = gymPlan?.logged > 0 ? 1 : 0;
+    const gymOnly = gymPlan ? 1 : 0;
     // Sessions of the week: the planned ones, and on past days whatever was
     // done on top of the plan.
-    plannedCount += d <= date ? Math.max(planned.length + gymOnly, completed.length) : planned.length + gymOnly;
-    if (d <= date) { doneCount += completed.length; doneTss += cTss; }
+    plannedCount += d <= date ? Math.max(planned.length + gymOnly, completed.length + gymLogged) : planned.length + gymOnly;
+    if (d <= date) { doneCount += completed.length + gymLogged; doneTss += cTss; }
     plannedTss += d < date ? cTss : Math.max(pTss, d === date ? cTss : 0);
     // The week's sessions for the list: what was done (with the Intervals.icu
     // id for its detail) and what is still planned (its event id, to move or
     // delete it). A plan that was done is shown once, as done.
-    const matchedIds = new Set((training.matched || []).map(m => m?.planned?.id).filter(Boolean));
-    for (const a of completed) sessions.push(sessionOf(a, d, "done"));
+    const matchedIds = new Set(matchedPlans.map(m => m.planned.id).filter(Boolean));
+    const planOf = new Map(matchedPlans.map(m => [String(m.actualId ?? ""), m.planned]));
+    for (const a of completed) {
+      // A Strava stub has neither name nor sport: the plan it was paired with names it.
+      const plan = planOf.get(String(a.id ?? ""));
+      sessions.push(sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done"));
+    }
     for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
-    if (gymOnly) sessions.push({ id: "gym:" + d, kind: "gym", status: d < date ? "missed" : "planned", date: d, time: null, title: gym[d].name || "Posilovna", sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
+    if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
     return {
       date: d,
       strain: d <= date ? actualStrain(google.find(r => r.id === d)) : null,
@@ -131,7 +146,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
         date: d,
         time: w ? clockOf(w.start) : null,
         minutes,
-        title: (w?.name || plan?.name || w?.type || "Trénink").trim(),
+        title: (w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
         sport: isGym ? "strength" : String(w?.type || "").toLowerCase() || null,
         tss: round(num(w?.tss)),
         strain: plannedStrain(num(w?.tss)),
@@ -168,6 +183,16 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const zones = { light: 0, moderate: 0, vigorous: 0, peak: 0 };
   for (const r of google) if (r.id > shift(date, -28) && r.id <= date && r.hrZoneMinutes) for (const k of Object.keys(zones)) zones[k] += num(r.hrZoneMinutes[k]) || 0;
   const zoneTotal = Object.values(zones).reduce((a, b) => a + b, 0);
+  // The same minutes per week (Monday to Sunday) for the last 4 weeks, the
+  // current one last: the app compares moderate + vigorous + peak with WHO's
+  // 150 minutes a week.
+  const zoneWeeks = Array.from({ length: 4 }, (_, i) => {
+    const from = shift(start, (i - 3) * 7), to = shift(from, 6);
+    const sum = { light: 0, moderate: 0, vigorous: 0, peak: 0 };
+    for (const r of google) if (r.id >= from && r.id <= to && r.id <= date && r.hrZoneMinutes) for (const k of Object.keys(sum)) sum[k] += num(r.hrZoneMinutes[k]) || 0;
+    return { start: from, week: isoWeek(from), ...Object.fromEntries(Object.entries(sum).map(([k, v]) => [k, Math.round(v)])) };
+  });
+  const zoneWeeksTotal = zoneWeeks.reduce((s, w) => s + w.light + w.moderate + w.vigorous + w.peak, 0);
 
   // VO2max over half a year: Google's daily estimate, else Intervals.icu's.
   const vo2 = rows.filter(r => num(r.vo2max) > 0).map(r => ({ date: r.id, value: round(num(r.vo2max), 1) }));
@@ -175,8 +200,11 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const vo2Latest = vo2Source.at(-1) || null;
   const vo2Before = vo2Latest ? [...vo2Source].reverse().find(p => p.date <= shift(vo2Latest.date, -28)) : null;
 
-  // Active energy today and the week's days.
-  const active = Array.from({ length: 7 }, (_, i) => shift(date, i - 6)).map(d => ({ date: d, value: round(num(google.find(r => r.id === d)?.activeCalories)) })).filter(p => p.value != null);
+  // Active energy today and the week's days, and the last 28 days for the
+  // detail (Training → Aktivní výdej).
+  const activeOn = d => round(num(google.find(r => r.id === d)?.activeCalories));
+  const activeDays = Array.from({ length: 28 }, (_, i) => shift(date, i - 27)).map(d => ({ date: d, value: activeOn(d) })).filter(p => p.value != null);
+  const active = activeDays.filter(p => p.date > shift(date, -7));
   const usualActive = active.filter(p => p.date < date).map(p => p.value);
 
   return {
@@ -189,9 +217,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     event: eventPlan(athleteFocus(profile, date).event, date),
     form: lastPmc ? { fitness: round(lastPmc.fitness), fatigue: round(lastPmc.fatigue), form: tsb, zone: zone.key, label: zone.label, text: zone.text, series: pmc } : null,
     load: { weeks, intensity },
-    zones: zoneTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal) } : null,
+    zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
-    activeCalories: active.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active } : null,
+    activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
   };
@@ -213,7 +241,7 @@ function sessionOf(w, date, status) {
     status,
     date,
     time: clockOf(w.start),
-    title: String(w.name || w.type || "Trénink").slice(0, 120),
+    title: String(w.name || w.type || L("Trénink", "Workout")).slice(0, 120),
     sport: sportOf(w),
     minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
     tss: round(num(w.tss)),
@@ -224,7 +252,7 @@ function sessionOf(w, date, status) {
 
 function strainBand(v) {
   if (v == null) return null;
-  return v >= 18 ? "maximální" : v >= 14 ? "vysoká" : v >= 10 ? "střední" : "lehká";
+  return v >= 18 ? L("maximální", "all out") : v >= 14 ? L("vysoká", "high") : v >= 10 ? L("střední", "moderate") : L("lehká", "light");
 }
 
 // The coach's first tip for today's session (coach-engine.js).

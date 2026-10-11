@@ -11,7 +11,12 @@ const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const nightDate = s => s?.date || String(s?.endTime || "").slice(0, 10);
-const clock = minutes => (minutes == null ? null : String(Math.floor(minutes / 60) % 24).padStart(2, "0") + ":" + String(Math.round(minutes) % 60).padStart(2, "0"));
+// Rounded first: 1379.6 min is 23:00, not 22:00.
+const clock = minutes => {
+  if (minutes == null) return null;
+  const m = Math.round(minutes);
+  return String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+};
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
 // Readiness = 70 (the personal normal) + each signal's weighted distance from

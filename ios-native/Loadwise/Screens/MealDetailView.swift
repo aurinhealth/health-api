@@ -11,7 +11,7 @@ struct MealDetailView: View {
     var body: some View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.food)
-            ScrollView {
+            PageScroll {
                 if let meal = model.food?.meals.first(where: { $0.type == type }) {
                     MealDetailContent(meal: meal, back: { dismiss() }, add: { adding = true })
                         .padding(.bottom, 100)

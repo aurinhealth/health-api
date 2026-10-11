@@ -31,11 +31,11 @@ export async function weekWeather(location, start) {
   if (!location) return {};
   const end = shift(start, 6);
   try {
-    const query = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, daily: 'weather_code,temperature_2m_max,precipitation_probability_max,precipitation_sum,wind_speed_10m_max', timezone: timeZone(), start_date: start, end_date: end });
+    const query = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max', timezone: timeZone(), start_date: start, end_date: end });
     const r = await fetch('https://api.open-meteo.com/v1/forecast?' + query, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) return {};
     const { daily: d } = await r.json();
-    return Object.fromEntries((d?.time || []).map((date, i) => [date, { code: d.weather_code?.[i], max: d.temperature_2m_max?.[i], wind: d.wind_speed_10m_max?.[i], rain: d.precipitation_sum?.[i], rainProb: d.precipitation_probability_max?.[i] }]));
+    return Object.fromEntries((d?.time || []).map((date, i) => [date, { code: d.weather_code?.[i], max: d.temperature_2m_max?.[i], min: d.temperature_2m_min?.[i], wind: d.wind_speed_10m_max?.[i], rain: d.precipitation_sum?.[i], rainProb: d.precipitation_probability_max?.[i] }]));
   } catch { return {}; }
 }
 // Indoor is shorter and so easier: no one should sit three hours on a

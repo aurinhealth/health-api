@@ -12,6 +12,14 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
+        if model.updateRequired {
+            UpdateRequiredView()
+        } else {
+            screens
+        }
+    }
+
+    @ViewBuilder private var screens: some View {
         switch model.phase {
         case .signedOut:
             LoginView()
@@ -25,13 +33,16 @@ struct RootView: View {
                     case .health: HealthView()
                     }
                 }
-                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil {
+                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil {
                     VStack(spacing: 6) {
                         if model.offline || !model.outbox.isEmpty {
                             OfflineBanner(offline: model.offline, waiting: model.outbox.count)
                         }
                         if let note = model.outboxNote {
                             OutboxNote(text: note) { model.outboxNote = nil }
+                        }
+                        if let notice = model.notice {
+                            OutboxNote(text: notice) { model.notice = nil }
                         }
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
@@ -58,7 +69,12 @@ struct RootView: View {
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
             .onChange(of: scenePhase) { _, phase in
-                if phase == .active, model.today != nil || !model.outbox.isEmpty { Task { await model.refresh() } }
+                guard phase == .active else { return }
+                Task {
+                    if model.today != nil || !model.outbox.isEmpty { await model.refresh() }
+                    // The open tab too, so Health or Food are not a day behind Today.
+                    if model.tab != .today { await model.refreshIfStale(model.tab) }
+                }
             }
         }
     }
@@ -67,6 +83,26 @@ struct RootView: View {
     private func select(_ tab: AppTab) {
         if model.tab == tab { model.paths[tab] = [] }
         model.tab = tab
+    }
+}
+
+/// The server no longer serves this build: data would not load or would come
+/// out wrong, so the app asks for the new version instead of the screens.
+struct UpdateRequiredView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "arrow.down.app")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(Palette.ink)
+            Text(L10n.tr("Je potřeba nová verze")).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            Text(L10n.tr("Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru."))
+                .font(.subheadline)
+                .foregroundStyle(Palette.muted)
+                .multilineTextAlignment(.center)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.background)
     }
 }
 

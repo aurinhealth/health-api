@@ -8,7 +8,7 @@ struct HealthView: View {
             ZStack {
                 ScreenBackground(glow: Palette.Glow.health)
                 if let health = model.health {
-                    ScrollView {
+                    PageScroll {
                         HealthContent(health: health)
                             .padding(.bottom, 100)
                     }
@@ -26,7 +26,7 @@ struct HealthView: View {
             .toolbar(.hidden, for: .navigationBar)
             .appRoutes()
         }
-        .task { if model.health == nil { await model.refreshHealth() } }
+        .task { await model.refreshIfStale(.health) }
     }
 }
 
@@ -39,7 +39,7 @@ struct DetailScreen<Content: View>: View {
     var body: some View {
         ZStack {
             ScreenBackground(glow: glow)
-            ScrollView {
+            PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět")) { dismiss() }
                     content

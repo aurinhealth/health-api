@@ -122,3 +122,17 @@ struct WidgetRow<Left: View, Right: View>: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 }
+
+/// A vertical page. Its content is exactly as wide as the screen: one child
+/// wider than that (a long word, a fixed-size label) would otherwise let the
+/// whole page be dragged sideways.
+struct PageScroll<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView(.vertical) {
+            content.containerRelativeFrame(.horizontal)
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+    }
+}
