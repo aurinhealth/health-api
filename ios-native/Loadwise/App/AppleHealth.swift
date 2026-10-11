@@ -115,7 +115,9 @@ final class AppleHealth {
         guard isAvailable else { message = L10n.tr("Apple Health na tomhle zařízení není."); return false }
         guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jednu oblast."); return false }
         do {
-            try await reader.requestAccess(chosen)
+            // What Synchronizace writes there stays allowed in the same sheet.
+            let export = AppleHealthExport.shared
+            try await reader.requestAccess(chosen, share: export.isOn ? AppleHealthExport.shareTypes(export.prefs) : [])
         } catch {
             message = error.localizedDescription
             return false
@@ -289,9 +291,16 @@ final class HealthReader: @unchecked Sendable {
     }()
     private var calendar: Calendar { Calendar.current }
 
-    func requestAccess(_ categories: Set<HealthCategory>) async throws {
+    /// Reading the categories; `share` are the types Synchronizace writes
+    /// (AppleHealthExport), asked for only when the user switched them on.
+    func requestAccess(_ categories: Set<HealthCategory>, share: Set<HKSampleType> = []) async throws {
         let read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
-        try await store.requestAuthorization(toShare: [], read: read)
+        try await store.requestAuthorization(toShare: share, read: read)
+    }
+
+    /// Not what Loadwise wrote itself (AppleHealthExport): the server has it already.
+    private var notOurs: NSPredicate {
+        NSCompoundPredicate(notPredicateWithSubpredicate: HKQuery.predicateForObjects(from: HKSource.default()))
     }
 
     private func stamp(_ date: Date) -> String { iso.string(from: date) }
@@ -404,7 +413,7 @@ final class HealthReader: @unchecked Sendable {
 
     /// Each weighing (or body fat measurement) as it was taken.
     private func measurements(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, scale: Double = 1, from: Date, to: Date) async -> [AppleRecord] {
-        await samples(HKQuantityType(id), from: from, to: to).compactMap { sample -> AppleRecord? in
+        await samples(HKQuantityType(id), from: from, to: to, predicate: notOurs).compactMap { sample -> AppleRecord? in
             guard let q = sample as? HKQuantitySample else { return nil }
             let value = q.quantity.doubleValue(for: unit) * scale
             return AppleRecord(type: type, id: q.uuid.uuidString, time: stamp(q.startDate), value: (value * 100).rounded() / 100)
@@ -559,7 +568,7 @@ final class HealthReader: @unchecked Sendable {
 
     /// Workouts with their summary and the heart rate for the chart.
     private func workouts(from: Date, to: Date) async -> [AppleRecord] {
-        let list = await samples(HKObjectType.workoutType(), from: from, to: to).compactMap { $0 as? HKWorkout }
+        let list = await samples(HKObjectType.workoutType(), from: from, to: to, predicate: notOurs).compactMap { $0 as? HKWorkout }
         let bpm = HKUnit.count().unitDivided(by: .minute())
         var out: [AppleRecord] = []
         for w in list {

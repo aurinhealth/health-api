@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var showAdd = false
     @State private var showSettings = false
     @State private var showCoach = false
+    @State private var showSyncStatus = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -48,6 +49,14 @@ struct RootView: View {
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.top, 4)
                 }
+                // A done activity sent to the apps from Synchronizace (SyncViews.swift).
+                if let report = model.syncReport, !showSyncStatus {
+                    SyncToastView(report: report) { showSyncStatus = true }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, model.immersive ? 16 : 88)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
                 if !model.immersive {
                     TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), onAdd: { showAdd = true })
                         .padding(.horizontal, 20)
@@ -64,6 +73,14 @@ struct RootView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
             .sheet(isPresented: $showCoach) { CoachView() }
+            .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet() }
+            .animation(.snappy, value: model.syncReport?.id)
+            // The toast goes away on its own unless its sheet is open.
+            .task(id: model.syncReport?.id) {
+                guard let shown = model.syncReport?.id else { return }
+                try? await Task.sleep(for: .seconds(7))
+                if !showSyncStatus && model.syncReport?.id == shown { model.syncReport = nil }
+            }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView() }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }

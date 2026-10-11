@@ -1,5 +1,6 @@
 import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
+import { readSyncPrefs } from './sync-destinations.js';
 // App-owned events and an outbox; providers are destinations, not storage.
 export async function ensureLocalWorkouts(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS local_workouts (user_id INTEGER NOT NULL,id TEXT NOT NULL,event_key TEXT NOT NULL,event_json TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'scheduled',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,id),UNIQUE(user_id,event_key))").run();
@@ -33,6 +34,12 @@ export async function syncLocalWorkout(env,id,fetchImpl=fetch){
   if(!env.INTERVALS_API_KEY)return {status:'not_connected',message:L('Trénink je uložený v aplikaci. Intervals.icu není připojeno.', 'The workout is saved in the app. Intervals.icu isn\'t connected.')};
   const exported=await db.prepare("SELECT * FROM workout_exports WHERE user_id=? AND local_id=? AND provider='intervals'").bind(db.userId,row.id).first();
   if(exported?.revision===row.revision&&exported.status==='synced')return {status:'synced',eventId:exported.remote_id};
+  // Settings → Synchronizace → Intervals.icu → Plánované tréninky off: new plans
+  // stay in the app; one already there is still updated or removed.
+  if(!exported?.remote_id&&!(await readSyncPrefs(db,db.userId??env.USER_ID,'intervals')).pushPlanned){
+    await db.prepare("UPDATE workout_exports SET status='off',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals' AND status!='running'").bind(db.userId,row.id).run();
+    return {status:'off',message:L('Trénink je uložený v aplikaci. Posílání plánu do Intervals.icu je vypnuté.', 'The workout is saved in the app. Sending the plan to Intervals.icu is off.')};
+  }
   const claimed=await db.prepare("UPDATE workout_exports SET status='running',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals' AND (status!='running' OR updated_at<datetime('now','-5 minutes'))").bind(db.userId,row.id).run();
   if(!claimed.meta?.changes)return {status:'pending'};
   const event=JSON.parse(row.event_json),headers={Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json','Content-Type':'application/json'};

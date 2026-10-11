@@ -357,7 +357,7 @@ function wireIntervalsKey(root,onConnected){
 function connectedNotice(){
   const params=new URLSearchParams(location.search),event=params.get('connected');if(!event)return;
   params.delete('connected');history.replaceState(null,'',location.pathname+(params.toString()?'?'+params:'')+location.hash);
-  const messages={google:'Google Health je připojené.','google-cancelled':'Připojení Google Health bylo zrušeno.',intervals:'Intervals.icu je připojené.','intervals-cancelled':'Připojení Intervals.icu bylo zrušeno.','intervals-failed':'Intervals.icu se nepodařilo připojit. Zkus to znovu, nebo vlož API klíč.'};
+  const messages={google:'Google Health je připojené.','google-cancelled':'Připojení Google Health bylo zrušeno.',intervals:'Intervals.icu je připojené.','intervals-cancelled':'Připojení Intervals.icu bylo zrušeno.','intervals-failed':'Intervals.icu se nepodařilo připojit. Zkus to znovu, nebo vlož API klíč.',strava:'Strava je připojená.','strava-cancelled':'Připojení Stravy bylo zrušeno.','strava-failed':'Stravu se nepodařilo připojit. Zkus to znovu.','strava-full':'Strava zatím není dostupná pro další uživatele.'};
   if(messages[event])toast(messages[event]);
 }
 connectedNotice();

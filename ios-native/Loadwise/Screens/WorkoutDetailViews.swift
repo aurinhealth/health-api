@@ -901,7 +901,7 @@ struct ManualWorkoutSheet: View {
                     Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)
-                SettingsGroup(footer: completed ? "Zapíše se jako odcvičený a pošle do Intervals.icu." : "Budoucí den: zapíše se jako plán do Intervals.icu.") {
+                SettingsGroup(footer: completed ? "Zapíše se jako odcvičený a pošle do aplikací ze Synchronizace." : "Budoucí den: zapíše se jako plán do Intervals.icu.") {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna"))
                     SettingsDivider()
                     SettingsField(title: "Délka", text: $minutes, unit: "min", keyboard: .numberPad)
@@ -943,7 +943,14 @@ struct ManualWorkoutSheet: View {
         defer { saving = false }
         let title = name.trimmingCharacters(in: .whitespaces).isEmpty ? L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna") : name
         do {
-            try await model.api.manualWorkout(name: title, date: AppModel.localDate(date), sport: sport, minutes: m, completed: completed, rpe: completed ? Int(rpe) : nil, notes: notes)
+            let day = AppModel.localDate(date)
+            let result = try await model.api.manualWorkout(name: title, date: day, sport: sport, minutes: m, completed: completed, rpe: completed ? Int(rpe) : nil, notes: notes)
+            if completed {
+                // Done: to the apps chosen in Synchronizace (the server sent its part already).
+                let activity = ActivityToSync(key: result.activityKey ?? "manual:" + UUID().uuidString, sport: sport, name: title, date: day,
+                                              start: nil, minutes: m, notes: notes, rpe: Int(rpe))
+                await model.shareActivity(activity, sends: result.sends ?? [])
+            }
             await model.refreshTraining()
             dismiss()
         } catch {

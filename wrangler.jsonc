@@ -68,7 +68,9 @@
     "USER_DATA_ROUTING": "true",
     "FOOD_CATALOG_ROUTING": "true",
     "USER_DATA_SHARD_COUNT": "20",
-    "OWNER_EMAIL": "chelseafc.czsk@gmail.com"
+    "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
+    // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
+    "STRAVA_CLIENT_ID": "183664"
   },
   "env": {
     // Test copy for trying changes before they go live: its own Worker
@@ -110,7 +112,8 @@
         "USER_DATA_SHARD_COUNT": "2",
         "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
         "ENVIRONMENT": "staging",
-        "APP_ORIGIN": "https://staging.petrfitnessdata.eu"
+        "APP_ORIGIN": "https://staging.petrfitnessdata.eu",
+        "STRAVA_CLIENT_ID": "183664"
       }
     }
   }

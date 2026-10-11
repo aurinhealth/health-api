@@ -55,7 +55,10 @@ export const PERSONAL_TABLES = {
   client_requests: {},
   // Thumbs up/down on exercises and ratings of generated workouts (exercise-feedback.js).
   exercise_preferences: {},
-  workout_ratings: {}
+  workout_ratings: {},
+  // Synchronizace: where the user sends data and what each send did (sync-destinations.js).
+  sync_preferences: {},
+  sync_sends: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

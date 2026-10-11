@@ -6,11 +6,15 @@
 // value there is one this sync wrote before (a ledger remembers what it
 // wrote). So data Intervals.icu gets from elsewhere (a Garmin, a manual entry)
 // is never overwritten, while today's steps can grow through the day.
+//
+// Settings → Synchronizace → Intervals.icu → Zdravotní data limits the fields
+// (sync-destinations.js); without a choice everything goes, as before.
 
 import { heartRateFromSamples } from "./index.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from "./user-time.js";
+import { readSyncPrefs, allowedWellness } from "./sync-destinations.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -93,12 +97,14 @@ const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_K
 export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = fetch, now = Date.now() } = {}) {
   const providers = env.CONNECTED_PROVIDERS || [];
   if (!providers.includes("google") || !providers.includes("intervals")) return { status: "skipped" };
+  const prefs = await readSyncPrefs(env.DB, env.USER_ID, "intervals");
+  if (prefs.health !== "all" && !prefs.health.some(type => type !== "weight")) return { status: "skipped", reason: "off" };
   const newest = localDate(new Date(now).toISOString()), oldest = localDate(new Date(now - (WELLNESS_SYNC_DAYS - 1) * 86400000).toISOString());
   const google = await googleWellness(env.DB, env.USER_ID, oldest, await sleepSessions(oldest, newest));
   const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: auth(env) });
   if (!response.ok) throw new Error("Intervals wellness HTTP " + response.status);
   const intervals = Object.fromEntries(((await response.json()) || []).map(r => [r.id, r]));
-  const updates = planWellnessSync(google, intervals, await writtenLedger(env.DB, env.USER_ID, oldest));
+  const updates = allowedWellness(planWellnessSync(google, intervals, await writtenLedger(env.DB, env.USER_ID, oldest)), prefs);
   const done = {};
   for (const [date, fields] of Object.entries(updates)) {
     try {

@@ -110,6 +110,8 @@ import { internalHeaders } from "./internal-auth.js";
 import { aiAllowance } from "./ai-usage.js";
 import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
+import { handleStravaOAuth, disconnectStrava, syncStravaWeight } from "./strava.js";
+import { syncOverview, saveSyncPrefs, sendActivity, activitySends, retrySend, retrySyncSends, readSyncPrefs, healthAllowed, DESTINATIONS, googleMissingScopes } from "./sync-destinations.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
@@ -135,7 +137,7 @@ const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:"
 
 // Requests that read or preview only and so keep the cache.
 // Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
-const CACHE_NEUTRAL = /^\/app\/api\/(food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|support\/report$|passkeys$|passkeys\/options$)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|support\/report$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -184,6 +186,10 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google'],async scoped=>{await backfillFoodGoogle(scoped.DB);return processFoodGoogle(scoped,{token:googleToken});});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],async scoped=>{await retryWorkoutExports(scoped);});
+    // Done activities whose send to Google Health, Intervals.icu or Strava did not go through (sync-destinations.js).
+    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google','intervals','strava'],scoped=>retrySyncSends(scoped,{googleToken}));
+    // Hourly: the latest weight to Strava when it changed and the user sends it there.
+    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===30)await forEachUser(env,['strava'],async scoped=>syncStravaWeight(scoped,{allowed:healthAllowed(await readSyncPrefs(scoped.DB,scoped.USER_ID,'strava'),'weight')}).catch(error=>({error:error.message})));
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],scoped=>legacyHealthApi.fetch(new Request('https://internal/sync/intervals/recent',{method:'POST'}),scoped,ctx));
     // Hourly, half an hour after the Google Health sync: weight the same in the
     // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
@@ -265,12 +271,15 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       if (!env.APPLE_DOMAIN_ASSOCIATION) return new Response("Not configured", { status: 404 });
       return new Response(env.APPLE_DOMAIN_ASSOCIATION, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     }
-    if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
+    if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
     // A new Intervals.icu connection imports its history, the same as a pasted key.
     if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
+    // Strava is only a destination (Synchronizace): nothing to import after connecting.
+    const stravaOAuth = await handleStravaOAuth(request, env, url.pathname);
+    if (stravaOAuth) return stravaOAuth;
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });
     if (nativeConnect) return nativeConnect;
@@ -720,8 +729,40 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const requestId=/^[A-Za-z0-9_-]{10,80}$/.test(String(body.requestId||''))?String(body.requestId):crypto.randomUUID();
       const event={external_id:'manual:'+requestId,category:'WORKOUT',name,type,start_date_local:date+'T12:00:00',moving_time:minutes*60,description:String(body.notes||'').slice(0,1000)};
       const saved=await storeLocalEvent(env.DB,event);if(completed)await completeLocalWorkout(env.DB,saved.id,{minutes,rpe:body.rpe,notes:body.notes});
-      return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:completed?{status:'not_exported'}:await syncLocalWorkout(env,saved.id)});
+      if(!completed)return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:await syncLocalWorkout(env,saved.id)});
+      // Done: to every destination the user sends activities to (Synchronizace).
+      const sent=await sendActivity(env,{key:'manual:'+saved.id,sport:body.sport,name,date,minutes,notes:body.notes,rpe:body.rpe},{googleToken}).catch(error=>{console.error('Activity send failed',error.message);return {key:'manual:'+saved.id,sends:[]};});
+      return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:{status:'not_exported'},activityKey:sent.key,sends:sent.sends});
     }catch(error){return Response.json({message:error.message},{status:400});}
+  }
+  // Synchronizace (sync-destinations.js): where the user sends data, and the
+  // sends of done activities with their state and "Zkusit znovu".
+  if(url.pathname==='/app/api/sync/prefs'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json(await syncOverview(env),{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname.startsWith('/app/api/sync/prefs/')&&request.method==='PUT'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const destination=url.pathname.slice('/app/api/sync/prefs/'.length);
+    if(!DESTINATIONS.includes(destination))return Response.json({message:L('Neznámá aplikace.', 'Unknown app.')},{status:404});
+    try{
+      const prefs=await saveSyncPrefs(env.DB,env.USER_ID,destination,await request.json().catch(()=>({})));
+      return Response.json({status:'ok',destination,prefs,...(destination==='google'&&env.GOOGLE_REFRESH_TOKEN?{missingScopes:googleMissingScopes(env,prefs)}:{})},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:error.status||400});}
+  }
+  if(url.pathname==='/app/api/sync/activity'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{return Response.json(await sendActivity(env,await request.json().catch(()=>({})),{googleToken}),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400});}
+  }
+  if(url.pathname==='/app/api/sync/sends'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return Response.json({status:'ok',key:url.searchParams.get('key'),sends:await activitySends(env,url.searchParams.get('key'))},{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/sync/retry'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{const body=await request.json().catch(()=>({}));return Response.json({status:'ok',send:await retrySend(env,body.key,body.destination,{googleToken})},{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }
   if(url.pathname==='/app/api/workouts/export'&&request.method==='POST'){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -1241,6 +1282,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const body=await request.json().catch(()=>({}));
     if (request.method === 'DELETE') {
       if(body.provider==='apple'){await disconnectAppleHealth(env.DB,env.USER_ID);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
+      if(body.provider==='strava'){await disconnectStrava(env);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);

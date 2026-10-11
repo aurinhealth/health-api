@@ -267,11 +267,13 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
-    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String) async throws {
+    /// A done one comes back with where it was sent (Synchronizace).
+    @discardableResult
+    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
         if let rpe { body["rpe"] = .number(Double(rpe)) }
-        let _: JSONValue = try await send("/app/api/workouts/manual", method: "POST", body: body)
+        return try await send("/app/api/workouts/manual", method: "POST", body: body)
     }
 
     /// Today's date in the phone's zone, usable off the main actor.
