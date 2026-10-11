@@ -63,7 +63,19 @@ change in `ios-native/`. It:
 
 Download the artifacts under Actions → the run → Artifacts.
 
-## Install on the iPhone
+## TestFlight (paid Apple Developer account)
+
+`.github/workflows/ios-testflight.yml` signs the app and uploads it to
+TestFlight on every change in `ios-native/` merged to `main` (or by hand:
+Actions → iOS TestFlight → Run workflow). Signing happens in the cloud with
+an App Store Connect API key, so no certificate or profile is kept anywhere.
+It needs the secrets `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and
+`ASC_KEY_P8`; without them it skips the upload.
+
+On the phone: install TestFlight from the App Store, open the invitation,
+and new builds arrive on their own. Builds expire after 90 days.
+
+## Install with Sideloadly (free Apple ID)
 
 The same as `mobile/README.md`:
 

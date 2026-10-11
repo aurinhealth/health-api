@@ -1,0 +1,141 @@
+name: iOS TestFlight
+
+# Signs the native app (ios-native/) with the paid Apple Developer account
+# and uploads it to TestFlight. No certificate or profile lives in the repo:
+# Xcode signs in the cloud with an App Store Connect API key (Admin role)
+# and creates the App Store profiles itself (-allowProvisioningUpdates).
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+# - APPLE_TEAM_ID: the 10-character Team ID (developer.apple.com → Membership)
+# - ASC_KEY_ID: the API key's Key ID
+# - ASC_ISSUER_ID: the Issuer ID above the list of keys
+# - ASC_KEY_P8: the whole contents of the downloaded AuthKey_XXXX.p8
+# Without them the workflow skips the upload and stays green.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "ios-native/**"
+      - ".github/workflows/ios-testflight.yml"
+  # A change to this pipeline is tried on its pull request, upload included.
+  pull_request:
+    paths:
+      - ".github/workflows/ios-testflight.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ios-native
+    steps:
+      - name: Check the signing secrets
+        id: secrets
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        working-directory: .
+        run: |
+          missing=""
+          for name in APPLE_TEAM_ID ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::TestFlight skipped, missing secrets:$missing"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.secrets.outputs.ready == 'true'
+        uses: actions/checkout@v6
+
+      # The same Xcode as ios-native.yml: Xcode 26 for the iOS 26 SDK, which
+      # App Store Connect also requires for new uploads.
+      - name: Pick Xcode
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Generate the Xcode project
+        if: steps.secrets.outputs.ready == 'true'
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Write the API key
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+
+      # Archived without a certificate; the entitlements (App Group) go in
+      # with an ad-hoc signature, and the export below signs it for real.
+      # The build number is this workflow's run number, so every upload is
+      # higher than the last.
+      - name: Archive
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Loadwise.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_ALLOWED=NO archive
+          app=build/Loadwise.xcarchive/Products/Applications/Loadwise.app
+          codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
+          codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
+
+      # Cloud-managed Apple Distribution certificate, App Store profiles
+      # created on the fly, and the upload straight to App Store Connect.
+      - name: Sign and upload to TestFlight
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/Loadwise.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "Uploaded build ${{ github.run_number }}; it shows in TestFlight once Apple finishes processing it." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the API key
+        if: always()
+        working-directory: .
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
