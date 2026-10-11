@@ -14,6 +14,9 @@ struct TodaySnapshot: Decodable, Equatable {
     let tonight: Tonight?
     let steps: Steps
     let weight: Weight?
+    /// Today's weather at the week plan's place; nil without a place (or from
+    /// an older server).
+    let weather: Weather?
 
     struct Readiness: Decodable, Equatable {
         let score: Int?
@@ -116,5 +119,29 @@ struct TodaySnapshot: Decodable, Equatable {
         let latest: Double
         let goal: Double?
         let series: [Point]
+    }
+
+    /// The forecast for today from Open-Meteo (src/app-today.js todayWeather).
+    struct Weather: Decodable, Equatable {
+        let place: String?
+        /// WMO weather code.
+        let code: Double?
+        /// Highest and lowest temperature, °C.
+        let max: Double?
+        let min: Double?
+        /// Strongest wind, km/h.
+        let wind: Double?
+        /// Rain, mm, and its probability, %.
+        let rain: Double?
+        let rainProb: Double?
+        /// Where a ride (outdoor) and a run (outdoorRun) belong today.
+        let outdoor: Advice?
+        let outdoorRun: Advice?
+    }
+
+    struct Advice: Decodable, Equatable {
+        /// "indoor" or "outdoor".
+        let environment: String?
+        let reason: String?
     }
 }

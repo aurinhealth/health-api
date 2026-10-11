@@ -183,6 +183,16 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const zones = { light: 0, moderate: 0, vigorous: 0, peak: 0 };
   for (const r of google) if (r.id > shift(date, -28) && r.id <= date && r.hrZoneMinutes) for (const k of Object.keys(zones)) zones[k] += num(r.hrZoneMinutes[k]) || 0;
   const zoneTotal = Object.values(zones).reduce((a, b) => a + b, 0);
+  // The same minutes per week (Monday to Sunday) for the last 4 weeks, the
+  // current one last: the app compares moderate + vigorous + peak with WHO's
+  // 150 minutes a week.
+  const zoneWeeks = Array.from({ length: 4 }, (_, i) => {
+    const from = shift(start, (i - 3) * 7), to = shift(from, 6);
+    const sum = { light: 0, moderate: 0, vigorous: 0, peak: 0 };
+    for (const r of google) if (r.id >= from && r.id <= to && r.id <= date && r.hrZoneMinutes) for (const k of Object.keys(sum)) sum[k] += num(r.hrZoneMinutes[k]) || 0;
+    return { start: from, week: isoWeek(from), ...Object.fromEntries(Object.entries(sum).map(([k, v]) => [k, Math.round(v)])) };
+  });
+  const zoneWeeksTotal = zoneWeeks.reduce((s, w) => s + w.light + w.moderate + w.vigorous + w.peak, 0);
 
   // VO2max over half a year: Google's daily estimate, else Intervals.icu's.
   const vo2 = rows.filter(r => num(r.vo2max) > 0).map(r => ({ date: r.id, value: round(num(r.vo2max), 1) }));
@@ -190,8 +200,11 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const vo2Latest = vo2Source.at(-1) || null;
   const vo2Before = vo2Latest ? [...vo2Source].reverse().find(p => p.date <= shift(vo2Latest.date, -28)) : null;
 
-  // Active energy today and the week's days.
-  const active = Array.from({ length: 7 }, (_, i) => shift(date, i - 6)).map(d => ({ date: d, value: round(num(google.find(r => r.id === d)?.activeCalories)) })).filter(p => p.value != null);
+  // Active energy today and the week's days, and the last 28 days for the
+  // detail (Training → Aktivní výdej).
+  const activeOn = d => round(num(google.find(r => r.id === d)?.activeCalories));
+  const activeDays = Array.from({ length: 28 }, (_, i) => shift(date, i - 27)).map(d => ({ date: d, value: activeOn(d) })).filter(p => p.value != null);
+  const active = activeDays.filter(p => p.date > shift(date, -7));
   const usualActive = active.filter(p => p.date < date).map(p => p.value);
 
   return {
@@ -204,9 +217,9 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     event: eventPlan(athleteFocus(profile, date).event, date),
     form: lastPmc ? { fitness: round(lastPmc.fitness), fatigue: round(lastPmc.fatigue), form: tsb, zone: zone.key, label: zone.label, text: zone.text, series: pmc } : null,
     load: { weeks, intensity },
-    zones: zoneTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal) } : null,
+    zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
-    activeCalories: active.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active } : null,
+    activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
   };

@@ -473,6 +473,43 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    func testZonesActiveEnergyAndWeather() throws {
+        let zones = try XCTUnwrap(DemoData.training.zones)
+        let weeks = try XCTUnwrap(zones.weeks)
+        XCTAssertEqual(weeks.count, 4)
+        XCTAssertEqual(weeks[3].counted, 62 + 2 * (16 + 1), "vigorous and peak minutes count twice")
+        XCTAssertEqual(ZoneStyle.status(weeks[3]), "chybí 54 min")
+        XCTAssertEqual(ZoneStyle.status(weeks[0]), "doporučení splněno")
+        XCTAssertEqual(DemoData.training.activeCalories?.days?.count, 27)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/zones")!), .zones)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/active-energy")!), .activeEnergy)
+        let weather = try XCTUnwrap(DemoData.today.weather)
+        XCTAssertEqual(weather.place, "Praha")
+        XCTAssertEqual(WeatherText.symbol(weather.code), "cloud.sun.fill")
+        XCTAssertEqual(WeatherText.symbol(95), "cloud.bolt.rain.fill")
+        XCTAssertEqual(WeatherText.description(63), "déšť")
+
+        let model = AppModel(demo: true)
+        let active = try XCTUnwrap(DemoData.training.activeCalories)
+        try render("training-zones", glow: Palette.Glow.training) {
+            ZonesDetailContent(zones: zones).padding(.horizontal, 24).padding(.bottom, 40)
+        }
+        try render("training-active-energy", glow: Palette.Glow.training) {
+            ActiveEnergyContent(active: active, today: DemoData.training.date, calendar: DemoData.calendarByDate)
+                .padding(.horizontal, 24).padding(.bottom, 40).environment(model)
+        }
+        try render("weather-pill", height: 120) {
+            HStack(spacing: 8) {
+                WeatherPill(weather: weather)
+                WeatherPill(weather: nil)
+            }
+            .padding(24)
+        }
+        try render("weather-details", height: 900) {
+            NavigationStack { WeatherDetails(weather: weather) }.environment(model)
+        }
+    }
+
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
