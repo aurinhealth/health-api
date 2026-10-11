@@ -1555,3 +1555,13 @@
 "Baví mě" = "I like it";
 "Nebaví mě" = "I don't like it";
 "Trénink se nepodařilo uložit: %@" = "The workout couldn't be saved: %@";
+
+/* Morning check-in on Today */
+"Jak se dnes cítíš?" = "How do you feel today?";
+"Svěží" = "Fresh";
+"Normál" = "Normal";
+"Unavený" = "Tired";
+"Nemocný" = "Sick";
+"Přepnout stav na Nemoc?" = "Switch your status to Sick?";
+"Přepnout" = "Switch";
+"Kouč do té doby nebude plánovat trénink." = "The coach won't plan training until then.";

@@ -207,6 +207,18 @@ export function recoveryReadiness(input) {
   return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing };
 }
 
+// The morning check-in (morning-checkin.js) on top of the body's readiness: it
+// only lowers it. "Tired" caps the zone at yellow and the score at 60, "sick"
+// makes it red with at most 25; without the body's number the answer alone
+// gives the zone.
+export function applyCheckin(readiness, feeling) {
+  const cap = { tired: { zone: "yellow", score: 60 }, sick: { zone: "red", score: 25 } }[feeling];
+  if (!cap) return { ...readiness, checkin: feeling || null };
+  const zones = ["red", "yellow", "green"];
+  const zone = readiness.zone ? zones[Math.min(zones.indexOf(readiness.zone), zones.indexOf(cap.zone))] : cap.zone;
+  return { ...readiness, zone, score: readiness.score == null ? null : Math.min(readiness.score, cap.score), flags: [...(readiness.flags || []), "checkin_" + feeling], checkin: feeling };
+}
+
 // Cardiovascular load from time in Google Health's heart-rate zones, weighted
 // as Edwards' summated-zone TRIMP (Edwards 1993; validated against session RPE
 // by Foster 2001). Google's zones are % of heart-rate reserve (Karvonen); light,

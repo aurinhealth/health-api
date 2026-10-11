@@ -80,6 +80,7 @@ import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
+import { getCheckin, saveCheckin } from './morning-checkin.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, dayHours, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
@@ -532,7 +533,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
   const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
-  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB)};
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),checkin:await getCheckin(env.DB,date).catch(()=>null)};
 }
 
 // CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
@@ -629,6 +630,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json();
       return Response.json({status:'ok',state:await updateAthleteState(env.DB,{status:body.status,note:body.note,statusUntil:body.statusUntil,forget:body.forget,dismiss:body.dismiss})},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // The morning check-in on Today (morning-checkin.js): one answer a day.
+  if(url.pathname==='/app/api/morning-checkin'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      if(request.method==='GET'){const d=url.searchParams.get('date'),date=validTrainingDay(d)?d:localToday();return Response.json({status:'ok',date,feeling:await getCheckin(env.DB,date)},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      const body=await request.json().catch(()=>({})),date=validTrainingDay(body.date)&&body.date<=localToday()?body.date:localToday();
+      return Response.json({status:'ok',date,feeling:await saveCheckin(env.DB,date,body.feeling??null)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/coach/check-in'&&request.method==='GET'){
@@ -1283,17 +1295,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym]=await Promise.all([
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,checkin]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
-        todayPlace(env,ctx,date),trainingGymPlans(env,date,date).catch(()=>({}))
+        todayPlace(env,ctx,date),trainingGymPlans(env,date,date).catch(()=>({})),getCheckin(env.DB,date).catch(()=>null)
       ]);
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);
-      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

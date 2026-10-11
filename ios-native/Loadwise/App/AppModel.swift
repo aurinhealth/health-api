@@ -321,6 +321,13 @@ final class AppModel {
     }
     @ObservationIgnored private var refreshing: Set<AppTab> = []
 
+    /// The morning check-in on Today. It lowers the readiness, so Today loads again.
+    func setMorningCheckin(_ feeling: String?) async throws {
+        guard !demo, let today else { return }
+        try await api.setMorningCheckin(feeling, date: today.date)
+        await refresh()
+    }
+
     /// A new Stav sportovce. The coach and the plans follow it, so Today and
     /// Training load again.
     func setAthleteStatus(_ status: String, until: String?, note: String?) async throws {

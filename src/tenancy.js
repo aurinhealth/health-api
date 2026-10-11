@@ -53,7 +53,11 @@ export const PERSONAL_TABLES = {
   client_requests: {},
   // Thumbs up/down on exercises and ratings of generated workouts (exercise-feedback.js).
   exercise_preferences: {},
-  workout_ratings: {}
+  workout_ratings: {},
+  // The morning check-in (morning-checkin.js) and the threshold estimates and
+  // tests offered from the data (threshold-check.js).
+  morning_checkins: {},
+  threshold_checks: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

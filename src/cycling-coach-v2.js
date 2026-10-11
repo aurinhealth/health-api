@@ -5,6 +5,7 @@ import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown } from
 import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { recoveryReadiness, mergeWellnessRows, sleepNeedFor } from "./recovery-model.js";
+import { manualReadinessFor } from "./morning-checkin.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -210,7 +211,7 @@ const WORDS_EN={
 };
 
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
@@ -268,9 +269,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(hard7===2)readinessReasons.push(W.hard2);
   if(lowerGym.length)readinessReasons.push(L("nedávná lower-body silová zátěž","recent lower-body strength work"));
   if(todayCompleted.length)readinessReasons.push(W.today);
+  // The morning check-in on Today (morning-checkin.js), unless the request
+  // brings its own number.
+  if(manualReadiness==null&&checkin)manualReadiness=manualReadinessFor(checkin);
   if(manualReadiness!=null){
-    const m=clamp(n(manualReadiness,50),0,100);
-    loadCap(m<34?"red":m<67?"yellow":"green",L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
+    const m=clamp(n(manualReadiness,50),0,100),feeling={fresh:L("svěží","fresh"),normal:L("normál","normal"),tired:L("unavený","tired"),sick:L("nemocný","sick")}[checkin];
+    loadCap(m<34?"red":m<67?"yellow":"green",feeling&&manualReadiness===manualReadinessFor(checkin)?L("ranní pocit: ","morning check-in: ")+feeling:L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
   }
   const score=body.score;
   // A beginner: low fitness, or without fitness data only a few sessions of

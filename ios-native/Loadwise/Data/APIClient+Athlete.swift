@@ -29,3 +29,12 @@ extension APIClient {
         return r.state
     }
 }
+
+// The morning check-in on Today (src/morning-checkin.js): how the athlete
+// feels, which can only lower the readiness.
+extension APIClient {
+    func setMorningCheckin(_ feeling: String?, date: String) async throws {
+        let body: JSONObject = ["date": .string(date), "feeling": feeling.map { .string($0) } ?? .null]
+        let _: JSONValue = try await send("/app/api/morning-checkin", method: "POST", body: body)
+    }
+}

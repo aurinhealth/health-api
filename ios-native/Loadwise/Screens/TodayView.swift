@@ -73,6 +73,10 @@ struct TodayContent: View {
             }
             .padding(.top, 40)
 
+            if model.selectedDate == nil {
+                MorningCheckinCard(feeling: today.checkin).padding(.top, 20)
+            }
+
             // Today's weather at the week plan's place (or the offer to set
             // it) with the athlete's status, above the key numbers.
             if model.selectedDate == nil {
@@ -219,6 +223,76 @@ struct ReadinessHero: View {
         case "yellow": return ("střední", Palette.amber, Palette.amberSoft)
         case "red": return ("nízká", Palette.rust, Palette.rust.opacity(0.14))
         default: return nil
+        }
+    }
+}
+
+/// "Jak se dnes cítíš?" under the readiness: one tap (src/morning-checkin.js).
+/// The answer can only lower the readiness, for Today and the coach alike.
+/// Tapping the chosen one again clears it; "Nemocný" offers the status Nemoc.
+struct MorningCheckinCard: View {
+    @Environment(AppModel.self) private var model
+    let feeling: String?
+    @State private var chosen: String?
+    @State private var saving = false
+    @State private var offerSick = false
+
+    struct Option: Identifiable {
+        let id: String
+        let symbol: String
+        let label: String
+    }
+
+    static let options: [Option] = [
+        Option(id: "fresh", symbol: "⚡️", label: "Svěží"),
+        Option(id: "normal", symbol: "🙂", label: "Normál"),
+        Option(id: "tired", symbol: "🥱", label: "Unavený"),
+        Option(id: "sick", symbol: "🤒", label: "Nemocný")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Jak se dnes cítíš?").font(Typo.small).foregroundStyle(Palette.muted)
+            HStack(spacing: 8) {
+                ForEach(Self.options) { (option: Option) in
+                    let on: Bool = chosen == option.id
+                    Button { Task { await choose(on ? nil : option.id) } } label: {
+                        VStack(spacing: 4) {
+                            Text(verbatim: option.symbol).font(.system(size: 22))
+                            Text(L10n.tr(option.label)).font(.footnote.weight(.semibold))
+                                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 60)
+                        .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+        }
+        .onAppear { chosen = feeling }
+        .onChange(of: feeling) { _, new in chosen = new }
+        .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
+            Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
+            Button("Teď ne", role: .cancel) {}
+        } message: {
+            Text("Kouč do té doby nebude plánovat trénink.")
+        }
+    }
+
+    private func choose(_ id: String?) async {
+        let before = chosen
+        chosen = id
+        saving = true
+        defer { saving = false }
+        do {
+            try await model.setMorningCheckin(id)
+            if id == "sick", model.athleteStatus?.status != "sick" { offerSick = true }
+        } catch {
+            chosen = before
+            model.notice = error.localizedDescription
         }
     }
 }
