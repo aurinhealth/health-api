@@ -11,7 +11,7 @@ struct FoodView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .appRoutes()
         }
-        .task { if model.food == nil { await model.refreshFood() } }
+        .task { await model.refreshIfStale(.food) }
         .sheet(item: $adding) { target in AddFoodSheet(meal: target.meal) }
         .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: MealSlot.now(slots: model.food?.mealSlots)) }
     }
@@ -20,7 +20,7 @@ struct FoodView: View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.food)
             if let food = model.food {
-                ScrollView {
+                PageScroll {
                     FoodContent(food: food, add: { adding = AddFoodTarget(meal: $0) }, scan: { scanning = true })
                         .padding(.bottom, 100)
                 }
@@ -291,7 +291,7 @@ struct DrinksCard: View {
                 Button { other = true } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Palette.onAccent)
                         .frame(width: 34, height: 34)
                         .background(Palette.blue, in: Circle())
                 }
@@ -329,7 +329,7 @@ struct DrinksCard: View {
                     }
                 }
             }
-            DrinkPresetRow(add: { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) })
+            DrinkPresetRow(add: { ml, kind in await model.addDrink(ml: ml, kind: kind) })
         }
         .animation(.easeInOut(duration: 0.6), value: water.ml)
         .onChange(of: reached) { _, now in
@@ -340,7 +340,7 @@ struct DrinksCard: View {
         .sensoryFeedback(.success, trigger: reached) { _, now in now }
         .sheet(isPresented: $choosing) {
             NavigationStack {
-                ScrollView { DrinkFigurePicker().padding(20) }
+                PageScroll { DrinkFigurePicker().padding(20) }
                     .background(Palette.settingsBackground.ignoresSafeArea())
                     .navigationTitle("Postavička pití")
                     .navigationBarTitleDisplayMode(.inline)

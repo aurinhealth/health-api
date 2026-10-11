@@ -38,6 +38,18 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     let kcal: Double?
     let activityId: String?
     let eventId: String?
+    /// A session from the watch (Google Health): its summary for the detail.
+    var summary: Summary? = nil
+
+    struct Summary: Decodable, Equatable {
+        let source: String?
+        let start: String?
+        let end: String?
+        let avgHr: Double?
+        let maxHr: Double?
+        let steps: Double?
+        let elevationM: Double?
+    }
 
     /// The week list's row, for the activity and plan details.
     var session: WeekSession {

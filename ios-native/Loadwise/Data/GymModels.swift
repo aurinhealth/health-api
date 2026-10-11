@@ -13,11 +13,32 @@ struct GymEquipment: Decodable, Equatable {
     var gymUrl: String
     /// The dumbbells there are, kg per hand (the plan asks for one of them).
     var dumbbellWeights: [Double]? = nil
+    /// The saved gyms and home gyms, each with its own stations; the plan
+    /// follows the active one ("bodyweight": none).
+    var places: [GymPlace]? = nil
+    var activePlace: String? = nil
 
     struct Station: Decodable, Equatable, Identifiable, Hashable {
         let id: String
         let group: String
         let label: String
+    }
+}
+
+/// One saved place to train (src/onboarding.js normalizePlaces).
+struct GymPlace: Decodable, Equatable, Identifiable {
+    var id: String
+    /// "gym" or "home".
+    var kind: String
+    var name: String
+    var stations: [String]
+    var url: String
+    var dumbbellWeights: [Double]
+
+    var json: JSONValue {
+        .object(["id": .string(id), "kind": .string(kind), "name": .string(name),
+                 "stations": .array(stations.map { .string($0) }), "url": .string(url),
+                 "dumbbellWeights": .array(dumbbellWeights.map { .number($0) })])
     }
 }
 
@@ -43,6 +64,8 @@ struct GymCatalogExercise: Decodable, Equatable, Identifiable, Hashable {
     let stations: [String]?
     /// Muscle group id (BodyMap) → how much the exercise works it (0–1).
     let muscles: [String: Double]?
+    /// Whether the active place has what it needs (nil from an older server).
+    var fits: Bool? = nil
     var id: String { name }
 
     static func == (a: Self, b: Self) -> Bool { a.name == b.name }

@@ -67,12 +67,15 @@ enum Fmt {
         return names[utcCalendar.component(.weekday, from: date) - 1]
     }
 
-    /// "dnes", "zítra", "v sobotu" relative to today's date.
+    /// "dnes", "zítra", "v sobotu", "včera" or "6. 10." relative to today's date.
     static func relativeDay(_ isoDate: String, today: String) -> String {
         guard let a = parse(today), let b = parse(isoDate) else { return isoDate }
         let days = Int((b.timeIntervalSince(a) / 86400).rounded())
         if days == 0 { return L10n.tr("dnes") }
         if days == 1 { return L10n.tr("zítra") }
+        if days == -1 { return L10n.tr("včera") }
+        // Earlier days by date: "v pondělí" reads as the coming one.
+        if days < 0 { return dayMonth(isoDate) }
         let weekday = utcCalendar.component(.weekday, from: b)
         let names = L10n.isEnglish
             ? ["on Sunday", "on Monday", "on Tuesday", "on Wednesday", "on Thursday", "on Friday", "on Saturday"]

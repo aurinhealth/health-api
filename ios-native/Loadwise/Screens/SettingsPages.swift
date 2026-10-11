@@ -57,11 +57,153 @@ struct SettingsPicker: View {
 
 // MARK: - Profile
 
+/// Profil: who you are. The photo (on this phone only), the name, sex, birth
+/// date and height, the e-mail of the account, signing out. What the
+/// calculations need beyond that (heart rate, activity, the weight goal) is
+/// on its own page, Tep a aktivita.
 struct ProfileSettingsView: View {
     let store: SettingsStore
+    var signOut: () -> Void = {}
+    @Environment(AppModel.self) private var model
+    @State private var name = ""
     @State private var sex = ""
+    @State private var hasBirth = false
+    @State private var birth = Calendar.current.date(byAdding: .year, value: -30, to: Date()) ?? Date()
     @State private var age = ""
     @State private var height = ""
+    @State private var original: JSONObject = [:]
+    @State private var copied = false
+    @AppStorage(AvatarStore.nameKey) private var accountName = ""
+    @AppStorage(AvatarStore.emailKey) private var email = ""
+
+    var body: some View {
+        SettingsPage(title: "Profil") {
+            AvatarEditor().padding(.top, 8)
+            if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+
+            SettingsGroup(title: "Osobní údaje", footer: "Z pohlaví, věku a výšky (a váhy) se počítá klidový výdej a denní cíl kalorií.") {
+                SettingsField(title: "Jméno", text: $name, keyboard: .default, placeholder: accountName.isEmpty ? "tvé jméno" : accountName)
+                    .textInputAutocapitalization(.words)
+                SettingsDivider()
+                SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "muž"), ("female", "žena")])
+                SettingsDivider()
+                HStack(spacing: 8) {
+                    Text("Datum narození").font(.body).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    if hasBirth {
+                        DatePicker("", selection: $birth, in: Self.birthRange, displayedComponents: .date)
+                            .labelsHidden()
+                            .environment(\.locale, L10n.locale)
+                    } else {
+                        Button("Zadat") { hasBirth = true }.font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                    }
+                }
+                .padding(.horizontal, 16).padding(.vertical, 8).frame(minHeight: 50)
+                SettingsDivider()
+                if hasBirth {
+                    SettingsRow(title: "Věk", value: L10n.f("%@ let", String(Self.years(from: birth))), chevron: false)
+                } else {
+                    SettingsField(title: "Věk", text: $age, unit: "let", keyboard: .numberPad)
+                }
+                SettingsDivider()
+                SettingsField(title: "Výška", text: $height, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
+            }
+
+            if !email.isEmpty {
+                SettingsGroup(title: "Účet", footer: "Přihlašuješ se přes tento účet. Fotka zůstává jen v tomhle telefonu.") {
+                    Button {
+                        UIPasteboard.general.string = email
+                        copied = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("E-mail").font(.body).foregroundStyle(Palette.ink)
+                            Spacer(minLength: 8)
+                            Text(verbatim: email).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 13)).foregroundStyle(Palette.faint)
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 50)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.f("E-mail %@, zkopírovat", email))
+                }
+            }
+
+            SettingsGroup {
+                Button(action: signOut) { SettingsRow(title: model.demo ? "Ukončit ukázku" : "Odhlásit se", chevron: false, titleColor: Palette.ink) }
+                    .buttonStyle(.plain)
+                if !model.demo {
+                    SettingsDivider()
+                    NavigationLink { PrivacySettingsView() } label: { SettingsRow(title: "Smazat účet", titleColor: Palette.rust) }
+                        .buttonStyle(.plain)
+                }
+            }
+        }
+        .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .onAppear(perform: fill)
+    }
+
+    static var birthRange: ClosedRange<Date> {
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date()
+        return calendar.date(byAdding: .year, value: -100, to: now)!...calendar.date(byAdding: .year, value: -14, to: now)!
+    }
+
+    static func years(from birth: Date) -> Int {
+        Calendar(identifier: .gregorian).dateComponents([.year], from: birth, to: Date()).year ?? 0
+    }
+
+    private static let dayFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private func fill() {
+        let p = store.profile
+        name = p["displayName"]?.string ?? UserDefaults.standard.string(forKey: AppModel.displayNameKey) ?? ""
+        sex = p["sex"]?.string ?? ""
+        if let text = p["birthDate"]?.string, let date = Self.dayFormat.date(from: text) {
+            hasBirth = true
+            birth = date
+        } else {
+            hasBirth = false
+        }
+        age = p["age"]?.string ?? ""
+        height = Units.imperial
+            ? (p["height"]?.number).map { Fmt.decimal(Units.length($0), digits: 1) } ?? ""
+            : p["height"]?.string ?? ""
+        original = changes
+    }
+
+    private var changes: JSONObject {
+        var c: JSONObject = [
+            "displayName": .string(name.trimmingCharacters(in: .whitespaces)), "sex": .string(sex),
+            "height": HeartActivitySettingsView.metric(height, Units.cm, scale: 1),
+            "birthDate": .string(hasBirth ? Self.dayFormat.string(from: birth) : "")
+        ]
+        if !hasBirth { c["age"] = .field(age) }
+        return c
+    }
+
+    private func save() async {
+        let shown = name.trimmingCharacters(in: .whitespaces)
+        if await store.saveProfile(changes) {
+            UserDefaults.standard.set(shown.nilIfBlank, forKey: AppModel.displayNameKey)
+            if let first = (shown.nilIfBlank ?? accountName.nilIfBlank ?? email).first {
+                UserDefaults.standard.set(String(first).uppercased(), forKey: AppModel.accountInitialKey)
+            }
+            fill()
+        }
+    }
+}
+
+/// Tep a aktivita: the values behind heart-rate zones and the calorie target,
+/// apart from Profil's personal details.
+struct HeartActivitySettingsView: View {
+    let store: SettingsStore
     @State private var hrmax = ""
     @State private var rhr = ""
     @State private var activity = ""
@@ -82,24 +224,14 @@ struct ProfileSettingsView: View {
     }
 
     var body: some View {
-        SettingsPage(title: "Profil") {
-            SettingsGroup(title: "Tělo", footer: "Z pohlaví, věku, výšky a váhy se počítá klidový výdej a denní cíl kalorií.") {
-                SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "muž"), ("female", "žena")])
-                SettingsDivider()
-                if hasBirthDate {
-                    SettingsRow(title: "Věk", value: age.isEmpty ? "–" : L10n.f("%@ let", age), chevron: false)
-                } else {
-                    SettingsField(title: "Věk", text: $age, unit: "let", keyboard: .numberPad)
-                }
-                SettingsDivider()
-                SettingsField(title: "Výška", text: $height, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
-            }
+        SettingsPage(title: "Tep a aktivita") {
+            if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             SettingsGroup(title: "Tep", footer: "Prázdné hodnoty dopočítá Loadwise z tvých tréninků a nocí.") {
                 SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad)
                 SettingsDivider()
                 SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad)
             }
-            SettingsGroup(title: "Aktivita a cíl") {
+            SettingsGroup(title: "Aktivita a cíl", footer: "Z běžného dne, sportu a cíle se počítá denní cíl kalorií.") {
                 SettingsPicker(title: "Běžný den", selection: $activity, options: Self.activities)
                 SettingsDivider()
                 SettingsPicker(title: "Sport týdně", selection: $sportHours, options: Self.sportHourOptions)
@@ -113,15 +245,14 @@ struct ProfileSettingsView: View {
         .onAppear(perform: fill)
     }
 
-    private var hasBirthDate: Bool { store.profile["birthDate"]?.string != nil }
+    /// "max 186 · klid 48" for the row in Settings.
+    static func summary(_ profile: JSONObject) -> String? {
+        let parts = [profile["hrmax"]?.string.map { L10n.f("max %@", $0) }, profile["rhr"]?.string.map { L10n.f("klid %@", $0) }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
 
     private func fill() {
         let p = store.profile
-        sex = p["sex"]?.string ?? ""
-        age = p["age"]?.string ?? ""
-        height = Units.imperial
-            ? (p["height"]?.number).map { Fmt.decimal(Units.length($0), digits: 1) } ?? ""
-            : p["height"]?.string ?? ""
         hrmax = p["hrmax"]?.string ?? ""
         rhr = p["rhr"]?.string ?? ""
         activity = p["activity"]?.string ?? ""
@@ -135,16 +266,12 @@ struct ProfileSettingsView: View {
     }
 
     private var changes: JSONObject {
-        var c: JSONObject = [
-            "sex": .string(sex), "height": Self.metric(height, Units.cm, scale: 1), "hrmax": .field(hrmax), "rhr": .field(rhr),
-            "activity": .string(activity), "sportHours": .string(sportHours), "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10)
-        ]
-        if !hasBirthDate { c["age"] = .field(age) }
-        return c
+        ["hrmax": .field(hrmax), "rhr": .field(rhr), "activity": .string(activity), "sportHours": .string(sportHours),
+         "goal": .string(goal), "targetWeight": Self.metric(targetWeight, Units.kg, scale: 10)]
     }
 
     /// A value typed in the chosen unit, sent in metric (rounded to 1/scale).
-    private static func metric(_ text: String, _ toMetric: (Double) -> Double, scale: Double) -> JSONValue {
+    static func metric(_ text: String, _ toMetric: (Double) -> Double, scale: Double) -> JSONValue {
         let value = JSONValue.field(text)
         guard Units.imperial, case .number(let shown) = value else { return value }
         return .number((toMetric(shown) * scale).rounded() / scale)
@@ -235,149 +362,382 @@ struct GoalsSettingsView: View {
 
 // MARK: - Data sources
 
+/// Zdroje dat, laid out like Bevel's: the connected services as cards, each
+/// with "Spravovat" (permissions, sync, disconnect), "+" for the rest in
+/// sections, and syncing everything at the bottom.
 struct SourcesSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
+    @State private var actions = SourceActions()
     @State private var syncing = false
-    @State private var working: String?
-    @State private var message: String?
-    @State private var googleDisclosure = false
-    @State private var intervalsKey = false
-    @State private var disconnecting: ConnectionsResponse.Provider?
+    @State private var adding = false
+    @State private var flow = ConnectFlowState()
+
+    private var connected: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected == true } }
+    private var available: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected != true && $0.configured != false } }
 
     var body: some View {
         SettingsPage(title: "Zdroje dat") {
-            // Access refused at the last sync, or Google permissions missing.
-            if !store.problems.isEmpty {
-                SettingsGroup(title: "Připojit znovu") {
-                    ForEach(Array(store.problems.enumerated()), id: \.element.id) { index, provider in
-                        if index > 0 { SettingsDivider() }
-                        Button { start(provider.id) } label: {
-                            SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.triangle.fill", color: Palette.rust), title: provider.name ?? provider.id,
-                                        subtitle: provider.problemText, value: working == provider.id ? L10n.tr("připojuji…") : nil)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(working != nil || store.demo)
-                    }
+            HStack {
+                Text("Propojení").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                Spacer()
+                Button { adding = true } label: {
+                    Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                        .frame(width: 36, height: 36).background(Palette.card, in: Circle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Přidat propojení")
             }
 
-            SettingsGroup(title: "Připojené", footer: "Přihlášení proběhne na stránce Googlu nebo Intervals.icu a pak se vrátíš sem.") {
-                ForEach(Array(store.connections.enumerated()), id: \.element.id) { index, provider in
-                    if index > 0 { SettingsDivider() }
-                    Menu {
-                        Button { start(provider.id) } label: {
-                            Label(L10n.tr(provider.connected == true ? "Připojit znovu" : "Připojit"), systemImage: "link")
-                        }
-                        if provider.id == "intervals" {
-                            Button { intervalsKey = true } label: { Label("Vložit API klíč", systemImage: "key") }
-                        }
-                        if provider.connected == true {
-                            Button(role: .destructive) { disconnecting = provider } label: { Label("Odpojit", systemImage: "link.badge.minus") }
-                        }
+            if connected.isEmpty && store.loaded {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Zatím není nic propojené.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text("Bez propojení běží Loadwise z toho, co zapíšeš ručně.").font(Typo.small).foregroundStyle(Palette.muted)
+                    PrimaryButton(title: "Přidat propojení", systemImage: "plus") { adding = true }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            VStack(spacing: 10) {
+                ForEach(connected) { provider in
+                    NavigationLink {
+                        IntegrationDetailView(provider: provider, store: store, actions: actions)
                     } label: {
-                        SettingsRow(icon: icon(provider.id), title: provider.name ?? provider.id, subtitle: subtitle(provider),
-                                    value: working == provider.id ? "připojuji…" : provider.needsAttention ? "připojit znovu" : provider.connected == true ? "připojeno" : "připojit")
+                        IntegrationCard(provider: provider, lastSync: lastSync, working: actions.working == provider.id)
                     }
-                    .disabled(working != nil || store.demo)
+                    .buttonStyle(.plain)
                 }
-                if !store.connections.isEmpty { SettingsDivider() }
-                SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
-                            subtitle: "přímé čtení z iPhonu přijde v dalším kroku; data z hodinek zatím chodí přes Intervals.icu", value: nil, chevron: false)
             }
 
-            SettingsGroup {
+            SettingsGroup(title: "Data") {
                 Button {
                     Task { syncing = true; await store.syncNow(); syncing = false }
                 } label: {
                     HStack {
-                        Text(syncing ? "Synchronizuji…" : "Synchronizovat teď").font(.body).foregroundStyle(Palette.ink)
+                        Text(syncing ? "Synchronizuji…" : "Synchronizovat vše").font(.body).foregroundStyle(Palette.ink)
                         Spacer()
                         if syncing { ProgressView() } else if let at = lastSync { Text(at).font(.subheadline).foregroundStyle(Palette.muted) }
                     }
                     .padding(.horizontal, 16)
                     .frame(minHeight: 50)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(syncing || store.demo)
+                .disabled(syncing || store.demo || connected.isEmpty)
                 // The last sync left a source out (src/dashboard-sync.js results, googleStatus).
                 if !syncing, let failed = store.sync?.failedSources, !failed.isEmpty {
                     SettingsDivider()
                     SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou",
                                 subtitle: failed.joined(separator: ", "), chevron: false)
                 }
+                SettingsDivider()
+                SettingsToggle(title: "Sloučit stejné záznamy", subtitle: "Když stejnou noc nebo trénink pošle víc zdrojů, započítá se jednou.", isOn: .constant(true), disabled: true)
             }
 
-            if let message {
+            if let message = actions.message {
                 Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
-            googleDisclosure = false
-            // The browser sheet opens once this one has closed.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
-        } }
-        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await store.load() ; message = "Intervals.icu je připojené." } }
-        .confirmationDialog(L10n.f("Odpojit %@?", disconnecting?.name ?? ""), isPresented: Binding(get: { disconnecting != nil }, set: { if !$0 { disconnecting = nil } }), titleVisibility: .visible) {
-            Button("Odpojit", role: .destructive) { if let p = disconnecting { Task { await disconnect(p.id) } } }
-        } message: {
-            Text("Data, která už Loadwise má, zůstanou. Nová přestanou chodit.")
-        }
-    }
-
-    /// Google first shows what Loadwise does with the data (Google's policy).
-    private func start(_ provider: String) {
-        if provider == "google" { googleDisclosure = true } else { connect(provider) }
-    }
-
-    private func connect(_ provider: String) {
-        Task {
-            working = provider
-            defer { working = nil }
-            do {
-                guard let event = try await model.connect(provider: provider) else { return }
-                switch event {
-                case "google", "intervals":
-                    message = L10n.f("%@ je připojené, data se začínají stahovat.", provider == "google" ? "Google" : "Intervals.icu")
-                case "intervals-failed":
-                    message = "Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč."
-                    intervalsKey = true
-                case "expired": message = "Odkaz vypršel, zkus to znovu."
-                default: message = "Připojení se nedokončilo."
+        .sheet(isPresented: $adding) {
+            AddIntegrationSheet(available: available) { provider in
+                adding = false
+                // The next sheet (Google's disclosure, the browser) once this one has closed.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    flow.start(provider, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
                 }
-                await store.load()
-            } catch {
-                message = error.localizedDescription
             }
         }
+        .connectFlow($flow, actions: actions, store: store)
     }
 
-    private func disconnect(_ provider: String) async {
-        do {
-            try await model.api.disconnect(provider: provider)
-            message = "Odpojeno."
-            await store.load()
-        } catch {
-            message = error.localizedDescription
+    private var lastSync: String? { store.sync?.updatedAt.flatMap(SourceActions.when) }
+}
+
+/// One connected service: its icon, name, the state in a few words and "Spravovat".
+struct IntegrationCard: View {
+    let provider: ConnectionsResponse.Provider
+    let lastSync: String?
+    var working = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            IntegrationIcon(id: provider.id, size: 46)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(verbatim: provider.name ?? provider.id).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                if let problem = provider.problemText {
+                    Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
+                } else if let at = provider.lastSuccessAt.flatMap(SourceActions.when) ?? lastSync {
+                    Text(L10n.f("synchronizováno %@", at)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+            Spacer(minLength: 8)
+            Text(working ? L10n.tr("připojuji…") : provider.needsAttention ? L10n.tr("Opravit") : L10n.tr("Spravovat"))
+                .font(Typo.caption.weight(.semibold))
+                .foregroundStyle(provider.needsAttention ? Palette.onButton : Palette.ink)
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(provider.needsAttention ? Palette.rust : Palette.ink.opacity(0.07), in: Capsule())
+        }
+        .padding(14)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .contentShape(Rectangle())
+    }
+}
+
+struct IntegrationIcon: View {
+    let id: String
+    var size: CGFloat = 40
+
+    private var style: (symbol: String, color: Color) {
+        switch id {
+        case "google": return ("heart.text.square.fill", Palette.blue)
+        case "intervals": return ("waveform.path.ecg", Palette.rust)
+        case "apple": return ("heart.fill", Color(light: 0xE5484D, dark: 0xF2777A))
+        default: return ("watch.analog", Palette.indigo)
         }
     }
 
-    private func icon(_ id: String) -> SettingsIcon {
-        id == "google" ? SettingsIcon(systemImage: "g.circle.fill", color: Palette.blue) : SettingsIcon(systemImage: "waveform.path.ecg", color: Palette.rust)
+    var body: some View {
+        let (symbol, color) = style
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.45, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
+            .accessibilityHidden(true)
+    }
+}
+
+/// "Spravovat": the state of one connection, its permissions, sync and disconnect.
+struct IntegrationDetailView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let provider: ConnectionsResponse.Provider
+    let store: SettingsStore
+    let actions: SourceActions
+    @State private var flow = ConnectFlowState()
+    @State private var syncing = false
+
+    /// The live state after a reconnect or a sync.
+    private var current: ConnectionsResponse.Provider { store.connections.first { $0.id == provider.id } ?? provider }
+
+    /// Google Health's permissions (src/google-scopes.js HEALTH_PERMISSIONS).
+    static let googlePermissions: [(id: String, title: String)] = [
+        ("activity", "Aktivita a tréninky"), ("metrics", "Zdravotní měření"), ("sleep", "Spánek"),
+        ("nutritionRead", "Čtení jídla"), ("nutritionWrite", "Zápis jídla")
+    ]
+
+    var body: some View {
+        SettingsPage(title: current.name ?? current.id) {
+            HStack(spacing: 14) {
+                IntegrationIcon(id: current.id, size: 56)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: current.name ?? current.id).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(current.connected == true ? (current.problemText ?? L10n.tr("připojeno")) : L10n.tr("nepřipojeno"))
+                        .font(Typo.small).foregroundStyle(current.needsAttention ? Palette.rust : Palette.green)
+                }
+            }
+
+            SettingsGroup(title: "Synchronizace") {
+                if let at = current.lastSuccessAt.flatMap(SourceActions.when) {
+                    SettingsRow(title: "Naposledy v pořádku", value: at, chevron: false)
+                    SettingsDivider()
+                }
+                if let error = current.lastError, current.needsReconnect == true {
+                    SettingsRow(title: "Poslední chyba", subtitle: error, chevron: false)
+                    SettingsDivider()
+                }
+                Button {
+                    Task { syncing = true; await store.syncNow(); await store.load(); syncing = false }
+                } label: {
+                    HStack {
+                        Text(syncing ? "Synchronizuji…" : "Synchronizovat znovu").font(.body).foregroundStyle(Palette.ink)
+                        Spacer()
+                        if syncing { ProgressView() } else { Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Palette.faint) }
+                    }
+                    .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(syncing || store.demo)
+            }
+
+            if let metrics = current.metrics, !metrics.isEmpty {
+                SettingsGroup(title: "Co odsud bereme") {
+                    ForEach(Array(metrics.enumerated()), id: \.offset) { index, metric in
+                        if index > 0 { SettingsDivider() }
+                        SettingsRow(title: metric, chevron: false)
+                    }
+                }
+            }
+
+            if current.id == "google" {
+                let missing = Set((current.missingPermissions ?? []).compactMap(\.string))
+                SettingsGroup(title: "Oprávnění", footer: "Oprávnění se mění na stránce Googlu: zaškrtni, co má Loadwise číst a zapisovat.") {
+                    ForEach(Array(Self.googlePermissions.enumerated()), id: \.offset) { index, permission in
+                        if index > 0 { SettingsDivider() }
+                        HStack {
+                            Text(permission.title).font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Image(systemName: missing.contains(permission.id) ? "xmark.circle" : "checkmark.circle.fill")
+                                .foregroundStyle(missing.contains(permission.id) ? Palette.rust : Palette.green)
+                                .accessibilityLabel(missing.contains(permission.id) ? L10n.tr("nepovoleno") : L10n.tr("povoleno"))
+                        }
+                        .padding(.horizontal, 16).frame(minHeight: 46)
+                    }
+                    SettingsDivider()
+                    Button { flow.start("google", actions: actions, model: model, store: store, askKey: {}) } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.blue),
+                                    title: missing.isEmpty ? "Upravit oprávnění" : "Povolit chybějící", chevron: false)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(actions.working != nil || store.demo)
+                }
+            } else if current.id == "intervals" {
+                SettingsGroup(title: "Přístup", footer: "Klíč najdeš v Intervals.icu v Settings → Developer Settings.") {
+                    Button { flow.start("intervals", actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true }) } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.rust), title: "Připojit znovu", chevron: false)
+                    }
+                    .buttonStyle(.plain)
+                    SettingsDivider()
+                    Button { flow.intervalsKey = true } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "key.fill", color: Palette.amberBar), title: "Vložit nový API klíč", chevron: false)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .disabled(actions.working != nil || store.demo)
+            }
+
+            SettingsGroup {
+                Button { flow.disconnecting = current } label: {
+                    SettingsRow(title: "Odpojit", chevron: false, titleColor: Palette.rust)
+                }
+                .buttonStyle(.plain)
+                .disabled(store.demo)
+            }
+
+            if let message = actions.message {
+                Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .connectFlow($flow, actions: actions, store: store, disconnected: { dismiss() })
+    }
+}
+
+/// "+": the services that can still be connected, in sections.
+struct AddIntegrationSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let available: [ConnectionsResponse.Provider]
+    let connect: (String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            SettingsPage(title: "Přidat propojení") {
+                let health = available.filter { $0.id == "google" }
+                let training = available.filter { $0.id == "intervals" }
+                SettingsGroup(title: "Zdraví a spánek") {
+                    ForEach(health) { provider in
+                        row(provider, subtitle: L10n.tr("spánek, tep, HRV, kroky, váha a jídlo"))
+                        SettingsDivider()
+                    }
+                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
+                                subtitle: L10n.tr("přijde s placeným Apple Developer Programem"), value: L10n.tr("brzy"), chevron: false)
+                        .opacity(0.6)
+                }
+                SettingsGroup(title: "Tréninky") {
+                    ForEach(Array(training.enumerated()), id: \.element.id) { index, provider in
+                        if index > 0 { SettingsDivider() }
+                        row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
+                    }
+                    if training.isEmpty {
+                        SettingsRow(title: "Intervals.icu je už připojené.", chevron: false)
+                    }
+                }
+                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Loadwise jejich data dostane odtamtud.") {
+                    Link(destination: URL(string: "https://intervals.icu/settings")!) {
+                        SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.indigo), title: "Přes Intervals.icu",
+                                    subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura, Strava")
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                        .accessibilityLabel("Zavřít")
+                }
+            }
+        }
+        .tint(Palette.ink)
     }
 
-    private func subtitle(_ provider: ConnectionsResponse.Provider) -> String? {
-        if provider.needsReconnect == true, provider.connected == true { return provider.problemText }
-        let missing = provider.missingPermissions?.count ?? 0
-        if missing > 0 { return missing == 1 ? L10n.tr("chybí 1 oprávnění") : L10n.f("chybí %@ oprávnění", String(missing)) }
-        return provider.metrics.map { $0.joined(separator: ", ").lowercased() }
+    private func row(_ provider: ConnectionsResponse.Provider, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            IntegrationIcon(id: provider.id, size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
+                Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(L10n.tr("Připojit")) { connect(provider.id) }
+                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(Palette.ink.opacity(0.07), in: Capsule())
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
+    }
+}
+
+/// Connecting and disconnecting, shared by Zdroje dat and a service's page.
+@MainActor
+@Observable
+final class SourceActions {
+    /// The service being connected right now.
+    var working: String?
+    var message: String?
+
+    /// true when Intervals.icu's sign-in failed and the API key should be asked for.
+    func connect(_ provider: String, model: AppModel, store: SettingsStore) async -> Bool {
+        working = provider
+        defer { working = nil }
+        do {
+            guard let event = try await model.connect(provider: provider) else { return false }
+            var askKey = false
+            switch event {
+            case "google", "intervals":
+                message = L10n.f("%@ je připojené, data se začínají stahovat.", provider == "google" ? "Google" : "Intervals.icu")
+            case "intervals-failed":
+                message = L10n.tr("Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč.")
+                askKey = true
+            case "expired": message = L10n.tr("Odkaz vypršel, zkus to znovu.")
+            default: message = L10n.tr("Připojení se nedokončilo.")
+            }
+            await store.load()
+            return askKey
+        } catch {
+            message = error.localizedDescription
+            return false
+        }
     }
 
-    private var lastSync: String? {
-        guard let at = store.sync?.updatedAt else { return nil }
+    func disconnect(_ provider: String, model: AppModel, store: SettingsStore) async -> Bool {
+        do {
+            try await model.api.disconnect(provider: provider)
+            message = L10n.tr("Odpojeno.")
+            await store.load()
+            return true
+        } catch {
+            message = error.localizedDescription
+            return false
+        }
+    }
+
+    /// "dnes 13:29" or "8. 10. 13:29" from the server's ISO or SQLite time.
+    static func when(_ text: String) -> String? {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = iso.date(from: at) ?? ISO8601DateFormatter().date(from: at) ?? Self.sqlite.date(from: at)
+        let date = iso.date(from: text) ?? ISO8601DateFormatter().date(from: text) ?? sqlite.date(from: text)
         guard let date else { return nil }
         let out = DateFormatter()
         out.locale = Fmt.locale
@@ -399,6 +759,66 @@ struct SourcesSettingsView: View {
     }()
 }
 
+/// The sheets of connecting (Google's disclosure, the Intervals.icu key) and
+/// the disconnect question, each view with its own.
+struct ConnectFlowState {
+    var googleDisclosure = false
+    var intervalsKey = false
+    var disconnecting: ConnectionsResponse.Provider?
+
+    /// Google first shows what Loadwise does with the data (Google's policy).
+    /// askKey: Intervals.icu's sign-in failed, show the API key sheet.
+    @MainActor
+    mutating func start(_ provider: String, actions: SourceActions, model: AppModel, store: SettingsStore, askKey: @escaping @MainActor () -> Void) {
+        if provider == "google" {
+            googleDisclosure = true
+        } else {
+            Task { @MainActor in if await actions.connect(provider, model: model, store: store) { askKey() } }
+        }
+    }
+}
+
+extension View {
+    func connectFlow(_ flow: Binding<ConnectFlowState>, actions: SourceActions, store: SettingsStore, disconnected: @escaping () -> Void = {}) -> some View {
+        modifier(ConnectFlowSheets(flow: flow, actions: actions, store: store, disconnected: disconnected))
+    }
+}
+
+struct ConnectFlowSheets: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var flow: ConnectFlowState
+    let actions: SourceActions
+    let store: SettingsStore
+    let disconnected: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $flow.googleDisclosure) {
+                GoogleDisclosureSheet {
+                    flow.googleDisclosure = false
+                    // The browser sheet opens once this one has closed.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        Task { _ = await actions.connect("google", model: model, store: store) }
+                    }
+                }
+            }
+            .sheet(isPresented: $flow.intervalsKey) {
+                IntervalsKeySheet { await store.load(); actions.message = L10n.tr("Intervals.icu je připojené.") }
+            }
+            .confirmationDialog(L10n.f("Odpojit %@?", flow.disconnecting?.name ?? ""),
+                                isPresented: Binding(get: { flow.disconnecting != nil }, set: { if !$0 { flow.disconnecting = nil } }),
+                                titleVisibility: .visible) {
+                Button("Odpojit", role: .destructive) {
+                    if let p = flow.disconnecting {
+                        Task { if await actions.disconnect(p.id, model: model, store: store) { disconnected() } }
+                    }
+                }
+            } message: {
+                Text("Data, která už Loadwise má, zůstanou. Nová přestanou chodit.")
+            }
+    }
+}
+
 /// What Loadwise reads and writes in Google Health, before Google's own consent.
 struct GoogleDisclosureSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -415,7 +835,7 @@ struct GoogleDisclosureSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
+            PageScroll {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Připojení Google Health").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     ForEach(items, id: \.0) { item in
@@ -586,7 +1006,8 @@ struct LanguageSettingsView: View {
                     L10n.setLanguage(value)
                     language = value
                     WidgetBridge.reload()
-                    Task { await model.refresh() }
+                    // Every tab: the server writes its texts in the new language.
+                    Task { await model.refreshAll() }
                 }
             }
         }

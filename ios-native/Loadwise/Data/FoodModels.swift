@@ -167,6 +167,40 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         return Double(digits)
     }
 
+    /// A size in the food's own unit: 1000 from "1 kg" for grams, 500 from
+    /// "0,5 l" for ml. nil for "2 x 125 g", where the first number is a count.
+    static func size(_ value: JSONValue?, unit: String) -> Double? {
+        guard let n = leadingNumber(value), n > 0 else { return nil }
+        guard case .string(let s) = value else { return n }
+        let text = s.lowercased()
+        if text.contains("x") || text.contains("×") { return nil }
+        if unit == "g", text.range(of: #"\d\s*kg"#, options: .regularExpression) != nil { return n * 1000 }
+        if unit == "ml", text.range(of: #"\d\s*l\b"#, options: .regularExpression) != nil { return n * 1000 }
+        return n
+    }
+
+    /// What ¼, ½ or 2 are counted from: one serving, else the whole package.
+    var portionReference: (size: Double, name: String)? {
+        if perPortion { return (1, L10n.tr("porce")) }
+        if let s = Self.size(serving_size, unit: unit) { return (s, L10n.tr("porce")) }
+        if let q = Self.size(quantity, unit: unit) { return (q, L10n.tr("balení")) }
+        return nil
+    }
+
+    /// The nutrition values, to compare before and after a correction.
+    var values: JSONObject {
+        var out: JSONObject = ["name": .string(name)]
+        if let brand { out["brand"] = .string(brand) }
+        for (key, value) in [("calories_100g", calories_100g), ("protein_100g", protein_100g), ("carbs_100g", carbs_100g),
+                             ("sugars_100g", sugars_100g), ("fat_100g", fat_100g), ("fiber_100g", fiber_100g)] {
+            if let value { out[key] = .number(value) }
+        }
+        return out
+    }
+
+    /// From the shared catalog or an AI lookup, so a correction concerns everyone.
+    var isShared: Bool { !["personal", "manual", "recipe", "composed"].contains(source ?? "") }
+
     func kcal(for amount: Double) -> Double? {
         guard let c = calories_100g else { return nil }
         return perPortion ? c * amount : c * amount / 100

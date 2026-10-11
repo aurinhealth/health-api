@@ -51,6 +51,14 @@ installed side by side (different bundle IDs).
 - "Prohlédnout ukázku" on the sign-in screen shows sample data without an
   account.
 
+## Version check
+
+Every request carries `X-Loadwise-Api: <APIClient.apiLevel>`. When the server
+needs a newer app (`MIN_APP_API` in `src/app-version.js`) it answers 426 and
+the app shows "Je potřeba nová verze" instead of the screens. Raise both
+numbers in the same pull request, only for changes that break what installed
+apps read.
+
 ## Build without a Mac
 
 The GitHub Actions workflow `.github/workflows/ios-native.yml` runs on every

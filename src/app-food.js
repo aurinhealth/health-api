@@ -5,17 +5,20 @@
 // water. Pure: GET /app/api/food-today loads the inputs.
 import { localDateTime } from "./user-time.js";
 import { MEAL_DEFAULT_TIMES } from "./food-log.js";
+import { L } from "./lang.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
 
+// The label follows the app language when read (lang.js).
+const slot = (type, cs, en, share) => ({ type, share, get label() { return L(cs, en); } });
 export const MEALS = [
-  { type: "breakfast", label: "Snídaně", share: 0.25 },
-  { type: "snack_am", label: "Dopolední svačina", share: 0.1 },
-  { type: "lunch", label: "Oběd", share: 0.3 },
-  { type: "snack_pm", label: "Odpolední svačina", share: 0.1 },
-  { type: "dinner", label: "Večeře", share: 0.25 },
-  { type: "snack_late", label: "Druhá večeře", share: 0.08 }
+  slot("breakfast", "Snídaně", "Breakfast", 0.25),
+  slot("snack_am", "Dopolední svačina", "Morning snack", 0.1),
+  slot("lunch", "Oběd", "Lunch", 0.3),
+  slot("snack_pm", "Odpolední svačina", "Afternoon snack", 0.1),
+  slot("dinner", "Večeře", "Dinner", 0.25),
+  slot("snack_late", "Druhá večeře", "Late snack", 0.08)
 ];
 const USUAL = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 
@@ -42,6 +45,10 @@ export function mealOf(note, time, slots = USUAL) {
   return time < "10:00" ? "breakfast" : time < "11:30" ? "snack_am" : time < "14:30" ? "lunch" : time < "17:30" ? "snack_pm" : "dinner";
 }
 
+// Czech keeps "porce" and "ks" for any amount, as before.
+const unitLabel = (unit, amount) => unit === "portion" ? L("porce", amount === 1 ? "serving" : "servings")
+  : unit === "piece" ? L("ks", amount === 1 ? "pc" : "pcs") : unit;
+
 function noteOf(entry) {
   try { const n = JSON.parse(entry?.note || "{}"); return n && typeof n === "object" && !Array.isArray(n) ? n : {}; } catch { return {}; }
 }
@@ -61,7 +68,7 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
       const amount = num(note.enteredQuantity ?? note.amount), unit = note.enteredUnit || note.unit || null;
       return {
         id: e.id,
-        name: String(e.recipe_title || note.product || "Jídlo").slice(0, 120),
+        name: String(e.recipe_title || note.product || L("Jídlo", "Food")).slice(0, 120),
         time,
         meal: mealOf(note, time, chosen),
         kcal: round(num(e.kcal)),
@@ -71,7 +78,7 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         fiber: round(num(e.fiber_g), 1),
         sugar: round(num(note.sugar_g), 1),
         salt: round(num(note.salt_g), 2),
-        amount: amount != null && unit ? round(amount, 1) + " " + (unit === "portion" ? "porce" : unit === "piece" ? "ks" : unit) : null,
+        amount: amount != null && unit ? round(amount, 1) + " " + unitLabel(unit, round(amount, 1)) : null,
         brand: note.brand || null
       };
     });
@@ -150,10 +157,10 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
 function sentence({ eaten, target, bonus, left, next }) {
   if (target == null) return null;
   const parts = [];
-  if (bonus > 50) parts.push(`Tréninkový den: o ${bonus} kcal víc.`);
-  if (eaten > target + 100) parts.push(`Dnes je to o ${Math.round(eaten - target)} kcal nad cílem.`);
-  else if (left != null && left <= 100) parts.push("Cíl na dnešek je splněný.");
-  else if (next) parts.push(`Zbývá ${Math.round(left)} kcal, ${next.label.toLowerCase()} kolem ${next.suggestion.kcal} kcal.`);
-  else parts.push(`Zbývá ${Math.round(left)} kcal.`);
+  if (bonus > 50) parts.push(L(`Tréninkový den: o ${bonus} kcal víc.`, `Training day: ${bonus} kcal extra.`));
+  if (eaten > target + 100) parts.push(L(`Dnes je to o ${Math.round(eaten - target)} kcal nad cílem.`, `${Math.round(eaten - target)} kcal over today's target.`));
+  else if (left != null && left <= 100) parts.push(L("Cíl na dnešek je splněný.", "Today's target is reached."));
+  else if (next) parts.push(L(`Zbývá ${Math.round(left)} kcal, ${next.label.toLowerCase()} kolem ${next.suggestion.kcal} kcal.`, `${Math.round(left)} kcal left, ${next.label.toLowerCase()} around ${next.suggestion.kcal} kcal.`));
+  else parts.push(L(`Zbývá ${Math.round(left)} kcal.`, `${Math.round(left)} kcal left.`));
   return parts.join(" ");
 }

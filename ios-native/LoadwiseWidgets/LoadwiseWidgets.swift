@@ -25,13 +25,20 @@ struct SnapshotProvider: TimelineProvider {
     func placeholder(in context: Context) -> SnapshotEntry { SnapshotEntry(date: Date(), snapshot: .sample) }
 
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
-        completion(SnapshotEntry(date: Date(), snapshot: context.isPreview ? (WidgetSnapshot.load() ?? .sample) : WidgetSnapshot.load()))
+        let saved = context.isPreview ? (WidgetSnapshot.load() ?? .sample) : WidgetSnapshot.load()
+        completion(SnapshotEntry(date: Date(), snapshot: saved?.current(today: PendingDrinks.localDate())))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        // The app reloads the widgets after each refresh; this is only a fallback.
-        let entry = SnapshotEntry(date: Date(), snapshot: WidgetSnapshot.load())
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(60 * 60))))
+        // The app reloads the widgets after each refresh. Besides that: an entry
+        // now, and one at midnight that starts the new day at zero.
+        let now = Date()
+        let saved = WidgetSnapshot.load()
+        var entries = [SnapshotEntry(date: now, snapshot: saved?.current(today: PendingDrinks.localDate(now)))]
+        if let midnight = Calendar.current.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0), matchingPolicy: .nextTime) {
+            entries.append(SnapshotEntry(date: midnight, snapshot: saved?.current(today: PendingDrinks.localDate(midnight))))
+        }
+        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(60 * 60))))
     }
 }
 

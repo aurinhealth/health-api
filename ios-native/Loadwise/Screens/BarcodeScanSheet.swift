@@ -16,6 +16,8 @@ struct BarcodeScanSheet: View {
     @State private var state: ScanState = .scanning
     @State private var saving = false
     @State private var error: String?
+    /// "Upravit": the found food in the full editor, values and name correctable.
+    @State private var editing: FoodProduct?
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -67,6 +69,15 @@ struct BarcodeScanSheet: View {
             }
         }
         .task { await askCamera() }
+        .sheet(item: $editing) { product in
+            NavigationStack {
+                FoodAmountView(product: product, meal: meal, editing: true, done: {
+                    editing = nil
+                    dismiss()
+                    onLogged()
+                })
+            }
+        }
     }
 
     private func askCamera() async {
@@ -86,11 +97,25 @@ struct BarcodeScanSheet: View {
             case .found:
                 if let product {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("✓ Nalezeno").font(Typo.caption).foregroundStyle(Palette.green)
+                        HStack {
+                            Text("✓ Nalezeno").font(Typo.caption).foregroundStyle(Palette.green)
+                            Spacer()
+                            Button {
+                                var p = product
+                                if p.barcode == nil { p.barcode = code }
+                                editing = p
+                            } label: {
+                                Label("Upravit údaje", systemImage: "pencil").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                                    .padding(.horizontal, 12).frame(height: 30)
+                                    .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
                         Text(product.name).font(Typo.sentence(27, relativeTo: .title2)).foregroundStyle(Palette.ink)
                         Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     NutritionCells(product: product, amount: amountValue ?? 0)
+                    PortionChips(product: product, amount: $amount)
                     HStack(spacing: 10) {
                         HStack(spacing: 4) {
                             TextField("100", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 56)

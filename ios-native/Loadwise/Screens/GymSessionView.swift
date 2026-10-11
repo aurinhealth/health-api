@@ -15,6 +15,7 @@ struct GymSessionView: View {
     @State private var alternativesFor: String?
     @State private var minutes = 60
     @State private var muscles: [String: [String: Double]] = [:]
+    @State private var changing = false
 
     private var load: [String: Double] {
         muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }
@@ -42,12 +43,26 @@ struct GymSessionView: View {
                 Task { await replace(item.name, with: replacement) }
             }
         }
+        .sheet(isPresented: $changing) {
+            GymPlanActionsSheet(date: date, title: day?.planName, cancelled: day?.cancelled == true) { Task { await load() } }
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date()))).padding(.top, 24)
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
+                Spacer()
+                // Move or cancel the day's session (GymPlanActions.swift).
+                if !model.demo && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
+                    Button { changing = true } label: {
+                        Text("Změnit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    }
+                    .accessibilityLabel("Změnit trénink")
+                }
+            }
+            .padding(.top, 24)
             if loading && day == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else if let day, !day.exercises.isEmpty {
@@ -289,7 +304,7 @@ struct TechniqueSheet: View {
     @State private var error: String?
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text(exercise).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
@@ -349,7 +364,12 @@ struct AlternativesSheet: View {
     @Environment(\.dismiss) private var dismiss
     let date: String
     let exercise: String
+    /// The proposal's other exercises (not saved yet), so they are not offered.
+    var inPlan: [String] = []
+    var footnote: String? = "Nahradí jen série, které ještě nejsou hotové."
     var choose: (String) -> Void
+    /// The whole alternative (its estimated load), for a proposal not saved yet.
+    var chooseAlternative: ((GymAlternative) -> Void)? = nil
     @State private var items: [GymAlternative] = []
     @State private var loading = true
 
@@ -365,11 +385,12 @@ struct AlternativesSheet: View {
             } else if items.isEmpty {
                 Text("Žádná náhrada se nenašla.").font(Typo.small).foregroundStyle(Palette.muted)
             }
-            ScrollView {
+            PageScroll {
                 VStack(spacing: 0) {
                     ForEach(items) { alt in
                         Button {
                             choose(alt.name)
+                            chooseAlternative?(alt)
                             dismiss()
                         } label: {
                             HStack {
@@ -388,7 +409,7 @@ struct AlternativesSheet: View {
                     }
                 }
             }
-            Text("Nahradí jen série, které ještě nejsou hotové.").font(Typo.caption).foregroundStyle(Palette.faint)
+            if let footnote { Text(footnote).font(Typo.caption).foregroundStyle(Palette.faint) }
         }
         .padding(24)
         .presentationDetents([.medium, .large])
@@ -396,7 +417,7 @@ struct AlternativesSheet: View {
         .task {
             defer { loading = false }
             guard !model.demo else { return }
-            items = (try? await model.api.gymAlternatives(date: date, exercise: exercise)) ?? []
+            items = (try? await model.api.gymAlternatives(date: date, exercise: exercise, inPlan: inPlan)) ?? []
         }
     }
 }

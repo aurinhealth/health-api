@@ -48,7 +48,16 @@ test("food for another day gets its meal's usual time, today keeps the time of l
   assert.equal(mealConsumedAt("2099-01-01", "snack"), "2099-01-01T12:00:00");
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
   assert.equal(mealConsumedAt(today, "lunch"), null);
-  assert.match(entrypoint, /consumed_at:mealConsumedAt\(body\.date,body\.mealType\)/);
+  assert.match(entrypoint, /consumed_at:mealConsumedAt\(body\.date,body\.mealType,body\.time\)/);
+});
+
+test("a meal sent later from the phone keeps the time it was logged", () => {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
+  assert.equal(mealConsumedAt(today, "lunch", "12:40"), today + "T12:40:00");
+  assert.equal(mealConsumedAt("2099-01-01", "dinner", "19:05"), "2099-01-01T19:05:00");
+  // Anything but HH:MM falls back to the usual rule.
+  assert.equal(mealConsumedAt(today, "lunch", "25:00"), null);
+  assert.equal(mealConsumedAt("2099-01-01", "dinner", "7pm"), "2099-01-01T19:00:00");
 });
 
 test("a day ahead has no coach notes and its timeline uses only notes of that day", () => {

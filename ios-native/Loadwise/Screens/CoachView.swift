@@ -13,6 +13,10 @@ struct CoachView: View {
     @State private var progress: String?
     @State private var error: String?
     @State private var needsConsent = false
+    /// The coach needs Loadwise Pro (402): the offer instead of an error.
+    @State private var needsSubscription = false
+    /// The question that asked for the AI consent: sent again once it is given.
+    @State private var unsent: (bubble: UUID, text: String)?
     @State private var home: CoachesSnapshot?
     @State private var showChats = false
     @FocusState private var focused: Bool
@@ -41,6 +45,7 @@ struct CoachView: View {
                                 HStack(spacing: 8) { ProgressView(); Text(progress).font(Typo.caption).foregroundStyle(Palette.muted) }
                             }
                             if needsConsent { consentCard }
+                            if needsSubscription { AISubscriptionCard { Paywall.present(model) } }
                             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                             Color.clear.frame(height: 1).id("end")
                         }
@@ -63,6 +68,8 @@ struct CoachView: View {
                         Button { newChat() } label: { Label("Nová konverzace", systemImage: "square.and.pencil") }
                         Button { showChats = true } label: { Label("Předchozí konverzace", systemImage: "clock.arrow.circlepath") }
                     } label: { Image(systemName: "ellipsis.circle") }
+                    // Not while an answer streams in: it writes into the current conversation.
+                    .disabled(sending)
                     .accessibilityLabel("Konverzace")
                 }
             }
@@ -131,6 +138,13 @@ struct CoachView: View {
                         try await model.api.allowAI()
                         needsConsent = false
                         error = nil
+                        // The question that ran into the consent goes out now, no need to type it again.
+                        if let question = unsent {
+                            unsent = nil
+                            messages.removeAll { $0.id == question.bubble }
+                            input = question.text
+                            await send()
+                        }
                     } catch { self.error = error.localizedDescription }
                 }
             } label: {
@@ -162,12 +176,16 @@ struct CoachView: View {
 
     private func send() async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !sending else { return }
+        // The demo has no account to ask with.
+        guard !text.isEmpty, !sending, !model.demo else { return }
         input = ""
         error = nil
-        messages.append(Bubble(mine: true, text: text))
-        messages.append(Bubble(mine: false, text: ""))
-        let index = messages.count - 1
+        let mine = Bubble(mine: true, text: text)
+        messages.append(mine)
+        let reply = Bubble(mine: false, text: "")
+        messages.append(reply)
+        // By id, not index: the list may change while the answer streams in.
+        let id = reply.id
         sending = true
         progress = "Kouč přemýšlí…"
         defer { sending = false; progress = nil }
@@ -175,32 +193,43 @@ struct CoachView: View {
             for try await event in model.api.askCoach(text, chatId: chatId, view: view) {
                 switch event {
                 case .progress(let p): progress = p
-                case .answer(let a): messages[index].text = a
+                case .answer(let a): edit(id) { $0.text = a }
                 case .done(let result):
-                    if let a = result.answer { messages[index].text = a }
-                    messages[index].actions = result.actions ?? []
-                    messages[index].visuals = result.visuals ?? []
-                    if let id = result.chatId { chatId = id }
+                    edit(id) {
+                        if let a = result.answer { $0.text = a }
+                        $0.actions = result.actions ?? []
+                        $0.visuals = result.visuals ?? []
+                    }
+                    if let chat = result.chatId { chatId = chat }
                 }
             }
-            if messages[index].text.isEmpty { messages.remove(at: index) }
+            messages.removeAll { $0.id == id && $0.text.isEmpty }
         } catch APIError.aiConsentRequired {
-            messages.remove(at: index)
+            messages.removeAll { $0.id == id }
+            unsent = (mine.id, text)
             needsConsent = true
+        } catch APIError.subscriptionRequired {
+            messages.removeAll { $0.id == id }
+            needsSubscription = true
         } catch {
-            if messages[index].text.isEmpty { messages.remove(at: index) }
+            messages.removeAll { $0.id == id && $0.text.isEmpty }
             self.error = error.localizedDescription
         }
     }
 
+    private func edit(_ id: UUID, _ change: (inout Bubble) -> Void) {
+        guard let i = messages.firstIndex(where: { $0.id == id }) else { return }
+        change(&messages[i])
+    }
+
     private func decide(_ action: CoachAction, confirm: Bool, in bubble: UUID) async {
-        guard let draftId = action.draftId, let i = messages.firstIndex(where: { $0.id == bubble }) else { return }
+        guard let draftId = action.draftId else { return }
         do {
             let message = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
-            messages[i].decided[draftId] = message ?? (confirm ? "Hotovo." : "Zamítnuto.")
+            edit(bubble) { $0.decided[draftId] = message ?? (confirm ? "Hotovo." : "Zamítnuto.") }
             if confirm { await model.refreshTraining(); await model.refresh() }
         } catch {
-            messages[i].decided[draftId] = error.localizedDescription
+            edit(bubble) { $0.decided[draftId] = error.localizedDescription }
         }
     }
 

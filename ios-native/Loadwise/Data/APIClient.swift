@@ -5,12 +5,18 @@ enum APIError: LocalizedError, Equatable {
     case message(String)
     /// AI features need the user's AI consent first (403 ai_consent_required).
     case aiConsentRequired(String)
+    /// The server no longer serves this version of the app (426, src/app-version.js).
+    case updateRequired(String)
+    /// The AI feature needs the AI subscription (402 subscription_required).
+    case subscriptionRequired(String)
 
     var errorDescription: String? {
         switch self {
         case .unauthorized: return L10n.tr("Přihlášení vypršelo. Přihlas se znovu.")
         case .message(let text): return text
         case .aiConsentRequired(let text): return text
+        case .updateRequired(let text): return text
+        case .subscriptionRequired(let text): return text
         }
     }
 }
@@ -19,6 +25,16 @@ enum APIError: LocalizedError, Equatable {
 /// pfd_session cookie, which URLSession keeps in the shared cookie storage.
 final class APIClient: @unchecked Sendable {
     static let sessionCookie = "pfd_session"
+    /// The version of the server's API this app reads, sent as X-Loadwise-Api.
+    /// Raise it together with MIN_APP_API in src/app-version.js when a server
+    /// change breaks what installed apps expect; older apps then ask for an update.
+    static let apiLevel = 1
+
+    /// An AI feature answered 402: AppModel shows the Loadwise Pro offer.
+    var onSubscriptionRequired: (@Sendable () -> Void)?
+
+    /// Called on the first 426: AppModel swaps the screens for the update notice.
+    var onUpdateRequired: (@Sendable () -> Void)?
 
     let baseURL: URL
     private let session: URLSession
@@ -141,12 +157,12 @@ final class APIClient: @unchecked Sendable {
         return me.consent?.aiAllowed ?? false
     }
 
-    /// The signed-in account's name or e-mail (GET /app/api/me → user).
-    func accountName() async throws -> String? {
+    /// The signed-in account's name and e-mail (GET /app/api/me → user).
+    func account() async throws -> (name: String?, email: String?) {
         struct User: Decodable { let name: String?; let email: String? }
         struct Me: Decodable { let user: User? }
         let me: Me = try await get("/app/api/me")
-        return me.user?.name ?? me.user?.email
+        return (me.user?.name?.nilIfBlank, me.user?.email?.nilIfBlank)
     }
 
     func setAI(_ allowed: Bool) async throws {
@@ -202,9 +218,15 @@ final class APIClient: @unchecked Sendable {
         return r.technique
     }
 
-    func gymAlternatives(date: String, exercise: String) async throws -> [GymAlternative] {
+    /// Replacements that fit the active place, without the exercises already in
+    /// the plan (`inPlan`: a proposal not saved yet).
+    func gymAlternatives(date: String, exercise: String, inPlan: [String] = []) async throws -> [GymAlternative] {
         struct Response: Decodable { let alternatives: [GymAlternative]? }
-        let r: Response = try await get("/app/api/gym/alternatives?date=" + date + "&exercise=" + Self.query(exercise))
+        var path = "/app/api/gym/alternatives?date=" + date + "&exercise=" + Self.query(exercise)
+        if !inPlan.isEmpty, let data = try? JSONEncoder().encode(inPlan), let json = String(data: data, encoding: .utf8) {
+            path += "&inPlan=" + Self.query(json)
+        }
+        let r: Response = try await get(path)
         return r.alternatives ?? []
     }
 
@@ -474,6 +496,11 @@ final class APIClient: @unchecked Sendable {
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let message = json?["message"] as? String ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
+            // Too old an app: the write waits for the new version instead of being dropped.
+            if http.statusCode == 426 {
+                onUpdateRequired?()
+                throw OutboxRefusal.retry(message)
+            }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
@@ -502,6 +529,7 @@ final class APIClient: @unchecked Sendable {
         // The server counts days in the user's zone and answers in Czech.
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
+        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
@@ -515,8 +543,16 @@ final class APIClient: @unchecked Sendable {
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let message = json?["message"] as? String
+            if http.statusCode == 426 {
+                onUpdateRequired?()
+                throw APIError.updateRequired(message ?? L10n.tr("Tahle verze aplikace je zastaralá. Nainstaluj novou."))
+            }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
+            }
+            if http.statusCode == 402 {
+                onSubscriptionRequired?()
+                throw APIError.subscriptionRequired(message ?? L10n.tr("Tahle AI funkce je součástí AI předplatného."))
             }
             throw APIError.message(message ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode)))
         }

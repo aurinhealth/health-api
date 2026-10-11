@@ -38,7 +38,7 @@ struct RecipeEditorView: View {
     }
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 18) {
                 CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
                 Text("Nový recept").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)

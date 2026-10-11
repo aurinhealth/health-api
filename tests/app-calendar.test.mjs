@@ -56,3 +56,16 @@ test("the main sport: the longest workout, a walk only alone", () => {
   assert.equal(sportOf("VirtualRide"), "ride");
   assert.equal(sportOf("WeightTraining"), "strength");
 });
+
+test("a watch session carries its summary for the app's detail", () => {
+  const hike = row("exercise", "google-wearables", "g3", "2026-10-08T08:00:00Z", "2026-10-08T09:10:00Z",
+    { exercise: { exerciseType: "HIKING", displayName: "Výšlap", activeDuration: "4200s",
+      metricsSummary: { caloriesKcal: 420, steps: "8123", averageHeartRateBeatsPerMinute: 118.6, maxHeartRateBeatsPerMinute: { bpm: 152 },
+        elevationGainMillimeters: 312000, heartRateZoneDurations: { x: 1 } } } });
+  const out = buildCalendar({ start: "2026-10-08", end: "2026-10-08", today: "2026-10-09", google: [hike] });
+  const a = out.days[0].activities[0];
+  assert.equal(a.activityId, null);
+  assert.deepEqual(a.summary, { source: "google", start: "10:00", end: "11:10", avgHr: 119, maxHr: 152, steps: 8123, elevationM: 312 });
+  // Intervals.icu activities have their own detail and no summary.
+  assert.equal(day("2026-10-07").activities[0].summary, undefined);
+});

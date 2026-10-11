@@ -63,7 +63,9 @@ struct AddWaterIntent: AppIntent {
     func perform() async throws -> some IntentResult {
         let today = PendingDrinks.localDate()
         PendingDrinks.add(ml, on: today)
-        if var snapshot = WidgetSnapshot.load(), snapshot.date == today {
+        // After midnight the old day's snapshot starts the new day at zero water.
+        if let saved = WidgetSnapshot.load() {
+            var snapshot = saved.current(today: today)
             snapshot.waterMl = (snapshot.waterMl ?? 0) + Double(ml)
             snapshot.save()
         }

@@ -1514,35 +1514,53 @@ function plannedWorkoutInfo(
 // DAILY ENERGY
 // ======================================================
 
+// Ride, VirtualRide, GravelRide, MountainBikeRide, EBikeRide and Google's
+// *_BIKING types are all cycling.
+const FAMILIES=[["strength",/weight|strength|posil/],["cycling",/ride|cycl|bik|road|mtb|gravel/],["running",/run|běh/],["walking",/walk|chůz/],["swimming",/swim|plav/]];
+const KNOWN_FAMILIES=new Set(FAMILIES.map(f=>f[0]));
+const familyOf=text=>(FAMILIES.find(([,re])=>re.test(String(text||"").toLowerCase()))||[null])[0];
+// The type decides before the name: "Run after the ride" is a run.
 function activityFamily(item){
-  const text=(String(item?.type||"")+" "+String(item?.name||"")).toLowerCase();
-  if(/weight|strength|weights|posil/.test(text)) return "strength";
-  if(/ride|cycling|cycle|bike|road|mtb|gravel/.test(text)) return "cycling";
-  if(/run|běh/.test(text)) return "running";
-  if(/walk|chůz/.test(text)) return "walking";
-  if(/swim|plav/.test(text)) return "swimming";
-  return String(item?.type||"").toLowerCase() || "other";
+  return familyOf(item?.type)||familyOf(item?.name)||String(item?.type||"").toLowerCase()||"other";
 }
+const vagueFamily=f=>!f||f==="other"||f==="unknown";
 
-function plannedMatch(planned, actuals){
-  const paired=(actuals||[]).find(a =>
-    [a?.pairedEventId,a?.plannedEventId].filter(Boolean).some(id=>String(id)===String(planned?.id))
-  );
-  if(paired) return paired;
-
+function nameOrFamilyMatch(planned,a){
   const pName=(String(planned?.name||"")+" "+String(planned?.type||"")).toLowerCase();
   const stopWords=new Set(["workout","training","trénink","planned","plan","upper","body"]);
   const tokens=(pName.match(/[a-z0-9áéěíóúůýčďňřšťž]+/gi)||[]).filter(t=>t.length>=5&&!stopWords.has(t));
   const family=activityFamily(planned);
-  // This function is called after both records have already been restricted to
-  // one Prague calendar day by D1. Event titles/IDs may be absent in Intervals,
-  // so the shared activity family is the correct final pairing signal.
-  return (actuals||[]).find(a=>{
-    const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
-    const nameMatch=tokens.some(token=>aName.includes(token));
-    const sameFamily=family!=="other" && activityFamily(a)===family;
-    return nameMatch || sameFamily;
-  }) || null;
+  const aName=(String(a.name||"")+" "+String(a.type||"")).toLowerCase();
+  return tokens.some(token=>aName.includes(token)) || (!vagueFamily(family) && activityFamily(a)===family);
+}
+
+// Something was recorded although its sport is unknown: a length, a distance,
+// or the stub Intervals.icu shows in place of a Strava activity.
+function recordedSomething(a){
+  const p=a?.payload||{};
+  return Number(a?.durationHours||0)>0 || Number(p.distance||p.icu_distance||0)>0 || Boolean(p._note) || /strava/i.test(String(p.source||""));
+}
+
+// Both lists are already restricted to one calendar day by D1. A plan takes at
+// most one activity and an activity satisfies one plan, the strongest signal
+// first for the whole day: Intervals.icu's own pairing (paired_event_id is the
+// bare event id, for an app-owned plan the id it got in Intervals.icu), then
+// the name or the sport, then an activity of unknown sport for a plan whose
+// sport is known.
+function matchPlannedWorkouts(planned, actuals, remoteIds=new Map()){
+  const out=new Map(),used=new Set();
+  const ids=w=>{const id=String(w?.id??"").replace(/^planned:/,"");return [id,remoteIds.get(id)].filter(Boolean).map(String);};
+  const passes=[
+    (w,a)=>a.pairedEventId!=null&&ids(w).includes(String(a.pairedEventId)),
+    nameOrFamilyMatch,
+    (w,a)=>KNOWN_FAMILIES.has(activityFamily(w))&&vagueFamily(activityFamily(a))&&recordedSomething(a)
+  ];
+  for(const pass of passes)for(const w of planned||[]){
+    if(out.has(w))continue;
+    const a=(actuals||[]).find(x=>!used.has(x)&&pass(w,x));
+    if(a){out.set(w,a);used.add(a);}
+  }
+  return out;
 }
 
 function cyclingKcalPerHour(item) {
@@ -1616,7 +1634,6 @@ function googleExerciseActivity(row) {
     end: row.end_time,
     durationHours: durationHours || 0,
     pairedEventId: null,
-    plannedEventId: null,
     name,
     payload
   };
@@ -1793,7 +1810,6 @@ async function energyForDate(env, date) {
       end: row.end_time,
       durationHours: (activityNumber(payload, ["moving_time", "elapsed_time", "duration_seconds", "duration"]) || 0) / 3600 || hoursBetween(row.start_time, row.end_time),
       pairedEventId: payload.paired_event_id || payload.pairedEventId || payload.event_id || payload.eventId || null,
-      plannedEventId: payload.paired_activity_id || payload.pairedActivityId || payload.activity_id || payload.activityId || null,
       tss: activityNumber(payload, ["icu_training_load", "training_load", "tss"]),
       name: payload.name || payload.title || payload.description || (payload._note ? "Aktivita z Intervals" : ""),
       payload
@@ -1841,10 +1857,22 @@ async function energyForDate(env, date) {
   // One planned session is paired with at most one real activity.  The pairing
   // becomes part of the API response so the UI can render one combined card
   // instead of a misleading “plan + completed activity” duplicate.
+  // An app-owned plan (planned:local-…) has another id in Intervals.icu, the
+  // one an activity's paired_event_id names.
+  const remoteIds = new Map();
+  const localIds = plannedWorkouts.map(w => String(w.id || "").replace(/^planned:/, "")).filter(id => id.startsWith("local-"));
+  if (localIds.length && completed.some(a => a.pairedEventId != null)) {
+    try {
+      const rows = (await env.DB.prepare(`SELECT local_id, remote_id FROM workout_exports WHERE user_id = ? AND provider = 'intervals' AND remote_id IS NOT NULL AND local_id IN (${localIds.map(() => "?").join(",")})`)
+        .bind(env.USER_ID, ...localIds).all()).results || [];
+      for (const r of rows) remoteIds.set(String(r.local_id), String(r.remote_id));
+    } catch (error) { console.error("Workout export ids read failed", error.message); }
+  }
+  const pairs = matchPlannedWorkouts(plannedWorkouts, completed, remoteIds);
   const matchedPlannedWorkouts = [];
   const unmatchedPlanned = [];
   for (const workout of plannedWorkouts) {
-    const actual = plannedMatch(workout, completed);
+    const actual = pairs.get(workout);
     if (actual) {
       matchedPlannedWorkouts.push({ planned: workout, actualId: actual.id, source: actual.source });
     } else {

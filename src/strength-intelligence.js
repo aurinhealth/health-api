@@ -8,7 +8,12 @@ export const LOAD_UNITS = {
   BARBELL_KG: "barbell_kg",
   MACHINE_PER_SIDE_KG: "machine_per_side_kg",
   CABLE_STACK_KG: "cable_stack_kg",
-  BODYWEIGHT: "bodyweight"
+  // kg = added weight (a weight belt or a dumbbell); 0 = bodyweight only.
+  BODYWEIGHT: "bodyweight",
+  KETTLEBELL_KG: "kettlebell_kg",
+  MEDICINE_BALL_KG: "medicine_ball_kg",
+  // kg = the machine's counterweight: less is harder.
+  ASSISTANCE_KG: "assistance_kg"
 };
 
 export const EXERCISE_INTELLIGENCE = {
@@ -95,6 +100,32 @@ export const EXERCISE_INTELLIGENCE = {
   "Smith machine shrug": { muscle: "traps", pattern: "shrug", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Barbell shrug", "DB shrug"] },
   "Cable upright row": { muscle: "traps", pattern: "upright_row", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.4, variants: ["DB shrug"] },
   "Barbell good morning": { muscle: "lower_back", pattern: "hip_hinge", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.9, variants: ["Roman chair"] },
+  // Equipment of other gyms and home gyms (added 2026-10-11). A movement whose
+  // load is not comparable (a hack squat to a leg press, a kickback machine to
+  // a hip thrust) has its own pattern, so no weight carries over to it.
+  "Pull-up": { muscle: "back", pattern: "vertical_pull", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.9, variants: ["Chin-up", "Assisted pull-up", "Lat pulldown"] },
+  "Chin-up": { muscle: "back", pattern: "vertical_pull", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.9, variants: ["Pull-up", "Assisted pull-up", "Close-grip lat pulldown"] },
+  "Assisted pull-up": { muscle: "back", pattern: "vertical_pull", equipment: "assisted_machine", unilateral: false, loadUnit: LOAD_UNITS.ASSISTANCE_KG, fatigue: 0.8, variants: ["Pull-up", "Lat pulldown"] },
+  "Hanging leg raise": { muscle: "core", pattern: "trunk_flexion", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.4, variants: ["Abs bench crunch", "Cable crunch"] },
+  "Dips": { muscle: "triceps", pattern: "dip", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.8, variants: ["Assisted dip", "Cable triceps extension"] },
+  "Assisted dip": { muscle: "triceps", pattern: "dip", equipment: "assisted_machine", unilateral: false, loadUnit: LOAD_UNITS.ASSISTANCE_KG, fatigue: 0.7, variants: ["Dips", "Cable triceps extension"] },
+  "Kettlebell swing": { muscle: "glutes", pattern: "kettlebell_swing", equipment: "kettlebell", unilateral: false, loadUnit: LOAD_UNITS.KETTLEBELL_KG, fatigue: 0.7, variants: ["Cable pull-through", "DB Romanian deadlift"] },
+  "EZ bar curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "ez_bar", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.5, variants: ["Preacher curl", "Cable curl", "DB curl"] },
+  "EZ bar skull crusher": { muscle: "triceps", pattern: "elbow_extension", equipment: "ez_bar", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.5, variants: [] },
+  "Preacher curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "ez_bar", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.45, variants: ["EZ bar curl", "Cable curl"] },
+  "Band pull-apart": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "band", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.25, variants: ["Face pull", "Cable rear delt fly"] },
+  "Hack squat": { muscle: "quads", pattern: "hack_squat", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.3, variants: ["Pendulum squat", "Smith machine squat"] },
+  "Seated leg curl": { muscle: "hamstrings", pattern: "knee_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.7, variants: ["Prone leg curl Prime"] },
+  "Glute kickback machine": { muscle: "glutes", pattern: "glute_kickback", equipment: "machine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_PER_SIDE_KG, fatigue: 0.4, variants: ["Cable glute kickback"] },
+  "Seated calf raise": { muscle: "calves", pattern: "seated_plantar_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: [] },
+  "T-bar row": { muscle: "back", pattern: "horizontal_pull", equipment: "t_bar", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.0, variants: ["Barbell row", "Chest-supported row"] },
+  "Chest-supported row": { muscle: "back", pattern: "horizontal_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.8, variants: ["Low row", "Standing rowing machine"] },
+  "TRX row": { muscle: "back", pattern: "horizontal_pull", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.6, variants: ["One-arm DB row", "Low row"] },
+  "Barbell incline bench press": { muscle: "chest", pattern: "incline_push", equipment: "barbell", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.0, variants: ["Smith machine incline press", "DB incline press", "Barbell bench press"] },
+  "Trap bar deadlift": { muscle: "glutes", pattern: "trap_bar_deadlift", equipment: "trap_bar", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.35, variants: ["Barbell Romanian deadlift"] },
+  "Landmine press": { muscle: "shoulders", pattern: "landmine_press", equipment: "landmine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.7, variants: [] },
+  "Medicine ball slam": { muscle: "core", pattern: "slam", equipment: "medicine_ball", unilateral: false, loadUnit: LOAD_UNITS.MEDICINE_BALL_KG, fatigue: 0.45, variants: [] },
+  "Box step-up": { muscle: "glutes", pattern: "lunge", equipment: "bodyweight", unilateral: true, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.7, variants: ["DB step-up", "DB reverse lunge"] },
 
 };
 
@@ -152,7 +183,14 @@ export const LOAD_RULES = {
   CABLE_STACK: { min: 2.5, max: null, step: 2.5, strict: true },
   // Plate-loaded machines and barbells can be built from 1.25 kg plates per side.
   PLATE_LOADED: { min: 2.5, max: null, step: 2.5, strict: false },
-  BARBELL: { min: 10, max: null, step: 2.5, strict: true }
+  BARBELL: { min: 10, max: null, step: 2.5, strict: true },
+  // Added weight on bodyweight work: none to start.
+  BODYWEIGHT: { min: 0, max: null, step: 2.5, strict: false },
+  // The usual kettlebell sizes 4, 8, 12 … 32 kg.
+  KETTLEBELL: { min: 4, max: 48, step: 4, strict: true },
+  MEDICINE_BALL: { min: 1, max: 15, step: 1, strict: true },
+  // The counterweight of an assisted machine, down to none.
+  ASSISTANCE: { min: 0, max: null, step: 5, strict: false }
 };
 
 function loadRule(meta) {
@@ -161,6 +199,10 @@ function loadRule(meta) {
   if (meta.loadUnit === LOAD_UNITS.CABLE_STACK_KG) return LOAD_RULES.CABLE_STACK;
   if (meta.loadUnit === LOAD_UNITS.BARBELL_KG) return LOAD_RULES.BARBELL;
   if (meta.loadUnit === LOAD_UNITS.MACHINE_TOTAL_KG || meta.loadUnit === LOAD_UNITS.MACHINE_PER_SIDE_KG) return LOAD_RULES.PLATE_LOADED;
+  if (meta.loadUnit === LOAD_UNITS.BODYWEIGHT) return LOAD_RULES.BODYWEIGHT;
+  if (meta.loadUnit === LOAD_UNITS.KETTLEBELL_KG) return LOAD_RULES.KETTLEBELL;
+  if (meta.loadUnit === LOAD_UNITS.MEDICINE_BALL_KG) return LOAD_RULES.MEDICINE_BALL;
+  if (meta.loadUnit === LOAD_UNITS.ASSISTANCE_KG) return LOAD_RULES.ASSISTANCE;
   return LOAD_RULES.PLATE_LOADED;
 }
 
@@ -260,6 +302,9 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
   // After three weeks without the exercise, start a little lighter.
   const gap = today ? (Date.parse(dateKey(today) + "T12:00:00Z") - Date.parse(dates[0] + "T12:00:00Z")) / 86400000 : 0;
   if (gap > 21 && decision !== "decrease") { decision = "return"; kg = Math.min(topKg, stepDown(topKg * 0.9, step, rule.min) || topKg); }
+  // An assisted machine works the other way: progress takes counterweight
+  // off, a step back (or a return after a break) adds a step of it.
+  if (meta?.loadUnit === LOAD_UNITS.ASSISTANCE_KG) kg = decision === "increase" ? Math.max(rule.min, topKg - step) : decision === "decrease" || decision === "return" ? topKg + step : topKg;
   kg = resolveLoad(exercise, kg);
   // Stagnation: the same load for the last three sessions without more reps.
   const previous = dates.slice(1, 3).map(d => sessions.get(d));

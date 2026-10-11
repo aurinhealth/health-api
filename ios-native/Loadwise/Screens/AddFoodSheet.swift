@@ -30,7 +30,7 @@ struct AddFoodSheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
+            PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Co přidáme?").font(Typo.sentence(31, relativeTo: .title)).foregroundStyle(Palette.ink)
@@ -386,7 +386,7 @@ struct FoodAmountView: View {
     @State private var fiber = ""
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 16) {
                 CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
                 VStack(alignment: .leading, spacing: 4) {
@@ -397,6 +397,7 @@ struct FoodAmountView: View {
                     TextField("100", text: $amount).keyboardType(.decimalPad).font(Typo.number(56)).frame(maxWidth: 160)
                     Text(product.perPortion ? "porce" : product.unit).font(Typo.body).foregroundStyle(Palette.faint)
                 }
+                PortionChips(product: current, amount: $amount)
                 NutritionCells(product: current, amount: value ?? 0)
                 if let note {
                     Label(note, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
@@ -415,9 +416,10 @@ struct FoodAmountView: View {
                 }
                 .buttonStyle(.plain)
                 if edit {
-                    let footer = product.perPortion
+                    let footer = (product.perPortion
                         ? L10n.tr("Hodnoty na porci. Uloží se k potravině, příště je najdeš opravené.")
-                        : L10n.f("Hodnoty na 100 %@. Uloží se k potravině, příště je najdeš opravené.", product.unit)
+                        : L10n.f("Hodnoty na 100 %@. Uloží se k potravině, příště je najdeš opravené.", product.unit))
+                        + (product.isShared ? " " + L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : "")
                     SettingsGroup(footer: footer) {
                         SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Potravina")
                         SettingsDivider()
@@ -437,12 +439,17 @@ struct FoodAmountView: View {
                     }
                 }
 
+                // Without energy the food would count as 0 kcal (forLogging fills zeros).
+                if current.calories_100g == nil {
+                    Text("Doplň energii v kcal, jinak by se jídlo počítalo jako 0 kcal.").font(Typo.small).foregroundStyle(Palette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 Button { Task { await save() } } label: {
                     Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
-                .disabled(saving || value == nil || current.name.isEmpty)
+                .disabled(saving || value == nil || current.name.isEmpty || current.calories_100g == nil)
             }
             .padding(24)
         }
@@ -454,7 +461,8 @@ struct FoodAmountView: View {
     private func fill() {
         guard !filled else { return }
         filled = true
-        edit = editing
+        // Missing energy: the values open right away to fill it in.
+        edit = editing || product.calories_100g == nil
         if amount.isEmpty { amount = Self.text(product.defaultAmount) }
         name = product.name
         brand = product.brand ?? ""
@@ -498,11 +506,72 @@ struct FoodAmountView: View {
         guard let value else { return }
         saving = true
         defer { saving = false }
-        if let message = await model.logFood(product: current, amount: value, meal: meal) {
+        let corrected = current
+        if let message = await model.logFood(product: corrected, amount: value, meal: meal) {
             error = message
         } else {
+            sendCorrection(corrected)
             done()
         }
+    }
+
+    /// A food from the catalog or AI with other values than it had: the
+    /// operator gets the change to check and fix it for everyone (Nahlásit
+    /// problém, src/support-report.js). The user's own copy is already fixed.
+    private func sendCorrection(_ corrected: FoodProduct) {
+        guard !model.demo, product.isShared, corrected.values != product.values else { return }
+        var diagnostics: JSONObject = ["kind": .string("food-correction"), "before": .object(product.values), "after": .object(corrected.values),
+                                       "unit": .string(product.unit)]
+        if let barcode = product.barcode { diagnostics["barcode"] = .string(barcode) }
+        if let source = product.source { diagnostics["source"] = .string(source) }
+        if let url = product.source_url { diagnostics["sourceUrl"] = .string(url) }
+        let message = "Oprava potraviny: " + product.name + (product.barcode.map { " (EAN " + $0 + ")" } ?? "")
+        let api = model.api
+        // In the background: a refused report (daily limit) must not hold up the food.
+        Task.detached { _ = try? await api.reportProblem(message: message, screenshot: nil, diagnostics: diagnostics) }
+    }
+}
+
+/// ¼, ⅓, ½ … of a serving or of the whole package, so nobody has to work out
+/// grams. Hidden when the food has neither.
+struct PortionChips: View {
+    let product: FoodProduct
+    @Binding var amount: String
+
+    static let fractions: [(label: String, value: Double)] = [("¼", 0.25), ("⅓", 1.0 / 3), ("½", 0.5), ("¾", 0.75), ("1", 1), ("1½", 1.5), ("2", 2)]
+
+    var body: some View {
+        if let reference = product.portionReference {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(product.perPortion ? L10n.tr("Počet porcí") : L10n.f("1 %@ = %@ %@", reference.name, FoodAmountView.text(reference.size), product.unit))
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Self.fractions, id: \.label) { fraction in
+                            let text = Self.text(reference.size * fraction.value, perPortion: product.perPortion)
+                            let selected = text == amount
+                            Button { amount = text } label: {
+                                Text(fraction.label).font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(selected ? Palette.onButton : Palette.ink)
+                                    .frame(minWidth: 44).frame(height: 36).padding(.horizontal, 4)
+                                    .background(selected ? Palette.button : Palette.ink.opacity(0.06), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(L10n.f("%@ %@", fraction.label, reference.name))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Grams and ml whole; portions up to two decimals (⅓ = 0,33, ½ = 0,5).
+    static func text(_ value: Double, perPortion: Bool) -> String {
+        // No thousands separator: the amount field must read it back ("1500", not "1 500").
+        guard perPortion else { return String(Int(value.rounded())) }
+        let v = (value * 100).rounded() / 100
+        let digits = v.rounded() == v ? 0 : (v * 10).rounded() == v * 10 ? 1 : 2
+        return Fmt.decimal(v, digits: digits)
     }
 }
 
@@ -573,7 +642,7 @@ struct ManualFoodView: View {
     }
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 20) {
                 CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
                 Text("Zadat ručně").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)

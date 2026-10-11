@@ -11,6 +11,9 @@ final class SettingsStore {
     private(set) var connections: [ConnectionsResponse.Provider] = []
     private(set) var sync: SyncStatus?
     private(set) var loaded = false
+    /// The profile really came from the server. The server replaces the whole
+    /// profile on save, so saving changes onto an empty one would wipe the rest.
+    private(set) var profileLoaded = false
     private(set) var saving = false
     var errorMessage: String?
     let demo: Bool
@@ -35,6 +38,7 @@ final class SettingsStore {
         async let sync = api.syncStatus()
         do {
             self.profile = try await profile
+            profileLoaded = true
             self.connections = (try? await connections)?.providers ?? []
             self.training = try? await training
             self.sync = try? await sync
@@ -48,6 +52,11 @@ final class SettingsStore {
     /// Saves the profile with these keys changed. Returns false on an error.
     func saveProfile(_ changes: JSONObject) async -> Bool {
         guard !demo else { profile.merge(changes) { $1 }; return true }
+        if !profileLoaded { await load() }
+        guard profileLoaded else {
+            errorMessage = L10n.tr("Profil se nepodařilo načíst, takže ho teď nejde uložit. Zkus to znovu za chvíli.")
+            return false
+        }
         saving = true
         defer { saving = false }
         var next = profile

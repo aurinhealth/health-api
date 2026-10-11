@@ -43,10 +43,15 @@ async function ensure(db) {
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_fluid_log_user_date ON fluid_log(user_id, date)").run();
 }
 
+// A refused value (400); any other failure is the server's (500), so the app
+// keeps a drink that waits for signal and sends it again.
+export class FluidInputError extends Error {}
+const invalid = message => new FluidInputError(message);
+
 export async function addFluid(db, { date, ml, kind = "water", at = null }) {
   const amount = Math.round(Number(ml));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
-  if (!(amount >= 10 && amount <= 3000)) throw new Error(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw invalid(L("Neplatné datum.", "Invalid date."));
+  if (!(amount >= 10 && amount <= 3000)) throw invalid(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
   await ensure(db);
   const consumedAt = at && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(at)) ? String(at).slice(0, 16) : `${date}T12:00`;
   const r = await db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(?,?,?,?,?)")
@@ -58,9 +63,9 @@ export async function addFluid(db, { date, ml, kind = "water", at = null }) {
 export async function updateFluid(db, { id, ml, kind, at }) {
   await ensure(db);
   const row = await db.prepare("SELECT id,date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND id=?").bind(db.userId, Number(id)).first();
-  if (!row) throw new Error(L("Pití nenalezeno.", "Drink not found."));
+  if (!row) throw invalid(L("Pití nenalezeno.", "Drink not found."));
   const amount = ml == null ? Number(row.ml) : Math.round(Number(ml));
-  if (!(amount >= 10 && amount <= 3000)) throw new Error(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
+  if (!(amount >= 10 && amount <= 3000)) throw invalid(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
   const type = kind == null ? row.kind : KINDS.includes(kind) ? kind : "other";
   const consumedAt = at && /^\d{2}:\d{2}$/.test(String(at)) ? `${row.date}T${at}` : row.consumed_at;
   await db.prepare("UPDATE fluid_log SET ml=?,kind=?,consumed_at=? WHERE user_id=? AND id=?").bind(amount, type, consumedAt, db.userId, Number(id)).run();

@@ -344,7 +344,7 @@ struct LibraryWorkoutSheet: View {
     @State private var error: String?
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(workout.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
@@ -582,7 +582,7 @@ struct ExerciseSheet: View {
     @State private var technique = false
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 14) {
                 Text(exercise.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                 Text([exercise.muscle, exercise.station].compactMap { $0?.nilIfBlank }.joined(separator: " · "))

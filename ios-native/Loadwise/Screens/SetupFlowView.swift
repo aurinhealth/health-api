@@ -93,7 +93,7 @@ struct SetupFlowView: View {
                     SectionLabel(text: L10n.f("Krok %@ z %@", String(position + 1), String(counted.count)) + " · " + L10n.tr(name(page))).padding(.top, 16)
                 }
 
-                ScrollView {
+                PageScroll {
                     VStack(alignment: .leading, spacing: 14) { content }
                         .padding(.top, 14)
                         .padding(.bottom, 20)
@@ -267,8 +267,8 @@ struct SetupFlowView: View {
             ChoiceCard(title: a.1, subtitle: a.2, selected: activity == a.0) { activity = a.0; touched.insert("activity") }
         }
         title("Cíl", nil).padding(.top, 10)
-        ForEach(ProfileSettingsView.goals.indices, id: \.self) { i in
-            let g = ProfileSettingsView.goals[i]
+        ForEach(HeartActivitySettingsView.goals.indices, id: \.self) { i in
+            let g = HeartActivitySettingsView.goals[i]
             ChoiceCard(title: Fmt.capitalized(g.1), selected: goal == g.0) { goal = g.0 }
         }
     }
@@ -280,8 +280,8 @@ struct SetupFlowView: View {
         ChipFlow(items: GoalsSettingsView.sports.map { $0.0 }, label: { id in GoalsSettingsView.sports.first { $0.0 == id }?.1 ?? id },
                  isOn: { $0 == mainSport }, toggle: { mainSport = $0 })
         Text("Sportu týdně").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
-        ChipFlow(items: ProfileSettingsView.sportHourOptions.map { $0.0 }.filter { $0 != "auto" },
-                 label: { id in ProfileSettingsView.sportHourOptions.first { $0.0 == id }?.1 ?? id },
+        ChipFlow(items: HeartActivitySettingsView.sportHourOptions.map { $0.0 }.filter { $0 != "auto" },
+                 label: { id in HeartActivitySettingsView.sportHourOptions.first { $0.0 == id }?.1 ?? id },
                  isOn: { $0 == sportHours }, toggle: { sportHours = $0 })
         Text("Posilování").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
         ForEach(EquipmentView.setupKinds.indices, id: \.self) { i in

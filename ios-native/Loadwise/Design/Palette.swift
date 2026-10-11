@@ -12,13 +12,18 @@ enum Palette {
     static let ink = Color(light: 0x1B1A17, dark: 0xECEAE6)
     static let secondary = Color(light: 0x3B3832, dark: 0xD9D6D0)
     static let muted = Color(light: 0x6D6A63, dark: 0x9AA39F)
-    static let faint = Color(light: 0x8B877F, dark: 0x7C837F)
+    // Light: about 4:1 on the paper background (small captions), was 3.1:1.
+    static let faint = Color(light: 0x76726A, dark: 0x7C837F)
     static let hairline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
     static let track = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.08)
 
     /// Solid buttons and the centre "+" of the tab bar.
     static let button = Color(light: 0x15140F, dark: 0xF4F2EE)
     static let onButton = Color(light: 0xF3EFE8, dark: 0x0A0B0C)
+    /// An icon on a coloured fill (sport, drink, swipe action): white on the
+    /// deep light-mode colours, near black on the pale dark-mode ones, where
+    /// white read at about 1.5:1.
+    static let onAccent = Color(light: 0xFFFFFF, dark: 0x0A0B0C)
 
     static let green = Color(light: 0x1F6B52, dark: 0x8FE6C4)
     static let greenSoft = Color(light: 0xD3EADF, dark: 0x1D3B33)

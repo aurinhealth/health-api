@@ -8,7 +8,7 @@ struct FormDetailView: View {
     var body: some View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.training)
-            ScrollView {
+            PageScroll {
                 FormDetailContent(training: training, back: { dismiss() })
                     .padding(.bottom, 100)
             }

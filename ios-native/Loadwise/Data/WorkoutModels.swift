@@ -236,6 +236,8 @@ struct GymAlternative: Decodable, Equatable, Identifiable {
     let reps: JSONValue?
     let note: String?
     let station: String?
+    /// The load estimated from the athlete's history (kg), when there is one.
+    var kg: Double? = nil
     var id: String { name }
 }
 

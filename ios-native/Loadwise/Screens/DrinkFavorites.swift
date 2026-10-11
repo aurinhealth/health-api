@@ -59,7 +59,8 @@ struct DrinkPreset: Hashable, Identifiable {
 
 /// Jídlo → Pití: the favourite drinks in their usual glasses, one tap adds one.
 struct DrinkPresetRow: View {
-    let add: (Int, String) async -> Void
+    /// true when the drink was saved (or waits for signal).
+    let add: (Int, String) async -> Bool
     @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
     @State private var busy: String?
     @State private var done: String?
@@ -78,8 +79,10 @@ struct DrinkPresetRow: View {
         return Button {
             Task {
                 busy = p.id
-                await add(p.ml, p.kind)
+                let saved = await add(p.ml, p.kind)
                 busy = nil
+                // The tick only when it was saved; the error shows on top.
+                guard saved else { return }
                 withAnimation(.easeOut(duration: 0.2)) { done = p.id }
                 try? await Task.sleep(nanoseconds: 1_200_000_000)
                 withAnimation(.easeOut(duration: 0.2)) { if done == p.id { done = nil } }

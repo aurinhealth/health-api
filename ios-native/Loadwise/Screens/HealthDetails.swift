@@ -461,7 +461,7 @@ struct WeightDetailContent: View {
                 }
                 .padding(.top, 20)
                 ThreeCells(cells: [("Průměr 7 dní", Fmt.decimal(w.average.map { Units.weight($0) })), ("Za 30 dní", w.change.map { Fmt.signed(Units.weight($0), digits: 1) } ?? "–"),
-                                   ("Do cíle", w.goal.map { Units.weightText(max(0, (w.average ?? w.latest) - $0)) } ?? "–")])
+                                   ("Do cíle", w.goal.map { Units.weightText(abs((w.average ?? w.latest) - $0)) } ?? "–")])
                     .padding(.top, 20)
                 SectionLabel(text: "Složení těla").padding(.top, 32)
                 VStack(spacing: 0) {
@@ -496,8 +496,9 @@ struct WeightDetailContent: View {
     private func sentence(_ w: HealthSnapshot.Weight) -> String? {
         guard let change = w.change else { return nil }
         var s = change < 0 ? L10n.f("Za měsíc o %@ méně.", Units.weightText(abs(change))) : change > 0 ? L10n.f("Za měsíc o %@ více.", Units.weightText(change)) : L10n.tr("Za měsíc beze změny.")
-        if let goal = w.goal, let avg = w.average, change < 0, avg > goal {
-            let weeks = Int(((avg - goal) / (abs(change) / 30 * 7)).rounded(.up))
+        // Towards the goal from either side: losing down to it, or gaining up to it.
+        if let goal = w.goal, let avg = w.average, change != 0, (change < 0 && avg > goal) || (change > 0 && avg < goal) {
+            let weeks = Int((abs(avg - goal) / (abs(change) / 30 * 7)).rounded(.up))
             s += " " + L10n.f("Tímhle tempem jsi na cíli %@ zhruba za %@ %@.", Units.weightText(goal, digits: 0), String(weeks), Fmt.plural(weeks, "týden", "týdny", "týdnů"))
         }
         return s

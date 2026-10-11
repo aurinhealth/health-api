@@ -10,7 +10,7 @@ struct VO2maxDetailView: View {
     var body: some View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.training)
-            ScrollView {
+            PageScroll {
                 if let vo2 = training.vo2max {
                     VO2maxContent(vo2: vo2, back: { dismiss() }).padding(.bottom, 100)
                 } else {

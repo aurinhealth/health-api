@@ -47,6 +47,32 @@ struct WidgetSnapshot: Codable, Equatable {
         UserDefaults(suiteName: Self.group)?.set(data, forKey: Self.key)
     }
 
+    /// The snapshot as it stands on `today`: from an earlier day the day's
+    /// counts start again at zero (the targets stay), and the night and the
+    /// plan are unknown until the app refreshes. Without this the widgets
+    /// showed yesterday's calories, water and steps as today's after midnight.
+    func current(today: String) -> WidgetSnapshot {
+        guard date != today else { return self }
+        var s = self
+        s.date = today
+        s.readiness = nil
+        s.zone = nil
+        s.sleepMinutes = nil
+        s.sleepIndex = nil
+        s.hrv = nil
+        s.strain = 0
+        s.kcal = 0
+        s.waterMl = 0
+        s.protein = protein == nil ? nil : 0
+        s.carbs = carbs == nil ? nil : 0
+        s.fat = fat == nil ? nil : 0
+        s.steps = 0
+        s.bedtime = nil
+        s.nextTitle = nil
+        s.nextTime = nil
+        return s
+    }
+
     static func clear() {
         UserDefaults(suiteName: group)?.removeObject(forKey: key)
     }

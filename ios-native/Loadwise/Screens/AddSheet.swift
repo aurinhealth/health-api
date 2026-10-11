@@ -18,7 +18,7 @@ struct AddSheet: View {
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Co přidáme?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
@@ -64,6 +64,9 @@ struct AddSheet: View {
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
+        // What "+" adds goes to today, also while the screens show another day.
+        .onAppear { model.writesToday = true }
+        .onDisappear { model.writesToday = false }
         .sheet(item: $food, onDismiss: { dismiss() }) { start in AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start) }
         .sheet(isPresented: $weight, onDismiss: { dismiss() }) { WeightEntrySheet() }
         .sheet(isPresented: $workout, onDismiss: { dismiss() }) { ManualWorkoutSheet() }
@@ -160,7 +163,7 @@ struct DrinkSheet: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(editing ? "Upravit pití" : "Co piješ?").font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)

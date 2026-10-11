@@ -179,7 +179,7 @@ struct SportStyle {
             label = L10n.tr(day == nil ? "bez dat" : "volno")
         } else {
             symbol = SportIcon.symbol(sport)
-            tint = done ? .white : Self.color(sport)
+            tint = done ? Palette.onAccent : Self.color(sport)
             fill = done ? Self.color(sport) : Self.color(sport).opacity(0.1)
             dashed = !done
             label = done ? L10n.tr(Self.name(sport)) : L10n.f("v plánu %@", L10n.tr(Self.name(sport)))
@@ -314,6 +314,8 @@ struct CalendarDayList: View {
     let date: String
     let today: String
     let day: CalendarDay?
+    /// A watch session (no Intervals.icu detail) opened in its summary.
+    @State private var watch: CalendarActivity?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -330,6 +332,8 @@ struct CalendarDayList: View {
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     if let route = Self.route(activity) {
                         NavigationLink(value: route) { CalendarActivityRow(activity: activity, chevron: true) }.buttonStyle(.plain)
+                    } else if activity.status == "done" {
+                        Button { watch = activity } label: { CalendarActivityRow(activity: activity, chevron: true) }.buttonStyle(.plain)
                     } else {
                         CalendarActivityRow(activity: activity, chevron: false)
                     }
@@ -340,6 +344,7 @@ struct CalendarDayList: View {
             }
         }
         .padding(.horizontal, 16)
+        .sheet(item: $watch) { WatchActivityDetail(activity: $0) }
     }
 
     private var heading: String {
@@ -366,7 +371,7 @@ struct CalendarActivityRow: View {
         HStack(spacing: 12) {
             Image(systemName: SportIcon.symbol(activity.sport))
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(done ? .white : color)
+                .foregroundStyle(done ? Palette.onAccent : color)
                 .frame(width: 36, height: 36)
                 .background(done ? color : color.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
@@ -394,5 +399,77 @@ struct CalendarActivityRow: View {
         if let m = a.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
         if let km = a.km, km > 0 { parts.append(Units.distanceText(km)) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// A watch session from Google Health. Google sends only a summary (no laps,
+/// no heart-rate curve, no track), so this is what there is to show.
+struct WatchActivityDetail: View {
+    @Environment(\.dismiss) private var dismiss
+    let activity: CalendarActivity
+
+    var body: some View {
+        NavigationStack {
+            PageScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 14) {
+                        Image(systemName: SportIcon.symbol(activity.sport))
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(Palette.onAccent)
+                            .frame(width: 48, height: 48)
+                            .background(SportStyle.color(activity.sport), in: Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: activity.title).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                            Text(verbatim: when).font(Typo.small).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    .padding(.bottom, 18)
+                    ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
+                    Text("Google Health posílá jen souhrn aktivity, ne průběh výkonu ani trasu.")
+                        .font(Typo.caption).foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 16)
+                }
+                .padding(24)
+            }
+            .background(Palette.background.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                        .accessibilityLabel("Zavřít")
+                }
+            }
+        }
+        .tint(Palette.ink)
+        .presentationDetents([.medium, .large])
+    }
+
+    /// "Chůze · st 8. 10. · 10:00–11:10".
+    private var when: String {
+        let s = activity.summary
+        let time = [s?.start ?? activity.time, s?.end].compactMap { $0 }.joined(separator: "–")
+        return [Fmt.capitalized(L10n.tr(SportStyle.name(activity.sport))), Fmt.weekdayShort(activity.date) + " " + Fmt.dayMonth(activity.date), time.isEmpty ? nil : time]
+            .compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private var rows: [(String, String, String?)] {
+        let s = activity.summary
+        var out: [(String, String, String?)] = []
+        if let m = activity.minutes, m > 0 { out.append((L10n.tr("Doba pohybu"), Fmt.duration(Int(m.rounded())), nil)) }
+        if let km = activity.km, km > 0 {
+            out.append((L10n.tr("Vzdálenost"), Units.distanceText(km), nil))
+            // Pace for what is walked or run, per km (per mile in imperial units).
+            if ["run", "walk"].contains(activity.sport), let m = activity.minutes, m > 0 {
+                let perUnit = m / (Units.imperial ? km / 1.609344 : km)
+                let total = Int((perUnit * 60).rounded())
+                out.append((L10n.tr("Tempo"), "\(total / 60):" + String(format: "%02d", total % 60), Units.imperial ? "/ mi" : "/ km"))
+            }
+        }
+        if let kcal = activity.kcal, kcal > 0 { out.append((L10n.tr("Energie"), Fmt.int(kcal), "kcal")) }
+        if let hr = s?.avgHr { out.append((L10n.tr("Průměrný tep"), Fmt.int(hr), "bpm")) }
+        if let hr = s?.maxHr { out.append((L10n.tr("Maximální tep"), Fmt.int(hr), "bpm")) }
+        if let steps = s?.steps { out.append((L10n.tr("Kroky"), Fmt.int(steps), nil)) }
+        if let up = s?.elevationM, up > 0 { out.append((L10n.tr("Převýšení"), Fmt.int(up), "m")) }
+        return out
     }
 }

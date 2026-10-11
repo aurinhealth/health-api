@@ -147,7 +147,7 @@ struct SettingsPage<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        ScrollView {
+        PageScroll {
             VStack(alignment: .leading, spacing: 26) { content }
                 .padding(.horizontal, 20)
                 .padding(.top, 12)

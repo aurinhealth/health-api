@@ -52,23 +52,23 @@ test('an exercise outside the catalog gets its card written once by AI, stored a
   const { storedTechnique, generateTechnique, exerciseInUse } = await import('../src/exercise-technique.js');
   const { importStrengthHistory } = await import('../src/strength-history.js');
   const raw=createD1(),db=scopedDb(raw,1),other=scopedDb(raw,2),original=globalThis.fetch,calls=[];
-  const answer={setup:['Kettlebell mezi chodidly.','Záda rovná.'],steps:['Boky dozadu.','Švih z kyčlí.','Nahoře zpevni hýždě.'],feel:['Hýždě a zadní stehna.','Spodní záda nebolí.'],mistakes:['Dřep místo předklonu.'],breathing:'Výdech nahoře.',videoId:'abcdefghijk',videoTitle:'Kettlebell swing',query:'kettlebell swing form'};
+  const answer={setup:['Kettlebell v ruce nad hlavou.','Záda rovná.'],steps:['Boky dozadu.','Pomalu do lehu.','Nahoře zpevni hýždě.'],feel:['Hýždě a zadní stehna.','Spodní záda nebolí.'],mistakes:['Dřep místo předklonu.'],breathing:'Výdech nahoře.',videoId:'abcdefghijk',videoTitle:'Turkish get-up',query:'kettlebell swing form'};
   globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);calls.push(body);return Response.json({model:body.model,output_text:JSON.stringify(answer)});};
   try{
     const env={OPENAI_API_KEY:'test',DB:db};
     // Only an exercise the athlete really has.
-    assert.equal(await exerciseInUse(db,'Kettlebell swing'),false);
-    await importStrengthHistory(db,{date:'2026-10-04',sets:[{exercise:'Kettlebell swing',actualKg:16,actualReps:15,completed:true}]});
-    assert.equal(await exerciseInUse(db,'Kettlebell swing'),true);
-    assert.equal(await exerciseInUse(other,'Kettlebell swing'),false);
-    const made=await generateTechnique(env,'Kettlebell swing');
+    assert.equal(await exerciseInUse(db,'Turkish get-up'),false);
+    await importStrengthHistory(db,{date:'2026-10-04',sets:[{exercise:'Turkish get-up',actualKg:16,actualReps:15,completed:true}]});
+    assert.equal(await exerciseInUse(db,'Turkish get-up'),true);
+    assert.equal(await exerciseInUse(other,'Turkish get-up'),false);
+    const made=await generateTechnique(env,'Turkish get-up');
     assert.equal(calls.length,1);assert.equal(calls[0].model,'gpt-6-luna');assert.deepEqual(calls[0].tools,[{type:'web_search'}]);
-    assert.deepEqual(made.video,{id:'abcdefghijk',title:'Kettlebell swing'});
+    assert.deepEqual(made.video,{id:'abcdefghijk',title:'Turkish get-up'});
     // Stored for everyone: the next athlete reads it without the AI.
-    const stored=await storedTechnique(other,'Kettlebell swing');
-    const card=techniqueFor('Kettlebell swing',null,stored);
+    const stored=await storedTechnique(other,'Turkish get-up');
+    const card=techniqueFor('Turkish get-up',null,stored);
     assert.equal(card.source,'ai');assert.deepEqual(card.steps,answer.steps);assert.deepEqual(card.feel,answer.feel);assert.equal(card.video.id,'abcdefghijk');
-    assert.equal(techniqueFor('Kettlebell swing'),null);
+    assert.equal(techniqueFor('Turkish get-up'),null);
     // A broken answer stores nothing; an invalid video id is dropped.
     answer.steps=['Jen jeden krok.'];await assert.rejects(generateTechnique(env,'Sandbag carry'));
     assert.equal(await storedTechnique(db,'Sandbag carry'),null);
