@@ -64,6 +64,30 @@ export function eventPlan(event, date) {
   return { name: event.name || null, date: event.date, daysLeft: left, phase, phases };
 }
 
+// How a done session kept to its plan (Training → Tréninky týdne colours it):
+// "good" when its length and load (TSS) are within ±15 % of the plan and, in
+// the gym, at least 80 % of the planned sets were logged; "off" with a short
+// reason otherwise. Nothing to compare (a stub without data) counts as good.
+const PLAN_MARGIN = 0.15, GYM_SETS = 0.8;
+const hm = minutes => minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + String(minutes % 60).padStart(2, "0") : "") : minutes + " min";
+export function adherenceOf(done = {}, plan = {}, gym = null) {
+  const sets = num(gym?.sets), logged = num(gym?.logged);
+  if (sets > 0 && logged > 0) {
+    return logged >= sets * GYM_SETS ? { adherence: "good" } : { adherence: "off", adherenceReason: L("jen " + logged + " z " + sets + (sets === 1 ? " série" : " sérií"), "only " + logged + " of " + sets + (sets === 1 ? " set" : " sets")) };
+  }
+  const ratio = (a, p) => (a > 0 && p > 0 ? a / p - 1 : null);
+  const planMinutes = num(plan.durationHours) ? Math.round(num(plan.durationHours) * 60) : null;
+  const length = ratio(num(done.durationHours), num(plan.durationHours));
+  const load = ratio(num(done.tss), num(plan.tss));
+  if (length != null && Math.abs(length) > PLAN_MARGIN) {
+    return { adherence: "off", adherenceReason: length < 0 ? L("kratší než plán (" + hm(planMinutes) + ")", "shorter than planned (" + hm(planMinutes) + ")") : L("delší než plán (" + hm(planMinutes) + ")", "longer than planned (" + hm(planMinutes) + ")") };
+  }
+  if (load != null && Math.abs(load) > PLAN_MARGIN) {
+    return { adherence: "off", adherenceReason: load > 0 ? L("vyšší intenzita než plán", "harder than planned") : L("nižší intenzita než plán", "easier than planned") };
+  }
+  return { adherence: "good" };
+}
+
 const isWorkout = a => a && (num(a.durationHours) ?? 0) >= 0.15;
 
 // One day's sessions (Training → Tréninky týdne, Today → Plán dne): what was
@@ -93,11 +117,34 @@ export function daySessions(d, date, training = {}, gymDay = null) {
     // A Strava stub has neither name nor sport: the plan it was paired with names it.
     const plan = planOf.get(String(a.id ?? ""));
     const session = sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done");
-    sessions.push(plan?.id ? { ...session, plannedId: String(plan.id) } : session);
+    // A strength session done on a day with a gym plan saved in the app fulfils it.
+    const gymSets = session.sport === "strength" && gymDay?.exercises?.length ? gymDay : null;
+    const fit = plan ? adherenceOf(a, plan, gymSets) : gymSets ? adherenceOf(a, {}, gymSets) : { adherence: "offplan" };
+    sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit });
   }
   for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
-  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
+  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
   return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
+}
+
+// A session's state against the plan, as the app colours it (PlanState in
+// ios-native PlanSessionActions.swift): "good" done as planned, "off" done
+// differently, "missed", "planned" still ahead, "offplan" done outside the plan.
+export function planStateOf(session) {
+  if (!session) return null;
+  if (session.status === "missed") return "missed";
+  if (session.status !== "done") return "planned";
+  return session.adherence === "off" ? "off" : session.adherence === "offplan" ? "offplan" : "good";
+}
+
+// One state for a whole day (the training calendar's day): a missed plan
+// first, then a session done differently, then one done as planned, then a
+// plan still ahead, and only then what was done outside the plan; null for a
+// day without sessions.
+const DAY_ORDER = ["missed", "off", "good", "planned", "offplan"];
+export function dayPlanState(sessions = []) {
+  const states = new Set((sessions || []).map(planStateOf).filter(Boolean));
+  return DAY_ORDER.find(s => states.has(s)) || null;
 }
 
 export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, gym = {} }) {
@@ -213,7 +260,12 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
 
   // Active energy today and the week's days, and the last 28 days for the
   // detail (Training → Aktivní výdej).
-  const activeOn = d => round(num(google.find(r => r.id === d)?.activeCalories));
+  // A session the user counts at the estimate takes the watch's extra off.
+  const extraOn = d => deviceEnergyExtra(byDate.get(d)?.training?.completed);
+  const activeOn = d => {
+    const v = round(num(google.find(r => r.id === d)?.activeCalories));
+    return v == null ? null : Math.max(0, v - extraOn(d));
+  };
   const activeDays = Array.from({ length: 28 }, (_, i) => shift(date, i - 27)).map(d => ({ date: d, value: activeOn(d) })).filter(p => p.value != null);
   const active = activeDays.filter(p => p.date > shift(date, -7));
   const usualActive = active.filter(p => p.date < date).map(p => p.value);
@@ -230,7 +282,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     load: { weeks, intensity },
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
-    activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
+    activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
   };
@@ -251,14 +303,41 @@ function sessionOf(w, date, status) {
     kind: done ? "activity" : "planned",
     status,
     date,
-    time: clockOf(w.start),
+    // A plan at midnight is the day without a time (Intervals.icu's "any time").
+    time: !done && clockOf(w.start) === "00:00" ? null : clockOf(w.start),
     title: String(w.name || w.type || L("Trénink", "Workout")).slice(0, 120),
     sport: sportOf(w),
     minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
-    eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null
+    eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
+    ...(done ? energyOf(w) : {})
   };
+}
+
+// What the device says the session burned and, when that is implausible
+// (activity-energy-check.js), the estimate the energy budget plans with.
+// kcalChoice: what the user chose for it (activity-energy-choices.js),
+// "estimate" or "device"; absent while it waits to be checked.
+function energyOf(w) {
+  const kcal = round(num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories));
+  if (!(kcal > 0)) return {};
+  const c = w.energyCheck;
+  if (c?.status !== "review") return { kcal };
+  const out = { kcal, kcalEstimate: { value: round(num(w.autoCaloriesForPlanning ?? w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } };
+  return w.energyChoice ? { ...out, kcalChoice: w.energyChoice } : out;
+}
+
+// The watch's calories left out of a day's active energy: what it counted
+// above the estimate for the sessions the user chose to count the estimate for.
+export function deviceEnergyExtra(completed = []) {
+  let extra = 0;
+  for (const w of completed || []) {
+    if (w?.energyChoice !== "estimate") continue;
+    const device = num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories), counted = num(w.caloriesForPlanning);
+    if (device > 0 && counted != null && device > counted) extra += device - counted;
+  }
+  return Math.round(extra);
 }
 
 function strainBand(v) {

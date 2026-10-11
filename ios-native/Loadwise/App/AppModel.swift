@@ -65,6 +65,9 @@ final class AppModel {
     private(set) var outbox: [OutboxItem] = []
     /// A waiting write the server turned down, shown until tapped away.
     var outboxNote: String?
+    /// A done activity just sent to the apps chosen in Synchronizace: the
+    /// toast "Odesláno do 2 aplikací" and its sheet (SyncViews.swift).
+    var syncReport: SyncReport?
     /// The Today and Food answers as they came, under the waiting writes.
     @ObservationIgnored private var todayBase: Data?
     @ObservationIgnored private var foodBase: Data?
@@ -389,6 +392,8 @@ final class AppModel {
             let (snapshot, data) = try await api.foodData(date: selectedDate)
             food = snapshot
             foodBase = data
+            // The day's food and water to Apple Health when switched on in Synchronizace.
+            Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
             fetched[.food] = (Date(), shownDay)
             applyOutbox()
             foodError = nil
@@ -539,10 +544,97 @@ final class AppModel {
         let body: JSONObject = ["kg": .number(kg), "date": .string(date), "requestId": .string(UUID().uuidString)]
         let item = OutboxItem(path: "/app/api/weight", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Váha"),
                               overlay: OutboxOverlay(kind: .weight, date: date, kg: kg))
+        // Apple Health gets it too when weight is switched on in Synchronizace.
+        Task { await AppleHealthExport.shared.saveWeight(kg: kg, date: date) }
         if try await deliver(item) {
             await refreshHealth()
             await refresh()
         }
+    }
+
+    // MARK: - Synchronizace
+
+    /// The server destinations a done activity goes to (Google Health,
+    /// Intervals.icu, Strava), as last seen in Synchronizace: the toast lists
+    /// them as "odešle se" while there is no signal.
+    static let activityDestinationsKey = "sync.activityDestinations"
+
+    /// A done activity (a gym session, a workout typed in) to the apps chosen
+    /// in Synchronizace; `sends` when the server already sent it (a manual
+    /// workout). Shows the toast when it went anywhere.
+    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil) async {
+        guard !demo else { return }
+        var rows: [SyncReport.Row] = []
+        if let sends {
+            rows = sends.map { SyncReport.Row(destination: $0.destination, status: SyncReport.status($0.status), message: $0.message, needsScope: $0.needsScope) }
+        } else {
+            do {
+                let result = try await api.sendActivity(activity)
+                rows = (result.sends ?? []).map { SyncReport.Row(destination: $0.destination, status: SyncReport.status($0.status), message: $0.message, needsScope: $0.needsScope) }
+            } catch where Outbox.isNoConnection(error) {
+                // Without signal it waits in the outbox, after the activity itself.
+                enqueue(OutboxItem(path: "/app/api/sync/activity", method: "POST", body: OutboxItem.json(activity.body),
+                                   label: activity.name, key: "sync:" + activity.key))
+                offline = true
+                let waiting = UserDefaults.standard.stringArray(forKey: Self.activityDestinationsKey) ?? []
+                rows = waiting.map { SyncReport.Row(destination: $0, status: .pending) }
+            } catch {
+                rows = []
+            }
+        }
+        let apple = AppleHealthExport.shared
+        if apple.prefs.pushActivities {
+            let failed = await apple.saveWorkout(activity)
+            rows.insert(SyncReport.Row(destination: "apple", status: failed == nil ? .sent : .error, message: failed), at: 0)
+        }
+        rows.sort { (SyncApp.order.firstIndex(of: $0.destination) ?? 9) < (SyncApp.order.firstIndex(of: $1.destination) ?? 9) }
+        syncReport = rows.isEmpty ? nil : SyncReport(activity: activity, rows: rows)
+    }
+
+    /// "Zkusit znovu" in the toast's sheet.
+    func retrySync(_ destination: String) async {
+        guard var report = syncReport, let i = report.rows.firstIndex(where: { $0.destination == destination }) else { return }
+        report.rows[i].working = true
+        syncReport = report
+        var row = report.rows[i]
+        if destination == "apple" {
+            let failed = await AppleHealthExport.shared.saveWorkout(report.activity)
+            row.status = failed == nil ? .sent : .error
+            row.message = failed
+        } else {
+            do {
+                // Google first needs the permission to write workouts.
+                if row.needsScope != nil {
+                    guard let event = try await connect(provider: "google-extra"), event == "google" else {
+                        row.working = false
+                        update(row)
+                        return
+                    }
+                }
+                let send = try await api.retrySend(key: report.activity.key, destination: destination)
+                row.status = SyncReport.status(send.status)
+                row.message = send.message
+                row.needsScope = send.needsScope
+            } catch {
+                // Never reached the server (it waited without signal): send it whole.
+                if let result = try? await api.sendActivity(report.activity), let send = result.sends?.first(where: { $0.destination == destination }) {
+                    row.status = SyncReport.status(send.status)
+                    row.message = send.message
+                    row.needsScope = send.needsScope
+                } else {
+                    row.status = .error
+                    row.message = error.localizedDescription
+                }
+            }
+        }
+        row.working = false
+        update(row)
+    }
+
+    private func update(_ row: SyncReport.Row) {
+        guard var report = syncReport, let i = report.rows.firstIndex(where: { $0.destination == row.destination }) else { return }
+        report.rows[i] = row
+        syncReport = report
     }
 
     /// Saves a day's gym sheet; without signal the newest sheet of the day
@@ -755,6 +847,7 @@ final class AppModel {
         api.signOut()
         SnapshotCache.clear()
         GymDayCache.clear()
+        GymHistoryCache.clear()
         if !expired {
             // Waiting writes belong to this account; the next one must not send them.
             outbox = []

@@ -48,6 +48,10 @@ installed side by side (different bundle IDs).
   - Zdroje dat: connected sources and "Synchronizovat teď"; Apple Health
     (HealthKit) with the areas it may read (App/AppleHealth.swift);
   - Tréninkové zóny: run and bike separately, thresholds, presets and zones;
+  - Synchronizace: where Loadwise sends data (Apple Zdraví, Google Health,
+    Intervals.icu, Strava): planned workouts, done activities and the chosen
+    health data; after a done activity a toast says where it went
+    (Screens/SyncViews.swift, App/AppleHealthExport.swift);
   - Vzhled (automatic, light, dark), Jednotky, signing out.
 - "Prohlédnout ukázku" on the sign-in screen shows sample data without an
   account.

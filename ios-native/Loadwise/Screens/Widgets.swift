@@ -5,27 +5,40 @@ import SwiftUI
 
 struct FoodWidget: View {
     let nutrition: TodaySnapshot.Nutrition
+    var size: WidgetSize = .medium
 
     var body: some View {
         Card {
             WidgetHeader(title: "Jídlo a pití", color: Palette.amberBar)
-            HStack(alignment: .firstTextBaseline) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(Fmt.int(nutrition.kcal)).font(Typo.number(34)).foregroundStyle(Palette.ink)
-                    Text("/ " + Fmt.int(nutrition.target) + " kcal").font(Typo.number(17)).foregroundStyle(Palette.faint)
+            if size == .small {
+                VStack(alignment: .leading, spacing: 4) {
+                    NumberText(value: Fmt.int(nutrition.kcal), unit: "kcal")
+                    Text(L10n.f("z %@", Fmt.int(nutrition.target))).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
-                Spacer()
-                if let bonus = nutrition.trainingBonus, bonus > 0 {
-                    Text(L10n.f("+%@ trénink", Fmt.int(bonus))).font(Typo.caption).foregroundStyle(Palette.amber)
-                }
+                ProgressLine(fraction: fraction(nutrition.kcal, nutrition.target), height: 5)
+            } else {
+                full
             }
-            ProgressLine(fraction: fraction(nutrition.kcal, nutrition.target), height: 5)
-            HStack(alignment: .top, spacing: 12) {
-                macro("Bílkoviny", nutrition.protein.eaten, "g", fraction(nutrition.protein.eaten, nutrition.protein.target), Palette.brown)
-                macro("Sacharidy", nutrition.carbs.eaten, "g", fraction(nutrition.carbs.eaten, nutrition.carbs.target), Palette.amberBar)
-                macro("Tuky", nutrition.fat.eaten, "g", fraction(nutrition.fat.eaten, nutrition.fat.target), Palette.gold)
-                macro("Voda", nutrition.water.ml.map { Units.imperial ? Units.volume($0) : $0 / 1000 }, Units.imperial ? Units.volumeUnit : "l", fraction(nutrition.water.ml, nutrition.water.target), Palette.blue, digits: Units.imperial ? 0 : 1)
+        }
+    }
+
+    @ViewBuilder private var full: some View {
+        HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(Fmt.int(nutrition.kcal)).font(Typo.number(34)).foregroundStyle(Palette.ink)
+                Text("/ " + Fmt.int(nutrition.target) + " kcal").font(Typo.number(17)).foregroundStyle(Palette.faint)
             }
+            Spacer()
+            if let bonus = nutrition.trainingBonus, bonus > 0 {
+                Text(L10n.f("+%@ trénink", Fmt.int(bonus))).font(Typo.caption).foregroundStyle(Palette.amber)
+            }
+        }
+        ProgressLine(fraction: fraction(nutrition.kcal, nutrition.target), height: 5)
+        HStack(alignment: .top, spacing: 12) {
+            macro("Bílkoviny", nutrition.protein.eaten, "g", fraction(nutrition.protein.eaten, nutrition.protein.target), Palette.brown)
+            macro("Sacharidy", nutrition.carbs.eaten, "g", fraction(nutrition.carbs.eaten, nutrition.carbs.target), Palette.amberBar)
+            macro("Tuky", nutrition.fat.eaten, "g", fraction(nutrition.fat.eaten, nutrition.fat.target), Palette.gold)
+            macro("Voda", nutrition.water.ml.map { Units.imperial ? Units.volume($0) : $0 / 1000 }, Units.imperial ? Units.volumeUnit : "l", fraction(nutrition.water.ml, nutrition.water.target), Palette.blue, digits: Units.imperial ? 0 : 1)
         }
     }
 
@@ -111,7 +124,18 @@ struct PlanWidget: View {
 
     @ViewBuilder
     private func trailing(_ item: TodaySnapshot.PlanItem) -> some View {
-        if item.done {
+        if item.done, let session = item.session, let kcal = session.countedKcal {
+            // A done session with its calories; the device's number waits for a check.
+            VStack(alignment: .trailing, spacing: 1) {
+                NumberText(value: Fmt.int(kcal), unit: "kcal", size: 19)
+                if session.kcalNeedsCheck {
+                    Label("k ověření", systemImage: "exclamationmark.triangle")
+                        .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.amber)
+                        .labelStyle(TitleAndOptionalIcon(hasIcon: true))
+                }
+            }
+            .accessibilityElement(children: .combine)
+        } else if item.done {
             Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
                 .accessibilityLabel("Hotovo")
         } else if item.status == "missed" {
@@ -129,32 +153,34 @@ struct PlanWidget: View {
 
 struct StepsWidget: View {
     let steps: TodaySnapshot.Steps
+    var size: WidgetSize = .medium
     /// The hours shown in the day chart.
     private let hours = Array(6...22)
 
     var body: some View {
         Card {
             WidgetHeader(title: "Pohyb", color: Palette.amberBar)
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(Fmt.int(steps.today)).font(Typo.number(34)).foregroundStyle(Palette.ink).lineLimit(1)
-                    Text(L10n.f("kroků z %@", Fmt.int(steps.goal)) + percent).font(Typo.caption).foregroundStyle(Palette.amber)
-                }
-                .frame(width: 120, alignment: .leading)
+            SizedWidgetBody(size: size) {
+                Text(Fmt.int(steps.today)).font(Typo.number(34)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(L10n.f("kroků z %@", Fmt.int(steps.goal)) + percent).font(Typo.caption).foregroundStyle(Palette.amber)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            } chart: { height in
                 if let hourly = steps.hourly, hourly.count == 24 {
-                    dayChart(hourly)
+                    dayChart(hourly, height: height)
                 } else {
-                    weekChart
+                    weekChart(height: height)
                 }
             }
-            Text(steps.hourly == nil ? "7 dní" : "kroky během dne")
-                .font(Typo.tiny).foregroundStyle(Palette.faint)
+            if size != .small {
+                Text(steps.hourly == nil ? "7 dní" : "kroky během dne")
+                    .font(Typo.tiny).foregroundStyle(Palette.faint)
+            }
         }
     }
 
     /// Running total through the day: past hours filled, the current hour
     /// highlighted, the rest of the day dashed at the usual level.
-    private func dayChart(_ hourly: [Double]) -> some View {
+    private func dayChart(_ hourly: [Double], height: CGFloat) -> some View {
         let now = steps.hour ?? 23
         let total = hourly.indices.map { h in hourly[0...h].reduce(0, +) }
         let values = hours.map { h in h <= now ? total[h] : max(total[now], steps.usual?[h] ?? total[now]) }
@@ -166,11 +192,11 @@ struct StepsWidget: View {
                         target: steps.goal,
                         labels: hours.map { [6, 10, 14, 18, 22].contains($0) ? String($0) : "" },
                         highlighted: hours.firstIndex(of: now),
-                        spacing: 2.5,
-                        height: 56)
+                        spacing: size == .small ? 1.5 : 2.5,
+                        height: height)
     }
 
-    private var weekChart: some View {
+    private func weekChart(height: CGFloat) -> some View {
         BarChart(values: steps.week.map(\.value),
                  styles: steps.week.indices.map { i in
                      i == steps.week.count - 1 ? BarStyle(fill: Palette.amberBar)
@@ -180,7 +206,7 @@ struct StepsWidget: View {
                  target: steps.goal,
                  labels: steps.week.map { Fmt.weekdayInitial($0.date) },
                  highlighted: steps.week.count - 1,
-                 height: 56)
+                 height: height)
     }
 
     private var percent: String {
@@ -191,20 +217,26 @@ struct StepsWidget: View {
 
 struct RestingHRWidget: View {
     let restingHR: TodaySnapshot.RestingHR
+    var size: WidgetSize = .small
 
     var body: some View {
         Card {
             WidgetHeader(title: "Klidový tep", color: Palette.rust)
-            VStack(alignment: .leading, spacing: 4) {
+            SizedWidgetBody(size: size) {
                 NumberText(value: Fmt.int(restingHR.value), unit: "bpm")
                 if let note { Text(note.text).font(Typo.caption).foregroundStyle(note.good ? Palette.green : Palette.rust) }
+            } chart: { height in
+                LineChart(values: values, color: Palette.rust,
+                          lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
+                          band: restingHR.baseline.map { ($0 - 2)...($0 + 2) }, height: height)
             }
-            let values = restingHR.series.map(\.value)
-            LineChart(values: values, color: Palette.rust,
-                      lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
-                      band: restingHR.baseline.map { ($0 - 2)...($0 + 2) }, height: 40)
+            if size == .large {
+                Text("30 dní · pásmo = tvoje norma").font(Typo.tiny).foregroundStyle(Palette.faint)
+            }
         }
     }
+
+    private var values: [Double] { restingHR.series.map(\.value) }
 
     private var note: (text: String, good: Bool)? {
         guard let value = restingHR.value, let base = restingHR.baseline else { return nil }
@@ -216,19 +248,33 @@ struct RestingHRWidget: View {
 
 struct HRVWidget: View {
     let hrv: TodaySnapshot.HRV
+    var restingHR: Double? = nil
+    var size: WidgetSize = .small
 
     var body: some View {
         Card {
             WidgetHeader(title: "Srdce · HRV", color: Palette.green)
-            VStack(alignment: .leading, spacing: 4) {
-                NumberText(value: Fmt.int(hrv.value), unit: "ms")
-                Text(status).font(Typo.caption).foregroundStyle(Palette.green)
+            SizedWidgetBody(size: size) {
+                NumberText(value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms")
+                Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+            } chart: { height in
+                LineChart(values: values, color: Palette.green,
+                          lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
+                          band: band, height: height)
             }
-            let values = hrv.series.map(\.value)
-            LineChart(values: values, color: Palette.green,
-                      lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
-                      band: band, height: 40)
+            if size != .small {
+                Text("30 dní · pásmo = tvoje norma").font(Typo.tiny).foregroundStyle(Palette.faint)
+            }
         }
+    }
+
+    private var values: [Double] { hrv.series.map(\.value) }
+
+    /// "v normě", with the resting heart rate on the wider sizes.
+    private var note: String {
+        var text = L10n.tr(status)
+        if size != .small, let rhr = restingHR { text += " · " + L10n.f("tep %@", Fmt.int(rhr)) }
+        return text
     }
 
     private var band: ClosedRange<Double>? {
@@ -242,30 +288,40 @@ struct HRVWidget: View {
     }
 }
 
+extension TodaySnapshot.HRV {
+    /// Health's HRV in the shape the Today widget takes.
+    init(_ h: HealthSnapshot.HRV) {
+        self.init(value: h.value, baseline: h.baseline, low: h.low, high: h.high, trend: h.trend, series: h.series)
+    }
+}
+
 struct WeightWidget: View {
     let weight: TodaySnapshot.Weight
+    var size: WidgetSize = .medium
 
     var body: some View {
         Card {
             WidgetHeader(title: "Váha", color: Palette.brown)
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    NumberText(value: Fmt.decimal(Units.weight(weight.latest)), unit: Units.weightUnit)
-                    if let change {
-                        Text(L10n.f("%@ %@ za 30 dní", change <= 0 ? "↓" : "↑", Units.weightText(abs(change))))
-                            .font(Typo.caption).foregroundStyle(change <= 0 ? Palette.green : Palette.amber)
-                    }
+            SizedWidgetBody(size: size, mediumChart: 64) {
+                NumberText(value: Fmt.decimal(Units.weight(weight.latest)), unit: Units.weightUnit)
+                if let change {
+                    Text(L10n.f("%@ %@ za 30 dní", change <= 0 ? "↓" : "↑", Units.weightText(abs(change))))
+                        .font(Typo.caption).foregroundStyle(change <= 0 ? Palette.green : Palette.amber)
+                        .lineLimit(1).minimumScaleFactor(0.8)
                 }
-                .frame(width: 120, alignment: .leading)
-                let raw = weight.series.map { Units.weight($0.value) }
-                let goal = weight.goal.map { Units.weight($0) }
-                let all = raw + [goal].compactMap { $0 }
+            } chart: { height in
                 TrendDotsChart(raw: raw, trend: trend(raw), goal: goal,
-                               lo: (all.min() ?? 70) - 0.4, hi: (all.max() ?? 90) + 0.4, height: 64)
+                               lo: (all.min() ?? 70) - 0.4, hi: (all.max() ?? 90) + 0.4, height: height)
             }
-            Text("30 dní · body = vážení, čára = trend").font(Typo.tiny).foregroundStyle(Palette.faint)
+            if size != .small {
+                Text("30 dní · body = vážení, čára = trend").font(Typo.tiny).foregroundStyle(Palette.faint)
+            }
         }
     }
+
+    private var raw: [Double] { weight.series.map { Units.weight($0.value) } }
+    private var goal: Double? { weight.goal.map { Units.weight($0) } }
+    private var all: [Double] { raw + [goal].compactMap { $0 } }
 
     private var change: Double? {
         let t = trend(weight.series.map(\.value))

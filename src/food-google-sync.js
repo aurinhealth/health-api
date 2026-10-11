@@ -1,5 +1,6 @@
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
+import { readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 // Durable, user-scoped outbox. Local food writes never depend on Google being
 // online. Known Google records are patched, not recreated, on edits.
 const BASE='https://health.googleapis.com/v4/';
@@ -55,6 +56,8 @@ export async function backfillFoodGoogle(db){
 }
 export async function processFoodGoogle(env,{token,fetcher=fetch}={}){
   const db=env.DB;await ensure(db);
+  // Settings → Synchronizace → Google Health: food left out stays only in the app (queued).
+  if(!healthAllowed(await readSyncPrefs(db,db.userId??env.USER_ID,'google'),'nutrition'))return {status:'off'};
   if(Array.isArray(env.CONNECTED_PROVIDERS)&&!env.CONNECTED_PROVIDERS.includes('google')){
     await db.prepare("UPDATE food_google_exports SET status='disconnected',message='Google není připojené.' WHERE user_id=? AND status='queued'").bind(db.userId).run();
     return {status:'disconnected'};

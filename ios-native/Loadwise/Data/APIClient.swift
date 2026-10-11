@@ -242,6 +242,15 @@ final class APIClient: @unchecked Sendable {
         let _: JSONValue = try await send("/app/api/planned/move", method: "POST", body: ["eventId": JSONValue.string(eventId), "date": .string(date)])
     }
 
+    /// Another day and the time of day: time "" leaves the day without one,
+    /// "HH:MM" sets it, nil keeps it. The answer may carry a note about other changes.
+    func reschedulePlanned(eventId: String, to date: String, time: String?) async throws -> PlannedChange {
+        var body: JSONObject = ["eventId": .string(eventId), "date": .string(date)]
+        if let time { body["time"] = time.isEmpty ? JSONValue.null : JSONValue.string(time) }
+        let change: PlannedChange = try await send("/app/api/planned/move", method: "POST", body: body)
+        return change
+    }
+
     func deletePlanned(eventId: String) async throws {
         let _: JSONValue = try await send("/app/api/planned/delete", method: "POST", body: ["eventId": JSONValue.string(eventId)])
     }
@@ -258,11 +267,13 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
-    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String) async throws {
+    /// A done one comes back with where it was sent (Synchronizace).
+    @discardableResult
+    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
         if let rpe { body["rpe"] = .number(Double(rpe)) }
-        let _: JSONValue = try await send("/app/api/workouts/manual", method: "POST", body: body)
+        return try await send("/app/api/workouts/manual", method: "POST", body: body)
     }
 
     /// Today's date in the phone's zone, usable off the main actor.

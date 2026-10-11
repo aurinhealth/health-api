@@ -11,6 +11,7 @@
 import { grantedExtras } from "./google-scopes.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { localDate, localNoon } from "./user-time.js";
+import { readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 
 const TOLERANCE_KG = 0.05;
 export const WEIGHT_SYNC_DAYS = 14;
@@ -122,7 +123,12 @@ export async function syncWeights(env, { googleToken, fetchImpl = fetch, now = D
   // delay the weight used by nutrition and the athlete profile.
   await storeIntervalsWeights(env, intervals);
   const googleWritable = googleConnected && grantedExtras(env).weightWrite;
-  const actions = planWeightSync({ ...stored, intervals, written }, { googleConnected, intervalsConnected, googleWritable });
+  // Settings → Synchronizace: weight left out of what goes to Intervals.icu
+  // (its weights still come into the app).
+  // The same for Google Health: the app keeps its own copy instead.
+  const sendToIntervals = healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "intervals"), "weight");
+  const sendToGoogle = healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "google"), "weight");
+  const actions = planWeightSync({ ...stored, intervals, written }, { googleConnected, intervalsConnected, googleWritable: googleWritable && sendToGoogle }).filter(a => sendToIntervals || a.target !== "intervals");
   let token = null;
   const done = [];
   for (const action of actions) {

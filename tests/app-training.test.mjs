@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildTraining, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
+import { adherenceOf, buildTraining, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
 
 const DATE = "2026-10-08"; // Thursday, week 41
 const day = n => new Date(Date.parse(DATE + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
@@ -202,4 +202,16 @@ test("A Strava stub paired with the plan is listed as the planned ride, done", (
   const t = buildTraining({ ...input, days: days.map(d => d.date === day(-1) ? { ...d, daily: { training: { planned: [], completed: [stub], matched: [{ planned: plan, actualId: "activity:s1" }] } } } : d) });
   const rows = t.sessions.filter(s => s.date === day(-1));
   assert.deepEqual(rows.map(s => [s.kind, s.status, s.title, s.sport]), [["activity", "done", "Sobotní vyjížďka", "ride"]]);
+});
+
+test("a done session carries its calories and, when implausible, the realistic estimate", async () => {
+  const { daySessions } = await import("../src/app-training.js");
+  const gym = { id: "g1", source: "google-health", type: "WeightTraining", name: "WeightTraining", durationHours: 1.55, calories: 318, reportedCalories: 711,
+    caloriesForPlanning: 318, energyCheck: { status: "review", reported: 711, estimated: 318, low: 191, high: 636, reason: "x" } };
+  const walk = { id: "w1", source: "google-health", type: "Walk", durationHours: 1, calories: 250 };
+  const { sessions } = daySessions(DATE, DATE, { completed: [gym, walk] });
+  assert.equal(sessions[0].kcal, 711);
+  assert.deepEqual(sessions[0].kcalEstimate, { value: 318, low: 191, high: 636, reason: "x" });
+  assert.equal(sessions[1].kcal, 250);
+  assert.equal(sessions[1].kcalEstimate, undefined);
 });

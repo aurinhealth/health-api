@@ -8,12 +8,14 @@ import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleep
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
-import { daySessions } from "./app-training.js";
+import { daySessions, deviceEnergyExtra } from "./app-training.js";
+import { recoveryToday } from "./recovery-today.js";
 
 const STEP_GOAL = 10000;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
+const activeKcal = (v, extra) => (v == null ? null : Math.max(0, Math.round(v) - (extra || 0)));
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const nightDate = s => s?.date || String(s?.endTime || "").slice(0, 10);
 const clock = minutes => (minutes == null ? null : String(Math.floor(minutes / 60) % 24).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0"));
@@ -78,7 +80,7 @@ export function todayWeather(location, forecast, date) {
   };
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, checkin = null, trainingPlan = null }) {
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -139,10 +141,38 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // the order of the plan (no clock: it comes after the last record, whenever
   // that is), then bedtime. The same sessions as Training → Tréninky týdne,
   // so a gym session or a watch workout outside the plan shows here too.
+  // The watch's calories above the estimate the user chose to count (Plán dne → Kalorie k ověření).
+  const watchExtra = deviceEnergyExtra(training.completed);
   const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
   const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null;
-  const done = daySession.filter(s => s.status === "done").sort((a, b) => String(a.time || "99").localeCompare(String(b.time || "99")));
+  const done = daySession.filter(s => s.status === "done");
   const open = daySession.filter(s => s.status !== "done");
+
+  // Recovery (recovery-today.js): the suggestions after a training day, only
+  // for today; the stretching and sauna saved for the day join the plan.
+  const rec = recovery || {};
+  const savedRecovery = (Array.isArray(rec.saved) ? rec.saved : []).filter(r => r && r.date === date);
+  const gymByDate = { ...(rec.gym || {}), ...(gym ? { [date]: gym } : {}) };
+  const recoveryCard = hour != null && recovery ? recoveryToday({
+    date,
+    today: daySession,
+    yesterday: daySessions(shift(date, -1), date, rec.yesterday || {}, gymByDate[shift(date, -1)] || null).sessions,
+    tomorrow: rec.tomorrow ? daySessions(shift(date, 1), date, rec.tomorrow, gymByDate[shift(date, 1)] || null).sessions : null,
+    gym: gymByDate,
+    tonight: plan ? { bedtime: clock(plan.bed), need: tonightNeed } : null,
+    saved: savedRecovery
+  }) : null;
+  const stretchName = recoveryCard?.items?.find(i => i.kind === "stretch")?.title;
+  const recoveryItems = savedRecovery.map(r => ({
+    kind: "recovery",
+    recovery: r.kind,
+    time: r.done ? clockOf(r.doneAt) : null,
+    title: r.kind === "stretch" && stretchName ? stretchName : r.title,
+    detail: r.minutes + " min" + (r.kind === "sauna" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
+    done: r.done,
+    status: r.done ? "done" : "planned"
+  }));
+  const byTime = (a, b) => String(a.time || "99").localeCompare(String(b.time || "99"));
   const planItems = [
     ...[...done, ...open].map(s => ({
       kind: "workout",
@@ -156,6 +186,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       status: s.status,
       session: s
     })),
+    ...recoveryItems
+  ];
+  // Done first in the order of the day, then what is still open, then bedtime.
+  const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
     ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: L("potřeba spánku ", "sleep need ") + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
@@ -189,9 +223,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       fat: { eaten: round(num(totals.fat_g)), target: num(macros.fat_g) },
       water: { ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml) }
     },
-    plan: planItems,
+    plan: ordered,
+    recovery: recoveryCard,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
-    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: round(num(todayRow.activeCalories)), activeMinutes: activeMinutes(google, date) },
+    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)
   };

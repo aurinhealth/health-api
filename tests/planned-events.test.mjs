@@ -99,3 +99,12 @@ test('a gym plan with logged sets, or a target day with its own plan, stays put'
   raw.sqlite.prepare('UPDATE health_datapoints SET payload_json=? WHERE user_id=1').run(JSON.stringify({id:77,type:'Ride',start_date_local:'2026-10-04T17:30:00'}));
   assert.equal((await movePlannedEvent(env,{eventId:'77',date:'2026-10-05'},fetchImpl)).gymPlanMoved,false);
 });
+
+test("a move can set the time of day, or leave the day without one", async () => {
+  const { calls, env, fetchImpl } = await setup();
+  await movePlannedEvent(env, { eventId: "77", date: "2026-10-05", time: "07:00" }, fetchImpl);
+  assert.deepEqual(JSON.parse(calls[0].body), { start_date_local: "2026-10-05T07:00:00" });
+  await movePlannedEvent(env, { eventId: "77", date: "2026-10-06", time: null }, fetchImpl);
+  assert.deepEqual(JSON.parse(calls[1].body), { start_date_local: "2026-10-06T00:00:00" });
+  await assert.rejects(movePlannedEvent(env, { eventId: "77", date: "2026-10-06", time: "25:00" }, fetchImpl), /time|čas/i);
+});

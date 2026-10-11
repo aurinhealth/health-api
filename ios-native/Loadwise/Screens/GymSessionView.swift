@@ -20,6 +20,23 @@ struct GymSessionView: View {
     @State private var changing = false
     @State private var rating = false
     @State private var finishing = false
+    /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
+    @State private var doneMode = false
+
+    /// The lifting session from the watch or Intervals.icu that day.
+    private var doneSession: WeekSession? { model.doneStrengthSession(on: date) }
+
+    private var showsDone: Bool {
+        if day?.cancelled == true { return false }
+        return doneMode || doneSession != nil
+    }
+
+    /// Done: every set ticked, or a past day with sets ticked.
+    private static func isDone(_ day: GymDay, date: String) -> Bool {
+        let sets = day.exercises.flatMap { $0.sets }
+        guard sets.contains(where: { $0.done }) else { return false }
+        return date < AppModel.localDate(Date()) || sets.allSatisfy { $0.done }
+    }
 
     private var load: [String: Double] {
         muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }
@@ -64,7 +81,7 @@ struct GymSessionView: View {
                 SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
                 Spacer()
                 // Move or cancel the day's session (GymPlanActions.swift).
-                if !model.demo && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
+                if !model.demo && !showsDone && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
                     Button { changing = true } label: {
                         Text("Změnit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                     }
@@ -74,6 +91,11 @@ struct GymSessionView: View {
             .padding(.top, 24)
             if loading && day == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+            } else if showsDone {
+                GymDoneDetail(date: date,
+                              day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
+                              session: doneSession,
+                              save: { await save() })
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
@@ -178,6 +200,7 @@ struct GymSessionView: View {
         defer { loading = false }
         do {
             day = try await model.gymDay(date: date)
+            if let loaded = day, !doneMode { doneMode = Self.isDone(loaded, date: date) }
             if let names = day?.exercises.map(\.name), !names.isEmpty {
                 muscles = (try? await model.api.gymMuscles(names: names)) ?? [:]
             }
@@ -440,25 +463,20 @@ struct TechniqueSheet: View {
         .padding(.top, 6)
     }
 
-    /// A still from the exercise's video; tapping it plays the video.
+    /// Photos of the start and end position, swiped between; without them a
+    /// still from the exercise's video.
     @ViewBuilder private var photo: some View {
-        if let id = videoId, let url = URL(string: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg") {
-            Button { withAnimation { page = 1 } } label: {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Rectangle().fill(Palette.track)
-                }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    Image(systemName: "play.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 52, height: 52).background(.black.opacity(0.45), in: Circle())
-                }
+        if let photos = technique?.photos, photos.count >= 2 {
+            ExercisePhotos(urls: photos.compactMap { URL(string: $0) })
+        } else if let id = videoId, let url = URL(string: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg") {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Rectangle().fill(Palette.track)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Přehrát video")
+            .frame(maxWidth: .infinity)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 
@@ -675,5 +693,46 @@ struct YouTubePlayer: UIViewRepresentable {
 
     final class Coordinator {
         var loaded: String?
+    }
+}
+
+/// The start and end position of an exercise, one photo per page.
+struct ExercisePhotos: View {
+    let urls: [URL]
+    @State private var page = 0
+
+    var body: some View {
+        VStack(spacing: 10) {
+            TabView(selection: $page) {
+                ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(Palette.track)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .overlay(alignment: .bottomLeading) {
+                        Text(index == 0 ? L10n.tr("Začátek") : L10n.tr("Konec"))
+                            .font(Typo.caption)
+                            .foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Palette.background.opacity(0.65), in: Capsule())
+                            .padding(10)
+                    }
+                    .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .aspectRatio(3 / 2, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            HStack(spacing: 8) {
+                ForEach(0..<urls.count, id: \.self) { i in
+                    Circle().fill(i == page ? Palette.ink : Palette.faint).frame(width: 7, height: 7)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr("Fotky začátku a konce cviku"))
     }
 }

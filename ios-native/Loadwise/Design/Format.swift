@@ -84,6 +84,24 @@ enum Fmt {
         return days < 7 ? name : dayMonth(isoDate)
     }
 
+    /// The weekday after "na": "pondělí", "středu" ("Monday" in English).
+    static func weekdayName(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return isoDate }
+        let names = L10n.isEnglish
+            ? ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+            : ["neděli", "pondělí", "úterý", "středu", "čtvrtek", "pátek", "sobotu"]
+        return names[utcCalendar.component(.weekday, from: date) - 1]
+    }
+
+    /// "v pondělí", "ve středu" ("on Monday"), whichever week it is.
+    static func onWeekday(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return isoDate }
+        let names = L10n.isEnglish
+            ? ["on Sunday", "on Monday", "on Tuesday", "on Wednesday", "on Thursday", "on Friday", "on Saturday"]
+            : ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"]
+        return names[utcCalendar.component(.weekday, from: date) - 1]
+    }
+
     /// Minutes as "1 h 15 min" or "45 min".
     static func duration(_ minutes: Int) -> String {
         minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? " \(minutes % 60) min" : "") : "\(minutes) min"

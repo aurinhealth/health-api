@@ -149,6 +149,8 @@ struct TrainingSnapshot: Decodable, Equatable {
         let week: [TodaySnapshot.Point]
         /// The last 28 days for the detail (older saved answers lack it).
         let days: [TodaySnapshot.Point]?
+        /// The watch's calories left out today: a gym session counted at the estimate.
+        var excluded: Double? = nil
     }
 
     struct ThisWeek: Decodable, Equatable {
