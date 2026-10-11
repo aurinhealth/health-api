@@ -54,3 +54,17 @@ test("one answer a day, cleared with null", async () => {
   assert.equal(await getCheckin(db, "2026-10-11"), null);
   await assert.rejects(saveCheckin(db, "2026-10-11", "great"));
 });
+
+test("HRV is compared only with days from the same source", async () => {
+  const { recoveryReadiness } = await import("../src/recovery-model.js");
+  const day = k => new Date(Date.parse("2026-10-11T12:00:00Z") - k * 86400000).toISOString().slice(0, 10);
+  // 20 Google days around 75 ms, then 20 Apple days around 50 ms (SDNN).
+  const rows = [
+    ...Array.from({ length: 20 }, (_, i) => ({ id: day(40 - i), hrv: 75 + (i % 3), hrvSource: "google-wearables", restingHR: 55 })),
+    ...Array.from({ length: 20 }, (_, i) => ({ id: day(20 - i), hrv: 50 + (i % 3), hrvSource: "apple-health", restingHR: 55 })),
+    { id: day(0), hrv: 51, hrvSource: "apple-health", restingHR: 55 }
+  ];
+  const r = recoveryReadiness({ rows, date: day(0) });
+  assert.ok(Math.abs(r.components.hrv.baseline - 51) < 2, String(r.components.hrv.baseline));
+  assert.equal(r.components.hrv.days, 20);
+});

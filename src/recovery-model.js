@@ -161,10 +161,14 @@ export function recoveryReadiness(input) {
   const rows = (input && input.rows) || [], date = input && input.date, night = input && input.night, need = (input && input.sleepNeed) || 480;
   const today = rows.find(r => r && r.id === date) || {};
   const end = Date.parse(date + "T12:00:00Z"), components = {}, flags = [];
-  const hb = personalBaseline(rows, date, "hrv", { log: true });
+  // HRV only against days measured the same way: Apple Watch reports SDNN,
+  // Google's watches RMSSD, so one baseline over both mixes two scales. A new
+  // source starts its own baseline.
+  const hrvRows = rows.filter(r => r && (r.hrvSource || null) === (today.hrvSource || null));
+  const hb = personalBaseline(hrvRows, date, "hrv", { log: true });
   if (Number(today.hrv) > 0 && hb.mean != null) {
     const sd = Math.max(hb.sd, 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
-    const week = rows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
+    const week = hrvRows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
     const diff = week.length >= 3 ? week.reduce((s, v) => s + v, 0) / week.length - hb.mean : null, swc = 0.5 * sd;
     components.hrv = { value: Number(today.hrv), baseline: Math.exp(hb.mean), low: Math.exp(hb.mean - sd), high: Math.exp(hb.mean + sd), z, score: recoveryComponentScore(z), trend: diff == null ? null : diff < -swc ? "down" : diff > swc ? "up" : "stable", days: hb.count };
     if (components.hrv.trend === "down") flags.push("hrv_trend_down");
