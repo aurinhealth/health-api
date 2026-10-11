@@ -30,7 +30,9 @@ test('focused gym only generates exercises for selected groups', () => {
   const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
   const plan=generateStrengthPlan(context,{focusMuscles:['chest','upper_back','abs'],durationMinutes:60});
   const work=[...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))];
-  assert.equal(work.length,3);
+  // The hour is filled from the chosen groups only, more than one exercise each.
+  assert.ok(work.length>3&&work.length<=6,String(work.length));
+  for(const group of ['chest','upper_back','abs'])assert.ok(work.some(name=>FOCUS_GROUPS[group].exercises.includes(name)),group);
   assert.deepEqual(plan.focusMuscles,['chest','upper_back','abs']);
   assert.equal(plan.adaptive.volumeModifier,.9);
   for(const exercise of work)assert.ok(['chest','upper_back','abs'].some(group=>FOCUS_GROUPS[group].exercises.includes(exercise)));
@@ -49,8 +51,17 @@ test('front, side and rear shoulders map to distinct exercises', () => {
   const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
   const plan=generateStrengthPlan(context,{focusMuscles:['front_delts','side_delts','rear_delts']});
   const exercises=[...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))];
-  assert.equal(exercises.length,3);
+  assert.ok(exercises.length>=3);
   for(const group of ['front_delts','side_delts','rear_delts'])assert.ok(exercises.some(name=>FOCUS_GROUPS[group].exercises.includes(name)));
+});
+
+test('a long focused session gets several exercises per group, only from those groups', () => {
+  const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
+  const plan=generateStrengthPlan(context,{focusMuscles:['hips','biceps','rear_delts'],durationMinutes:95});
+  const work=[...new Set(plan.rows.filter(row=>row[0]==='WORK').map(row=>row[1]))];
+  assert.ok(work.length>=6,String(work.length));
+  for(const name of work)assert.ok(['hips','biceps','rear_delts'].some(group=>FOCUS_GROUPS[group].exercises.includes(name)),name);
+  for(const group of ['hips','biceps','rear_delts'])assert.ok(work.filter(name=>FOCUS_GROUPS[group].exercises.includes(name)).length>=2,group);
 });
 
 test('focused legs preserve cycling protection', () => {

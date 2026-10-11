@@ -13,7 +13,43 @@ export async function trainingSetup(db){
   await ensureOnboarding(db);const row=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
   let saved={};try{saved=JSON.parse(row?.training_json||'{}');}catch{}
   const history=await trainingHistory(db);
-  return {...saved,experience:!saved.experience||saved.experience==='auto'?history.experience:saved.experience,experienceMode:!saved.experience||saved.experience==='auto'?'auto':'manual',equipment:saved.equipment||'bodyweight',history};
+  const places=Array.isArray(saved.places)&&saved.places.length?{places:saved.places,activePlace:saved.activePlace}:legacyPlaces(saved);
+  return {...saved,...places,experience:!saved.experience||saved.experience==='auto'?history.experience:saved.experience,experienceMode:!saved.experience||saved.experience==='auto'?'auto':'manual',equipment:saved.equipment||'bodyweight',history};
+}
+
+// Places to train: several gyms and a home gym, each with its own stations,
+// name, web page and dumbbells. The active one is mirrored into the flat
+// fields (equipment, stations, gymName, gymUrl, dumbbellWeights) that the
+// generator reads, so switching places never overwrites another's list.
+const PLACE_KINDS=['gym','home'];
+const validStation=id=>Object.hasOwn(METAGYM_KUTNA_HORA.stations,id)||OTHER_STATION_IDS.includes(id);
+const ALL_STATIONS=[...Object.keys(METAGYM_KUTNA_HORA.stations),...OTHER_STATION_IDS];
+const cleanUrl=v=>/^https?:\/\/\S+$/i.test(String(v||'').trim())?String(v).trim().slice(0,300):'';
+const cleanWeights=v=>[...new Set((Array.isArray(v)?v:[]).map(Number).filter(kg=>Number.isFinite(kg)&&kg>0&&kg<=100).map(kg=>Math.round(kg*4)/4))].sort((a,b)=>a-b).slice(0,60);
+export function normalizePlaces(input){
+  const seen=new Set();
+  return (Array.isArray(input)?input:[]).slice(0,10).map((p,i)=>{
+    let id=/^[a-z0-9-]{1,40}$/.test(String(p?.id||''))?String(p.id):'place-'+(i+1);
+    while(seen.has(id))id+='-'+i;seen.add(id);
+    const kind=PLACE_KINDS.includes(p?.kind)?p.kind:'gym';
+    return {id,kind,name:String(p?.name||'').trim().slice(0,80)||(kind==='home'?'Domácí posilovna':'Posilovna'),
+      stations:[...new Set((Array.isArray(p?.stations)?p.stations:[]).map(String).filter(validStation))],url:cleanUrl(p?.url),dumbbellWeights:cleanWeights(p?.dumbbellWeights)};
+  });
+}
+// Accounts saved before places: their one gym or home gym becomes the first place.
+export function legacyPlaces(saved={}){
+  const equipment=saved.equipment||'bodyweight';
+  if(equipment==='bodyweight'&&!(saved.stations||[]).length)return {places:[],activePlace:'bodyweight'};
+  const home=equipment==='home'||equipment==='dumbbells';
+  const stations=equipment==='gym'?ALL_STATIONS:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:(saved.stations||[]);
+  return {places:normalizePlaces([{id:'place-1',kind:home?'home':'gym',name:saved.gymName,stations,url:saved.gymUrl,dumbbellWeights:saved.dumbbellWeights}]),activePlace:'place-1'};
+}
+// The flat fields from the active place ("bodyweight": none).
+export function mirrorActivePlace(training){
+  const places=normalizePlaces(training.places);
+  const active=places.find(p=>p.id===training.activePlace);
+  if(training.activePlace==='bodyweight'||!active)return {...training,places,activePlace:active?active.id:'bodyweight',equipment:'bodyweight',stations:[],gymName:'',gymUrl:'',dumbbellWeights:[]};
+  return {...training,places,activePlace:active.id,equipment:active.kind==='home'?'home':'custom',stations:active.stations,gymName:active.name,gymUrl:active.url,dumbbellWeights:active.dumbbellWeights};
 }
 export async function hasRecentActivityData(db,userId=db.userId){
   return Boolean(await db.prepare("SELECT id FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND COALESCE(start_time,sample_time)>=date('now','-28 days') AND (record_role IS NULL OR record_role!='duplicate') LIMIT 1").bind(userId).first());
@@ -42,14 +78,31 @@ export function normalizeTraining(input={}){
   // The dumbbells there are (kg per hand), so the plan asks for a weight that exists.
   const dumbbellWeights=[...new Set((Array.isArray(input.dumbbellWeights)?input.dumbbellWeights:[]).map(Number).filter(kg=>Number.isFinite(kg)&&kg>0&&kg<=100).map(kg=>Math.round(kg*4)/4))].sort((a,b)=>a-b).slice(0,60);
   const kind=equipment==='custom'&&!stations.length?'gym':equipment==='home'&&!stations.length?'dumbbells':equipment;
-  return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights};
+  const places=normalizePlaces(input.places);
+  const activePlace=input.activePlace==='bodyweight'||places.some(p=>p.id===input.activePlace)?String(input.activePlace):places[0]?.id||'bodyweight';
+  return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace};
 }
 export async function updateTrainingSetup(db,input={}){
   await ensureOnboarding(db);
   const row=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
-  const training=normalizeTraining({...JSON.parse(row?.training_json||'{}'),...input});
+  const old=JSON.parse(row?.training_json||'{}');
+  // Saving places: the flat fields follow the active place. Saving the flat
+  // fields (the setup, the web): they go into the active place too.
+  const merged={...old,...(Array.isArray(old.places)&&old.places.length?{}:legacyPlaces(old)),...input};
+  const usesPlaces=Array.isArray(input.places)||input.activePlace!=null;
+  const training=normalizeTraining(usesPlaces?mirrorActivePlace(merged):intoActivePlace(merged));
   await db.prepare("INSERT INTO user_setup(user_id,training_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET training_json=excluded.training_json").bind(db.userId,JSON.stringify(training)).run();
   return trainingSetup(db);
+}
+// Flat fields saved without places (setup, web): written into the active place.
+function intoActivePlace(training){
+  const places=normalizePlaces(training.places),i=places.findIndex(p=>p.id===training.activePlace);
+  if(training.equipment==='bodyweight')return {...training,places,activePlace:'bodyweight'};
+  if(i<0)return training;
+  const home=training.equipment==='home'||training.equipment==='dumbbells';
+  places[i]={...places[i],kind:home?'home':'gym',stations:training.equipment==='gym'?ALL_STATIONS:training.equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:(training.stations||[]).filter(validStation),
+    name:String(training.gymName||'').trim()||places[i].name,url:cleanUrl(training.gymUrl)||places[i].url,dumbbellWeights:cleanWeights(training.dumbbellWeights)};
+  return {...training,places};
 }
 export async function completeOnboarding(env,input={}){
   const db=env.DB;await ensureOnboarding(db);

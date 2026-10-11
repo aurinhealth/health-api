@@ -1,7 +1,7 @@
 // The athlete's equipment (onboarding.js trainingSetup): the whole gym, own
 // stations chosen in the app (equipment "custom" with the station ids), only
 // dumbbells or the body weight.
-function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return true;const allowed=(equipment==='custom'||equipment==='home')&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
+export function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return true;const allowed=(equipment==='custom'||equipment==='home')&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
 import { L } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
@@ -652,22 +652,43 @@ export function generateStrengthPlan(context, options = {}) {
     if (exercise && date && (!lastExerciseDate.has(exercise) || daysBetween(date, context.date) < daysBetween(lastExerciseDate.get(exercise), context.date))) lastExerciseDate.set(exercise, date);
   }
   const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
-  const focusedExercise = group => {
+  // The group's exercises, best first (the first one may carry a stall swap).
+  const rankedExercises = group => {
     const candidates = FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name));
     if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
       const recent = last && daysBetween(last, context.date) < 5 ? 2 : 0;
       const legPenalty = chosen.protectedLegs && ['quads', 'hamstrings', 'hips'].includes(group) ? def.fatigue * 2 : 0;
-      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + (withStall && stalled.has(name) ? 3 : 0);
+      // The group's list is curated main movement first (hip thrust before
+      // abduction), so its order breaks near ties.
+      const order = FOCUS_GROUPS[group].exercises.indexOf(name) * .05;
+      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0);
     };
-    const best = candidates.slice().sort((a, b) => score(a) - score(b))[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
+    const ranked = candidates.slice().sort((a, b) => score(a) - score(b)), best = ranked[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
-    return best;
+    return ranked;
   };
-  let exercises = focusMuscles ? focusMuscles.map(focusedExercise) : chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup));
-  const maxExercises = focusMuscles ? focusMuscles.length : Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
-  exercises = exercises.slice(0, maxExercises);
+  const maxExercises = Number(options.maxExercises) || exerciseCountFor(options.durationMinutes);
+  let exercises;
+  if (focusMuscles) {
+    // Chosen groups fill the session's length: the best exercise of each group
+    // first, then the next ones in turn (95 minutes of glutes, biceps and rear
+    // delts is 8 exercises, not 3). The timing check below trims any excess.
+    // Legs kept fresh for a key ride get their one best exercise, no more.
+    const ranked = focusMuscles.map(group => chosen.protectedLegs && ['quads', 'hamstrings', 'hips', 'calves'].includes(group) ? rankedExercises(group).slice(0, 1) : rankedExercises(group)), next = ranked.map(() => 0);
+    exercises = [];
+    const total = Math.max(focusMuscles.length, maxExercises);
+    for (let added = true; added && exercises.length < total;) {
+      added = false;
+      for (let g = 0; g < ranked.length && exercises.length < total; g++) {
+        while (next[g] < ranked[g].length && exercises.includes(ranked[g][next[g]])) next[g]++;
+        if (next[g] < ranked[g].length) { exercises.push(ranked[g][next[g]++]); added = true; }
+      }
+    }
+  } else {
+    exercises = chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup)).slice(0, maxExercises);
+  }
 
   // Warm-up exercises must be the first exercises of the session. Keep the
   // relative order otherwise, so each exercise's warm-up sets stay immediately
