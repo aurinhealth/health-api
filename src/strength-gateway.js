@@ -17,6 +17,7 @@ import { getWeekPlan } from './week-planner.js';
 import { availabilityOn, trainingBudget, parseTimeWindow } from './training-availability.js';
 import { localToday } from "./user-time.js";
 import { exercisePreferences } from "./exercise-feedback.js";
+import { activePlan, gymPhaseFor } from "./training-plans.js";
 
 
 export default {
@@ -110,6 +111,13 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       focusMuscles: body?.focusMuscles,
       excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
     };
+    // A gym plan (training-plans.js) sets the session on its days, unless the
+    // athlete chose what to train.
+    if (!options.focusMuscles && !(options.focus && options.focusSource !== "week")) {
+      const gymPlan = await activePlan(env.DB, null, { gym: true }).catch(() => null);
+      const phase = gymPlan ? gymPhaseFor(gymPlan, context.date, prefs?.days) : null;
+      if (phase) options.planPhase = phase;
+    }
     // The athlete's thumbs up and down on exercises.
     const taste = await exercisePreferences(env.DB);
     options.likedExercises = taste.liked;

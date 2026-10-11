@@ -87,6 +87,12 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         return base64url(Data(bytes))
     }
 
+    /// Sign in with Apple: the request asks Apple to put the SHA-256 (hex) of
+    /// this nonce in the identity token; the server checks it (src/apple-login.js).
+    static func appleNonceHash(_ nonce: String) -> String {
+        SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     static func challenge(for verifier: String) -> String {
         base64url(Data(SHA256.hash(data: Data(verifier.utf8))))
     }

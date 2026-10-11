@@ -17,6 +17,39 @@ struct TodaySnapshot: Decodable, Equatable {
     /// Today's weather at the week plan's place; nil without a place (or from
     /// an older server).
     let weather: Weather?
+    /// The morning check-in: "fresh", "normal", "tired", "sick" or nil
+    /// (not answered, or an older server).
+    let checkin: String?
+    /// The active training plan in one line (GET /app/api/plans has the rest).
+    let trainingPlan: PlanLine?
+
+    struct PlanLine: Decodable, Equatable {
+        let name: String
+        let week: Int
+        let weeksCount: Int
+        let phaseLabel: String?
+        /// Sick, injured or on a break: the plan waits.
+        let paused: Bool?
+        /// What the plan asks now (a missed session, last week, back from a break).
+        let proposal: PlanProposal?
+    }
+
+    /// src/training-plans.js proposalView.
+    struct PlanProposal: Decodable, Equatable {
+        struct Option: Decodable, Equatable, Identifiable {
+            let id: String
+            let label: String
+            let date: String?
+            let recommended: Bool?
+        }
+        let type: String
+        let title: String
+        let text: String
+        let options: [Option]
+        /// For a missed session: the days left in the week.
+        let days: [String]?
+        let button: String
+    }
 
     struct Readiness: Decodable, Equatable {
         let score: Int?

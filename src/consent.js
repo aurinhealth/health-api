@@ -5,7 +5,7 @@
 // version of the health text asks everyone again.
 import { L } from './lang.js';
 
-export const CONSENT_VERSION = '2026-10-08';
+export const CONSENT_VERSION = '2026-10-11';
 export const CONSENT_KINDS = ['health', 'ai'];
 
 async function consentRows(db, userId) {

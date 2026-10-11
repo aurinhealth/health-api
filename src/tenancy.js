@@ -53,7 +53,13 @@ export const PERSONAL_TABLES = {
   client_requests: {},
   // Thumbs up/down on exercises and ratings of generated workouts (exercise-feedback.js).
   exercise_preferences: {},
-  workout_ratings: {}
+  workout_ratings: {},
+  // The morning check-in (morning-checkin.js) and the threshold estimates and
+  // tests offered from the data (threshold-check.js).
+  morning_checkins: {},
+  threshold_checks: {},
+  // The athlete's training plans (training-plans.js).
+  training_plans: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
@@ -298,8 +304,7 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
     if (row && row.google_sub && row.google_sub !== String(sub)) return null;
   }
   if (!row) {
-    const invite = await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first();
-    if (!invite && address !== ownerEmail(env)) return null;
+    if (!(await mayCreateAccount(db, env, address))) return null;
     await db.prepare("INSERT INTO users(email, role) VALUES(?, ?)").bind(address, address === ownerEmail(env) ? "admin" : "user").run();
     row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE email=?").bind(address).first();
   }
@@ -311,7 +316,8 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
   return publicUser({ ...row, email: address, name: name || row.name }, env);
 }
 
-// Who may get a sign-in code by e-mail: an active user, an invited address or the owner.
+// Who may get a sign-in code by e-mail: an active user, an invited address or the owner
+// (anyone, with OPEN_SIGNUP).
 export async function mayGetEmailCode(db, env, email) {
   const address = normalizeEmail(email);
   if (!address) return false;
@@ -320,7 +326,18 @@ export async function mayGetEmailCode(db, env, email) {
     db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first()
   ]);
   if (user) return !user.disabled;
-  return Boolean(invite) || address === ownerEmail(env);
+  return Boolean(invite) || address === ownerEmail(env) || openSignup(env);
+}
+
+// OPEN_SIGNUP=true (a Worker variable): anyone who signs in gets an account, as an App Store
+// release needs. Otherwise only invited addresses and the owner do.
+export const openSignup = env => String(env?.OPEN_SIGNUP || "").trim() === "true";
+
+// Whether a sign-in with this verified address may create a new account.
+export async function mayCreateAccount(db, env, address) {
+  if (!address) return false;
+  if (address === ownerEmail(env) || openSignup(env)) return true;
+  return Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
 }
 
 // Signs in the owner of an e-mail address that confirmed a code: an existing
@@ -330,8 +347,7 @@ export async function signInEmailUser(db, env, email) {
   if (!address) return null;
   let row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first(), created = false;
   if (!row) {
-    const invite = await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first();
-    if (!invite && address !== ownerEmail(env)) return null;
+    if (!(await mayCreateAccount(db, env, address))) return null;
     const inserted = await db.prepare("INSERT INTO users(email, role) VALUES(?, ?) ON CONFLICT(email) DO NOTHING").bind(address, address === ownerEmail(env) ? "admin" : "user").run();
     created = Number(inserted.meta?.changes) > 0;
     row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();

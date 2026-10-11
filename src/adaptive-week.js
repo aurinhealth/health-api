@@ -65,6 +65,10 @@ export function indoorMinutes(sport, minutes) {
   return rule ? Math.max(rule.min, Math.min(rule.max, Math.round(minutes * rule.share / 5) * 5)) : minutes;
 }
 const weekdayOf = date => (new Date(date + 'T12:00:00Z').getUTCDay() + 6) % 7;
+// Without fitness data: the open chips at 30 min of running or 60 of riding.
+export function estimatedTargets(roles, start, today, loads = []) {
+  return { status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports?.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: x.sport === 'run' ? 30 : 60, tss: 25 }))) };
+}
 export function capWeekTargets(targets, prefs, days = [], weather = {}) {
   const remaining = new Map();
   for (const x of targets.items || []) {
@@ -120,7 +124,9 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
   }
   return { ...prefs, days };
 }
-export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null }) {
+// A training plan (training-plans.js) comes in as `plan`: { roles } for
+// planWeekRoles, { load } for weekTargets and apply(targets) for its sessions.
+export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null }) {
   const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history });
   const warnings = [], existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6));
   const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
@@ -133,13 +139,14 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   if (state.status && state.status !== 'active') return { prefs: proposedPrefs, items: [], warnings: [...warnings, { text: L('Stav ', 'Status ') + state.status + L(' pozastavuje návrhy tréninků.', ' pauses workout proposals.') }], mode: 'review' };
   const wellness = (fitness.wellness || []).filter(w => w.id <= today).at(-1), ctl = Number(wellness?.ctl) || null;
   const loads = existing.map(d => ({ date: d.date, done: Number(d.daily?.training?.actualTss) || (d.daily?.training?.completed || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), planned: (d.daily?.training?.planned || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), sports: sessionsOn(d).map(sportOf) }));
-  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 ? 'red' : 'green' });
+  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 ? 'red' : 'green', ...(plan?.roles || {}) });
+  const withPlan = t => plan?.apply ? plan.apply(t) : t;
   // Running this week so far (done, and planned still ahead) counts against the weekly running cap.
   const runCommitted = existing.reduce((n, d) => n + (d.date > today ? d.daily?.training?.planned || [] : d.daily?.training?.completed || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0), 0);
-  let targets = capRunVolume(weekTargets({ roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(fitness.wellness || [], start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) }), history ? weeklyRunCap(history, start) : null, runCommitted);
+  let targets = capRunVolume(withPlan(weekTargets({ plan: plan?.load || null, roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(fitness.wellness || [], start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) })), history ? weeklyRunCap(history, start) : null, runCommitted);
   // Without fitness data the estimate keeps the same running cap: a beginner's
   // runs share the floor (60 min a week) or what the recent weeks allow.
-  if (!ctl) targets = capRunVolume({ status: 'estimated', items: roles.flatMap((d, i) => d.items.filter(x => shift(start, i) >= today && !loads[i]?.sports.includes(x.sport)).map(x => ({ ...x, date: shift(start, i), minutes: x.sport === 'run' ? 30 : 60, tss: 25 }))) }, weeklyRunCap(history || [], start), runCommitted);
+  if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);
   targets = capWeekTargets(targets, proposedPrefs, existing, weather);
   return { prefs: proposedPrefs, items: targets.items, targets, warnings, mode: existing.some(d => sessionsOn(d).length) ? 'review_and_fill' : 'fill', missingAvailability: !proposedPrefs.days.some(d => d.length) && !prefs.availability.some(d => d.minutes > 0) };
 }

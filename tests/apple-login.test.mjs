@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleAppleLogin, appleConfigured, appleClientSecret, appleIdentity, unlinkAppleIdentity, _resetAppleJwksCacheForTest } from "../src/apple-login.js";
+import { handleAppleLogin, handleNativeAppleLogin, revokeApple, appleConfigured, appleClientSecret, appleIdentity, unlinkAppleIdentity, _resetAppleJwksCacheForTest } from "../src/apple-login.js";
 import { isPublicPath, resolvePrincipal } from "../src/dashboard-auth.js";
 import { ensureTenancy, scopedDb, _resetTenancyForTest } from "../src/tenancy.js";
 import { deleteAccount } from "../src/account-data.js";
@@ -154,4 +154,60 @@ test("the app page asks for the Apple button only when Apple is set up, and Sett
   assert.match(entry, /handleAppleLogin\(request, rawEnv, url\.pathname, \{ user: signedIn \? user : null \}\)/);
   assert.match(client, /href="\/auth\/apple\?link=1"/);
   assert.match(client, /fetch\('\/app\/api\/me\/apple',\{method:'DELETE'/);
+});
+
+// The iPhone app: the token's audience is the bundle ID and its nonce the SHA-256 (hex) of the app's nonce.
+const APP_NONCE = "app-nonce-0123456789abcdef";
+const hex = async text => Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))).toString("hex");
+function nativeFetch(claims, seen = {}) {
+  return async (url, init) => {
+    if (String(url).endsWith("/auth/keys")) return Response.json({ keys: [jwk] });
+    seen.calls = [...(seen.calls || []), { url: String(url), body: new URLSearchParams(String(init.body)) }];
+    return Response.json({ refresh_token: "apple-refresh-1", ...claims });
+  };
+}
+async function nativeRequest(env, body, { fetchImpl, saveRefreshToken, headers = { "Content-Type": "application/json" } } = {}) {
+  const request = new Request("https://petrfitnessdata.eu/auth/app/apple", { method: "POST", headers, body: JSON.stringify(body) });
+  return handleNativeAppleLogin(request, env, "/auth/app/apple", { fetchImpl, saveRefreshToken });
+}
+
+test("the app signs in with Apple natively and keeps the token that deleting the account revokes", async () => {
+  assert.equal(isPublicPath("/auth/app/apple"), true);
+  const env = await withUsers();
+  await env.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
+  const token = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
+  const seen = {}, saved = [];
+  const ok = await nativeRequest(env, { identityToken: token, authorizationCode: "code-1", nonce: APP_NONCE, name: "Jana  Nová" }, { fetchImpl: nativeFetch({}, seen), saveRefreshToken: async (user, value) => saved.push([user.email, value]) });
+  assert.equal(ok.status, 200);
+  assert.ok(sessionOf(ok));
+  assert.equal((await env.DB.prepare("SELECT name FROM users WHERE email='friend@example.com'").first()).name, "Jana Nová");
+  assert.deepEqual(saved, [["friend@example.com", "apple-refresh-1"]]);
+  const exchange = seen.calls.find(c => c.url.endsWith("/auth/token")).body;
+  assert.equal(exchange.get("client_id"), "eu.petrfitnessdata.loadwise.native");
+  assert.equal(exchange.get("code"), "code-1");
+  const sub = JSON.parse(Buffer.from(exchange.get("client_secret").split(".")[1], "base64url")).sub;
+  assert.equal(sub, "eu.petrfitnessdata.loadwise.native");
+
+  const revoked = {};
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "apple-refresh-1" }, nativeFetch({}, revoked)), "revoked");
+  assert.equal(revoked.calls[0].url, "https://appleid.apple.com/auth/revoke");
+  assert.equal(revoked.calls[0].body.get("token"), "apple-refresh-1");
+  assert.equal(await revokeApple({ ...apple }), "none");
+});
+
+test("the app's Apple sign-in refuses a web token, a wrong nonce, a form post and an uninvited e-mail", async () => {
+  const env = await withUsers();
+  const fetchImpl = nativeFetch({});
+  const web = await idToken({ nonce: await hex(APP_NONCE) });
+  assert.equal((await nativeRequest(env, { identityToken: web, nonce: APP_NONCE }, { fetchImpl })).status, 401);
+  const app = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
+  assert.equal((await nativeRequest(env, { identityToken: app, nonce: APP_NONCE + "x" }, { fetchImpl })).status, 401);
+  assert.equal((await nativeRequest(env, { identityToken: app, nonce: APP_NONCE }, { fetchImpl, headers: { "Content-Type": "text/plain" } })).status, 415);
+  const denied = await nativeRequest(env, { identityToken: app, nonce: APP_NONCE }, { fetchImpl });
+  assert.equal(denied.status, 403);
+  assert.equal((await denied.json()).error, "not_invited");
+  // OPEN_SIGNUP: anyone Apple vouches for gets an account.
+  const open = await nativeRequest({ ...env, OPEN_SIGNUP: "true" }, { identityToken: app, nonce: APP_NONCE }, { fetchImpl });
+  assert.equal(open.status, 200);
+  assert.ok(await env.DB.prepare("SELECT id FROM users WHERE email='friend@example.com'").first());
 });

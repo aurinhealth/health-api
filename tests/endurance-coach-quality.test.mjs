@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildCyclingCoachV2, wellnessTrend } from "../src/cycling-coach-v2.js";
+import { buildToday } from "../src/app-today.js";
 import { qualityDomain } from "../src/session-intensity.js";
 import { weekTargets, planWeekRoles } from "../src/week-planner.js";
 import { buildAdaptiveDecision } from "../src/adaptive-engine.js";
@@ -26,7 +27,7 @@ test("library interval sessions count as quality, easy ones do not", () => {
 test("deep fatigue with a falling HRV is not green and gets no sweet spot", () => {
   const result = coach({ fitness: { wellness: wellness({ atl: 100, tsb: -30, hrv: 58 }) } });
   assert.notEqual(result.readiness.status, "green");
-  assert.ok(result.readiness.reasons.some(r => /HRV 58 ms je pod tvým běžným pásmem 76–84 ms \(28 % pod průměrem\)/.test(r)));
+  assert.ok(result.readiness.reasons.some(r => /HRV 58 ms je pod tvým běžným pásmem 76–84 ms/.test(r)));
   assert.ok(["endurance", "recovery"].includes(result.recommendation.session.kind));
   // HRV and resting HR are judged against the athlete's own baseline.
   assert.deepEqual(wellnessTrend({ wellness: wellness({ hrv: 58 }) }, date, "hrv"), { today: 58, baseline: 80, deltaPct: -27.5, delta: -22 });
@@ -131,4 +132,19 @@ test("a week's running grows at most 10 % over the recent weeks", async () => {
   assert.ok(runs.reduce((n, x) => n + x.minutes, 0) <= 90 + 5, JSON.stringify(runs));
   assert.equal(proposal.targets.runCap.limited, true);
   assert.equal(weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness }).targets.runCap, undefined);
+});
+
+test("the ride coach's readiness is the Today screen's, from Google or Apple Health without Intervals.icu", () => {
+  const day = "2026-10-11", shift = (d, k) => new Date(Date.parse(d + "T12:00:00Z") + k * 86400000).toISOString().slice(0, 10);
+  const rows = Array.from({ length: 30 }, (_, i) => ({ id: shift(day, i - 29), hrv: 60 + (i % 3), restingHR: 50 + (i % 2) }));
+  const night = { date: day, durationMin: 470, endTime: day + "T06:40:00Z" };
+  const today = buildToday({ date: day, health: { wellness: rows }, sleep: { sessions: [night] } });
+  const ride = buildCyclingCoachV2({ date: day, week: { days: [] }, health: { wellness: rows, sleep: [night] } });
+  assert.equal(today.readiness.score, ride.readiness.score);
+  assert.equal(today.readiness.zone, ride.readiness.status);
+  assert.equal(ride.readiness.status, "green");
+  // Deep training fatigue still lowers it.
+  const tired = buildCyclingCoachV2({ date: day, week: { days: [] }, fitness: { wellness: [{ id: day, ctl: 60, atl: 95, tsb: -35 }] }, health: { wellness: rows, sleep: [night] } });
+  assert.equal(tired.readiness.score, today.readiness.score);
+  assert.equal(tired.readiness.status, "red");
 });

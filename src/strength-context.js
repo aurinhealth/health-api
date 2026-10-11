@@ -211,6 +211,8 @@ export async function buildStrengthContext(env, requestedDate = null) {
   delete context.intervalsWellness;
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
+  // The morning check-in lowers the readiness (morning-checkin.js).
+  try { const { getCheckin } = await import("./morning-checkin.js"); context.checkin = await getCheckin(env.DB, date); } catch { context.checkin = null; }
   try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null }; } catch { context.profile = { sex: "" }; }
   // The last 10 days of Google Health sleep (nights and naps): the recovery
   // score's sleep part and the sleep need, as the dashboard computes them.

@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 /// The first screen: three pages of what Loadwise does, then the sign-in.
@@ -5,6 +6,8 @@ struct LoginView: View {
     @Environment(AppModel.self) private var model
     @State private var page = 0
     @State private var emailLogin = false
+    @State private var appleNonce = ""
+    @Environment(\.colorScheme) private var colorScheme
 
     private let pages: [(symbol: String, color: Color, title: String, text: String)] = [
         ("sun.max.fill", Palette.green, "Každé ráno víš, jak na tom jsi.", "Připravenost z HRV, tepu a spánku. Jedno číslo a jedna věta, co dnes dává smysl."),
@@ -70,6 +73,25 @@ struct LoginView: View {
                         .background(Palette.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .padding(.bottom, 12)
                 }
+                SignInWithAppleButton(.signIn) { request in
+                    model.errorMessage = nil
+                    appleNonce = AuthService.randomVerifier()
+                    request.requestedScopes = [.fullName, .email]
+                    request.nonce = AuthService.appleNonceHash(appleNonce)
+                } onCompletion: { result in
+                    switch result {
+                    case .success(let authorization):
+                        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else { return }
+                        Task { await model.signIn(apple: credential, nonce: appleNonce) }
+                    case .failure(let error):
+                        if (error as? ASAuthorizationError)?.code != .canceled { model.errorMessage = error.localizedDescription }
+                    }
+                }
+                .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
+                .frame(height: 52)
+                .clipShape(Capsule())
+                .disabled(model.signingIn)
+                .padding(.bottom, 10)
                 Button {
                     model.errorMessage = nil
                     Task { await model.signIn() }
@@ -97,11 +119,6 @@ struct LoginView: View {
                     .foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
-                Text("Přístup mají pozvaní uživatelé.")
-                    .font(Typo.caption)
-                    .foregroundStyle(Palette.faint)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 24)

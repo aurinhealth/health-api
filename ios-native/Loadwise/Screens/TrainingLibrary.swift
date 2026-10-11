@@ -363,7 +363,7 @@ struct LibraryWorkoutSheet: View {
                     Text(d).font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 if let blocks = workout.steps, !blocks.isEmpty {
-                    StepsProfile(blocks: blocks).frame(height: 54)
+                    Card { WorkoutProfile(blocks: blocks, sport: sport) }
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in StepBlockRow(block: block) }
                     }
