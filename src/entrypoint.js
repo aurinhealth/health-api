@@ -167,15 +167,18 @@ const worker = {
         await deleteAccount(await connectionEnvironment(await userDataEnvironment(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
       }
     }
-    await forEachUser(env, ["google", "intervals"], scoped => app.scheduled(controller, scoped, ctx));
+    // After the user's midnight (0:00–6:00 in their zone), heart-rate samples
+    // older than two weeks become 5-minute rows, six hours of samples a minute.
+    await forEachUser(env, ["google", "intervals"], async scoped => {
+      const result = await app.scheduled(controller, scoped, ctx);
+      if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
+      return result;
+    });
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google'],async scoped=>{await backfillFoodGoogle(scoped.DB);return processFoodGoogle(scoped,{token:googleToken});});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],async scoped=>{await retryWorkoutExports(scoped);});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],scoped=>legacyHealthApi.fetch(new Request('https://internal/sync/intervals/recent',{method:'POST'}),scoped,ctx));
-    // Heart-rate samples older than two weeks become 5-minute rows, six hours
-    // of samples per user a minute between 3:00 and 4:00 UTC, after the nightly sync.
-    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 3) await forEachUser(env, ["google"], scoped => compactHeartRate(scoped.DB, scoped.USER_ID));
     // Hourly, half an hour after the Google Health sync: weight the same in the
     // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
     // heart rate, HRV, …) copied into Intervals.icu.

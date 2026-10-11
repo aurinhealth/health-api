@@ -1,3 +1,5 @@
+import { dayStartUtc, localToday } from './user-time.js';
+
 // Google Health heart rate arrives as a sample every few seconds (~50k rows a
 // day). The last HEART_RATE_RAW_DAYS keep every sample; older samples become one
 // row per 5 minutes (average, minimum, maximum, count), the step the night chart
@@ -15,7 +17,9 @@ const iso = seconds => `strftime('%Y-%m-%dT%H:%M:%SZ', ${seconds}, 'unixepoch')`
 // transaction: the 5-minute rows are written and the samples deleted together.
 // Returns the window it compacted, or null when nothing is left to do.
 export async function compactHeartRate(db, userId, { now = Date.now() } = {}) {
-  const cutoff = new Date(now - HEART_RATE_RAW_DAYS * 86400000).toISOString().slice(0, 10) + 'T00:00:00Z';
+  // Midnight of the user's day two weeks back, in their time zone.
+  const today = localToday(new Date(now));
+  const cutoff = dayStartUtc(new Date(Date.parse(today + 'T12:00:00Z') - HEART_RATE_RAW_DAYS * 86400000).toISOString().slice(0, 10)) + 'Z';
   const oldest = await db.prepare("SELECT MIN(sample_time) AS t FROM health_datapoints WHERE user_id = ? AND data_type = 'heart-rate' AND source_family = 'google-wearables' AND sample_time < ?").bind(userId, cutoff).first();
   const first = Date.parse(oldest?.t || '');
   if (!Number.isFinite(first)) return null;
