@@ -33,6 +33,9 @@ test("the Google Health summary reads through an index", async () => {
   await googleDashboard(db, "2026-10-08");
   assert.ok(plans.length >= 2);
   assert.deepEqual(scans(plans), []);
+  // Steps and energy: only the last month's rows, not all ever saved.
+  const steps = plans.find(p => /'steps'/.test(p.sql));
+  assert.ok(steps.plan.some(d => /start_time>/.test(d)), steps.plan.join("; "));
 });
 
 test("fitness insights match each activity's session once, not per comparison", async () => {
