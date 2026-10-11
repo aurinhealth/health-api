@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 import UIKit
 
 /// Today's gym session: the exercises and their sets. Tick a set to record it
@@ -332,37 +333,28 @@ struct TechniqueSheet: View {
     let exercise: String
     @State private var technique: GymTechnique?
     @State private var error: String?
+    /// 0: the photo and how it's done, 1: the video.
+    @State private var page = 0
 
     var body: some View {
-        PageScroll {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text(exercise).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-                }
-                if let t = technique {
-                    if let muscles = t.muscles, !muscles.isEmpty {
-                        Text(muscles.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
-                    }
-                    list("Příprava", t.setup)
-                    list("Provedení", t.steps)
-                    list("Časté chyby", t.mistakes)
-                    if let b = t.breathing { list("Dýchání", [b]) }
-                    list("Kde to cítit", t.feel)
-                    if let id = t.video?.id, let url = URL(string: "https://www.youtube.com/watch?v=" + id) {
-                        Link(destination: url) { Label(t.video?.title ?? "Video", systemImage: "play.rectangle.fill").font(Typo.bodyStrong) }
-                    } else if let s = t.searchUrl, let url = URL(string: s) {
-                        Link(destination: url) { Label("Najít video", systemImage: "play.rectangle").font(Typo.bodyStrong) }
-                    }
-                } else if let error {
-                    Text(error).font(Typo.small).foregroundStyle(Palette.rust)
-                } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                    Text("U cviku mimo katalog může první načtení chvíli trvat.").font(Typo.caption).foregroundStyle(Palette.faint)
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(exercise).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                Spacer()
+                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }
-            .padding(24)
+            .padding(.horizontal, 24).padding(.top, 24)
+            Picker("Zobrazit", selection: $page) {
+                Text("Jak na to").tag(0)
+                Text("Video").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 24)
+            TabView(selection: $page) {
+                PageScroll { howTo.padding(.horizontal, 24).padding(.bottom, 24) }.tag(0)
+                PageScroll { videoPage.padding(.horizontal, 24).padding(.bottom, 24) }.tag(1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
@@ -370,6 +362,76 @@ struct TechniqueSheet: View {
             guard !model.demo else { error = "V ukázce se technika nenačítá."; return }
             do { technique = try await model.api.gymTechnique(exercise: exercise) } catch { self.error = error.localizedDescription }
         }
+    }
+
+    private var videoId: String? { technique?.video?.id.flatMap { $0.isEmpty ? nil : $0 } }
+
+    @ViewBuilder private var howTo: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let t = technique {
+                photo
+                if let muscles = t.muscles, !muscles.isEmpty {
+                    Text(muscles.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
+                }
+                list("Příprava", t.setup)
+                list("Provedení", t.steps)
+                list("Časté chyby", t.mistakes)
+                if let b = t.breathing, !b.isEmpty { list("Dýchání", [b]) }
+                list("Kde to cítit", t.feel)
+            } else if let error {
+                Text(error).font(Typo.small).foregroundStyle(Palette.rust)
+            } else {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                Text("U cviku mimo katalog může první načtení chvíli trvat.").font(Typo.caption).foregroundStyle(Palette.faint)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    /// A still from the exercise's video; tapping it plays the video.
+    @ViewBuilder private var photo: some View {
+        if let id = videoId, let url = URL(string: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg") {
+            Button { withAnimation { page = 1 } } label: {
+                AsyncImage(url: url) { image in
+                    image.resizable().scaledToFill()
+                } placeholder: {
+                    Rectangle().fill(Palette.track)
+                }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(16 / 9, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay {
+                    Image(systemName: "play.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 52, height: 52).background(.black.opacity(0.45), in: Circle())
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Přehrát video")
+        }
+    }
+
+    @ViewBuilder private var videoPage: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            if let id = videoId {
+                YouTubePlayer(id: id)
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if let title = technique?.video?.title, !title.isEmpty {
+                    Text(verbatim: title).font(Typo.small).foregroundStyle(Palette.muted)
+                }
+                if let url = URL(string: "https://www.youtube.com/watch?v=" + id) {
+                    Link(destination: url) { Label("Otevřít v YouTube", systemImage: "arrow.up.right.square").font(Typo.bodyStrong) }
+                }
+            } else if technique != nil {
+                Text("K tomuhle cviku zatím video nemáme.").font(Typo.body).foregroundStyle(Palette.muted)
+                if let s = technique?.searchUrl, let url = URL(string: s) {
+                    Link(destination: url) { Label("Najít video", systemImage: "play.rectangle").font(Typo.bodyStrong) }
+                }
+            } else {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+            }
+        }
+        .padding(.top, 6)
     }
 
     @ViewBuilder
@@ -528,5 +590,38 @@ extension View {
                     .fontWeight(.semibold)
             }
         }
+    }
+}
+
+/// The exercise's YouTube video played inside the app.
+struct YouTubePlayer: UIViewRepresentable {
+    let id: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.isOpaque = false
+        view.backgroundColor = .black
+        view.scrollView.isScrollEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: WKWebView, context: Context) {
+        guard context.coordinator.loaded != id else { return }
+        context.coordinator.loaded = id
+        let html = """
+        <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>html,body{margin:0;height:100%;background:#000}iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head>
+        <body><iframe src="https://www.youtube-nocookie.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>
+        """
+        view.loadHTMLString(html, baseURL: URL(string: "https://petrfitnessdata.eu"))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var loaded: String?
     }
 }
