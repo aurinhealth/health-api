@@ -962,6 +962,8 @@ export const EN = {
 "U tohoto cviku máš rozepsané hodnoty. Nejdřív sérii ulož, nebo vrať hodnoty na původní zadání.": "You have values in progress for this exercise. Save the set first, or reset the values to the original entry.",
 "Ubrat opakování": "Remove rep",
 "Udržovat váhu": "Maintain weight",
+"Nabrat 0,25 kg týdně": "Gain 0.25 kg per week",
+"Nabrat 0,5 kg týdně": "Gain 0.5 kg per week",
 "Udržování": "Maintenance",
 "Ukládám do Intervals.icu…": "Saving to Intervals.icu…",
 "Ukládám…": "Saving…",

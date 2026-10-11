@@ -73,14 +73,32 @@ test("Today combines readiness, sleep, strain, food and plan for the app", () =>
 });
 
 test("Today's plan lists workouts and tonight's bedtime in time order", () => {
-  const t = buildToday(input);
+  const t = buildToday({ ...input, hour: 12 });
   assert.deepEqual(t.plan.map(p => p.kind), ["workout", "bedtime"]);
-  assert.equal(t.plan[0].time, "17:30");
+  assert.equal(t.plan[0].time, null, "a planned session has no clock: it comes after the last record");
+  assert.equal(t.plan[0].status, "planned");
   assert.equal(t.plan[0].detail, "45 min · 45 TSS");
   assert.equal(t.plan[0].done, false);
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
   assert.equal(t.tonight.wake, "07:02", "the usual wake time");
   assert.equal(t.tonight.bedtime, t.plan[1].time);
+});
+
+test("Today's plan shows what was done at its time, then the plan, a gym session outside the plan too", () => {
+  const training = {
+    planned: [{ id: "planned:1", start: DATE + "T17:30:00", durationHours: 1, tss: 60, name: "Endurance", type: "Ride" }],
+    completed: [{ id: "activity:i1", source: "intervals", start: DATE + "T07:10:00", durationHours: 0, name: null, type: null }],
+    matched: []
+  };
+  const t = buildToday({ ...input, hour: 12, daily: { ...input.daily, training }, gym: { name: "Push", exercises: ["Bench"], logged: 3 } });
+  const workouts = t.plan.filter(p => p.kind === "workout");
+  assert.deepEqual(workouts.map(p => [p.status, p.time]), [["done", "07:10"], ["done", null], ["planned", null]]);
+  assert.equal(workouts[0].session.kind, "activity");
+  assert.ok(workouts.some(p => p.session.kind === "gym" && p.done), "the gym session saved in the app");
+  assert.equal(workouts.find(p => p.status === "planned").title, "Endurance");
+  // Viewing a past day: what was not done is missed.
+  const past = buildToday({ ...input, date: DATE, hour: null, daily: { ...input.daily, training: { planned: training.planned, completed: [], matched: [] } } });
+  assert.equal(past.plan.find(p => p.kind === "workout").status, "missed");
 });
 
 test("Today stays usable without data", () => {

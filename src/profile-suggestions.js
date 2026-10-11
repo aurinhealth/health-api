@@ -172,10 +172,14 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
 }
 
 // The profile the calculations use: saved values plus suggestions.
-export async function loadEffectiveProfile(db, userId) {
+// What the user typed themselves (saved) and that with the calibrated values in the gaps (effective).
+export async function loadProfiles(db, userId) {
   const rows = (await db.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = ? AND id IN (1, 2)").bind(userId).all().catch(() => ({ results: [] }))).results || [];
   const parsed = id => { try { return JSON.parse(rows.find(r => Number(r.id) === id)?.profile_json || "null"); } catch { return null; } };
   const saved = parsed(1), suggested = parsed(2);
-  if(!saved&&!suggested)return null;
-  return effectiveProfile(saved,suggested);
+  return { saved, effective: saved || suggested ? effectiveProfile(saved, suggested) : null };
+}
+
+export async function loadEffectiveProfile(db, userId) {
+  return (await loadProfiles(db, userId)).effective;
 }

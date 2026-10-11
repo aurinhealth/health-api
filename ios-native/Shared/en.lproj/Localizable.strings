@@ -536,7 +536,7 @@
 "Proč mám nízkou připravenost?" = "Why is my readiness low?";
 "Proč se dnes hodí" = "Why it fits today";
 "Práh" = "Threshold";
-"Prázdné hodnoty dopočítá Loadwise z tvých tréninků a nocí." = "Loadwise fills in blank values from your workouts and nights.";
+"Prázdné hodnoty Loadwise průběžně dopočítává z tréninků, Apple Health a Google Health. Zadaná hodnota platí i pro tepové zóny." = "Loadwise keeps filling in blank values from your workouts, Apple Health and Google Health. A value you enter also sets your heart rate zones.";
 "Průběh" = "Structure";
 "Průměr 7 dní" = "7-day average";
 "Pár otázek a připravím ti cíl kalorií a živin, potřebu spánku s večerkou a tréninky, které sedí k tvému vybavení. Zabere to asi minutu." = "A few questions and I'll set up your calorie and macro targets, your sleep need with a bedtime, and workouts that fit your equipment. It takes about a minute.";
@@ -1056,6 +1056,7 @@
 "hotovo %@" = "%@ done";
 "https://posilovna.cz" = "https://mygym.com";
 "hubnout %@ týdně" = "lose %@ per week";
+"nabrat %@ týdně" = "gain %@ per week";
 "iPhone pak v tyto časy zazvoní jako budík v Hodinách, i v tichém režimu. Když časy změníš a uložíš, budík se posune." = "Your iPhone will ring at these times like a Clock alarm, even in silent mode. If you change and save the times, the alarm moves too.";
 "imperiální" = "imperial";
 "index %@" = "score %@";
@@ -1461,3 +1462,4 @@
 "Načíst z Apple Health teď" = "Load from Apple Health now";
 "spánek, tréninky, tep, HRV, kroky a váha" = "sleep, workouts, heart rate, HRV, steps and weight";
 "Apple Health je připojené." = "Apple Health is connected.";
+"Nesplněno" = "Missed";

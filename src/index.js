@@ -1985,6 +1985,7 @@ function goalPhrase(energy) {
   const deficit = Number(energy.calorieBreakdown?.weightLossDeficit) || 0;
   const target = energy.energyProfile?.targetWeightKg;
   if (deficit > 0) return target ? L(`cílové tempo úbytku hmotnosti směrem k ${target} kg`, `your target rate of weight loss towards ${target} kg`) : L("cílové tempo úbytku hmotnosti", "your target rate of weight loss");
+  if (deficit < 0) return target ? L(`cílové tempo nabírání hmotnosti směrem k ${target} kg`, `your target rate of weight gain towards ${target} kg`) : L("cílové tempo nabírání hmotnosti", "your target rate of weight gain");
   return L("udržení hmotnosti", "maintaining your weight");
 }
 

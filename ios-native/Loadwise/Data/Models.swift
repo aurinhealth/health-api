@@ -91,8 +91,12 @@ struct TodaySnapshot: Decodable, Equatable {
         let done: Bool
         /// Workouts: ride, run, strength or other.
         var sport: String? = nil
+        /// Workouts: "done", "planned" or "missed".
+        var status: String? = nil
+        /// Workouts: the session as Training lists it, to open its detail.
+        var session: WeekSession? = nil
 
-        var id: String { kind + "|" + (time ?? "") + "|" + title }
+        var id: String { session.map { "session|" + $0.id } ?? kind + "|" + (time ?? "") + "|" + title }
     }
 
     struct Tonight: Decodable, Equatable {

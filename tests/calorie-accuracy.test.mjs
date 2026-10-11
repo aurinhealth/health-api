@@ -34,6 +34,18 @@ test("every Intervals.icu sport counts once, and a Google copy of the same run i
   assert.ok(day.nutrition.calorieBreakdown.activityAdjustment >= 700);
 });
 
+test("a weight gain goal adds a surplus to the day's target", async () => {
+  const target = async goal => {
+    const d = db();
+    profile(d, { ...man, goal });
+    point(d, "manual", "weight", "w", { sample: "2098-12-30T07:00:00Z", value: 80 });
+    return (await daily(d)).nutrition;
+  };
+  const keep = await target("maintain"), gain = await target("gain_0.5");
+  assert.equal(gain.calorieBreakdown.weightLossDeficit, -550);
+  assert.equal(gain.calorieTarget - keep.calorieTarget, 550);
+});
+
 test("running without measured calories is costed by body weight", async () => {
   const at = async kg => {
     const d = db();
@@ -86,6 +98,10 @@ test("the weight trend corrects the target by energy balance against the chosen 
   assert.equal(trendAdjustment("maintain", trend(0.3)).adjustment, -175);
   assert.equal(trendAdjustment("maintain", trend(-0.3)).adjustment, 175);
   assert.equal(trendAdjustment("maintain", trend(0.1)).adjustment, 0);
+  // Gaining: too slow adds energy, too fast takes some away.
+  assert.equal(trendAdjustment("gain_0.25", trend(0)).adjustment, 150);
+  assert.equal(trendAdjustment("gain_0.25", trend(0.25)).adjustment, 0);
+  assert.equal(trendAdjustment("gain_0.5", trend(1)).adjustment, -250);
   assert.equal(trendAdjustment("lose_0.5", trend(0.1, { samples: 3 })).adjustment, 0);
   assert.equal(trendAdjustment("lose_0.5", trend(0.1, { spanDays: 14 })).adjustment, 0);
   // Slightly off the goal: a small step, proportional to the gap.

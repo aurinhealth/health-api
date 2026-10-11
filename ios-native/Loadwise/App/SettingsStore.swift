@@ -7,6 +7,9 @@ import Observation
 @Observable
 final class SettingsStore {
     private(set) var profile: JSONObject = [:]
+    /// The values Loadwise works out itself for the empty fields (max and
+    /// resting heart rate, usual day, weekly sport).
+    private(set) var suggestions: JSONObject = [:]
     private(set) var training: TrainingProfileResponse?
     private(set) var connections: [ConnectionsResponse.Provider] = []
     private(set) var sync: SyncStatus?
@@ -32,12 +35,14 @@ final class SettingsStore {
 
     func load() async {
         guard !demo else { return }
-        async let profile = api.profile()
+        async let profile = api.profileWithSuggestions()
         async let training = api.trainingProfile()
         async let connections = api.connections()
         async let sync = api.syncStatus()
         do {
-            self.profile = try await profile
+            let response = try await profile
+            self.profile = response.profile ?? [:]
+            suggestions = response.suggestions ?? [:]
             profileLoaded = true
             self.connections = (try? await connections)?.providers ?? []
             self.training = try? await training

@@ -15,11 +15,11 @@ struct WeekSessionsList: View {
         VStack(spacing: 0) {
             ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
                 HStack(spacing: 0) {
-                    NavigationLink(value: destination(session)) {
+                    NavigationLink(value: Self.destination(session)) {
                         SessionRow(session: session, today: today)
                     }
                     .buttonStyle(.plain)
-                    .disabled(destination(session) == nil)
+                    .disabled(Self.destination(session) == nil)
                     if GymPlanActions.changeable(session) && !model.demo {
                         Menu {
                             Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
@@ -62,7 +62,8 @@ struct WeekSessionsList: View {
         }
     }
 
-    private func destination(_ s: WeekSession) -> AppRoute? {
+    /// Where a session opens (also Today → Plán dne).
+    static func destination(_ s: WeekSession) -> AppRoute? {
         if s.kind == "gym" || (s.sport == "strength" && s.status != "done") { return .gym(s.date) }
         if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }

@@ -378,8 +378,11 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Settings
 
     func profile() async throws -> JSONObject {
-        let response: ProfileResponse = try await get("/app/api/profile")
-        return response.profile ?? [:]
+        try await profileWithSuggestions().profile ?? [:]
+    }
+
+    func profileWithSuggestions() async throws -> ProfileResponse {
+        try await get("/app/api/profile")
     }
 
     /// The server stores the whole profile, so this sends all of it.
