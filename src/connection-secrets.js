@@ -1,5 +1,6 @@
 import { L } from './lang.js';
-// Provider credentials per user (the Google and Intervals.icu keys), AES-GCM
+// Provider credentials per user (the Google and Intervals.icu keys, and the
+// app's Apple sign-in token that deleting the account revokes), AES-GCM
 // encrypted. CONNECTION_KEY is their own key: rows written with it start with
 // "v2." and are bound to their user and provider, so a row copied to another
 // account does not decrypt. Rows saved before CONNECTION_KEY existed were
@@ -43,7 +44,7 @@ export async function connectionEnvironment(env){
     let plain;
     try{plain=await decryptSecret(env,uid,row.provider,row.encrypted);}
     catch(error){console.error('Connection key unreadable',uid,row.provider,error.message);continue;}
-    if(row.provider==='google')resolved.GOOGLE_REFRESH_TOKEN=plain;if(row.provider==='intervals')resolved.INTERVALS_API_KEY=plain;if(row.provider==='google_scopes')resolved.GOOGLE_SCOPES=plain.split(/\s+/).filter(Boolean);
+    if(row.provider==='google')resolved.GOOGLE_REFRESH_TOKEN=plain;if(row.provider==='intervals')resolved.INTERVALS_API_KEY=plain;if(row.provider==='google_scopes')resolved.GOOGLE_SCOPES=plain.split(/\s+/).filter(Boolean);if(row.provider==='apple')resolved.APPLE_REFRESH_TOKEN=plain;
   }
   if(resolved.GOOGLE_REFRESH_TOKEN)resolved.CONNECTED_PROVIDERS.push('google');if(resolved.INTERVALS_API_KEY)resolved.CONNECTED_PROVIDERS.push('intervals');return resolved;
 }

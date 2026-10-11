@@ -95,7 +95,7 @@ import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-manage
 import legacyHealthApi, { googleToken } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
-import { handleAppleLogin, appleConfigured, appleIdentity, unlinkAppleIdentity } from "./apple-login.js";
+import { handleAppleLogin, handleNativeAppleLogin, revokeApple, appleConfigured, appleIdentity, unlinkAppleIdentity } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
@@ -261,6 +261,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });
     if (nativeConnect) return nativeConnect;
+    // Sign in with Apple inside the iPhone app; the token that revokes it is kept with the user's keys.
+    const nativeApple = await handleNativeAppleLogin(request, rawEnv, url.pathname, { saveRefreshToken: async (account, token) => saveConnectionSecret(await userDataEnvironment(rawEnv, account), "apple", token) });
+    if (nativeApple) return nativeApple;
     const googleLogin = await handleGoogleLogin(request, rawEnv, url.pathname);
     if (googleLogin) return googleLogin;
     const appleLogin = await handleAppleLogin(request, rawEnv, url.pathname, { user: signedIn ? user : null });
@@ -637,6 +640,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if (!session.signedIn) return Response.json({message:"Přihlas se do dashboardu."},{status:401});
     if (request.headers.get("Origin") !== url.origin) return Response.json({message:"Neplatný původ požadavku."},{status:403});
     await unlinkAppleIdentity(env.RAW_DB, session.user.id);
+    // The app's Apple sign-in is given back too, when the app made one.
+    const keys = await connectionEnvironment(env);
+    if (keys.APPLE_REFRESH_TOKEN) { await revokeApple(keys); await deleteConnectionSecret(env, "apple"); }
     return Response.json({status:"ok"},{headers:{"Cache-Control":"no-store"}});
   }
   // The user's own data: download everything, or delete the account with it.

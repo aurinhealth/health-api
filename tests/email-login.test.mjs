@@ -145,3 +145,25 @@ test("e-mail texts in Czech and English", () => {
   assert.match(notice.text, /“Apple Passwords \(iPhone\)” was added to your Loadwise account on 7 October 2026 at 10:00/);
   assert.match(passkeyAddedEmail("cs", "<b>x</b>").html, /&lt;b&gt;x&lt;\/b&gt;/);
 });
+
+test("App Review: the review address gets the fixed code, which still needs sending and works once", async () => {
+  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810" });
+  await inviteUser(env.DB, "review@example.com", 1);
+  assert.equal((await verify(env, "review@example.com", "246810")).status, 400, "no code sent yet");
+  await start(env, "review@example.com");
+  assert.equal(codeIn(sent[0]), "246810");
+  assert.equal((await verify(env, "review@example.com", "246810")).status, 200);
+  assert.equal((await verify(env, "review@example.com", "246810")).status, 400, "used up");
+  // Anyone else still gets a random code.
+  await inviteUser(env.DB, "friend@example.com", 1);
+  await start(env, "friend@example.com");
+  assert.notEqual(codeIn(sent[1]), "246810");
+});
+
+test("OPEN_SIGNUP: any address gets a code and an account", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true" });
+  await start(env, "stranger@example.com");
+  assert.equal(sent.length, 1);
+  assert.equal((await verify(env, "stranger@example.com", codeIn(sent[0]))).status, 200);
+  assert.ok(env.DB.sqlite.prepare("SELECT id FROM users WHERE email = 'stranger@example.com'").get());
+});

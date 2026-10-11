@@ -54,8 +54,16 @@ function codeHash(env, email, code, purpose = "email-code") {
   return signText(purpose + ":" + email + ":" + code, sessionSecret(env));
 }
 
+// App Review: APP_REVIEW_EMAIL gets the fixed code APP_REVIEW_CODE (six digits, a secret) instead
+// of a random one, so Apple's reviewer can sign in without the inbox. The usual limits still
+// apply: the code works only after "send code", for 10 minutes and 5 tries.
+export function reviewCode(env, email) {
+  const address = normalizeEmail(env?.APP_REVIEW_EMAIL), code = String(env?.APP_REVIEW_CODE || "").trim();
+  return address && address === email && /^\d{6}$/.test(code) ? code : null;
+}
+
 // Returns true when a code went out.
-export async function sendCode(env, email, lang = "cs", { now = Date.now(), code = randomCode() } = {}) {
+export async function sendCode(env, email, lang = "cs", { now = Date.now(), code = reviewCode(env, email) || randomCode() } = {}) {
   if (!(await mayGetEmailCode(env.DB, env, email))) return false;
   return claimAndSend(env.DB, env, email, code, "email-code", signInCodeEmail(lang, code), now);
 }

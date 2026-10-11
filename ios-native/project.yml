@@ -22,12 +22,18 @@ targets:
     sources:
       - path: Loadwise
       - path: Shared
+      # The privacy manifest App Store Connect checks (UserDefaults, file dates, the data sent to the server).
+      - path: Privacy/App/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - target: LoadwiseWidgets
     # The App Group the home-screen widgets read Today from (WidgetBridge).
     entitlements:
       path: Loadwise/Loadwise.entitlements
       properties:
+        # Sign in with Apple (LoginView); App Store rule 4.8 asks for it next to Google.
+        com.apple.developer.applesignin:
+          - Default
         com.apple.security.application-groups:
           - group.eu.petrfitnessdata.loadwise
     settings:
@@ -72,6 +78,8 @@ targets:
     sources:
       - path: LoadwiseWidgets
       - path: Shared
+      - path: Privacy/Widgets/PrivacyInfo.xcprivacy
+        buildPhase: resources
     entitlements:
       path: LoadwiseWidgets/LoadwiseWidgets.entitlements
       properties:
