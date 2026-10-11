@@ -1,15 +1,8 @@
 name: Health & Strength tests
 
+# Pull requests only: on main the same checks run as the first job of
+# deploy-worker.yml, before anything is deployed.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "package.json"
-      - "eslint.config.mjs"
-      - ".github/workflows/health-strength-tests.yml"
   pull_request:
     paths:
       - "src/**"
@@ -20,6 +13,12 @@ on:
 
 permissions:
   contents: read
+
+# A newer push to the same pull request cancels the older run: only the newest
+# commit's result matters.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   node-tests:
