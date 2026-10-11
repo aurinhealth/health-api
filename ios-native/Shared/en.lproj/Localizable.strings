@@ -1565,3 +1565,26 @@
 "Přepnout stav na Nemoc?" = "Switch your status to Sick?";
 "Přepnout" = "Switch";
 "Kouč do té doby nebude plánovat trénink." = "The coach won't plan training until then.";
+
+/* Threshold check and test on Today */
+"%@ zatím chybí." = "%@ isn't set yet.";
+"%@ · %@" = "%@ · %@";
+"%@: %@" = "%@: %@";
+"%@: %@ (teď %@)" = "%@: %@ (now %@)";
+"Dva dny před testem trénuješ lehce." = "The two days before the test are easy.";
+"Jak dopadl test %@?" = "How did the test on %@ go?";
+"Naplánovat test" = "Plan the test";
+"Neukládat" = "Don't save";
+"Ověř to testem: %@ (%@)." = "Check it with a test: %@ (%@).";
+"Podle tréninků se ti %@ zlepšilo na %@ (nastaveno %@)." = "Your training suggests your %@ has improved to %@ (set to %@).";
+"Podle tréninků je %@ nižší, %@ (nastaveno %@)." = "Your training suggests your %@ is lower, %@ (set to %@).";
+"Průměrný tep posledních 20 min" = "Average heart rate of the last 20 min";
+"Průměrný výkon 20 min (W)" = "Average power over 20 min (W)";
+"Spočítat" = "Calculate";
+"Test" = "Test";
+"Test jsem nedělal" = "I didn't do the test";
+"Uběhnutá vzdálenost za 30 min (km)" = "Distance run in 30 min (km)";
+"Uběhnutá vzdálenost za 30 min (mi)" = "Distance run in 30 min (mi)";
+"Výsledek testu" = "Test result";
+"Zrušit test" = "Cancel the test";
+"doporučený den" = "recommended day";

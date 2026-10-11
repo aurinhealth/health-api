@@ -88,6 +88,7 @@ struct TodayContent: View {
 
             if model.selectedDate == nil {
                 CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
+                ThresholdCheckCard().padding(.top, 12)
             }
 
             if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
