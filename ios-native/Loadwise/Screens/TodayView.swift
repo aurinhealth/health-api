@@ -59,17 +59,18 @@ struct TodayContent: View {
                 .accessibilityLabel("Profil a nastavení")
             }
 
+            // The athlete's status and today's weather at the week plan's place
+            // (or the offer to set it), side by side when they fit.
             if model.selectedDate == nil {
-                AthleteStatusPill().padding(.top, 14)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) { AthleteStatusPill(); WeatherPill(weather: today.weather) }
+                    VStack(alignment: .leading, spacing: 8) { AthleteStatusPill(); WeatherPill(weather: today.weather) }
+                }
+                .padding(.top, 14)
             }
 
             if model.selectedDate == nil && !model.demo {
                 ConnectionProblemCard()
-            }
-
-            // Today's weather at the week plan's place (or the offer to set it).
-            if model.selectedDate == nil {
-                WeatherPill(weather: today.weather).padding(.top, 14)
             }
 
             RouteLink(route: .readiness) {
