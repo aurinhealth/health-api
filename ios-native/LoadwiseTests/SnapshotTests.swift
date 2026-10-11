@@ -40,7 +40,7 @@ final class SnapshotTests: XCTestCase {
                 .padding(24).padding(.top, 30)
         }
         let sessions = DemoData.training.sessions ?? []
-        try render("training-sessions", glow: Palette.Glow.training) { NavigationStack { WeekSessionsList(sessions: sessions, today: "2026-10-08") }.padding(24).frame(height: 600) }
+        try render("training-sessions", glow: Palette.Glow.training) { NavigationStack { WeekSessionsList(sessions: sessions, today: "2026-10-08") }.environment(AppModel(demo: true)).padding(24).frame(height: 600) }
     }
 
     func testFoodScreens() throws {
