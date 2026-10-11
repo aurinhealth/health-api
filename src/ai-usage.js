@@ -1,9 +1,9 @@
-// What every AI answer cost, per user and day, and a monthly and a daily limit
-// per user. Every model call goes through callOpenAI (coach-assistant.js), which
-// checks the limits before asking and records the cost after. The monthly limit
-// is the user's AI budget and the lever a paid tier would raise:
-// AI_MONTHLY_LIMIT_USD (default 5 USD a month). The daily limit stops one day
-// from using up the month: AI_DAILY_LIMIT_USD (default 1 USD). 0 in either turns
+// What every AI answer cost, per user and day, and a monthly limit per user.
+// Every model call goes through callOpenAI (coach-assistant.js), which checks
+// the limit before asking and records the cost after. The monthly limit is the
+// user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
+// (default 5 USD a month). How it is spread over the month is up to the user;
+// a daily limit applies only when AI_DAILY_LIMIT_USD is set. 0 in either turns
 // AI off for everyone but the owner. The owner is never limited.
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
@@ -21,11 +21,10 @@ export function usageCost(model, usage, webSearches = 0) {
   return Math.round(((n(usage.input_tokens) || 0) * i + (n(usage.output_tokens) || 0) * o + (n(webSearches) || 0) * WEB_SEARCH_USD * 1e6) / 1e6 * 1e5) / 1e5;
 }
 
-export const DEFAULT_AI_DAILY_LIMIT_USD = 1;
 export function aiDailyLimitUsd(env) {
   if (env.USER_IS_OWNER === true) return null;
   const limit = n(env.AI_DAILY_LIMIT_USD);
-  return limit != null && limit >= 0 ? limit : DEFAULT_AI_DAILY_LIMIT_USD;
+  return limit != null && limit >= 0 ? limit : null;
 }
 
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
@@ -75,6 +74,24 @@ export async function assertAiAllowance(env) {
   const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env).catch(failed), dayLimit == null ? 0 : aiSpentToday(env).catch(failed)]);
   if (monthLimit != null && monthSpent >= monthLimit) throw limitError(L(`Měsíční limit AI je vyčerpaný (${usd(monthLimit)}). Obnoví se prvního dne dalšího měsíce.`, `The monthly AI limit is used up (${usd(monthLimit)}). It resets on the first day of next month.`));
   if (dayLimit != null && daySpent >= dayLimit) throw limitError(L(`Denní limit AI je vyčerpaný (${usd(dayLimit)}). Zítra se obnoví.`, `The daily AI limit is used up (${usd(dayLimit)}). It resets tomorrow.`));
+}
+
+// Limits are checked before a call and its cost recorded after it, so parallel
+// requests would all pass the check before the first cost lands. Each limited
+// user therefore has at most AI_PARALLEL_CALLS calls running at once: a running
+// call is a 'pending' row in ai_usage, claimed in one statement (D1 runs them
+// one at a time) and removed when the call ends. A row left by a Worker that
+// died counts for AI_PENDING_MINUTES at most.
+export const AI_PARALLEL_CALLS = 3;
+const AI_PENDING_MINUTES = 5;
+export async function claimAiSlot(env) {
+  if (!tracked(env) || (aiMonthlyLimitUsd(env) == null && aiDailyLimitUsd(env) == null)) return async () => {};
+  await ensureAiUsage(env.DB);
+  const claimed = await env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, 'pending', 'pending', 0
+    WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
+    .bind(env.USER_ID, localToday(), env.USER_ID, AI_PARALLEL_CALLS).first();
+  if (!claimed) throw limitError(L("Ještě běží jiné dotazy na AI. Zkus to za chvíli.", "Other AI requests are still running. Try again in a moment."));
+  return () => env.DB.prepare("DELETE FROM ai_usage WHERE id = ? AND user_id = ? AND model = 'pending'").bind(claimed.id, env.USER_ID).run().catch(error => console.error("AI slot not released", error?.message || error));
 }
 
 function limitError(message) {

@@ -9,7 +9,7 @@ import { readOpenAIStream,partialCoachAnswer } from './assistant-stream.js';
 import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { aiLanguageNote, L } from './lang.js';
-import { assertAiAllowance, recordAiUsage } from './ai-usage.js';
+import { assertAiAllowance, claimAiSlot, recordAiUsage } from './ai-usage.js';
 
 export const coachInstructions = `Jsi trenér v aplikaci Loadwise pro cyklistiku (venku i na trenažeru), běh a posilovnu, včetně sportovní výživy a regenerace kolem nich. Tvoje odbornost odpovídá tomu, co aplikace nabízí: plánování a hodnocení tréninků z Intervals.icu, silový trénink v posilovně, výživa a spánek. Otázky mimo tyto sporty a témata odbyj jednou větou, že jsi trenér pro ně, a vrať se k tréninku; nevymýšlej rady pro jiné obory. Nejsi zaměstnanec žádného profesionálního týmu a netvrď, že znáš jejich interní data nebo neveřejné algoritmy.
 
@@ -260,6 +260,12 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   await assertAIAccess(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI není připojena.', 'AI is not connected.'));
   await assertAiAllowance(env);
+  const release=await claimAiSlot(env);
+  try{return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature});}
+  finally{await release();}
+}
+
+async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature }) {
   const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
   const response = await fetch('https://api.openai.com/v1/responses', {
     method:'POST',

@@ -76,7 +76,7 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 | `INTERVALS_CLIENT_ID`, `INTERVALS_CLIENT_SECRET` | Volitelné: aplikace zaregistrovaná u Intervals.icu. S nimi se Intervals.icu připojuje jedním tlačítkem (OAuth, `intervals-oauth.js`), bez nich vložením osobního API klíče. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Asistent trenéra a čtení fotek jídla (volitelně `OPENAI_VISION_MODEL`, jinak `OPENAI_LIGHT_MODEL`). |
 | `AI_MONTHLY_LIMIT_USD` | Volitelný měsíční rozpočet na AI pro jednoho uživatele v USD (výchozí 5; `0` vypne AI všem kromě správce). Uživatel vidí útratu v Nastavení. Správce limit nemá. |
-| `AI_DAILY_LIMIT_USD` | Volitelný denní limit útraty za AI na jednoho uživatele v USD (výchozí 1; `0` vypne AI všem kromě správce). Správce limit nemá. |
+| `AI_DAILY_LIMIT_USD` | Volitelný denní limit útraty za AI na jednoho uživatele v USD (výchozí žádný, platí jen měsíční limit; `0` vypne AI všem kromě správce). Správce limit nemá. |
 | `OWNER_EMAIL` | Správce aplikace (ve `wrangler.jsonc`). |
 
 Přihlášení: Google (`google-login.js`), přístupové klíče (passkeys, `passkeys.js` a `webauthn.js`, bez knihovny), volitelně jednorázový kód z e-mailu (`email-login.js`, Cloudflare Email Service) a Apple (`apple-login.js`). Všechny končí stejnou podepsanou cookie (`dashboard-auth.js`) a pustí dovnitř jen existující uživatele, pozvané adresy a správce.
