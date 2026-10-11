@@ -20,6 +20,29 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let eventId: String?
     /// On a done session: the plan it fulfils, for undoing a pairing.
     var plannedId: String? = nil
+    /// On a done session: the calories the device reported.
+    var kcal: Double? = nil
+    /// When those look implausible (src/activity-energy-check.js): the
+    /// realistic estimate and its range, to check (Kalorie k ověření).
+    var kcalEstimate: KcalEstimate? = nil
+    /// The user's choice for it: "estimate" or "device"; nil while unchecked.
+    var kcalChoice: String? = nil
+
+    struct KcalEstimate: Decodable, Hashable {
+        let value: Double?
+        let low: Double?
+        let high: Double?
+        let reason: String?
+    }
+
+    /// The device's calories wait for the user's check.
+    var kcalNeedsCheck: Bool { kcalEstimate?.value != nil && kcal != nil && kcalChoice == nil }
+
+    /// The calories the day counts with: the estimate when chosen.
+    var countedKcal: Double? {
+        if kcalChoice == "estimate", let value = kcalEstimate?.value { return value }
+        return kcal
+    }
 }
 
 // MARK: - Gym (GET/POST /app/api/gym, src/gym-plan-store.js)

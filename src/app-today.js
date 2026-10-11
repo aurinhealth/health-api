@@ -8,12 +8,13 @@ import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepIndexScore, be
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
-import { daySessions } from "./app-training.js";
+import { daySessions, deviceEnergyExtra } from "./app-training.js";
 
 const STEP_GOAL = 10000;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
+const activeKcal = (v, extra) => (v == null ? null : Math.max(0, Math.round(v) - (extra || 0)));
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const nightDate = s => s?.date || String(s?.endTime || "").slice(0, 10);
 const clock = minutes => (minutes == null ? null : String(Math.floor(minutes / 60) % 24).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0"));
@@ -137,6 +138,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // the order of the plan (no clock: it comes after the last record, whenever
   // that is), then bedtime. The same sessions as Training → Tréninky týdne,
   // so a gym session or a watch workout outside the plan shows here too.
+  // The watch's calories above the estimate the user chose to count (Plán dne → Kalorie k ověření).
+  const watchExtra = deviceEnergyExtra(training.completed);
   const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
   const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null;
   const done = daySession.filter(s => s.status === "done").sort((a, b) => String(a.time || "99").localeCompare(String(b.time || "99")));
@@ -186,7 +189,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     },
     plan: planItems,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
-    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: round(num(todayRow.activeCalories)), activeMinutes: activeMinutes(google, date) },
+    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)
   };

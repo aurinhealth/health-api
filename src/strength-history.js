@@ -217,3 +217,39 @@ export async function getStrengthHistory(db, limit = 100) {
   return (result.results || []).map(row => ({ ...row,...strengthSetOptions(row), exercise: normalizeExerciseName(row.exercise) }));
 }
 
+
+// The work sets of the last `days` days grouped by exercise and day, newest
+// day first (GET /app/api/gym/history): what the app shows as "minule 82,5 kg
+// × 6", the exercise's history, and the base of the next suggestion.
+// target: the lower end of the planned reps ("8-10" → 8), when there was a plan.
+export async function strengthSessions(db, { days = 180, today = new Date().toISOString().slice(0, 10) } = {}) {
+  await ensureStrengthTable(db);
+  const span = Math.min(Math.max(Number(days) || 180, 7), 730);
+  const since = new Date(Date.parse(today + "T12:00:00Z") - span * 86400000).toISOString().slice(0, 10);
+  const result = await db.prepare(`
+    SELECT workout_date, plan_row, exercise, actual_kg, actual_reps, planned_reps, rpe
+    FROM strength_sets
+    WHERE user_id = ? AND completed = 1 AND type = 'WORK' AND workout_date >= ?
+    ORDER BY workout_date DESC, plan_row ASC
+    LIMIT 4000
+  `).bind(db.userId, since).all();
+  return groupStrengthSessions(result.results || []);
+}
+
+export function groupStrengthSessions(rows) {
+  const byExercise = new Map();
+  for (const row of rows || []) {
+    const name = normalizeExerciseName(text(row.exercise));
+    const date = text(row.workout_date).slice(0, 10);
+    if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (!byExercise.has(name)) byExercise.set(name, new Map());
+    const days = byExercise.get(name);
+    if (!days.has(date)) days.set(date, []);
+    const target = Number(String(row.planned_reps ?? "").match(/^\s*(\d+)/)?.[1]) || null;
+    days.get(date).push({ kg: numberOrNull(row.actual_kg), reps: numberOrNull(row.actual_reps), target, rpe: numberOrNull(row.rpe) });
+  }
+  return [...byExercise.entries()].map(([name, days]) => ({
+    name,
+    sessions: [...days.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([date, sets]) => ({ date, sets }))
+  })).sort((a, b) => b.sessions[0].date.localeCompare(a.sessions[0].date));
+}

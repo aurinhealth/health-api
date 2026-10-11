@@ -29,6 +29,8 @@ enum AppRoute: Hashable {
     case workoutLibrary(String)
     case equipment
     case trainingMode(String)
+    /// Posilovna naživo (GymLive.swift): the day, and whether it starts with the last workout's exercises.
+    case liveGym(String, Bool)
     /// The coach's sessions for the rest of the week, the review of today, the records.
     case weekPlan
     case dayReview
@@ -120,6 +122,7 @@ struct RouteScreen: View {
         case .workoutLibrary(let sport): TrainingLibraryView(sport: sport)
         case .equipment: EquipmentView()
         case .trainingMode(let date): TrainingModeView(date: date)
+        case .liveGym(let date, let repeatLast): LiveGymView(date: date, repeatLast: repeatLast)
         case .weekPlan: WeekPlanView()
         case .dayReview: DayReviewView()
         case .insights: InsightsView()

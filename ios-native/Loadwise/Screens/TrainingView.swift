@@ -424,6 +424,9 @@ struct ActiveCaloriesWidget: View {
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     NumberText(value: Fmt.int(active.today), unit: "kcal")
+                    if let excluded = active.excluded, excluded > 0 {
+                        Text(L10n.f("bez %@ navíc z hodinek", Fmt.int(excluded))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
                     if let usual = active.usual {
                         Text(L10n.f("obvykle %@ kcal", Fmt.int(usual))).font(Typo.caption).foregroundStyle(Palette.faint)
                     }

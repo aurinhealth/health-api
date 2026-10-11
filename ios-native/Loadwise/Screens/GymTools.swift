@@ -15,6 +15,20 @@ struct TrainingTools: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Posilovna")
+            // Posilovna naživo (GymLive.swift): an empty session with a clock,
+            // or the last workout's exercises with the next loads.
+            NavigationLink(value: AppRoute.liveGym(today, false)) {
+                Label("Začít posilovnu", systemImage: "dumbbell.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            NavigationLink(value: AppRoute.liveGym(today, true)) {
+                Label("Zopakovat minulou", systemImage: "arrow.counterclockwise").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity).frame(height: 46)
+                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
             LazyVGrid(columns: columns, spacing: 10) {
                 tile(.trainingMode(today), "play.fill", "Režim tréninku", Palette.amberBar)
                 tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
