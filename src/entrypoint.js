@@ -83,7 +83,7 @@ import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './
 import { getCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, saveCheck, upcomingTest, thresholdSessions, estimateRideFtp, estimateRunPace, thresholdOffer, recommendTestDay, testResult, getTestWorkout } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
-import { activePlan, planWeek, planQuality, planLoad, applyPlan, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate } from './training-plans.js';
+import { activePlan, reviewPlan, planWeek, planQuality, planLoad, applyPlan, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, dayHours, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
@@ -476,11 +476,42 @@ async function computeWeekTargets(env,ctx,start,prefs){
 // The active training plan in a week (training-plans.js): how many quality
 // days and what load the week planner makes, and its sessions on the chips.
 async function planForWeek(env,ctx,start){
-  const plan=await activePlan(env.DB,localToday()).catch(()=>null),pw=plan?planWeek(plan,start):null;
+  const today=localToday();
+  let plan=await syncedPlans(env,today).then(p=>p.active).catch(()=>null);
+  // Once a week: a past week's key sessions not done repeat the week (reviewPlan).
+  const thisMonday=mondayOfDate(today);
+  if(plan&&!plan.pauseFrom&&!(plan.reviewed>=thisMonday)){
+    const last=shiftDate(thisMonday,-7);
+    const keyDates=await planKeyDates(env,plan,last).catch(()=>[]);
+    plan=(await reviewPlan(env.DB,plan,thisMonday,{keyDates,doneDates:await planSportDates(env,plan.sport,last,thisMonday).catch(()=>[])}).catch(()=>({plan}))).plan;
+  }
+  const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
   if(!pw)return {plan:null,pw:null,roles:{},load:null,apply:t=>t};
   const [thresholds,capabilities]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),getCapabilities(env.DB,plan.sport).catch(()=>({}))]);
-  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities};
+  // This week: key sessions missed on past days move to the easy days ahead.
+  const done=start<=today&&today<shiftDate(start,7)?new Set(await planSportDates(env,plan.sport,start,today).catch(()=>[])):null;
+  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,done,today:done?today:null};
   return {plan,pw,roles:{quality:planQuality(pw),prefer:plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+}
+// The endurance and the gym plan with the athlete's status applied: sick,
+// injured or on a break pauses them, back to training moves them on
+// (training-plans.js planPause).
+async function syncedPlans(env,today=localToday()){
+  const state=await getAthleteState(env.DB,{date:today}).catch(()=>null);
+  const [active,gym]=await Promise.all([activePlan(env.DB,today,{state}),activePlan(env.DB,today,{gym:true,state})]);
+  return {active,gym};
+}
+// Days with an activity of the sport, from (inclusive) to (exclusive).
+async function planSportDates(env,sport,from,to){
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
+  return [...new Set(rows.map(activityFromRow).filter(a=>a&&a.kind===sport&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
+}
+// The key days (quality, test, long) the plan put in a week.
+async function planKeyDates(env,plan,monday){
+  const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
+  if(!prefs?.days)return [];
+  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport});
+  return roles.map((d,i)=>d.items.some(x=>x.sport===plan.sport&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
 // The weather place of the week plan and today's forecast for Today (app-today.js
@@ -604,7 +635,7 @@ async function thresholdCheckState(env,ctx,today){
   // A plan with tests (ride FTP: the first and the last week) schedules each
   // on its week's first quality day, so the coach eases the days before it.
   const active=await activePlan(env.DB,today).catch(()=>null);
-  for(const monday of active?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[]){
+  for(const monday of active&&!active.pauseFrom?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[]){
     const pw=planWeek(active,monday);
     if(!pw?.spec.q[0]?.test)continue;
     const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:active.sport}):[];
@@ -726,7 +757,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json();
-      return Response.json({status:'ok',state:await updateAthleteState(env.DB,{status:body.status,note:body.note,statusUntil:body.statusUntil,forget:body.forget,dismiss:body.dismiss})},{headers:{'Cache-Control':'no-store'}});
+      const state=await updateAthleteState(env.DB,{status:body.status,note:body.note,statusUntil:body.statusUntil,forget:body.forget,dismiss:body.dismiss});
+      if(body.status!=null)await syncedPlans(env).catch(()=>null);
+      return Response.json({status:'ok',state},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   // The morning check-in on Today (morning-checkin.js): one answer a day.
@@ -1091,7 +1124,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         else throw new Error(L('Neznámá akce.', 'Unknown action.'));
       }
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
-      const [active,gym]=await Promise.all([activePlan(env.DB,today),activePlan(env.DB,today,{gym:true})]);
+      const {active,gym}=await syncedPlans(env,today);
       return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:active?planSummary(active,today):null,activeGym:gym?planSummary(gym,today):null,...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
@@ -1265,7 +1298,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(body.decision==='confirm'){
         const a=draft.action;
         // A proposed end date applies only while it is still in the future.
-        if(a.type==='status')result=await updateAthleteState(env.DB,{status:a.status,note:a.reason,statusUntil:a.statusUntil&&a.statusUntil>localToday()?a.statusUntil:null});
+        if(a.type==='status'){result=await updateAthleteState(env.DB,{status:a.status,note:a.reason,statusUntil:a.statusUntil&&a.statusUntil>localToday()?a.statusUntil:null});await syncedPlans(env).catch(()=>null);}
         else if(a.type==='gym_swap'){
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Návrh je určený pro minulý den. Požádej o nový návrh.', 'The proposal is for a past day. Ask for a new proposal.'));
           assertTrainingAllowed(await getAthleteState(env.DB));
@@ -1465,8 +1498,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         todayPlace(env,ctx,date),trainingGymPlans(env,date,date).catch(()=>({})),getCheckin(env.DB,date).catch(()=>null)
       ]);
       // The active training plan in one line (training-plans.js).
-      const active=await activePlan(env.DB,localToday()).catch(()=>null)??await activePlan(env.DB,localToday(),{gym:true}).catch(()=>null),summary=active?planSummary(active,date):null;
-      const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate}:null;
+      const synced=await syncedPlans(env).catch(()=>({})),active=synced.active??synced.gym,summary=active?planSummary(active,date):null;
+      const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused}:null;
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
       applyEnergyBudget(daily,profile,health);

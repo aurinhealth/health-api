@@ -88,7 +88,7 @@ struct TodayContent: View {
 
             if model.selectedDate == nil {
                 if let plan = today.trainingPlan {
-                    Label(([plan.name, L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + (plan.phaseLabel.map { [$0] } ?? [])).joined(separator: " · "), systemImage: "flag")
+                    Label(([plan.name, plan.paused == true ? L10n.tr("pozastaveno") : L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + (plan.paused == true ? [] : plan.phaseLabel.map { [$0] } ?? [])).joined(separator: " · "), systemImage: "flag")
                         .font(Typo.small).foregroundStyle(Palette.secondary)
                         .padding(.top, 24)
                 }

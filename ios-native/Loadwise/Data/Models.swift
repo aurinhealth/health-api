@@ -28,6 +28,8 @@ struct TodaySnapshot: Decodable, Equatable {
         let week: Int
         let weeksCount: Int
         let phaseLabel: String?
+        /// Sick, injured or on a break: the plan waits.
+        let paused: Bool?
     }
 
     struct Readiness: Decodable, Equatable {

@@ -43,6 +43,12 @@ struct TrainingPlans: Decodable, Equatable {
         let weeksCount: Int
         let phaseLabel: String?
         let started: Bool
+        /// Sick, injured or on a break: the plan waits, then goes on.
+        let paused: Bool?
+        /// Weeks the plan moved later (a break, a week of missed sessions).
+        let shiftedWeeks: Int?
+        /// A lighter week after a break in a race plan.
+        let returning: Bool?
         let template: Template
     }
 
@@ -122,11 +128,11 @@ struct ActivePlanSummary: View {
     var body: some View {
         Card {
             WidgetHeader(title: L10n.tr("Plán"), color: Palette.amberBar,
-                         trailing: active.started ? L10n.f("týden %@/%@", String(active.week), String(active.weeksCount)) : L10n.f("od %@", Fmt.dayMonth(active.startDate)))
+                         trailing: active.paused == true ? L10n.tr("pozastaveno") : active.started ? L10n.f("týden %@/%@", String(active.week), String(active.weeksCount)) : L10n.f("od %@", Fmt.dayMonth(active.startDate)))
             Text(active.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
             WeekStrip(weeks: active.template.weeks, current: active.started ? active.week : 0)
             if active.started, let week = active.template.weeks.first(where: { $0.week == active.week }) {
-                Text(([week.phaseLabel] + week.keys).joined(separator: " · "))
+                Text(([active.returning == true ? L10n.tr("návrat") : week.phaseLabel] + week.keys.prefix(active.returning == true ? 1 : week.keys.count)).joined(separator: " · "))
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }

@@ -260,7 +260,12 @@ export function planWeek(plan, date) {
   if (!template) return null;
   const index = Math.floor(daysBetween(plan.startDate, mondayOf(date)) / 7);
   if (index < 0 || index >= template.weeks.length) return null;
-  return { template, index, week: index + 1, weeks: template.weeks.length, spec: template.weeks[index], monday: shift(plan.startDate, index * 7) };
+  const monday = shift(plan.startDate, index * 7), base = template.weeks[index];
+  // Back after an illness or a break in a race plan (the race date stays):
+  // the first week or two are lighter, with one key session at most.
+  const returning = !base.race && plan.returnFrom && monday >= plan.returnFrom && monday < shift(plan.returnFrom, 7 * (plan.returnWeeks || 1));
+  const spec = returning ? { ...base, load: Math.min(base.load, .8), q: base.q.slice(0, 1), returning: true } : base;
+  return { template, index, week: index + 1, weeks: template.weeks.length, spec, monday };
 }
 // The quality days the week planner should make for the plan's week.
 export const planQuality = pw => pw ? pw.spec.q.length : null;
@@ -273,7 +278,11 @@ export { phaseLabel };
 // Items are { date, sport, slot, role, minutes, tss, intensity }.
 // `shifts` is the athlete's capabilities by energy system (workout-library.js
 // getCapabilities): a beginner's key sessions are easier, see levelShift.
-export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasPower = true, shifts = {} } = {}) {
+// `done` is the set of dates with a session of the plan's sport so far and
+// `today` the athlete's day: a key session (intervals, a test, the long one)
+// missed on an earlier day moves to the next easy day of the week that is
+// not next to another key day.
+export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasPower = true, shifts = {}, done = null, today = null } = {}) {
   const pw = planWeek(plan, weekStart);
   if (!pw || !targets?.items || pw.template.sport === "gym") return targets;
   const { template, spec } = pw, sport = template.sport;
@@ -304,17 +313,32 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     if (stridesLeft && sport === "run" && !spec.easy) { stridesLeft--; return { kind: "easy", family: "run-easy-strides" }; }
     return { kind: "easy", family: spec.easy?.family || (sport === "run" ? "run-easy" : "z2"), level: spec.easy?.level ?? null, minutes: spec.easy?.minutes ?? null };
   };
+  // Missed key sessions: the easy days ahead take them in order.
+  const KEY = ["quality", "test", "long"], moved = new Map();
+  let unplaced = 0;
+  if (done && today) {
+    const planned = own.map(x => ({ x, s: sessionFor(x) }));
+    stridesLeft = spec.strides ? 1 : 0;
+    const missed = planned.filter(({ x, s }) => x.date < today && KEY.includes(s.kind) && !done.has(x.date)).map(p => p.s);
+    const keyDays = planned.filter(({ x, s }) => x.date >= today && KEY.includes(s.kind)).map(p => p.x.date);
+    for (const s of missed) {
+      const free = planned.find(({ x, s: f }) => x.date >= today && !KEY.includes(f.kind) && f.kind !== "race" && !moved.has(x) && !(race && daysBetween(x.date, race) <= 2) && keyDays.every(d => Math.abs(daysBetween(d, x.date)) >= 2));
+      if (!free) { unplaced++; continue; }
+      moved.set(free.x, { ...s, movedFrom: true });
+      keyDays.push(free.x.date);
+    }
+  }
   const roleOf = s => s.kind === "quality" || s.kind === "test" ? "quality" : s.kind === "long" ? "long" : s.kind === "race" ? "race" : s.kind === "recovery" ? "recovery" : "endurance";
   const out = items.map(x => {
     if (x.sport !== sport || (x.slot || 0) !== 0) return x;
-    const s = sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) : 0;
+    const s = moved.get(x) || sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) : 0;
     const minutes = s.minutes ?? (s.kind === "race" ? raceMinutes(raceKm, thresholdPace) : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes);
     const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
     const label = s.kind === "test" ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : s.label || (workoutId && baseName(workoutId)) || x.label;
     const role = roleOf(s), intensity = x.intensity || .7;
-    return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId } };
+    return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(s.movedFrom ? { moved: true } : {}) } };
   });
-  return { ...targets, items: out, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase), load: spec.load } };
+  return { ...targets, items: out, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase), load: spec.load, returning: Boolean(spec.returning), moved: moved.size, unplaced } };
 }
 
 // The week's load factor: the plan's, never above the safety rules (a
@@ -377,21 +401,84 @@ export function planDays(template, prefs) {
 }
 
 // ---- storage -------------------------------------------------------------------
+let migrated = false;
 async function ensure(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS training_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, template_id TEXT NOT NULL, sport TEXT NOT NULL, start_date TEXT NOT NULL, race_date TEXT, race_km REAL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS training_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, template_id TEXT NOT NULL, sport TEXT NOT NULL, start_date TEXT NOT NULL, race_date TEXT, race_km REAL, status TEXT NOT NULL DEFAULT 'active', state_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
+  // Tables made before the plan kept its pauses and shifts.
+  if (migrated) return;
+  try { await db.prepare("ALTER TABLE training_plans ADD COLUMN state_json TEXT NOT NULL DEFAULT '{}'").run(); } catch { /* already there */ }
+  migrated = true;
 }
-const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, startDate: r.start_date, raceDate: r.race_date || null, raceKm: r.race_km ?? null, status: r.status } : null;
+const parseState = text => { try { return JSON.parse(text || "{}") || {}; } catch { return {}; } };
+// state: pauseFrom/pauseUntil (an illness or a break going on), shiftedWeeks
+// (weeks the plan moved later), returnFrom/returnWeeks (lighter weeks after a
+// break in a race plan) and reviewed (the last week checked for missed sessions).
+const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, startDate: r.start_date, raceDate: r.race_date || null, raceKm: r.race_km ?? null, status: r.status, ...parseState(r.state_json) } : null;
+const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed"];
+async function savePlan(db, plan) {
+  const state = Object.fromEntries(STATE_KEYS.filter(k => plan[k] != null).map(k => [k, plan[k]]));
+  await db.prepare("UPDATE training_plans SET start_date=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(plan.startDate, JSON.stringify(state), db.userId, plan.id).run();
+}
+
+// ---- illness, a break, missed weeks --------------------------------------------
+// While the athlete's status is sick, injured or on a break the plan waits;
+// back to training, a plan without a race moves later by the weeks the break
+// took (rounded up), so it goes on from before the break instead of catching
+// up. A race plan keeps its race day: its first week or two back are lighter.
+// Breaks shorter than 4 days only cost their sessions.
+export function planPause(plan, state, today) {
+  const template = plan && getTemplate(plan.templateId);
+  if (!template) return { plan, changed: false };
+  const away = state?.status && state.status !== "active";
+  if (away) {
+    if (plan.pauseFrom && (plan.pauseUntil || null) === (state.statusUntil || null)) return { plan, changed: false };
+    return { plan: { ...plan, pauseFrom: plan.pauseFrom || today, pauseUntil: state.statusUntil || null }, changed: true };
+  }
+  if (!plan.pauseFrom) return { plan, changed: false };
+  const from = plan.pauseFrom > plan.startDate ? plan.pauseFrom : plan.startDate, end = plan.pauseUntil && plan.pauseUntil < today ? plan.pauseUntil : today;
+  const days = daysBetween(from, end), out = { ...plan, pauseFrom: null, pauseUntil: null };
+  if (days >= 4 && end > plan.startDate) {
+    const weeks = Math.min(6, Math.ceil(days / 7));
+    if (template.race) Object.assign(out, { returnFrom: mondayOf(end), returnWeeks: days >= 14 ? 2 : 1 });
+    else Object.assign(out, { startDate: shift(plan.startDate, weeks * 7), shiftedWeeks: (plan.shiftedWeeks || 0) + weeks });
+  }
+  return { plan: out, changed: true };
+}
+// A finished week whose key sessions were not all done, not even on another
+// day of that week, is repeated: the rest of the plan moves a week later.
+// At most twice in a plan; a race plan keeps its race day and goes on.
+// keyDates: the week's key session days; doneDates: days with a session of the sport.
+export function planReview(plan, weekStart, { keyDates = [], doneDates = [] } = {}) {
+  const template = plan && getTemplate(plan.templateId);
+  if (!template || plan.reviewed >= weekStart) return { plan, changed: false, repeated: false };
+  const out = { ...plan, reviewed: weekStart };
+  const done = new Set(doneDates), missed = keyDates.filter(d => !done.has(d)).sort();
+  // A missed session done later that week on a day without a key session counts.
+  const madeUp = missed.length ? doneDates.filter(d => d > missed[0] && !keyDates.includes(d)).length : 0;
+  const repeat = !template.race && missed.length > madeUp && (plan.shiftedWeeks || 0) < 2 && planWeek(plan, weekStart) != null;
+  if (repeat) Object.assign(out, { startDate: shift(plan.startDate, 7), shiftedWeeks: (plan.shiftedWeeks || 0) + 1 });
+  return { plan: out, changed: true, repeated: repeat };
+}
 // The active plan, or null; a plan past its last week is finished. An
 // endurance plan (ride or run) and a gym plan can run side by side.
-export async function activePlan(db, today = null, { gym = false } = {}) {
+export async function activePlan(db, today = null, { gym = false, state = null } = {}) {
   await ensure(db);
-  const plan = fromRow(await db.prepare(`SELECT * FROM training_plans WHERE user_id=? AND status='active' AND sport${gym ? "=" : "<>"}'gym' ORDER BY id DESC LIMIT 1`).bind(db.userId).first());
+  let plan = fromRow(await db.prepare(`SELECT * FROM training_plans WHERE user_id=? AND status='active' AND sport${gym ? "=" : "<>"}'gym' ORDER BY id DESC LIMIT 1`).bind(db.userId).first());
   const template = plan && getTemplate(plan.templateId);
   if (plan && today && (!template || today >= shift(plan.startDate, template.weeks.length * 7))) {
     await db.prepare("UPDATE training_plans SET status='done',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(db.userId, plan.id).run();
     return null;
   }
+  if (plan && state && today) {
+    const r = planPause(plan, state, today);
+    if (r.changed) { plan = r.plan; await savePlan(db, plan); }
+  }
   return plan;
+}
+export async function reviewPlan(db, plan, weekStart, data) {
+  const r = planReview(plan, weekStart, data);
+  if (r.changed) await savePlan(db, r.plan);
+  return r;
 }
 export async function startPlan(db, { templateId, startDate, raceDate = null, raceKm = null }) {
   const template = getTemplate(templateId);
@@ -420,5 +507,5 @@ export function planSummary(plan, today) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return null;
   const pw = planWeek(plan, today), started = today >= plan.startDate;
-  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase) : null, started, template: templateSummary(template) };
+  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning), template: templateSummary(template) };
 }

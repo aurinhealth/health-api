@@ -143,3 +143,59 @@ test("the strength generator follows the plan's phase: its exercises, sets and r
   // A focus the athlete chose wins over the plan.
   assert.doesNotMatch(generateStrengthPlan(context, { planPhase: phase, focusMuscles: ["chest"], durationMinutes: 60 }).planName, /Síla/);
 });
+
+test("a missed key session moves to the next easy day, not next to another key day", () => {
+  const plan = { templateId: "run-10k", startDate: monday, raceDate: week(9).replace(/12$/, "20"), raceKm: 10 };
+  const start = week(2), base = targetsFor(plan, 2), runs = base.items.filter(x => x.sport === "run");
+  const firstKey = runs.find(x => x.role === "quality");
+  // Wednesday: the first key session (Tuesday) was not run.
+  const today = new Date(Date.parse(firstKey.date + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
+  const pw = planWeek(plan, start);
+  const out = applyPlan(weekTargets({ roles: planWeekRoles(days, { quality: planQuality(pw), prefer: "run" }), ctl: 50, days: [], today: start, weekStart: start, plan: planLoad(pw) }), plan, start, { thresholdPace: 280, done: new Set(), today });
+  const moved = out.items.filter(x => x.plan?.moved);
+  assert.equal(out.plan.moved + out.plan.unplaced, 1);
+  for (const m of moved) {
+    assert.ok(m.date >= today);
+    assert.equal(m.plan.family, firstKey.plan.family);
+    const keys = out.items.filter(x => x.sport === "run" && x !== m && x.date >= today && ["quality", "test", "long"].includes(x.plan?.kind));
+    assert.ok(keys.every(k => Math.abs(Date.parse(k.date) - Date.parse(m.date)) >= 2 * 86400000), JSON.stringify(keys.map(k => k.date)));
+  }
+  // Done that day: nothing moves.
+  const ok = applyPlan(weekTargets({ roles: planWeekRoles(days, { quality: planQuality(pw), prefer: "run" }), ctl: 50, days: [], today: start, weekStart: start, plan: planLoad(pw) }), plan, start, { thresholdPace: 280, done: new Set([firstKey.date]), today });
+  assert.equal(ok.plan.moved, 0);
+});
+
+test("illness pauses the plan; back, it goes on from where it stopped", async () => {
+  const { planPause } = await import("../src/training-plans.js");
+  const plan = { templateId: "ride-ftp", startDate: monday };
+  const sick = planPause(plan, { status: "sick", statusUntil: null }, "2026-10-21").plan;
+  assert.equal(sick.pauseFrom, "2026-10-21");
+  assert.equal(planPause(sick, { status: "sick" }, "2026-10-23").changed, false);
+  // Ten days away: the plan moves two weeks later, week 2 again.
+  const back = planPause(sick, { status: "active" }, "2026-10-31").plan;
+  assert.deepEqual([back.startDate, back.shiftedWeeks, back.pauseFrom], ["2026-10-26", 2, null]);
+  assert.equal(planWeek(back, "2026-11-02").week, 2);
+  // Three days: only those sessions are lost.
+  assert.equal(planPause(planPause(plan, { status: "sick" }, "2026-10-21").plan, { status: "active" }, "2026-10-24").plan.startDate, monday);
+  // A race plan keeps its race day; its first week back is lighter.
+  const race = { templateId: "run-10k", startDate: monday, raceDate: "2026-12-20", raceKm: 10 };
+  const r = planPause(planPause(race, { status: "on_break" }, "2026-10-26").plan, { status: "active" }, "2026-11-02").plan;
+  assert.equal(r.startDate, monday);
+  assert.equal(r.returnFrom, "2026-11-02");
+  const w = planWeek(r, "2026-11-02");
+  assert.ok(w.spec.returning && w.spec.load <= .8 && w.spec.q.length <= 1);
+  assert.ok(!planWeek(r, "2026-11-09").spec.returning);
+});
+
+test("a week with key sessions missed repeats, at most twice; a race plan goes on", async () => {
+  const { planReview } = await import("../src/training-plans.js");
+  const plan = { templateId: "ride-ftp", startDate: monday };
+  const keyDates = ["2026-10-13", "2026-10-16"];
+  const r = planReview(plan, "2026-10-19", { keyDates, doneDates: ["2026-10-13"] });
+  assert.deepEqual([r.repeated, r.plan.startDate, r.plan.reviewed], [true, "2026-10-19", "2026-10-19"]);
+  assert.equal(planReview(r.plan, "2026-10-19", { keyDates, doneDates: [] }).changed, false, "once a week");
+  // Made up later that week on an easy day: no repeat.
+  assert.equal(planReview(plan, "2026-10-19", { keyDates, doneDates: ["2026-10-13", "2026-10-17"] }).repeated, false);
+  assert.equal(planReview({ ...plan, shiftedWeeks: 2 }, "2026-10-19", { keyDates, doneDates: [] }).repeated, false);
+  assert.equal(planReview({ templateId: "run-10k", startDate: monday, raceDate: "2026-12-20" }, "2026-10-19", { keyDates, doneDates: [] }).repeated, false);
+});

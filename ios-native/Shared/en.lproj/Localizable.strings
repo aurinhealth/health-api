@@ -1605,3 +1605,5 @@
 "Začínáš týdnem %@." = "You start with week %@.";
 "První týden od %@." = "The first week starts %@.";
 "Do týdenního plánu jsem přidal: %@." = "Added to your week plan: %@.";
+"pozastaveno" = "paused";
+"návrat" = "return";
