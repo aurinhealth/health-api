@@ -32,13 +32,16 @@ async function plannedRow(db, eventId) {
   return db.prepare("SELECT id,payload_json,start_time,end_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(db.userId, "planned:" + eventId).first();
 }
 
-export async function movePlannedEvent(env, { eventId, date }, fetchImpl = fetch) {
+// A move keeps the time of day, unless the app sends one: "HH:MM", or null
+// for the day without a time (midnight, as Intervals.icu shows it).
+export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = fetch) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   if (!validDate(date)) throw new Error(L("Neplatné datum.", "Invalid date."));
+  if (time != null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(time))) throw new Error(L("Neplatný čas.", "Invalid time."));
   const row = await plannedRow(env.DB, id);
   let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
-  const start = shiftEventStart(payload.start_date_local || row?.start_time, date);
+  const start = time === undefined ? shiftEventStart(payload.start_date_local || row?.start_time, date) : date + "T" + (time ? time + ":00" : "00:00:00");
   if(id.startsWith('local-')){const result=await editLocalWorkout(env,id,{start_date_local:start,end_date_local:null},fetchImpl);const gym=isStrengthEvent(payload)?await moveGymPlan(env.DB,eventDate(payload),date):{moved:false};return {...result,date,gymPlanMoved:gym.moved};}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ start_date_local: start }) });
   if (!response.ok) throw new Error(L("Intervals.icu přesun odmítlo (HTTP ", "Intervals.icu rejected the move (HTTP ") + response.status + ").");

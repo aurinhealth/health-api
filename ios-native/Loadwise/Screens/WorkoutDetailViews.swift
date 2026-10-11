@@ -8,23 +8,37 @@ struct WeekSessionsList: View {
     @Environment(AppModel.self) private var model
     let sessions: [WeekSession]
     let today: String
+    /// The result of a move or a cancel with its undo, shown by the screen at the bottom.
+    var toast: Binding<PlanToast?> = .constant(nil)
     @State private var changing: WeekSession?
     @State private var cancelling: WeekSession?
+    @State private var moving: WeekSession?
+    /// Cancelled sessions leave the list at once; the server hears of it when the undo is gone.
+    @State private var hidden: Set<String> = []
     @State private var error: String?
+
+    private var shown: [WeekSession] { sessions.filter { !hidden.contains($0.id) } }
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, session in
                 HStack(spacing: 0) {
                     NavigationLink(value: Self.destination(session)) {
                         SessionRow(session: session, today: today)
                     }
                     .buttonStyle(.plain)
                     .disabled(Self.destination(session) == nil)
-                    let changeable = GymPlanActions.changeable(session)
+                    let upcoming = PlanSessionActions.upcoming(session)
+                    let changeable = GymPlanActions.changeable(session) && !upcoming
                     let candidates = pairCandidates(session)
-                    if (changeable || !candidates.isEmpty || session.plannedId != nil) && !model.demo {
+                    if (upcoming || changeable || !candidates.isEmpty || session.plannedId != nil) && !model.demo {
                         Menu {
+                            if upcoming {
+                                Button { moving = session } label: { Label("Přesunout", systemImage: "arrow.right") }
+                                if let route = Self.destination(session) {
+                                    Button { model.paths[model.tab, default: []].append(route) } label: { Label("Upravit", systemImage: "pencil") }
+                                }
+                            }
                             if changeable {
                                 Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
                             }
@@ -43,8 +57,8 @@ struct WeekSessionsList: View {
                                     Label("Zrušit spárování", systemImage: "link.badge.plus")
                                 }
                             }
-                            // A missed session leaves the list in one step.
-                            if changeable && session.status == "missed" {
+                            // A session ahead, or a missed one, leaves the list in one step.
+                            if upcoming || (changeable && session.status == "missed") {
                                 Button(role: .destructive) { cancelling = session } label: { Label("Zrušit trénink", systemImage: "xmark") }
                             }
                         } label: {
@@ -56,18 +70,23 @@ struct WeekSessionsList: View {
                         .accessibilityLabel(L10n.tr("Změnit trénink"))
                     }
                 }
-                if index < sessions.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                if index < shown.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
         }
         .sheet(item: $changing) { s in
             GymPlanActionsSheet(date: s.date, title: s.title, eventId: s.eventId)
         }
-        .confirmationDialog("Zrušit trénink?", isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
+        .sheet(item: $moving) { s in
+            MovePlannedSheet(session: s, today: today) { date, note in moved(s, to: date, note: note) }
+        }
+        .confirmationDialog(cancelling.map { L10n.f("Zrušit %@?", $0.title) } ?? "",
+                            isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
                             titleVisibility: .visible, presenting: cancelling) { s in
-            Button("Zrušit trénink", role: .destructive) { Task { await cancel(s) } }
-        } message: { s in
-            Text(verbatim: s.title + " · " + Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date))
+            Button("Zrušit trénink", role: .destructive) { cancel(s) }
+            Button("Nechat", role: .cancel) {}
+        } message: { _ in
+            Text("Plán týdne se přepočítá.")
         }
     }
 
@@ -81,22 +100,62 @@ struct WeekSessionsList: View {
         do {
             try await model.api.pairActivity(plannedId: plannedId, activityId: activityId, date: date)
             error = nil
-            await model.refreshTraining()
-            await model.refresh()
+            await reload()
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    private func cancel(_ s: WeekSession) async {
-        do {
-            try await GymPlanActions.cancel(model, date: s.date, eventId: s.eventId)
-            error = nil
-            await model.refreshTraining()
-            await model.refresh()
-        } catch {
-            self.error = error.localizedDescription
-        }
+    private func reload() async {
+        await model.refreshTraining()
+        await model.refresh()
+    }
+
+    /// Moved: the toast says where, "Zpět" moves it back.
+    private func moved(_ s: WeekSession, to date: String, note: String?) {
+        // The undo may run after this screen is gone: the model is taken now.
+        let model: AppModel = self.model
+        Task { await reload() }
+        toast.wrappedValue = PlanToast(
+            title: L10n.f("Přesunuto na %@", Fmt.weekdayName(date)),
+            note: note,
+            cancelled: false,
+            undo: {
+                do {
+                    try await PlanSessionActions.moveBack(model, session: s, from: date)
+                    error = nil
+                } catch {
+                    self.error = error.localizedDescription
+                }
+                await model.refreshTraining()
+                await model.refresh()
+            })
+    }
+
+    /// Cancelled: gone from the list now, deleted once the undo is gone.
+    private func cancel(_ s: WeekSession) {
+        hidden.insert(s.id)
+        let model: AppModel = self.model
+        let tss: Double = s.tss ?? 0
+        let note: String? = tss > 0 ? L10n.f("Týden má o %@ TSS méně.", Fmt.int(tss)) : nil
+        toast.wrappedValue = PlanToast(
+            title: L10n.tr("Trénink zrušen"),
+            note: note,
+            cancelled: true,
+            undo: {
+                _ = hidden.remove(s.id)
+            },
+            commit: {
+                do {
+                    try await GymPlanActions.cancel(model, date: s.date, eventId: s.eventId)
+                    error = nil
+                } catch {
+                    _ = hidden.remove(s.id)
+                    self.error = error.localizedDescription
+                }
+                await model.refreshTraining()
+                await model.refresh()
+            })
     }
 
     /// Where a session opens (also Today → Plán dne).
@@ -113,15 +172,19 @@ struct SessionRow: View {
     let today: String
 
     var body: some View {
+        let state = PlanState(session)
         HStack(spacing: 14) {
-            Image(systemName: SportIcon.symbol(session.sport))
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(session.status == "done" ? Palette.onButton : Palette.ink)
-                .frame(width: 36, height: 36)
-                .background(session.status == "done" ? Palette.amberBar : Palette.track, in: Circle())
+            // The plan's colours: green kept to it, amber done differently, rust
+            // missed, a dashed grey ring still ahead, blue outside the plan.
+            PlanStateIcon(symbol: SportIcon.symbol(session.sport), state: state)
+                .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
-                Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(session.status == "missed" ? Palette.muted : Palette.ink).lineLimit(1)
-                Text(subtitle).font(Typo.caption).foregroundStyle(session.status == "missed" ? Palette.rust : Palette.muted).lineLimit(1)
+                Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                // Only a session done differently says why.
+                if state == .off, let reason = session.adherenceReason, !reason.isEmpty {
+                    Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             if let tss = session.tss, tss > 0 {
@@ -138,8 +201,6 @@ struct SessionRow: View {
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
         if let t = session.time { parts.append(t) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
-        if session.status == "missed" { parts.append(L10n.tr("nesplněno")) }
-        if session.status == "done" { parts.append(L10n.tr("hotovo")) }
         return parts.joined(separator: " · ")
     }
 }

@@ -1930,7 +1930,7 @@ async function trainingGymPlans(env,from,to){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],logged:rows.filter(x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))).length};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))).length};
   }
   return out;
 }
