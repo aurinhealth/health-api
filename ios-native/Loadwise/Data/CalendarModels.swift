@@ -21,6 +21,11 @@ struct CalendarDay: Decodable, Equatable, Identifiable {
     /// Workouts still planned.
     let planned: Int
     let activities: [CalendarActivity]
+    /// Past plans nothing was done for.
+    var missed: Int? = nil
+    /// The day against the plan (src/app-training.js dayPlanState): "good",
+    /// "off", "missed", "planned" or "offplan"; nil at rest or from an older server.
+    var plan: String? = nil
     var id: String { date }
 }
 
@@ -28,7 +33,7 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     let id: String
     /// ride, run, strength, swim, walk or other.
     let sport: String
-    /// "done" or "planned".
+    /// "done", "planned" or "missed".
     let status: String
     let title: String
     let date: String
@@ -40,6 +45,12 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     let eventId: String?
     /// A session from the watch (Google Health): its summary for the detail.
     var summary: Summary? = nil
+    /// On a done session: "good", "off" or "offplan", as WeekSession.adherence.
+    var adherence: String? = nil
+    /// With "off": why, in one line.
+    var adherenceReason: String? = nil
+    /// On a done session: the plan it fulfils.
+    var plannedId: String? = nil
 
     struct Summary: Decodable, Equatable {
         let source: String?
@@ -55,7 +66,8 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     var session: WeekSession {
         let rounded: Int? = minutes.map { Int($0.rounded()) }
         return WeekSession(id: id, kind: kind, status: status, date: date, time: time, title: title, sport: sport,
-                           minutes: rounded, tss: nil, activityId: activityId, eventId: eventId)
+                           minutes: rounded, tss: nil, activityId: activityId, eventId: eventId, plannedId: plannedId,
+                           adherence: adherence, adherenceReason: adherenceReason)
     }
 
     private var kind: String {

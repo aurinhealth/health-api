@@ -1,8 +1,14 @@
 // The training calendar of the native app (Training → the day strip and the
 // month): per day what was done and what is planned, with the sport, length,
-// distance and calories, and the day's main sport for its icon. Pure: GET
-// /app/api/training/calendar reads the rows of health_datapoints and gym plans.
+// distance and calories, and the day's main sport for its icon. Each day's
+// sessions are paired with the plan as the week's are (plan-match.js, then
+// app-training.js daySessions): a done session says how it kept to its plan,
+// a past plan nothing was done for is "missed", and the day gets one state for
+// its colour. Pure: GET /app/api/training/calendar reads the rows of
+// health_datapoints, gym plans and the pairings made by hand.
 import { pairSessions, sessionLocalStart } from "./activity-match.js";
+import { matchPlannedWorkouts } from "./plan-match.js";
+import { daySessions, dayPlanState } from "./app-training.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { bilingual, L } from "./lang.js";
 
@@ -40,7 +46,13 @@ function intervalsActivity(row) {
     minutes: round(minutes), km: meters > 0 ? round(meters / 1000, 1) : null,
     kcal: round(num(p.calories_kcal ?? p.calories ?? p.icu_calories ?? row.value_numeric)) || null,
     activityId: /^[a-zA-Z0-9_-]{1,80}$/.test(id) && row.source_family === "intervals" ? id : null,
-    eventId: null
+    eventId: null,
+    // What the pairing with the plan reads (as index.js's daily activities).
+    pair: {
+      id: String(row.external_id || id), source: "intervals", type, name: p.name || "", start: row.start_time, payload: p,
+      durationHours: minutes > 0 ? minutes / 60 : null, tss: num(p.icu_training_load ?? p.training_load ?? p.tss),
+      pairedEventId: p.paired_event_id ?? p.pairedEventId ?? p.event_id ?? p.eventId ?? null
+    }
   };
 }
 
@@ -91,7 +103,8 @@ function googleActivity(row) {
     minutes: round(minutes), km: meters > 0 ? round(meters / 1000, 1) : null,
     kcal: round(num(metrics.caloriesKcal)) || null,
     activityId: null, eventId: null,
-    summary: googleSummary(row, metrics)
+    summary: googleSummary(row, metrics),
+    pair: { id: String(row.external_id), source: "google", type, name: ex.displayName || "", start: row.start_time, payload: p, durationHours: minutes > 0 ? minutes / 60 : null, tss: null, pairedEventId: null }
   };
 }
 
@@ -116,6 +129,7 @@ function plannedWorkout(row) {
     activityId: null,
     eventId: /^planned:/.test(String(row.external_id || "")) ? String(row.external_id) : null,
     tss: num(p.icu_training_load ?? p.training_load),
+    pair: { id: String(row.external_id), name, type: p.type || "", start, durationHours: hours > 0 && hours < 12 ? hours : null, tss: num(p.icu_training_load ?? p.training_load) },
     // "Weekly" notes, nutrition and plain notes are no workouts.
     weekly: (/^weekly$/i.test(name) && !hours) || /nutrition/i.test(name + " " + (p.category || "")) || /^(NOTE|HOLIDAY|SICK|INJURED|SET_EFTP|FITNESS_DAYS|TARGET)$/i.test(String(p.category || ""))
   };
@@ -130,39 +144,62 @@ export function primarySport(activities) {
   return longest(real.filter(a => a.status === "done")) || longest(real) || longest(activities) || "rest";
 }
 
-export function buildCalendar({ start, end, today, activities = [], google = [], planned = [], gym = {} }) {
+// manual: the pairings made by hand (manual-pairs.js), planned id → activity id.
+export function buildCalendar({ start, end, today, activities = [], google = [], planned = [], gym = {}, manual = new Map() }) {
   const done = activities.map(intervalsActivity);
   const watch = google.map(googleActivity);
   // One workout from both sources counts once (activity-match.js).
   const drop = new Set(pairSessions([...activities, ...google]).map(p => p.drop));
-  const list = [...done, ...watch].filter(a => !drop.has(a.row) && a.date && (a.minutes || 0) >= 5);
+  const kept = [...done, ...watch].filter(a => !drop.has(a.row) && a.date);
+  const plans = planned.map(plannedWorkout).filter(w => !w.weekly && w.date);
 
   const days = new Map();
   for (let d = start; d <= end; d = shift(d, 1)) days.set(d, []);
-  for (const a of list) {
-    if (!days.has(a.date)) continue;
-    const { row, ...rest } = a;
-    days.get(a.date).push(rest);
-  }
-  // Plans: from today on, the ones not yet done (a done sport that day takes its plan).
-  for (const w of planned.map(plannedWorkout)) {
-    if (w.weekly || !days.has(w.date) || w.date < today) continue;
-    const day = days.get(w.date);
-    if (day.some(a => a.status === "done" && a.sport === w.sport)) continue;
-    const { weekly, tss, ...rest } = w;
-    day.push(rest);
-  }
-  for (const [date, plan] of Object.entries(gym || {})) {
-    if (!days.has(date) || date < today || !plan?.exercises?.length) continue;
-    const day = days.get(date);
-    if (day.some(a => a.sport === "strength")) continue;
-    day.push({ id: "gym:" + date, sport: "strength", status: "planned", title: plan.name || L("Posilovna", "Gym"), date, time: null, minutes: null, km: null, kcal: null, activityId: null, eventId: null, exercises: plan.exercises.length });
+  for (const [date, items] of days) {
+    const dayDone = kept.filter(a => a.date === date), dayPlans = plans.filter(w => w.date === date);
+    // The same pairing as the week's sessions: plan-match.js, then daySessions.
+    const pairs = matchPlannedWorkouts(dayPlans.map(w => w.pair), dayDone.map(a => a.pair), new Map(), manual);
+    const matched = [...pairs].map(([plan, actual]) => ({ planned: plan, actualId: actual.id }));
+    const paired = new Set(matched.map(m => String(m.actualId)));
+    const training = { planned: dayPlans.map(w => w.pair).filter(w => !pairs.has(w)), completed: dayDone.map(a => a.pair), matched };
+    const gymPlan = gym?.[date]?.exercises?.length ? gym[date] : null;
+    const byId = new Map(daySessions(date, today, training, gymPlan).sessions.map(s => [s.id, s]));
+    // Done: what lasted five minutes, and a stub without a length its plan names.
+    for (const a of dayDone) {
+      if ((a.minutes || 0) < 5 && !paired.has(a.pair.id)) continue;
+      const { row, pair, ...rest } = a;
+      const s = byId.get(pair.id);
+      rest.adherence = s?.adherence || "offplan";
+      if (s?.adherenceReason) rest.adherenceReason = s.adherenceReason;
+      if (s?.plannedId) {
+        rest.plannedId = s.plannedId;
+        const plan = dayPlans.find(w => w.id === s.plannedId);
+        if (plan && rest.sport === "other") Object.assign(rest, { sport: plan.sport, title: plan.title });
+      }
+      items.push(rest);
+    }
+    // Plans nothing was paired with: still ahead, or missed on a past day.
+    for (const w of dayPlans) {
+      const s = byId.get(w.id);
+      if (!s || s.status === "done") continue;
+      const { weekly, tss, pair, ...rest } = w;
+      items.push({ ...rest, status: s.status });
+    }
+    // A gym plan saved in the app; its sets logged there make it done.
+    const gymSession = byId.get("gym:" + date);
+    if (gymSession && gymPlan) {
+      items.push({
+        id: gymSession.id, sport: "strength", status: gymSession.status, title: gymSession.title, date, time: null, minutes: null, km: null, kcal: null, activityId: null, eventId: null, exercises: gymPlan.exercises.length,
+        ...(gymSession.adherence ? { adherence: gymSession.adherence } : {}), ...(gymSession.adherenceReason ? { adherenceReason: gymSession.adherenceReason } : {})
+      });
+    }
   }
 
   return {
     status: "ok", start, end, today,
     days: [...days.entries()].map(([date, items]) => {
-      const sorted = items.sort((a, b) => (a.status === b.status ? 0 : a.status === "done" ? -1 : 1) || String(a.time || "99").localeCompare(String(b.time || "99")));
+      const rank = a => (a.status === "done" ? 0 : 1);
+      const sorted = items.sort((a, b) => rank(a) - rank(b) || String(a.time || "99").localeCompare(String(b.time || "99")));
       const real = sorted.filter(a => a.status === "done");
       return {
         date,
@@ -170,7 +207,11 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
         count: real.length,
         minutes: Math.round(real.reduce((s, a) => s + (a.minutes || 0), 0)),
         kcal: Math.round(real.reduce((s, a) => s + (a.kcal || 0), 0)),
-        planned: sorted.length - real.length,
+        planned: sorted.filter(a => a.status === "planned").length,
+        missed: sorted.filter(a => a.status === "missed").length,
+        // The day's colour (app-training.js dayPlanState): good, off, missed,
+        // planned or offplan; null for a day without sessions.
+        plan: dayPlanState(sorted),
         activities: sorted
       };
     })

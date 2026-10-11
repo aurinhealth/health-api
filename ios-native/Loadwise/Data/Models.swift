@@ -17,6 +17,8 @@ struct TodaySnapshot: Decodable, Equatable {
     /// Today's weather at the week plan's place; nil without a place (or from
     /// an older server).
     let weather: Weather?
+    /// "Regenerace na dnes" after a training day (Data/RecoveryModels.swift).
+    let recovery: RecoveryToday?
     /// The morning check-in: "fresh", "normal", "tired", "sick" or nil
     /// (not answered, or an older server).
     let checkin: String?

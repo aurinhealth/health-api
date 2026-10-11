@@ -3,6 +3,8 @@ import SwiftUI
 struct TrainingView: View {
     @Environment(AppModel.self) private var model
     @State private var addingWorkout = false
+    /// A moved or cancelled session with its undo (Tréninky týdne).
+    @State private var toast: PlanToast?
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -10,7 +12,7 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true })
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast)
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
@@ -27,70 +29,80 @@ struct TrainingView: View {
             .toolbar(.hidden, for: .navigationBar)
             .appRoutes()
         }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                PlanToastView(toast: toast) { undo(toast) }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 92)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: toast?.id)
+        .task(id: toast?.id) {
+            guard let current = toast else { return }
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            if toast?.id == current.id { toast = nil }
+            // Also when the screen went away or another toast came: a cancel still reaches the server.
+            if let commit = current.settle(undo: false) { Task { await commit() } }
+        }
         .task { await model.refreshIfStale(.training) }
         .sheet(isPresented: $addingWorkout) { ManualWorkoutSheet() }
+    }
+
+    private func undo(_ t: PlanToast) {
+        toast = nil
+        if let work = t.settle(undo: true) { Task { await work() } }
     }
 }
 
 /// The Training screen without the scroll view, so tests can render it whole.
 struct TrainingContent: View {
+    @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
     var addWorkout: () -> Void = {}
+    var toast: Binding<PlanToast?> = .constant(nil)
+    @State private var editing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                SectionLabel(text: L10n.f("Trénink · týden %@", String(training.week)))
-                Spacer()
-                CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
-            }
+            if !editing {
+                HStack {
+                    SectionLabel(text: L10n.f("Trénink · týden %@", String(training.week)))
+                    Spacer()
+                    CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
+                }
 
-            TrainingCalendarCard(today: training.date)
-                .padding(.top, 18)
+                TrainingCalendarCard(today: training.date)
+                    .padding(.top, 18)
 
-            StrainHero(training: training)
-                .padding(.top, 26)
+                StrainHero(training: training)
+                    .padding(.top, 26)
+                CoachTextCard(screen: "training").padding(.top, 18)
 
-            WeekStrainBars(days: training.days)
-                .padding(.top, 22)
+                WeekStrainBars(days: training.days)
+                    .padding(.top, 22)
 
-            if let next = training.next {
-                NextSession(session: next, today: training.date)
-                    .padding(.top, 20)
-            }
+                if let next = training.next {
+                    NextSession(session: next, today: training.date)
+                        .padding(.top, 20)
+                }
 
-            if let event = training.event {
-                EventCard(event: event)
+                if let event = training.event {
+                    EventCard(event: event)
+                        .padding(.top, 28)
+                }
+
+                TrainingPlanCard()
+                    .padding(.top, 28)
+
+                TrainingTools(today: training.date, addWorkout: addWorkout)
                     .padding(.top, 28)
             }
 
-            TrainingPlanCard()
-                .padding(.top, 28)
-
-            TrainingTools(today: training.date, addWorkout: addWorkout)
-                .padding(.top, 28)
-
-            VStack(spacing: 12) {
-                if training.form != nil || training.vo2max != nil {
-                    WidgetRow {
-                        if let form = training.form {
-                            RouteLink(route: .form) { FormWidget(form: form) }
-                        } else { Color.clear }
-                    } right: {
-                        if let vo2 = training.vo2max { RouteLink(route: .vo2max) { VO2maxWidget(vo2: vo2) } } else { Color.clear }
-                    }
-                }
-                ThisWeekWidget(week: training.thisWeek, loads: training.load.weeks)
-                if let sessions = training.sessions, !sessions.isEmpty {
-                    Card {
-                        WidgetHeader(title: "Tréninky týdne", color: Palette.amberBar)
-                        WeekSessionsList(sessions: sessions, today: training.date)
-                    }
-                }
-                if let active = training.activeCalories { RouteLink(route: .activeEnergy) { ActiveCaloriesWidget(active: active) } }
-                if let zones = training.zones { RouteLink(route: .zones) { ZonesWidget(zones: zones) } }
-            }
-            .padding(.top, 28)
+            WidgetBoard(panel: .training,
+                        data: WidgetData(panel: .training, today: model.today, health: model.health, training: training, food: model.food, planToast: toast),
+                        editing: $editing)
+                .padding(.top, editing ? 0 : 28)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
@@ -321,18 +333,24 @@ struct EventCard: View {
 
 struct FormWidget: View {
     let form: TrainingSnapshot.Form
+    var size: WidgetSize = .small
 
     var body: some View {
         Card {
             WidgetHeader(title: "Forma", color: Palette.amberBar)
-            VStack(alignment: .leading, spacing: 4) {
+            SizedWidgetBody(size: size) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(Fmt.signed(form.form)).font(Typo.number(34)).foregroundStyle(Palette.ink)
                     Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
                 }
-                Text(form.label).font(Typo.caption).foregroundStyle(zoneColor(form.zone))
+                Text(form.label).font(Typo.caption).foregroundStyle(zoneColor(form.zone)).lineLimit(1)
+            } chart: { height in
+                FormLines(series: Array(form.series.suffix(size == .large ? 90 : 42)), height: height)
             }
-            FormLines(series: Array(form.series.suffix(42)), height: 40)
+            if size == .large {
+                Text(form.text).font(Typo.small).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otevře detail formy a kondice")
@@ -365,44 +383,48 @@ struct FormLines: View {
 
 struct VO2maxWidget: View {
     let vo2: TrainingSnapshot.VO2max
+    var size: WidgetSize = .small
 
     var body: some View {
         Card {
             WidgetHeader(title: "VO2max", color: Palette.green)
-            VStack(alignment: .leading, spacing: 4) {
-                NumberText(value: Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1))
+            SizedWidgetBody(size: size) {
+                NumberText(value: Fmt.decimal(vo2.value, digits: vo2.value.rounded() == vo2.value ? 0 : 1), unit: size == .small ? nil : "ml/kg/min")
                 if let change = vo2.change, change != 0 {
                     Text((change > 0 ? "↑ " : "↓ ") + L10n.f("%@ za 4 týdny", Fmt.decimal(abs(change))))
                         .font(Typo.caption).foregroundStyle(change > 0 ? Palette.green : Palette.rust)
                 } else {
                     Text("půl roku").font(Typo.caption).foregroundStyle(Palette.faint)
                 }
+            } chart: { height in
+                LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: height)
             }
-            let values = vo2.series.map(\.value)
-            LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: 40)
+            if size == .large {
+                Text("půl roku").font(Typo.tiny).foregroundStyle(Palette.faint)
+            }
         }
     }
+
+    private var values: [Double] { vo2.series.map(\.value) }
 }
 
 struct ThisWeekWidget: View {
     let week: TrainingSnapshot.ThisWeek
     let loads: [TrainingSnapshot.WeekLoad]
+    var size: WidgetSize = .medium
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Tento týden", color: Palette.ink, trailing: week.plannedLoad > 0 ? L10n.f("%@ z %@ TSS", Fmt.int(week.doneLoad), Fmt.int(week.plannedLoad)) : nil)
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text("\(week.done)").font(Typo.number(34)).foregroundStyle(Palette.ink)
-                        Text(L10n.f("z %@", String(week.planned))).font(Typo.number(17)).foregroundStyle(Palette.faint)
-                    }
-                    Text(L10n.f("%@ hotovo", Fmt.plural(week.planned, "tréninku", "tréninků", "tréninků")))
-                        .font(Typo.caption).foregroundStyle(Palette.amber)
+            WidgetHeader(title: "Tento týden", color: Palette.ink, trailing: size != .small && week.plannedLoad > 0 ? L10n.f("%@ z %@ TSS", Fmt.int(week.doneLoad), Fmt.int(week.plannedLoad)) : nil)
+            SizedWidgetBody(size: size, mediumChart: 52) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text("\(week.done)").font(Typo.number(34)).foregroundStyle(Palette.ink)
+                    Text(L10n.f("z %@", String(week.planned))).font(Typo.number(17)).foregroundStyle(Palette.faint)
                 }
-                .frame(width: 120, alignment: .leading)
+                Text(L10n.f("%@ hotovo", Fmt.plural(week.planned, "tréninku", "tréninků", "tréninků")))
+                    .font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
+            } chart: { height in
                 if loads.count > 1 {
-                    let values = loads.map { max($0.load, $0.planned ?? 0) }
                     BarChart(values: values,
                              styles: loads.indices.map { i in
                                  i == loads.count - 1 ? BarStyle(fill: Palette.amberBar, dashed: (loads[i].planned ?? 0) > loads[i].load) : BarStyle(fill: Palette.sand)
@@ -410,35 +432,42 @@ struct ThisWeekWidget: View {
                              hi: max(values.max() ?? 1, 1),
                              labels: loads.map { String($0.week) },
                              highlighted: loads.count - 1,
-                             height: 52)
+                             height: height)
                 }
             }
-            Text("zátěž po týdnech (TSS)").font(Typo.tiny).foregroundStyle(Palette.faint)
+            if size != .small {
+                Text("zátěž po týdnech (TSS)").font(Typo.tiny).foregroundStyle(Palette.faint)
+            }
         }
     }
+
+    private var values: [Double] { loads.map { max($0.load, $0.planned ?? 0) } }
 }
 
 struct ActiveCaloriesWidget: View {
     let active: TrainingSnapshot.ActiveCalories
+    var size: WidgetSize = .medium
 
     var body: some View {
         Card {
             WidgetHeader(title: "Aktivní výdej", color: Palette.rust)
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    NumberText(value: Fmt.int(active.today), unit: "kcal")
-                    if let usual = active.usual {
-                        Text(L10n.f("obvykle %@ kcal", Fmt.int(usual))).font(Typo.caption).foregroundStyle(Palette.faint)
-                    }
+            SizedWidgetBody(size: size, mediumChart: 52) {
+                NumberText(value: Fmt.int(active.today), unit: "kcal")
+                if let excluded = active.excluded, excluded > 0 {
+                    Text(L10n.f("bez %@ navíc z hodinek", Fmt.int(excluded))).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 }
-                .frame(width: 120, alignment: .leading)
+                if let usual = active.usual {
+                    Text(L10n.f("obvykle %@ kcal", Fmt.int(usual))).font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1)
+                }
+            } chart: { height in
                 BarChart(values: active.week.map(\.value),
                          styles: active.week.indices.map { i in BarStyle(fill: i == active.week.count - 1 ? Palette.rust : Palette.rust.opacity(0.3)) },
                          hi: max(active.week.map(\.value).max() ?? 1, active.usual ?? 0),
                          target: active.usual,
                          labels: active.week.map { Fmt.weekdayInitial($0.date) },
                          highlighted: active.week.count - 1,
-                         height: 52)
+                         spacing: size == .small ? 3 : 4,
+                         height: height)
             }
         }
     }
@@ -449,10 +478,18 @@ struct ActiveCaloriesWidget: View {
 /// Light activity (moving through the day) only as a side note.
 struct ZonesWidget: View {
     let zones: TrainingSnapshot.Zones
+    var size: WidgetSize = .medium
 
     var body: some View {
         Card {
-            if let weeks = zones.weeks, let week = weeks.last {
+            if size == .small, let week = zones.weeks?.last {
+                WidgetHeader(title: "Aktivní minuty", color: Palette.rust)
+                VStack(alignment: .leading, spacing: 4) {
+                    NumberText(value: Fmt.int(week.counted), unit: L10n.f("z %@", "150 min"))
+                    Text(ZoneStyle.status(week)).font(Typo.caption).foregroundStyle(ZoneStyle.statusColor(week)).lineLimit(1)
+                }
+                ProgressLine(fraction: week.counted / TrainingSnapshot.ZoneWeek.whoTarget, color: Palette.rust)
+            } else if let weeks = zones.weeks, let week = weeks.last {
                 WidgetHeader(title: "Aktivní minuty v zónách", color: Palette.rust, trailing: L10n.tr("tento týden"))
                 HStack(alignment: .bottom, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {

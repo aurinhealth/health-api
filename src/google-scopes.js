@@ -14,6 +14,9 @@ export const HEALTH_SCOPES = [
 export const EXTRA_SCOPES = {
   // Writing weight to Google Health (manual entries, weight from Intervals.icu).
   weightWrite: "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.writeonly",
+  // Writing workouts logged in the app to Google Health (Synchronizace,
+  // sync-destinations.js). Only ever an extra, never one of HEALTH_SCOPES.
+  activityWrite: "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.writeonly",
   // Birth date from the Google account (People API), for the age.
   birthday: "https://www.googleapis.com/auth/user.birthday.read"
 };
@@ -71,12 +74,13 @@ export function skippedForPermission(env, error) {
 }
 
 // Scopes for a Google Health access token: the granted base ones plus weight
-// writing when granted. Asking a refresh for a scope the user did not grant
+// and workout writing when granted. Asking a refresh for a scope the user did not grant
 // fails the whole token. People API scopes get their own token (see
 // birthdayScopes); Google Health has rejected tokens carrying other APIs'
 // scopes before.
 export function healthScopes(env) {
-  const wanted = grantedExtras(env).weightWrite ? [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite] : HEALTH_SCOPES;
+  const extras = grantedExtras(env);
+  const wanted = [...HEALTH_SCOPES, ...(extras.weightWrite ? [EXTRA_SCOPES.weightWrite] : []), ...(extras.activityWrite ? [EXTRA_SCOPES.activityWrite] : [])];
   return wanted.filter(scope => hasGoogleScope(env, scope));
 }
 

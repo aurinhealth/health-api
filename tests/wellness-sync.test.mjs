@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { googleWellness, planWellnessSync, syncWellnessToIntervals } from "../src/wellness-sync.js";
+import { saveSyncPrefs } from "../src/sync-destinations.js";
 
 function db() {
   const d = createD1();
@@ -54,4 +55,17 @@ test("one pass writes to Intervals.icu, remembers, and does not repeat", async (
   assert.deepEqual(puts, []);
   // Needs both services.
   assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["intervals"] }, deps)).status, "skipped");
+});
+
+test("Synchronizace: only the chosen health data goes to Intervals.icu", async () => {
+  const d = db();
+  await saveSyncPrefs(d, 7, "intervals", { health: ["restingHR", "sleep"] });
+  const puts = [];
+  const fetchImpl = async (url, opts = {}) => { if (opts.method === "PUT") { puts.push(JSON.parse(opts.body)); return Response.json({}); } return Response.json([]); };
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
+  await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep, now: Date.parse("2026-10-02T10:00:00Z") });
+  assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, sleepSecs: 24720, avgSleepingHR: 52 }]);
+  // Nothing but weight chosen: the wellness pass does not run at all.
+  await saveSyncPrefs(d, 7, "intervals", { health: ["weight"] });
+  assert.equal((await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep })).reason, "off");
 });

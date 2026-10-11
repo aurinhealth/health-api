@@ -376,6 +376,24 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .time), "2:05")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .kcal), Fmt.int(1250))
         XCTAssertEqual(MonthGrid.value(calendar.days.last, .count), " ")
+        // A response without the plan's state still decodes: done counts as outside the plan.
+        XCTAssertNil(calendar.days.first?.plan)
+        XCTAssertEqual(PlanState(day: calendar.days.first), .offPlan)
+        XCTAssertNil(PlanState(day: calendar.days.last))
+        let dayJSON = """
+        {"date":"2026-10-07","primary":"ride","count":1,"minutes":60,"kcal":700,"planned":0,"missed":1,"plan":"missed","activities":[
+         {"id":"activity:a2","sport":"ride","status":"done","title":"Tempo","date":"2026-10-07","time":"07:00","minutes":60,"km":null,"kcal":700,"activityId":"a2","eventId":null,"adherence":"off","adherenceReason":"kratší než plán (1 h 30)","plannedId":"planned:2"},
+         {"id":"planned:3","sport":"run","status":"missed","title":"Běh","date":"2026-10-07","time":null,"minutes":45,"km":null,"kcal":null,"activityId":null,"eventId":"planned:3"}]}
+        """
+        let planDay = try JSONDecoder().decode(CalendarDay.self, from: Data(dayJSON.utf8))
+        XCTAssertEqual(PlanState(day: planDay), .missed)
+        XCTAssertEqual(planDay.missed, 1)
+        let off = try XCTUnwrap(planDay.activities.first)
+        XCTAssertEqual(PlanState(off.session), .off)
+        XCTAssertEqual(off.session.plannedId, "planned:2")
+        let missed = try XCTUnwrap(planDay.activities.last)
+        XCTAssertEqual(PlanState(missed.session), .missed)
+        XCTAssertEqual(CalendarActivityRow.detail(missed), "Neodjeto · 45 min")
         // October 2026 starts on a Thursday: three empty cells first.
         let grid = ISODay.monthGrid("2026-10-15")
         XCTAssertEqual(grid.first?.prefix(4).map { $0 ?? "" }, ["", "", "", "2026-10-01"])

@@ -99,6 +99,10 @@ struct SettingsMenu: View {
                         }
                 }
                 SettingsDivider()
+                NavigationLink { SyncSettingsView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "arrow.up.forward.app.fill", color: Palette.green), title: "Synchronizace")
+                }
+                SettingsDivider()
                 NavigationLink { HeartActivitySettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Tep a aktivita",
                                 value: HeartActivitySettingsView.summary(store.profile, suggestions: store.suggestions))

@@ -1,6 +1,6 @@
 // Recovery sessions the athlete adds to a day's plan from the coach's note:
 // a short stretching routine picked for the sport just done (and a sore or
-// cramped muscle first, gently). Stored per user and day; the names follow
+// cramped muscle first, gently), or a sauna. Stored per user and day; the names follow
 // the app language of the request.
 import { L } from "./lang.js";
 
@@ -39,13 +39,24 @@ export function recoveryRoutine({ sport = null, focus = "", note = "" } = {}) {
 }
 
 const seconds = item => { const s = STRETCHES[item.key]; return s ? (s.hold ? s.hold : s.reps * 4) * (s.sides ? 2 : 1) + 10 : 0; };
+// The time the move itself takes (both sides), for the app's timer.
+const holdSeconds = s => (s.hold ? s.hold : s.reps * 4) * (s.sides ? 2 : 1);
+export const SAUNA_MINUTES = 30;
 export function describeRecovery(row) {
-  const items = (row.items || []).filter(i => STRETCHES[i.key]).map(i => {
+  const sauna = row.kind === "sauna";
+  const items = sauna ? [] : (row.items || []).filter(i => STRETCHES[i.key]).map(i => {
     const s = STRETCHES[i.key];
-    return { key: i.key, name: L(s.cs, s.en), dose: s.hold ? s.hold + " s" + (s.sides ? L(" na stranu", " per side") : "") : s.reps + "×" + (s.sides ? L(" na stranu", " per side") : ""), cue: L(s.cueCs, s.cueEn) + (i.gentle ? L(" Jemně a bez bolesti.", " Gently, without pain.") : ""), gentle: Boolean(i.gentle) };
+    return { key: i.key, name: L(s.cs, s.en), dose: s.hold ? s.hold + " s" + (s.sides ? L(" na stranu", " per side") : "") : s.reps + "×" + (s.sides ? L(" na stranu", " per side") : ""), cue: L(s.cueCs, s.cueEn) + (i.gentle ? L(" Jemně a bez bolesti.", " Gently, without pain.") : ""), gentle: Boolean(i.gentle), seconds: holdSeconds(s), sides: Boolean(s.sides) };
   });
-  const minutes = Math.max(5, Math.round((row.items || []).reduce((a, i) => a + seconds(i), 0) / 60));
-  return { id: row.id, date: row.date, kind: row.kind, title: L("Protažení", "Stretching"), minutes, items, done: Boolean(row.done_at) };
+  const minutes = sauna ? SAUNA_MINUTES : Math.max(5, Math.round((row.items || []).reduce((a, i) => a + seconds(i), 0) / 60));
+  return { id: row.id, date: row.date, kind: row.kind, title: sauna ? "Sauna" : L("Protažení", "Stretching"), minutes, items, done: Boolean(row.done_at), doneAt: row.done_at || null };
+}
+
+// The body parts a routine stretches, in its order: "hrudník, záda, ramena".
+const AREA_NAMES = { hips: ["kyčle", "hips"], quads: ["stehna", "thighs"], hamstrings: ["stehna", "thighs"], glutes: ["hýždě", "glutes"], calves: ["lýtka", "calves"], back: ["záda", "back"], lats: ["záda", "back"], chest: ["hrudník", "chest"], shoulders: ["ramena", "shoulders"] };
+export function routineAreas(items, limit = 3) {
+  const names = (items || []).map(i => STRETCHES[i.key]?.area).filter(Boolean).map(a => L(...AREA_NAMES[a]));
+  return [...new Set(names)].slice(0, limit);
 }
 
 export async function ensureRecoveryTable(db) {
@@ -68,12 +79,14 @@ export async function listRecovery(db, { from, to }) {
   return (rows.results || []).map(parse);
 }
 
-// One stretching session per day: adding again replaces the routine.
-export async function addRecovery(db, { date, sport = null, focus = "", note = "" }) {
+// One stretching session per day: adding again replaces the routine. A sauna
+// is its own kind without moves. `done` stores it as already done (the app
+// saves a finished routine or sauna straight into the day's plan).
+export async function addRecovery(db, { date, sport = null, focus = "", note = "", kind = "stretch", done = false }) {
   await ensureRecoveryTable(db);
-  const routine = recoveryRoutine({ sport, focus, note });
+  const routine = kind === "sauna" ? { kind: "sauna", items: [] } : recoveryRoutine({ sport, focus, note });
   await db.prepare("DELETE FROM recovery_sessions WHERE user_id=? AND date=? AND kind=? AND done_at IS NULL").bind(db.userId, date, routine.kind).run();
-  await db.prepare("INSERT INTO recovery_sessions(user_id,date,kind,items_json) VALUES(?,?,?,?)").bind(db.userId, date, routine.kind, JSON.stringify(routine.items)).run();
+  await db.prepare("INSERT INTO recovery_sessions(user_id,date,kind,items_json,done_at) VALUES(?,?,?,?,?)").bind(db.userId, date, routine.kind, JSON.stringify(routine.items), done ? new Date().toISOString() : null).run();
   return (await listRecovery(db, { from: date, to: date })).filter(r => r.kind === routine.kind).at(-1);
 }
 
