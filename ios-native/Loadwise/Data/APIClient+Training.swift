@@ -15,6 +15,12 @@ extension APIClient {
                               "dumbbellWeights": .array(dumbbellWeights.map { .number($0) })])
     }
 
+    /// All the saved places and the one the plan follows.
+    func saveGymPlaces(_ places: [GymPlace], active: String) async throws -> GymEquipment {
+        try await send("/app/api/gym/equipment", method: "POST",
+                       body: ["places": JSONValue.array(places.map(\.json)), "activePlace": .string(active)])
+    }
+
     /// AI reads photos of the gym (JPEG) or its web page and picks the stations.
     func detectGymEquipment(photos: [Data], url: String) async throws -> GymDetectResult {
         var body: JSONObject = ["images": .array(photos.map { .string("data:image/jpeg;base64," + $0.base64EncodedString()) })]

@@ -218,9 +218,15 @@ final class APIClient: @unchecked Sendable {
         return r.technique
     }
 
-    func gymAlternatives(date: String, exercise: String) async throws -> [GymAlternative] {
+    /// Replacements that fit the active place, without the exercises already in
+    /// the plan (`inPlan`: a proposal not saved yet).
+    func gymAlternatives(date: String, exercise: String, inPlan: [String] = []) async throws -> [GymAlternative] {
         struct Response: Decodable { let alternatives: [GymAlternative]? }
-        let r: Response = try await get("/app/api/gym/alternatives?date=" + date + "&exercise=" + Self.query(exercise))
+        var path = "/app/api/gym/alternatives?date=" + date + "&exercise=" + Self.query(exercise)
+        if !inPlan.isEmpty, let data = try? JSONEncoder().encode(inPlan), let json = String(data: data, encoding: .utf8) {
+            path += "&inPlan=" + Self.query(json)
+        }
+        let r: Response = try await get(path)
         return r.alternatives ?? []
     }
 

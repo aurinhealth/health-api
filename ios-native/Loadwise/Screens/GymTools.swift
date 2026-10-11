@@ -210,6 +210,9 @@ struct GymBuilderView: View {
     @State private var error: String?
     @State private var saved = false
     @State private var equipment: GymEquipment?
+    @State private var catalog: [GymCatalogExercise] = []
+    @State private var replacing: String?
+    @State private var adding = false
 
     private var isoDay: String { AppModel.localDate(day) }
 
@@ -228,6 +231,15 @@ struct GymBuilderView: View {
         .task {
             if let d = Self.isoFormatter.date(from: date) { day = d }
             if !model.demo, equipment == nil { equipment = try? await model.api.gymEquipment() }
+            if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
+        }
+        .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
+            AlternativesSheet(date: isoDay, exercise: item.name, inPlan: proposal?.exercises.map(\.name) ?? [], footnote: nil,
+                              choose: { _ in }, chooseAlternative: { alt in replace(item.name, with: alt) })
+        }
+        .sheet(isPresented: $adding) {
+            ExercisePicker(catalog: catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) },
+                           used: Set(proposal?.exercises.map(\.name) ?? [])) { ex in add(ex) }
         }
     }
 
@@ -240,9 +252,10 @@ struct GymBuilderView: View {
                 DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
                     .environment(\.locale, Fmt.locale)
                 Picker("Délka", selection: $minutes) {
-                    ForEach([30, 45, 60, 75, 90], id: \.self) { Text("\($0) min").tag($0) }
+                    ForEach([30, 45, 60, 75, 90, 120], id: \.self) { Text("\($0)").tag($0) }
                 }
                 .pickerStyle(.segmented)
+                Text("minut").font(Typo.caption).foregroundStyle(Palette.muted)
             }
             .padding(.top, 10)
 
@@ -319,10 +332,31 @@ struct GymBuilderView: View {
                         Spacer(minLength: 8)
                         Text("\(ex.sets) × " + ex.reps + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
                             .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
+                        if !saved {
+                            Menu {
+                                Button { replacing = ex.name } label: { Label("Nahradit jiným", systemImage: "arrow.triangle.swap") }
+                                Button(role: .destructive) { remove(ex.name) } label: { Label("Odebrat", systemImage: "trash") }
+                                    .disabled(p.exercises.count < 2)
+                            } label: {
+                                Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                                    .frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                            }
+                            .accessibilityLabel(L10n.f("Upravit %@", ex.name))
+                        }
                     }
                     .padding(.vertical, 12)
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                 }
+            }
+            if !saved {
+                Button { adding = true } label: {
+                    Label("Přidat cvik", systemImage: "plus.circle.fill").font(Typo.bodyStrong).foregroundStyle(Palette.green)
+                        .frame(maxWidth: .infinity, alignment: .leading).frame(height: 44)
+                }
+                .disabled(catalog.isEmpty || busy != nil)
+                .padding(.top, 4)
+                Text("Cvik nahradíš nebo odebereš přes ⋯, nabídnu jen to, co máš ve vybavení.")
+                    .font(Typo.caption).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
             }
             if let rationale = p.rationale {
                 Text(rationale).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
@@ -371,6 +405,40 @@ struct GymBuilderView: View {
                 .padding(.top, 10)
             }
         }
+    }
+
+    // MARK: Editing the proposal by hand
+
+    private func remove(_ name: String) {
+        guard var p = proposal else { return }
+        p.rows.removeAll { $0.count > 1 && $0[1].string == name }
+        p.muscles[name] = nil
+        proposal = p
+    }
+
+    /// The same sets with the other exercise and its estimated load.
+    private func replace(_ name: String, with alt: GymAlternative) {
+        guard var p = proposal else { return }
+        let kg = alt.kg.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1).replacingOccurrences(of: ",", with: ".") } ?? ""
+        for i in p.rows.indices where p.rows[i].count > 3 && p.rows[i][1].string == name {
+            p.rows[i][1] = .string(alt.name)
+            p.rows[i][3] = .string((p.rows[i][0].string ?? "").uppercased() == "WARMUP" ? "" : kg)
+        }
+        p.muscles[name] = nil
+        if let map = catalog.first(where: { $0.name == alt.name })?.muscles { p.muscles[alt.name] = map }
+        proposal = p
+    }
+
+    /// Its usual sets at the end; the load is estimated when the plan is saved
+    /// or in the training.
+    private func add(_ ex: GymCatalogExercise) {
+        guard var p = proposal, !p.exercises.contains(where: { $0.name == ex.name }) else { return }
+        let sets = max(1, min(PlanEditorSheet.count(ex.sets) ?? 3, 6))
+        for n in 1...sets {
+            p.rows.append(["WORK", ex.name, String(n), "", ex.reps?.string ?? "10", "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) })
+        }
+        if let map = ex.muscles { p.muscles[ex.name] = map }
+        proposal = p
     }
 
     private func muscleLine(_ map: [String: Double]?) -> String {
@@ -434,14 +502,18 @@ struct GymBuilderView: View {
 
 // MARK: - Equipment
 
-/// Where the athlete trains: a gym (the usual stations, all of them until the
-/// athlete unticks what theirs lacks, or AI picks them from photos or the
-/// gym's web page), a home gym (the few things there are), or the body weight
-/// only. With dumbbells, the weights there are, so the plan asks for one of them.
+/// Where the athlete trains: the saved gyms and home gyms, each with its own
+/// stations (a gym starts with all of them until the athlete unticks what it
+/// lacks, or AI picks them from photos or the gym's web page), or the body
+/// weight only. The plan follows the chosen place. With dumbbells, the weights
+/// there are, so the plan asks for one of them.
 struct EquipmentView: View {
     @Environment(AppModel.self) private var model
     @State private var data: GymEquipment?
-    @State private var kind = "custom"
+    @State private var places: [GymPlace] = []
+    @State private var active = "bodyweight"
+    // The active place as edited, written back into `places` on a switch and on saving.
+    @State private var kind = "bodyweight"
     @State private var selected: Set<String> = []
     @State private var weights: Set<Double> = []
     @State private var gymName = ""
@@ -452,12 +524,7 @@ struct EquipmentView: View {
     @State private var note: String?
     @State private var error: String?
     @State private var saved = false
-
-    static let kinds: [(String, String, String)] = [
-        ("custom", "Posilovna", "Stroje, kladky a volné váhy, odškrtneš, co tam chybí"),
-        ("home", "Domácí posilovna", "Jen to, co máš doma: jednoručky, lavice, hrazda…"),
-        ("bodyweight", "Vlastní váha", "Bez vybavení")
-    ]
+    @State private var confirmDelete = false
 
     /// The first setup asks only roughly; the stations are set here later.
     static let setupKinds: [(String, String, String)] = [
@@ -467,6 +534,7 @@ struct EquipmentView: View {
     ]
 
     static let homeDefault: Set<String> = ["dumbbells", "adjustable_bench", "floor_mats"]
+    static let maxPlaces = 10
     /// The usual dumbbells, kg per hand.
     static let weightOptions: [Double] = [1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 12, 12.5, 14, 15, 16, 17.5, 18, 20, 22, 22.5, 24, 25, 26, 27.5, 28, 30, 32, 32.5, 34, 35, 36, 38, 40, 42, 44, 45, 46, 48, 50]
 
@@ -475,36 +543,63 @@ struct EquipmentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Posilovna · vybavení").padding(.top, 24)
                 Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                Text("Ulož si víc míst, každé má vlastní vybavení. Plán počítá s tím, které je vybrané.")
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
 
                 VStack(spacing: 10) {
-                    ForEach(Self.kinds.indices, id: \.self) { i in
-                        let k = Self.kinds[i]
-                        ChoiceCard(title: k.1, subtitle: k.2, selected: kind == k.0) { choose(k.0) }
+                    ForEach(places) { place in
+                        ChoiceCard(title: place.id == active ? (gymName.nilIfBlank ?? place.name) : place.name,
+                                   subtitle: placeLine(place),
+                                   systemImage: place.kind == "home" ? "house" : "dumbbell",
+                                   selected: active == place.id) { switchTo(place.id) }
                     }
+                    ChoiceCard(title: "Vlastní váha", subtitle: L10n.tr("Bez vybavení"), systemImage: "figure.cooldown",
+                               selected: active == "bodyweight") { switchTo("bodyweight") }
                 }
                 .padding(.top, 18)
 
-                if kind == "custom" { detection }
+                HStack(spacing: 10) {
+                    SecondaryButton(title: "Posilovna", systemImage: "plus") { add("gym") }
+                    SecondaryButton(title: "Domácí", systemImage: "plus") { add("home") }
+                }
+                .disabled(places.count >= Self.maxPlaces || busy != nil || data == nil)
+                .padding(.top, 12)
+
                 if kind != "bodyweight" {
-                    if kind == "custom" {
-                        SettingsGroup(title: "Název") {
-                            SettingsField(title: "Posilovna", text: $gymName, keyboard: .default, placeholder: L10n.tr("třeba Fitko u nádraží"))
-                        }
-                        .padding(.top, 22)
+                    SettingsGroup(title: "Název") {
+                        SettingsField(title: kind == "home" ? "Místo" : "Posilovna", text: $gymName, keyboard: .default,
+                                      placeholder: L10n.tr(kind == "home" ? "třeba Doma nebo Chata" : "třeba Fitko u nádraží"))
                     }
+                    .padding(.top, 22)
+                    if kind == "custom" { detection }
                     if selected.contains("dumbbells") { dumbbells }
                     stations
+                    Button(role: .destructive) { confirmDelete = true } label: {
+                        Label("Smazat toto místo", systemImage: "trash").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                            .frame(maxWidth: .infinity).frame(height: 44)
+                    }
+                    .padding(.top, 18)
+                    .confirmationDialog(L10n.f("Smazat %@?", gymName.nilIfBlank ?? L10n.tr("místo")), isPresented: $confirmDelete, titleVisibility: .visible) {
+                        Button("Smazat", role: .destructive) { deleteActive() }
+                    }
                 }
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
                 if saved { Label("Uloženo", systemImage: "checkmark.circle.fill").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 14) }
                 PrimaryButton(title: busy == "save" ? "Ukládám…" : "Uložit vybavení", busy: busy == "save") { Task { await save() } }
-                    .disabled(busy != nil || model.demo || (kind != "bodyweight" && selected.isEmpty))
+                    .disabled(busy != nil || model.demo || data == nil || (kind != "bodyweight" && selected.isEmpty))
                     .padding(.top, 22)
             }
         }
         .task { await load() }
         .onChange(of: photos) { _, items in if !items.isEmpty { Task { await detect(items) } } }
+    }
+
+    /// "14 věcí · web" under a place; the one being edited counts live.
+    private func placeLine(_ place: GymPlace) -> String {
+        let count = place.id == active ? selected.count : place.stations.count
+        let kindText = L10n.tr(place.kind == "home" ? "Domácí posilovna" : "Posilovna")
+        return kindText + " · " + L10n.f("%@ %@", String(count), Fmt.plural(count, "věc", "věci", "věcí"))
     }
 
     private var detection: some View {
@@ -629,15 +724,59 @@ struct EquipmentView: View {
         return out
     }
 
-    /// A gym starts with everything a gym usually has, a home gym with
-    /// dumbbells, a bench and a mat.
-    private func choose(_ next: String) {
-        guard next != kind else { return }
-        kind = next
+    /// Puts what is being edited back into its place.
+    private func commit() {
+        guard let i = places.firstIndex(where: { $0.id == active }) else { return }
+        places[i].stations = selected.sorted()
+        places[i].name = gymName.trimmingCharacters(in: .whitespaces).nilIfBlank ?? places[i].name
+        places[i].url = kind == "custom" ? gymUrl.trimmingCharacters(in: .whitespaces) : ""
+        places[i].dumbbellWeights = selected.contains("dumbbells") ? weights.sorted() : []
+    }
+
+    /// Shows the active place's stations, name and weights for editing.
+    private func edit() {
+        if let p = places.first(where: { $0.id == active }) {
+            kind = p.kind == "home" ? "home" : "custom"
+            selected = Set(p.stations)
+            weights = Set(p.dumbbellWeights)
+            gymName = p.name
+            gymUrl = p.url
+        } else {
+            kind = "bodyweight"; selected = []; weights = []; gymName = ""; gymUrl = ""
+        }
+        note = nil
+    }
+
+    private func switchTo(_ id: String) {
+        guard id != active else { return }
+        commit()
+        active = id
+        edit()
         saved = false
+    }
+
+    /// A new gym starts with everything a gym usually has, a home gym with
+    /// dumbbells, a bench and a mat.
+    private func add(_ placeKind: String) {
+        commit()
         let all = Set((data?.stations ?? []).map(\.id))
-        if next == "custom", selected.isEmpty || selected.isSubset(of: Self.homeDefault) { selected = all }
-        if next == "home", selected.isEmpty || selected == all { selected = Self.homeDefault.intersection(all.isEmpty ? Self.homeDefault : all) }
+        var n = places.count + 1
+        while places.contains(where: { $0.id == "place-\(n)" }) { n += 1 }
+        let base = L10n.tr(placeKind == "home" ? "Domácí posilovna" : "Posilovna")
+        let same = places.filter { $0.kind == placeKind }.count
+        places.append(GymPlace(id: "place-\(n)", kind: placeKind, name: same == 0 ? base : base + " \(same + 1)",
+                               stations: placeKind == "home" ? Self.homeDefault.intersection(all.isEmpty ? Self.homeDefault : all).sorted() : all.sorted(),
+                               url: "", dumbbellWeights: []))
+        active = "place-\(n)"
+        edit()
+        saved = false
+    }
+
+    private func deleteActive() {
+        places.removeAll { $0.id == active }
+        active = places.first?.id ?? "bodyweight"
+        edit()
+        saved = false
     }
 
     private func toggle(_ id: String) {
@@ -650,16 +789,9 @@ struct EquipmentView: View {
         do {
             let d = try await model.api.gymEquipment()
             data = d
-            let all = Set((d.stations ?? []).map(\.id))
-            switch d.equipment {
-            case "gym": kind = "custom"; selected = all
-            case "dumbbells": kind = "home"; selected = Self.homeDefault
-            default: kind = d.equipment; selected = Set(d.selected)
-            }
-            if kind == "custom", selected.isEmpty { selected = all }
-            weights = Set(d.dumbbellWeights ?? [])
-            gymName = d.gymName
-            gymUrl = d.gymUrl
+            places = d.places ?? []
+            active = d.activePlace ?? "bodyweight"
+            edit()
         } catch {
             self.error = error.localizedDescription
         }
@@ -668,14 +800,14 @@ struct EquipmentView: View {
     private func save() async {
         busy = "save"
         defer { busy = nil }
+        commit()
         do {
-            let stations = kind == "bodyweight" ? [] : Array(selected)
-            let r = try await model.api.saveGymEquipment(equipment: kind, stations: stations, gymName: kind == "custom" ? gymName : "",
-                                                         gymUrl: kind == "custom" ? gymUrl : "",
-                                                         dumbbellWeights: selected.contains("dumbbells") ? weights.sorted() : [])
+            let r = try await model.api.saveGymPlaces(places, active: active)
             data?.equipment = r.equipment
             data?.selected = r.selected
             data?.dumbbellWeights = r.dumbbellWeights
+            data?.gymName = r.gymName
+            if let stored = r.places { places = stored; active = r.activePlace ?? "bodyweight"; edit() }
             saved = true
             error = nil
         } catch {

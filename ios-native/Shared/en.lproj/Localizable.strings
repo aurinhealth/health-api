@@ -1353,3 +1353,14 @@
 "182,50 Kč měsíčně" = "CZK 182.50 a month";
 "249 Kč / měsíc" = "CZK 249 / month";
 "placeno měsíčně" = "billed monthly";
+"Ulož si víc míst, každé má vlastní vybavení. Plán počítá s tím, které je vybrané." = "Save several places, each with its own equipment. The plan uses the one selected.";
+"Domácí" = "Home";
+"Místo" = "Place";
+"třeba Doma nebo Chata" = "e.g. Home or Cabin";
+"Smazat toto místo" = "Delete this place";
+"Smazat %@?" = "Delete %@?";
+"místo" = "place";
+"Nahradit jiným" = "Replace with another";
+"Upravit %@" = "Edit %@";
+"Cvik nahradíš nebo odebereš přes ⋯, nabídnu jen to, co máš ve vybavení." = "Replace or remove an exercise with ⋯; only what your equipment allows is offered.";
+"minut" = "minutes";

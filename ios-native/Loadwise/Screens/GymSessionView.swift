@@ -349,7 +349,12 @@ struct AlternativesSheet: View {
     @Environment(\.dismiss) private var dismiss
     let date: String
     let exercise: String
+    /// The proposal's other exercises (not saved yet), so they are not offered.
+    var inPlan: [String] = []
+    var footnote: String? = "Nahradí jen série, které ještě nejsou hotové."
     var choose: (String) -> Void
+    /// The whole alternative (its estimated load), for a proposal not saved yet.
+    var chooseAlternative: ((GymAlternative) -> Void)? = nil
     @State private var items: [GymAlternative] = []
     @State private var loading = true
 
@@ -370,6 +375,7 @@ struct AlternativesSheet: View {
                     ForEach(items) { alt in
                         Button {
                             choose(alt.name)
+                            chooseAlternative?(alt)
                             dismiss()
                         } label: {
                             HStack {
@@ -388,7 +394,7 @@ struct AlternativesSheet: View {
                     }
                 }
             }
-            Text("Nahradí jen série, které ještě nejsou hotové.").font(Typo.caption).foregroundStyle(Palette.faint)
+            if let footnote { Text(footnote).font(Typo.caption).foregroundStyle(Palette.faint) }
         }
         .padding(24)
         .presentationDetents([.medium, .large])
@@ -396,7 +402,7 @@ struct AlternativesSheet: View {
         .task {
             defer { loading = false }
             guard !model.demo else { return }
-            items = (try? await model.api.gymAlternatives(date: date, exercise: exercise)) ?? []
+            items = (try? await model.api.gymAlternatives(date: date, exercise: exercise, inPlan: inPlan)) ?? []
         }
     }
 }
