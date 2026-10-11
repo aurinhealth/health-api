@@ -1,5 +1,8 @@
 # Loadwise pro iPhone
 
+> Webová aplikace je vypnutá (`src/web-app-closed.js`), takže tenhle obal ukáže
+> jen oznámení. Aplikace pro iPhone je teď nativní, viz `ios-native/`.
+
 Nativní obal (Capacitor) kolem webové aplikace `https://petrfitnessdata.eu/app`.
 Aplikace načítá živý web s opravdovými daty. Změny webu proto nepotřebují nové
 sestavení, nový build je potřeba jen při změně v `mobile/`.
