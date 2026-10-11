@@ -57,7 +57,9 @@ export const PERSONAL_TABLES = {
   // The morning check-in (morning-checkin.js) and the threshold estimates and
   // tests offered from the data (threshold-check.js).
   morning_checkins: {},
-  threshold_checks: {}
+  threshold_checks: {},
+  // The athlete's training plans (training-plans.js).
+  training_plans: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

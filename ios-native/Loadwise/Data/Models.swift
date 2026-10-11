@@ -20,6 +20,15 @@ struct TodaySnapshot: Decodable, Equatable {
     /// The morning check-in: "fresh", "normal", "tired", "sick" or nil
     /// (not answered, or an older server).
     let checkin: String?
+    /// The active training plan in one line (GET /app/api/plans has the rest).
+    let trainingPlan: PlanLine?
+
+    struct PlanLine: Decodable, Equatable {
+        let name: String
+        let week: Int
+        let weeksCount: Int
+        let phaseLabel: String?
+    }
 
     struct Readiness: Decodable, Equatable {
         let score: Int?

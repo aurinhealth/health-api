@@ -64,6 +64,9 @@ struct TrainingContent: View {
                     .padding(.top, 28)
             }
 
+            TrainingPlanCard()
+                .padding(.top, 28)
+
             TrainingTools(today: training.date, addWorkout: addWorkout)
                 .padding(.top, 28)
 

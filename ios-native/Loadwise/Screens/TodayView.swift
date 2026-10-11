@@ -87,7 +87,12 @@ struct TodayContent: View {
                 .padding(.top, model.selectedDate == nil ? 12 : 28)
 
             if model.selectedDate == nil {
-                CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
+                if let plan = today.trainingPlan {
+                    Label(([plan.name, L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + (plan.phaseLabel.map { [$0] } ?? [])).joined(separator: " · "), systemImage: "flag")
+                        .font(Typo.small).foregroundStyle(Palette.secondary)
+                        .padding(.top, 24)
+                }
+                CoachCheckInCard(openCoach: openCoach).padding(.top, today.trainingPlan == nil ? 24 : 10)
                 ThresholdCheckCard().padding(.top, 12)
             }
 

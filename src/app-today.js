@@ -78,7 +78,7 @@ export function todayWeather(location, forecast, date) {
   };
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, checkin = null }) {
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, checkin = null, trainingPlan = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -167,6 +167,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [] },
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
+    trainingPlan: trainingPlan || null,
     sleep: night ? {
       minutes: num(night.durationMin),
       inBedMinutes: num(night.timeInBedMin),
