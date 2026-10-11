@@ -428,6 +428,16 @@ final class APIClient: @unchecked Sendable {
         guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
     }
 
+    /// Sign in with Apple in the app: Apple's identity token and one-time code
+    /// for the session cookie (POST /auth/app/apple).
+    func appleLogin(identityToken: String, authorizationCode: String?, nonce: String, name: String?) async throws {
+        var body: [String: JSONValue] = ["identityToken": .string(identityToken), "nonce": .string(nonce)]
+        if let authorizationCode { body["authorizationCode"] = .string(authorizationCode) }
+        if let name, !name.isEmpty { body["name"] = .string(name) }
+        let _: JSONValue = try await send("/auth/app/apple", method: "POST", body: body)
+        guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
+    }
+
     /// E-mail sign-in, step 1: a six-digit code goes to the address (when it has access).
     func startEmailLogin(email: String) async throws {
         let _: JSONValue = try await send("/auth/email/start", method: "POST", body: ["email": JSONValue.string(email)])

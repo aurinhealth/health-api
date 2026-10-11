@@ -45,11 +45,13 @@ test("a beginner's ride grows at most 10 % over the longest ride of the last two
 
 test("too little data is said as such, not as fatigue", () => {
   const none = buildCyclingCoachV2({ date, week: week([]) });
-  assert.equal(none.readiness.status, "red");
-  assert.deepEqual(none.recommendation.adaptations, ["zatím málo dat: držím lehkou intenzitu"]);
+  // Without the body's signals the load decides, and without fatigue data it is never green.
+  assert.equal(none.readiness.status, "yellow");
+  assert.ok(none.readiness.reasons.some(r => /chybí HRV nebo klidový tep/.test(r)));
+  assert.equal(none.recommendation.session.kind, "endurance");
   const tired = buildCyclingCoachV2({ date, week: week(history), fitness: { wellness: [{ id: date, ctl: 50, atl: 85 }] }, health: { sleep: [{ type: "sleep", durationMin: 300, endTime: date + "T06:30:00" }] }, manualReadiness: 10 });
   assert.equal(tired.readiness.status, "red");
-  assert.ok(tired.recommendation.adaptations.includes("vysoká únava: bez intenzity"));
+  assert.ok(tired.recommendation.adaptations.includes("nízká připravenost: bez intenzity"));
 });
 
 test("without LTHR the heart-rate zones come from the max and resting heart rate in the profile", async () => {

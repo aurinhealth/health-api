@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Observation
 import SwiftUI
@@ -202,6 +203,26 @@ final class AppModel {
         }
     }
 
+    /// Signs in with what Sign in with Apple returned; nonce is the raw value
+    /// whose hash went into the request.
+    func signIn(apple credential: ASAuthorizationAppleIDCredential, nonce: String) async {
+        guard let tokenData = credential.identityToken, let token = String(data: tokenData, encoding: .utf8) else {
+            errorMessage = L10n.tr("Apple nevrátil identitu účtu. Zkus to znovu.")
+            return
+        }
+        signingIn = true
+        defer { signingIn = false }
+        let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+        let name = credential.fullName.map { PersonNameComponentsFormatter().string(from: $0) }
+        do {
+            try await api.appleLogin(identityToken: token, authorizationCode: code, nonce: nonce, name: name)
+            await signedIn()
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// Signs in with the code from the e-mail.
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
@@ -299,6 +320,13 @@ final class AppModel {
         }
     }
     @ObservationIgnored private var refreshing: Set<AppTab> = []
+
+    /// The morning check-in on Today. It lowers the readiness, so Today loads again.
+    func setMorningCheckin(_ feeling: String?) async throws {
+        guard !demo, let today else { return }
+        try await api.setMorningCheckin(feeling, date: today.date)
+        await refresh()
+    }
 
     /// A new Stav sportovce. The coach and the plans follow it, so Today and
     /// Training load again.

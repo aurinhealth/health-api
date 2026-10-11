@@ -162,7 +162,7 @@ export function focusGoal(focus){
   return compactObject({event:focus.event?.name,eventDate:focus.event?.date,daysLeft:days,goal:focus.goal,phase:days==null?null:days>84?'base':days>=21?'build':null});
 }
 
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -174,7 +174,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
   const cyclingCoachV2 = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest
   });
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),

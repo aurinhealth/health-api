@@ -7,6 +7,8 @@ import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-
 import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
+import { getTestWorkout } from "./threshold-check.js";
+import { raceWorkout } from "./training-plans.js";
 import { explainWorkout, stepRows } from "./workout-explanation.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { workoutEn } from "./workout-i18n.js";
@@ -51,6 +53,10 @@ export async function catalog(db, sport = "ride") {
 }
 export async function getWorkout(db, id) {
   if (builtInById().has(id)) return builtInById().get(id);
+  // The threshold tests (threshold-check.js) are planned by id, never picked by the generator.
+  if (/^test-/.test(String(id))) return getTestWorkout(id);
+  // Race day of a running plan (training-plans.js): "race-run-<km>-<minutes>".
+  if (/^race-run-/.test(String(id))) return raceWorkout(id);
   // "<id>~<minutes>": a workout resized to another length (see resizeWorkout).
   const resized = String(id).match(/^(.+)~(\d{2,3})$/);
   if (resized) { const base = await getWorkout(db, resized[1]); return base ? resizeWorkout(base, Number(resized[2])) : null; }

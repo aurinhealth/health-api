@@ -161,7 +161,9 @@ export async function resetWeekPlan(db, date) {
 //   neighbouring days and not right before or after the long day if avoidable;
 // - the endurance day after a quality or long day is easy;
 // - gym on a quality or long day, or the day before quality, is upper body only.
-export function planWeekRoles(days = [], { readiness = "green" } = {}) {
+// A training plan (training-plans.js) sets how many quality days the week has
+// (`quality`, still capped by readiness) and puts them on its sport's days first (`prefer`).
+export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null } = {}) {
   const has = (i, s) => (days[i] || []).includes(s);
   const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run"));
   const role = {};
@@ -169,13 +171,16 @@ export function planWeekRoles(days = [], { readiness = "green" } = {}) {
   let long = weekend[0];
   if (long == null && endurance.length >= 3) long = endurance.at(-1);
   if (long != null && endurance.length >= 2) role[long] = "long";
-  const wanted = readiness === "red" ? 0 : readiness === "yellow" ? Math.min(1, endurance.length >= 2 ? 1 : 0) : endurance.length >= 4 ? 2 : endurance.length >= 2 ? 1 : 0;
-  const quality = [];
+  const usual = endurance.length >= 4 ? 2 : endurance.length >= 2 ? 1 : 0;
+  const planned = Number.isInteger(quality) ? Math.min(quality, Math.max(0, endurance.length - (long != null && endurance.length >= 2 ? 1 : 0))) : usual;
+  const wanted = readiness === "red" ? 0 : readiness === "yellow" ? Math.min(1, planned) : planned;
+  const picks = prefer ? [...endurance.filter(i => (days[i] || []).find(s => s !== "gym") === prefer), ...endurance.filter(i => (days[i] || []).find(s => s !== "gym") !== prefer)] : endurance;
+  const qualityDays = [];
   for (const gap of [2, 1]) {
-    for (const i of endurance) {
-      if (quality.length >= wanted || role[i]) continue;
-      const far = quality.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap);
-      if (far) { quality.push(i); role[i] = "quality"; }
+    for (const i of picks) {
+      if (qualityDays.length >= wanted || role[i]) continue;
+      const far = qualityDays.every(q => Math.abs(q - i) >= 2) && (role[long] !== "long" || Math.abs(long - i) >= gap);
+      if (far) { qualityDays.push(i); role[i] = "quality"; }
     }
   }
   for (const i of endurance) if (!role[i]) role[i] = role[i - 1] === "quality" || role[i - 1] === "long" ? "recovery" : "endurance";
@@ -268,15 +273,19 @@ const GYM_TSS = { gym_full: 35, gym_upper: 25 };
 const SPORT_MINUTES = { ride: [30, 300], run: [20, 150] };
 const round5 = v => Math.round(v / 5) * 5;
 
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null } = {}) {
+// `plan` (training-plans.js planLoad) replaces the usual +5 % with the plan's
+// week: { load, light }. The safety rules still win: a recovery week the data
+// calls stays one, and a ramp above 8 a week only holds.
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
-  const rule = recoveryWeek({ base, weekLoads: weekLoads?.length ? weekLoads : [Number(lastWeekLoad) || 0], hrvDown }), recovery = rule.recovery;
+  const rule = recoveryWeek({ base, weekLoads: weekLoads?.length ? weekLoads : [Number(lastWeekLoad) || 0], hrvDown }), recovery = rule.recovery || Boolean(plan?.light);
   // +5 % raises CTL by about CTL/120 a week, well under the 5–8 a week Friel
   // (TrainingPeaks) calls sustainable; a ramp already above 8 only holds.
   const hold = Number(rampRate) > 8;
-  const target = Math.round(base * (recovery ? .7 : hold ? 1 : 1.05));
+  const planned = Number(plan?.load) > 0 ? Number(plan.load) : null;
+  const target = Math.round(base * (rule.recovery ? Math.min(.7, planned ?? .7) : planned != null ? (hold ? Math.min(1, planned) : planned) : recovery ? .7 : hold ? 1 : 1.05));
   const dateOf = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);
   const info = date => days.find(d => d.date === date) || { done: 0, planned: 0, sports: [] };
   let committed = 0;
@@ -300,7 +309,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
     return { date: x.date, sport: x.sport, slot: x.slot || 0, role: x.role, label: x.label, tss: Math.round(minutes / 60 * intensity * intensity * 100), minutes, intensity };
   });
   const assigned = items.reduce((s, x) => s + x.tss, 0), shortfall = Math.max(0, target - committed - assigned);
-  return { status: "ok", ctl: Math.round(fitness), base, target, recovery, rampHold: hold, recoveryReason: rule.reason, weekLoads: weekLoads || null, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
+  return { status: "ok", ctl: Math.round(fitness), base, target, recovery, rampHold: hold, recoveryReason: rule.reason ?? (plan?.light ? "plan" : null), weekLoads: weekLoads || null, lastWeekLoad: Math.round(lastWeekLoad), committed: Math.round(committed), items, shortfall: !recovery && shortfall > target * .15 ? Math.round(shortfall) : 0 };
 }
 // Running grows slowly: tendons and bones adapt later than heart and lungs.
 // A week's running (done, planned and proposed together) stays within 10 %

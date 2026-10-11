@@ -161,10 +161,14 @@ export function recoveryReadiness(input) {
   const rows = (input && input.rows) || [], date = input && input.date, night = input && input.night, need = (input && input.sleepNeed) || 480;
   const today = rows.find(r => r && r.id === date) || {};
   const end = Date.parse(date + "T12:00:00Z"), components = {}, flags = [];
-  const hb = personalBaseline(rows, date, "hrv", { log: true });
+  // HRV only against days measured the same way: Apple Watch reports SDNN,
+  // Google's watches RMSSD, so one baseline over both mixes two scales. A new
+  // source starts its own baseline.
+  const hrvRows = rows.filter(r => r && (r.hrvSource || null) === (today.hrvSource || null));
+  const hb = personalBaseline(hrvRows, date, "hrv", { log: true });
   if (Number(today.hrv) > 0 && hb.mean != null) {
     const sd = Math.max(hb.sd, 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
-    const week = rows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
+    const week = hrvRows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
     const diff = week.length >= 3 ? week.reduce((s, v) => s + v, 0) / week.length - hb.mean : null, swc = 0.5 * sd;
     components.hrv = { value: Number(today.hrv), baseline: Math.exp(hb.mean), low: Math.exp(hb.mean - sd), high: Math.exp(hb.mean + sd), z, score: recoveryComponentScore(z), trend: diff == null ? null : diff < -swc ? "down" : diff > swc ? "up" : "stable", days: hb.count };
     if (components.hrv.trend === "down") flags.push("hrv_trend_down");
@@ -205,6 +209,18 @@ export function recoveryReadiness(input) {
   if (components.skinTemp && components.skinTemp.elevated) score -= 10;
   score = Math.round(Math.max(0, Math.min(100, score)));
   return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing };
+}
+
+// The morning check-in (morning-checkin.js) on top of the body's readiness: it
+// only lowers it. "Tired" caps the zone at yellow and the score at 60, "sick"
+// makes it red with at most 25; without the body's number the answer alone
+// gives the zone.
+export function applyCheckin(readiness, feeling) {
+  const cap = { tired: { zone: "yellow", score: 60 }, sick: { zone: "red", score: 25 } }[feeling];
+  if (!cap) return { ...readiness, checkin: feeling || null };
+  const zones = ["red", "yellow", "green"];
+  const zone = readiness.zone ? zones[Math.min(zones.indexOf(readiness.zone), zones.indexOf(cap.zone))] : cap.zone;
+  return { ...readiness, zone, score: readiness.score == null ? null : Math.min(readiness.score, cap.score), flags: [...(readiness.flags || []), "checkin_" + feeling], checkin: feeling };
 }
 
 // Cardiovascular load from time in Google Health's heart-rate zones, weighted
