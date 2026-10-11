@@ -511,24 +511,14 @@ final class SnapshotTests: XCTestCase {
     }
 
     /// The offer: the app playing in the phone at moments of the tour, and
-    /// the list with the plans. Also every frame of one loop in dark mode
-    /// (paywall-frames/, JPEG), to turn into a video of the real thing.
+    /// the list with the plans.
     func testPaywallTour() throws {
         for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1) }
 
-        let frames = outputDirectory.appending(path: "paywall-frames")
-        try FileManager.default.createDirectory(at: frames, withIntermediateDirectories: true)
-        let count = Int(AppTour.length * 30)
-        for i in 0..<count {
-            let renderer = ImageRenderer(content: PaywallView(close: {}, frozenTime: Double(i) / 30)
-                .frame(width: 390, height: 844).environment(\.colorScheme, .dark))
-            renderer.scale = 2
-            let data = try XCTUnwrap(renderer.uiImage?.jpegData(compressionQuality: 0.85))
-            try data.write(to: frames.appending(path: String(format: "%04d.jpg", i)))
-        }
+    }
     }
 
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
