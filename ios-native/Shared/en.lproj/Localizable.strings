@@ -1198,3 +1198,9 @@
 "↓ %@ pod normou" = "↓ %@ below normal";
 "↓ klesá" = "↓ falling";
 "✓ Nalezeno" = "✓ Found";
+"Změnit trénink" = "Change workout";
+"Zrušit trénink" = "Cancel workout";
+"Zrušit trénink?" = "Cancel the workout?";
+"Obnovit" = "Restore";
+"Trénink se na tento den vrátí do plánu." = "The workout goes back into the plan for this day.";
+"Plán i zapsané série zůstanou uložené." = "The plan and the logged sets stay saved.";

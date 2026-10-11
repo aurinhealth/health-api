@@ -15,6 +15,7 @@ struct GymSessionView: View {
     @State private var alternativesFor: String?
     @State private var minutes = 60
     @State private var muscles: [String: [String: Double]] = [:]
+    @State private var changing = false
 
     private var load: [String: Double] {
         muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }
@@ -42,12 +43,26 @@ struct GymSessionView: View {
                 Task { await replace(item.name, with: replacement) }
             }
         }
+        .sheet(isPresented: $changing) {
+            GymPlanActionsSheet(date: date, title: day?.planName, cancelled: day?.cancelled == true) { Task { await load() } }
+        }
     }
 
     @ViewBuilder
     private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date()))).padding(.top, 24)
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: L10n.tr("Posilovna") + " · " + Fmt.relativeDay(date, today: AppModel.localDate(Date())))
+                Spacer()
+                // Move or cancel the day's session (GymPlanActions.swift).
+                if !model.demo && (day?.cancelled == true || !(day?.exercises.isEmpty ?? true)) {
+                    Button { changing = true } label: {
+                        Text("Změnit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                    }
+                    .accessibilityLabel("Změnit trénink")
+                }
+            }
+            .padding(.top, 24)
             if loading && day == nil {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             } else if let day, !day.exercises.isEmpty {

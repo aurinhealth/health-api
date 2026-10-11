@@ -169,7 +169,8 @@ export function buildCoachCouncil(input){
   const date=input.date||input.daily?.date,daily=input.daily||{},training=daily.training||{},completed=training.completed||[],matched=training.matched||[],used=new Set(),policy=trainingStatus(input.athleteState);
   const planned=(training.planned||[]).filter(p=>{
     if(matched.some(m=>String(m.planned?.id)===String(p.id)&&p.id!=null))return false;
-    const found=completed.find(a=>!used.has(a.id)&&(p.id!=null&&String(a.pairedEventId||a.plannedEventId)===String(p.id)||txt(p.name).trim()&&txt(p.name).trim().toLowerCase()===txt(a.name).trim().toLowerCase()));
+    // paired_event_id is the bare Intervals.icu id, the plan's id is "planned:<id>".
+    const found=completed.find(a=>!used.has(a.id)&&(p.id!=null&&a.pairedEventId!=null&&String(a.pairedEventId)===String(p.id).replace(/^planned:/,'')||txt(p.name).trim()&&txt(p.name).trim().toLowerCase()===txt(a.name).trim().toLowerCase()));
     if(found){used.add(found.id);return false;}return true;
   });
   const c={...daily,training:{...training,planned,completed:[]},sleep:sleepFacts(input.sleepSessions||[],date),fitness:input.fitness||{},food:daily.nutrition?.foodLog?.totals||{},focus:input.focus,todayGym:input.gym?todayGymContext(input.gym,date):null,thresholds:input.thresholds||null};
