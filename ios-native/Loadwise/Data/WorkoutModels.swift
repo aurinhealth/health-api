@@ -222,6 +222,7 @@ struct GymTechnique: Decodable, Equatable {
     let mistakes: [String]?
     let breathing: String?
     let feel: [String]?
+    let photos: [String]?
     let video: Video?
     let searchUrl: String?
 

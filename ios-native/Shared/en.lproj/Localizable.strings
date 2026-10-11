@@ -1555,3 +1555,6 @@
 "Baví mě" = "I like it";
 "Nebaví mě" = "I don't like it";
 "Trénink se nepodařilo uložit: %@" = "The workout couldn't be saved: %@";
+"Začátek" = "Start";
+"Konec" = "End";
+"Fotky začátku a konce cviku" = "Photos of the exercise's start and end position";

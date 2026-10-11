@@ -78,3 +78,13 @@ test('an exercise outside the catalog gets its card written once by AI, stored a
   const entry=(await import('node:fs')).readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
   assert.match(entry,/if\(!stored&&env\.OPENAI_API_KEY&&await exerciseInUse\(env\.DB,exercise\)\)stored=await generateTechnique\(env,exercise\)/);
 });
+
+test('catalog exercises carry start and end photos from the open exercise database',()=>{
+  const low=techniqueFor('Low row');
+  assert.deepEqual(low.photos,[
+    'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/0.jpg',
+    'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/1.jpg']);
+  const withPhotos=Object.keys(EXERCISES).filter(n=>techniqueFor(n).photos.length===2);
+  assert.ok(withPhotos.length>=90,'only '+withPhotos.length+' exercises have photos');
+  assert.deepEqual(techniqueFor('Pendulum squat').photos,[]);
+});

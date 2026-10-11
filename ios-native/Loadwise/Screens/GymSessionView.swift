@@ -440,25 +440,20 @@ struct TechniqueSheet: View {
         .padding(.top, 6)
     }
 
-    /// A still from the exercise's video; tapping it plays the video.
+    /// Photos of the start and end position, swiped between; without them a
+    /// still from the exercise's video.
     @ViewBuilder private var photo: some View {
-        if let id = videoId, let url = URL(string: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg") {
-            Button { withAnimation { page = 1 } } label: {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Rectangle().fill(Palette.track)
-                }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(16 / 9, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    Image(systemName: "play.fill").font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 52, height: 52).background(.black.opacity(0.45), in: Circle())
-                }
+        if let photos = technique?.photos, photos.count >= 2 {
+            ExercisePhotos(urls: photos.compactMap { URL(string: $0) })
+        } else if let id = videoId, let url = URL(string: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg") {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+            } placeholder: {
+                Rectangle().fill(Palette.track)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Přehrát video")
+            .frame(maxWidth: .infinity)
+            .aspectRatio(16 / 9, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
     }
 
@@ -675,5 +670,46 @@ struct YouTubePlayer: UIViewRepresentable {
 
     final class Coordinator {
         var loaded: String?
+    }
+}
+
+/// The start and end position of an exercise, one photo per page.
+struct ExercisePhotos: View {
+    let urls: [URL]
+    @State private var page = 0
+
+    var body: some View {
+        VStack(spacing: 10) {
+            TabView(selection: $page) {
+                ForEach(Array(urls.enumerated()), id: \.offset) { index, url in
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFill()
+                    } placeholder: {
+                        Rectangle().fill(Palette.track)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+                    .overlay(alignment: .bottomLeading) {
+                        Text(index == 0 ? L10n.tr("Začátek") : L10n.tr("Konec"))
+                            .font(Typo.caption)
+                            .foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Palette.background.opacity(0.65), in: Capsule())
+                            .padding(10)
+                    }
+                    .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .aspectRatio(3 / 2, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            HStack(spacing: 8) {
+                ForEach(0..<urls.count, id: \.self) { i in
+                    Circle().fill(i == page ? Palette.ink : Palette.faint).frame(width: 7, height: 7)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr("Fotky začátku a konce cviku"))
     }
 }

@@ -12,6 +12,7 @@ import { callOpenAI, lightModel } from './coach-assistant.js';
 import { EXERCISES, FOCUS_GROUPS } from './strength-generator.js';
 import { stationLabel } from './gym-equipment.js';
 import { normalizeExerciseName } from './strength-normalization.js';
+import { exercisePhotos } from './exercise-photos.js';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -42,6 +43,7 @@ export function techniqueFor(name, own = null, stored = null) {
     note: def?.note || '',
     setup: t?.setup || [], steps: t?.steps || [], mistakes: t?.mistakes || [], breathing: t?.breathing || '',
     feel: L(FEEL[exercise], FEEL_EN[exercise] || FEEL[exercise]) || t?.feel || [], source: TECHNIQUE[exercise] ? 'library' : t ? 'ai' : null,
+    photos: exercisePhotos(exercise),
     video, ownUrl: own?.url || null,
     searchUrl: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query)
   };
