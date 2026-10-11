@@ -7,7 +7,8 @@ import SwiftUI
 struct AddFoodSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    let meal: String
+    /// The meal the food goes into; the header menu changes it.
+    @State private var meal: String
     /// Straight to the camera, the scanner… when opened from the "+" menu.
     var start: FoodStart? = nil
     @State private var started = false
@@ -28,6 +29,17 @@ struct AddFoodSheet: View {
     @State private var photoMode: String?
     @State private var readingPhoto = false
 
+    init(meal: String, start: FoodStart? = nil) {
+        _meal = State(initialValue: meal)
+        self.start = start
+    }
+
+    /// The day's meals, plus the one this sheet opened with.
+    private var mealChoices: [MealSlot.Slot] {
+        let chosen = Set(model.food?.mealSlots ?? MealSlot.usual).union([meal])
+        return MealSlot.all.filter { chosen.contains($0.id) }
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             PageScroll {
@@ -37,7 +49,20 @@ struct AddFoodSheet: View {
                         Spacer()
                         Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                     }
-                    Text(MealSlot.labels[meal] ?? "Jídlo").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 4)
+                    Menu {
+                        Picker("Jídlo", selection: $meal) {
+                            ForEach(mealChoices) { slot in Text(LocalizedStringKey(slot.label)).tag(slot.id) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(LocalizedStringKey(MealSlot.labels[meal] ?? "Jídlo"))
+                            Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                        }
+                        .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(Capsule().fill(Palette.ink.opacity(0.06)))
+                    }
+                    .padding(.top, 6)
 
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
