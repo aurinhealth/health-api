@@ -4,7 +4,7 @@
 // gym's web page (web search). The athlete checks the list before saving.
 import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
-import { METAGYM_KUTNA_HORA, OTHER_STATION_IDS } from "./gym-equipment.js";
+import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
 
 // Generic names and groups, in the order the app lists them.
@@ -23,28 +23,21 @@ export const GYM_STATIONS = [
   { id: "multi_flight", group: "Záda a ramena", label: "Upažování (stroj)", en: "Lateral raise machine" },
   { id: "pec_deck", group: "Záda a ramena", label: "Pec deck / zadní ramena", en: "Pec deck / rear delt" },
   { id: "chest_press", group: "Prsa", label: "Tlaky na prsa (stroj)", en: "Chest press machine" },
-  { id: "pendulum_squat", group: "Nohy a hýždě", label: "Pendulum / hack dřep", en: "Pendulum / hack squat" },
-  { id: "pivot_leg_press", group: "Nohy a hýždě", label: "Leg press", en: "Leg press" },
+  { id: "pendulum_squat", group: "Nohy a hýždě", label: "Pendulum dřep (kyvadlový stroj)", en: "Pendulum squat" },
+  { id: "pivot_leg_press", group: "Nohy a hýždě", label: "Leg press (i 45° saně)", en: "Leg press (incl. 45° sled)" },
   { id: "hip_thrust", group: "Nohy a hýždě", label: "Hip thrust (stroj)", en: "Hip thrust machine" },
   { id: "leg_extension", group: "Nohy a hýždě", label: "Předkopávání (leg extension)", en: "Leg extension" },
-  { id: "prone_leg_curl", group: "Nohy a hýždě", label: "Zakopávání (leg curl)", en: "Leg curl" },
-  { id: "calf_raise", group: "Nohy a hýždě", label: "Lýtka (stroj)", en: "Calf raise machine" },
+  { id: "prone_leg_curl", group: "Nohy a hýždě", label: "Zakopávání vleže (leg curl)", en: "Lying leg curl" },
+  { id: "calf_raise", group: "Nohy a hýždě", label: "Lýtka vestoje (stroj)", en: "Standing calf raise machine" },
   { id: "adduction_abduction", group: "Nohy a hýždě", label: "Přitahování a unožování (stroj)", en: "Adduction / abduction" },
   { id: "abs_bench", group: "Střed těla", label: "Lavice na břicho", en: "Abs bench" },
   { id: "roman_chair", group: "Střed těla", label: "Hyperextenze (roman chair)", en: "Roman chair" },
   { id: "treadmill", group: "Kardio", label: "Běžecký pás", en: "Treadmill" },
   { id: "stairmaster", group: "Kardio", label: "Schodový trenažér", en: "Stair climber" }
-].filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id)).concat([
-  // What other gyms and home gyms usually have too. No catalog exercise needs
-  // them yet, so they only describe the place.
-  { id: "pullup_bar", group: "Volné váhy", label: "Hrazda", en: "Pull-up bar" },
-  { id: "dip_bars", group: "Volné váhy", label: "Bradla", en: "Dip bars" },
-  { id: "kettlebells", group: "Volné váhy", label: "Kettlebelly", en: "Kettlebells" },
-  { id: "ez_bar", group: "Volné váhy", label: "EZ osa", en: "EZ bar" },
-  { id: "resistance_bands", group: "Volné váhy", label: "Odporové gumy", en: "Resistance bands" },
-  { id: "rowing_ergometer", group: "Kardio", label: "Veslovací trenažér", en: "Rowing ergometer" },
-  { id: "exercise_bike", group: "Kardio", label: "Rotoped", en: "Exercise bike" }
-]).filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id) || OTHER_STATION_IDS.includes(s.id));
+].filter(s => Object.hasOwn(METAGYM_KUTNA_HORA.stations, s.id)).concat(
+  // What other gyms and home gyms usually have too (gym-equipment.js OTHER_STATIONS).
+  OTHER_STATION_IDS.map(id => ({ id, ...OTHER_STATIONS[id] }))
+);
 
 export const GYM_STATION_IDS = GYM_STATIONS.map(s => s.id);
 
