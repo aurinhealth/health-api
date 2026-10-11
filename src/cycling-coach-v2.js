@@ -211,7 +211,7 @@ const WORDS_EN={
 };
 
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
@@ -392,6 +392,13 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(hard7>=2&&["vo2","threshold","sweet_spot"].includes(kind)){
     kind="endurance"; adaptations.push(L("dodržen limit kvalitních dnů","quality-day limit respected"));
   }
+  // A threshold test the athlete planned (threshold-check.js): the two days
+  // before it stay without intensity, the day before short and easy.
+  const testDays=upcomingTest?.testDate?diffDays(upcomingTest.testDate,targetDate):null;
+  if(testDays===1||testDays===2){
+    if(["vo2","threshold","sweet_spot","tempo","long_endurance"].includes(kind)&&!plannedInfo?.system)kind=testDays===1?"recovery":"endurance";
+    adaptations.push(testDays===1?L("zítra je test: dnes jen lehce a krátce","test tomorrow: just short and easy today"):L("pozítří je test: bez intenzity","test in two days: no intensity"));
+  }
   if(lowerGym.length&&["vo2","threshold"].includes(kind)){
     kind="endurance"; adaptations.push(W.gym);
   }
@@ -435,6 +442,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     const limit=Math.max(30,Math.round(longest*1.1/5)*5);
     if(requestedMinutes>limit){rationale.push(longest?L("Nejdelší běh za poslední 2 týdny měl "+Math.round(longest)+" min, dnes proto nejvýš "+limit+" min (+10 %).","Your longest run in the last 2 weeks was "+Math.round(longest)+" min, so at most "+limit+" min today (+10 %)."):L("Za poslední 2 týdny nevidím žádný běh, začínám na "+limit+" min.","I don't see any run in the last 2 weeks, starting at "+limit+" min."));requestedMinutes=limit;if(kind==="long_endurance"&&limit<longMinutes)kind="endurance";}
   }
+  if(testDays===1&&!plannedInfo?.minutes)requestedMinutes=Math.min(requestedMinutes,run?30:60);
   const session=workoutTemplate(kind,requestedMinutes,cadence,sport);
   const capabilitySystem=kind==="long_endurance"?"endurance":kind==="vo2"?"vo2max":kind;
   const capability=capabilities?.[capabilitySystem]||null;

@@ -30,7 +30,7 @@ const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 
 // LTHR is known. Checked against 38 power-measured rides and runs of the
 // owner from August to October 2026 (Intervals.icu's load): 0.82 matches the
 // total with no bias, per session r = 0.94 and a mean error of 23.
-const DEFAULT_THRESHOLD_HRR = 0.82;
+export const DEFAULT_THRESHOLD_HRR = 0.82;
 
 function trimpWeight(hrr, sex) {
   return sex === "female" ? 0.86 * Math.exp(1.67 * hrr) : 0.64 * Math.exp(1.92 * hrr);

@@ -81,13 +81,14 @@ import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, nightlyGymSkip, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getCheckin, saveCheckin } from './morning-checkin.js';
+import { getChecks, saveCheck, upcomingTest, thresholdSessions, estimateRideFtp, estimateRunPace, thresholdOffer, recommendTestDay, testResult, getTestWorkout } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { capWeekTargets, weekProposal, weekWeather, dayHours, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
 import { movePlannedEvent, deletePlannedEvent, setPlannedEnvironment, isStrengthEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
-import { saveTrainingProfile } from "./training-profile.js";
+import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
 import { nightDetail } from "./night-detail.js";
@@ -533,7 +534,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
   const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
-  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),checkin:await getCheckin(env.DB,date).catch(()=>null)};
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
 }
 
 // CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
@@ -554,6 +555,73 @@ async function ownFitness(env,from,to){
   const age=Number(profile?.age)||null;
   const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
   return loadSeries(dailyLoads(sessionsFrom(kept,byActivity,gymDays),athlete),{from,to,warmup});
+}
+
+// Thresholds from the data and the test to confirm them (threshold-check.js):
+// what to offer, the planned tests and the measured results waiting for the
+// athlete's confirmation. A planned test that has passed is read from the
+// day's activity (Intervals.icu intervals); without them the app asks for the
+// values.
+const TEST_IDS={ride:['test-ride-ftp20','test-ride-lthr30'],run:['test-run-tt30']};
+async function thresholdCheckState(env,ctx,today){
+  const from=shiftDate(today,-90);
+  const [rows,thresholds,profile,checks,rest]=await Promise.all([
+    env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,from,shiftDate(today,1)).all().then(r=>r.results||[]).catch(()=>[]),
+    cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),
+    dashboardProfile(env).catch(()=>null),getChecks(env.DB),
+    env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(today,-30)).all().then(r=>(r.results||[]).map(x=>Number(x.value_numeric)).sort((a,b)=>a-b)).catch(()=>[])
+  ]);
+  const byActivity=new Map(),activities=[];
+  for(const row of rows){const a=activityFromRow(row);if(a){byActivity.set(a,row);activities.push(a);}}
+  const sessions=thresholdSessions(dedupeActivities(activities),byActivity);
+  const age=Number(profile?.age)||null;
+  const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,runLthr:thresholds.runLthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null)};
+  const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null};
+  const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
+  // The week plan's next 10 days for the recommended test day.
+  const plans=new Map();
+  const days=[];
+  for(let k=1;k<=10;k++){
+    const date=shiftDate(today,k),monday=mondayOfDate(date);
+    if(!plans.has(monday))plans.set(monday,await getWeekPlan(env.DB,date).catch(()=>null));
+    const prefs=plans.get(monday),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
+    days.push({date,prefs,sports:prefs?.days?.[weekday]||[],minutes:prefs?availabilityOn(prefs,date).minutes:null});
+  }
+  const offers=[],scheduled=[],results=[],manual=[];
+  for(const sport of ['ride','run']){
+    const check=checks[sport];
+    // A planned test that has passed: its result, or the athlete's values.
+    if(check?.status==='scheduled'&&check.testDate<=today){
+      const done=sessions.filter(x=>x.kind===sport&&x.date===check.testDate).sort((a,b)=>(b.minutes||0)-(a.minutes||0))[0];
+      if(done){
+        const detail=done.id?await rideIntervals(env,done.id).catch(()=>null):null;
+        const result=detail?testResult(check.testId,detail.intervals):null;
+        if(result){await saveCheck(env.DB,sport,{...check,status:'measured',result});checks[sport]={...check,status:'measured',result};}
+        else {manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
+      }else if(check.testDate<shiftDate(today,-3)){await saveCheck(env.DB,sport,{...check,status:'dismissed'});checks[sport]={...check,status:'dismissed',updatedAt:today};}
+      else if(check.testDate<today){manual.push({sport,testId:check.testId,testDate:check.testDate});continue;}
+    }
+    const c=checks[sport];
+    if(c?.status==='scheduled'){const w=getTestWorkout(c.testId);scheduled.push({sport,testId:c.testId,testDate:c.testDate,name:w?.name||null,minutes:w?.duration_minutes||null});continue;}
+    if(c?.status==='measured'){results.push({sport,testId:c.testId,testDate:c.testDate,result:c.result,current});continue;}
+    const offer=thresholdOffer({sport,sessions,current,estimate:estimates[sport],check:c,today});
+    if(!offer)continue;
+    const w=getTestWorkout(offer.testId);
+    const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport)?.role||null:null}))});
+    offers.push({...offer,testName:w.name,testMinutes:w.duration_minutes,testDescription:w.description,...when});
+  }
+  return {status:'ok',current,estimates,offers,scheduled,results,manual};
+}
+
+// A manually entered test result into the values to confirm.
+function manualTestResult(testId,values={}){
+  const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;
+  if(testId==='test-ride-ftp20'){const p=num(values.power20);if(!p||p>1500)throw new Error(L('Zadej průměrný výkon z 20 minut.','Enter the average power of the 20 minutes.'));return {ftp:Math.round(p*.95),power20:p};}
+  if(testId==='test-ride-lthr30'){const hr=num(values.hr);if(!hr||hr<80||hr>230)throw new Error(L('Zadej průměrný tep posledních 20 minut.','Enter the average heart rate of the last 20 minutes.'));return {lthr:Math.round(hr)};}
+  const km=num(String(values.distanceKm??'').replace(',','.')),pace=km?Math.round(1800/km):null;
+  if(!pace||pace<150||pace>600)throw new Error(L('Zadej vzdálenost, kterou jsi za 30 minut uběhl.','Enter the distance you ran in the 30 minutes.'));
+  const hr=num(values.hr);
+  return {runThresholdPace:pace,runLthr:hr&&hr>=80&&hr<=230?Math.round(hr):null,distance:Math.round(km*1000)};
 }
 
 async function planningHistory(env,date,days=84){
@@ -970,6 +1038,44 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
       return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days),start:monday,targets,historyEstimate},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  if(url.pathname==='/app/api/threshold-check'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      const today=localToday();
+      if(request.method==='GET')return Response.json(await thresholdCheckState(env,ctx,today),{headers:{'Cache-Control':'no-store'}});
+      if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      const body=await request.json().catch(()=>({})),sport=body.sport==='run'?'run':'ride',checks=await getChecks(env.DB),check=checks[sport]||null;
+      const estimate=body.estimate&&Number(body.estimate.value)>0?{value:Number(body.estimate.value),basis:String(body.estimate.basis||'').slice(0,30)}:check?.estimate||null;
+      if(body.action==='schedule'){
+        const testId=TEST_IDS[sport].includes(body.testId)?body.testId:TEST_IDS[sport][0];
+        if(!validTrainingDay(body.date)||body.date<today)throw new Error(L('Vyber den testu.','Choose the test day.'));
+        const planned=await scheduleWorkoutInIntervals(env,env.DB,{workoutId:testId,date:body.date,confirm:true,environment:body.environment==='indoor'?'indoor':'outdoor'});
+        await saveCheck(env.DB,sport,{status:'scheduled',testId,testDate:body.date,estimate});
+        return Response.json({status:'ok',planned:{date:body.date,eventId:planned.eventId||null}},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(body.action==='dismiss'||body.action==='cancel'){await saveCheck(env.DB,sport,{status:'dismissed',testId:check?.testId||null,testDate:check?.testDate||null,estimate});return Response.json({status:'ok'});}
+      if(body.action==='result'){
+        if(!check?.testId)throw new Error(L('Žádný test k vyhodnocení.','No test to evaluate.'));
+        const result=manualTestResult(check.testId,body.values||{});
+        await saveCheck(env.DB,sport,{...check,status:'measured',result});
+        return Response.json({status:'ok',result});
+      }
+      if(body.action==='apply'){
+        // The confirmed values go to the training profile (and to Intervals.icu, as from Nastavení → Zóny).
+        const v=body.values||{},num=x=>Number.isFinite(Number(x))&&Number(x)>0?Math.round(Number(x)):null,patch={};
+        if(sport==='ride'){if(num(v.ftp)&&num(v.ftp)<=1000)patch.ftp=num(v.ftp);if(num(v.lthr)&&num(v.lthr)<=230)patch.lthr=num(v.lthr);}
+        else {if(num(v.runThresholdPace)>=150&&num(v.runThresholdPace)<=600)patch.runThresholdPace=num(v.runThresholdPace);if(num(v.runLthr)&&num(v.runLthr)<=230)patch.runLthr=num(v.runLthr);}
+        if(!Object.keys(patch).length)throw new Error(L('Chybí hodnota k uložení.','There is no value to save.'));
+        await saveTrainingProfile(env.DB,{...await getTrainingProfile(env.DB),...patch});
+        const t=await athleteThresholds(env);
+        const intervals=env.INTERVALS_API_KEY?await writeIntervalsZones(env,t).catch(error=>({status:'error',message:error.message})):null;
+        await saveCheck(env.DB,sport,{status:'applied',testId:check?.testId||null,testDate:check?.testDate||null,estimate,result:check?.result||null});
+        return Response.json({status:'ok',saved:patch,intervals},{headers:{'Cache-Control':'no-store'}});
+      }
+      throw new Error(L('Neznámá akce.','Unknown action.'));
+    }catch(error){return Response.json({message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/training-profile'||url.pathname==='/app/api/training-profile/estimate'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
