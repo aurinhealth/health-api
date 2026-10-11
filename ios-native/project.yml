@@ -54,8 +54,8 @@ targets:
         NSPhotoLibraryUsageDescription: Loadwise načte fotku jídla nebo posilovny, kterou vybereš.
         NSLocationWhenInUseUsageDescription: Loadwise vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.
         NSHealthShareUsageDescription: Loadwise čte z Apple Health spánek, tréninky, tep, HRV, kroky a váhu, aby spočítal regeneraci, zátěž a kalorický cíl.
-        # App Store Connect requires it with the HealthKit entitlement, even before Loadwise writes anything.
-        NSHealthUpdateUsageDescription: Loadwise do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš, například tréninky, jídlo a pití.
+        # Settings → Synchronizace → Apple Zdraví writes workouts, weight, food and water (App/AppleHealthExport.swift).
+        NSHealthUpdateUsageDescription: Loadwise do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Loadwise tě vzbudí v čase budíku, podle kterého počítá večerku.
         # Built with the iOS 26 SDK for AlarmKit, the app keeps its own design.
