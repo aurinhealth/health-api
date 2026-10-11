@@ -2,7 +2,7 @@ import {EXERCISES} from './strength-generator.js';
 import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad} from './strength-intelligence.js';
 import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
-import {availableAt,stationLabel} from './gym-equipment.js';
+import {availableAt,hasKnownStations,stationLabel} from './gym-equipment.js';
 
 const MUSCLES_CS={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
 const MUSCLES_EN={chest:'Chest',back:'Back',shoulders:'Shoulders',quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',biceps:'Biceps',triceps:'Triceps',core:'Core',adductors:'Adductors',abductors:'Abductors',rear_delts:'Rear delts',side_delts:'Side delts',calves:'Calves',forearms:'Forearms',traps:'Traps',lower_back:'Lower back'};
@@ -86,13 +86,39 @@ const searchTerms={
   'Barbell shrug':'trapézy krčení ramen osa',
   'Smith machine shrug':'trapézy krčení ramen smith',
   'Cable upright row':'trapézy přítah k bradě kladka ramena',
-  'Barbell good morning':'spodní záda dobré ráno předklon osa'
+  'Barbell good morning':'spodní záda dobré ráno předklon osa',
+  'Pull-up':'shyby hrazda nadhmat záda laty',
+  'Chin-up':'shyby podhmat hrazda biceps záda laty',
+  'Assisted pull-up':'asistované shyby stroj protizávaží záda laty',
+  'Hanging leg raise':'přednožování ve visu hrazda břicho',
+  'Dips':'kliky na bradlech dipy triceps prsa',
+  'Assisted dip':'asistované kliky na bradlech dipy stroj protizávaží triceps',
+  'Kettlebell swing':'kettlebell švihy swing hýždě kyčle',
+  'EZ bar curl':'biceps ez osa bicepsový zdvih',
+  'EZ bar skull crusher':'triceps francouzský tlak vleže ez osa lebka',
+  'Preacher curl':'biceps scottova lavice ez osa',
+  'Band pull-apart':'roztahování gumy zadní ramena lopatky guma',
+  'Hack squat':'hack dřep stroj stehna',
+  'Seated leg curl':'zakopávání vsedě hamstringy zadní stehna',
+  'Glute kickback machine':'zanožování stroj kickback hýždě',
+  'Seated calf raise':'výpony vsedě lýtka',
+  'T-bar row':'t-bar přítah v předklonu záda',
+  'Chest-supported row':'přítah s oporou hrudníku stroj záda veslování',
+  'TRX row':'trx závěsný systém přítahy záda vlastní váha',
+  'Barbell incline bench press':'šikmá lavice osa tlaky horní prsa benchpress',
+  'Trap bar deadlift':'mrtvý tah trap bar šestihranná osa hýždě stehna',
+  'Landmine press':'landmine tlak jednoruč ramena osa',
+  'Medicine ball slam':'medicinbal slam hody o zem břicho výbušnost',
+  'Box step-up':'výstupy na bednu box step up hýždě stehna'
 
 };
 
 export function gymExerciseCatalog(){
-  // Only exercises that can be done in the gym (METAGYM Kutná Hora), with the station.
-  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&availableAt(name)).map(([name,def])=>({name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name)}));
+  // Every exercise whose stations the app knows (METAGYM Kutná Hora or the
+  // usual equipment of other gyms), with the station; the app offers the
+  // athlete those of their own gym (the stations of each exercise);
+  // standardGym: METAGYM Kutná Hora (the "gym" preset) has it.
+  return Object.entries(EXERCISES).filter(([name])=>EXERCISE_INTELLIGENCE[name]&&hasKnownStations(name)).map(([name,def])=>({name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,search:[searchTerms[name]||'',stationLabel(name)||''].join(' ').trim(),note:def.note||'',station:stationLabel(name),standardGym:availableAt(name)}));
 }
 
 // What can take the place of an exercise in the plan: the same muscle,

@@ -1540,5 +1540,419 @@ export const TECHNIQUE_EN = {
    "Too much weight – start light."
   ],
   breathing: "Inhale and hold your breath on the way down, exhale at the top."
+ },
+ "Pull-up": {
+  setup: [
+   "Grab the bar with an overhand grip slightly wider than your shoulders.",
+   "Hang with straight arms, pull your shoulders slightly down away from your ears.",
+   "Brace your abs and glutes, keep your legs together."
+  ],
+  steps: [
+   "Drive your elbows down to your sides, chest toward the bar.",
+   "Get your chin over the bar without tipping your head back.",
+   "Lower slowly to a full hang."
+  ],
+  mistakes: [
+   "Swinging and kicking your legs.",
+   "Half reps – not finishing at the top or the bottom.",
+   "Shoulders shrugged up to your ears."
+  ],
+  breathing: "Exhale as you pull up, inhale as you lower."
+ },
+ "Chin-up": {
+  setup: [
+   "Grab the bar with an underhand grip, shoulder-width apart.",
+   "Hang with straight arms, shoulders slightly down.",
+   "Brace your abs, legs together."
+  ],
+  steps: [
+   "Pull your elbows down and back, chest toward the bar.",
+   "Get your chin over the bar.",
+   "Lower slowly to a full hang."
+  ],
+  mistakes: [
+   "Kicking your legs.",
+   "Dropping into the hang.",
+   "Tipping your head back instead of finishing the pull."
+  ],
+  breathing: "Exhale as you pull up, inhale as you lower."
+ },
+ "Assisted pull-up": {
+  setup: [
+   "Set the counterweight (kg = the machine's help, more kg is easier).",
+   "Kneel or stand on the platform and grab the handles overhand.",
+   "Pull your shoulders slightly down, brace your abs."
+  ],
+  steps: [
+   "Drive your elbows down to your sides, chest toward the handles.",
+   "Get your chin above the handles.",
+   "Return slowly to straight arms."
+  ],
+  mistakes: [
+   "Too much counterweight – the set is far too easy.",
+   "Jerking and pushing off with your legs.",
+   "Shoulders up at your ears."
+  ],
+  breathing: "Exhale as you pull, inhale as you lower."
+ },
+ "Hanging leg raise": {
+  setup: [
+   "Grab the bar overhand at shoulder width and hang.",
+   "Pull your shoulders slightly down so you don't hang only in the joints.",
+   "Stop any swinging, legs together."
+  ],
+  steps: [
+   "Tilt your pelvis up and raise your knees (easier) or straight legs in front of you.",
+   "Go up as long as your pelvis stays tilted, hold briefly.",
+   "Lower slowly, without swinging."
+  ],
+  mistakes: [
+   "Momentum instead of abs.",
+   "Arched lower back – only the hip flexors lift the legs.",
+   "Lowering fast."
+  ],
+  breathing: "Exhale as you raise, inhale as you lower."
+ },
+ "Dips": {
+  setup: [
+   "Support yourself on the bars with straight arms, shoulders down away from your ears.",
+   "Bend or cross your legs, brace your abs.",
+   "Keep your torso fairly upright (more triceps); a slight lean brings in the chest."
+  ],
+  steps: [
+   "Bend your elbows slowly, pointing them back.",
+   "Lower as long as your shoulders stay pain-free – about a right angle at the elbows.",
+   "Press back up to straight arms."
+  ],
+  mistakes: [
+   "Going too deep – overloads the front of the shoulder.",
+   "Elbows flaring out to the sides.",
+   "Shoulders shrugged up to your ears."
+  ],
+  breathing: "Inhale as you lower, exhale as you press up."
+ },
+ "Assisted dip": {
+  setup: [
+   "Set the counterweight (more kg is easier).",
+   "Kneel or stand on the platform, grab the handles and straighten your arms.",
+   "Shoulders down away from your ears, torso fairly upright."
+  ],
+  steps: [
+   "Bend your elbows slowly, pointing them back.",
+   "Lower to about a right angle at the elbows, shoulders pain-free.",
+   "Press back up to straight arms."
+  ],
+  mistakes: [
+   "Going too deep.",
+   "Elbows flaring out.",
+   "Too much counterweight – the set is far too easy."
+  ],
+  breathing: "Inhale as you lower, exhale as you press up."
+ },
+ "Kettlebell swing": {
+  setup: [
+   "Place the kettlebell about 30 cm in front of you, feet slightly wider than your hips.",
+   "Hips back, flat back, grab the handle with both hands.",
+   "Brace your abs and pull your shoulder blades down."
+  ],
+  steps: [
+   "Hike the kettlebell back between your thighs, hinging at the hips.",
+   "Drive your hips forward hard and squeeze your glutes – the kettlebell floats to chest height.",
+   "Let it fall back and flow into the next swing from the hips."
+  ],
+  mistakes: [
+   "Squatting instead of hinging at the hips.",
+   "Lifting the kettlebell with your arms and shoulders.",
+   "Rounded back or leaning back at the top."
+  ],
+  breathing: "Exhale as you drive the hips forward, inhale as you hike back."
+ },
+ "EZ bar curl": {
+  setup: [
+   "Grab the EZ bar underhand on the inner bends.",
+   "Stand tall, feet hip-width apart.",
+   "Elbows at your sides, shoulders down."
+  ],
+  steps: [
+   "Bend your elbows and curl the bar to your shoulders, elbows stay put.",
+   "Squeeze your biceps briefly at the top.",
+   "Lower slowly to almost straight arms."
+  ],
+  mistakes: [
+   "Leaning back and swinging your torso.",
+   "Elbows drifting forward.",
+   "Lowering fast."
+  ],
+  breathing: "Exhale as you curl, inhale as you lower."
+ },
+ "EZ bar skull crusher": {
+  setup: [
+   "Lie on a flat bench, feet on the floor.",
+   "Hold the EZ bar overhand on the narrow bends above your chest, arms straight.",
+   "Tilt your arms slightly toward your head, elbows pointing at the ceiling."
+  ],
+  steps: [
+   "Bend only at the elbows and lower the bar slowly behind your forehead.",
+   "Your upper arms stay put.",
+   "Straighten your elbows back to the start."
+  ],
+  mistakes: [
+   "Elbows flaring out.",
+   "Moving at the shoulders instead of the elbows.",
+   "Too much weight – start light so the bar stays under control."
+  ],
+  breathing: "Inhale as you lower, exhale as you straighten."
+ },
+ "Preacher curl": {
+  setup: [
+   "Set the seat so your armpits rest on the top edge of the pad.",
+   "Lay the backs of your arms on the pad.",
+   "Grab the EZ bar underhand on the bends."
+  ],
+  steps: [
+   "Bend your elbows and curl the bar toward your shoulders.",
+   "Squeeze your biceps briefly at the top.",
+   "Lower slowly, keeping a little bend in your elbows at the bottom."
+  ],
+  mistakes: [
+   "Snapping the elbows straight at the bottom.",
+   "Lifting your shoulders and torso off the pad.",
+   "Too much weight."
+  ],
+  breathing: "Exhale as you curl, inhale as you lower."
+ },
+ "Band pull-apart": {
+  setup: [
+   "Stand tall, hold the band overhand at shoulder width.",
+   "Arms straight in front of your chest at shoulder height.",
+   "Shoulders down, abs braced."
+  ],
+  steps: [
+   "Pull the band apart to the sides, shoulder blades together.",
+   "Bring the band all the way to your chest and hold briefly.",
+   "Return slowly to the start."
+  ],
+  mistakes: [
+   "Shrugging your shoulders up.",
+   "Arching your lower back.",
+   "A band too stiff to bring to your chest."
+  ],
+  breathing: "Exhale as you pull apart, inhale as you return."
+ },
+ "Hack squat": {
+  setup: [
+   "Rest your back and shoulders against the pads, feet hip-width on the platform.",
+   "Release the safeties and straighten your knees (not locked).",
+   "Brace your abs, keep your back on the pad."
+  ],
+  steps: [
+   "Lower slowly, knees tracking over your toes.",
+   "Go as deep as your lower back stays on the pad and your heels on the platform.",
+   "Drive up through your whole feet."
+  ],
+  mistakes: [
+   "Lower back coming off the pad.",
+   "Knees caving in.",
+   "Locking out your knees at the top."
+  ],
+  breathing: "Inhale as you lower, exhale as you drive up."
+ },
+ "Seated leg curl": {
+  setup: [
+   "Set the back pad so your knees line up with the machine's pivot.",
+   "Lower roller above your heels, upper pad firmly across your thighs.",
+   "Hold the handles and press your hips into the seat."
+  ],
+  steps: [
+   "Curl your heels down under the seat.",
+   "Hold briefly at the bottom.",
+   "Return slowly to straight legs."
+  ],
+  mistakes: [
+   "Knees out of line with the pivot.",
+   "Lifting your hips off the seat.",
+   "Swinging and a fast return."
+  ],
+  breathing: "Exhale as you curl, inhale as you return."
+ },
+ "Glute kickback machine": {
+  setup: [
+   "Lean on the chest pad or handles, depending on the machine.",
+   "Put the foot of the working leg on the plate or behind the roller.",
+   "Brace your abs, flat back."
+  ],
+  steps: [
+   "Push the leg back and up from the hip, not the lower back.",
+   "Squeeze your glute briefly at the top.",
+   "Return slowly, then switch legs."
+  ],
+  mistakes: [
+   "Arching your lower back.",
+   "Too big a range – your torso tips back.",
+   "Swinging."
+  ],
+  breathing: "Exhale as you kick back, inhale as you return."
+ },
+ "Seated calf raise": {
+  setup: [
+   "Sit down and put the balls of your feet on the edge of the platform.",
+   "Set the pad snugly on your knees.",
+   "Release the safety."
+  ],
+  steps: [
+   "Lower your heels as far as you can into a stretch.",
+   "Rise onto your toes as high as you can.",
+   "Hold briefly at the top and return slowly."
+  ],
+  mistakes: [
+   "Bouncing without a hold.",
+   "A small range.",
+   "Rushing the tempo."
+  ],
+  breathing: "Exhale as you rise, inhale as you lower."
+ },
+ "T-bar row": {
+  setup: [
+   "Stand over the bar or on the machine's platform, feet hip-width apart.",
+   "Hinge at the hips, knees slightly bent, flat back.",
+   "Grab the handles and brace your abs."
+  ],
+  steps: [
+   "Pull the handles to your chest, elbows close to your body.",
+   "Squeeze your shoulder blades together at the top.",
+   "Lower slowly to straight arms, back stays flat."
+  ],
+  mistakes: [
+   "Rounded back.",
+   "Jerking your torso up.",
+   "Shoulders up at your ears."
+  ],
+  breathing: "Exhale as you pull, inhale as you lower."
+ },
+ "Chest-supported row": {
+  setup: [
+   "Set the seat so the handles are at the height of your lower chest.",
+   "Rest your chest on the pad.",
+   "Grab the handles, arms straight."
+  ],
+  steps: [
+   "Pull the handles toward you, elbows going back.",
+   "Squeeze your shoulder blades together and hold briefly.",
+   "Return slowly to straight arms."
+  ],
+  mistakes: [
+   "Chest coming off the pad.",
+   "Shoulders up at your ears.",
+   "Cutting the range short."
+  ],
+  breathing: "Exhale as you pull, inhale as you return."
+ },
+ "TRX row": {
+  setup: [
+   "Shorten the straps, grab the handles and lean back with straight arms.",
+   "Keep your body in one line from head to heels.",
+   "The further you lean back (lower), the harder it gets."
+  ],
+  steps: [
+   "Pull your chest to the handles, elbows close to your body.",
+   "Squeeze your shoulder blades together at the top.",
+   "Lower slowly back to straight arms."
+  ],
+  mistakes: [
+   "Sagging hips.",
+   "Shoulders up at your ears.",
+   "Dropping back instead of lowering under control."
+  ],
+  breathing: "Exhale as you pull, inhale as you lower."
+ },
+ "Barbell incline bench press": {
+  setup: [
+   "Lie on the incline bench, eyes under the bar, feet planted on the floor.",
+   "Grip slightly wider than your shoulders, shoulder blades pinched and down.",
+   "Unrack the bar over your upper chest (ideally with a spotter)."
+  ],
+  steps: [
+   "Lower the bar slowly to your upper chest, elbows slightly tucked.",
+   "Touch your chest lightly without bouncing.",
+   "Press the bar back up over your shoulders."
+  ],
+  mistakes: [
+   "Bouncing the bar off your chest.",
+   "Lifting your hips off the bench.",
+   "Elbows flared out to a right angle."
+  ],
+  breathing: "Inhale as you lower, exhale as you press up."
+ },
+ "Trap bar deadlift": {
+  setup: [
+   "Stand in the middle of the trap bar, feet hip-width apart.",
+   "Hips back, knees bent, grab the handles, flat back.",
+   "Shoulders over the bar, brace your abs, chest up."
+  ],
+  steps: [
+   "Push the floor away and lift the bar, hips and shoulders rising together.",
+   "Stand tall at the top and squeeze your glutes, without leaning back.",
+   "Lower the bar under control, back flat."
+  ],
+  mistakes: [
+   "Rounded back.",
+   "Hips shooting up before the shoulders.",
+   "Leaning back at the top."
+  ],
+  breathing: "Inhale and brace at the bottom, exhale at the top."
+ },
+ "Landmine press": {
+  setup: [
+   "Put one end of the bar into the landmine and load plates on the other (kg = plates).",
+   "Face the bar in a slight split stance, holding its end at your shoulder with one hand.",
+   "Brace your abs and glutes."
+  ],
+  steps: [
+   "Press the bar up and forward at an angle to a straight arm.",
+   "At the top, let your shoulder blade move forward with the arm.",
+   "Lower it slowly to your shoulder and switch hands after the set."
+  ],
+  mistakes: [
+   "Leaning back with an arched lower back.",
+   "Twisting your torso.",
+   "Shoulders up at your ears."
+  ],
+  breathing: "Exhale as you press, inhale as you lower."
+ },
+ "Medicine ball slam": {
+  setup: [
+   "Use a non-bouncing medicine ball (slam ball).",
+   "Stand shoulder-width apart, holding the ball at your chest with both hands.",
+   "Brace your abs."
+  ],
+  steps: [
+   "Raise the ball overhead and come up onto your toes.",
+   "Slam it hard into the floor in front of you, driven by your abs.",
+   "Pick the ball up with a flat back (hips back) and repeat."
+  ],
+  mistakes: [
+   "Rounding your back as you pick up the ball.",
+   "Throwing with just your arms, without your torso.",
+   "A bouncy ball that comes back at your face."
+  ],
+  breathing: "Inhale at the top, exhale sharply as you slam."
+ },
+ "Box step-up": {
+  setup: [
+   "Set up a stable box at about knee height.",
+   "Face the box and put your whole foot of one leg on it.",
+   "Torso upright, dumbbells at your sides if you use them."
+  ],
+  steps: [
+   "Drive through the heel of the foot on the box up to standing.",
+   "Stand tall at the top, just bring the other foot alongside.",
+   "Step down slowly with the same leg; switch legs after the set."
+  ],
+  mistakes: [
+   "Pushing off with the bottom leg.",
+   "Knee caving in.",
+   "A box that is too high."
+  ],
+  breathing: "Exhale as you step up, inhale as you step down."
  }
 };

@@ -38,8 +38,40 @@ export const METAGYM_KUTNA_HORA = {
 };
 
 // Equipment other gyms and home gyms usually have, beyond Kutná Hora: the
-// athlete can mark it (src/gym-equipment-ai.js GYM_STATIONS has the names).
-export const OTHER_STATION_IDS = ["pullup_bar", "dip_bars", "kettlebells", "ez_bar", "resistance_bands", "rowing_ergometer", "exercise_bike"];
+// athlete can mark it (src/gym-equipment-ai.js GYM_STATIONS lists it with the
+// Kutná Hora stations). Ids are stored in the athlete's setup: keep them stable.
+// Not added because Kutná Hora's station covers it: a 45° leg press (leg press),
+// a lateral raise machine (multi flight), a pec fly machine (pec deck) and a 45°
+// back extension (roman chair).
+export const OTHER_STATIONS = {
+  pullup_bar: { group: "Volné váhy", label: "Hrazda", en: "Pull-up bar" },
+  dip_bars: { group: "Volné váhy", label: "Bradla", en: "Dip bars" },
+  kettlebells: { group: "Volné váhy", label: "Kettlebelly", en: "Kettlebells" },
+  ez_bar: { group: "Volné váhy", label: "EZ osa", en: "EZ bar" },
+  incline_bench_press: { group: "Volné váhy", label: "Šikmá lavice s osou (incline bench)", en: "Incline bench press" },
+  preacher_bench: { group: "Volné váhy", label: "Scottova lavice", en: "Preacher bench" },
+  trap_bar: { group: "Volné váhy", label: "Trap bar (šestihranná osa)", en: "Trap bar" },
+  landmine: { group: "Volné váhy", label: "Landmine (ukotvení osy)", en: "Landmine" },
+  plyo_box: { group: "Volné váhy", label: "Plyo box (bedna)", en: "Plyo box" },
+  medicine_ball: { group: "Volné váhy", label: "Medicinbal", en: "Medicine ball" },
+  resistance_bands: { group: "Volné váhy", label: "Odporové gumy", en: "Resistance bands" },
+  suspension_trainer: { group: "Volné váhy", label: "Závěsný systém (TRX)", en: "Suspension trainer (TRX)" },
+  assisted_pullup_dip: { group: "Záda a ramena", label: "Asistovaný stroj na shyby a kliky na bradlech", en: "Assisted pull-up / dip machine" },
+  t_bar_row: { group: "Záda a ramena", label: "T-bar přítah", en: "T-bar row" },
+  chest_supported_row: { group: "Záda a ramena", label: "Přítahy s oporou hrudníku (stroj)", en: "Chest-supported row machine" },
+  hack_squat: { group: "Nohy a hýždě", label: "Hack dřep (stroj)", en: "Hack squat machine" },
+  seated_leg_curl: { group: "Nohy a hýždě", label: "Zakopávání vsedě (stroj)", en: "Seated leg curl" },
+  glute_kickback_machine: { group: "Nohy a hýždě", label: "Zanožování na hýždě (stroj)", en: "Glute kickback machine" },
+  seated_calf_raise: { group: "Nohy a hýždě", label: "Lýtka vsedě (stroj)", en: "Seated calf raise machine" },
+  sled: { group: "Kardio", label: "Saně (sled)", en: "Sled" },
+  battle_ropes: { group: "Kardio", label: "Battle ropes (lana)", en: "Battle ropes" },
+  rowing_ergometer: { group: "Kardio", label: "Veslovací trenažér", en: "Rowing ergometer" },
+  ski_erg: { group: "Kardio", label: "SkiErg (běžkařský trenažér)", en: "SkiErg" },
+  exercise_bike: { group: "Kardio", label: "Rotoped", en: "Exercise bike" },
+  air_bike: { group: "Kardio", label: "Air bike (rotoped s rukama)", en: "Air bike" },
+  elliptical: { group: "Kardio", label: "Eliptický trenažér", en: "Elliptical" }
+};
+export const OTHER_STATION_IDS = Object.keys(OTHER_STATIONS);
 
 // Station names in English (lang.js); names that are already English stay.
 const STATION_EN = {
@@ -138,14 +170,55 @@ export const EXERCISE_STATIONS = {
   "Barbell shrug": ["squat_rack", "barbells"],
   "Smith machine shrug": ["smith_machine"],
   "Cable upright row": ["cables"],
-  "Barbell good morning": ["squat_rack", "barbells"]
-
+  "Barbell good morning": ["squat_rack", "barbells"],
+  // Equipment of other gyms and home gyms (OTHER_STATIONS, added 2026-10-11).
+  "Pull-up": ["pullup_bar"],
+  "Chin-up": ["pullup_bar"],
+  "Assisted pull-up": ["assisted_pullup_dip"],
+  "Hanging leg raise": ["pullup_bar"],
+  "Dips": ["dip_bars"],
+  "Assisted dip": ["assisted_pullup_dip"],
+  "Kettlebell swing": ["kettlebells"],
+  "EZ bar curl": ["ez_bar"],
+  "EZ bar skull crusher": ["ez_bar", "adjustable_bench"],
+  "Preacher curl": ["preacher_bench", "ez_bar"],
+  "Band pull-apart": ["resistance_bands"],
+  "Hack squat": ["hack_squat"],
+  "Seated leg curl": ["seated_leg_curl"],
+  "Glute kickback machine": ["glute_kickback_machine"],
+  "Seated calf raise": ["seated_calf_raise"],
+  "T-bar row": ["t_bar_row"],
+  "Chest-supported row": ["chest_supported_row"],
+  "TRX row": ["suspension_trainer"],
+  "Barbell incline bench press": ["incline_bench_press", "barbells"],
+  "Trap bar deadlift": ["trap_bar"],
+  "Landmine press": ["landmine", "barbells"],
+  "Medicine ball slam": ["medicine_ball"],
+  "Box step-up": ["plyo_box"]
 };
 
+// The stations an exercise needs, by the gym's own names; a station of other
+// gyms (not in this gym) by its generic name.
 export function stationLabel(exercise, gym = METAGYM_KUTNA_HORA) {
-  return (EXERCISE_STATIONS[exercise] || []).map(id => gym.stations[id]?.label).map(label => label && L(label, STATION_EN[label] || label)).filter(Boolean).join(" + ") || null;
+  return (EXERCISE_STATIONS[exercise] || []).map(id => {
+    const label = gym.stations[id]?.label;
+    if (label) return L(label, STATION_EN[label] || label);
+    return OTHER_STATIONS[id] ? L(OTHER_STATIONS[id].label, OTHER_STATIONS[id].en) : null;
+  }).filter(Boolean).join(" + ") || null;
 }
+// Whether the gym (METAGYM Kutná Hora unless given) has every station of the exercise.
 export function availableAt(exercise, gym = METAGYM_KUTNA_HORA) {
   const stations = EXERCISE_STATIONS[exercise];
   return Boolean(stations?.length) && stations.every(id => gym.stations[id]);
+}
+// A station id the app knows: a Kutná Hora station or one of other gyms.
+export function knownStation(id) {
+  return Object.hasOwn(METAGYM_KUTNA_HORA.stations, id) || Object.hasOwn(OTHER_STATIONS, id);
+}
+// A catalog exercise is valid when all its stations are known; whether the
+// athlete's own gym has them is decided by their setup (strength-generator.js
+// fitsEquipment).
+export function hasKnownStations(exercise) {
+  const stations = EXERCISE_STATIONS[exercise];
+  return Boolean(stations?.length) && stations.every(knownStation);
 }

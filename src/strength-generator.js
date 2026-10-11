@@ -1,12 +1,17 @@
 // The athlete's equipment (onboarding.js trainingSetup): the whole gym, own
 // stations chosen in the app (equipment "custom" with the station ids), only
 // dumbbells or the body weight.
-export function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return true;const allowed=(equipment==='custom'||equipment==='home')&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
+// The whole gym ("gym", also the default) is METAGYM Kutná Hora; exercises for
+// the equipment of other gyms need the athlete's own stations.
+export function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return availableInGym(name);const allowed=(equipment==='custom'||equipment==='home')&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
 import { L } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { isIntensity } from "./strength-context.js";
-import { availableAt, EXERCISE_STATIONS } from "./gym-equipment.js";
+import { availableAt as availableInGym, hasKnownStations, EXERCISE_STATIONS } from "./gym-equipment.js";
+// A catalog exercise of any gym the app knows (Kutná Hora or the usual
+// equipment of others); fitsEquipment then keeps what the athlete's gym has.
+const availableAt = hasKnownStations;
 import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
@@ -98,25 +103,52 @@ const EXERCISES = {
   "Barbell shrug": { pattern: "shrug", muscle: "traps", unilateral: false, sets: 3, reps: "8–12", baseKg: 60, warmup: false, note: "Trapézy; osa z klece ve výšce stehen, kg = celá osa", fatigue: 0.45 },
   "Smith machine shrug": { pattern: "shrug", muscle: "traps", unilateral: false, sets: 3, reps: "10–15", baseKg: 50, warmup: false, note: "Trapézy; osa Smithu ve výšce stehen, kg = kotouče + osa", fatigue: 0.4 },
   "Cable upright row": { pattern: "upright_row", muscle: "traps", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Trapézy a boční ramena; tyč na spodní kladce, lokty nejvýš do výšky ramen", fatigue: 0.4 },
-  "Barbell good morning": { pattern: "hinge", muscle: "lower_back", unilateral: false, sets: 3, reps: "8–12", baseKg: 30, warmup: true, note: "Spodní záda a hamstringy; osa na zádech z klece, rovná záda, kg = celá osa", fatigue: 0.9 }
+  "Barbell good morning": { pattern: "hinge", muscle: "lower_back", unilateral: false, sets: 3, reps: "8–12", baseKg: 30, warmup: true, note: "Spodní záda a hamstringy; osa na zádech z klece, rovná záda, kg = celá osa", fatigue: 0.9 },
+  // Equipment of other gyms and home gyms (gym-equipment.js OTHER_STATIONS,
+  // added 2026-10-11): chosen only when the athlete marked the station.
+  // Bodyweight work: kg = added weight. Assisted machines: kg = counterweight,
+  // with no starting guess (it depends on the athlete's body weight).
+  "Pull-up": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "5–10", baseKg: 0, warmup: false, note: "Laty; shyby nadhmatem, kg = přidaná zátěž. Když nedáš 5 čistých opakování, zvol asistovaný stroj nebo gumu", fatigue: 0.9 },
+  "Chin-up": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "5–10", baseKg: 0, warmup: false, note: "Laty a biceps; shyby podhmatem na šířku ramen, kg = přidaná zátěž", fatigue: 0.9 },
+  "Assisted pull-up": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "6–10", baseKg: null, warmup: false, note: "Laty; kg = protizávaží stroje, čím méně, tím těžší. Nastav ho tak, aby ti zbyla 2–3 opakování v rezervě", fatigue: 0.8 },
+  "Hanging leg raise": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "8–12", baseKg: 0, warmup: false, note: "Břicho; ve visu na hrazdě bez švihu, s pokrčenými koleny je to lehčí", fatigue: 0.4 },
+  "Dips": { pattern: "push", muscle: "triceps", unilateral: false, sets: 3, reps: "6–10", baseKg: 0, warmup: false, note: "Triceps a prsa; na bradlech, dolů jen tak hluboko, aby ramena nebolela, kg = přidaná zátěž", fatigue: 0.8 },
+  "Assisted dip": { pattern: "push", muscle: "triceps", unilateral: false, sets: 3, reps: "8–12", baseKg: null, warmup: false, note: "Triceps a prsa; kg = protizávaží stroje, čím méně, tím těžší", fatigue: 0.7 },
+  "Kettlebell swing": { pattern: "hinge", muscle: "glutes", unilateral: false, sets: 3, reps: "10–15", baseKg: 16, warmup: false, note: "Hýždě a zadní stehna; švih z kyčlí, ne z ramen, kg = kettlebell", fatigue: 0.7 },
+  "EZ bar curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Biceps; EZ osa ve stoje, kg = osa s kotouči", fatigue: 0.5 },
+  "EZ bar skull crusher": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Triceps; vleže na lavici spouštíš EZ osu za čelo, kg = osa s kotouči", fatigue: 0.5 },
+  "Preacher curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "8–12", baseKg: 15, warmup: false, note: "Biceps; Scottova lavice s EZ osou, dole lokty nepropínej švihem, kg = osa s kotouči", fatigue: 0.45 },
+  "Band pull-apart": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "15–20", baseKg: null, warmup: false, note: "Zadní ramena a lopatky; roztahování gumy před hrudníkem, tuhost gumy podle síly", fatigue: 0.25 },
+  "Hack squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Kvadricepsy; hack dřep na stroji, kg = kotouče na stroji", fatigue: 1.3 },
+  "Seated leg curl": { pattern: "hamstring", muscle: "hamstrings", unilateral: false, sets: 3, reps: "10–15", baseKg: 35, warmup: false, note: "Hamstringy; zakopávání vsedě, kg = celková zátěž stroje", fatigue: 0.7 },
+  "Glute kickback machine": { pattern: "glute_kickback", muscle: "glutes", unilateral: true, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Hýždě; zanožování na stroji, kg = zátěž na jednu stranu", fatigue: 0.4 },
+  "Seated calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "12–20", baseKg: 30, warmup: false, note: "Lýtka (hlavně šikmý sval lýtkový); vsedě s opěrkou na kolenou, kg = celková zátěž stroje", fatigue: 0.35 },
+  "T-bar row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 30, warmup: true, note: "Záda; přítah T-osy v předklonu s rovnými zády, kg = kotouče", fatigue: 1.0 },
+  "Chest-supported row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: false, note: "Záda bez zátěže beder; hrudník opřený o opěrku, kg = celková zátěž stroje", fatigue: 0.8 },
+  "TRX row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–15", baseKg: null, warmup: false, note: "Záda; přítahy v závěsném systému, čím víc vodorovně, tím těžší", fatigue: 0.6 },
+  "Barbell incline bench press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "6–10", baseKg: 40, warmup: true, note: "Horní hrudník; šikmá lavice s osou ve stojanu, kg = celá osa", fatigue: 1.0 },
+  "Trap bar deadlift": { pattern: "hinge", muscle: "glutes", unilateral: false, sets: 3, reps: "5–8", baseKg: 60, warmup: true, note: "Hýždě, stehna a záda; mrtvý tah s trap barem, rovná záda, kg = osa s kotouči", fatigue: 1.35 },
+  "Landmine press": { pattern: "push_vertical", muscle: "shoulders", unilateral: true, sets: 3, reps: "8–12", baseKg: 10, warmup: false, note: "Ramena a horní hrudník; jednoruč šikmo vzhůru, k ramenům šetrnější, kg = kotouče na konci osy", fatigue: 0.7 },
+  "Medicine ball slam": { pattern: "slam", muscle: "core", unilateral: false, sets: 3, reps: "8–12", baseKg: 6, warmup: false, note: "Střed těla a výbušnost; medicinbal, který neskáče, kg = medicinbal", fatigue: 0.45 },
+  "Box step-up": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 0, warmup: false, note: "Hýždě a stehna; výstupy na bednu do výšky kolena, kg = jednoručka v každé ruce (0 = vlastní váha)", fatigue: 0.7 }
 
 };
 
 export const FOCUS_GROUPS = {
-  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press']},
-  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row']},
-  lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown']},
-  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press']},
+  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press','Barbell incline bench press']},
+  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row']},
+  lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown','Pull-up','Assisted pull-up','Chin-up']},
+  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press','Landmine press']},
   side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise']},
-  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly']},
-  biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl']},
-  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension']},
-  abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch']},
+  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly','Band pull-apart']},
+  biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl','EZ bar curl','Preacher curl']},
+  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension','EZ bar skull crusher','Dips','Assisted dip']},
+  abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch','Hanging leg raise','Medicine ball slam']},
   obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop']},
-  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat']},
-  hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift']},
-  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat']},
-  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise']},
+  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat','Hack squat']},
+  hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift','Seated leg curl','Trap bar deadlift']},
+  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat','Glute kickback machine','Trap bar deadlift','Kettlebell swing','Box step-up']},
+  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise','Seated calf raise']},
   forearms: {label:'Předloktí', exercises:['DB wrist curl','DB reverse wrist curl','Cable reverse curl']},
   traps: {label:'Trapézy', exercises:['DB shrug','Barbell shrug','Smith machine shrug','Cable upright row']},
   lower_back: {label:'Spodní záda', exercises:['Roman chair','Barbell good morning']}
@@ -205,7 +237,30 @@ const NOTE_EN = {
  "Barbell shrug": "Traps; bar from a rack at thigh height, kg = whole bar",
  "Smith machine shrug": "Traps; Smith bar at thigh height, kg = plates + bar",
  "Cable upright row": "Traps and side delts; bar on a low pulley, elbows no higher than the shoulders",
- "Barbell good morning": "Lower back and hamstrings; bar on the back from a rack, flat back, kg = whole bar"
+ "Barbell good morning": "Lower back and hamstrings; bar on the back from a rack, flat back, kg = whole bar",
+ "Pull-up": "Lats; overhand pull-ups, kg = added weight. If you can't do 5 clean reps, use the assisted machine or a band",
+ "Chin-up": "Lats and biceps; underhand pull-ups, shoulder-width grip, kg = added weight",
+ "Assisted pull-up": "Lats; kg = machine counterweight, less is harder. Set it so you have 2–3 reps in reserve",
+ "Hanging leg raise": "Abs; hanging from a bar without swinging, bent knees make it easier",
+ "Dips": "Triceps and chest; on dip bars, go only as deep as your shoulders stay pain-free, kg = added weight",
+ "Assisted dip": "Triceps and chest; kg = machine counterweight, less is harder",
+ "Kettlebell swing": "Glutes and hamstrings; swing from the hips, not the shoulders, kg = kettlebell",
+ "EZ bar curl": "Biceps; standing with an EZ bar, kg = bar with plates",
+ "EZ bar skull crusher": "Triceps; lying on a bench, lower the EZ bar behind your forehead, kg = bar with plates",
+ "Preacher curl": "Biceps; preacher bench with an EZ bar, don't snap the elbows straight at the bottom, kg = bar with plates",
+ "Band pull-apart": "Rear delts and shoulder blades; pull a band apart in front of your chest, pick the band by strength",
+ "Hack squat": "Quads; hack squat machine, kg = plates on the machine",
+ "Seated leg curl": "Hamstrings; seated leg curl, kg = total machine load",
+ "Glute kickback machine": "Glutes; kickback machine, kg = load per side",
+ "Seated calf raise": "Calves (mainly the soleus); seated with the pad on your knees, kg = total machine load",
+ "T-bar row": "Back; bent-over T-bar row with a flat back, kg = plates",
+ "Chest-supported row": "Back without loading the lower back; chest on the pad, kg = total machine load",
+ "TRX row": "Back; rows on a suspension trainer, the more horizontal, the harder",
+ "Barbell incline bench press": "Upper chest; incline bench with a racked barbell, kg = whole bar",
+ "Trap bar deadlift": "Glutes, thighs and back; trap bar deadlift, flat back, kg = bar with plates",
+ "Landmine press": "Shoulders and upper chest; one arm, pressing up at an angle, easier on the shoulders, kg = plates on the end of the bar",
+ "Medicine ball slam": "Core and power; a non-bouncing medicine ball, kg = ball",
+ "Box step-up": "Glutes and thighs; step-ups onto a knee-high box, kg = one dumbbell in each hand (0 = bodyweight)"
 };
 const GROUP_EN = {"chest": "Chest", "upper_back": "Upper back", "lats": "Lats", "front_delts": "Front delts", "side_delts": "Side delts", "rear_delts": "Rear delts", "biceps": "Biceps", "triceps": "Triceps", "abs": "Abs", "obliques": "Obliques", "quads": "Quads", "hamstrings": "Hamstrings", "hips": "Glutes and hips", "calves": "Calves", "forearms": "Forearms", "traps": "Traps", "lower_back": "Lower back"};
 for (const [name, def] of Object.entries(EXERCISES)) { const cs = def.note; Object.defineProperty(def, 'note', { get: () => L(cs, NOTE_EN[name] || cs), enumerable: true }); }
@@ -429,20 +484,20 @@ function choosePlan(context, options = {}) {
   const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
 
   const candidatesByPattern = {
-    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"],
-    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row", "Single-arm cable row", "Wide-grip low row", "Barbell row"],
-    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press", "Barbell overhead press"],
-    verticalPull: ["Lat pulldown", "Cable pullover", "Close-grip lat pulldown"],
+    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Barbell incline bench press"],
+    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row", "Single-arm cable row", "Wide-grip low row", "Barbell row", "Chest-supported row", "T-bar row", "TRX row"],
+    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press", "Barbell overhead press", "Landmine press"],
+    verticalPull: ["Lat pulldown", "Cable pullover", "Close-grip lat pulldown", "Pull-up", "Assisted pull-up", "Chin-up"],
     lateralRaise: ["Cable lateral raise", "Standing multi flight", "DB lateral raise"],
-    biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl"],
-    triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension"],
-    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly"],
-    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair"],
-    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat", "Barbell back squat", "Smith machine squat", "Barbell front squat"],
-    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift"],
-    unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat"],
-    posterior: ["Prone leg curl Prime"],
-    calves: ["Standing calf raise", "Single-leg calf raise"],
+    biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl", "EZ bar curl", "Preacher curl"],
+    triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension", "EZ bar skull crusher", "Dips", "Assisted dip"],
+    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly", "Band pull-apart"],
+    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair", "Hanging leg raise", "Medicine ball slam"],
+    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat", "Barbell back squat", "Smith machine squat", "Barbell front squat", "Hack squat"],
+    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift", "Trap bar deadlift", "Kettlebell swing", "Glute kickback machine"],
+    unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat", "Box step-up"],
+    posterior: ["Prone leg curl Prime", "Seated leg curl"],
+    calves: ["Standing calf raise", "Single-leg calf raise", "Seated calf raise"],
     // Grip and upper traps help posture on the bike and in daily life; they
     // are not a priority, so they take a turn about every second week.
     forearms: ["DB wrist curl", "Cable reverse curl", "DB reverse wrist curl"],
@@ -568,9 +623,9 @@ const kgText = x => L(String(x).replace(".", ","), String(x));
 function progressionNote(estimate) {
   if (estimate.source !== "own-history") return "";
   const last = L("minule ", "last time ") + (estimate.referenceSets > 1 ? estimate.referenceSets + "× " : "") + estimate.referenceReps + L(" op. @ ", " reps @ ") + kgText(estimate.referenceKg) + " kg" + (estimate.referenceRpe != null ? ", RPE " + kgText(estimate.referenceRpe) : "");
-  const diff = Math.round((estimate.kg - estimate.referenceKg) * 100) / 100;
-  if (estimate.progression === "increase") return "↑ " + last + " → +" + kgText(diff) + " kg";
-  if (estimate.progression === "decrease") return "↓ " + last + " → " + kgText(diff) + L(" kg, ať udržíš rozsah opakování", " kg to stay in the rep range");
+  const diff = Math.round((estimate.kg - estimate.referenceKg) * 100) / 100, signed = (diff > 0 ? "+" : "") + kgText(diff);
+  if (estimate.progression === "increase") return "↑ " + last + " → " + signed + " kg";
+  if (estimate.progression === "decrease") return "↓ " + last + " → " + signed + L(" kg, ať udržíš rozsah opakování", " kg to stay in the rep range");
   if (estimate.progression === "return") return L("po delší pauze lehčeji (", "lighter after a longer break (") + last + ")";
   if (estimate.stalled) return "= " + last + L(" – 3× bez posunu: přidej opakování, jinak příště vyměníme cvik", " – 3× without progress: add a rep, otherwise we'll swap the exercise next time");
   return "= " + last + L(" – cíl: o opakování víc", " – goal: one more rep");

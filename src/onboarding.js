@@ -23,7 +23,8 @@ export async function trainingSetup(db){
 // generator reads, so switching places never overwrites another's list.
 const PLACE_KINDS=['gym','home'];
 const validStation=id=>Object.hasOwn(METAGYM_KUTNA_HORA.stations,id)||OTHER_STATION_IDS.includes(id);
-const ALL_STATIONS=[...Object.keys(METAGYM_KUTNA_HORA.stations),...OTHER_STATION_IDS];
+// "gym" (the setting before places) meant METAGYM Kutná Hora.
+const ALL_STATIONS=Object.keys(METAGYM_KUTNA_HORA.stations);
 const cleanUrl=v=>/^https?:\/\/\S+$/i.test(String(v||'').trim())?String(v).trim().slice(0,300):'';
 const cleanWeights=v=>[...new Set((Array.isArray(v)?v:[]).map(Number).filter(kg=>Number.isFinite(kg)&&kg>0&&kg<=100).map(kg=>Math.round(kg*4)/4))].sort((a,b)=>a-b).slice(0,60);
 export function normalizePlaces(input){
