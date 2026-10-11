@@ -34,6 +34,7 @@ const ADJUST_INSTRUCTIONS = `Jsi trenér posilovny. Uprav silový trénink podle
 Používej jen přesné názvy cviků ze seznamu catalog nebo cviky, které už v plánu jsou. Nevymýšlej jiné cviky.
 Cviky, kterých se přání netýká, nech beze změny i s jejich vahami, opakováními a rozcvičkou (WARMUP).
 U nového cviku nastav váhu podle history (poslední série toho cviku), jinak kg null; opakování jako text, např. "8-10".
+Cviky ze seznamu disliked sportovec nemá rád: nepřidávej je, pokud o ně výslovně nežádá. Cviky ze seznamu liked má rád, při jinak rovné volbě je upřednostni.
 Kratší trénink znamená méně sérií nebo cviků, delší víc. Nejvýš ${MAX_EXERCISES} cviků a ${MAX_SETS} sérií na cvik.
 V answer jednou až dvěma krátkými českými větami řekni, co jsi změnil.`;
 
@@ -73,11 +74,11 @@ export function fillGymLoads(rows, history = []) {
   }
   return rows;
 }
-export async function adjustGymPlan(env, { rows, request, history = [] }) {
+export async function adjustGymPlan(env, { rows, request, history = [], taste = {} }) {
   const items = gymExerciseCatalog(), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
-  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent });
+  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [] });
   const r = await callOpenAI(env, { feature: "gym-adjust", instructions: ADJUST_INSTRUCTIONS, input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
   const data = JSON.parse(r.text), out = fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history);
   if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));

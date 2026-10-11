@@ -311,7 +311,7 @@ function openRequestedConsent(){const params=new URLSearchParams(location.search
 // the provider's page, which sends the user back (/app?connected=…).
 const ACTIVITY_OPTIONS=[['sedentary','Sedavá práce, málo chůze'],['light','Lehce aktivní: hodně chůze, práce vestoje'],['active','Aktivní: většinu dne v pohybu'],['heavy','Fyzicky náročná práce']];
 const SPORT_HOURS_OPTIONS=[['0','Žádný'],['1-3','1–3 hodiny'],['3-6','3–6 hodin'],['6-10','6–10 hodin'],['10+','Víc než 10 hodin']];
-const GOAL_OPTIONS=[['lose_0.25','Hubnout 0,25 kg týdně'],['lose_0.5','Hubnout 0,5 kg týdně'],['lose_0.75','Hubnout 0,75 kg týdně'],['lose_1','Hubnout 1 kg týdně'],['maintain','Udržovat váhu']];
+const GOAL_OPTIONS=[['lose_0.25','Hubnout 0,25 kg týdně'],['lose_0.5','Hubnout 0,5 kg týdně'],['lose_0.75','Hubnout 0,75 kg týdně'],['lose_1','Hubnout 1 kg týdně'],['maintain','Udržovat váhu'],['gain_0.25','Nabrat 0,25 kg týdně'],['gain_0.5','Nabrat 0,5 kg týdně']];
 const GOOGLE_PERMISSION_LABELS=uiTable({activity:'aktivity a kroky',metrics:'tep, HRV a váha',sleep:'spánek',nutritionRead:'čtení jídla',nutritionWrite:'zápis jídla'},{activity:'activity and steps',metrics:'heart rate, HRV and weight',sleep:'sleep',nutritionRead:'reading food',nutritionWrite:'writing food'});
 // Texts put together from parts (a list of names): the page translator only
 // knows whole texts, so these pick the language themselves.

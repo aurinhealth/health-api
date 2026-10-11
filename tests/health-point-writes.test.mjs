@@ -15,7 +15,7 @@ function setup() {
   const raw = createD1();
   raw.sqlite.exec(schema);
   const env = { DB: scopedDb(raw, 1), USER_ID: 1 };
-  const context = vm.createContext({ healthPointJson, crypto, googleInfo: (_type, p) => p.info });
+  const context = vm.createContext({ healthPointJson, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async () => 0 });
   for (const [start, end] of [
     ['function pointStatement(', '// GOOGLE NUTRITION API'],
     ['async function saveGooglePointsBatch(', 'async function syncGoogleRecent(']

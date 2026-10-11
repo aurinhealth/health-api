@@ -134,5 +134,6 @@ struct PageScroll<Content: View>: View {
             content.containerRelativeFrame(.horizontal)
         }
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        .scrollDismissesKeyboard(.interactively)
     }
 }

@@ -56,6 +56,20 @@ test("a manual FTP wins over Intervals and the latest ride, per user", async () 
   assert.deepEqual([b.ftp, b.source, b.indoorFtp, b.powerZones.length], [280, "intervals-settings", 270, 7]);
 });
 
+test("max and resting heart rate typed in Tep a aktivita win over Intervals and the calibrated values", async () => {
+  const raw = createD1(), db = scopedDb(raw, 3);
+  await db.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();
+  await db.prepare("INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(3,1,?)").bind(JSON.stringify({ hrmax: 191, rhr: 44 })).run();
+  await db.prepare("INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(3,2,?)").bind(JSON.stringify({ hrmax: 185, rhr: 50, fetchedAt: new Date().toISOString(), permissions: "{}" })).run();
+  const fetchImpl = async () => Response.json({ sportSettings: [{ types: ["Ride"], ftp: 280, max_hr: 180 }, { types: ["Run"], max_hr: 183 }] });
+  const t = await athleteThresholds({ DB: db, USER_ID: 3, INTERVALS_API_KEY: "k" }, fetchImpl);
+  assert.deepEqual([t.maxHr, t.runMaxHr, t.restHr], [191, null, 44]);
+  // Without own values Intervals keeps its max.
+  await db.prepare("UPDATE dashboard_profile SET profile_json=? WHERE user_id=3 AND id=1").bind("{}").run();
+  const auto = await athleteThresholds({ DB: db, USER_ID: 3, INTERVALS_API_KEY: "k" }, fetchImpl);
+  assert.deepEqual([auto.maxHr, auto.runMaxHr], [180, 183]);
+});
+
 const week = rides => ({ days: rides.map(([date, completed]) => ({ date, daily: { training: { planned: [], completed } } })) });
 const fresh = { wellness: [{ id: "2026-09-30", ctl: 60, atl: 50 }] };
 const sleep = { sleep: [{ type: "sleep", durationMin: 480, startTime: "2026-09-29T22:00:00Z", endTime: "2026-09-30T06:00:00Z" }] };

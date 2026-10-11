@@ -18,6 +18,8 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let activityId: String?
     /// "planned:<id>" for /app/api/planned/move and delete.
     let eventId: String?
+    /// On a done session: the plan it fulfils, for undoing a pairing.
+    var plannedId: String? = nil
 }
 
 // MARK: - Gym (GET/POST /app/api/gym, src/gym-plan-store.js)
@@ -249,6 +251,8 @@ struct ActivityDetail: Decodable, Equatable {
     let streams: [Stream]?
     let intervals: [Lap]?
     let hrr: HeartRateRecovery?
+    /// Heart-rate zones with their bpm range; power zones are in `analysis`.
+    var hrZones: [Zone]? = nil
 
     struct Activity: Decodable, Equatable {
         let name: String?
@@ -272,12 +276,15 @@ struct ActivityDetail: Decodable, Equatable {
         let zone: JSONValue?
         let seconds: Double?
         let percent: Double?
+        var min: Double? = nil
+        var max: Double? = nil
     }
 
     struct Analysis: Decodable, Equatable {
         let variability: Double?
         let aerobicDrift: Double?
         let zones: [Zone]?
+        var ftp: Double? = nil
     }
 
     struct StreamPoint: Decodable, Equatable {

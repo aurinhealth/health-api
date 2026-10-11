@@ -16,6 +16,7 @@ import { readGymPlan, writeStrengthPlanToDb } from '../src/gym-plan-store.js';
 import { writeStrengthPlanToIntervals } from '../src/intervals-strength.js';
 import { exerciseMuscles } from '../src/fitness-insights.js';
 import { internalHeaders } from '../src/internal-auth.js';
+import { exercisePreferences } from '../src/exercise-feedback.js';
 
 const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
@@ -37,7 +38,7 @@ async function api(minutes) {
     getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes,
     buildCyclingCoachV2, generateWorkout, getCapabilities, scheduleWorkoutInIntervals,
     storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan,
-    readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles,
+    readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles, exercisePreferences,
     weekWeather: async () => ({}), computeWeekTargets: async () => ({ items: [] }),
     cached: async (_env, _ctx, _key, load) => load(), athleteThresholds: async () => ({ ftp: 250 }),
     loadCoachInputs: async (_env, _ctx, _auth, date) => ({

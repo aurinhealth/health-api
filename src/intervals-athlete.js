@@ -5,7 +5,7 @@
 import { getTrainingProfile } from "./training-profile.js";
 import { powerZones, hrZones, paceZones } from "./training-zones.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
-import { loadEffectiveProfile, refreshSuggestions } from "./profile-suggestions.js";
+import { loadProfiles, refreshSuggestions } from "./profile-suggestions.js";
 const n = v => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null;
 
 // On a trainer most riders hold a few per cent less than outdoors. Without an
@@ -59,14 +59,15 @@ export async function athleteThresholds(env, fetchImpl = fetch) {
   // A manual FTP replaces the Intervals values, including its indoor FTP.
   if (profile.ftp) { out.ftp = profile.ftp; out.indoorFtp = null; out.source = "manual"; }
   for (const key of ["lthr", "maxHr"]) if (profile[key]) out[key] = profile[key];
-  // Max and resting heart rate from the personal profile (Nastavení → Profil)
-  // when neither the training settings nor Intervals.icu have them.
-  // Those calibrate from the activities and the wellness (refreshed once a day).
-  let personal = null;
-  if (env.DB && (!out.maxHr || !profile.restHr)) {
-    try { await refreshSuggestions(env, { fetchImpl }); } catch (error) { console.error("Profile suggestions not refreshed", error.message); }
-    try { personal = await loadEffectiveProfile(env.DB, env.USER_ID); } catch (error) { console.error("Profile unavailable", error.message); }
+  // Max and resting heart rate typed in Nastavení → Tep a aktivita beat
+  // Intervals.icu; the values calibrated from the activities and the wellness
+  // (refreshed once a day) only fill what nothing else has.
+  let personal = null, own = null;
+  if (env.DB) {
+    if (!out.maxHr || !profile.restHr) { try { await refreshSuggestions(env, { fetchImpl }); } catch (error) { console.error("Profile suggestions not refreshed", error.message); } }
+    try { ({ saved: own, effective: personal } = await loadProfiles(env.DB, env.USER_ID)); } catch (error) { console.error("Profile unavailable", error.message); }
   }
+  if (!profile.maxHr && n(own?.hrmax)) { out.maxHr = n(own.hrmax); out.runMaxHr = null; }
   if (!out.maxHr && n(personal?.hrmax)) out.maxHr = n(personal.hrmax);
   out.restHr = profile.restHr || n(personal?.rhr) || null;
   if (profile.runThresholdPace) { out.runThresholdPace = profile.runThresholdPace; out.runPaceSource = "manual"; }

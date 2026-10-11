@@ -38,6 +38,24 @@ export async function weekWeather(location, start) {
     return Object.fromEntries((d?.time || []).map((date, i) => [date, { code: d.weather_code?.[i], max: d.temperature_2m_max?.[i], min: d.temperature_2m_min?.[i], wind: d.wind_speed_10m_max?.[i], rain: d.precipitation_sum?.[i], rainProb: d.precipitation_probability_max?.[i] }]));
   } catch { return {}; }
 }
+// A few hours of one day (8, 11, 14, 17 and 20 h) for the weather card on Today.
+export const DAY_HOURS = [8, 11, 14, 17, 20];
+export function pickHours(hourly, date) {
+  const out = [];
+  for (const h of DAY_HOURS) {
+    const i = (hourly?.time || []).indexOf(date + 'T' + String(h).padStart(2, '0') + ':00');
+    const t = Number(hourly?.temperature_2m?.[i]);
+    if (i >= 0 && Number.isFinite(t)) out.push({ hour: h, temp: Math.round(t), code: Number.isFinite(Number(hourly.weather_code?.[i])) ? Number(hourly.weather_code[i]) : null });
+  }
+  return out;
+}
+export async function dayHours(location, date) {
+  if (!location) return [];
+  const query = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, hourly: 'temperature_2m,weather_code', timezone: timeZone(), start_date: date, end_date: date });
+  const r = await fetch('https://api.open-meteo.com/v1/forecast?' + query, { signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error('no forecast');
+  return pickHours((await r.json()).hourly, date);
+}
 // Indoor is shorter and so easier: no one should sit three hours on a
 // trainer. Rides take 70 % of the outdoor length (at most 90 min), treadmill
 // runs 80 % (at most 60 min); the intensity of the role stays.

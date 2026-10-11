@@ -3,6 +3,7 @@ import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad} fro
 import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
 import {availableAt,hasKnownStations,stationLabel} from './gym-equipment.js';
+import {withoutDisliked} from './exercise-feedback.js';
 
 const MUSCLES_CS={chest:'Hrudník',back:'Záda',shoulders:'Ramena',quads:'Přední stehna',hamstrings:'Zadní stehna',glutes:'Hýždě',biceps:'Biceps',triceps:'Triceps',core:'Střed těla',adductors:'Vnitřní stehna',abductors:'Vnější stehna',rear_delts:'Zadní ramena',side_delts:'Boční ramena',calves:'Lýtka',forearms:'Předloktí',traps:'Trapézy',lower_back:'Spodní záda'};
 const MUSCLES_EN={chest:'Chest',back:'Back',shoulders:'Shoulders',quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',biceps:'Biceps',triceps:'Triceps',core:'Core',adductors:'Adductors',abductors:'Abductors',rear_delts:'Rear delts',side_delts:'Side delts',calves:'Calves',forearms:'Forearms',traps:'Traps',lower_back:'Lower back'};
@@ -132,10 +133,15 @@ export function gymLoadEstimate(exercise,history=[]){
   const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null});
   return estimate.kg==null?null:{kg:estimate.kg,source:estimate.source,reference:estimate.referenceExercise||null};
 }
-export function gymAlternatives(exercise,history=[],exclude=[]){
+// Exercises the athlete gave a thumbs down (taste.disliked) are offered only
+// when nothing else fits; liked ones come first among equally similar ones.
+export function gymAlternatives(exercise,history=[],exclude=[],taste={}){
   const name=normalizeExerciseName(exercise),skip=new Set([name,...exclude.map(normalizeExerciseName)]);
   if(!EXERCISE_INTELLIGENCE[name])return [];
-  return findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name)).slice(0,8).map(a=>{
+  const liked=new Set((taste.liked||[]).map(normalizeExerciseName));
+  const found=findExerciseAlternatives(name,history).filter(a=>EXERCISES[a.name]&&availableAt(a.name)&&!skip.has(a.name));
+  const ranked=withoutDisliked(found,taste.disliked,a=>a.name).map((a,i)=>({a,i})).sort((x,y)=>(x.i-(liked.has(x.a.name)?1.5:0))-(y.i-(liked.has(y.a.name)?1.5:0))).map(x=>x.a);
+  return ranked.slice(0,8).map(a=>{
     const def=EXERCISES[a.name],estimate=gymLoadEstimate(a.name,history)||{kg:null,source:'no-reference'};
     return {name:a.name,muscle:muscleLabel(def.muscle),sets:def.sets,reps:def.reps,kg:estimate.kg??null,source:estimate.source,note:def.note||'',station:stationLabel(a.name)||'',warmup:Boolean(def.warmup)};
   });

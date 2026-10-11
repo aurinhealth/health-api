@@ -9,6 +9,9 @@ struct BarcodeScanSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let meal: String
+    /// Another meal than the one the scanner was opened for.
+    @State private var chosenMeal: String?
+    private var target: String { chosenMeal ?? meal }
     var onLogged: () -> Void = {}
     @State private var code: String?
     @State private var product: FoodProduct?
@@ -71,7 +74,7 @@ struct BarcodeScanSheet: View {
         .task { await askCamera() }
         .sheet(item: $editing) { product in
             NavigationStack {
-                FoodAmountView(product: product, meal: meal, editing: true, done: {
+                FoodAmountView(product: product, meal: target, editing: true, done: {
                     editing = nil
                     dismiss()
                     onLogged()
@@ -116,6 +119,7 @@ struct BarcodeScanSheet: View {
                     }
                     NutritionCells(product: product, amount: amountValue ?? 0)
                     PortionChips(product: product, amount: $amount)
+                    MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                     HStack(spacing: 10) {
                         HStack(spacing: 4) {
                             TextField("100", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 56)
@@ -125,7 +129,7 @@ struct BarcodeScanSheet: View {
                         .padding(.horizontal, 14).frame(height: 50)
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                         Button { Task { await save(product) } } label: {
-                            Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                                 .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                         }
                         .disabled(saving || amountValue == nil)
@@ -201,7 +205,7 @@ struct BarcodeScanSheet: View {
         defer { saving = false }
         var p = product
         if p.barcode == nil { p.barcode = code }
-        if let message = await model.logFood(product: p, amount: value, meal: meal) {
+        if let message = await model.logFood(product: p, amount: value, meal: target) {
             error = message
         } else {
             dismiss()

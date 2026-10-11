@@ -32,7 +32,10 @@ struct TodayView: View {
                 ProgressView()
             }
         }
-        .task { await model.refreshIfStale(.today) }
+        .task {
+            await model.refreshIfStale(.today)
+            await DeviceLocation.refreshIfFollowing(model)
+        }
     }
 }
 
@@ -59,16 +62,6 @@ struct TodayContent: View {
                 .accessibilityLabel("Profil a nastavení")
             }
 
-            // The athlete's status and today's weather at the week plan's place
-            // (or the offer to set it), side by side when they fit.
-            if model.selectedDate == nil {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) { AthleteStatusPill(); WeatherPill(weather: today.weather) }
-                    VStack(alignment: .leading, spacing: 8) { AthleteStatusPill(); WeatherPill(weather: today.weather) }
-                }
-                .padding(.top, 14)
-            }
-
             if model.selectedDate == nil && !model.demo {
                 ConnectionProblemCard()
             }
@@ -80,8 +73,14 @@ struct TodayContent: View {
             }
             .padding(.top, 40)
 
+            // Today's weather at the week plan's place (or the offer to set
+            // it) with the athlete's status, above the key numbers.
+            if model.selectedDate == nil {
+                TodayWeatherCard(weather: today.weather).padding(.top, 28)
+            }
+
             KeyNumbers(today: today)
-                .padding(.top, 28)
+                .padding(.top, model.selectedDate == nil ? 12 : 28)
 
             if model.selectedDate == nil {
                 CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
@@ -113,7 +112,7 @@ struct TodayContent: View {
                         RouteLink(route: .sleepSettings) { BedtimeSetupCard() }
                     }
                 }
-                if shows(.steps) { StepsWidget(steps: today.steps) }
+                if shows(.steps) { RouteLink(route: .steps) { StepsWidget(steps: today.steps) } }
                 if shows(.heart), today.restingHR != nil || today.hrv != nil {
                     WidgetRow {
                         if let rhr = today.restingHR { RouteLink(route: .heart) { RestingHRWidget(restingHR: rhr) } } else { Color.clear }
@@ -233,10 +232,9 @@ struct KeyNumbers: View {
         HStack(spacing: 0) {
             RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
-            Button { model.tab = .training } label: {
+            RouteLink(route: .strain) {
                 cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, Palette.amber)
             }
-            .buttonStyle(PressableCardStyle())
             Divider().overlay(Palette.hairline)
             RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
         }

@@ -101,7 +101,7 @@ struct SettingsMenu: View {
                 SettingsDivider()
                 NavigationLink { HeartActivitySettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Tep a aktivita",
-                                value: HeartActivitySettingsView.summary(store.profile))
+                                value: HeartActivitySettingsView.summary(store.profile, suggestions: store.suggestions))
                 }
                 SettingsDivider()
                 NavigationLink { SleepSettingsView(given: store) } label: {
@@ -217,6 +217,7 @@ struct SettingsMenu: View {
 
     private var goalsValue: String? {
         if let name = store.profile["eventName"]?.string { return name }
+        if store.profile["mainSport"]?.string == "auto" { return "automaticky" }
         return GoalsSettingsView.sports.first { $0.0 == store.profile["mainSport"]?.string }?.1
     }
 }
