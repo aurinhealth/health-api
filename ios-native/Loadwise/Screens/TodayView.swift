@@ -113,7 +113,7 @@ struct TodayContent: View {
                         RouteLink(route: .sleepSettings) { BedtimeSetupCard() }
                     }
                 }
-                if shows(.steps) { StepsWidget(steps: today.steps) }
+                if shows(.steps) { RouteLink(route: .steps) { StepsWidget(steps: today.steps) } }
                 if shows(.heart), today.restingHR != nil || today.hrv != nil {
                     WidgetRow {
                         if let rhr = today.restingHR { RouteLink(route: .heart) { RestingHRWidget(restingHR: rhr) } } else { Color.clear }

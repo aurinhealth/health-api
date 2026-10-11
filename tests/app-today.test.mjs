@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildToday } from "../src/app-today.js";
+import { buildToday, activeMinutes } from "../src/app-today.js";
 import { googleHealthSummary } from "../src/google-dashboard.js";
 
 const DATE = "2026-10-08";
@@ -183,4 +183,14 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /location:place\.location,forecast:place\.forecast/);
   assert.match(src, /cached\(env,ctx,'weather:'/);
+});
+
+test('active minutes count vigorous minutes twice, today and since Monday', () => {
+  const rows = [
+    { id: '2026-10-05', hrZoneMinutes: { light: 90, moderate: 20, vigorous: 10, peak: 0 } },
+    { id: '2026-10-04', hrZoneMinutes: { light: 0, moderate: 60, vigorous: 0, peak: 0 } },
+    { id: '2026-10-07', hrZoneMinutes: { light: 10, moderate: 15, vigorous: 2, peak: 1 } }
+  ];
+  assert.deepEqual(activeMinutes(rows, '2026-10-07'), { today: 21, week: 61, target: 150 });
+  assert.equal(activeMinutes([{ id: '2026-10-07', steps: 100 }], '2026-10-07'), null);
 });

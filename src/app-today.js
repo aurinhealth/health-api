@@ -37,6 +37,16 @@ export function primaryNights(sessions) {
   return byDay;
 }
 
+// Minutes at moderate heart rate or above, the way WHO counts them (a vigorous
+// or peak minute counts twice): today and since Monday.
+export function activeMinutes(rows, date) {
+  const counted = r => { const z = r?.hrZoneMinutes; return z ? (num(z.moderate) || 0) + 2 * ((num(z.vigorous) || 0) + (num(z.peak) || 0)) : 0; };
+  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7, monday = shift(date, -weekday);
+  const week = rows.filter(r => r.id >= monday && r.id <= date);
+  if (!week.some(r => r.hrZoneMinutes)) return null;
+  return { today: Math.round(counted(rows.find(r => r.id === date))), week: Math.round(week.reduce((s, r) => s + counted(r), 0)), target: 150 };
+}
+
 export function dayStrain(rows, date) {
   const row = rows.find(r => r.id === date);
   const load = heartRateLoad(row?.hrZoneMinutes);
@@ -175,7 +185,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     },
     plan: planItems,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
-    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour },
+    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: round(num(todayRow.activeCalories)), activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)
   };

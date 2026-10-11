@@ -456,6 +456,21 @@ struct SourcesSettingsView: View {
                 }
             }
 
+            if store.loaded && !store.demo {
+                SectionLabel(text: "Můžeš připojit").padding(.top, 10)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    ForEach(offers, id: \.id) { offer in
+                        if let url = offer.url {
+                            Link(destination: url) { IntegrationTile(id: offer.id, name: offer.name, note: offer.note) }
+                                .buttonStyle(.plain)
+                        } else {
+                            Button { start(offer.id) } label: { IntegrationTile(id: offer.id, name: offer.name, note: offer.note) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
             SettingsGroup(title: "Data") {
                 Button {
                     Task { syncing = true; await store.syncNow(); syncing = false }
@@ -489,10 +504,7 @@ struct SourcesSettingsView: View {
             AddIntegrationSheet(available: available, appleConnected: connected.contains { $0.id == "apple" }) { provider in
                 adding = false
                 // The next sheet (Google's disclosure, the browser) once this one has closed.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if provider == "apple" { connectingApple = true; return }
-                    flow.start(provider, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { start(provider) }
             }
         }
         .sheet(isPresented: $connectingApple) {
@@ -502,9 +514,64 @@ struct SourcesSettingsView: View {
     }
 
     private var lastSync: String? { store.sync?.updatedAt.flatMap(SourceActions.when) }
+
+    private func start(_ provider: String) {
+        if provider == "apple" { connectingApple = true; return }
+        // Strava, Garmin and Wahoo come through Intervals.icu, so connect that first.
+        let target = ["strava", "garmin", "wahoo"].contains(provider) ? "intervals" : provider
+        flow.start(target, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
+    }
+
+    private struct Offer {
+        let id: String
+        let name: String
+        let note: String
+        var url: URL? = nil
+    }
+
+    /// What is not connected yet: the services Loadwise reads itself, then the
+    /// watches and apps that come in through Intervals.icu.
+    private var offers: [Offer] {
+        var list: [Offer] = []
+        if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
+            list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
+        }
+        for provider in available where provider.id == "google" || provider.id == "intervals" {
+            list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
+        }
+        let settings = URL(string: "https://intervals.icu/settings")
+        let viaIntervals = connected.contains { $0.id == "intervals" }
+        for (id, name) in [("strava", "Strava"), ("garmin", "Garmin"), ("wahoo", "Wahoo")] {
+            list.append(Offer(id: id, name: name, note: L10n.tr("přes Intervals"), url: viaIntervals ? settings : nil))
+        }
+        return list
+    }
 }
 
-/// One connected service: its icon, name, the state in a few words and "Spravovat".
+/// A service to connect in the grid: its icon, name and how.
+struct IntegrationTile: View {
+    let id: String
+    let name: String
+    let note: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            IntegrationIcon(id: id, size: 50)
+            VStack(spacing: 1) {
+                Text(verbatim: name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(verbatim: note).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+        .padding(.vertical, 16).padding(.horizontal, 6)
+        .frame(maxWidth: .infinity)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One connected service: its icon, name, what it brings and its state.
 struct IntegrationCard: View {
     let provider: ConnectionsResponse.Provider
     let lastSync: String?
@@ -512,26 +579,35 @@ struct IntegrationCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            IntegrationIcon(id: provider.id, size: 46)
+            IntegrationIcon(id: provider.id, size: 50)
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: provider.name ?? provider.id).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                 if let problem = provider.problemText {
                     Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
-                } else if let at = provider.lastSuccessAt.flatMap(SourceActions.when) ?? lastSync {
-                    Text(L10n.f("synchronizováno %@", at)).font(Typo.caption).foregroundStyle(Palette.muted)
+                } else {
+                    Text(Self.brings(provider.id)).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
-            Text(working ? L10n.tr("připojuji…") : provider.needsAttention ? L10n.tr("Opravit") : L10n.tr("Spravovat"))
+            Text(working ? L10n.tr("připojuji…") : provider.needsAttention ? L10n.tr("Opravit") : L10n.tr("propojeno"))
                 .font(Typo.caption.weight(.semibold))
-                .foregroundStyle(provider.needsAttention ? Palette.onButton : Palette.ink)
+                .foregroundStyle(provider.needsAttention ? Palette.onButton : working ? Palette.ink : Palette.green)
                 .padding(.horizontal, 12).frame(height: 30)
-                .background(provider.needsAttention ? Palette.rust : Palette.ink.opacity(0.07), in: Capsule())
+                .background(provider.needsAttention ? Palette.rust : working ? Palette.ink.opacity(0.07) : Palette.greenSoft, in: Capsule())
         }
         .padding(14)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .contentShape(Rectangle())
+    }
+
+    static func brings(_ id: String) -> String {
+        switch id {
+        case "apple": return L10n.tr("spánek, tréninky, srdce, pohyb")
+        case "intervals": return L10n.tr("tréninky, plán, zóny")
+        case "google": return L10n.tr("spánek, tep, kroky")
+        default: return L10n.tr("tréninky")
+        }
     }
 }
 
@@ -539,23 +615,46 @@ struct IntegrationIcon: View {
     let id: String
     var size: CGFloat = 40
 
-    private var style: (symbol: String, color: Color) {
-        switch id {
-        case "google": return ("heart.text.square.fill", Palette.blue)
-        case "intervals": return ("waveform.path.ecg", Palette.rust)
-        case "apple": return ("heart.fill", Color(light: 0xE5484D, dark: 0xF2777A))
-        default: return ("watch.analog", Palette.indigo)
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+        ZStack {
+            switch id {
+            case "apple":
+                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
+                Image(systemName: "heart.fill").font(.system(size: size * 0.46, weight: .semibold))
+                    .foregroundStyle(LinearGradient(colors: [Color(light: 0xFF5E7E, dark: 0xFF5E7E), Color(light: 0xF0283C, dark: 0xF0283C)], startPoint: .top, endPoint: .bottom))
+            case "google":
+                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
+                Image(systemName: "heart.fill").font(.system(size: size * 0.46, weight: .semibold))
+                    .foregroundStyle(AngularGradient(colors: [Color(light: 0x4285F4, dark: 0x4285F4), Color(light: 0x34A853, dark: 0x34A853), Color(light: 0xFBBC04, dark: 0xFBBC04), Color(light: 0xEA4335, dark: 0xEA4335), Color(light: 0x4285F4, dark: 0x4285F4)], center: .center))
+            case "intervals":
+                shape.fill(Color(light: 0x1E2A3B, dark: 0x1E2A3B))
+                HStack(alignment: .bottom, spacing: size * 0.05) {
+                    bar(0x3B8FE0, 0.18)
+                    bar(0xE5533D, 0.30)
+                    bar(0xF2B33D, 0.24)
+                    bar(0xE5533D, 0.38)
+                }
+            case "strava":
+                shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
+                Image(systemName: "chevron.up").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
+            case "garmin":
+                shape.fill(Color(light: 0x111111, dark: 0x111111))
+                Image(systemName: "triangle.fill").font(.system(size: size * 0.38, weight: .bold)).foregroundStyle(.white)
+            case "wahoo":
+                shape.fill(Color(light: 0x0B6FE0, dark: 0x0B6FE0))
+                Text(verbatim: "W").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
+            default:
+                shape.fill(Palette.indigo)
+                Image(systemName: "watch.analog").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
+            }
         }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 
-    var body: some View {
-        let (symbol, color) = style
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.45, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(color, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
-            .accessibilityHidden(true)
+    private func bar(_ hex: UInt32, _ height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: size * 0.03).fill(Color(light: hex, dark: hex)).frame(width: size * 0.09, height: size * height)
     }
 }
 

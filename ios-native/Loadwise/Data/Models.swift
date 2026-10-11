@@ -117,6 +117,16 @@ struct TodaySnapshot: Decodable, Equatable {
         let usual: [Double]?
         /// The current hour for today, nil for a past day.
         let hour: Int?
+        var month: [Point]? = nil
+        var activeKcal: Double? = nil
+        var activeMinutes: ActiveMinutes? = nil
+
+        /// Minutes at moderate heart rate or above, vigorous counted twice.
+        struct ActiveMinutes: Decodable, Equatable {
+            let today: Double
+            let week: Double
+            var target: Double? = nil
+        }
     }
 
     struct Weight: Decodable, Equatable {
