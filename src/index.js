@@ -5,6 +5,7 @@ import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from './activity-energy-check.js';
+import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { d1WeightTrend } from "./strength-context.js";
@@ -1880,6 +1881,13 @@ async function energyForDate(env, date) {
     if(activity.energyCheck)continue;
     const check=strengthEnergyCheck(activity,weight?.value_numeric);
     if(check?.status==='review'||check?.status==='consistent'){activity.energyCheck=check;activity.caloriesForPlanning=check.status==='review'?check.estimated:activity.calories;}
+  }
+  // The user's own choice for a flagged session (count the estimate or keep
+  // the watch's number) comes before the automatic one.
+  const flagged=completed.filter(a=>a.energyCheck?.status==='review'&&a.id!=null);
+  if(flagged.length){
+    const choices=await energyChoices(env.DB,env.USER_ID,flagged.map(a=>a.id));
+    for(const activity of flagged)applyEnergyChoice(activity,choices.get(String(activity.id)));
   }
 
   // One planned session is paired with at most one real activity.  The pairing

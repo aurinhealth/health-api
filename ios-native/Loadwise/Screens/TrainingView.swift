@@ -450,6 +450,9 @@ struct ActiveCaloriesWidget: View {
             WidgetHeader(title: "Aktivní výdej", color: Palette.rust)
             SizedWidgetBody(size: size, mediumChart: 52) {
                 NumberText(value: Fmt.int(active.today), unit: "kcal")
+                if let excluded = active.excluded, excluded > 0 {
+                    Text(L10n.f("bez %@ navíc z hodinek", Fmt.int(excluded))).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                }
                 if let usual = active.usual {
                     Text(L10n.f("obvykle %@ kcal", Fmt.int(usual))).font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1)
                 }

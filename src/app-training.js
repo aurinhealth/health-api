@@ -240,7 +240,12 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
 
   // Active energy today and the week's days, and the last 28 days for the
   // detail (Training → Aktivní výdej).
-  const activeOn = d => round(num(google.find(r => r.id === d)?.activeCalories));
+  // A session the user counts at the estimate takes the watch's extra off.
+  const extraOn = d => deviceEnergyExtra(byDate.get(d)?.training?.completed);
+  const activeOn = d => {
+    const v = round(num(google.find(r => r.id === d)?.activeCalories));
+    return v == null ? null : Math.max(0, v - extraOn(d));
+  };
   const activeDays = Array.from({ length: 28 }, (_, i) => shift(date, i - 27)).map(d => ({ date: d, value: activeOn(d) })).filter(p => p.value != null);
   const active = activeDays.filter(p => p.date > shift(date, -7));
   const usualActive = active.filter(p => p.date < date).map(p => p.value);
@@ -257,7 +262,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     load: { weeks, intensity },
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
-    activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
+    activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
     thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
   };
@@ -292,11 +297,27 @@ function sessionOf(w, date, status) {
 
 // What the device says the session burned and, when that is implausible
 // (activity-energy-check.js), the estimate the energy budget plans with.
+// kcalChoice: what the user chose for it (activity-energy-choices.js),
+// "estimate" or "device"; absent while it waits to be checked.
 function energyOf(w) {
   const kcal = round(num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories));
   if (!(kcal > 0)) return {};
   const c = w.energyCheck;
-  return c?.status === "review" ? { kcal, kcalEstimate: { value: round(num(w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } } : { kcal };
+  if (c?.status !== "review") return { kcal };
+  const out = { kcal, kcalEstimate: { value: round(num(w.autoCaloriesForPlanning ?? w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } };
+  return w.energyChoice ? { ...out, kcalChoice: w.energyChoice } : out;
+}
+
+// The watch's calories left out of a day's active energy: what it counted
+// above the estimate for the sessions the user chose to count the estimate for.
+export function deviceEnergyExtra(completed = []) {
+  let extra = 0;
+  for (const w of completed || []) {
+    if (w?.energyChoice !== "estimate") continue;
+    const device = num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories), counted = num(w.caloriesForPlanning);
+    if (device > 0 && counted != null && device > counted) extra += device - counted;
+  }
+  return Math.round(extra);
 }
 
 function strainBand(v) {

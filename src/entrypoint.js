@@ -21,6 +21,7 @@ import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { setManualPair } from './manual-pairs.js';
+import { setEnergyChoice } from './activity-energy-choices.js';
 import { saveExerciseFeedback, exercisePreferences, saveWorkoutRating, workoutRatings } from './exercise-feedback.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
@@ -69,7 +70,7 @@ import { assetVersion, scriptCacheControl } from "./asset-version.js";
 
 const CLIENT_VERSION = assetVersion(dashboardClient);
 import { handleGoogleOAuth } from "./google-oauth.js";
-import { importStrengthHistory, getStrengthHistory, parseStrengthPlan, removeManualSets } from "./strength-history.js";
+import { importStrengthHistory, getStrengthHistory, parseStrengthPlan, removeManualSets, strengthSessions } from "./strength-history.js";
 import { searchCookbookRecipes, logFood, mealConsumedAt } from "./food-log.js";
 import { explainWorkout } from "./workout-explanation.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
@@ -765,6 +766,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // Only what the athlete's gym has (the active place's stations).
     return Response.json({status:'ok',exercise,alternatives:gymAlternatives(exercise,history,inPlan,taste).filter(a=>fitsEquipment(a.name,setup))},{headers:{'Cache-Control':'no-store'}});
   }
+  // The work sets of the last months by exercise and day (the app's exercise
+  // history, "minule 82,5 kg × 6" and the suggested load of the next sets).
+  if(url.pathname==='/app/api/gym/history'&&request.method==='GET'){
+    const exercises=await strengthSessions(env.DB,{days:url.searchParams.get('days')||180,today:localToday()}).catch(error=>{console.error('Gym history read failed',error);return [];});
+    return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});
+  }
   // Loads for exercises added by hand, or a plan's sets left without a weight.
   if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
     let names=[];try{names=JSON.parse(url.searchParams.get('names')||'[]');}catch{}
@@ -819,6 +826,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const result=await setManualPair(env.DB,env.USER_ID,await request.json().catch(()=>({})));
+    if(result.code)return Response.json({status:'error',message:result.message},{status:result.code});
+    await bumpCacheVersion(env.DB);
+    return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+  }
+  // Calories of a flagged session (activity-energy-choices.js): count the
+  // estimate or keep the watch's number; the energy budget follows it.
+  if(url.pathname==='/app/api/training/energy'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const result=await setEnergyChoice(env.DB,env.USER_ID,await request.json().catch(()=>({})));
     if(result.code)return Response.json({status:'error',message:result.message},{status:result.code});
     await bumpCacheVersion(env.DB);
     return Response.json(result,{headers:{'Cache-Control':'no-store'}});

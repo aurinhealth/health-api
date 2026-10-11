@@ -727,6 +727,7 @@ final class AppModel {
         api.signOut()
         SnapshotCache.clear()
         GymDayCache.clear()
+        GymHistoryCache.clear()
         if !expired {
             // Waiting writes belong to this account; the next one must not send them.
             outbox = []

@@ -124,7 +124,18 @@ struct PlanWidget: View {
 
     @ViewBuilder
     private func trailing(_ item: TodaySnapshot.PlanItem) -> some View {
-        if item.done {
+        if item.done, let session = item.session, let kcal = session.countedKcal {
+            // A done session with its calories; the device's number waits for a check.
+            VStack(alignment: .trailing, spacing: 1) {
+                NumberText(value: Fmt.int(kcal), unit: "kcal", size: 19)
+                if session.kcalNeedsCheck {
+                    Label("k ověření", systemImage: "exclamationmark.triangle")
+                        .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.amber)
+                        .labelStyle(TitleAndOptionalIcon(hasIcon: true))
+                }
+            }
+            .accessibilityElement(children: .combine)
+        } else if item.done {
             Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
                 .accessibilityLabel("Hotovo")
         } else if item.status == "missed" {
