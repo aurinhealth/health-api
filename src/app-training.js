@@ -66,6 +66,40 @@ export function eventPlan(event, date) {
 
 const isWorkout = a => a && (num(a.durationHours) ?? 0) >= 0.15;
 
+// One day's sessions (Training → Tréninky týdne, Today → Plán dne): what was
+// done (with the Intervals.icu id for its detail) and what is still planned
+// (its event id, to move or delete it). A plan that was done is shown once, as
+// done; on a past day a plan nothing was done for is "missed".
+export function daySessions(d, date, training = {}, gymDay = null) {
+  const planned = (training.planned || []).filter(Boolean);
+  const matchedPlans = (training.matched || []).filter(m => m?.planned);
+  // An activity paired with a plan counts even without a length (a Strava stub).
+  const pairedIds = new Set(matchedPlans.map(m => String(m.actualId ?? "")).filter(Boolean));
+  // So does every Intervals.icu activity: a Strava stub (no length, no sport,
+  // often a gym session from the watch) is still a session that was done.
+  const completed = (training.completed || []).filter(a => isWorkout(a) || (a && (pairedIds.has(String(a.id ?? "")) || a.source === "intervals")));
+  const pTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
+  const cTss = completed.reduce((s, w) => s + (num(w.tss) || 0), 0);
+  // A gym plan saved in the app is its own session unless the day already
+  // has a strength session, planned in Intervals.icu or done; other sports
+  // that day do not hide it. Sets logged in the app mean it was done.
+  const strengthDay = [...planned, ...matchedPlans.map(m => m.planned), ...(training.completed || [])].some(w => w && sportOf(w) === "strength");
+  const gymPlan = !strengthDay && gymDay?.exercises?.length ? gymDay : null;
+  const gymLogged = gymPlan?.logged > 0 ? 1 : 0;
+  const matchedIds = new Set(matchedPlans.map(m => m.planned.id).filter(Boolean));
+  const planOf = new Map(matchedPlans.map(m => [String(m.actualId ?? ""), m.planned]));
+  const sessions = [];
+  for (const a of completed) {
+    // A Strava stub has neither name nor sport: the plan it was paired with names it.
+    const plan = planOf.get(String(a.id ?? ""));
+    const session = sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done");
+    sessions.push(plan?.id ? { ...session, plannedId: String(plan.id) } : session);
+  }
+  for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
+  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
+  return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
+}
+
 export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, gym = {} }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
@@ -79,37 +113,14 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const sessions = [];
   const week = Array.from({ length: 7 }, (_, i) => {
     const d = shift(start, i), training = byDate.get(d)?.training || {};
-    const planned = (training.planned || []).filter(Boolean);
-    const matchedPlans = (training.matched || []).filter(m => m?.planned);
-    // An activity paired with a plan counts even without a length (a Strava stub).
-    const pairedIds = new Set(matchedPlans.map(m => String(m.actualId ?? "")).filter(Boolean));
-    const completed = (training.completed || []).filter(a => isWorkout(a) || (a && pairedIds.has(String(a.id ?? ""))));
-    const pTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
-    const cTss = completed.reduce((s, w) => s + (num(w.tss) || 0), 0);
-    // A gym plan saved in the app is its own session unless the day already
-    // has a strength session, planned in Intervals.icu or done; other sports
-    // that day do not hide it. Sets logged in the app mean it was done.
-    const strengthDay = [...planned, ...matchedPlans.map(m => m.planned), ...(training.completed || [])].some(w => w && sportOf(w) === "strength");
-    const gymPlan = !strengthDay && gym[d]?.exercises?.length ? gym[d] : null;
-    const gymLogged = gymPlan?.logged > 0 ? 1 : 0;
+    const { sessions: daySessionList, planned, completed, gymPlan, gymLogged, pTss, cTss } = daySessions(d, date, training, gym[d]);
     const gymOnly = gymPlan ? 1 : 0;
     // Sessions of the week: the planned ones, and on past days whatever was
     // done on top of the plan.
     plannedCount += d <= date ? Math.max(planned.length + gymOnly, completed.length + gymLogged) : planned.length + gymOnly;
     if (d <= date) { doneCount += completed.length + gymLogged; doneTss += cTss; }
     plannedTss += d < date ? cTss : Math.max(pTss, d === date ? cTss : 0);
-    // The week's sessions for the list: what was done (with the Intervals.icu
-    // id for its detail) and what is still planned (its event id, to move or
-    // delete it). A plan that was done is shown once, as done.
-    const matchedIds = new Set(matchedPlans.map(m => m.planned.id).filter(Boolean));
-    const planOf = new Map(matchedPlans.map(m => [String(m.actualId ?? ""), m.planned]));
-    for (const a of completed) {
-      // A Strava stub has neither name nor sport: the plan it was paired with names it.
-      const plan = planOf.get(String(a.id ?? ""));
-      sessions.push(sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done"));
-    }
-    for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
-    if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });
+    sessions.push(...daySessionList);
     return {
       date: d,
       strain: d <= date ? actualStrain(google.find(r => r.id === d)) : null,

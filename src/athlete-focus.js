@@ -1,7 +1,8 @@
 import { L } from './lang.js';
 // "Hlavní sport a cíl" from the settings: what the athlete trains for. The
 // coach prompts take their role and direction from it; without it they use
-// general fitness. Sport history never selects a specialization for the user.
+// general fitness. Sport history selects the sport only when the user chose
+// "auto" (effectiveProfile resolves it from the recent activities).
 const SPORTS = {
   cycling: { label: "cyklistika", role: "cyklistiky a silové přípravy" },
   running: { label: "běh", role: "běhu a silové přípravy" },
@@ -18,7 +19,7 @@ const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, ma
 export function normalizeFocus(p = {}) {
   const hours = Number(p.weeklyHours);
   return {
-    mainSport: Object.hasOwn(SPORTS, p.mainSport) ? p.mainSport : "general",
+    mainSport: Object.hasOwn(SPORTS, p.mainSport) || p.mainSport === "auto" ? p.mainSport : "general",
     sportGoal: text(p.sportGoal, 300),
     eventName: text(p.eventName, 120),
     eventDate: /^\d{4}-\d{2}-\d{2}$/.test(String(p.eventDate || "")) && Number.isFinite(Date.parse(p.eventDate + "T12:00:00Z")) ? p.eventDate : "",
@@ -30,6 +31,7 @@ export function normalizeFocus(p = {}) {
 // time is not part of it: it lives in the week plan only (availability).
 export function athleteFocus(profile, today) {
   const f = normalizeFocus(profile || {});
+  if (f.mainSport === "auto") f.mainSport = "general";
   const daysLeft = f.eventDate && today ? Math.round((Date.parse(f.eventDate + "T12:00:00Z") - Date.parse(today + "T12:00:00Z")) / 86400000) : null;
   return {
     sport: f.mainSport || null, sportLabel: SPORTS[f.mainSport] ? L(SPORTS[f.mainSport].label, SPORT_LABEL_EN[f.mainSport]) : null,

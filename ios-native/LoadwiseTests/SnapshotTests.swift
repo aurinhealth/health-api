@@ -510,6 +510,15 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// The offer: the app playing in the phone at moments of the tour, and
+    /// the list with the plans.
+    func testPaywallTour() throws {
+        for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
+            try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time) }
+        }
+        try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1) }
+    }
+
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {

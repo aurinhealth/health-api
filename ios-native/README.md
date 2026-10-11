@@ -45,7 +45,8 @@ installed side by side (different bundle IDs).
 - Settings (the "P" on Today), a closed menu with pages:
   - Profil: sex, age, height, heart rate, activity and the weight goal;
   - Cíle: main sport, weekly hours and the main event;
-  - Zdroje dat: connected sources and "Synchronizovat teď";
+  - Zdroje dat: connected sources and "Synchronizovat teď"; Apple Health
+    (HealthKit) with the areas it may read (App/AppleHealth.swift);
   - Tréninkové zóny: run and bike separately, thresholds, presets and zones;
   - Vzhled (automatic, light, dark), Jednotky, signing out.
 - "Prohlédnout ukázku" on the sign-in screen shows sample data without an

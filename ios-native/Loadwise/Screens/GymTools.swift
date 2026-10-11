@@ -213,6 +213,7 @@ struct GymBuilderView: View {
     @State private var catalog: [GymCatalogExercise] = []
     @State private var replacing: String?
     @State private var adding = false
+    @State private var technique: String?
 
     private var isoDay: String { AppModel.localDate(day) }
 
@@ -240,6 +241,9 @@ struct GymBuilderView: View {
         .sheet(isPresented: $adding) {
             ExercisePicker(catalog: catalog.filter { $0.fits ?? EquipmentView.fits($0, equipment) },
                            used: Set(proposal?.exercises.map(\.name) ?? [])) { ex in add(ex) }
+        }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
+            TechniqueSheet(exercise: item.name)
         }
     }
 
@@ -321,33 +325,7 @@ struct GymBuilderView: View {
             .padding(.top, 18)
 
             SectionLabel(text: "Cviky").padding(.top, 26)
-            VStack(spacing: 0) {
-                ForEach(Array(p.exercises.enumerated()), id: \.offset) { index, ex in
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text("\(index + 1)").font(Typo.number(20)).foregroundStyle(Palette.faint).frame(width: 22, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                            Text(muscleLine(p.muscles[ex.name])).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                        }
-                        Spacer(minLength: 8)
-                        Text("\(ex.sets) × " + ex.reps + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
-                            .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
-                        if !saved {
-                            Menu {
-                                Button { replacing = ex.name } label: { Label("Nahradit jiným", systemImage: "arrow.triangle.swap") }
-                                Button(role: .destructive) { remove(ex.name) } label: { Label("Odebrat", systemImage: "trash") }
-                                    .disabled(p.exercises.count < 2)
-                            } label: {
-                                Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
-                                    .frame(width: 32, height: 32).background(Palette.track, in: Circle())
-                            }
-                            .accessibilityLabel(L10n.f("Upravit %@", ex.name))
-                        }
-                    }
-                    .padding(.vertical, 12)
-                    Rectangle().fill(Palette.hairline).frame(height: 1)
-                }
-            }
+            exerciseList(p)
             if !saved {
                 Button { adding = true } label: {
                     Label("Přidat cvik", systemImage: "plus.circle.fill").font(Typo.bodyStrong).foregroundStyle(Palette.green)
@@ -355,7 +333,7 @@ struct GymBuilderView: View {
                 }
                 .disabled(catalog.isEmpty || busy != nil)
                 .padding(.top, 4)
-                Text("Cvik nahradíš nebo odebereš přes ⋯, nabídnu jen to, co máš ve vybavení.")
+                Text("Cvik posuneš, nahradíš nebo odebereš přes ⋯, nový zařadím podle náročnosti. Nabídnu jen to, co máš ve vybavení.")
                     .font(Typo.caption).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
             }
             if let rationale = p.rationale {
@@ -407,7 +385,64 @@ struct GymBuilderView: View {
         }
     }
 
+    /// The exercises in order; a superset together under its mark.
+    private func exerciseList(_ p: GymProposal) -> some View {
+        let list = p.exercises
+        let groups = p.supersets
+        return VStack(spacing: 0) {
+            ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
+                if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
+                    SupersetGroup(letter: letter) {
+                        ForEach(Array(run), id: \.self) { (index: Int) in exerciseRow(p, index, list[index]) }
+                    }
+                } else {
+                    ForEach(Array(run), id: \.self) { (index: Int) in exerciseRow(p, index, list[index]) }
+                }
+            }
+        }
+    }
+
+    private func exerciseRow(_ p: GymProposal, _ index: Int, _ ex: (name: String, sets: Int, reps: String, kg: String)) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("\(index + 1)").font(Typo.number(20)).foregroundStyle(Palette.faint).frame(width: 22, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                    Text(muscleLine(p.muscles[ex.name])).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                    if p.failing.contains(ex.name) { GymTag.failure.padding(.top, 4) }
+                }
+                Spacer(minLength: 8)
+                Text("\(ex.sets) × " + ex.reps + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
+                    .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
+                ExerciseInfoButton(name: ex.name) { technique = ex.name }
+                if !saved {
+                    Menu {
+                        Button { move(index, by: -1) } label: { Label("Posunout výš", systemImage: "arrow.up") }
+                            .disabled(!p.canMove(index, by: -1))
+                        Button { move(index, by: 1) } label: { Label("Posunout níž", systemImage: "arrow.down") }
+                            .disabled(!p.canMove(index, by: 1))
+                        Button { replacing = ex.name } label: { Label("Nahradit jiným", systemImage: "arrow.triangle.swap") }
+                        Button(role: .destructive) { remove(ex.name) } label: { Label("Odebrat", systemImage: "trash") }
+                            .disabled(p.exercises.count < 2)
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                            .frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                    }
+                    .accessibilityLabel(L10n.f("Upravit %@", ex.name))
+                }
+            }
+            .padding(.vertical, 12)
+            Rectangle().fill(Palette.hairline).frame(height: 1)
+        }
+    }
+
     // MARK: Editing the proposal by hand
+
+    private func move(_ index: Int, by step: Int) {
+        guard var p = proposal else { return }
+        p.moveExercise(index, by: step)
+        proposal = p
+    }
 
     private func remove(_ name: String) {
         guard var p = proposal else { return }
@@ -429,15 +464,17 @@ struct GymBuilderView: View {
         proposal = p
     }
 
-    /// Its usual sets at the end; the load is estimated when the plan is saved
-    /// or in the training.
+    /// Its usual sets where it belongs among the others (the big lifts first,
+    /// the core last); the load is estimated when the plan is saved or in the
+    /// training.
     private func add(_ ex: GymCatalogExercise) {
         guard var p = proposal, !p.exercises.contains(where: { $0.name == ex.name }) else { return }
         let sets = max(1, min(PlanEditorSheet.count(ex.sets) ?? 3, 6))
-        for n in 1...sets {
-            p.rows.append(["WORK", ex.name, String(n), "", ex.reps?.string ?? "10", "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) })
+        let rows: [[JSONValue]] = (1...sets).map { n in
+            ["WORK", ex.name, String(n), "", ex.reps?.string ?? "10", "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) }
         }
         if let map = ex.muscles { p.muscles[ex.name] = map }
+        p.insert(rows, name: ex.name, catalog: catalog)
         proposal = p
     }
 
@@ -460,9 +497,11 @@ struct GymBuilderView: View {
 
     private func preview() async {
         await run("preview") {
-            proposal = try await model.api.previewGym(date: isoDay, minutes: minutes,
+            var next = try await model.api.previewGym(date: isoDay, minutes: minutes,
                                                       focus: focus == "upper" || focus == "lower" ? focus : nil,
                                                       muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains) : [])
+            next.groupSupersets()
+            proposal = next
             answer = nil
             wish = ""
         }
@@ -475,6 +514,7 @@ struct GymBuilderView: View {
             var next = p
             next.rows = r.rows
             if !r.muscles.isEmpty { next.muscles = r.muscles }
+            next.groupSupersets()
             proposal = next
             answer = r.answer
             wish = ""

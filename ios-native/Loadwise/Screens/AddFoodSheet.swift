@@ -7,7 +7,8 @@ import SwiftUI
 struct AddFoodSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    let meal: String
+    /// The meal the food goes into; the header menu changes it.
+    @State private var meal: String
     /// Straight to the camera, the scanner… when opened from the "+" menu.
     var start: FoodStart? = nil
     @State private var started = false
@@ -28,6 +29,11 @@ struct AddFoodSheet: View {
     @State private var photoMode: String?
     @State private var readingPhoto = false
 
+    init(meal: String, start: FoodStart? = nil) {
+        _meal = State(initialValue: meal)
+        self.start = start
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             PageScroll {
@@ -37,7 +43,7 @@ struct AddFoodSheet: View {
                         Spacer()
                         Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                     }
-                    Text(MealSlot.labels[meal] ?? "Jídlo").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 4)
+                    MealMenu(selection: $meal).padding(.top, 6)
 
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
@@ -371,6 +377,8 @@ struct FoodAmountView: View {
     var note: String? = nil
     var editing = false
     var done: () -> Void = {}
+    /// Another meal than the one the food was opened for.
+    @State private var chosenMeal: String?
     @State private var amount = ""
     @State private var saving = false
     @State private var error: String?
@@ -384,6 +392,8 @@ struct FoodAmountView: View {
     @State private var sugar = ""
     @State private var fat = ""
     @State private var fiber = ""
+
+    private var target: String { chosenMeal ?? meal }
 
     var body: some View {
         PageScroll {
@@ -445,8 +455,9 @@ struct FoodAmountView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                 Button { Task { await save() } } label: {
-                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || value == nil || current.name.isEmpty || current.calories_100g == nil)
@@ -507,7 +518,7 @@ struct FoodAmountView: View {
         saving = true
         defer { saving = false }
         let corrected = current
-        if let message = await model.logFood(product: corrected, amount: value, meal: meal) {
+        if let message = await model.logFood(product: corrected, amount: value, meal: target) {
             error = message
         } else {
             sendCorrection(corrected)
@@ -634,12 +645,15 @@ struct ManualFoodView: View {
     @State private var fat = ""
     @State private var saving = false
     @State private var error: String?
+    @State private var chosenMeal: String?
 
     init(meal: String, name: String = "", done: @escaping () -> Void = {}) {
         self.meal = meal
         _name = State(initialValue: name)
         self.done = done
     }
+
+    private var target: String { chosenMeal ?? meal }
 
     var body: some View {
         PageScroll {
@@ -658,8 +672,9 @@ struct ManualFoodView: View {
                     SettingsField(title: "Tuky", text: $fat, unit: "g")
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                 Button { Task { await save() } } label: {
-                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(meal)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || name.trimmingCharacters(in: .whitespaces).isEmpty || number(kcal) == nil)
@@ -677,6 +692,33 @@ struct ManualFoodView: View {
                                   carbs_100g: number(carbs) ?? 0, fat_100g: number(fat) ?? 0, nutrition_basis: "portion", source: "manual")
         saving = true
         defer { saving = false }
-        if let message = await model.logFood(product: product, amount: 1, meal: meal) { error = message } else { done() }
+        if let message = await model.logFood(product: product, amount: 1, meal: target) { error = message } else { done() }
+    }
+}
+
+/// The meal the food goes into, as a small menu of the day's meals.
+struct MealMenu: View {
+    @Environment(AppModel.self) private var model
+    @Binding var selection: String
+
+    private var choices: [MealSlot.Slot] {
+        let chosen = Set(model.food?.mealSlots ?? MealSlot.usual).union([selection])
+        return MealSlot.all.filter { chosen.contains($0.id) }
+    }
+
+    var body: some View {
+        Menu {
+            Picker("Jídlo", selection: $selection) {
+                ForEach(choices) { slot in Text(LocalizedStringKey(slot.label)).tag(slot.id) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(LocalizedStringKey(MealSlot.labels[selection] ?? "Jídlo"))
+                Image(systemName: "chevron.up.chevron.down").font(.caption2)
+            }
+            .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Capsule().fill(Palette.ink.opacity(0.06)))
+        }
     }
 }

@@ -14,6 +14,10 @@ enum AppRoute: Hashable {
     case activeEnergy
     /// Minutes in the heart-rate zones week by week (Training → Aktivní minuty v zónách).
     case zones
+    /// Steps today, this week and over 30 days (Today → Pohyb).
+    case steps
+    /// The day's strain, what it is made of and the form forecast (Today → Zátěž).
+    case strain
     case gym(String)
     case activity(WeekSession)
     case planned(WeekSession)
@@ -34,7 +38,7 @@ enum AppRoute: Hashable {
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .heart, .weight: return .health
-        case .sleepSettings, .dayReview: return .today
+        case .sleepSettings, .dayReview, .steps, .strain: return .today
         default: return .training
         }
     }
@@ -52,6 +56,8 @@ enum AppRoute: Hashable {
         case "vo2max": self = .vo2max
         case "active-energy": self = .activeEnergy
         case "zones": self = .zones
+        case "steps": self = .steps
+        case "strain": self = .strain
         case "library": self = parts.count > 1 ? .workoutLibrary(parts[1]) : .library
         case "gym": self = .gym(parts.count > 1 ? parts[1] : AppModel.localDate(Date()))
         case "sleep-settings": self = .sleepSettings
@@ -102,6 +108,8 @@ struct RouteScreen: View {
             if let training = model.training { ActiveEnergyDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
         case .zones:
             if let training = model.training { ZonesDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
+        case .steps: StepsDetailView()
+        case .strain: StrainDetailView()
         case .gym(let date): GymSessionView(date: date)
         case .activity(let session): ActivityDetailView(session: session)
         case .planned(let session): PlannedWorkoutView(session: session)

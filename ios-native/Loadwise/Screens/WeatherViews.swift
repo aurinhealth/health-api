@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 // Weather on Today: the forecast for the place of the week plan
 // (GET /app/api/today → weather, src/app-today.js todayWeather) with the
@@ -111,6 +112,55 @@ struct WeatherPill: View {
     private var accessibilityText: String {
         guard let weather else { return L10n.tr("Nastavit polohu pro počasí") }
         return L10n.f("Počasí: %@, %@", WeatherText.range(weather), weather.place ?? "")
+    }
+}
+
+/// Today's card above the key numbers: the place with the location arrow and
+/// the day's temperatures, the athlete's status in the corner and a few
+/// hours of the forecast.
+struct TodayWeatherCard: View {
+    let weather: TodaySnapshot.Weather?
+    @State private var open = false
+
+    var body: some View {
+        Card {
+            HStack(alignment: .center) {
+                Button { open = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "location.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.blue)
+                        if let weather {
+                            Text(verbatim: (weather.place ?? L10n.tr("Počasí")) + " · " + WeatherText.range(weather))
+                                .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                        } else {
+                            Text("Nastavit polohu pro počasí").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 8)
+                AthleteStatusPill(compact: true)
+            }
+            if let hours = weather?.hours, !hours.isEmpty {
+                Button { open = true } label: {
+                    HStack(spacing: 0) {
+                        ForEach(hours, id: \.hour) { h in
+                            VStack(spacing: 5) {
+                                Text(verbatim: String(h.hour)).font(Typo.tiny).foregroundStyle(Palette.faint)
+                                Image(systemName: WeatherText.symbol(h.code)).font(.system(size: 15)).foregroundStyle(Palette.blue)
+                                    .symbolRenderingMode(.hierarchical).frame(height: 18)
+                                Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .sheet(isPresented: $open) { WeatherSheet(weather: weather) }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -233,6 +283,89 @@ struct GeoPlace: Decodable, Identifiable, Hashable {
     }
 }
 
+/// "Použít polohu iPhonu": one position from the phone, named by Apple's
+/// reverse geocoding. Asked only when the user taps it.
+@MainActor
+enum DeviceLocation {
+    private static let manager = CLLocationManager()
+
+    enum Failure: LocalizedError {
+        case denied, unavailable
+        var errorDescription: String? {
+            switch self {
+            case .denied: return L10n.tr("Loadwise nemá přístup k poloze. Povol ho v Nastavení iPhonu → Loadwise → Poloha.")
+            case .unavailable: return L10n.tr("Polohu se nepodařilo zjistit. Zkus to znovu venku nebo vyhledej místo.")
+            }
+        }
+    }
+
+    /// "Aktuální poloha" was chosen: the weather follows the iPhone.
+    static let followKey = "weather.followDevice"
+    private static let checkedKey = "weather.deviceCheckedAt"
+    private static let savedKey = "weather.deviceSaved"
+
+    static var following: Bool { UserDefaults.standard.bool(forKey: followKey) }
+
+    /// While following, at most every two hours and only with access already
+    /// granted: a move of more than 10 km saves the new place.
+    static func refreshIfFollowing(_ model: AppModel) async {
+        guard following, !model.demo else { return }
+        let status = manager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else { return }
+        let last = UserDefaults.standard.double(forKey: checkedKey)
+        guard Date().timeIntervalSince1970 - last > 2 * 3600 else { return }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: checkedKey)
+        guard let place = try? await self.place() else { return }
+        let saved = UserDefaults.standard.array(forKey: savedKey) as? [Double] ?? []
+        if saved.count == 2 {
+            let moved = CLLocation(latitude: saved[0], longitude: saved[1]).distance(from: CLLocation(latitude: place.latitude, longitude: place.longitude))
+            if moved < 10_000 { return }
+        }
+        try? await WeatherPlaceStore.save(place, source: "device", model: model)
+    }
+
+    static func remember(_ place: GeoPlace?, following follow: Bool) {
+        UserDefaults.standard.set(follow, forKey: followKey)
+        if let place, follow {
+            UserDefaults.standard.set([place.latitude, place.longitude], forKey: savedKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: savedKey)
+        }
+    }
+
+    static func place() async throws -> GeoPlace {
+        if manager.authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+            // The answer comes from the system dialog.
+            for _ in 0..<120 where manager.authorizationStatus == .notDetermined {
+                try await Task.sleep(for: .milliseconds(500))
+            }
+        }
+        let status = manager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else { throw Failure.denied }
+        let found: CLLocation? = try await withThrowingTaskGroup(of: CLLocation?.self) { group in
+            group.addTask {
+                for try await update in CLLocationUpdate.liveUpdates() {
+                    if let location = update.location { return location }
+                }
+                return nil
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(15))
+                return nil
+            }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        guard let location = found else { throw Failure.unavailable }
+        let mark = try? await CLGeocoder().reverseGeocodeLocation(location).first
+        return GeoPlace(name: mark?.locality ?? mark?.name ?? L10n.tr("Moje poloha"),
+                        latitude: location.coordinate.latitude, longitude: location.coordinate.longitude,
+                        admin1: mark?.administrativeArea, country: mark?.country)
+    }
+}
+
 /// "Poloha pro počasí": the place whose forecast Today shows and the coach
 /// plans by. Saved into the usual week plan (GET/POST /app/api/week-plan,
 /// prefs.location), every other key of the plan goes back as it came.
@@ -249,6 +382,8 @@ struct WeatherPlaceView: View {
     @State private var saving = false
     @State private var current: String?
     @State private var error: String?
+    @State private var locating = false
+    @State private var following = DeviceLocation.following
 
     var body: some View {
         SettingsPage(title: "Poloha pro počasí") {
@@ -270,6 +405,27 @@ struct WeatherPlaceView: View {
             }
             .padding(.horizontal, 14).frame(height: 46)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            SettingsGroup {
+                Button { Task { await useDevice() } } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.onAccent)
+                            .frame(width: 32, height: 32).background(Palette.blue, in: Circle())
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Aktuální poloha").font(.body.weight(.semibold)).foregroundStyle(Palette.blue)
+                            Text(verbatim: following ? (current.map { $0 + " · " } ?? "") + L10n.tr("aktualizuje se samo") : L10n.tr("poloha iPhonu, aktualizuje se sama"))
+                                .font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer()
+                        if locating { ProgressView() } else if following { Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.blue) }
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 56)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(saving || locating)
+            }
 
             if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
@@ -344,13 +500,27 @@ struct WeatherPlaceView: View {
         guard let plan = try? await model.api.weekPlan(start: nil) else { return }
         if case .object(let location)? = WeekPlanPrefs.object(plan.prefs)["location"] {
             current = location["name"]?.string
+            following = location["source"]?.string == "device"
         } else {
             current = nil
+            following = false
+        }
+        UserDefaults.standard.set(following, forKey: DeviceLocation.followKey)
+    }
+
+    private func useDevice() async {
+        locating = true
+        defer { locating = false }
+        do {
+            let place = try await DeviceLocation.place()
+            await save(place, source: "device")
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
     /// Saves the place (nil: none) into the usual week plan and reloads Today.
-    private func save(_ place: GeoPlace?) async {
+    private func save(_ place: GeoPlace?, source: String = "search") async {
         guard !model.demo else {
             error = L10n.tr("V ukázce se poloha neukládá.")
             return
@@ -358,31 +528,42 @@ struct WeatherPlaceView: View {
         saving = true
         defer { saving = false }
         do {
-            let plan = try await model.api.weekPlan(start: nil)
-            var prefs = WeekPlanPrefs.object(plan.prefs)
-            prefs["source"] = nil
-            // The starting template's count is not the athlete's own: it stays automatic.
-            if case .object(let automatic)? = prefs["automatic"], automatic["weeklyActivities"] == prefs["weeklyActivities"] {
-                prefs["weeklyActivities"] = .null
-            }
-            prefs["automatic"] = nil
-            if let place {
-                prefs["location"] = .object([
-                    "name": .string(place.name),
-                    "latitude": .number(place.latitude),
-                    "longitude": .number(place.longitude),
-                    "source": .string("search")
-                ])
-            } else {
-                prefs["location"] = .null
-            }
-            try await model.api.saveWeekPlan(start: nil, prefs: .object(prefs))
+            try await WeatherPlaceStore.save(place, source: source, model: model)
             current = place?.name
+            following = source == "device" && place != nil
             error = nil
-            await model.refresh()
             if let onSave { onSave() } else { dismiss() }
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// Writes the weather's place into the usual week plan, every other key of
+/// the plan as it came, and reloads Today.
+@MainActor
+enum WeatherPlaceStore {
+    static func save(_ place: GeoPlace?, source: String, model: AppModel) async throws {
+        let plan = try await model.api.weekPlan(start: nil)
+        var prefs = WeekPlanPrefs.object(plan.prefs)
+        prefs["source"] = nil
+        // The starting template's count is not the athlete's own: it stays automatic.
+        if case .object(let automatic)? = prefs["automatic"], automatic["weeklyActivities"] == prefs["weeklyActivities"] {
+            prefs["weeklyActivities"] = .null
+        }
+        prefs["automatic"] = nil
+        if let place {
+            prefs["location"] = .object([
+                "name": .string(place.name),
+                "latitude": .number(place.latitude),
+                "longitude": .number(place.longitude),
+                "source": .string(source)
+            ])
+        } else {
+            prefs["location"] = .null
+        }
+        try await model.api.saveWeekPlan(start: nil, prefs: .object(prefs))
+        DeviceLocation.remember(place, following: source == "device")
+        await model.refresh()
     }
 }

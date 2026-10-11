@@ -6,7 +6,7 @@ export function energyBudget(daily,profile,health){
   // cycling or step calories a second time. This is a running, not final, day.
   // A personal profile carries its own floor (resting metabolism); otherwise 1800 as before.
   const floor=daily.nutrition?.calorieBreakdown?.source==='profile'?Number(daily.nutrition.calorieBreakdown.minTarget)||1800:1800;
-  return{basal:Math.round(basal),active:Math.round(active),digestionShare:digestion,deficit:Math.max(0,deficit),target:Math.max(floor,Math.round((basal+active)/(1-digestion)-Math.max(0,deficit))),source:'google-health',partial:true};
+  return{basal:Math.round(basal),active:Math.round(active),digestionShare:digestion,deficit:Math.max(0,deficit),surplus:Math.max(0,-deficit),target:Math.max(floor,Math.round((basal+active)/(1-digestion)-deficit)),source:'google-health',partial:true};
 }
 
 // The day's calorie target with the Google Health energy budget: the higher of

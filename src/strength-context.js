@@ -1,3 +1,4 @@
+import { HEART_RATE_BUCKET_TYPE } from "./heart-rate-compaction.js";
 import {trainingSetup} from './onboarding.js';
 import { getAthleteState } from './athlete-state.js';
 import { isQualityName } from './session-intensity.js';
@@ -102,8 +103,12 @@ const RECOVERY_TYPE = /sleep|hrv|heart.rate|resting/i;
 const inRange = (lo, hi) => `((sample_time ${lo} ? AND sample_time ${hi} ?) OR (sample_time IS NULL AND start_time ${lo} ? AND start_time ${hi} ?))`;
 export async function d1Recovery(env, startDate, endDate) {
   const from = `${startDate}T00:00:00`, to = `${endDate}T23:59:59`;
-  const types = ((await env.DB.prepare("SELECT DISTINCT data_type FROM health_datapoints WHERE user_id = ?").bind(env.USER_ID).all()).results || [])
-    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")));
+  // The user's data types by skipping through the index one type at a time
+  // (~30 rows read); SELECT DISTINCT read every row, heart rate included (1.3M).
+  const types = ((await env.DB.prepare(`WITH RECURSIVE t(data_type) AS (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ?
+      UNION ALL SELECT (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ? AND data_type > t.data_type) FROM t WHERE t.data_type IS NOT NULL)
+    SELECT data_type FROM t WHERE data_type IS NOT NULL`).bind(env.USER_ID, env.USER_ID).all()).results || [])
+    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && t !== HEART_RATE_BUCKET_TYPE);
   if (!types.length) return {};
   const google = "data_type = ? AND source_family LIKE 'google%'";
   const latest = await env.DB.batch(types.flatMap(type => [
@@ -212,7 +217,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   try {
     const { sleepSessionFromRow } = await import("./sleep-sessions.js");
     const since = new Date(Date.parse(date + "T12:00:00Z") - 10 * 86400000).toISOString().slice(0, 10);
-    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family = 'google-wearables' AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 60").bind(env.USER_ID, since).all()).results || [];
+    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 60").bind(env.USER_ID, since).all()).results || [];
     const seen = new Set();
     context.sleepSessions = rows.map(sleepSessionFromRow).filter(s => { const k = s.startTime + "|" + s.endTime; if (seen.has(k)) return false; seen.add(k); return s.durationMin > 0; });
   } catch { context.sleepSessions = []; }

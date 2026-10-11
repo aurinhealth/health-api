@@ -47,3 +47,13 @@ test('the morning card draws the night: stages, heart rate with spikes, tiles an
   assert.match(html, /tep vyskočil|Tep vyskočil/);
   assert.equal(ctx.nightHtml({ night: null }), '');
 });
+
+test('an older night draws heart rate from the 5-minute rows', async () => {
+  const startTime = start, endTime = at(305);
+  const rows = [{ external_id: 'a', start_time: startTime, end_time: endTime, payload_json: JSON.stringify({ sleep: { interval: { startTime, endTime, startUtcOffset: '7200s' }, stages } }) }];
+  const compact = [{ bucket: Date.parse(start) / 1000 + 300, avg: 50, min: 47, max: 53 }, { bucket: Date.parse(start) / 1000 + 600, avg: 54, min: 52, max: 58 }];
+  const db = { userId: 7, prepare(q) { return { bind: () => ({ all: async () => ({ results: /data_type='sleep'/.test(q) ? rows : /heart-rate-5min/.test(q) ? compact : [] }) }) }; } };
+  const d = await nightDetail(db, { date: '2026-10-08' });
+  assert.deepEqual(d.night.hr.map(b => [b.m, b.avg, b.min, b.max]), [[5, 50, 47, 53], [10, 54, 52, 58]]);
+  assert.equal(d.night.stats.lowHr, 50);
+});

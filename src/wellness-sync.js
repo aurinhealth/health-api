@@ -36,11 +36,11 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   const days = {};
   const put = (day, field, value) => { if (Number.isFinite(Number(value)) && Number(value) > 0) (days[day] ||= {})[field] = round(field, value); };
   const types = Object.keys(DAILY);
-  const rows = (await db.prepare(`SELECT data_type, sample_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'google-sources')
+  const rows = (await db.prepare(`SELECT data_type, sample_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'google-sources', 'apple-health')
     AND data_type IN (${types.map(() => "?").join(", ")}) AND value_numeric IS NOT NULL AND sample_time >= ? AND (record_role IS NULL OR record_role != 'duplicate') ORDER BY sample_time`)
     .bind(userId, ...types, oldest).all()).results || [];
   for (const r of rows) put(localDate(r.sample_time), DAILY[r.data_type], r.value_numeric);
-  const steps = (await db.prepare(`SELECT start_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'steps'
+  const steps = (await db.prepare(`SELECT start_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type = 'steps'
     AND record_role = 'primary' AND start_time >= ?`).bind(userId, oldest).all()).results || [];
   const stepsPerDay = {};
   for (const r of steps) { const d = localDate(r.start_time); stepsPerDay[d] = (stepsPerDay[d] || 0) + Number(r.value_numeric || 0); }
@@ -52,7 +52,7 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   for (const [d, s] of Object.entries(longest)) {
     put(d, "sleepSecs", Number(s.durationMin) * 60);
     if (!s.startTime || !s.endTime) continue;
-    const samples = (await db.prepare(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
+    const samples = (await db.prepare(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min')
       AND sample_time >= ? AND sample_time <= ? LIMIT 5000`).bind(userId, utc(s.startTime), utc(s.endTime)).all()).results || [];
     put(d, "avgSleepingHR", heartRateFromSamples({ start: s.startTime, end: s.endTime }, samples));
   }
