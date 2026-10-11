@@ -517,8 +517,6 @@ final class SnapshotTests: XCTestCase {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1) }
-
-    }
     }
 
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
