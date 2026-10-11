@@ -107,6 +107,10 @@ struct SettingsMenu: View {
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.text.square", color: Palette.rust), title: "Tréninkové zóny", value: "běh, kolo")
                 }
+                SettingsDivider()
+                NavigationLink { WeatherPlaceView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "cloud.sun.fill", color: Palette.blue), title: "Poloha pro počasí", value: model.today?.weather?.place)
+                }
             }
             .buttonStyle(.plain)
 

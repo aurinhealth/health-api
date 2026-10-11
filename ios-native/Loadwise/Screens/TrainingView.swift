@@ -84,8 +84,8 @@ struct TrainingContent: View {
                         WeekSessionsList(sessions: sessions, today: training.date)
                     }
                 }
-                if let active = training.activeCalories { ActiveCaloriesWidget(active: active) }
-                if let zones = training.zones { ZonesWidget(zones: zones) }
+                if let active = training.activeCalories { RouteLink(route: .activeEnergy) { ActiveCaloriesWidget(active: active) } }
+                if let zones = training.zones { RouteLink(route: .zones) { ZonesWidget(zones: zones) } }
             }
             .padding(.top, 28)
         }
@@ -441,19 +441,146 @@ struct ActiveCaloriesWidget: View {
     }
 }
 
+/// Active minutes in the heart-rate zones this week (moderate, vigorous and
+/// peak) against WHO's 150 minutes a week, the last 4 weeks as stacked bars.
+/// Light activity (moving through the day) only as a side note.
 struct ZonesWidget: View {
     let zones: TrainingSnapshot.Zones
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + " · " + Fmt.hoursMinutesLong(zones.minutes))
-            ZoneBar(parts: parts)
+            if let weeks = zones.weeks, let week = weeks.last {
+                WidgetHeader(title: "Aktivní minuty v zónách", color: Palette.rust, trailing: L10n.tr("tento týden"))
+                HStack(alignment: .bottom, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        NumberText(value: Fmt.int(week.counted), unit: L10n.f("z %@", "150 min"))
+                        Text(ZoneStyle.status(week)).font(Typo.caption).foregroundStyle(ZoneStyle.statusColor(week))
+                    }
+                    .frame(width: 120, alignment: .leading)
+                    ZoneWeekBars(weeks: weeks, height: 52)
+                }
+                ZoneLegend(week: week)
+                Text(L10n.f("doporučení WHO 150 min týdně · lehká aktivita %@", Fmt.hoursMinutesLong(week.light)))
+                    .font(Typo.tiny).foregroundStyle(Palette.faint)
+            } else {
+                // An answer from before the weeks were sent.
+                WidgetHeader(title: "Čas v tepových zónách", color: Palette.rust, trailing: L10n.tr("4 týdny") + " · " + Fmt.hoursMinutesLong(zones.minutes))
+                ZoneBar(parts: parts)
+            }
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var parts: [(String, Double, Color)] {
-        [("Lehká", zones.light, Palette.sand), ("Střední", zones.moderate, Palette.amberBar.opacity(0.6)),
-         ("Intenzivní", zones.vigorous, Palette.amberBar), ("Maximální", zones.peak, Palette.rust)]
+        [("Lehká", zones.light, ZoneStyle.light), ("Střední", zones.moderate, ZoneStyle.moderate),
+         ("Intenzivní", zones.vigorous, ZoneStyle.vigorous), ("Maximální", zones.peak, ZoneStyle.peak)]
+    }
+}
+
+/// The colours of the heart-rate zones and the week's state against WHO.
+enum ZoneStyle {
+    static let light = Palette.sand
+    static let moderate = Palette.amberBar.opacity(0.55)
+    static let vigorous = Palette.amberBar
+    static let peak = Palette.rust
+
+    /// "splněno" or "chybí 45 min".
+    static func status(_ week: TrainingSnapshot.ZoneWeek) -> String {
+        let left = TrainingSnapshot.ZoneWeek.whoTarget - week.counted
+        return left <= 0 ? L10n.tr("doporučení splněno") : L10n.f("chybí %@ min", Fmt.int(left))
+    }
+
+    static func statusColor(_ week: TrainingSnapshot.ZoneWeek) -> Color {
+        week.counted >= TrainingSnapshot.ZoneWeek.whoTarget ? Palette.green : Palette.amber
+    }
+}
+
+/// The weeks' active minutes as stacked bars: moderate, then vigorous and peak
+/// twice (as WHO counts them). The current week is the last one, highlighted;
+/// the 150-minute recommendation is the dashed line.
+struct ZoneWeekBars: View {
+    let weeks: [TrainingSnapshot.ZoneWeek]
+    var height: CGFloat = 52
+    var spacing: CGFloat = 8
+
+    var body: some View {
+        let target = TrainingSnapshot.ZoneWeek.whoTarget
+        let top = Swift.max(weeks.map(\.counted).max() ?? 0, target) * 1.1
+        VStack(spacing: 4) {
+            GeometryReader { geo in
+                let h = geo.size.height
+                ZStack(alignment: .bottomLeading) {
+                    HStack(alignment: .bottom, spacing: spacing) {
+                        ForEach(weeks.indices, id: \.self) { i in
+                            bar(weeks[i], height: h, top: top)
+                                .opacity(i == weeks.count - 1 ? 1 : 0.5)
+                        }
+                    }
+                    DashedLine()
+                        .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        .frame(height: 1)
+                        .offset(y: -h * scaled(target, 0, top))
+                }
+                .frame(width: geo.size.width, height: h, alignment: .bottomLeading)
+            }
+            .frame(height: height)
+            HStack(spacing: spacing) {
+                ForEach(weeks.indices, id: \.self) { i in
+                    Text(verbatim: Self.label(weeks[i]))
+                        .font(.system(size: 9, weight: i == weeks.count - 1 ? .semibold : .regular))
+                        .foregroundStyle(i == weeks.count - 1 ? Palette.ink : Palette.faint)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private func bar(_ week: TrainingSnapshot.ZoneWeek, height h: CGFloat, top: Double) -> some View {
+        if week.counted <= 0 {
+            RoundedRectangle(cornerRadius: 2.5).fill(Palette.track).frame(height: 2.5).frame(maxWidth: .infinity)
+        } else {
+            VStack(spacing: 0) {
+                Rectangle().fill(ZoneStyle.peak).frame(height: h * scaled(2 * week.peak, 0, top))
+                Rectangle().fill(ZoneStyle.vigorous).frame(height: h * scaled(2 * week.vigorous, 0, top))
+                Rectangle().fill(ZoneStyle.moderate).frame(height: h * scaled(week.moderate, 0, top))
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 2.5))
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The week's number, as on the load bars.
+    static func label(_ week: TrainingSnapshot.ZoneWeek) -> String {
+        week.week.map { String($0) } ?? Fmt.dayMonth(week.start)
+    }
+}
+
+/// The week's minutes in each active zone, with the zone's colour.
+struct ZoneLegend: View {
+    let week: TrainingSnapshot.ZoneWeek
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            item("Střední", week.moderate, ZoneStyle.moderate)
+            item("Intenzivní", week.vigorous, ZoneStyle.vigorous)
+            item("Maximální", week.peak, ZoneStyle.peak)
+        }
+    }
+
+    private func item(_ name: String, _ minutes: Double, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Circle().fill(color).frame(width: 7, height: 7)
+                Text(name).font(Typo.tiny).foregroundStyle(Palette.faint).lineLimit(1)
+            }
+            Text(verbatim: Fmt.int(minutes) + " min").font(Typo.number(17)).foregroundStyle(Palette.ink)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -3,6 +3,7 @@
 // requests; the app gets them here, computed with the shared recovery model
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
+import { environmentFor } from "./adaptive-week.js";
 import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore } from "./recovery-model.js";
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
@@ -43,7 +44,28 @@ export function dayStrain(rows, date) {
 // Planned training on the same 0–21 scale, from TSS (as the web dashboard).
 const plannedStrain = tss => (tss > 0 ? Math.round(21 * (1 - Math.exp(-tss / 90)) * 10) / 10 : null);
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [] }) {
+// Today's weather at the place chosen for the week plan (week-planner.js
+// location) with the advice whether a ride or a run belongs outdoors
+// (adaptive-week.js environmentFor, the same rule as the coach). Null without a
+// place; without a forecast only the place and the season's advice.
+export function todayWeather(location, forecast, date) {
+  if (!location || !Number.isFinite(Number(location.latitude)) || !Number.isFinite(Number(location.longitude))) return null;
+  const w = forecast && typeof forecast === "object" && Object.keys(forecast).length ? forecast : null;
+  const advice = sport => { const e = environmentFor(date, sport, w); return { environment: e.environment, reason: e.reason || null }; };
+  return {
+    place: String(location.name || "").slice(0, 80) || null,
+    code: round(num(w?.code)),
+    max: round(num(w?.max)),
+    min: round(num(w?.min)),
+    wind: round(num(w?.wind)),
+    rain: round(num(w?.rain), 1),
+    rainProb: round(num(w?.rainProb)),
+    outdoor: advice("ride"),
+    outdoorRun: advice("run")
+  };
+}
+
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -142,6 +164,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     plan: planItems,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour },
-    weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null
+    weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
+    weather: todayWeather(location, forecast, date)
   };
 }

@@ -69,6 +69,11 @@ struct TodayContent: View {
                 ConnectionProblemCard()
             }
 
+            // Today's weather at the week plan's place (or the offer to set it).
+            if model.selectedDate == nil {
+                WeatherPill(weather: today.weather).padding(.top, 14)
+            }
+
             RouteLink(route: .readiness) {
                 ReadinessHero(readiness: today.readiness, nightMissing: today.sleep == nil, isToday: today.steps.hour != nil)
                     .frame(maxWidth: .infinity, alignment: .leading)

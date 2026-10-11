@@ -96,6 +96,27 @@ test("Form, load per week, zones and VO2max", () => {
   assert.equal(t.activeCalories.usual, 400);
 });
 
+test("Zone minutes per week and active energy for the last 28 days", () => {
+  const older = [
+    { id: day(-10), hrZoneMinutes: { light: 100, moderate: 40, vigorous: 20, peak: 5 }, activeCalories: 650 },
+    { id: day(-24), hrZoneMinutes: { light: 10, moderate: 15, vigorous: 0, peak: 0 }, activeCalories: 220 },
+    { id: day(-27), hrZoneMinutes: { light: 10, moderate: 99, vigorous: 0, peak: 0 }, activeCalories: 210 },
+    { id: day(-28), activeCalories: 999 }
+  ];
+  const t = buildTraining({ ...input, health: { wellness: [...older, ...google] } });
+  assert.equal(t.zones.weeks.length, 4);
+  assert.deepEqual(t.zones.weeks.map(w => w.start), ["2026-09-14", "2026-09-21", "2026-09-28", "2026-10-05"]);
+  assert.deepEqual(t.zones.weeks[3], { start: "2026-10-05", week: 41, light: 180, moderate: 65, vigorous: 15, peak: 2 });
+  assert.deepEqual(t.zones.weeks[2], { start: "2026-09-28", week: 40, light: 100, moderate: 40, vigorous: 20, peak: 5 });
+  assert.equal(t.zones.weeks[0].moderate, 15, "day -24 is Monday of the first week, day -27 is before it");
+  assert.equal(t.zones.light, 300, "the 4-week totals stay for older apps");
+  assert.equal(t.activeCalories.days.length, 7);
+  assert.deepEqual(t.activeCalories.days[0], { date: day(-27), value: 210 });
+  assert.deepEqual(t.activeCalories.days.at(-1), { date: DATE, value: 180 });
+  assert.equal(t.activeCalories.week.length, 4, "the week stays 7 days");
+  assert.equal(t.activeCalories.usual, 400);
+});
+
 test("Form zones follow Intervals.icu", () => {
   assert.equal(formZone(30).key, "transition");
   assert.equal(formZone(10).key, "fresh");

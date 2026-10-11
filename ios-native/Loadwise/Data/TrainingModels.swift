@@ -114,6 +114,27 @@ struct TrainingSnapshot: Decodable, Equatable {
         let vigorous: Double
         let peak: Double
         let minutes: Double
+        /// The same per week, Monday to Sunday, the current week last (older
+        /// saved answers lack it).
+        let weeks: [ZoneWeek]?
+    }
+
+    /// One week's minutes in the heart-rate zones.
+    struct ZoneWeek: Decodable, Equatable, Identifiable {
+        let start: String
+        let week: Int?
+        let light: Double
+        let moderate: Double
+        let vigorous: Double
+        let peak: Double
+        var id: String { start }
+
+        /// WHO recommends 150 minutes of moderate activity a week, or 75 of
+        /// vigorous: a vigorous (and peak) minute counts as two.
+        static let whoTarget: Double = 150
+
+        /// The minutes the WHO recommendation counts: vigorous and peak twice.
+        var counted: Double { moderate + 2 * (vigorous + peak) }
     }
 
     struct VO2max: Decodable, Equatable {
@@ -126,6 +147,8 @@ struct TrainingSnapshot: Decodable, Equatable {
         let today: Double?
         let usual: Double?
         let week: [TodaySnapshot.Point]
+        /// The last 28 days for the detail (older saved answers lack it).
+        let days: [TodaySnapshot.Point]?
     }
 
     struct ThisWeek: Decodable, Equatable {
