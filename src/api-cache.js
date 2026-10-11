@@ -19,7 +19,8 @@ export async function bumpCacheVersion(db) {
 
 export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
   if (!store || env.DB?.userId == null) return compute();
-  const url = "https://cache.internal/" + env.DB.userId + "/" + (await cacheVersion(env.DB)) + "/" + encodeURIComponent(key);
+  const scope = encodeURIComponent((env.ENVIRONMENT || 'production') + ':' + (env.USER_DATA_SHARD || 'legacy'));
+  const url = "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (await cacheVersion(env.DB)) + "/" + encodeURIComponent(key);
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   const value = await compute();

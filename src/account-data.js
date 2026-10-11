@@ -93,13 +93,23 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
     console.error("Account data deletion continues in the cron", error.message);
     return { status: "ok", google, deleted: {}, pending: true };
   }
-  if (purge.done) await env.DB.prepare("DELETE FROM account_deletions WHERE user_id = ?").bind(env.USER_ID).run();
+  if (purge.done) {
+    await completeDeletion(env.DB, env.USER_ID, env.USER_DATA_ROUTING === 'true');
+  }
   return { status: "ok", google, deleted: purge.deleted, pending: !purge.done };
+}
+
+async function completeDeletion(db, userId, routed) {
+  const statements = [db.prepare('DELETE FROM account_deletions WHERE user_id=?').bind(userId)];
+  if (routed) statements.push(db.prepare('DELETE FROM user_data_routes WHERE user_id=?').bind(userId));
+  // Keep the retry marker and its data location together until both can be
+  // removed atomically on the central database.
+  await db.batch(statements);
 }
 
 // Every minute: removes the rest of the data of one deleted account. An entry
 // whose account still exists is dropped untouched (ids are never reused).
-export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS, maxChunks = MAX_CHUNKS } = {}) {
+export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS, maxChunks = MAX_CHUNKS, databaseForUser = null } = {}) {
   let next;
   try {
     next = await db.prepare("SELECT user_id FROM account_deletions ORDER BY requested_at, user_id LIMIT 1").first();
@@ -113,8 +123,11 @@ export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, ch
     await db.prepare("DELETE FROM account_deletions WHERE user_id = ?").bind(userId).run();
     return { userId, done: false, skipped: "account exists" };
   }
-  const { done, deleted } = await purgeUserData(db, userId, { deadline: Date.now() + budgetMs, chunkRows, maxChunks });
-  if (done) await db.prepare("DELETE FROM account_deletions WHERE user_id = ?").bind(userId).run();
+  const data = databaseForUser ? await databaseForUser(userId) : db;
+  const { done, deleted } = await purgeUserData(data, userId, { deadline: Date.now() + budgetMs, chunkRows, maxChunks });
+  if (done) {
+    await completeDeletion(db, userId, Boolean(databaseForUser));
+  }
   return { userId, done, deleted: Object.values(deleted).reduce((sum, n) => sum + n, 0) };
 }
 

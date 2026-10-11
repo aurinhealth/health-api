@@ -149,7 +149,7 @@ test("the cron never touches the data of an account that still exists", async ()
 
 test("the every-minute cron finishes deleted accounts", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /if \(controller\.cron === "\* \* \* \* \*"\) await finishAccountDeletions\(env\.DB\)/);
+  assert.match(entry, /if \(controller\.cron === "\* \* \* \* \*"\) await finishAccountDeletions\(env\.DB,/);
 });
 
 test("accounts nobody signed in to for two years are picked for deletion, never the owner", async () => {

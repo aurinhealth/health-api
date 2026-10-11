@@ -1,4 +1,5 @@
 .wrangler/
+wrangler.runtime.jsonc
 node_modules/
 .dev.vars
 .qa-tools/
