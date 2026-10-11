@@ -110,3 +110,36 @@ test("the plan's quality count goes to the plan's sport first", () => {
   // Readiness still caps it.
   assert.equal(planWeekRoles(days, { quality: 2, readiness: "red" }).flatMap(d => d.items).filter(x => x.role === "quality").length, 0);
 });
+
+test("the gym plan: its phase on the first gym days of the week, a day apart", async () => {
+  const { gymPhaseFor } = await import("../src/training-plans.js");
+  const plan = { templateId: "gym-cycling", startDate: monday };
+  const gymDays = [["gym"], ["gym"], [], ["ride", "gym"], [], ["gym"], []];
+  assert.equal(gymPhaseFor(plan, "2026-10-12", gymDays).phaseName, "Základ");
+  assert.equal(gymPhaseFor(plan, "2026-10-13", gymDays), null, "not two days in a row");
+  assert.ok(gymPhaseFor(plan, "2026-10-15", gymDays));
+  assert.equal(gymPhaseFor(plan, "2026-10-17", gymDays), null, "two sessions a week");
+  // The transition week has one session; the strength phases few heavy repetitions.
+  assert.equal(gymPhaseFor(plan, week(11), gymDays).sets, 2);
+  assert.equal(gymPhaseFor(plan, shiftDays(week(11), 3), gymDays), null);
+  assert.equal(gymPhaseFor(plan, week(15), gymDays).reps, "3–5");
+  assert.equal(getTemplate("gym-cycling").weeks.length, 18);
+});
+const shiftDays = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+
+test("the strength generator follows the plan's phase: its exercises, sets and repetitions", async () => {
+  const { generateStrengthPlan, EXERCISES } = await import("../src/strength-generator.js");
+  const { gymPhaseFor } = await import("../src/training-plans.js");
+  const phase = gymPhaseFor({ templateId: "gym-cycling", startDate: monday }, week(15), [["gym"], [], [], ["gym"], [], [], []]);
+  const context = { date: week(15), profile: { sex: "male" }, cycling: { recentActivities: [], plannedWorkouts: [], recentRideTss: 200 }, strength: { recentCompletedSets: [], plannedSessions: [] } };
+  const plan = generateStrengthPlan(context, { planPhase: phase, durationMinutes: 75 });
+  const work = plan.rows.filter(r => r[0] === "WORK");
+  // The first slot's first alternative the default gym has.
+  assert.ok(work.some(r => ["Trap bar deadlift", "Barbell Romanian deadlift", "DB Romanian deadlift"].includes(r[1])));
+  for (const r of work) if (!["core", "anti_rotation", "trunk_flexion"].includes(EXERCISES[r[1]].pattern)) assert.equal(r[4], "3–5", r[1]);
+  assert.ok(Math.max(...[...new Set(work.map(r => r[1]))].map(ex => work.filter(r => r[1] === ex).length)) <= 3);
+  assert.match(plan.planName, /Síla 2/);
+  assert.match(work[0][9], /RPE 7–9/);
+  // A focus the athlete chose wins over the plan.
+  assert.doesNotMatch(generateStrengthPlan(context, { planPhase: phase, focusMuscles: ["chest"], durationMinutes: 60 }).planName, /Síla/);
+});

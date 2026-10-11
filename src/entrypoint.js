@@ -1077,7 +1077,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(request.method==='POST'){
         if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
         const body=await request.json().catch(()=>({}));
-        if(body.action==='stop')await stopPlan(env.DB);
+        if(body.action==='stop')await stopPlan(env.DB,{gym:body.sport==='gym'});
         else if(body.action==='start'){
           const template=getTemplate(String(body.templateId||''));
           if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
@@ -1091,8 +1091,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         else throw new Error(L('Neznámá akce.', 'Unknown action.'));
       }
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
-      const active=await activePlan(env.DB,today);
-      return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:active?planSummary(active,today):null,...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
+      const [active,gym]=await Promise.all([activePlan(env.DB,today),activePlan(env.DB,today,{gym:true})]);
+      return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:active?planSummary(active,today):null,activeGym:gym?planSummary(gym,today):null,...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   if(url.pathname==='/app/api/threshold-check'){
@@ -1465,7 +1465,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         todayPlace(env,ctx,date),trainingGymPlans(env,date,date).catch(()=>({})),getCheckin(env.DB,date).catch(()=>null)
       ]);
       // The active training plan in one line (training-plans.js).
-      const active=await activePlan(env.DB,localToday()).catch(()=>null),summary=active?planSummary(active,date):null;
+      const active=await activePlan(env.DB,localToday()).catch(()=>null)??await activePlan(env.DB,localToday(),{gym:true}).catch(()=>null),summary=active?planSummary(active,date):null;
       const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate}:null;
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));

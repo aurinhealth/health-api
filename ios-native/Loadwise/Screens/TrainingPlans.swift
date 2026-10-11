@@ -53,7 +53,11 @@ struct TrainingPlans: Decodable, Equatable {
 
     let templates: [Template]
     let active: Active?
+    /// The gym plan runs beside a ride or run plan.
+    let activeGym: Active?
     let started: Started?
+
+    func active(for sport: String) -> Active? { sport == "gym" ? activeGym : active }
 }
 
 extension APIClient {
@@ -76,7 +80,11 @@ struct TrainingPlanCard: View {
         Group {
             if let plans {
                 Button { showing = true } label: {
-                    if let active = plans.active { ActivePlanSummary(active: active) } else { choose }
+                    VStack(spacing: 12) {
+                        if let active = plans.active { ActivePlanSummary(active: active) }
+                        if let gym = plans.activeGym { ActivePlanSummary(active: gym) }
+                        if plans.active == nil && plans.activeGym == nil { choose }
+                    }
                 }
                 .buttonStyle(.plain)
             }
@@ -160,7 +168,7 @@ struct TrainingPlansSheet: View {
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Tréninkové plány") {
-                if let active = plans.active {
+                ForEach([plans.active, plans.activeGym].compactMap { $0 }, id: \.templateId) { active in
                     NavigationLink { PlanDetailView(template: active.template, active: active) } label: {
                         ActivePlanSummary(active: active)
                     }
@@ -169,13 +177,14 @@ struct TrainingPlansSheet: View {
                 Picker("Sport", selection: $sport) {
                     Text("Běh").tag("run")
                     Text("Kolo").tag("ride")
+                    Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)
                 SettingsGroup {
                     let list = plans.templates.filter { $0.sport == sport }
                     ForEach(Array(list.enumerated()), id: \.element.id) { index, template in
                         if index > 0 { SettingsDivider() }
-                        NavigationLink { PlanDetailView(template: template, active: plans.active) } label: {
+                        NavigationLink { PlanDetailView(template: template, active: plans.active(for: template.sport == "gym" ? "gym" : "endurance")) } label: {
                             SettingsRow(title: template.name, value: "\(template.weeksCount) " + Fmt.plural(template.weeksCount, "týden", "týdny", "týdnů"))
                         }
                         .buttonStyle(.plain)
@@ -234,7 +243,7 @@ struct PlanDetailView: View {
             raceDate = Calendar.current.date(byAdding: .day, value: template.weeksCount * 7, to: Date()) ?? Date()
         }
         .confirmationDialog("Ukončit plán?", isPresented: $confirmStop, titleVisibility: .visible) {
-            Button("Ukončit plán", role: .destructive) { Task { await act(["action": .string("stop")]) } }
+            Button("Ukončit plán", role: .destructive) { Task { await act(["action": .string("stop"), "sport": .string(template.sport)]) } }
         }
     }
 

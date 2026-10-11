@@ -140,6 +140,26 @@ const RIDE_BASE = [
   W("recovery", .7, [q("tempo", 3)])
 ];
 
+// Strength for cyclists: two sessions a week through seven phases, from
+// stability and single-leg control with light loads to heavy, low-rep
+// strength. Load by RPE (how many repetitions are left in reserve), the
+// sets waving 2 → 3 → 2 within a phase. Each exercise slot lists
+// alternatives; the athlete's equipment picks the first that fits.
+const STABILITY = [["Goblet squat", "Bodyweight squat"], ["DB step-up", "Box step-up"], ["DB single-leg Romanian deadlift", "Glute bridge"], ["Glute bridge", "Hip thrust"], ["One-arm DB row", "Single-arm cable row", "TRX row"], ["Dead bug"], ["Pallof press"]];
+const BUILD = [["DB Bulgarian split squat", "Smith machine split squat", "DB reverse lunge"], ["Goblet squat", "Smith machine squat", "Pivot leg press"], ["DB Romanian deadlift", "Barbell Romanian deadlift"], ["Hip thrust", "Barbell hip thrust", "Smith machine hip thrust", "Glute bridge"], ["Single-arm cable row", "One-arm DB row", "Chest-supported row"], ["Lat pulldown", "Assisted pull-up", "Pull-up"], ["Pallof press", "Cable woodchop"]];
+const STRENGTH = [["Trap bar deadlift", "Barbell Romanian deadlift", "DB Romanian deadlift"], ["Barbell back squat", "Smith machine squat", "Pivot leg press", "Goblet squat"], ["DB Bulgarian split squat", "Smith machine split squat", "DB reverse lunge"], ["DB single-leg Romanian deadlift"], ["Single-arm cable row", "One-arm DB row"], ["Lat pulldown", "Pull-up", "Assisted pull-up"], ["Hanging leg raise", "Dead bug"], ["Pallof press"]];
+const G = (phase, name, sets, reps, rpe, exercises, sessions = 2) => ({ phase, gym: { name, sets, reps, rpe, exercises, sessions }, load: sessions < 2 ? .6 : 1, q: [] });
+const phaseWeeks = (phase, name, reps, rpe, exercises, sets) => sets.map(n => G(phase, name, n, reps, rpe, exercises));
+const GYM_CYCLING = () => [
+  ...phaseWeeks("base", L("Základ", "Foundation"), "12–15", "3–5", STABILITY, [2, 2]),
+  ...phaseWeeks("base", L("Stabilita", "Stability"), "10–12", "4–6", STABILITY, [2, 3, 2]),
+  ...phaseWeeks("build", L("Rozvoj 1", "Build 1"), "8–10", "5–7", BUILD, [2, 3, 2]),
+  ...phaseWeeks("build", L("Rozvoj 2", "Build 2"), "6–8", "6–7", BUILD, [3, 3, 2]),
+  G("recovery", L("Přechod", "Transition"), 2, "8–10", "5–6", BUILD, 1),
+  ...phaseWeeks("peak", L("Síla 1", "Strength 1"), "4–6", "7–8", STRENGTH, [2, 3, 3]),
+  ...phaseWeeks("peak", L("Síla 2", "Strength 2"), "3–5", "7–9", STRENGTH, [3, 3, 2])
+];
+
 // days: [fewest, most] training days of the sport a week the plan is made for.
 const TEMPLATES = () => [
   { id: "run-5k-start", sport: "run", weeks: RUN_START, days: [3, 3], level: "beginner", race: { km: 5 },
@@ -160,6 +180,9 @@ const TEMPLATES = () => [
   { id: "run-maintain", sport: "run", weeks: RUN_MAINTAIN, days: [4, 5], level: "intermediate",
     name: L("Mezi závody", "Between races"), goal: L("Udržet a posunout formu", "Keep and lift your form"),
     description: L("Tři čtyřtýdenní bloky: fartlek, rychlost, práh a dlouhý běh. Každý blok o stupeň těžší, čtvrtý týden lehčí.", "Three four-week blocks: fartlek, speed, threshold and a long run. Each block a step harder, the fourth week lighter.") },
+  { id: "gym-cycling", sport: "gym", weeks: GYM_CYCLING(), days: [2, 4], level: "intermediate",
+    name: L("Posilovna ke kolu", "Strength for cyclists"), goal: L("Silnější nohy a stabilní trup na kolo", "Stronger legs and a stable trunk for the bike"),
+    description: L("18 týdnů, dva tréninky týdně: od stability a práce na jedné noze k těžké síle s málo opakováními. Zátěž podle RPE, nohy šetří den před náročnou jízdou.", "18 weeks, two sessions a week: from stability and single-leg work to heavy strength with few repetitions. Load by RPE; the legs are spared the day before a hard ride.") },
   { id: "ride-ftp", sport: "ride", weeks: RIDE_FTP, days: [3, 6], level: "intermediate", tests: true,
     name: L("Kolo: FTP", "Cycling: FTP"), goal: L("Vyšší FTP za 8 týdnů", "A higher FTP in 8 weeks"),
     description: L("Začíná a končí testem FTP. Sweet spot a práh s prodlužováním času na prahu, čtvrtý týden lehčí.", "Starts and ends with an FTP test. Sweet spot and threshold with ever longer time at threshold, the fourth week lighter.") },
@@ -252,7 +275,7 @@ export { phaseLabel };
 // getCapabilities): a beginner's key sessions are easier, see levelShift.
 export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasPower = true, shifts = {} } = {}) {
   const pw = planWeek(plan, weekStart);
-  if (!pw || !targets?.items) return targets;
+  if (!pw || !targets?.items || pw.template.sport === "gym") return targets;
   const { template, spec } = pw, sport = template.sport;
   const race = template.race && plan.raceDate && plan.raceDate >= weekStart && plan.raceDate <= shift(weekStart, 6) ? plan.raceDate : null;
   const raceKm = Number(plan.raceKm) || template.race?.km;
@@ -298,6 +321,24 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
 // recovery week the data calls stays one; a ramp above 8 a week only holds).
 export const planLoad = pw => pw ? { load: pw.spec.load, light: ["recovery", "taper", "race"].includes(pw.spec.phase) || pw.spec.load < .8 } : null;
 
+// The gym plan's session for a date: the week's phase on the first gym days
+// of the week, at least a day apart (no strength on consecutive days), as many
+// as the phase has sessions. Other gym days are the usual adaptive workouts.
+// `days` is the week plan's days (0 = Monday).
+export function gymPhaseFor(plan, date, days = []) {
+  const pw = planWeek(plan, date);
+  if (!pw || pw.template.sport !== "gym") return null;
+  const g = pw.spec.gym, picked = [];
+  for (let i = 0; i < 7 && picked.length < g.sessions; i++) if ((days[i] || []).includes("gym") && picked.every(p => i - p >= 2)) picked.push(i);
+  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
+  if (!picked.includes(weekday)) return null;
+  const head = L("Posilovna ke kolu", "Strength for cyclists") + " · " + g.name;
+  return {
+    name: head + L(" · týden ", " · week ") + pw.week + "/" + pw.weeks, phaseName: g.name, sets: g.sets, reps: g.reps, rpe: g.rpe, exercises: g.exercises,
+    rationale: L(`Plán ${head}, týden ${pw.week}/${pw.weeks}: ${g.sets} série po ${g.reps} opakováních, RPE ${g.rpe} (tolik opakování nech v rezervě, kolik chybí do 10).`, `Plan ${head}, week ${pw.week}/${pw.weeks}: ${g.sets} sets of ${g.reps} reps, RPE ${g.rpe} (keep as many reps in reserve as are missing to 10).`)
+  };
+}
+
 // ---- starting a plan -----------------------------------------------------------
 // A race plan ends on race day: it starts the Monday (weeks − 1) before the
 // race week; a race too close starts the plan later (shorter), down to 60 %
@@ -340,10 +381,11 @@ async function ensure(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS training_plans (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, template_id TEXT NOT NULL, sport TEXT NOT NULL, start_date TEXT NOT NULL, race_date TEXT, race_km REAL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
 }
 const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, startDate: r.start_date, raceDate: r.race_date || null, raceKm: r.race_km ?? null, status: r.status } : null;
-// The active plan, or null; a plan past its last week is finished.
-export async function activePlan(db, today = null) {
+// The active plan, or null; a plan past its last week is finished. An
+// endurance plan (ride or run) and a gym plan can run side by side.
+export async function activePlan(db, today = null, { gym = false } = {}) {
   await ensure(db);
-  const plan = fromRow(await db.prepare("SELECT * FROM training_plans WHERE user_id=? AND status='active' ORDER BY id DESC LIMIT 1").bind(db.userId).first());
+  const plan = fromRow(await db.prepare(`SELECT * FROM training_plans WHERE user_id=? AND status='active' AND sport${gym ? "=" : "<>"}'gym' ORDER BY id DESC LIMIT 1`).bind(db.userId).first());
   const template = plan && getTemplate(plan.templateId);
   if (plan && today && (!template || today >= shift(plan.startDate, template.weeks.length * 7))) {
     await db.prepare("UPDATE training_plans SET status='done',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(db.userId, plan.id).run();
@@ -355,14 +397,14 @@ export async function startPlan(db, { templateId, startDate, raceDate = null, ra
   const template = getTemplate(templateId);
   if (!template) throw new Error(L("Neznámý plán.", "Unknown plan."));
   await ensure(db);
-  await db.prepare("UPDATE training_plans SET status='stopped',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active'").bind(db.userId).run();
+  await stopPlan(db, { gym: template.sport === "gym" });
   const km = template.race ? (template.race.options?.includes(Number(raceKm)) ? Number(raceKm) : template.race.km) : null;
   await db.prepare("INSERT INTO training_plans(user_id,template_id,sport,start_date,race_date,race_km,status) VALUES(?,?,?,?,?,?,'active')").bind(db.userId, template.id, template.sport, startDate, raceDate, km).run();
-  return activePlan(db);
+  return activePlan(db, null, { gym: template.sport === "gym" });
 }
-export async function stopPlan(db) {
+export async function stopPlan(db, { gym = false } = {}) {
   await ensure(db);
-  await db.prepare("UPDATE training_plans SET status='stopped',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active'").bind(db.userId).run();
+  await db.prepare(`UPDATE training_plans SET status='stopped',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active' AND sport${gym ? "=" : "<>"}'gym'`).bind(db.userId).run();
 }
 
 // ---- what the app shows ----------------------------------------------------------
@@ -371,12 +413,12 @@ export function templateSummary(t) {
   return {
     id: t.id, sport: t.sport, name: t.name, goal: t.goal, description: t.description, level: t.level, weeksCount: t.weeks.length, days: t.days,
     race: t.race ? { km: t.race.km, options: t.race.options || null } : null, tests: Boolean(t.tests),
-    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: phaseLabel(w.phase), load: w.load, keys: w.q.map(k => keyLabel(t.sport, k)), longMinutes: w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race) }))
+    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase), load: w.load, keys: w.gym ? [L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`), `${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : w.q.map(k => keyLabel(t.sport, k)), longMinutes: w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race) }))
   };
 }
 export function planSummary(plan, today) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return null;
   const pw = planWeek(plan, today), started = today >= plan.startDate;
-  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? phaseLabel(pw.spec.phase) : null, started, template: templateSummary(template) };
+  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase) : null, started, template: templateSummary(template) };
 }
