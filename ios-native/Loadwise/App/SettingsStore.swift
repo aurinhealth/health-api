@@ -91,6 +91,9 @@ final class SettingsStore {
 
     func syncNow() async {
         guard !demo else { return }
+        await AppleHealth.shared.sync(api: api, force: true)
+        // Apple Health alone has nothing for the server to fetch.
+        guard connections.contains(where: { $0.connected == true && $0.id != "apple" }) || connections.isEmpty else { return }
         do {
             try await api.startSync()
             sync = try? await api.syncStatus()

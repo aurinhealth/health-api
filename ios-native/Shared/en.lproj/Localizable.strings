@@ -1441,3 +1441,23 @@
 "Obnovit" = "Restore";
 "Trénink se na tento den vrátí do plánu." = "The workout goes back into the plan for this day.";
 "Plán i zapsané série zůstanou uložené." = "The plan and the logged sets stay saved.";
+
+/* Apple Health (App/AppleHealth.swift, Screens/AppleHealthViews.swift) */
+"Dech a kyslík" = "Breathing and oxygen";
+"noci a fáze spánku" = "nights and sleep stages";
+"tréninky z hodinek a aplikací, tep během tréninku" = "workouts from the watch and apps, heart rate during workouts";
+"tep, klidový tep, HRV, VO₂max" = "heart rate, resting heart rate, HRV, VO₂max";
+"kroky a aktivní energie" = "steps and active energy";
+"dechová frekvence a okysličení krve" = "respiratory rate and blood oxygen";
+"hmotnost a tělesný tuk" = "weight and body fat";
+"Apple Health na tomhle zařízení není." = "Apple Health isn't available on this device.";
+"Vyber aspoň jednu oblast." = "Choose at least one area.";
+"Co může Loadwise číst" = "What Loadwise may read";
+"Načítám data…" = "Loading data…";
+"Povolit přístup" = "Allow access";
+"Přístup k jednotlivým údajům můžeš kdykoli změnit i v Nastavení iPhonu → Zdraví → Přístup k datům." = "You can change access to each type of data any time in iPhone Settings → Health → Data Access.";
+"Číst Apple Health v tomhle iPhonu" = "Read Apple Health on this iPhone";
+"Načítám z Apple Health…" = "Loading from Apple Health…";
+"Načíst z Apple Health teď" = "Load from Apple Health now";
+"spánek, tréninky, tep, HRV, kroky a váha" = "sleep, workouts, heart rate, HRV, steps and weight";
+"Apple Health je připojené." = "Apple Health is connected.";

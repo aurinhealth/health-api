@@ -92,7 +92,7 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import { writeStrengthPlanToIntervals } from './intervals-strength.js';
 import { estimateFtp, estimateThresholdPace, FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, PACE_ZONE_MODELS, HR_ZONE_MODELS } from "./training-zones.js";
 import {updateFoodEntry,copyFoodEntry,deleteFoodEntry} from './food-entry-management.js';
-import legacyHealthApi, { googleToken } from "./index.js";
+import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { handleAppleLogin, appleConfigured, appleIdentity, unlinkAppleIdentity } from "./apple-login.js";
@@ -115,6 +115,7 @@ import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
+import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth } from "./apple-health.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
@@ -435,13 +436,13 @@ async function computeWeekTargets(env,ctx,start,prefs){
   const wellness=(fitness.wellness||[]).filter(r=>r.id<=today),ctl=[...wellness].reverse().find(r=>Number(r.ctl)>0)?.ctl;
   const loadOn=date=>{const r=wellness.find(x=>x.id===date);return Number(r?.ctlLoad??r?.atlLoad)||0;};
   let lastWeekLoad=0;for(let i=-7;i<0;i++)lastWeekLoad+=loadOn(shiftDate(start,i));
-  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,1)).all().catch(()=>({results:[]}))).results||[];
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,1)).all().catch(()=>({results:[]}))).results||[];
   const gymDays=new Set(((await env.DB.prepare("SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<?").bind(env.USER_ID,start,end).all().catch(()=>({results:[]}))).results||[]).map(r=>r.workout_date));
   const days=Array.from({length:7},(_,i)=>({date:shiftDate(start,i),done:loadOn(shiftDate(start,i)),planned:0,sports:[]}));
   // Running this week so far: done runs, and planned ones still ahead.
   let runCommitted=0;
   for(const r of rows){let p={};try{p=JSON.parse(r.payload_json||'{}');}catch{}const d=days.find(x=>x.date===localDate(r.start_time));if(!d)continue;
-    const sport=sportOfType(r.source_family==='google-wearables'?{WEIGHTLIFTING:'weight',WEIGHTS:'weight',STRENGTH_TRAINING:'weight',RUNNING:'run',BIKING:'ride'}[p.exercise?.exerciseType]:p.type);
+    const sport=sportOfType((r.source_family==='google-wearables'||r.source_family==='apple-health')?{WEIGHTLIFTING:'weight',WEIGHTS:'weight',STRENGTH_TRAINING:'weight',RUNNING:'run',BIKING:'ride'}[p.exercise?.exerciseType]:p.type);
     if(r.data_type==='planned-workout'&&!/nutrition/i.test(String(p.name||'')+' '+String(p.category||''))){d.planned+=Number(p.icu_training_load)||0;}
     if(sport==='run')runCommitted+=r.data_type==='planned-workout'?(d.date>today?(Number(p.moving_time)||0)/60:0):activityFromRow(r)?.minutes||0;
     if(sport&&!/nutrition/i.test(String(p.name||'')))d.sports.push(sport);}
@@ -1176,6 +1177,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json().catch(()=>({}));
     if (request.method === 'DELETE') {
+      if(body.provider==='apple'){await disconnectAppleHealth(env.DB,env.USER_ID);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
@@ -1286,7 +1288,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       let end=valid(url.searchParams.get('end'))?url.searchParams.get('end'):shiftDate(today,14);
       if(end<start||end>shiftDate(start,92))end=shiftDate(start,92);
       const result=await cached(env,ctx,'training-calendar:'+start+':'+end+':'+today,async()=>{
-        const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
+        const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
         const gym=await trainingGymPlans(env,today>start?today:start,end).catch(()=>({}));
         return buildCalendar({start,end,today,gym,
           activities:rows.filter(r=>r.data_type==='activity'),
@@ -1397,6 +1399,27 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!(env.CONNECTED_PROVIDERS||[]).includes('intervals'))return Response.json({message:L('Nejdřív připoj Intervals.icu.', 'Connect Intervals.icu first.')},{status:409});
     const run=await initialImport(env,ctx,{provider:'intervals',force:true});
     return Response.json(run,{status:202,headers:{'Cache-Control':'no-store'}});
+  }
+
+  // Apple Health from the iPhone app (apple-health.js): the phone reads
+  // HealthKit and sends sums, nights and workouts; DELETE disconnects.
+  if(url.pathname==='/app/api/health/apple'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      if(request.method==='GET')return Response.json({status:'ok',...await appleHealthStatus(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
+      if(request.method==='POST'){
+        const body=await request.json().catch(()=>null);
+        if(!body||typeof body!=='object')return Response.json({message:L('Neplatná data.', 'Invalid data.')},{status:400});
+        const result=await saveAppleHealth(env.DB,env.USER_ID,body);
+        if(result.code)return Response.json({message:result.message},{status:result.code});
+        // Apple Watch workouts pair with Intervals.icu activities like Google's do.
+        const from=Date.parse(body.windows?.exercise?.from||'');
+        if(result.saved&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
+        return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+      }
+      if(request.method==='DELETE')return Response.json(await disconnectAppleHealth(env.DB,env.USER_ID),{headers:{'Cache-Control':'no-store'}});
+      return Response.json({message:'Method not allowed'},{status:405});
+    }catch(error){console.error('Apple Health',error);return Response.json({message:error.message},{status:500});}
   }
 
   if(url.pathname==='/app/api/sync'&&['POST','GET'].includes(request.method)){

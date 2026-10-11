@@ -261,11 +261,11 @@ export async function loadFitnessInsights(db, today) {
   const since = "2000-01-01";
   const [setRows, activityRows] = await Promise.all([
     db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' ORDER BY workout_date").bind(db.userId).all().catch(() => ({ results: [] })),
-    db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family='intervals' AND data_type='activity') OR (source_family='google-wearables' AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
+    db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family='intervals' AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
   ]);
   const activities = (activityRows.results || []).map(r => {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch {}
-    if (r.source_family === "google-wearables") {
+    if ((r.source_family === "google-wearables" || r.source_family === "apple-health")) {
       const ex = p.exercise || {}, type = { WALKING: "Walk", RUNNING: "Run", BIKING: "Ride", HIKING: "Hike", WEIGHTLIFTING: "WeightTraining", WEIGHTS: "WeightTraining", STRENGTH_TRAINING: "WeightTraining" }[ex.exerciseType] || ex.exerciseType;
       const secs = Number(String(ex.activeDuration || "").replace(/s$/, "")) || null;
       return { source: "google", type, date: localDate(r.start_time), name: ex.displayName || type, moving_time: secs, distance: n(ex.metricsSummary?.distanceMillimeters) / 1000 || null, row: r };

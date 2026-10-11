@@ -69,7 +69,7 @@ export async function observedMaxHeartRate(db, userId, now = Date.now()) {
 export async function observedHeartRates(db, userId, now = Date.now()) {
   const since = new Date(now - 183 * DAY_MS).toISOString().slice(0, 10);
   const rows = (await db.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id = ?
-    AND ((source_family = 'intervals' AND data_type = 'activity') OR (source_family = 'google-wearables' AND data_type = 'exercise'))
+    AND ((source_family = 'intervals' AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
     AND (record_role IS NULL OR record_role != 'duplicate') AND start_time >= ?`).bind(userId, since).all()).results || [];
   const peaks = rows.map(r => { try { return activityMaxHeartRate(JSON.parse(r.payload_json || "{}")); } catch { return null; } }).filter(v => v != null).sort((a, b) => b - a);
   for (let i = 0; i < peaks.length; i++) if (i === peaks.length - 1 || peaks[i] - peaks[i + 1] <= 8) return { max: peaks[i], count: peaks.length };

@@ -371,6 +371,7 @@ struct SourcesSettingsView: View {
     @State private var actions = SourceActions()
     @State private var syncing = false
     @State private var adding = false
+    @State private var connectingApple = false
     @State private var flow = ConnectFlowState()
 
     private var connected: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected == true } }
@@ -440,13 +441,17 @@ struct SourcesSettingsView: View {
             }
         }
         .sheet(isPresented: $adding) {
-            AddIntegrationSheet(available: available) { provider in
+            AddIntegrationSheet(available: available, appleConnected: connected.contains { $0.id == "apple" }) { provider in
                 adding = false
                 // The next sheet (Google's disclosure, the browser) once this one has closed.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    if provider == "apple" { connectingApple = true; return }
                     flow.start(provider, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
                 }
             }
+        }
+        .sheet(isPresented: $connectingApple) {
+            AppleHealthConnectSheet { await store.load(); actions.message = L10n.tr("Apple Health je připojené.") }
         }
         .connectFlow($flow, actions: actions, store: store)
     }
@@ -593,6 +598,8 @@ struct IntegrationDetailView: View {
                     .buttonStyle(.plain)
                     .disabled(actions.working != nil || store.demo)
                 }
+            } else if current.id == "apple" {
+                AppleHealthSettings(store: store)
             } else if current.id == "intervals" {
                 SettingsGroup(title: "Přístup", footer: "Klíč najdeš v Intervals.icu v Settings → Developer Settings.") {
                     Button { flow.start("intervals", actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true }) } label: {
@@ -628,6 +635,7 @@ struct IntegrationDetailView: View {
 struct AddIntegrationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let available: [ConnectionsResponse.Provider]
+    var appleConnected = false
     let connect: (String) -> Void
 
     var body: some View {
@@ -640,17 +648,20 @@ struct AddIntegrationSheet: View {
                         row(provider, subtitle: L10n.tr("spánek, tep, HRV, kroky, váha a jídlo"))
                         SettingsDivider()
                     }
-                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
-                                subtitle: L10n.tr("přijde s placeným Apple Developer Programem"), value: L10n.tr("brzy"), chevron: false)
-                        .opacity(0.6)
-                }
-                SettingsGroup(title: "Tréninky") {
-                    ForEach(Array(training.enumerated()), id: \.element.id) { index, provider in
-                        if index > 0 { SettingsDivider() }
-                        row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
+                    if appleConnected {
+                        SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
+                                    subtitle: L10n.tr("připojeno"), chevron: false)
+                    } else if AppleHealth.shared.isAvailable {
+                        appleRow
                     }
-                    if training.isEmpty {
-                        SettingsRow(title: "Intervals.icu je už připojené.", chevron: false)
+                }
+                // A connected Intervals.icu is in Zdroje dat already; nothing to add here then.
+                if !training.isEmpty {
+                    SettingsGroup(title: "Tréninky") {
+                        ForEach(Array(training.enumerated()), id: \.element.id) { index, provider in
+                            if index > 0 { SettingsDivider() }
+                            row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
+                        }
                     }
                 }
                 SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Loadwise jejich data dostane odtamtud.") {
@@ -669,6 +680,24 @@ struct AddIntegrationSheet: View {
             }
         }
         .tint(Palette.ink)
+    }
+
+    /// Apple Health is read on the phone, so it is not in the server's list until connected.
+    private var appleRow: some View {
+        HStack(spacing: 12) {
+            IntegrationIcon(id: "apple", size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Apple Health").font(.body).foregroundStyle(Palette.ink)
+                Text("spánek, tréninky, tep, HRV, kroky a váha").font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(L10n.tr("Připojit")) { connect("apple") }
+                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(Palette.ink.opacity(0.07), in: Capsule())
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
     }
 
     private func row(_ provider: ConnectionsResponse.Provider, subtitle: String) -> some View {
@@ -722,6 +751,7 @@ final class SourceActions {
     }
 
     func disconnect(_ provider: String, model: AppModel, store: SettingsStore) async -> Bool {
+        if provider == "apple" { AppleHealth.shared.disconnect() }
         do {
             try await model.api.disconnect(provider: provider)
             message = L10n.tr("Odpojeno.")
