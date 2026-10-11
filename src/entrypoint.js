@@ -20,6 +20,7 @@ import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from
 import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
+import { setManualPair } from './manual-pairs.js';
 import { foodIntake } from './food-portions.js';
 import {productFromLabel} from './food-sources.js';
 import {activityDetail,rideIntervals} from './activity-detail.js';
@@ -792,6 +793,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(url.pathname.endsWith('/environment')){const result=await setPlannedEnvironment(env,body);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  // Pairing a planned session with the activity that fulfilled it by hand
+  // (manual-pairs.js); every view built from the day sees it after the bump.
+  if(url.pathname==='/app/api/training/pair'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const result=await setManualPair(env.DB,env.USER_ID,await request.json().catch(()=>({})));
+    if(result.code)return Response.json({status:'error',message:result.message},{status:result.code});
+    await bumpCacheVersion(env.DB);
+    return Response.json(result,{headers:{'Cache-Control':'no-store'}});
   }
   // "Revize dne": the coach checks one planned day in the context of the week.
   if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){

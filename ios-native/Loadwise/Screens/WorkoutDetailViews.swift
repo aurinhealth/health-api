@@ -20,11 +20,30 @@ struct WeekSessionsList: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(Self.destination(session) == nil)
-                    if GymPlanActions.changeable(session) && !model.demo {
+                    let changeable = GymPlanActions.changeable(session)
+                    let candidates = pairCandidates(session)
+                    if (changeable || !candidates.isEmpty || session.plannedId != nil) && !model.demo {
                         Menu {
-                            Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
+                            if changeable {
+                                Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
+                            }
+                            // When the automatic pairing missed it: the activity that fulfilled this plan.
+                            if !candidates.isEmpty {
+                                Menu {
+                                    ForEach(candidates) { activity in
+                                        Button(activity.title + (activity.time.map { " · " + $0 } ?? "")) {
+                                            Task { await pair(plannedId: session.id, activityId: activity.id, date: session.date) }
+                                        }
+                                    }
+                                } label: { Label("Spárovat s aktivitou", systemImage: "link") }
+                            }
+                            if let plannedId = session.plannedId {
+                                Button { Task { await pair(plannedId: plannedId, activityId: nil, date: session.date) } } label: {
+                                    Label("Zrušit spárování", systemImage: "link.badge.plus")
+                                }
+                            }
                             // A missed session leaves the list in one step.
-                            if session.status == "missed" {
+                            if changeable && session.status == "missed" {
                                 Button(role: .destructive) { cancelling = session } label: { Label("Zrušit trénink", systemImage: "xmark") }
                             }
                         } label: {
@@ -48,6 +67,23 @@ struct WeekSessionsList: View {
             Button("Zrušit trénink", role: .destructive) { Task { await cancel(s) } }
         } message: { s in
             Text(verbatim: s.title + " · " + Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date))
+        }
+    }
+
+    /// The day's done sessions a plan can be paired with by hand.
+    private func pairCandidates(_ s: WeekSession) -> [WeekSession] {
+        guard s.kind == "planned", s.id.hasPrefix("planned:"), s.date <= today else { return [] }
+        return sessions.filter { $0.kind == "activity" && $0.date == s.date }
+    }
+
+    private func pair(plannedId: String, activityId: String?, date: String) async {
+        do {
+            try await model.api.pairActivity(plannedId: plannedId, activityId: activityId, date: date)
+            error = nil
+            await model.refreshTraining()
+            await model.refresh()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

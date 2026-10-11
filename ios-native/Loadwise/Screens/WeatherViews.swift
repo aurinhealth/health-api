@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 // Weather on Today: the forecast for the place of the week plan
 // (GET /app/api/today → weather, src/app-today.js todayWeather) with the
@@ -233,6 +234,55 @@ struct GeoPlace: Decodable, Identifiable, Hashable {
     }
 }
 
+/// "Použít polohu iPhonu": one position from the phone, named by Apple's
+/// reverse geocoding. Asked only when the user taps it.
+@MainActor
+enum DeviceLocation {
+    private static let manager = CLLocationManager()
+
+    enum Failure: LocalizedError {
+        case denied, unavailable
+        var errorDescription: String? {
+            switch self {
+            case .denied: return L10n.tr("Loadwise nemá přístup k poloze. Povol ho v Nastavení iPhonu → Loadwise → Poloha.")
+            case .unavailable: return L10n.tr("Polohu se nepodařilo zjistit. Zkus to znovu venku nebo vyhledej místo.")
+            }
+        }
+    }
+
+    static func place() async throws -> GeoPlace {
+        if manager.authorizationStatus == .notDetermined {
+            manager.requestWhenInUseAuthorization()
+            // The answer comes from the system dialog.
+            for _ in 0..<120 where manager.authorizationStatus == .notDetermined {
+                try await Task.sleep(for: .milliseconds(500))
+            }
+        }
+        let status = manager.authorizationStatus
+        guard status == .authorizedWhenInUse || status == .authorizedAlways else { throw Failure.denied }
+        let found: CLLocation? = try await withThrowingTaskGroup(of: CLLocation?.self) { group in
+            group.addTask {
+                for try await update in CLLocationUpdate.liveUpdates() {
+                    if let location = update.location { return location }
+                }
+                return nil
+            }
+            group.addTask {
+                try await Task.sleep(for: .seconds(15))
+                return nil
+            }
+            let first = try await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+        guard let location = found else { throw Failure.unavailable }
+        let mark = try? await CLGeocoder().reverseGeocodeLocation(location).first
+        return GeoPlace(name: mark?.locality ?? mark?.name ?? L10n.tr("Moje poloha"),
+                        latitude: location.coordinate.latitude, longitude: location.coordinate.longitude,
+                        admin1: mark?.administrativeArea, country: mark?.country)
+    }
+}
+
 /// "Poloha pro počasí": the place whose forecast Today shows and the coach
 /// plans by. Saved into the usual week plan (GET/POST /app/api/week-plan,
 /// prefs.location), every other key of the plan goes back as it came.
@@ -249,6 +299,7 @@ struct WeatherPlaceView: View {
     @State private var saving = false
     @State private var current: String?
     @State private var error: String?
+    @State private var locating = false
 
     var body: some View {
         SettingsPage(title: "Poloha pro počasí") {
@@ -270,6 +321,17 @@ struct WeatherPlaceView: View {
             }
             .padding(.horizontal, 14).frame(height: 46)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            SettingsGroup {
+                Button { Task { await useDevice() } } label: {
+                    HStack {
+                        SettingsRow(icon: SettingsIcon(systemImage: "location.fill", color: Palette.blue), title: "Použít polohu iPhonu", chevron: false)
+                        if locating { ProgressView().padding(.trailing, 16) }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(saving || locating)
+            }
 
             if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
@@ -349,8 +411,19 @@ struct WeatherPlaceView: View {
         }
     }
 
+    private func useDevice() async {
+        locating = true
+        defer { locating = false }
+        do {
+            let place = try await DeviceLocation.place()
+            await save(place, source: "device")
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     /// Saves the place (nil: none) into the usual week plan and reloads Today.
-    private func save(_ place: GeoPlace?) async {
+    private func save(_ place: GeoPlace?, source: String = "search") async {
         guard !model.demo else {
             error = L10n.tr("V ukázce se poloha neukládá.")
             return
@@ -371,7 +444,7 @@ struct WeatherPlaceView: View {
                     "name": .string(place.name),
                     "latitude": .number(place.latitude),
                     "longitude": .number(place.longitude),
-                    "source": .string("search")
+                    "source": .string(source)
                 ])
             } else {
                 prefs["location"] = .null

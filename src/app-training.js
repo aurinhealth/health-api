@@ -92,7 +92,8 @@ export function daySessions(d, date, training = {}, gymDay = null) {
   for (const a of completed) {
     // A Strava stub has neither name nor sport: the plan it was paired with names it.
     const plan = planOf.get(String(a.id ?? ""));
-    sessions.push(sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done"));
+    const session = sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done");
+    sessions.push(plan?.id ? { ...session, plannedId: String(plan.id) } : session);
   }
   for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
   if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null });

@@ -18,6 +18,8 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let activityId: String?
     /// "planned:<id>" for /app/api/planned/move and delete.
     let eventId: String?
+    /// On a done session: the plan it fulfils, for undoing a pairing.
+    var plannedId: String? = nil
 }
 
 // MARK: - Gym (GET/POST /app/api/gym, src/gym-plan-store.js)

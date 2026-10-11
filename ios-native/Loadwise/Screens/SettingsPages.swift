@@ -1094,10 +1094,22 @@ struct LanguageSettingsView: View {
 struct NotificationsSettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Reminders.bedtimeKey) private var bedtime = true
+    @AppStorage(Reminders.bedtimeOffsetKey) private var bedtimeOffset = 30
     @AppStorage(Reminders.workoutKey) private var workout = true
+    @AppStorage(Reminders.workoutTimeKey) private var workoutTime = 16 * 60
     @AppStorage(Reminders.waterKey) private var water = true
+    @AppStorage(Reminders.waterFromKey) private var waterFrom = 10 * 60
+    @AppStorage(Reminders.waterToKey) private var waterTo = 16 * 60
+    @AppStorage(Reminders.waterEveryKey) private var waterEvery = 3 * 60
     @AppStorage(Reminders.foodKey) private var food = true
+    @AppStorage(Reminders.foodTimeKey) private var foodTime = 20 * 60 + 30
+    @AppStorage(Reminders.weightKey) private var weight = false
+    @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
+    @AppStorage(Reminders.weekKey) private var week = false
+    @AppStorage(Reminders.weekTimeKey) private var weekTime = 19 * 60
     @State private var allowed: Bool?
+    /// Bumped by every change, so the reminders are planned again once.
+    @State private var revision = 0
 
     var body: some View {
         SettingsPage(title: "Oznámení") {
@@ -1109,27 +1121,127 @@ struct NotificationsSettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat.") {
-                SettingsToggle(title: "Čas do postele", subtitle: "půl hodiny před doporučeným časem", isOn: $bedtime)
+            SettingsGroup(title: "Spánek a trénink") {
+                SettingsToggle(title: "Čas do postele", isOn: $bedtime)
+                if bedtime {
+                    SettingsDivider()
+                    SettingsPicker(title: "Předem", selection: Binding(get: { String(bedtimeOffset) }, set: { bedtimeOffset = Int($0) ?? 30 }),
+                                   options: [("15", "15 min"), ("30", "30 min"), ("45", "45 min"), ("60", "1 h")])
+                }
                 SettingsDivider()
-                SettingsToggle(title: "Trénink", subtitle: "hodinu před naplánovaným tréninkem", isOn: $workout)
+                SettingsToggle(title: "Trénink v plánu", isOn: $workout)
+                if workout {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $workoutTime)
+                }
+            }
+            SettingsGroup(title: "Pití", footer: "Jen dokud nemáš splněný denní cíl.") {
+                SettingsToggle(title: "Napít se", isOn: $water)
+                if water {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Od", minutes: $waterFrom)
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Do", minutes: $waterTo)
+                    SettingsDivider()
+                    SettingsPicker(title: "Každé", selection: Binding(get: { String(waterEvery / 60) }, set: { waterEvery = (Int($0) ?? 3) * 60 }),
+                                   options: [("1", "1 h"), ("2", "2 h"), ("3", "3 h"), ("4", "4 h")])
+                }
+            }
+            SettingsGroup(title: "Jídla") {
+                ForEach(Array(Reminders.meals.enumerated()), id: \.offset) { index, meal in
+                    if index > 0 { SettingsDivider() }
+                    MealReminderRow(meal: meal)
+                }
                 SettingsDivider()
-                SettingsToggle(title: "Pití", subtitle: "v 10, 13 a 16 h, dokud nemáš splněno", isOn: $water)
+                SettingsToggle(title: "Zapsat jídlo za celý den", isOn: $food)
+                if food {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $foodTime)
+                }
+            }
+            SettingsGroup(title: "Další") {
+                SettingsToggle(title: "Ranní vážení", isOn: $weight)
+                if weight {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $weightTime)
+                }
                 SettingsDivider()
-                SettingsToggle(title: "Zapsat jídlo", subtitle: "ve 20:30", isOn: $food)
+                SettingsToggle(title: "Plán na příští týden", subtitle: "v neděli", isOn: $week)
+                if week {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $weekTime)
+                }
             }
         }
-        .task { await check() }
-        .onChange(of: [bedtime, workout, water, food]) { Task { await check(); if let today = model.today { await Reminders.reschedule(from: today) } } }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in revision += 1 }
+        .task(id: revision) {
+            if revision > 0 {
+                try? await Task.sleep(for: .milliseconds(400))
+                if Task.isCancelled { return }
+            }
+            await check()
+            if revision > 0, let today = model.today { await Reminders.reschedule(from: today) }
+        }
     }
 
     private func check() async {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if status == .notDetermined, bedtime || workout || water || food {
+        if status == .notDetermined, bedtime || workout || water || food || weight || week {
             allowed = await Reminders.requestPermission()
         } else {
             allowed = status == .authorized || status == .provisional
         }
+    }
+}
+
+/// One meal's reminder: on or off, and its time when on.
+private struct MealReminderRow: View {
+    let meal: (id: String, title: String, time: Int, on: Bool)
+    @AppStorage private var on: Bool
+    @AppStorage private var time: Int
+
+    init(meal: (id: String, title: String, time: Int, on: Bool)) {
+        self.meal = meal
+        _on = AppStorage(wrappedValue: meal.on, Reminders.mealKey(meal.id))
+        _time = AppStorage(wrappedValue: meal.time, Reminders.mealTimeKey(meal.id))
+    }
+
+    var body: some View {
+        SettingsToggle(title: meal.title, isOn: $on)
+        if on {
+            SettingsDivider()
+            ReminderTimeRow(title: "Připomenout v", minutes: $time)
+        }
+    }
+}
+
+/// "Připomenout v 16:00".
+private struct ReminderTimeRow: View {
+    let title: String
+    @Binding var minutes: Int
+
+    var body: some View {
+        HStack {
+            Text(title).font(.body).foregroundStyle(Palette.ink)
+            Spacer()
+            ReminderTimePicker(minutes: $minutes)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 50)
+    }
+}
+
+/// A clock time stored as minutes after midnight.
+private struct ReminderTimePicker: View {
+    @Binding var minutes: Int
+
+    var body: some View {
+        DatePicker("", selection: Binding(
+            get: { Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date() },
+            set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); minutes = (c.hour ?? 0) * 60 + (c.minute ?? 0) }
+        ), displayedComponents: .hourAndMinute)
+        .labelsHidden()
+        .environment(\.locale, Fmt.locale)
     }
 }
 

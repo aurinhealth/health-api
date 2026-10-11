@@ -17,6 +17,7 @@ import { afterGoogleSync } from "./apple-health.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
+import { manualPairs } from "./manual-pairs.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -1554,16 +1555,26 @@ function recordedSomething(a){
 // bare event id, for an app-owned plan the id it got in Intervals.icu), then
 // the name or the sport, then an activity of unknown sport for a plan whose
 // sport is known.
-function matchPlannedWorkouts(planned, actuals, remoteIds=new Map()){
+// A pairing made by hand in the app (manual-pairs.js) comes before all of
+// them; a plan the user unpaired takes no activity.
+export function matchPlannedWorkouts(planned, actuals, remoteIds=new Map(), manual=new Map()){
   const out=new Map(),used=new Set();
   const ids=w=>{const id=String(w?.id??"").replace(/^planned:/,"");return [id,remoteIds.get(id)].filter(Boolean).map(String);};
+  const handPicked=new Set([...manual.values()].filter(Boolean));
+  for(const a of actuals||[])if(handPicked.has(String(a.id??"")))used.add(a);
+  for(const w of planned||[]){
+    const chosen=manual.get(String(w?.id??""));
+    if(chosen==null)continue;
+    const a=chosen&&(actuals||[]).find(x=>String(x.id??"")===chosen);
+    if(a)out.set(w,a);
+  }
   const passes=[
     (w,a)=>a.pairedEventId!=null&&ids(w).includes(String(a.pairedEventId)),
     nameOrFamilyMatch,
     (w,a)=>KNOWN_FAMILIES.has(activityFamily(w))&&vagueFamily(activityFamily(a))&&recordedSomething(a)
   ];
   for(const pass of passes)for(const w of planned||[]){
-    if(out.has(w))continue;
+    if(out.has(w)||manual.has(String(w?.id??"")))continue;
     const a=(actuals||[]).find(x=>!used.has(x)&&pass(w,x));
     if(a){out.set(w,a);used.add(a);}
   }
@@ -1875,7 +1886,8 @@ async function energyForDate(env, date) {
       for (const r of rows) remoteIds.set(String(r.local_id), String(r.remote_id));
     } catch (error) { console.error("Workout export ids read failed", error.message); }
   }
-  const pairs = matchPlannedWorkouts(plannedWorkouts, completed, remoteIds);
+  const manual = await manualPairs(env.DB, env.USER_ID, plannedWorkouts.map(w => w.id));
+  const pairs = matchPlannedWorkouts(plannedWorkouts, completed, remoteIds, manual);
   const matchedPlannedWorkouts = [];
   const unmatchedPlanned = [];
   for (const workout of plannedWorkouts) {

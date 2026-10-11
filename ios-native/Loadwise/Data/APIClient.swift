@@ -375,6 +375,13 @@ final class APIClient: @unchecked Sendable {
         let _: JSONValue = try await send("/app/api/fluids", method: "POST", body: body)
     }
 
+    /// Pairs a planned session with the activity that fulfilled it; nil
+    /// keeps the plan unpaired (src/manual-pairs.js).
+    func pairActivity(plannedId: String, activityId: String?, date: String) async throws {
+        let body: JSONObject = ["plannedId": .string(plannedId), "activityId": activityId.map { .string($0) } ?? .null, "date": .string(date)]
+        let _: JSONValue = try await send("/app/api/training/pair", method: "POST", body: body)
+    }
+
     // MARK: - Settings
 
     func profile() async throws -> JSONObject {
