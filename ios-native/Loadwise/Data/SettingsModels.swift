@@ -3,6 +3,9 @@ import Foundation
 /// GET /app/api/profile: the profile as stored (energy-profile.js normalizeProfile).
 struct ProfileResponse: Decodable {
     let profile: JSONObject?
+    /// What Loadwise worked out itself (src/profile-suggestions.js): it fills
+    /// the fields left empty.
+    let suggestions: JSONObject?
 }
 
 /// GET /app/api/connections (src/connections.js).

@@ -36,7 +36,7 @@ export function sessionOf(row) {
 }
 function readSession(row) {
   const p = parse(row.payload_json ?? row.payload);
-  const google = row.source_family === "google-wearables" || row.source === "google" || row.source === "google-health" || Boolean(p.exercise);
+  const google = row.source_family === "google-wearables" || row.source_family === "apple-health" || row.source === "google" || row.source === "google-health" || Boolean(p.exercise);
   if (google) {
     const ex = p.exercise || {}, start = row.start_time || row.start || ex.interval?.startTime, end = row.end_time || row.end || ex.interval?.endTime;
     const at = zonedTime(start), span = (zonedTime(end) - at) / 60000;

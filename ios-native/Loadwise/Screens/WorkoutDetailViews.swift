@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 // MARK: - The week's sessions
@@ -15,16 +16,35 @@ struct WeekSessionsList: View {
         VStack(spacing: 0) {
             ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
                 HStack(spacing: 0) {
-                    NavigationLink(value: destination(session)) {
+                    NavigationLink(value: Self.destination(session)) {
                         SessionRow(session: session, today: today)
                     }
                     .buttonStyle(.plain)
-                    .disabled(destination(session) == nil)
-                    if GymPlanActions.changeable(session) && !model.demo {
+                    .disabled(Self.destination(session) == nil)
+                    let changeable = GymPlanActions.changeable(session)
+                    let candidates = pairCandidates(session)
+                    if (changeable || !candidates.isEmpty || session.plannedId != nil) && !model.demo {
                         Menu {
-                            Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
+                            if changeable {
+                                Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
+                            }
+                            // When the automatic pairing missed it: the activity that fulfilled this plan.
+                            if !candidates.isEmpty {
+                                Menu {
+                                    ForEach(candidates) { activity in
+                                        Button(activity.title + (activity.time.map { " · " + $0 } ?? "")) {
+                                            Task { await pair(plannedId: session.id, activityId: activity.id, date: session.date) }
+                                        }
+                                    }
+                                } label: { Label("Spárovat s aktivitou", systemImage: "link") }
+                            }
+                            if let plannedId = session.plannedId {
+                                Button { Task { await pair(plannedId: plannedId, activityId: nil, date: session.date) } } label: {
+                                    Label("Zrušit spárování", systemImage: "link.badge.plus")
+                                }
+                            }
                             // A missed session leaves the list in one step.
-                            if session.status == "missed" {
+                            if changeable && session.status == "missed" {
                                 Button(role: .destructive) { cancelling = session } label: { Label("Zrušit trénink", systemImage: "xmark") }
                             }
                         } label: {
@@ -51,6 +71,23 @@ struct WeekSessionsList: View {
         }
     }
 
+    /// The day's done sessions a plan can be paired with by hand.
+    private func pairCandidates(_ s: WeekSession) -> [WeekSession] {
+        guard s.kind == "planned", s.id.hasPrefix("planned:"), s.date <= today else { return [] }
+        return sessions.filter { $0.kind == "activity" && $0.date == s.date }
+    }
+
+    private func pair(plannedId: String, activityId: String?, date: String) async {
+        do {
+            try await model.api.pairActivity(plannedId: plannedId, activityId: activityId, date: date)
+            error = nil
+            await model.refreshTraining()
+            await model.refresh()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func cancel(_ s: WeekSession) async {
         do {
             try await GymPlanActions.cancel(model, date: s.date, eventId: s.eventId)
@@ -62,7 +99,8 @@ struct WeekSessionsList: View {
         }
     }
 
-    private func destination(_ s: WeekSession) -> AppRoute? {
+    /// Where a session opens (also Today → Plán dne).
+    static func destination(_ s: WeekSession) -> AppRoute? {
         if s.kind == "gym" || (s.sport == "strength" && s.status != "done") { return .gym(s.date) }
         if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
@@ -163,6 +201,8 @@ struct ActivityDetailView: View {
 
 struct ActivityDetailContent: View {
     let detail: ActivityDetail
+    /// The minute the finger is on, shared by the power and heart-rate charts.
+    @State private var cursor: Double?
 
     var body: some View {
         let a = detail.activity
@@ -172,7 +212,8 @@ struct ActivityDetailContent: View {
                 if let d = a.distance, d > 0 { stat("Vzdálenost", Units.distanceText(d / 1000)) }
                 if let load = a.icu_training_load { stat("Zátěž", Fmt.int(load) + " TSS") }
                 if let w = a.icu_normalized_watts ?? a.average_watts { stat(a.icu_normalized_watts != nil ? "NP" : "Výkon", Fmt.int(w) + " W") }
-                if let hr = a.average_heartrate { stat("Tep", Fmt.int(hr) + (a.max_heartrate.map { " / " + Fmt.int($0) } ?? "")) }
+                if let hr = a.average_heartrate { stat("Prům. tep", Fmt.int(hr) + " bpm") }
+                if let hr = a.max_heartrate { stat("Max. tep", Fmt.int(hr) + " bpm") }
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
@@ -180,43 +221,55 @@ struct ActivityDetailContent: View {
             }
             .padding(.top, 22)
 
-            let hr = detail.stream("heartrate"), watts = detail.stream("watts")
-            if hr.count > 10 || watts.count > 10 {
-                Card {
-                    if watts.count > 10 {
-                        Text("Výkon").font(Typo.caption).foregroundStyle(Palette.muted)
-                        LineChart(values: smooth(watts), color: Palette.amberBar, lo: 0, hi: (watts.max() ?? 300) * 0.8, lastDot: false, lineWidth: 1.4, height: 80)
-                    }
-                    if hr.count > 10 {
-                        Text("Tep").font(Typo.caption).foregroundStyle(Palette.muted)
-                        LineChart(values: smooth(hr), color: Palette.rust, lo: (hr.min() ?? 60) - 5, hi: (hr.max() ?? 180) + 5, lastDot: false, lineWidth: 1.4, height: 70)
-                    }
-                }
-                .padding(.top, 22)
+            let watts = samples("watts"), hr = samples("heartrate")
+            let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
+            if watts.count > 10 {
+                StreamChart(title: "Výkon", unit: "W", color: Palette.amberBar, samples: watts, span: span, floorZero: true, cursor: $cursor)
+                    .padding(.top, 22)
+            }
+            if hr.count > 10 {
+                StreamChart(title: "Tep", unit: "bpm", color: Palette.rust, samples: hr, span: span, floorZero: false, cursor: $cursor)
+                    .padding(.top, watts.count > 10 ? 12 : 22)
             }
 
-            if let zones = detail.analysis?.zones, !zones.isEmpty {
-                SectionLabel(text: "Čas v zónách").padding(.top, 28)
-                ZoneBar(parts: zones.enumerated().map { i, z in ("Z\(i + 1)", z.seconds ?? 0, zoneColor(i, zones.count)) })
+            if let zones = detail.hrZones, !zones.isEmpty {
+                zoneHeader("Čas v tepových zónách", Fmt.duration(Int((zones.compactMap(\.seconds).reduce(0, +) / 60).rounded())))
+                Card { ZoneList(rows: zoneRows(zones, names: ZoneList.heartNames(zones.count), unit: "bpm"), bars: true) }
+                    .padding(.top, 12)
+            }
+            if let zones = detail.analysis?.zones, zones.contains(where: { ($0.seconds ?? 0) >= 30 }) {
+                zoneHeader("Čas ve výkonových zónách", detail.analysis?.ftp.map { "FTP " + Fmt.int($0) + " W" } ?? "")
+                Card { ZoneList(rows: zoneRows(zones, names: ZoneList.powerNames, unit: nil).filter { $0.seconds >= 30 }, bars: false) }
                     .padding(.top, 12)
             }
 
             if let laps = detail.intervals, !laps.isEmpty {
-                SectionLabel(text: "Úseky").padding(.top, 28)
+                let hasWatts = laps.contains { $0.watts != nil }, hasHr = laps.contains { $0.hr != nil }
+                let showPace = !hasWatts && isRun && laps.contains { ($0.speed ?? 0) > 0 }
+                HStack(spacing: 0) {
+                    Text("Úsek").frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Čas").frame(width: 56, alignment: .trailing)
+                    if hasWatts { Text("Výkon").frame(width: 70, alignment: .trailing) }
+                    if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: 70, alignment: .trailing) }
+                    if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
+                }
+                .font(.system(size: 12, weight: .medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
+                .padding(.top, 28).padding(.bottom, 8)
                 VStack(spacing: 0) {
                     ForEach(Array(laps.prefix(30).enumerated()), id: \.offset) { i, lap in
-                        HStack {
-                            Text(lap.label ?? "\(i + 1)").font(.subheadline).foregroundStyle(Palette.ink).lineLimit(1)
-                            Spacer()
-                            if let s = lap.seconds { Text(Fmt.duration(max(1, Int(s / 60)))).font(Typo.caption).foregroundStyle(Palette.muted) }
-                            if let w = lap.watts { Text(Fmt.int(w) + " W").font(Typo.number(17)).frame(width: 64, alignment: .trailing) }
-                            if let h = lap.hr { Text(Fmt.int(h)).font(Typo.number(17)).foregroundStyle(Palette.rust).frame(width: 40, alignment: .trailing) }
+                        HStack(spacing: 0) {
+                            Text(verbatim: lap.label ?? "\(i + 1)").font(.subheadline).foregroundStyle(Palette.ink).lineLimit(1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(verbatim: lap.seconds.map { clock($0) } ?? "").font(Typo.caption).foregroundStyle(Palette.muted)
+                                .frame(width: 56, alignment: .trailing)
+                            if hasWatts { Text(verbatim: lap.watts.map { Fmt.int($0) + " W" } ?? "").font(Typo.number(17)).frame(width: 70, alignment: .trailing) }
+                            if showPace { Text(verbatim: lap.speed.flatMap { $0 > 0 ? Units.paceText(1000 / $0) : nil } ?? "").font(Typo.number(17)).frame(width: 70, alignment: .trailing) }
+                            if hasHr { Text(verbatim: lap.hr.map { Fmt.int($0) } ?? "").font(Typo.number(17)).foregroundStyle(Palette.rust).frame(width: 48, alignment: .trailing) }
                         }
-                        .padding(.vertical, 9)
+                        .padding(.vertical, 10)
                         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     }
                 }
-                .padding(.top, 8)
             }
 
             if let hrr = detail.hrr, let drop = hrr.drop {
@@ -226,31 +279,201 @@ struct ActivityDetailContent: View {
         }
     }
 
+    private var isRun: Bool { (detail.activity.type ?? "").lowercased().contains("run") }
+
     private var runPace: String? {
-        let a = detail.activity
-        guard (a.type ?? "").lowercased().contains("run"), let v = a.average_speed, v > 0 else { return nil }
+        guard isRun, let v = detail.activity.average_speed, v > 0 else { return nil }
         return Units.paceText(1000 / v)
     }
 
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(LocalizedStringKey(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(verbatim: value).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
     }
 
-    /// Averages of about 200 points, enough for a phone-wide line.
-    private func smooth(_ values: [Double]) -> [Double] {
-        let step = max(1, values.count / 200)
-        return stride(from: 0, to: values.count, by: step).map { i in
-            let slice = values[i..<min(values.count, i + step)]
-            return slice.reduce(0, +) / Double(slice.count)
+    private func zoneHeader(_ title: String, _ trailing: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            SectionLabel(text: title)
+            Spacer()
+            Text(verbatim: trailing).font(Typo.caption).foregroundStyle(Palette.faint)
+        }
+        .padding(.top, 28)
+    }
+
+    private func zoneRows(_ zones: [ActivityDetail.Zone], names: [String], unit: String?) -> [ZoneList.Row] {
+        let total = max(zones.compactMap(\.seconds).reduce(0, +), 1)
+        return zones.enumerated().map { i, z in
+            var range: String? = nil
+            if let unit {
+                if let lo = z.min, let hi = z.max { range = Fmt.int(lo) + "–" + Fmt.int(hi) + " " + unit }
+                else if let hi = z.max { range = "< " + Fmt.int(hi + 1) + " " + unit }
+                else if let lo = z.min { range = Fmt.int(lo) + "+ " + unit }
+            }
+            let seconds = z.seconds ?? 0
+            return ZoneList.Row(id: i, name: i < names.count ? names[i] : "Z\(i + 1)", range: range, seconds: seconds, percent: z.percent ?? seconds / total * 100)
         }
     }
 
-    private func zoneColor(_ i: Int, _ n: Int) -> Color {
-        let colors = [Palette.sand, Palette.green.opacity(0.5), Palette.amberBar.opacity(0.6), Palette.amberBar, Palette.rust, Palette.rust.opacity(0.8), Palette.indigo]
+    /// About 240 averaged points with their minute, enough for a phone-wide line.
+    private func samples(_ type: String) -> [StreamChart.Sample] {
+        let points = (detail.streams?.first { $0.type == type }?.points ?? []).filter { $0.v != nil }
+        let step = max(1, points.count / 240)
+        return stride(from: 0, to: points.count, by: step).map { i in
+            let slice = points[i..<min(points.count, i + step)]
+            let sum = slice.reduce(0.0) { $0 + ($1.v ?? 0) }
+            return StreamChart.Sample(id: i, minute: slice.first!.t / 60, value: sum / Double(slice.count))
+        }
+    }
+
+    /// 600 → "10:00", 3725 → "1:02:05".
+    private func clock(_ seconds: Double) -> String {
+        let s = Int(seconds.rounded())
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// Power or heart rate over the ride with minutes and values on the axes. Hold
+/// and drag a finger to read the value at that moment; the cursor is shared
+/// with the other chart of the same activity.
+struct StreamChart: View {
+    struct Sample: Identifiable {
+        let id: Int
+        let minute: Double
+        let value: Double
+    }
+
+    let title: String
+    let unit: String
+    let color: Color
+    let samples: [Sample]
+    let span: Double
+    let floorZero: Bool
+    @Binding var cursor: Double?
+
+    var body: some View {
+        let values = samples.map(\.value)
+        let average = values.reduce(0, +) / Double(max(values.count, 1))
+        let top = values.max() ?? 1, bottom = values.min() ?? 0
+        let lo = floorZero ? 0 : max(0, (bottom - 8).rounded(.down))
+        let hi = floorZero ? top * 1.05 : top + 5
+        let picked: Sample? = cursor.flatMap { c in samples.min { abs($0.minute - c) < abs($1.minute - c) } }
+
+        Card {
+            HStack(alignment: .firstTextBaseline) {
+                Text(LocalizedStringKey(title)).font(Typo.bodyStrong).foregroundStyle(color)
+                Spacer()
+                if let picked {
+                    Text(verbatim: Self.clock(picked.minute) + "   " + Fmt.int(picked.value) + " " + unit)
+                        .font(Typo.number(17)).foregroundStyle(Palette.ink)
+                } else {
+                    Text(verbatim: L10n.tr("prům.") + " " + Fmt.int(average) + " " + unit).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+            Chart {
+                ForEach(samples) { s in
+                    AreaMark(x: .value("Minuta", s.minute), yStart: .value("Spodek", lo), yEnd: .value(title, s.value))
+                        .foregroundStyle(color.opacity(0.12))
+                    LineMark(x: .value("Minuta", s.minute), y: .value(title, s.value))
+                        .foregroundStyle(color)
+                        .lineStyle(StrokeStyle(lineWidth: 1.4, lineJoin: .round))
+                }
+                if let picked {
+                    RuleMark(x: .value("Minuta", picked.minute)).foregroundStyle(Palette.faint.opacity(0.6))
+                    PointMark(x: .value("Minuta", picked.minute), y: .value(title, picked.value))
+                        .foregroundStyle(color).symbolSize(40)
+                }
+            }
+            .chartXScale(domain: 0...span)
+            .chartYScale(domain: lo...max(hi, lo + 1))
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 5)) { _ in
+                    AxisGridLine().foregroundStyle(Palette.hairline)
+                    AxisValueLabel().foregroundStyle(Palette.faint)
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                    AxisGridLine().foregroundStyle(Palette.hairline)
+                    AxisValueLabel().foregroundStyle(Palette.faint)
+                }
+            }
+            .chartXSelection(value: $cursor)
+            .frame(height: 150)
+            Text("min").font(Typo.tiny).foregroundStyle(Palette.faint).frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + L10n.tr("prům.") + " " + Fmt.int(average) + " " + unit))
+    }
+
+    /// 31.5 → "31:30".
+    static func clock(_ minute: Double) -> String {
+        let s = Int((minute * 60).rounded())
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s % 3600 / 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// Time in each zone on its own row: the zone, its range, minutes and share.
+struct ZoneList: View {
+    struct Row: Identifiable {
+        let id: Int
+        let name: String
+        let range: String?
+        let seconds: Double
+        let percent: Double
+    }
+
+    let rows: [Row]
+    var bars = true
+
+    static let powerNames = ["Regenerace", "Vytrvalost", "Tempo", "Práh", "VO2max", "Anaerobní", "Neuromuskulární"]
+
+    static func heartNames(_ count: Int) -> [String] {
+        count >= 7 ? ["Regenerace", "Vytrvalost", "Tempo", "Pod prahem", "Nad prahem", "VO2max", "Anaerobní"]
+            : ["Regenerace", "Vytrvalost", "Tempo", "Práh", "VO2max", "Anaerobní"]
+    }
+
+    static func color(_ i: Int) -> Color {
+        let colors = [Palette.sand, Palette.green.opacity(0.5), Palette.amberBar.opacity(0.6), Palette.amberBar, Palette.rust, Palette.indigo, Palette.ink]
         return colors[min(i, colors.count - 1)]
+    }
+
+    var body: some View {
+        let top = max(rows.map(\.percent).max() ?? 1, 1)
+        VStack(spacing: 0) {
+            ForEach(rows) { r in
+                VStack(spacing: 10) {
+                    HStack(spacing: 12) {
+                        Text(verbatim: "Z\(r.id + 1)").font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(r.id >= 3 ? Palette.onAccent : Palette.ink)
+                            .frame(width: 30, height: 30)
+                            .background(Self.color(r.id), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(LocalizedStringKey(r.name)).font(.body).foregroundStyle(Palette.ink)
+                            if let range = r.range { Text(verbatim: range).font(Typo.caption).foregroundStyle(Palette.muted) }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text(verbatim: Fmt.duration(Int((r.seconds / 60).rounded()))).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                            if bars { Text(verbatim: Fmt.int(r.percent) + " %").font(Typo.caption).foregroundStyle(Palette.muted) }
+                        }
+                    }
+                    if bars {
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Palette.track)
+                                Capsule().fill(Self.color(r.id)).frame(width: max(4, geo.size.width * r.percent / top))
+                            }
+                        }
+                        .frame(height: 7)
+                    }
+                }
+                .padding(.vertical, 11)
+                .overlay(alignment: .top) { if r.id != rows.first?.id { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+                .accessibilityElement(children: .combine)
+            }
+        }
     }
 }
 
@@ -418,7 +641,8 @@ struct StepBlockRow: View {
 /// rated through /app/api/workouts/feedback (paired with its activity, the RPE
 /// written to Intervals.icu, the coach asked in the background); any other
 /// session goes to the coach directly (/app/api/coach/reflections). The
-/// coach's note on the session shows under the form.
+/// coach's note on the session shows under the form. Below the note: how well
+/// the generated workout fitted (/app/api/feedback/workout), for any sport.
 struct FeedbackSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -436,6 +660,8 @@ struct FeedbackSheet: View {
     @State private var waiting = false
     @State private var status: String?
     @State private var error: String?
+    @State private var fit: String?
+    @State private var fitText = ""
 
     /// The library workout and its calendar day, when the session has one.
     private var target: (id: String, date: String)? {
@@ -463,6 +689,15 @@ struct FeedbackSheet: View {
                         .padding(12)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .disabled(saved)
+                    Text("Sedělo ti sestavení tréninku?").font(.body).padding(.top, 4)
+                    PlanFitPicker(rating: $fit).disabled(saved)
+                    if fit != nil {
+                        TextField("Co nesedělo? (nepovinné)", text: $fitText, axis: .vertical)
+                            .lineLimit(2...5)
+                            .padding(12)
+                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .disabled(saved)
+                    }
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                     if let status { Text(status).font(Typo.small).foregroundStyle(Palette.muted) }
                     if saved {
@@ -507,8 +742,14 @@ struct FeedbackSheet: View {
         let api = model.api, date = session.date
         async let links = try? api.scheduledWorkouts()
         async let notesOfDay = try? api.coachReflections(date: date)
+        async let ratingsOfDay = try? api.workoutRatings(date: date)
         let allLinks: [ScheduledWorkout] = (await links) ?? []
         let reflections: [CoachReflection] = (await notesOfDay) ?? []
+        let ratings: [WorkoutRating] = (await ratingsOfDay) ?? []
+        if let own = ratings.first(where: { $0.sessionId == session.id }) {
+            fit = own.rating
+            fitText = own.text ?? ""
+        }
         link = ScheduledWorkout.link(for: session, in: allLinks)
         known = reflections.count
         let id = target?.id
@@ -524,6 +765,10 @@ struct FeedbackSheet: View {
         defer { saving = false }
         let text = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
+            if let fit {
+                try await model.api.rateWorkout(date: session.date, sessionId: session.id, sport: session.sport, rating: fit,
+                                                text: fitText.trimmingCharacters(in: .whitespacesAndNewlines))
+            }
             if let target, link?.rated != true {
                 do {
                     // A session kept only in the app has no activity: its planned length counts.

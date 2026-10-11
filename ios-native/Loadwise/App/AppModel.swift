@@ -255,6 +255,8 @@ final class AppModel {
         loading = true
         defer { loading = false }
         await sendOutbox()
+        // Last night and the morning's HRV from the watch before Today is computed.
+        await AppleHealth.shared.sync(api: api)
         do {
             let (snapshot, data) = try await api.todayData(date: selectedDate)
             today = snapshot
@@ -338,6 +340,7 @@ final class AppModel {
 
     func refreshHealth() async {
         guard !demo, phase == .signedIn else { return }
+        await AppleHealth.shared.sync(api: api)
         do {
             health = try await api.health(date: selectedDate)
             fetched[.health] = (Date(), shownDay)
@@ -728,6 +731,8 @@ final class AppModel {
             // Waiting writes belong to this account; the next one must not send them.
             outbox = []
             OutboxStore.save([])
+            // Apple Health was allowed for this account, not the next one.
+            AppleHealth.shared.disconnect()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }

@@ -22,7 +22,9 @@ export const GOALS = {
   "lose_0.5": { kgPerWeek: -0.5, label: "Hubnout 0,5 kg týdně" },
   "lose_0.75": { kgPerWeek: -0.75, label: "Hubnout 0,75 kg týdně" },
   "lose_1": { kgPerWeek: -1, label: "Hubnout 1 kg týdně" },
-  maintain: { kgPerWeek: 0, label: "Udržovat váhu" }
+  maintain: { kgPerWeek: 0, label: "Udržovat váhu" },
+  "gain_0.25": { kgPerWeek: 0.25, label: "Nabrat 0,25 kg týdně" },
+  "gain_0.5": { kgPerWeek: 0.5, label: "Nabrat 0,5 kg týdně" }
 };
 
 // Extra energy of an hour of sport above rest, per kg of body weight.
@@ -152,6 +154,11 @@ export function trendAdjustment(goalKey, trend) {
     if (rate < goal * 1.5) return { adjustment: step(rate - goal), reason: "loss_above_target" };
     return { adjustment: 0, reason: "within_target_range" };
   }
+  if (goal > 0) {
+    if (rate < goal / 2) return { adjustment: step(rate - goal), reason: "gain_below_target" };
+    if (rate > goal * 1.5) return { adjustment: step(rate - goal), reason: "gain_above_target" };
+    return { adjustment: 0, reason: "within_target_range" };
+  }
   if (rate > 0.25) return { adjustment: step(rate), reason: "gaining_while_maintaining" };
   if (rate < -0.25) return { adjustment: step(rate), reason: "losing_while_maintaining" };
   return { adjustment: 0, reason: "within_target_range" };
@@ -160,12 +167,16 @@ export const TREND_REASONS = bilingual({
   loss_below_target: "váha klesá pomaleji, než je cíl",
   loss_above_target: "váha klesá rychleji, než je cíl",
   gaining_while_maintaining: "váha při udržování roste",
-  losing_while_maintaining: "váha při udržování klesá"
+  losing_while_maintaining: "váha při udržování klesá",
+  gain_below_target: "váha roste pomaleji, než je cíl",
+  gain_above_target: "váha roste rychleji, než je cíl"
 }, {
   loss_below_target: "weight is falling slower than the goal",
   loss_above_target: "weight is falling faster than the goal",
   gaining_while_maintaining: "weight is rising while maintaining",
-  losing_while_maintaining: "weight is falling while maintaining"
+  losing_while_maintaining: "weight is falling while maintaining",
+  gain_below_target: "weight is rising slower than the goal",
+  gain_above_target: "weight is rising faster than the goal"
 });
 
 export const MISSING_LABELS = bilingual({ weight: "váha", sex: "pohlaví", age: "datum narození", height: "výška", activity: "denní aktivita", goal: "cíl", sportHours: "sport za týden" }, { weight: "weight", sex: "sex", age: "date of birth", height: "height", activity: "daily activity", goal: "goal", sportHours: "sport per week" });
@@ -177,6 +188,11 @@ export const SUGGESTED_FIELDS = ["height", "activity", "rhr", "hrmax", "birthDat
 export function effectiveProfile(saved, suggested) {
   const profile = { ...(saved || {}) };
   for (const key of SUGGESTED_FIELDS) if ((profile[key] == null || profile[key] === "") && suggested?.[key]) profile[key] = suggested[key];
+  // A sport set to "auto" and empty weekly hours come from the recent activities.
+  const history = suggested?.trainingHistory;
+  if (profile.mainSport === "auto") profile.mainSport = history?.recentCount ? suggested.mainSport ?? history.mainSport : "general";
+  const hours = Number(history?.weeklyHours);
+  if ((profile.weeklyHours == null || profile.weeklyHours === "") && hours >= 1) profile.weeklyHours = Math.round(hours * 2) / 2;
   profile.mainSport = normalizeFocus(profile).mainSport;
   if (ageFrom(profile.birthDate) != null) profile.age = ageFrom(profile.birthDate);
   return profile;

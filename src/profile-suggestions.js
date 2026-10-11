@@ -69,7 +69,7 @@ export async function observedMaxHeartRate(db, userId, now = Date.now()) {
 export async function observedHeartRates(db, userId, now = Date.now()) {
   const since = new Date(now - 183 * DAY_MS).toISOString().slice(0, 10);
   const rows = (await db.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id = ?
-    AND ((source_family = 'intervals' AND data_type = 'activity') OR (source_family = 'google-wearables' AND data_type = 'exercise'))
+    AND ((source_family = 'intervals' AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
     AND (record_role IS NULL OR record_role != 'duplicate') AND start_time >= ?`).bind(userId, since).all()).results || [];
   const peaks = rows.map(r => { try { return activityMaxHeartRate(JSON.parse(r.payload_json || "{}")); } catch { return null; } }).filter(v => v != null).sort((a, b) => b - a);
   for (let i = 0; i < peaks.length; i++) if (i === peaks.length - 1 || peaks[i] - peaks[i + 1] <= 8) return { max: peaks[i], count: peaks.length };
@@ -172,10 +172,14 @@ export async function refreshSuggestions(env, { googleToken, fetchImpl = fetch, 
 }
 
 // The profile the calculations use: saved values plus suggestions.
-export async function loadEffectiveProfile(db, userId) {
+// What the user typed themselves (saved) and that with the calibrated values in the gaps (effective).
+export async function loadProfiles(db, userId) {
   const rows = (await db.prepare("SELECT id, profile_json FROM dashboard_profile WHERE user_id = ? AND id IN (1, 2)").bind(userId).all().catch(() => ({ results: [] }))).results || [];
   const parsed = id => { try { return JSON.parse(rows.find(r => Number(r.id) === id)?.profile_json || "null"); } catch { return null; } };
   const saved = parsed(1), suggested = parsed(2);
-  if(!saved&&!suggested)return null;
-  return effectiveProfile(saved,suggested);
+  return { saved, effective: saved || suggested ? effectiveProfile(saved, suggested) : null };
+}
+
+export async function loadEffectiveProfile(db, userId) {
+  return (await loadProfiles(db, userId)).effective;
 }

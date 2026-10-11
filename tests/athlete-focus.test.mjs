@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { athleteFocus, normalizeFocus, withFocus } from "../src/athlete-focus.js";
-import { normalizeProfile } from "../src/energy-profile.js";
+import { normalizeProfile, effectiveProfile } from "../src/energy-profile.js";
 import { coachInstructions } from "../src/coach-assistant.js";
 import { reviewInstructions } from "../src/coach-review.js";
 import { reflectionInstructions } from "../src/coach-reflection.js";
@@ -14,6 +14,17 @@ test("the main sport and goal are kept only with known values", () => {
   assert.equal(p.mainSport, "running");
   assert.equal(p.eventDate, "2026-11-15");
   assert.equal(p.weeklyHours, 7.5);
+});
+
+test("an automatic sport and empty weekly hours come from the recent activities, typed values stay", () => {
+  const suggested = { mainSport: "running", trainingHistory: { mainSport: "running", recentCount: 9, weeklyHours: 4.3 } };
+  assert.equal(normalizeProfile({ mainSport: "auto" }).mainSport, "auto", "the choice is saved as automatic");
+  const auto = effectiveProfile(normalizeProfile({ mainSport: "auto" }), suggested);
+  assert.deepEqual([auto.mainSport, auto.weeklyHours], ["running", 4.5]);
+  const own = effectiveProfile(normalizeProfile({ mainSport: "cycling", weeklyHours: 8 }), suggested);
+  assert.deepEqual([own.mainSport, own.weeklyHours], ["cycling", 8]);
+  assert.equal(effectiveProfile({ mainSport: "auto" }, { trainingHistory: { recentCount: 0 } }).mainSport, "general", "no activities yet");
+  assert.equal(athleteFocus({ mainSport: "auto" }, "2026-10-03").sport, "general");
 });
 
 test("without a focus all coaches use general fitness", () => {

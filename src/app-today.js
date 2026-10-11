@@ -8,6 +8,7 @@ import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepIndexScore, be
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
+import { daySessions } from "./app-training.js";
 
 const STEP_GOAL = 10000;
 
@@ -36,6 +37,16 @@ export function primaryNights(sessions) {
   return byDay;
 }
 
+// Minutes at moderate heart rate or above, the way WHO counts them (a vigorous
+// or peak minute counts twice): today and since Monday.
+export function activeMinutes(rows, date) {
+  const counted = r => { const z = r?.hrZoneMinutes; return z ? (num(z.moderate) || 0) + 2 * ((num(z.vigorous) || 0) + (num(z.peak) || 0)) : 0; };
+  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7, monday = shift(date, -weekday);
+  const week = rows.filter(r => r.id >= monday && r.id <= date);
+  if (!week.some(r => r.hrZoneMinutes)) return null;
+  return { today: Math.round(counted(rows.find(r => r.id === date))), week: Math.round(week.reduce((s, r) => s + counted(r), 0)), target: 150 };
+}
+
 export function dayStrain(rows, date) {
   const row = rows.find(r => r.id === date);
   const load = heartRateLoad(row?.hrZoneMinutes);
@@ -61,12 +72,13 @@ export function todayWeather(location, forecast, date) {
     wind: round(num(w?.wind)),
     rain: round(num(w?.rain), 1),
     rainProb: round(num(w?.rainProb)),
+    hours: Array.isArray(w?.hours) && w.hours.length ? w.hours : null,
     outdoor: advice("ride"),
     outdoorRun: advice("run")
   };
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null }) {
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -97,7 +109,6 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // Training: planned and completed sessions of the day.
   const training = daily.training || {};
   const planned = Array.isArray(training.planned) ? training.planned : [];
-  const matched = new Set((training.matched || []).map(m => m?.planned?.name + "|" + m?.planned?.start));
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
   // Food and drink.
@@ -122,18 +133,29 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const usual = earlier.length ? Array.from({ length: 24 }, (_, h) => Math.round(earlier.reduce((s, c) => s + c[h], 0) / earlier.length)) : null;
   const summary = coaches.morningSummary || null;
 
+  // The day's plan: what was done at its time, then what is still planned in
+  // the order of the plan (no clock: it comes after the last record, whenever
+  // that is), then bedtime. The same sessions as Training → Tréninky týdne,
+  // so a gym session or a watch workout outside the plan shows here too.
+  const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
+  const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null;
+  const done = daySession.filter(s => s.status === "done").sort((a, b) => String(a.time || "99").localeCompare(String(b.time || "99")));
+  const open = daySession.filter(s => s.status !== "done");
   const planItems = [
-    ...planned.map(w => ({
+    ...[...done, ...open].map(s => ({
       kind: "workout",
       // ride, run or strength: the app opens the gym session for strength.
-      sport: /weight|strength|gym/i.test(String(w.type || "")) ? "strength" : /run/i.test(String(w.type || "")) ? "run" : /ride|cycl|bike/i.test(String(w.type || "")) ? "ride" : "other",
-      time: clockOf(w.start),
-      title: w.name || w.type || L("Trénink", "Workout"),
-      detail: [num(w.durationHours) ? Math.round(num(w.durationHours) * 60) + " min" : null, num(w.tss) ? Math.round(num(w.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null,
-      done: matched.has(w.name + "|" + w.start)
+      sport: s.sport === "strength" ? "strength" : ["run", "ride"].includes(s.sport) ? s.sport : "other",
+      time: s.status === "done" ? s.time : null,
+      title: s.title,
+      detail: detailOf(s),
+      done: s.status === "done",
+      // "done", "planned" or "missed" (a past day's plan nothing was done for).
+      status: s.status,
+      session: s
     })),
     ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: L("potřeba spánku ", "sleep need ") + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
-  ].sort((a, b) => String(a.time || "99").localeCompare(String(b.time || "99")));
+  ];
 
   return {
     status: "ok",
@@ -164,7 +186,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     },
     plan: planItems,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
-    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour },
+    steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: round(num(todayRow.activeCalories)), activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,
     weather: todayWeather(location, forecast, date)
   };

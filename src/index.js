@@ -13,9 +13,11 @@ import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
 import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
 import { pairSessions } from "./activity-match.js";
+import { afterGoogleSync } from "./apple-health.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
+import { manualPairs } from "./manual-pairs.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -899,6 +901,8 @@ async function saveGooglePointsBatch(env, family, type, points) {
 
   // D1 batch executes the statements sequentially in one database call.
   for(let i=0;i<statements.length;i+=50)await env.DB.batch(statements.slice(i,i+50));
+  // Days Apple Health already covers keep the Apple rows (apple-health.js).
+  await afterGoogleSync(env, type, points);
   return points.length;
 }
 async function syncGoogleRecent(env){
@@ -1297,13 +1301,15 @@ async function syncIntervals(env,options={}) {
 // Google Health: the copy becomes record_role 'duplicate' (the queries skip
 // it) and points to the kept record. See activity-match.js. `days` limits it
 // to recent activities (after each sync); without it all are checked again.
-async function matchActivities(env, { days = null } = {}) {
+export async function matchActivities(env, { days = null } = {}) {
   const since = days ? dateDaysAgo(days + 1) : "0000";
   const rows = (await env.DB.prepare(
     `SELECT source_family, data_type, external_id, start_time, end_time, payload_json, record_role, matched_activity_id
      FROM health_datapoints
      WHERE user_id = ?
-     AND ((source_family IN ('intervals','local') AND data_type = 'activity') OR (source_family = 'google-wearables' AND data_type = 'exercise'))
+     AND ((source_family IN ('intervals','local') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
+     -- Google copies of Apple Health workouts stay out (apple-health.js).
+     AND NOT (source_family = 'google-wearables' AND COALESCE(matched_activity_id,'') = 'apple-health')
      AND start_time IS NOT NULL AND start_time >= ?
      ORDER BY start_time`
   ).bind(env.USER_ID, since).all()).results || [];
@@ -1342,6 +1348,7 @@ async function weightHistory(env, days = null) {
       WHERE user_id = ?
         AND data_type = 'weight'
         AND value_numeric IS NOT NULL
+        AND (record_role IS NULL OR record_role != 'duplicate')
         AND COALESCE(sample_time, start_time, end_time) >= ?
       ORDER BY 1 ASC
     `).bind(env.USER_ID, cutoff).all();
@@ -1355,6 +1362,7 @@ async function weightHistory(env, days = null) {
     WHERE user_id = ?
       AND data_type = 'weight'
       AND value_numeric IS NOT NULL
+      AND (record_role IS NULL OR record_role != 'duplicate')
       AND COALESCE(sample_time, start_time, end_time) IS NOT NULL
     ORDER BY 1 ASC
   `).bind(env.USER_ID).all();
@@ -1547,16 +1555,26 @@ function recordedSomething(a){
 // bare event id, for an app-owned plan the id it got in Intervals.icu), then
 // the name or the sport, then an activity of unknown sport for a plan whose
 // sport is known.
-function matchPlannedWorkouts(planned, actuals, remoteIds=new Map()){
+// A pairing made by hand in the app (manual-pairs.js) comes before all of
+// them; a plan the user unpaired takes no activity.
+export function matchPlannedWorkouts(planned, actuals, remoteIds=new Map(), manual=new Map()){
   const out=new Map(),used=new Set();
   const ids=w=>{const id=String(w?.id??"").replace(/^planned:/,"");return [id,remoteIds.get(id)].filter(Boolean).map(String);};
+  const handPicked=new Set([...manual.values()].filter(Boolean));
+  for(const a of actuals||[])if(handPicked.has(String(a.id??"")))used.add(a);
+  for(const w of planned||[]){
+    const chosen=manual.get(String(w?.id??""));
+    if(chosen==null)continue;
+    const a=chosen&&(actuals||[]).find(x=>String(x.id??"")===chosen);
+    if(a)out.set(w,a);
+  }
   const passes=[
     (w,a)=>a.pairedEventId!=null&&ids(w).includes(String(a.pairedEventId)),
     nameOrFamilyMatch,
     (w,a)=>KNOWN_FAMILIES.has(activityFamily(w))&&vagueFamily(activityFamily(a))&&recordedSomething(a)
   ];
   for(const pass of passes)for(const w of planned||[]){
-    if(out.has(w))continue;
+    if(out.has(w)||manual.has(String(w?.id??"")))continue;
     const a=(actuals||[]).find(x=>!used.has(x)&&pass(w,x));
     if(a){out.set(w,a);used.add(a);}
   }
@@ -1760,7 +1778,7 @@ async function energyForDate(env, date) {
   const googleExercises = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE user_id = ? AND source_family = 'google-wearables'
+    WHERE user_id = ? AND source_family IN ('google-wearables','apple-health')
       AND data_type = 'exercise'
       AND start_time >= ?
       AND start_time < ?
@@ -1844,7 +1862,7 @@ async function energyForDate(env, date) {
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
   const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||''));
   if(walking.length){
-    const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
+    const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
     for(const activity of walking){
       const checked=walkingEnergyCheck(activity,weight?.value_numeric),measured=activityTelemetryEnergy(activity,telemetry);
       activity.reportedCalories=activity.calories;
@@ -1868,7 +1886,8 @@ async function energyForDate(env, date) {
       for (const r of rows) remoteIds.set(String(r.local_id), String(r.remote_id));
     } catch (error) { console.error("Workout export ids read failed", error.message); }
   }
-  const pairs = matchPlannedWorkouts(plannedWorkouts, completed, remoteIds);
+  const manual = await manualPairs(env.DB, env.USER_ID, plannedWorkouts.map(w => w.id));
+  const pairs = matchPlannedWorkouts(plannedWorkouts, completed, remoteIds, manual);
   const matchedPlannedWorkouts = [];
   const unmatchedPlanned = [];
   for (const workout of plannedWorkouts) {
@@ -1978,6 +1997,7 @@ function goalPhrase(energy) {
   const deficit = Number(energy.calorieBreakdown?.weightLossDeficit) || 0;
   const target = energy.energyProfile?.targetWeightKg;
   if (deficit > 0) return target ? L(`cílové tempo úbytku hmotnosti směrem k ${target} kg`, `your target rate of weight loss towards ${target} kg`) : L("cílové tempo úbytku hmotnosti", "your target rate of weight loss");
+  if (deficit < 0) return target ? L(`cílové tempo nabírání hmotnosti směrem k ${target} kg`, `your target rate of weight gain towards ${target} kg`) : L("cílové tempo nabírání hmotnosti", "your target rate of weight gain");
   return L("udržení hmotnosti", "maintaining your weight");
 }
 
@@ -2516,7 +2536,8 @@ async function healthSleep(env, url) {
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'sleep'
-      AND source_family = 'google-wearables'
+      AND source_family IN ('google-wearables','apple-health')
+      AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
     LIMIT 5000
   `).bind(env.USER_ID).all();

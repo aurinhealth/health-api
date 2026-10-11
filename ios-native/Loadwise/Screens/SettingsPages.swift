@@ -219,22 +219,44 @@ struct HeartActivitySettingsView: View {
         func lose(_ kg: Double, _ digits: Int) -> String {
             L10n.f("hubnout %@ týdně", Units.weightText(kg, digits: Units.imperial ? 1 : digits))
         }
+        func gain(_ kg: Double, _ digits: Int) -> String {
+            L10n.f("nabrat %@ týdně", Units.weightText(kg, digits: Units.imperial ? 1 : digits))
+        }
         return [("lose_0.25", lose(0.25, 2)), ("lose_0.5", lose(0.5, 1)), ("lose_0.75", lose(0.75, 2)), ("lose_1", lose(1, 0)),
-                ("maintain", L10n.tr("udržovat váhu"))]
+                ("maintain", L10n.tr("udržovat váhu")), ("gain_0.25", gain(0.25, 2)), ("gain_0.5", gain(0.5, 1))]
+    }
+
+    /// "automaticky · Aktivní": the usual day Loadwise reads from the steps.
+    private var activityOptions: [(String, String)] {
+        let guess = store.suggestions["activity"]?.string.flatMap { id in Self.activities.first { $0.0 == id }?.1 }
+        return [("", Self.auto(guess.map { L10n.tr($0) }))] + Self.activities
+    }
+
+    /// "automaticky · ≈ 4,5 h": the weekly sport of the last four weeks.
+    private var sportOptions: [(String, String)] {
+        let hours: Double? = {
+            if case .object(let history)? = store.suggestions["trainingHistory"] { return history["weeklyHours"]?.number }
+            return nil
+        }()
+        return Self.sportHourOptions.map { $0.0 == "auto" ? ("auto", Self.auto(hours.map { "≈ " + Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) + " h" })) : $0 }
+    }
+
+    private static func auto(_ value: String?) -> String {
+        value.map { L10n.tr("automaticky") + " · " + $0 } ?? L10n.tr("automaticky")
     }
 
     var body: some View {
         SettingsPage(title: "Tep a aktivita") {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            SettingsGroup(title: "Tep", footer: "Prázdné hodnoty dopočítá Loadwise z tvých tréninků a nocí.") {
-                SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad)
+            SettingsGroup(title: "Tep", footer: "Prázdné hodnoty Loadwise průběžně dopočítává z tréninků, Apple Health a Google Health. Zadaná hodnota platí i pro tepové zóny.") {
+                SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"))
                 SettingsDivider()
-                SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad)
+                SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad, placeholder: suggested("rhr"))
             }
             SettingsGroup(title: "Aktivita a cíl", footer: "Z běžného dne, sportu a cíle se počítá denní cíl kalorií.") {
-                SettingsPicker(title: "Běžný den", selection: $activity, options: Self.activities)
+                SettingsPicker(title: "Běžný den", selection: $activity, options: activityOptions)
                 SettingsDivider()
-                SettingsPicker(title: "Sport týdně", selection: $sportHours, options: Self.sportHourOptions)
+                SettingsPicker(title: "Sport týdně", selection: $sportHours, options: sportOptions)
                 SettingsDivider()
                 SettingsPicker(title: "Cíl", selection: $goal, options: Self.goals)
                 SettingsDivider()
@@ -245,9 +267,15 @@ struct HeartActivitySettingsView: View {
         .onAppear(perform: fill)
     }
 
+    /// The worked-out value shown in an empty field.
+    private func suggested(_ key: String) -> String {
+        (store.suggestions[key]?.number).map { Fmt.int($0) } ?? "–"
+    }
+
     /// "max 186 · klid 48" for the row in Settings.
-    static func summary(_ profile: JSONObject) -> String? {
-        let parts = [profile["hrmax"]?.string.map { L10n.f("max %@", $0) }, profile["rhr"]?.string.map { L10n.f("klid %@", $0) }].compactMap { $0 }
+    static func summary(_ profile: JSONObject, suggestions: JSONObject = [:]) -> String? {
+        let value = { (key: String) in profile[key]?.string ?? suggestions[key]?.number.map { Fmt.int($0) } }
+        let parts = [value("hrmax").map { L10n.f("max %@", $0) }, value("rhr").map { L10n.f("klid %@", $0) }].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -299,9 +327,9 @@ struct GoalsSettingsView: View {
     var body: some View {
         SettingsPage(title: "Cíle") {
             SettingsGroup(title: "Sport", footer: "Trenér podle hlavního sportu volí tréninky a ostatní sporty bere jako doplněk.") {
-                SettingsPicker(title: "Hlavní sport", selection: $mainSport, options: Self.sports)
+                SettingsPicker(title: "Hlavní sport", selection: $mainSport, options: sportOptions)
                 SettingsDivider()
-                SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h")
+                SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h", placeholder: recentHours.map { Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) } ?? "–")
                 SettingsDivider()
                 TextField("Cíl vlastními slovy, třeba „zaběhnout půlmaraton pod 1:40“", text: $sportGoal, axis: .vertical)
                     .lineLimit(2...4)
@@ -324,6 +352,23 @@ struct GoalsSettingsView: View {
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
         .onAppear(perform: fill)
+    }
+
+    private var history: JSONObject {
+        if case .object(let h)? = store.suggestions["trainingHistory"] { return h }
+        return [:]
+    }
+
+    /// The weekly hours of the last four weeks, shown while the field is empty.
+    private var recentHours: Double? {
+        history["weeklyHours"]?.number.flatMap { $0 >= 1 ? $0 : nil }
+    }
+
+    /// "automaticky · běh": the sport of the recent activities.
+    private var sportOptions: [(String, String)] {
+        let recent = (history["recentCount"]?.number ?? 0) > 0 ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil
+        let label = recent.flatMap { id in Self.sports.first { $0.0 == id }?.1 }
+        return [("auto", label.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky"))] + Self.sports
     }
 
     private static let isoDay: DateFormatter = {
@@ -371,6 +416,7 @@ struct SourcesSettingsView: View {
     @State private var actions = SourceActions()
     @State private var syncing = false
     @State private var adding = false
+    @State private var connectingApple = false
     @State private var flow = ConnectFlowState()
 
     private var connected: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected == true } }
@@ -410,6 +456,21 @@ struct SourcesSettingsView: View {
                 }
             }
 
+            if store.loaded && !store.demo {
+                SectionLabel(text: "Můžeš připojit").padding(.top, 10)
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    ForEach(offers, id: \.id) { offer in
+                        if let url = offer.url {
+                            Link(destination: url) { IntegrationTile(id: offer.id, name: offer.name, note: offer.note) }
+                                .buttonStyle(.plain)
+                        } else {
+                            Button { start(offer.id) } label: { IntegrationTile(id: offer.id, name: offer.name, note: offer.note) }
+                                .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
             SettingsGroup(title: "Data") {
                 Button {
                     Task { syncing = true; await store.syncNow(); syncing = false }
@@ -440,21 +501,77 @@ struct SourcesSettingsView: View {
             }
         }
         .sheet(isPresented: $adding) {
-            AddIntegrationSheet(available: available) { provider in
+            AddIntegrationSheet(available: available, appleConnected: connected.contains { $0.id == "apple" }) { provider in
                 adding = false
                 // The next sheet (Google's disclosure, the browser) once this one has closed.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    flow.start(provider, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { start(provider) }
             }
+        }
+        .sheet(isPresented: $connectingApple) {
+            AppleHealthConnectSheet { await store.load(); actions.message = L10n.tr("Apple Health je připojené.") }
         }
         .connectFlow($flow, actions: actions, store: store)
     }
 
     private var lastSync: String? { store.sync?.updatedAt.flatMap(SourceActions.when) }
+
+    private func start(_ provider: String) {
+        if provider == "apple" { connectingApple = true; return }
+        // Strava, Garmin and Wahoo come through Intervals.icu, so connect that first.
+        let target = ["strava", "garmin", "wahoo"].contains(provider) ? "intervals" : provider
+        flow.start(target, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
+    }
+
+    private struct Offer {
+        let id: String
+        let name: String
+        let note: String
+        var url: URL? = nil
+    }
+
+    /// What is not connected yet: the services Loadwise reads itself, then the
+    /// watches and apps that come in through Intervals.icu.
+    private var offers: [Offer] {
+        var list: [Offer] = []
+        if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
+            list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
+        }
+        for provider in available where provider.id == "google" || provider.id == "intervals" {
+            list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
+        }
+        let settings = URL(string: "https://intervals.icu/settings")
+        let viaIntervals = connected.contains { $0.id == "intervals" }
+        for (id, name) in [("strava", "Strava"), ("garmin", "Garmin"), ("wahoo", "Wahoo")] {
+            list.append(Offer(id: id, name: name, note: L10n.tr("přes Intervals"), url: viaIntervals ? settings : nil))
+        }
+        return list
+    }
 }
 
-/// One connected service: its icon, name, the state in a few words and "Spravovat".
+/// A service to connect in the grid: its icon, name and how.
+struct IntegrationTile: View {
+    let id: String
+    let name: String
+    let note: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            IntegrationIcon(id: id, size: 50)
+            VStack(spacing: 1) {
+                Text(verbatim: name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(verbatim: note).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            }
+        }
+        .padding(.vertical, 16).padding(.horizontal, 6)
+        .frame(maxWidth: .infinity)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One connected service: its icon, name, what it brings and its state.
 struct IntegrationCard: View {
     let provider: ConnectionsResponse.Provider
     let lastSync: String?
@@ -462,26 +579,35 @@ struct IntegrationCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            IntegrationIcon(id: provider.id, size: 46)
+            IntegrationIcon(id: provider.id, size: 50)
             VStack(alignment: .leading, spacing: 3) {
                 Text(verbatim: provider.name ?? provider.id).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                 if let problem = provider.problemText {
                     Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
-                } else if let at = provider.lastSuccessAt.flatMap(SourceActions.when) ?? lastSync {
-                    Text(L10n.f("synchronizováno %@", at)).font(Typo.caption).foregroundStyle(Palette.muted)
+                } else {
+                    Text(Self.brings(provider.id)).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
-            Text(working ? L10n.tr("připojuji…") : provider.needsAttention ? L10n.tr("Opravit") : L10n.tr("Spravovat"))
+            Text(working ? L10n.tr("připojuji…") : provider.needsAttention ? L10n.tr("Opravit") : L10n.tr("propojeno"))
                 .font(Typo.caption.weight(.semibold))
-                .foregroundStyle(provider.needsAttention ? Palette.onButton : Palette.ink)
+                .foregroundStyle(provider.needsAttention ? Palette.onButton : working ? Palette.ink : Palette.green)
                 .padding(.horizontal, 12).frame(height: 30)
-                .background(provider.needsAttention ? Palette.rust : Palette.ink.opacity(0.07), in: Capsule())
+                .background(provider.needsAttention ? Palette.rust : working ? Palette.ink.opacity(0.07) : Palette.greenSoft, in: Capsule())
         }
         .padding(14)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .contentShape(Rectangle())
+    }
+
+    static func brings(_ id: String) -> String {
+        switch id {
+        case "apple": return L10n.tr("spánek, tréninky, srdce, pohyb")
+        case "intervals": return L10n.tr("tréninky, plán, zóny")
+        case "google": return L10n.tr("spánek, tep, kroky")
+        default: return L10n.tr("tréninky")
+        }
     }
 }
 
@@ -489,23 +615,46 @@ struct IntegrationIcon: View {
     let id: String
     var size: CGFloat = 40
 
-    private var style: (symbol: String, color: Color) {
-        switch id {
-        case "google": return ("heart.text.square.fill", Palette.blue)
-        case "intervals": return ("waveform.path.ecg", Palette.rust)
-        case "apple": return ("heart.fill", Color(light: 0xE5484D, dark: 0xF2777A))
-        default: return ("watch.analog", Palette.indigo)
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
+        ZStack {
+            switch id {
+            case "apple":
+                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
+                Image(systemName: "heart.fill").font(.system(size: size * 0.46, weight: .semibold))
+                    .foregroundStyle(LinearGradient(colors: [Color(light: 0xFF5E7E, dark: 0xFF5E7E), Color(light: 0xF0283C, dark: 0xF0283C)], startPoint: .top, endPoint: .bottom))
+            case "google":
+                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
+                Image(systemName: "heart.fill").font(.system(size: size * 0.46, weight: .semibold))
+                    .foregroundStyle(AngularGradient(colors: [Color(light: 0x4285F4, dark: 0x4285F4), Color(light: 0x34A853, dark: 0x34A853), Color(light: 0xFBBC04, dark: 0xFBBC04), Color(light: 0xEA4335, dark: 0xEA4335), Color(light: 0x4285F4, dark: 0x4285F4)], center: .center))
+            case "intervals":
+                shape.fill(Color(light: 0x1E2A3B, dark: 0x1E2A3B))
+                HStack(alignment: .bottom, spacing: size * 0.05) {
+                    bar(0x3B8FE0, 0.18)
+                    bar(0xE5533D, 0.30)
+                    bar(0xF2B33D, 0.24)
+                    bar(0xE5533D, 0.38)
+                }
+            case "strava":
+                shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
+                Image(systemName: "chevron.up").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
+            case "garmin":
+                shape.fill(Color(light: 0x111111, dark: 0x111111))
+                Image(systemName: "triangle.fill").font(.system(size: size * 0.38, weight: .bold)).foregroundStyle(.white)
+            case "wahoo":
+                shape.fill(Color(light: 0x0B6FE0, dark: 0x0B6FE0))
+                Text(verbatim: "W").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
+            default:
+                shape.fill(Palette.indigo)
+                Image(systemName: "watch.analog").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
+            }
         }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 
-    var body: some View {
-        let (symbol, color) = style
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.45, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(color, in: RoundedRectangle(cornerRadius: size * 0.26, style: .continuous))
-            .accessibilityHidden(true)
+    private func bar(_ hex: UInt32, _ height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: size * 0.03).fill(Color(light: hex, dark: hex)).frame(width: size * 0.09, height: size * height)
     }
 }
 
@@ -593,6 +742,8 @@ struct IntegrationDetailView: View {
                     .buttonStyle(.plain)
                     .disabled(actions.working != nil || store.demo)
                 }
+            } else if current.id == "apple" {
+                AppleHealthSettings(store: store)
             } else if current.id == "intervals" {
                 SettingsGroup(title: "Přístup", footer: "Klíč najdeš v Intervals.icu v Settings → Developer Settings.") {
                     Button { flow.start("intervals", actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true }) } label: {
@@ -628,6 +779,7 @@ struct IntegrationDetailView: View {
 struct AddIntegrationSheet: View {
     @Environment(\.dismiss) private var dismiss
     let available: [ConnectionsResponse.Provider]
+    var appleConnected = false
     let connect: (String) -> Void
 
     var body: some View {
@@ -640,17 +792,20 @@ struct AddIntegrationSheet: View {
                         row(provider, subtitle: L10n.tr("spánek, tep, HRV, kroky, váha a jídlo"))
                         SettingsDivider()
                     }
-                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
-                                subtitle: L10n.tr("přijde s placeným Apple Developer Programem"), value: L10n.tr("brzy"), chevron: false)
-                        .opacity(0.6)
-                }
-                SettingsGroup(title: "Tréninky") {
-                    ForEach(Array(training.enumerated()), id: \.element.id) { index, provider in
-                        if index > 0 { SettingsDivider() }
-                        row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
+                    if appleConnected {
+                        SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Color(light: 0xE5484D, dark: 0xF2777A)), title: "Apple Health",
+                                    subtitle: L10n.tr("připojeno"), chevron: false)
+                    } else if AppleHealth.shared.isAvailable {
+                        appleRow
                     }
-                    if training.isEmpty {
-                        SettingsRow(title: "Intervals.icu je už připojené.", chevron: false)
+                }
+                // A connected Intervals.icu is in Zdroje dat already; nothing to add here then.
+                if !training.isEmpty {
+                    SettingsGroup(title: "Tréninky") {
+                        ForEach(Array(training.enumerated()), id: \.element.id) { index, provider in
+                            if index > 0 { SettingsDivider() }
+                            row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
+                        }
                     }
                 }
                 SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Loadwise jejich data dostane odtamtud.") {
@@ -669,6 +824,24 @@ struct AddIntegrationSheet: View {
             }
         }
         .tint(Palette.ink)
+    }
+
+    /// Apple Health is read on the phone, so it is not in the server's list until connected.
+    private var appleRow: some View {
+        HStack(spacing: 12) {
+            IntegrationIcon(id: "apple", size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Apple Health").font(.body).foregroundStyle(Palette.ink)
+                Text("spánek, tréninky, tep, HRV, kroky a váha").font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(L10n.tr("Připojit")) { connect("apple") }
+                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(Palette.ink.opacity(0.07), in: Capsule())
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
     }
 
     private func row(_ provider: ConnectionsResponse.Provider, subtitle: String) -> some View {
@@ -722,6 +895,7 @@ final class SourceActions {
     }
 
     func disconnect(_ provider: String, model: AppModel, store: SettingsStore) async -> Bool {
+        if provider == "apple" { AppleHealth.shared.disconnect() }
         do {
             try await model.api.disconnect(provider: provider)
             message = L10n.tr("Odpojeno.")
@@ -1019,10 +1193,22 @@ struct LanguageSettingsView: View {
 struct NotificationsSettingsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Reminders.bedtimeKey) private var bedtime = true
+    @AppStorage(Reminders.bedtimeOffsetKey) private var bedtimeOffset = 30
     @AppStorage(Reminders.workoutKey) private var workout = true
+    @AppStorage(Reminders.workoutTimeKey) private var workoutTime = 16 * 60
     @AppStorage(Reminders.waterKey) private var water = true
+    @AppStorage(Reminders.waterFromKey) private var waterFrom = 10 * 60
+    @AppStorage(Reminders.waterToKey) private var waterTo = 16 * 60
+    @AppStorage(Reminders.waterEveryKey) private var waterEvery = 3 * 60
     @AppStorage(Reminders.foodKey) private var food = true
+    @AppStorage(Reminders.foodTimeKey) private var foodTime = 20 * 60 + 30
+    @AppStorage(Reminders.weightKey) private var weight = false
+    @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
+    @AppStorage(Reminders.weekKey) private var week = false
+    @AppStorage(Reminders.weekTimeKey) private var weekTime = 19 * 60
     @State private var allowed: Bool?
+    /// Bumped by every change, so the reminders are planned again once.
+    @State private var revision = 0
 
     var body: some View {
         SettingsPage(title: "Oznámení") {
@@ -1034,27 +1220,127 @@ struct NotificationsSettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            SettingsGroup(footer: "Připomínky se plánují v telefonu podle dnešních dat.") {
-                SettingsToggle(title: "Čas do postele", subtitle: "půl hodiny před doporučeným časem", isOn: $bedtime)
+            SettingsGroup(title: "Spánek a trénink") {
+                SettingsToggle(title: "Čas do postele", isOn: $bedtime)
+                if bedtime {
+                    SettingsDivider()
+                    SettingsPicker(title: "Předem", selection: Binding(get: { String(bedtimeOffset) }, set: { bedtimeOffset = Int($0) ?? 30 }),
+                                   options: [("15", "15 min"), ("30", "30 min"), ("45", "45 min"), ("60", "1 h")])
+                }
                 SettingsDivider()
-                SettingsToggle(title: "Trénink", subtitle: "hodinu před naplánovaným tréninkem", isOn: $workout)
+                SettingsToggle(title: "Trénink v plánu", isOn: $workout)
+                if workout {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $workoutTime)
+                }
+            }
+            SettingsGroup(title: "Pití", footer: "Jen dokud nemáš splněný denní cíl.") {
+                SettingsToggle(title: "Napít se", isOn: $water)
+                if water {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Od", minutes: $waterFrom)
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Do", minutes: $waterTo)
+                    SettingsDivider()
+                    SettingsPicker(title: "Každé", selection: Binding(get: { String(waterEvery / 60) }, set: { waterEvery = (Int($0) ?? 3) * 60 }),
+                                   options: [("1", "1 h"), ("2", "2 h"), ("3", "3 h"), ("4", "4 h")])
+                }
+            }
+            SettingsGroup(title: "Jídla") {
+                ForEach(Array(Reminders.meals.enumerated()), id: \.offset) { index, meal in
+                    if index > 0 { SettingsDivider() }
+                    MealReminderRow(meal: meal)
+                }
                 SettingsDivider()
-                SettingsToggle(title: "Pití", subtitle: "v 10, 13 a 16 h, dokud nemáš splněno", isOn: $water)
+                SettingsToggle(title: "Zapsat jídlo za celý den", isOn: $food)
+                if food {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $foodTime)
+                }
+            }
+            SettingsGroup(title: "Další") {
+                SettingsToggle(title: "Ranní vážení", isOn: $weight)
+                if weight {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $weightTime)
+                }
                 SettingsDivider()
-                SettingsToggle(title: "Zapsat jídlo", subtitle: "ve 20:30", isOn: $food)
+                SettingsToggle(title: "Plán na příští týden", subtitle: "v neděli", isOn: $week)
+                if week {
+                    SettingsDivider()
+                    ReminderTimeRow(title: "Připomenout v", minutes: $weekTime)
+                }
             }
         }
-        .task { await check() }
-        .onChange(of: [bedtime, workout, water, food]) { Task { await check(); if let today = model.today { await Reminders.reschedule(from: today) } } }
+        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in revision += 1 }
+        .task(id: revision) {
+            if revision > 0 {
+                try? await Task.sleep(for: .milliseconds(400))
+                if Task.isCancelled { return }
+            }
+            await check()
+            if revision > 0, let today = model.today { await Reminders.reschedule(from: today) }
+        }
     }
 
     private func check() async {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if status == .notDetermined, bedtime || workout || water || food {
+        if status == .notDetermined, bedtime || workout || water || food || weight || week {
             allowed = await Reminders.requestPermission()
         } else {
             allowed = status == .authorized || status == .provisional
         }
+    }
+}
+
+/// One meal's reminder: on or off, and its time when on.
+private struct MealReminderRow: View {
+    let meal: (id: String, title: String, time: Int, on: Bool)
+    @AppStorage private var on: Bool
+    @AppStorage private var time: Int
+
+    init(meal: (id: String, title: String, time: Int, on: Bool)) {
+        self.meal = meal
+        _on = AppStorage(wrappedValue: meal.on, Reminders.mealKey(meal.id))
+        _time = AppStorage(wrappedValue: meal.time, Reminders.mealTimeKey(meal.id))
+    }
+
+    var body: some View {
+        SettingsToggle(title: meal.title, isOn: $on)
+        if on {
+            SettingsDivider()
+            ReminderTimeRow(title: "Připomenout v", minutes: $time)
+        }
+    }
+}
+
+/// "Připomenout v 16:00".
+private struct ReminderTimeRow: View {
+    let title: String
+    @Binding var minutes: Int
+
+    var body: some View {
+        HStack {
+            Text(title).font(.body).foregroundStyle(Palette.ink)
+            Spacer()
+            ReminderTimePicker(minutes: $minutes)
+        }
+        .padding(.horizontal, 16)
+        .frame(minHeight: 50)
+    }
+}
+
+/// A clock time stored as minutes after midnight.
+private struct ReminderTimePicker: View {
+    @Binding var minutes: Int
+
+    var body: some View {
+        DatePicker("", selection: Binding(
+            get: { Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date() },
+            set: { let c = Calendar.current.dateComponents([.hour, .minute], from: $0); minutes = (c.hour ?? 0) * 60 + (c.minute ?? 0) }
+        ), displayedComponents: .hourAndMinute)
+        .labelsHidden()
+        .environment(\.locale, Fmt.locale)
     }
 }
 

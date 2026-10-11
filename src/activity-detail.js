@@ -24,6 +24,21 @@ export function activityIntervals(detail={}){
   const rows=Array.isArray(detail.icu_intervals)?detail.icu_intervals:[];
   return rows.filter(r=>present(r.elapsed_time)||present(r.moving_time)).slice(0,60).map(r=>({label:r.label||null,type:r.type||null,start:present(r.start_time)?Number(r.start_time):null,seconds:Number(r.moving_time??r.elapsed_time),watts:present(r.average_watts)?Math.round(r.average_watts):null,np:present(r.weighted_average_watts)?Math.round(r.weighted_average_watts):null,hr:present(r.average_heartrate)?Math.round(r.average_heartrate):null,maxHr:present(r.max_heartrate)?Math.round(r.max_heartrate):null,cadence:present(r.average_cadence)?Math.round(r.average_cadence):null,maxWatts:present(r.max_watts)?Math.round(r.max_watts):null,speed:present(r.average_speed)?Number(r.average_speed):null,elevation:present(r.total_elevation_gain)?Math.round(r.total_elevation_gain):null,distance:present(r.distance)?Number(r.distance):null,zone:present(r.zone)?Number(r.zone):null}));
 }
+// Time in each heart-rate zone with its bpm range: Intervals.icu's own zone
+// times when it sent them, otherwise counted from the heart-rate stream.
+export function heartRateZones(detail={},time=[],hr=[]){
+  const bounds=(Array.isArray(detail.icu_hr_zones)?detail.icu_hr_zones:[]).map(Number).filter(v=>v>0);
+  if(bounds.length<3)return [];
+  let seconds=Array.isArray(detail.icu_hr_zone_times)?detail.icu_hr_zone_times.map(v=>Math.max(0,Number(v)||0)):[];
+  if(seconds.length!==bounds.length){
+    seconds=bounds.map(()=>0);
+    const t=i=>present(time[i])?Number(time[i]):i;
+    for(let i=1;i<hr.length;i++){const v=Number(hr[i]),dt=t(i)-t(i-1);if(!(v>0)||!(dt>0)||dt>30)continue;let z=bounds.findIndex(b=>v<=b);if(z<0)z=bounds.length-1;seconds[z]+=dt;}
+  }
+  const total=seconds.reduce((a,b)=>a+b,0);
+  if(!total)return [];
+  return bounds.map((b,i)=>({zone:i+1,min:i?Math.round(bounds[i-1])+1:null,max:i===bounds.length-1?null:Math.round(b),seconds:Math.round(seconds[i]),percent:seconds[i]/total*100}));
+}
 async function boundedJson(response,maxBytes=8*1024*1024){
   if(!response.ok)throw new Error(L('Zdroj aktivity není dostupný.', 'The activity source isn\'t available.'));
   const reader=response.body.getReader(),chunks=[];let bytes=0;
@@ -55,6 +70,6 @@ export async function activityDetail(request,env,id,authorized){
     const activity=compactActivity(detail);
     const stream=type=>(Array.isArray(streams)?streams:[]).find(x=>x.type===type)?.data||[],zones=Array.isArray(detail.icu_hr_zones)?detail.icu_hr_zones:null;
     const hrr=heartRateRecovery(stream('time'),stream('heartrate'),zones&&zones.length>=4?Number(zones[2])+1:null);
-    return Response.json({status:'ok',activity,analysis:analyzeRide(activity,streams),streams:sampleActivityStreams(streams),intervals:activityIntervals(detail),hrr,source:'intervals.icu'},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({status:'ok',activity,analysis:analyzeRide(activity,streams),hrZones:heartRateZones(detail,stream('time'),stream('heartrate')),streams:sampleActivityStreams(streams),intervals:activityIntervals(detail),hrr,source:'intervals.icu'},{headers:{'Cache-Control':'private, no-store'}});
   }catch{return Response.json({message:L('Detail není dostupný. Některé aktivity nemají přístupný GPS nebo výkonový stream.', 'Details aren\'t available. Some activities have no accessible GPS or power stream.')},{status:502,headers:{'Cache-Control':'no-store'}});}
 }
