@@ -1,8 +1,10 @@
 import SwiftUI
 
-// "Kdy mám čas": the time for training on each weekday and the sports for the
-// day, for the usual week or just one week (GET/POST/DELETE /app/api/week-plan,
-// src/week-planner.js). The week's plan and the generator keep to it.
+// "Kdy mám čas": the time for training on each weekday, one bar per day set by
+// a tap or a drag (0–4 h), for the usual week or just one week
+// (GET/POST/DELETE /app/api/week-plan, src/week-planner.js). The week's plan
+// and the generator keep to it. The sports per day and the number of workouts
+// go back as they came.
 
 /// The week plan's object as the server sends it: the editor reads a few keys
 /// and changes them, every other key goes back as it came.
@@ -71,39 +73,20 @@ struct AvailabilityView: View {
     var weekStart: String = WeekPlanView.monday()
     var onSave: () -> Void = {}
 
-    private enum Scope: Hashable { case usual, week }
-
-    @State private var scope: Scope = .usual
+    @State private var weekOnly = false
     @State private var prefs: JSONValue?
     @State private var minutes = Array(repeating: -1, count: 7)
-    @State private var days = Array(repeating: [String](), count: 7)
-    @State private var weeklyActivities: Int?
     @State private var loading = false
     @State private var saving = false
     @State private var error: String?
     @State private var started = false
     @State private var skipScopeLoad = false
 
-    private static let minuteOptions = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300, 360]
-
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · týden").padding(.top, 24)
                 Text("Kdy mám čas").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-
-                Picker("Platnost", selection: $scope) {
-                    Text("Běžný týden").tag(Scope.usual)
-                    Text("Jen tento týden").tag(Scope.week)
-                }
-                .pickerStyle(.segmented)
-                .disabled(loading || saving)
-                .padding(.top, 18)
-
-                if scope == .week {
-                    Text(verbatim: Fmt.dayMonth(weekStart) + " – " + Fmt.dayMonth(ISODay.shift(weekStart, 6)))
-                        .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8)
-                }
 
                 if loading && prefs == nil {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -120,7 +103,7 @@ struct AvailabilityView: View {
             started = true
             await load(initial: true)
         }
-        .onChange(of: scope) { _, _ in
+        .onChange(of: weekOnly) { _, _ in
             if skipScopeLoad { skipScopeLoad = false; return }
             Task { await load(initial: false) }
         }
@@ -128,32 +111,42 @@ struct AvailabilityView: View {
 
     @ViewBuilder
     private var editor: some View {
-        let total = minutes.filter { $0 > 0 }.reduce(0, +)
-        SettingsGroup(footer: total > 0 ? L10n.f("Celkem %@ týdně", Fmt.duration(total)) : nil) {
+        VStack(spacing: 0) {
             ForEach(0..<7, id: \.self) { i in
-                if i > 0 { SettingsDivider() }
-                dayRow(i)
+                if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                AvailabilityBarRow(
+                    day: Fmt.weekdayShort(ISODay.shift(weekStart, i)),
+                    date: weekOnly ? Fmt.dayMonth(ISODay.shift(weekStart, i)) : nil,
+                    minutes: $minutes[i]
+                )
             }
         }
-        .padding(.top, 18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 4)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .disabled(saving || loading)
+        .sensoryFeedback(.selection, trigger: minutes)
+        .padding(.top, 22)
+
+        HStack(alignment: .firstTextBaseline) {
+            Text("Týdně").font(Typo.body).foregroundStyle(Palette.muted)
+            Spacer(minLength: 8)
+            Text(verbatim: Fmt.duration(total)).font(Typo.number(36)).foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .accessibilityElement(children: .combine)
+        .padding(.top, 22)
 
         SettingsGroup {
-            HStack(spacing: 12) {
-                Text("Tréninků týdně").font(.body).foregroundStyle(Palette.ink)
-                Spacer(minLength: 8)
-                Menu {
-                    Picker("Tréninků týdně", selection: $weeklyActivities) {
-                        Text("Podle historie").tag(Int?.none)
-                        ForEach(1...14, id: \.self) { n in Text(verbatim: String(n)).tag(Int?.some(n)) }
-                    }
-                } label: {
-                    menuLabel(weeklyActivities.map { String($0) } ?? L10n.tr("Podle historie"))
-                }
-            }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 50)
+            SettingsToggle(
+                title: "Jen tento týden",
+                subtitle: Fmt.dayMonth(weekStart) + " – " + Fmt.dayMonth(ISODay.shift(weekStart, 6)),
+                isOn: $weekOnly,
+                disabled: loading || saving
+            )
         }
-        .padding(.top, 14)
+        .padding(.top, 16)
 
         PrimaryButton(title: saving ? "Ukládám…" : "Uložit", systemImage: "checkmark", busy: saving) {
             Task { await save() }
@@ -161,7 +154,7 @@ struct AvailabilityView: View {
         .disabled(saving || loading || model.demo)
         .padding(.top, 22)
 
-        if scope == .week && WeekPlanPrefs.source(prefs) == "week" {
+        if weekOnly && WeekPlanPrefs.source(prefs) == "week" {
             SecondaryButton(title: "Vrátit běžný týden", systemImage: "arrow.uturn.backward") {
                 Task { await reset() }
             }
@@ -170,63 +163,7 @@ struct AvailabilityView: View {
         }
     }
 
-    private func dayRow(_ i: Int) -> some View {
-        let date = ISODay.shift(weekStart, i)
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: Self.weekdayName(date)).font(.body).foregroundStyle(Palette.ink)
-                    if scope == .week {
-                        Text(verbatim: Fmt.dayMonth(date)).font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                }
-                Spacer(minLength: 8)
-                Menu {
-                    Picker("Čas", selection: $minutes[i]) {
-                        Text("Neurčeno").tag(-1)
-                        ForEach(Self.options(including: minutes[i]), id: \.self) { m in
-                            Text(verbatim: Self.minutesText(m)).tag(m)
-                        }
-                    }
-                } label: {
-                    menuLabel(Self.minutesText(minutes[i]))
-                }
-            }
-            if minutes[i] != 0 {
-                HStack(spacing: 8) {
-                    ForEach(WeekPlanPrefs.sports, id: \.self) { sport in sportChip(sport, day: i) }
-                }
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    private func sportChip(_ sport: String, day i: Int) -> some View {
-        let on = days[i].contains(sport)
-        return Button {
-            if on { days[i].removeAll { $0 == sport } }
-            else if days[i].count < WeekPlanPrefs.maxPerDay { days[i].append(sport) }
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: Self.symbol(sport)).font(.system(size: 12, weight: .semibold))
-                Text(verbatim: Self.sportName(sport)).font(Typo.caption.weight(.medium))
-            }
-            .foregroundStyle(on ? Palette.amber : Palette.muted)
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(on ? Palette.amberSoft : Palette.track, in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
-    }
-
-    private func menuLabel(_ text: String) -> some View {
-        HStack(spacing: 4) {
-            Text(verbatim: text).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
-            Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
-        }
-    }
+    private var total: Int { minutes.filter { $0 > 0 }.reduce(0, +) }
 
     // MARK: Data
 
@@ -236,11 +173,11 @@ struct AvailabilityView: View {
         defer { loading = false }
         do {
             // A week without its own plan answers with the usual week.
-            let r = try await model.api.weekPlan(start: initial || scope == .week ? weekStart : nil)
+            let r = try await model.api.weekPlan(start: initial || weekOnly ? weekStart : nil)
             if initial && WeekPlanPrefs.source(r.prefs) == "week" {
                 // The page opens on the week when it has its own plan.
                 skipScopeLoad = true
-                scope = .week
+                weekOnly = true
             }
             apply(r.prefs)
         } catch {
@@ -251,8 +188,6 @@ struct AvailabilityView: View {
     private func apply(_ value: JSONValue?) {
         prefs = value
         minutes = WeekPlanPrefs.minutes(value)
-        days = WeekPlanPrefs.days(value)
-        weeklyActivities = WeekPlanPrefs.weeklyActivities(value)
         error = nil
     }
 
@@ -260,8 +195,9 @@ struct AvailabilityView: View {
         saving = true
         defer { saving = false }
         do {
-            let body = WeekPlanPrefs.edited(prefs, minutes: minutes, days: days.map { Array($0.prefix(WeekPlanPrefs.maxPerDay)) }, weeklyActivities: weeklyActivities)
-            try await model.api.saveWeekPlan(start: scope == .week ? weekStart : nil, prefs: body)
+            let days = WeekPlanPrefs.days(prefs).map { Array($0.prefix(WeekPlanPrefs.maxPerDay)) }
+            let body = WeekPlanPrefs.edited(prefs, minutes: minutes, days: days, weeklyActivities: WeekPlanPrefs.weeklyActivities(prefs))
+            try await model.api.saveWeekPlan(start: weekOnly ? weekStart : nil, prefs: body)
             onSave()
             dismiss()
         } catch {
@@ -280,32 +216,81 @@ struct AvailabilityView: View {
             self.error = error.localizedDescription
         }
     }
+}
 
-    // MARK: Text
+/// One weekday: "Po", a bar to tap or drag (0–4 h in quarter hours) and the
+/// time on the right ("1 h 30", "volno", "–" while not set).
+struct AvailabilityBarRow: View {
+    let day: String
+    var date: String? = nil
+    @Binding var minutes: Int
 
-    private static func options(including current: Int) -> [Int] {
-        current > 0 && !minuteOptions.contains(current) ? (minuteOptions + [current]).sorted() : minuteOptions
+    static let maxMinutes = 240
+    static let step = 15
+
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(verbatim: day).font(Typo.bodyStrong).foregroundStyle(minutes == 0 ? Palette.faint : Palette.ink)
+                if let date {
+                    Text(verbatim: date).font(Typo.tiny).foregroundStyle(Palette.faint).lineLimit(1)
+                }
+            }
+            .frame(width: 44, alignment: .leading)
+
+            GeometryReader { geo in
+                let width = max(geo.size.width, 1)
+                let fraction = minutes > 0 ? min(Double(minutes) / Double(Self.maxMinutes), 1) : 0
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Palette.track)
+                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Palette.amberBar)
+                        .frame(width: width * fraction)
+                }
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in set(x: value.location.x, width: width) }
+                )
+            }
+            .frame(height: 30)
+
+            valueText
+                .frame(minWidth: 64, alignment: .trailing)
+        }
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: day))
+        .accessibilityValue(Text(verbatim: Self.text(minutes)))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: minutes = min(Self.maxMinutes, max(minutes, 0) + Self.step)
+            case .decrement: minutes = max(0, minutes - Self.step)
+            @unknown default: break
+            }
+        }
     }
 
-    private static func minutesText(_ m: Int) -> String {
-        m < 0 ? L10n.tr("Neurčeno") : m == 0 ? L10n.tr("Volno") : Fmt.duration(m)
+    @ViewBuilder
+    private var valueText: some View {
+        if minutes == 0 {
+            Text(verbatim: L10n.tr("volno")).font(Typo.sentenceItalic(20)).foregroundStyle(Palette.faint)
+        } else {
+            Text(verbatim: Self.text(minutes)).font(Typo.number(24)).foregroundStyle(minutes < 0 ? Palette.faint : Palette.ink)
+                .lineLimit(1)
+        }
     }
 
-    static func sportName(_ sport: String) -> String {
-        L10n.tr(["ride": "Kolo", "run": "Běh", "gym": "Posilovna"][sport] ?? sport)
+    private func set(x: CGFloat, width: CGFloat) {
+        let raw = Double(min(max(x, 0), width) / width) * Double(Self.maxMinutes)
+        let snapped = Int((raw / Double(Self.step)).rounded()) * Self.step
+        if snapped != minutes { minutes = snapped }
     }
 
-    static func symbol(_ sport: String) -> String {
-        ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill"][sport] ?? "figure.mixed.cardio"
-    }
-
-    /// "Pondělí" for a Monday.
-    private static func weekdayName(_ iso: String) -> String {
-        guard let date = ISODay.date(iso) else { return iso }
-        let f = DateFormatter()
-        f.locale = Fmt.locale
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "EEEE"
-        return Fmt.capitalized(f.string(from: date))
+    /// 90 → "1 h 30", 45 → "45 min", 0 → "volno", not set → "–".
+    static func text(_ m: Int) -> String {
+        if m < 0 { return "–" }
+        if m == 0 { return L10n.tr("volno") }
+        if m < 60 { return "\(m) min" }
+        return "\(m / 60) h" + (m % 60 > 0 ? " \(m % 60)" : "")
     }
 }

@@ -77,6 +77,7 @@ struct TrainingContent: View {
 
                 StrainHero(training: training)
                     .padding(.top, 26)
+                CoachTextCard(screen: "training").padding(.top, 18)
 
                 WeekStrainBars(days: training.days)
                     .padding(.top, 22)

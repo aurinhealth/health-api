@@ -101,31 +101,8 @@ struct TodayContent: View {
             CoachCheckInCard(openCoach: openCoach).padding(.top, 24)
         }
 
-        if let summary = today.summary, summary.text != nil || summary.recommendation != nil {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    SectionLabel(text: "Co to znamená pro dnešek")
-                    Spacer()
-                    Button(action: openCoach) {
-                        Label("Zeptat se", systemImage: "bubble.left").font(.footnote.weight(.medium)).foregroundStyle(Palette.muted)
-                    }
-                }
-                summaryText(summary)
-                    .font(Typo.sentence(22))
-                    .foregroundStyle(Palette.ink)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.top, 32)
-        }
-    }
-
-    private func summaryText(_ s: TodaySnapshot.Summary) -> Text {
-        var text = Text(s.text ?? "")
-        if let rec = s.recommendation {
-            text = text + Text(s.text == nil ? "" : " ") + Text(rec).font(Typo.sentenceItalic(22)).foregroundColor(Palette.green)
-        }
-        return text
+        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil).padding(.top, 32)
+        RecoveryTodayCard(today: today).padding(.top, 12)
     }
 }
 
