@@ -27,3 +27,19 @@ export function activityTelemetryEnergy(activity,rows){
   }
   return covered/duration>=.98?{kcal:Math.round(kcal),coverage:covered/duration,source:'google-active-energy-intervals'}:null;
 }
+// Gym watches and phones count a lifting session like steady cardio from the
+// heart rate, so 90 minutes of sets and rests easily reads 700 kcal. Most of
+// that time is rest between sets: net of the resting burn, resistance work is
+// about 2.5 kcal per kg and hour (3.5 MET), hard circuits up to 5 (6 MET).
+// MET reference: https://pacompendium.com/conditioning-exercise/ (2024 Adult Compendium, 02050–02054).
+export function strengthEnergyCheck(activity,weightKg){
+  const text=`${activity.type||''} ${activity.name||''}`;
+  if(!/weight|strength|gym|lifting|posil|síl/i.test(text))return null;
+  const weight=Number(weightKg),hours=Number(activity.durationHours);
+  if(!(weight>=30&&weight<=300&&hours>0&&hours<=6))return {status:'unavailable',reason:L('Chybí hmotnost nebo délka tréninku pro kontrolu výdeje.', 'Weight or workout duration is missing for the expenditure check.')};
+  const estimated=Math.round(2.5*weight*hours),low=Math.round(1.5*weight*hours),high=Math.round(5*weight*hours),reported=Number(activity.calories);
+  const review=reported>0&&(reported>high||reported<low);
+  return {status:review?'review':'consistent',reported:reported>0?reported:null,estimated,low,high,basis:'active',
+    source:activity.source==='google-health'?L('Google Health · souhrn tréninku', 'Google Health · workout summary'):null,
+    reason:review?L('Hodinky počítají posilovnu podle tepu jako vytrvalostní trénink, včetně pauz mezi sériemi. Skutečný výdej bývá nižší.', 'Watches count lifting from heart rate like endurance training, rests between sets included. The real burn is usually lower.'):L('Orientační kontrola podle hmotnosti a délky tréninku. Nejde o měření.', 'A rough check based on weight and workout duration. It isn\'t a measurement.')};
+}

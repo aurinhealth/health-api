@@ -257,8 +257,18 @@ function sessionOf(w, date, status) {
     minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
-    eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null
+    eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
+    ...(done ? energyOf(w) : {})
   };
+}
+
+// What the device says the session burned and, when that is implausible
+// (activity-energy-check.js), the estimate the energy budget plans with.
+function energyOf(w) {
+  const kcal = round(num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories));
+  if (!(kcal > 0)) return {};
+  const c = w.energyCheck;
+  return c?.status === "review" ? { kcal, kcalEstimate: { value: round(num(w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } } : { kcal };
 }
 
 function strainBand(v) {

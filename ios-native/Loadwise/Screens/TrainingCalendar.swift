@@ -355,7 +355,7 @@ struct CalendarDayList: View {
     }
 
     static func route(_ a: CalendarActivity) -> AppRoute? {
-        if a.sport == "strength" && a.status == "planned" { return .gym(a.date) }
+        if a.sport == "strength" && a.status != "missed" { return .gym(a.date) }
         if a.status == "done" { return a.activityId != nil ? .activity(a.session) : nil }
         return a.eventId != nil ? .planned(a.session) : nil
     }

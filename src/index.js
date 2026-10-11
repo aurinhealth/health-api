@@ -4,7 +4,7 @@ import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
-import {walkingEnergyCheck,activityTelemetryEnergy} from './activity-energy-check.js';
+import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from './activity-energy-check.js';
 import { sleepSessionFromRow } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { d1WeightTrend } from "./strength-context.js";
@@ -1873,6 +1873,13 @@ async function energyForDate(env, date) {
       const check=walkingEnergyCheck(activity,weight?.value_numeric);
       if(check){activity.energyCheck={...check,summaryCalories:activity.reportedCalories,summaryMismatch:checked?.status==='review',telemetry:measured};activity.caloriesForPlanning=measured?measured.kcal:check.status==='review'?check.estimated:activity.calories;}
     }
+  }
+  // A lifting session's device calories are checked the same way; the energy
+  // budget then plans with the estimate instead of an inflated number.
+  for(const activity of completed){
+    if(activity.energyCheck)continue;
+    const check=strengthEnergyCheck(activity,weight?.value_numeric);
+    if(check?.status==='review'||check?.status==='consistent'){activity.energyCheck=check;activity.caloriesForPlanning=check.status==='review'?check.estimated:activity.calories;}
   }
 
   // One planned session is paired with at most one real activity.  The pairing

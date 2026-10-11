@@ -101,7 +101,9 @@ struct WeekSessionsList: View {
 
     /// Where a session opens (also Today → Plán dne).
     static func destination(_ s: WeekSession) -> AppRoute? {
-        if s.kind == "gym" || (s.sport == "strength" && s.status != "done") { return .gym(s.date) }
+        // A done lifting session opens the day's gym sheet too, wherever it was
+        // recorded (Google Health has no detail of its own): the sets and weights.
+        if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
         if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
         return nil

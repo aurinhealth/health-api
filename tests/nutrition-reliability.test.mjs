@@ -7,7 +7,7 @@ import {scopedDb} from '../src/tenancy.js';
 import {foodIntake} from '../src/food-portions.js';
 import {savePersonalFood,searchFoodCatalog,searchPersonalFoods,listPersonalFoods} from '../src/personal-foods.js';
 import {foodLookupLanguages,lookupFoodWithAI} from '../src/food-ai.js';
-import {walkingEnergyCheck,activityTelemetryEnergy} from '../src/activity-energy-check.js';
+import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from '../src/activity-energy-check.js';
 import {foodGooglePayload,queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from '../src/food-google-sync.js';
 const food={name:'Řecký jogurt',brand:'Test',nutrition_basis:'g',calories_100g:80,protein_100g:10,carbs_100g:6,fat_100g:2,quantity:'450 g',serving_size:'150 g',piece_size:'150 g',preferred_unit:'pack'};
 function scopedDbs(){return db();}
@@ -73,6 +73,11 @@ test('AI searches the interface language first and English only when the first l
 });
 test('walking checks use duration and weight, flag 1200 kcal at 13000 steps without erasing the source measurement',()=>{
   const a={type:'Walk',durationHours:2,calories:1200,payload:{exercise:{metricsSummary:{steps:13000,distanceMillimeters:9500000}}}};const c=walkingEnergyCheck(a,88);assert.equal(c.status,'review');assert.equal(c.estimated,493);assert.equal(a.calories,1200);assert.equal(walkingEnergyCheck({...a,type:'Ride'},88),null);assert.equal(walkingEnergyCheck(a,null).status,'unavailable');
+});
+test('a lifting session the watch counts like cardio is flagged with a realistic estimate',()=>{
+  const a={type:'WeightTraining',name:'WeightTraining',durationHours:1.55,calories:711,source:'google-health'};const c=strengthEnergyCheck(a,82);
+  assert.equal(c.status,'review');assert.equal(c.estimated,318);assert.ok(c.high<711);
+  assert.equal(strengthEnergyCheck({...a,calories:300},82).status,'consistent');assert.equal(strengthEnergyCheck({...a,type:'Walk',name:'Walk'},82),null);assert.equal(strengthEnergyCheck(a,null).status,'unavailable');
 });
 test('weekly balance excludes future meals and days without a log from accumulated differences',()=>{
   const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8'),ctx=vm.createContext({num:v=>Number(v)||0,measured:v=>v!=null});
