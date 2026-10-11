@@ -772,7 +772,10 @@ const GOOGLE_SYNC_CONFIGS = [
   ["steps", "steps", "interval", "google-wearables", 7],
   ["distance", "distance", "interval", "google-wearables", 7],
   ["floors", "floors", "interval", "google-wearables", 7],
-  ["heart-rate", "heart_rate", "sample", "google-wearables", 7],
+  // Heart rate is ~50k samples a day; samples don't change once synced, so the
+  // nightly run re-reads only the last 3 days (late watch syncs included)
+  // instead of a week: fewer Google pages and D1 reads every night.
+  ["heart-rate", "heart_rate", "sample", "google-wearables", 3],
   ["heart-rate-variability", "heart_rate_variability", "sample", "google-wearables", 7],
   ["oxygen-saturation", "oxygen_saturation", "sample", "google-wearables", 7],
   ["daily-resting-heart-rate", "daily_resting_heart_rate", "daily", "google-wearables", 30],
@@ -1842,7 +1845,7 @@ async function energyForDate(env, date) {
     try {
       const samples = (await env.DB.prepare(`
         SELECT sample_time, value_numeric, payload_json FROM health_datapoints
-        WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
+        WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min')
           AND sample_time >= ? AND sample_time < ?
         LIMIT 5000
       `).bind(env.USER_ID, dayStart, dayEnd).all()).results || [];

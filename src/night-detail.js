@@ -64,17 +64,25 @@ export async function nightDetail(db, { date }) {
     .map(x => ({ date: x.date, asleepMin: x.durationMin, inBedMin: x.timeInBedMin, stages: x.stages, bedClock: clockMin(x.startTime, x.offset), wakeClock: clockMin(x.endTime, x.offset) }));
   if (!last) return { status: "ok", date, night: null, history };
   const between = [db.userId, last.startTime, last.endTime];
-  const [hrRows, hrvRows] = await Promise.all([
+  const [rawHr, compactHr, hrvRows] = await Promise.all([
     db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket,
         AVG(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS avg,
         MIN(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS min,
         MAX(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS max
       FROM health_datapoints WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<?
       GROUP BY bucket ORDER BY bucket`).bind(...between).all().then(r => r.results || []).catch(() => []),
+    // Nights older than two weeks keep heart rate as 5-minute rows (heart-rate-compaction.js).
+    db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg,
+        json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max
+      FROM health_datapoints WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<?
+      ORDER BY sample_time`).bind(...between).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT sample_time, json_extract(payload_json, '$.heartRateVariability.rootMeanSquareOfSuccessiveDifferencesMilliseconds') AS rmssd
       FROM health_datapoints WHERE user_id=? AND data_type='heart-rate-variability' AND sample_time>=? AND sample_time<?
       ORDER BY sample_time LIMIT 400`).bind(...between).all().then(r => r.results || []).catch(() => [])
   ]);
+  const buckets = new Map(compactHr.map(r => [n(r.bucket), r]));
+  for (const r of rawHr) buckets.set(n(r.bucket), r);
+  const hrRows = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
   const t0 = ms(last.startTime), round = v => v == null ? null : Math.round(v * 10) / 10;
   const hr = hrRows.map(r => ({ m: Math.round((n(r.bucket) * 1000 - t0) / 60000), avg: round(n(r.avg)), min: n(r.min), max: n(r.max) })).filter(b => b.avg != null && b.avg > 20 && b.avg < 220);
   const hrv = hrvRows.map(r => ({ m: Math.round((ms(r.sample_time) - t0) / 60000), ms: round(n(r.rmssd)) })).filter(x => x.ms != null && x.ms > 0 && x.ms < 300);

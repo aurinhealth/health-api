@@ -32,14 +32,18 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
 export async function googleDashboard(db,today){
   const shift=d=>new Date(Date.parse(today+'T12:00:00Z')+d*86400000).toISOString().slice(0,10),end=shift(1);
   // Daily values (one row a day) go back 61 days: recovery compares them with
-  // the athlete's own 60-day baseline. Steps, energy and heart-rate zones are
-  // many rows a day and only needed for the last month. The outer list of all
-  // seven types lets SQLite use the (user, source, type) index; with only the
-  // OR of two lists it read the whole table (~1M heart-rate rows, ~0.3 s+).
-  const [data,zones]=await Promise.all([
-    db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND record_role='primary' AND ((data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max') AND COALESCE(sample_time,end_time,start_time,'')>=?) OR (data_type IN ('steps','active-energy-burned') AND COALESCE(sample_time,end_time,start_time,'')>=?)) AND COALESCE(sample_time,end_time,start_time,'')<? AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max','steps','active-energy-burned') ORDER BY id LIMIT 40000`).bind(db.userId,shift(-61),shift(-31),end).all(),
+  // the athlete's own 60-day baseline. Steps and energy are many rows a day and
+  // only needed for the last month: their own query narrows start_time through
+  // the (user, source, type, start_time) index, so it reads only that month
+  // instead of every steps and energy row ever saved (~60k rows per load).
+  // An interval starts at most a day before it ends, hence the extra day.
+  const recent='COALESCE(sample_time,end_time,start_time,\'\')';
+  const [daily,intervals,zones]=await Promise.all([
+    db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-61),end).all(),
+    db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('steps','active-energy-burned') AND start_time>=? AND start_time<? AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-32),end,shift(-31),end).all(),
     db.prepare(`SELECT start_time,end_time,json_extract(payload_json,'$.timeInHeartRateZone.heartRateZoneType') AS zone FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND record_role='primary' AND data_type='time-in-heart-rate-zone' AND start_time>=? AND start_time<? LIMIT 20000`).bind(db.userId,shift(-31),end).all().catch(()=>({results:[]}))
   ]);
+  const data={results:[...(daily.results||[]),...(intervals.results||[])]};
   const summary=googleHealthSummary(data.results||[],today,zones.results||[]);
   const sync=await db.prepare("SELECT status,updated_at,details_json FROM sync_status WHERE user_id=? AND sync_name IN ('google','google_recent') ORDER BY updated_at DESC LIMIT 1").bind(db.userId).first();
   let detail={};try{detail=JSON.parse(sync?.details_json||'{}');}catch{}
