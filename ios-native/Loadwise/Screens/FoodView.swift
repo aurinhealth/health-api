@@ -95,67 +95,86 @@ struct FoodContent: View {
     let food: FoodSnapshot
     var add: (String) -> Void = { _ in }
     var scan: () -> Void = {}
+    @State private var editing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                DayNavigator(date: food.date)
-                Spacer()
-                CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+            if editing {
+                board
+            } else {
+                content
             }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
+    }
 
-            HStack(alignment: .lastTextBaseline, spacing: 12) {
-                Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).foregroundStyle(Palette.ink)
-                if let target = food.target {
-                    Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
-                }
-            }
-            .padding(.top, 34)
-            if let sentence = food.sentence {
-                Text(sentence).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 12)
-            }
+    private var board: some View {
+        WidgetBoard(panel: .food,
+                    data: WidgetData(panel: .food, today: model.today, health: model.health, training: model.training, food: food),
+                    editing: $editing,
+                    editTitle: nil)
+    }
 
-            MacroCells(macros: food.macros).padding(.top, 26)
-            if let fiber = food.macros.fiber {
-                FiberRow(title: "Vláknina", amount: fiber, color: Palette.green).padding(.top, 12)
-            }
-            if let sugar = food.macros.sugar, (sugar.eaten ?? 0) > 0 {
-                FiberRow(title: "Cukry", amount: sugar, color: Palette.amberBar, limit: true).padding(.top, 8)
-            }
+    @ViewBuilder private var content: some View {
+        HStack {
+            DayNavigator(date: food.date)
+            Spacer()
+            CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+        }
 
-            DrinksCard(water: food.water).padding(.top, 18)
-
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Jídla dne")
-                Spacer()
-                NavigationLink { MealSlotsSettingsView() } label: {
-                    Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                }
-                .accessibilityLabel("Upravit jídla dne")
+        HStack(alignment: .lastTextBaseline, spacing: 12) {
+            Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).foregroundStyle(Palette.ink)
+            if let target = food.target {
+                Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
             }
-            .padding(.top, 28)
-            VStack(spacing: 0) {
-                ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
-                    MealRow(meal: meal, add: { add(meal.type) })
-                    if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                }
-                if food.meals.isEmpty {
-                    Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
-                }
-            }
-            .padding(.top, 6)
+        }
+        .padding(.top, 34)
+        if let sentence = food.sentence {
+            Text(sentence).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true).padding(.top, 12)
+        }
 
+        MacroCells(macros: food.macros).padding(.top, 26)
+        if let fiber = food.macros.fiber {
+            FiberRow(title: "Vláknina", amount: fiber, color: Palette.green).padding(.top, 12)
+        }
+        if let sugar = food.macros.sugar, (sugar.eaten ?? 0) > 0 {
+            FiberRow(title: "Cukry", amount: sugar, color: Palette.amberBar, limit: true).padding(.top, 8)
+        }
+
+        board.padding(.top, 18)
+
+        HStack(alignment: .firstTextBaseline) {
+            SectionLabel(text: "Jídla dne")
+            Spacer()
+            NavigationLink { MealSlotsSettingsView() } label: {
+                Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+            }
+            .accessibilityLabel("Upravit jídla dne")
+        }
+        .padding(.top, 28)
+        VStack(spacing: 0) {
+            ForEach(Array(food.meals.enumerated()), id: \.element.id) { index, meal in
+                MealRow(meal: meal, add: { add(meal.type) })
+                if index < food.meals.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+            }
+            if food.meals.isEmpty {
+                Text("Zatím nic. Přidej první jídlo dne.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 14)
+            }
+        }
+        .padding(.top, 6)
+
+        VStack(spacing: 28) {
             Button { add(MealSlot.now(slots: food.mealSlots)) } label: {
                 Label("Přidat jídlo", systemImage: "plus")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(Palette.button, in: Capsule())
             }
-            .padding(.top, 22)
+            WidgetEditButton { editing = true }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 16)
+        .padding(.top, 22)
     }
 }
 
@@ -244,6 +263,7 @@ struct FiberRow: View {
 struct DrinksCard: View {
     @Environment(AppModel.self) private var model
     let water: FoodSnapshot.Water
+    var size: WidgetSize = .medium
     @State private var other = false
     @State private var editing: FoodSnapshot.Drink?
     @State private var choosing = false
@@ -285,6 +305,22 @@ struct DrinksCard: View {
     }
 
     var body: some View {
+        if size == .small { compact } else { full }
+    }
+
+    /// The small widget: how much of the day's goal, without the buttons.
+    private var compact: some View {
+        Card {
+            WidgetHeader(title: "Pití", color: Palette.blue)
+            VStack(alignment: .leading, spacing: 4) {
+                amount(30)
+                Text(Fmt.int(fraction * 100) + " %").font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
+            }
+            ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
+        }
+    }
+
+    private var full: some View {
         Card {
             HStack(spacing: 8) {
                 WidgetHeader(title: "Pití a hydratace", color: Palette.blue)
