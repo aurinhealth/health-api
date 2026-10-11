@@ -53,50 +53,61 @@ struct StrainDetailContent: View {
     }
 
     var body: some View {
-        let score = today.strain.score ?? 0
-        let split = parts
-        let (label, color) = Self.level(score)
         VStack(alignment: .leading, spacing: 0) {
             Text("Zátěž").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
-
-            StrainDial(score: score, planned: today.strain.planned)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 16)
-            Pill(text: L10n.tr(label), foreground: color, background: color.opacity(0.14))
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-
-            Card { StrainSplitBar(training: split.training, movement: split.movement, planned: split.planned) }
-                .padding(.top, 20)
-
+            dial
             SectionLabel(text: "Z čeho je").padding(.top, 30)
-            Card(padding: 0) {
-                VStack(spacing: 0) {
-                    let done = sessions.filter { $0.status == "done" }
-                    let doneTss = done.compactMap(\.tss).reduce(0, +)
-                    let open = sessions.filter { $0.status == "planned" }
-                    let openTss = open.compactMap(\.tss).reduce(0, +)
-                    ForEach(done) { s in
-                        StrainRow(symbol: SessionRow.symbol(s.sport), color: Palette.amberBar, title: s.title, meta: meta(s),
-                                  value: doneTss > 0 ? split.training * (s.tss ?? 0) / doneTss : nil, planned: false, first: s.id == done.first?.id)
-                    }
-                    StrainRow(symbol: "shoeprints.fill", color: Palette.sand, title: L10n.tr("Pohyb během dne"), meta: movementMeta,
-                              value: split.movement, planned: false, first: done.isEmpty)
-                    ForEach(open) { s in
-                        StrainRow(symbol: SessionRow.symbol(s.sport), color: Palette.amberBar, title: s.title, meta: L10n.tr("v plánu"),
-                                  value: openTss > 0 ? split.planned * (s.tss ?? 0) / openTss : nil, planned: true, first: false)
-                    }
-                }
-                .padding(.horizontal, 16).padding(.vertical, 4)
-            }
-            .padding(.top, 12)
-
+            sources.padding(.top, 12)
             if let form = training?.form, !form.series.isEmpty {
                 SectionLabel(text: "Kondice a únava").padding(.top, 30)
                 FitnessChart(form: form, upcoming: upcomingTss)
                     .padding(.top, 12)
             }
         }
+    }
+
+    private var dial: some View {
+        let score: Double = today.strain.score ?? 0
+        let split = parts
+        let level: (String, Color) = Self.level(score)
+        return VStack(spacing: 0) {
+            StrainDial(score: score, planned: today.strain.planned)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 16)
+            Pill(text: L10n.tr(level.0), foreground: level.1, background: level.1.opacity(0.14))
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+            Card { StrainSplitBar(training: split.training, movement: split.movement, planned: split.planned) }
+                .padding(.top, 20)
+        }
+    }
+
+    private var sources: some View {
+        let split = parts
+        let done: [WeekSession] = sessions.filter { $0.status == "done" }
+        let open: [WeekSession] = sessions.filter { $0.status == "planned" }
+        let doneTss: Double = done.compactMap(\.tss).reduce(0, +)
+        let openTss: Double = open.compactMap(\.tss).reduce(0, +)
+        let firstDone: String? = done.first?.id
+        return Card(padding: 0) {
+            VStack(spacing: 0) {
+                ForEach(done) { (s: WeekSession) in
+                    StrainRow(symbol: SessionRow.symbol(s.sport), color: Palette.amberBar, title: s.title, meta: meta(s),
+                              value: share(split.training, s.tss, of: doneTss), planned: false, first: s.id == firstDone)
+                }
+                StrainRow(symbol: "shoeprints.fill", color: Palette.sand, title: L10n.tr("Pohyb během dne"), meta: movementMeta,
+                          value: split.movement, planned: false, first: done.isEmpty)
+                ForEach(open) { (s: WeekSession) in
+                    StrainRow(symbol: SessionRow.symbol(s.sport), color: Palette.amberBar, title: s.title, meta: L10n.tr("v plánu"),
+                              value: share(split.planned, s.tss, of: openTss), planned: true, first: false)
+                }
+            }
+            .padding(.horizontal, 16).padding(.vertical, 4)
+        }
+    }
+
+    private func share(_ total: Double, _ tss: Double?, of all: Double) -> Double? {
+        all > 0 ? total * (tss ?? 0) / all : nil
     }
 
     private func meta(_ s: WeekSession) -> String {
