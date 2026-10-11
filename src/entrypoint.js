@@ -20,7 +20,7 @@ import { parseNutritionLabel, parseNutritionPortion, nutritionConsistency } from
 import { readFoodPhotoWithAI, readBarcodeWithAI } from './food-photo.js';
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
-import { setManualPair } from './manual-pairs.js';
+import { setManualPair, manualPairs } from './manual-pairs.js';
 import { setEnergyChoice } from './activity-energy-choices.js';
 import { saveExerciseFeedback, exercisePreferences, saveWorkoutRating, workoutRatings } from './exercise-feedback.js';
 import { foodIntake } from './food-portions.js';
@@ -1369,11 +1369,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(end<start||end>shiftDate(start,92))end=shiftDate(start,92);
       const result=await cached(env,ctx,'training-calendar:'+start+':'+end+':'+today,async()=>{
         const rows=(await env.DB.prepare("SELECT data_type,source_family,external_id,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().catch(()=>({results:[]}))).results||[];
-        const gym=await trainingGymPlans(env,today>start?today:start,end).catch(()=>({}));
-        return buildCalendar({start,end,today,gym,
+        // Past gym plans too: one nothing was done for shows as missed.
+        const planned=rows.filter(r=>r.data_type==='planned-workout');
+        const [gym,manual]=await Promise.all([trainingGymPlans(env,start,end).catch(()=>({})),manualPairs(env.DB,env.USER_ID,planned.map(r=>r.external_id))]);
+        return buildCalendar({start,end,today,gym,manual,planned,
           activities:rows.filter(r=>r.data_type==='activity'),
-          google:rows.filter(r=>r.data_type==='exercise'),
-          planned:rows.filter(r=>r.data_type==='planned-workout')});
+          google:rows.filter(r=>r.data_type==='exercise')});
       },{ttl:120});
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}

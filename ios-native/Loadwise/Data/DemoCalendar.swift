@@ -20,17 +20,23 @@ extension DemoData {
             // Every fifth week a lighter one; a few days off now and then.
             let skip = (Int(date.suffix(2)) ?? 0) % 11 == 0
             let items = skip ? [] : week[ISODay.weekdayIndex(date)]
+            // Now and then a session done differently from the plan.
+            let differently = (Int(date.suffix(2)) ?? 0) % 9 == 4
             let list: [CalendarActivity] = items.enumerated().compactMap { i, item -> CalendarActivity? in
                 if !done && item.0 == "walk" { return nil }
+                let adherence: String? = !done ? nil : item.0 == "walk" ? "offplan" : differently ? "off" : "good"
                 return CalendarActivity(id: date + "-\(i)", sport: item.0, status: done ? "done" : "planned", title: item.1, date: date,
                                         time: i == 0 ? "07:30" : "17:10", minutes: item.2, km: item.3, kcal: done ? item.4 : nil,
-                                        activityId: nil, eventId: nil)
+                                        activityId: nil, eventId: nil, adherence: adherence)
             }
             let real = list.filter { $0.status == "done" }
             let main = list.filter { $0.sport != "walk" }.max { ($0.minutes ?? 0) < ($1.minutes ?? 0) } ?? list.first
+            // The day's state as src/app-training.js dayPlanState orders it.
+            let states: [String] = list.map { $0.adherence ?? "planned" }
+            let plan: String? = ["off", "good", "planned", "offplan"].first(where: { states.contains($0) })
             return CalendarDay(date: date, primary: main?.sport ?? "rest", count: real.count,
                                minutes: real.reduce(0) { $0 + ($1.minutes ?? 0) }, kcal: real.reduce(0) { $0 + ($1.kcal ?? 0) },
-                               planned: list.count - real.count, activities: list)
+                               planned: list.count - real.count, activities: list, plan: plan)
         }
     }
 }

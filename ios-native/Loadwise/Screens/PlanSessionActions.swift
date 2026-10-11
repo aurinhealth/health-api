@@ -22,6 +22,28 @@ enum PlanState: CaseIterable {
         }
     }
 
+    /// A whole day of the training calendar, from the server's state for it
+    /// (src/app-training.js dayPlanState); nil for a day without sessions.
+    init?(day: CalendarDay?) {
+        guard let day else { return nil }
+        switch day.plan {
+        case "good": self = .good
+        case "off": self = .off
+        case "missed": self = .missed
+        case "planned": self = .upcoming
+        case "offplan": self = .offPlan
+        default:
+            // An older server sends no state: done counts as outside the plan.
+            if day.count > 0 {
+                self = .offPlan
+            } else if day.planned > 0 {
+                self = .upcoming
+            } else {
+                return nil
+            }
+        }
+    }
+
     var color: Color {
         switch self {
         case .good: return Palette.green

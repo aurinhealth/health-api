@@ -125,7 +125,8 @@ struct TrainingCalendarCard: View {
     }
 }
 
-/// One day of the strip: "P", the main sport in a circle and "9".
+/// One day of the strip: "P", the main sport in a circle in the plan's colour
+/// (as Tréninky týdne) and "9".
 struct DayCircle: View {
     let date: String
     let today: String
@@ -139,11 +140,12 @@ struct DayCircle: View {
                 .font(.system(size: 12, weight: date == today ? .bold : .medium))
                 .foregroundStyle(date == today ? Palette.amber : Palette.faint)
             ZStack {
-                Circle().fill(style.fill)
-                if style.dashed {
-                    Circle().strokeBorder(style.tint.opacity(0.7), style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+                if let state = style.state {
+                    PlanStateIcon(symbol: style.symbol, state: state, size: 44)
+                } else {
+                    Circle().fill(style.fill)
+                    Image(systemName: style.symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.faint)
                 }
-                Image(systemName: style.symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(style.tint)
             }
             .frame(width: 44, height: 44)
             .overlay(Circle().stroke(selected ? Palette.ink : .clear, lineWidth: 2).padding(-4))
@@ -160,29 +162,29 @@ struct DayCircle: View {
     }
 }
 
-/// How a day's sport looks: done filled, planned dashed, rest quiet.
+/// How a day looks: the main sport in the colour of the plan (PlanState, the
+/// same as Tréninky týdne and the week widget): green kept to it, amber done
+/// differently, rust missed, blue outside the plan, a dashed grey ring still
+/// ahead. A day at rest stays quiet.
 struct SportStyle {
     let symbol: String
-    let tint: Color
+    /// nil at rest.
+    let state: PlanState?
+    /// The quiet circle of a day at rest.
     let fill: Color
-    let dashed: Bool
     let label: String
 
     init(day: CalendarDay?, date: String, today: String) {
         let sport = day?.primary ?? "rest"
-        let done = (day?.count ?? 0) > 0
-        if sport == "rest" {
-            symbol = "moon.zzz"
-            tint = Palette.faint
-            fill = date <= today ? Palette.track : .clear
-            dashed = false
-            label = L10n.tr(day == nil ? "bez dat" : "volno")
-        } else {
+        let planState: PlanState? = sport == "rest" ? nil : PlanState(day: day)
+        state = planState
+        fill = date <= today ? Palette.track : .clear
+        if let planState {
             symbol = SportIcon.symbol(sport)
-            tint = done ? Palette.onAccent : Self.color(sport)
-            fill = done ? Self.color(sport) : Self.color(sport).opacity(0.1)
-            dashed = !done
-            label = done ? L10n.tr(Self.name(sport)) : L10n.f("v plánu %@", L10n.tr(Self.name(sport)))
+            label = L10n.tr(Self.name(sport)) + ", " + L10n.tr(planState.title)
+        } else {
+            symbol = "moon.zzz"
+            label = L10n.tr(day == nil ? "bez dat" : "volno")
         }
     }
 
@@ -269,9 +271,12 @@ struct MonthGrid: View {
                 .font(.system(size: 12, weight: date == today ? .bold : .regular))
                 .foregroundStyle(date == today ? Palette.amber : Palette.muted)
             ZStack {
-                Circle().fill(style.fill)
-                if style.dashed { Circle().strokeBorder(style.tint.opacity(0.7), style: StrokeStyle(lineWidth: 1, dash: [2, 2])) }
-                Image(systemName: style.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(style.tint)
+                if let state = style.state {
+                    PlanStateIcon(symbol: style.symbol, state: state, size: 26)
+                } else {
+                    Circle().fill(style.fill)
+                    Image(systemName: style.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
             }
             .frame(width: 26, height: 26)
             Text(Self.value(day, mode)).font(.system(size: 10, weight: .semibold).monospacedDigit())
@@ -366,17 +371,18 @@ struct CalendarActivityRow: View {
     let chevron: Bool
 
     var body: some View {
-        let done = activity.status == "done"
-        let color = SportStyle.color(activity.sport)
+        let state = PlanState(activity.session)
         HStack(spacing: 12) {
-            Image(systemName: SportIcon.symbol(activity.sport))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(done ? Palette.onAccent : color)
-                .frame(width: 36, height: 36)
-                .background(done ? color : color.opacity(0.12), in: Circle())
+            // The plan's colours, as a row of Tréninky týdne.
+            PlanStateIcon(symbol: SportIcon.symbol(activity.sport), state: state)
+                .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text(Self.detail(activity)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                // Only a session done differently says why.
+                if state == .off, let reason = activity.adherenceReason, !reason.isEmpty {
+                    Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
+                }
             }
             Spacer(minLength: 6)
             if let kcal = activity.kcal, kcal > 0 {
@@ -392,9 +398,15 @@ struct CalendarActivityRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    /// "Kolo · 1 h 30 min · 42,3 km" or "v plánu · 45 min".
+    /// "Kolo · 1 h 30 min · 42,3 km", "V plánu · 45 min" or "Neodjeto · 1 h".
     static func detail(_ a: CalendarActivity) -> String {
-        var parts: [String] = [a.status == "done" ? Fmt.capitalized(L10n.tr(SportStyle.name(a.sport))) : L10n.tr("V plánu")]
+        let head: String
+        switch a.status {
+        case "done": head = Fmt.capitalized(L10n.tr(SportStyle.name(a.sport)))
+        case "missed": head = L10n.tr(PlanState.missed.title)
+        default: head = L10n.tr("V plánu")
+        }
+        var parts: [String] = [head]
         if let t = a.time { parts.append(t) }
         if let m = a.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
         if let km = a.km, km > 0 { parts.append(Units.distanceText(km)) }

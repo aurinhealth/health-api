@@ -127,6 +127,26 @@ export function daySessions(d, date, training = {}, gymDay = null) {
   return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
 }
 
+// A session's state against the plan, as the app colours it (PlanState in
+// ios-native PlanSessionActions.swift): "good" done as planned, "off" done
+// differently, "missed", "planned" still ahead, "offplan" done outside the plan.
+export function planStateOf(session) {
+  if (!session) return null;
+  if (session.status === "missed") return "missed";
+  if (session.status !== "done") return "planned";
+  return session.adherence === "off" ? "off" : session.adherence === "offplan" ? "offplan" : "good";
+}
+
+// One state for a whole day (the training calendar's day): a missed plan
+// first, then a session done differently, then one done as planned, then a
+// plan still ahead, and only then what was done outside the plan; null for a
+// day without sessions.
+const DAY_ORDER = ["missed", "off", "good", "planned", "offplan"];
+export function dayPlanState(sessions = []) {
+  const states = new Set((sessions || []).map(planStateOf).filter(Boolean));
+  return DAY_ORDER.find(s => states.has(s)) || null;
+}
+
 export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, gym = {} }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
