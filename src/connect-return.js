@@ -3,7 +3,7 @@
 // Propojení. ?connected= tells the page what just happened (the page removes
 // it from the address).
 // The native app (?return=native) gets loadwise://connected, which closes its browser sheet.
-const EVENTS = new Set(["google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed"]);
+const EVENTS = new Set(["google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed", "strava", "strava-cancelled", "strava-failed", "strava-full"]);
 
 export function connectReturn(request) {
   const back = new URL(request.url).searchParams.get("return");

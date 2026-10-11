@@ -19,6 +19,8 @@ import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
 import { manualPairs } from "./manual-pairs.js";
+import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByLoadwise } from "./sync-destinations.js";
+import { syncStravaWeight } from "./strava.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -175,7 +177,8 @@ async function appWeight(env, request) {
   // With Google Health connected the weight goes there too; without it, only
   // here. A refused Google write (no write permission) does not lose the entry.
   let google = null;
-  if (env.GOOGLE_REFRESH_TOKEN) {
+  // Settings → Synchronizace can leave weight out of Google Health.
+  if (env.GOOGLE_REFRESH_TOKEN && healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "google"), "weight")) {
     try {
       const token = await googleToken(env);
       const response = await fetch("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
@@ -188,13 +191,19 @@ async function appWeight(env, request) {
     } catch (error) { console.error("Google Health weight write failed", error.message); google = { error: error.message }; }
   }
   await savePoint(env,"manual","weight",{value_kg:value,source:"manual",google_operation:google},value,"kg",at,at,at,"manual-weight:"+date);
-  // Intervals.icu gets it right away too; the hourly weight sync retries a failure.
+  // Intervals.icu gets it right away too (unless weight is left out in
+  // Synchronizace); the hourly weight sync retries a failure.
   let intervals = null;
-  if (env.INTERVALS_API_KEY) {
+  if (env.INTERVALS_API_KEY && healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "intervals"), "weight")) {
     try { await writeIntervalsWeight(env, date, value); intervals = "ok"; }
     catch (error) { console.error("Intervals weight write failed", error.message); intervals = "error"; }
   }
-  return Response.json({status:"ok",date,kg:value,google,intervals});
+  // Strava too, when connected and weight is sent there; the hourly job retries.
+  let strava = null;
+  if (env.STRAVA_TOKEN && healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "strava"), "weight")) {
+    strava = await syncStravaWeight(env).then(() => "ok").catch(error => { console.error("Strava weight write failed", error.message); return "error"; });
+  }
+  return Response.json({status:"ok",date,kg:value,google,intervals,strava});
 }
 
 // ======================================================
@@ -855,6 +864,8 @@ async function googleReconcilePage(
 
 async function saveGooglePointsBatch(env, family, type, points) {
   if (!points.length) return 0;
+  // Settings → Synchronizace → Google Health → Stahovat hotové aktivity off.
+  if (type === "exercise" && !(await readSyncPrefs(env.DB, env.USER_ID, "google")).pullActivities) return 0;
 
   const statements = points.map(point => {
     const i = googleInfo(type, point);
@@ -1140,11 +1151,17 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}
   const previous = activities.some(a => a?._note && !a.name && !a.type)
     ? (await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND start_time>=?").bind(env.USER_ID,oldest).all()).results || [] : [];
   const existingById = new Map(previous.map(row => [row.external_id, row]));
+  // Activities the app logged and sent there (Synchronizace): the app keeps
+  // its own copy, a second one from Intervals.icu would count them twice.
+  const sentHere = await sentIntervalsIds(env.DB, env.USER_ID);
+  // Settings → Synchronizace → Intervals.icu → Stahovat hotové aktivity off.
+  if (!(await readSyncPrefs(env.DB, env.USER_ID, "intervals")).pullActivities) return { activities_found: activities.length, activities_saved: 0, skipped: "off" };
 
   let saved = 0;
 
   for (const sourceActivity of activities) {
     const id = String(sourceActivity.id);
+    if (sentByLoadwise(sourceActivity) || sentHere.has(id)) continue;
     let a = sourceActivity;
     if (sourceActivity?._note && !sourceActivity.name && !sourceActivity.type) {
       const existing = existingById.get("activity:"+id);
