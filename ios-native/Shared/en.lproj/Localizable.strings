@@ -1364,3 +1364,9 @@
 "Upravit %@" = "Edit %@";
 "Cvik nahradíš nebo odebereš přes ⋯, nabídnu jen to, co máš ve vybavení." = "Replace or remove an exercise with ⋯; only what your equipment allows is offered.";
 "minut" = "minutes";
+"Změnit trénink" = "Change workout";
+"Zrušit trénink" = "Cancel workout";
+"Zrušit trénink?" = "Cancel the workout?";
+"Obnovit" = "Restore";
+"Trénink se na tento den vrátí do plánu." = "The workout goes back into the plan for this day.";
+"Plán i zapsané série zůstanou uložené." = "The plan and the logged sets stay saved.";

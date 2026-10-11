@@ -382,9 +382,9 @@ async function handleCoachInbox(request, env, ctx, internalAuth) {
 async function matchScheduledActivity(env,ctx,internalAuth,link){
   const response=await app.fetch(new Request('https://internal/analysis/daily?date='+link.scheduled_date,{headers:internalAuth}),env,ctx);
   if(!response.ok)return null;const daily=await response.json().catch(()=>({})),matched=daily.training?.matched||[],completed=daily.training?.completed||[];
-  const match=matched.find(m=>String(m.planned?.id||'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
+  const match=matched.find(m=>String(m.planned?.id||'').replace(/^planned:/,'')===String(link.intervals_event_id||'')||String(m.planned?.name||'').trim().toLowerCase()===String(link.name||'').trim().toLowerCase());
   if(!match)return null;
-  const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>String(a.pairedEventId||a.plannedEventId||'')===String(link.intervals_event_id||''));
+  const actual=completed.find(a=>String(a.id||'')===String(match.actualId||''))||completed.find(a=>a.pairedEventId!=null&&String(a.pairedEventId)===String(link.intervals_event_id||''));
   if(!actual)return null;
   const actualMinutes=Number(actual.durationHours)>0?Number(actual.durationHours)*60:null;
   if(actualMinutes==null)return null;
@@ -1830,7 +1830,7 @@ async function trainingGymPlans(env,from,to){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))]};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],logged:rows.filter(x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))).length};
   }
   return out;
 }

@@ -4,24 +4,66 @@ import SwiftUI
 
 /// Training → Tento týden: every session of the week, tap for its detail.
 struct WeekSessionsList: View {
+    @Environment(AppModel.self) private var model
     let sessions: [WeekSession]
     let today: String
+    @State private var changing: WeekSession?
+    @State private var cancelling: WeekSession?
+    @State private var error: String?
 
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
-                NavigationLink(value: destination(session)) {
-                    SessionRow(session: session, today: today)
+                HStack(spacing: 0) {
+                    NavigationLink(value: destination(session)) {
+                        SessionRow(session: session, today: today)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(destination(session) == nil)
+                    if GymPlanActions.changeable(session) && !model.demo {
+                        Menu {
+                            Button { changing = session } label: { Label("Změnit trénink", systemImage: "calendar") }
+                            // A missed session leaves the list in one step.
+                            if session.status == "missed" {
+                                Button(role: .destructive) { cancelling = session } label: { Label("Zrušit trénink", systemImage: "xmark") }
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                                .frame(width: 36, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(L10n.tr("Změnit trénink"))
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(destination(session) == nil)
                 if index < sessions.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
             }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
+        }
+        .sheet(item: $changing) { s in
+            GymPlanActionsSheet(date: s.date, title: s.title, eventId: s.eventId)
+        }
+        .confirmationDialog("Zrušit trénink?", isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
+                            titleVisibility: .visible, presenting: cancelling) { s in
+            Button("Zrušit trénink", role: .destructive) { Task { await cancel(s) } }
+        } message: { s in
+            Text(verbatim: s.title + " · " + Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date))
+        }
+    }
+
+    private func cancel(_ s: WeekSession) async {
+        do {
+            try await GymPlanActions.cancel(model, date: s.date, eventId: s.eventId)
+            error = nil
+            await model.refreshTraining()
+            await model.refresh()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
     private func destination(_ s: WeekSession) -> AppRoute? {
-        if s.sport == "strength" && s.status != "done" { return .gym(s.date) }
+        if s.kind == "gym" || (s.sport == "strength" && s.status != "done") { return .gym(s.date) }
         if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
         return nil

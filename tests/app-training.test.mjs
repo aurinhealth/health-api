@@ -151,3 +151,34 @@ test("The week's sessions: done with the activity id, planned with the event id"
   assert.ok(!t.sessions.some(s => s.date === day(-3) && s.status === "missed"), "a past plan with a session done is not missed");
   assert.equal(t.sessions.find(s => s.date === day(2)).sport, "run");
 });
+
+test("A saved gym plan is listed next to another sport that day, unless strength is already there", () => {
+  const sunday = day(3);
+  const withGym = (training, plan = { name: "Celé tělo", exercises: ["Dřep"] }) => buildTraining({
+    ...input,
+    days: days.map(d => d.date === sunday ? { ...d, daily: { training } } : d),
+    gym: { [sunday]: plan }
+  }).sessions.filter(s => s.date === sunday);
+  const rideDay = withGym({ planned: [{ id: "planned:5", name: "Vyjížďka", type: "Ride", tss: 80 }], completed: [], matched: [] });
+  assert.deepEqual(rideDay.map(s => [s.kind, s.sport, s.status]), [["planned", "ride", "planned"], ["gym", "strength", "planned"]]);
+  const strengthEvent = withGym({ planned: [{ id: "planned:6", name: "Posilovna", type: "WeightTraining" }], completed: [], matched: [] });
+  assert.deepEqual(strengthEvent.map(s => [s.kind, s.eventId]), [["planned", "planned:6"]]);
+  const done = withGym({ planned: [], completed: [{ id: "g1", type: "WeightTraining", durationHours: 1 }], matched: [] });
+  assert.deepEqual(done.map(s => s.kind), ["activity"]);
+  const logged = withGym({ planned: [], completed: [], matched: [] }, { name: "Celé tělo", exercises: ["Dřep"], logged: 3 });
+  assert.deepEqual(logged.map(s => [s.kind, s.status]), [["gym", "done"]]);
+});
+
+test("A missed gym plan stays on a past day where a ride was done", () => {
+  const t = buildTraining({ ...input, gym: { [day(-1)]: { name: "Horní tělo", exercises: ["Shyby"] } } });
+  const rows = t.sessions.filter(s => s.date === day(-1));
+  assert.deepEqual(rows.map(s => [s.kind, s.status]), [["activity", "done"], ["gym", "missed"]]);
+});
+
+test("A Strava stub paired with the plan is listed as the planned ride, done", () => {
+  const stub = { id: "activity:s1", source: "intervals", type: "Unknown", name: "Aktivita z Intervals", durationHours: 0, payload: { id: "s1", _note: "STRAVA" } };
+  const plan = { id: "planned:8", name: "Sobotní vyjížďka", type: "Ride", tss: 120 };
+  const t = buildTraining({ ...input, days: days.map(d => d.date === day(-1) ? { ...d, daily: { training: { planned: [], completed: [stub], matched: [{ planned: plan, actualId: "activity:s1" }] } } } : d) });
+  const rows = t.sessions.filter(s => s.date === day(-1));
+  assert.deepEqual(rows.map(s => [s.kind, s.status, s.title, s.sport]), [["activity", "done", "Sobotní vyjížďka", "ride"]]);
+});
