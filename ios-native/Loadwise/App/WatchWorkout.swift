@@ -32,7 +32,7 @@ enum WatchWorkout {
         } else if let slow = s.paceSlow ?? s.paceFast, let fast = s.paceFast ?? s.paceSlow, slow > 0, fast > 0 {
             // Pace (s/km) as speed: the slower pace is the lower speed.
             let lowSpeed = 1000 / max(slow, fast), highSpeed = 1000 / min(slow, fast)
-            step.step.alert = SpeedRangeAlert(target: Measurement(value: lowSpeed, unit: UnitSpeed.metersPerSecond)...Measurement(value: highSpeed, unit: UnitSpeed.metersPerSecond))
+            step.step.alert = SpeedRangeAlert(target: Measurement(value: lowSpeed, unit: UnitSpeed.metersPerSecond)...Measurement(value: highSpeed, unit: UnitSpeed.metersPerSecond), metric: .current)
         }
         return step
     }
