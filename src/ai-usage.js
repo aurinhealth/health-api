@@ -77,6 +77,24 @@ export async function assertAiAllowance(env) {
   if (dayLimit != null && daySpent >= dayLimit) throw limitError(L(`Denní limit AI je vyčerpaný (${usd(dayLimit)}). Zítra se obnoví.`, `The daily AI limit is used up (${usd(dayLimit)}). It resets tomorrow.`));
 }
 
+// Limits are checked before a call and its cost recorded after it, so parallel
+// requests would all pass the check before the first cost lands. Each limited
+// user therefore has at most AI_PARALLEL_CALLS calls running at once: a running
+// call is a 'pending' row in ai_usage, claimed in one statement (D1 runs them
+// one at a time) and removed when the call ends. A row left by a Worker that
+// died counts for AI_PENDING_MINUTES at most.
+export const AI_PARALLEL_CALLS = 3;
+const AI_PENDING_MINUTES = 5;
+export async function claimAiSlot(env) {
+  if (!tracked(env) || (aiMonthlyLimitUsd(env) == null && aiDailyLimitUsd(env) == null)) return async () => {};
+  await ensureAiUsage(env.DB);
+  const claimed = await env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, 'pending', 'pending', 0
+    WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
+    .bind(env.USER_ID, localToday(), env.USER_ID, AI_PARALLEL_CALLS).first();
+  if (!claimed) throw limitError(L("Ještě běží jiné dotazy na AI. Zkus to za chvíli.", "Other AI requests are still running. Try again in a moment."));
+  return () => env.DB.prepare("DELETE FROM ai_usage WHERE id = ? AND user_id = ? AND model = 'pending'").bind(claimed.id, env.USER_ID).run().catch(error => console.error("AI slot not released", error?.message || error));
+}
+
 function limitError(message) {
   const error = new Error(message);
   error.ai = true;
