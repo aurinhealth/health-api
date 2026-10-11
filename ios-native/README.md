@@ -51,14 +51,6 @@ installed side by side (different bundle IDs).
 - "Prohlédnout ukázku" on the sign-in screen shows sample data without an
   account.
 
-## Version check
-
-Every request carries `X-Loadwise-Api: <APIClient.apiLevel>`. When the server
-needs a newer app (`MIN_APP_API` in `src/app-version.js`) it answers 426 and
-the app shows "Je potřeba nová verze" instead of the screens. Raise both
-numbers in the same pull request, only for changes that break what installed
-apps read.
-
 ## Build without a Mac
 
 The GitHub Actions workflow `.github/workflows/ios-native.yml` runs on every
@@ -71,7 +63,19 @@ change in `ios-native/`. It:
 
 Download the artifacts under Actions → the run → Artifacts.
 
-## Install on the iPhone
+## TestFlight (paid Apple Developer account)
+
+`.github/workflows/ios-testflight.yml` signs the app and uploads it to
+TestFlight on every change in `ios-native/` merged to `main` (or by hand:
+Actions → iOS TestFlight → Run workflow). Signing happens in the cloud with
+an App Store Connect API key, so no certificate or profile is kept anywhere.
+It needs the secrets `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and
+`ASC_KEY_P8`; without them it skips the upload.
+
+On the phone: install TestFlight from the App Store, open the invitation,
+and new builds arrive on their own. Builds expire after 90 days.
+
+## Install with Sideloadly (free Apple ID)
 
 The same as `mobile/README.md`:
 
