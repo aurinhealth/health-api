@@ -52,7 +52,7 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   for (const [d, s] of Object.entries(longest)) {
     put(d, "sleepSecs", Number(s.durationMin) * 60);
     if (!s.startTime || !s.endTime) continue;
-    const samples = (await db.prepare(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
+    const samples = (await db.prepare(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min')
       AND sample_time >= ? AND sample_time <= ? LIMIT 5000`).bind(userId, utc(s.startTime), utc(s.endTime)).all()).results || [];
     put(d, "avgSleepingHR", heartRateFromSamples({ start: s.startTime, end: s.endTime }, samples));
   }

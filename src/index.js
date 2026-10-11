@@ -1827,7 +1827,7 @@ async function energyForDate(env, date) {
     try {
       const samples = (await env.DB.prepare(`
         SELECT sample_time, value_numeric, payload_json FROM health_datapoints
-        WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate')
+        WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min')
           AND sample_time >= ? AND sample_time < ?
         LIMIT 5000
       `).bind(env.USER_ID, dayStart, dayEnd).all()).results || [];

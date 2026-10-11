@@ -120,6 +120,7 @@ import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
 import { lang, withLang, storedLanguage, rememberLanguage, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
+import { compactHeartRate } from "./heart-rate-compaction.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, dayStartUtc, localNow, localToday, localDate, localHour, timeZone } from "./user-time.js";
 
 // A month of Google Health samples summed per day: thousands of rows that only a
@@ -172,6 +173,9 @@ const worker = {
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google'],async scoped=>{await backfillFoodGoogle(scoped.DB);return processFoodGoogle(scoped,{token:googleToken});});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],async scoped=>{await retryWorkoutExports(scoped);});
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],scoped=>legacyHealthApi.fetch(new Request('https://internal/sync/intervals/recent',{method:'POST'}),scoped,ctx));
+    // Heart-rate samples older than two weeks become 5-minute rows, six hours
+    // of samples per user a minute between 3:00 and 4:00 UTC, after the nightly sync.
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 3) await forEachUser(env, ["google"], scoped => compactHeartRate(scoped.DB, scoped.USER_ID));
     // Hourly, half an hour after the Google Health sync: weight the same in the
     // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
     // heart rate, HRV, …) copied into Intervals.icu.
