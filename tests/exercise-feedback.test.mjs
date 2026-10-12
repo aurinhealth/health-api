@@ -91,8 +91,8 @@ test("rating a session again replaces its rating", async () => {
 });
 
 test("the feedback endpoints check sign-in and the origin, and the generator reads the thumbs", () => {
-  const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  const block = src.slice(src.indexOf("url.pathname==='/app/api/feedback/exercise'"), src.indexOf('"Revize dne"'));
+  const src = readFileSync(new URL("../src/routes-training.js", import.meta.url), "utf8");
+  const block = src.slice(src.indexOf("url.pathname==='/app/api/feedback/exercise'"), src.indexOf("// The threshold check and the training profile."));
   assert.match(block, /session\.signedIn/);
   assert.match(block, /request\.headers\.get\('Origin'\)!==url\.origin/);
   assert.match(block, /saveWorkoutRating\(env\.DB,body\)/);
