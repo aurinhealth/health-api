@@ -20,10 +20,13 @@ struct RootView: View {
         }
     }
 
+    /// The tabs, the tab bar and the sheets grow with the text size up to a cap.
+    private static let textSizes: PartialRangeThrough<DynamicTypeSize> = ...DynamicTypeSize.screenCap
+
     @ViewBuilder private var screens: some View {
         switch model.phase {
         case .signedOut:
-            LoginView()
+            LoginView().dynamicTypeSize(Self.textSizes)
         case .signedIn:
             ZStack(alignment: .bottom) {
                 Group {
@@ -34,6 +37,7 @@ struct RootView: View {
                     case .health: HealthView()
                     }
                 }
+                .dynamicTypeSize(Self.textSizes)
                 if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil {
                     VStack(spacing: 6) {
                         if model.offline || !model.outbox.isEmpty {
@@ -61,6 +65,7 @@ struct RootView: View {
                     TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), onAdd: { showAdd = true })
                         .padding(.horizontal, 20)
                         .padding(.bottom, 8)
+                        .dynamicTypeSize(Self.textSizes)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -70,10 +75,11 @@ struct RootView: View {
                     // One sheet at a time: the coach opens once "+" has closed.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { showCoach = true }
                 })
+                .dynamicTypeSize(Self.textSizes)
             }
-            .sheet(isPresented: $showSettings) { SettingsView() }
-            .sheet(isPresented: $showCoach) { CoachView() }
-            .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet() }
+            .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
+            .sheet(isPresented: $showCoach) { CoachView().dynamicTypeSize(Self.textSizes) }
+            .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .animation(.snappy, value: model.syncReport?.id)
             // The toast goes away on its own unless its sheet is open.
             .task(id: model.syncReport?.id) {
@@ -82,8 +88,8 @@ struct RootView: View {
                 if !showSyncStatus && model.syncReport?.id == shown { model.syncReport = nil }
             }
             // After the first e-mail sign-in: a passkey for next time, then the setup.
-            .sheet(isPresented: Binding(get: { model.passkeyOffer }, set: { model.passkeyOffer = $0 })) { PasskeyOfferSheet() }
-            .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView() }
+            .sheet(isPresented: Binding(get: { model.passkeyOffer }, set: { model.passkeyOffer = $0 })) { PasskeyOfferSheet().dynamicTypeSize(Self.textSizes) }
+            .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
                 await model.checkSetup(); await model.loadAccountInitial()

@@ -124,7 +124,7 @@ struct FoodContent: View {
         }
 
         HStack(alignment: .lastTextBaseline, spacing: 12) {
-            Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).foregroundStyle(Palette.ink)
+            Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
                 Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
             }

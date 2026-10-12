@@ -204,6 +204,7 @@ struct StrainDial: View {
             .frame(width: 150)
             .offset(y: 4)
         }
+        .dynamicTypeSize(...DynamicTypeSize.denseCap)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: L10n.tr("Zátěž") + " " + Fmt.decimal(score) + ", " + subtitle))
     }

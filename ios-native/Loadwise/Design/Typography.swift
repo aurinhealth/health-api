@@ -5,8 +5,10 @@ import SwiftUI
 // - Instrument Serif only for numbers;
 // - Newsreader for sentences and text headings.
 enum Typo {
+    /// Grows with the text size like a large title: the same at the default
+    /// size, and the screens cap it (DynamicTypeSize.screenCap).
     static func number(_ size: CGFloat) -> Font {
-        .custom("InstrumentSerif-Regular", fixedSize: size)
+        .custom("InstrumentSerif-Regular", size: size, relativeTo: .largeTitle)
     }
 
     static func sentence(_ size: CGFloat = 20, relativeTo style: Font.TextStyle = .title3) -> Font {
@@ -22,6 +24,14 @@ enum Typo {
     static let small = Font.footnote
     static let caption = Font.caption
     static let tiny = Font.caption2
+}
+
+extension DynamicTypeSize {
+    /// The largest text size the screens follow; past it the big numbers and
+    /// the cards would no longer fit.
+    static let screenCap: DynamicTypeSize = .accessibility1
+    /// Dense parts with a fixed size (the strain dial, small panel widgets).
+    static let denseCap: DynamicTypeSize = .xxxLarge
 }
 
 /// Small spaced capitals above a section ("PLÁN DNE").

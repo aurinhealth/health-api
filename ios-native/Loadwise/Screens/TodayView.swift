@@ -161,7 +161,7 @@ struct ReadinessHero: View {
             if let score = readiness.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(String(score))
-                        .font(Typo.number(132))
+                        .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
                     if let pill = pill {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)

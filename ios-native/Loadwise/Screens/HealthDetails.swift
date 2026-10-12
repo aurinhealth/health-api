@@ -28,7 +28,7 @@ struct SleepDetailContent: View {
             SectionLabel(text: L10n.f("Spánek · noc na %@", weekday(health.date))).padding(.top, 24)
             if let night = sleep.night {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).foregroundStyle(Palette.ink)
+                    Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     if let index = night.index { Pill(text: L10n.f("index %@", String(index)), foreground: Palette.indigo, background: Palette.lilac) }
                 }
                 .padding(.top, 12)
@@ -329,7 +329,7 @@ struct HeartDetailContent: View {
             if let hrv = health.hrv {
                 Text("Variabilita srdečního tepu v noci").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
                 HStack(alignment: .lastTextBaseline, spacing: 10) {
-                    Text(Fmt.int(hrv.value ?? hrv.series.last?.value)).font(Typo.number(104)).foregroundStyle(Palette.ink)
+                    Text(Fmt.int(hrv.value ?? hrv.series.last?.value)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text("ms").font(Typo.small).foregroundStyle(Palette.faint)
                     if let s = status(hrv) { Pill(text: s.0, foreground: s.1, background: s.2) }
                 }
@@ -441,7 +441,7 @@ struct WeightDetailContent: View {
             SectionLabel(text: "Váha a složení těla").padding(.top, 24)
             if let w = health.weight {
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    Text(Fmt.decimal(Units.weight(w.latest))).font(Typo.number(104)).foregroundStyle(Palette.ink)
+                    Text(Fmt.decimal(Units.weight(w.latest))).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text(Units.weightUnit).font(Typo.small).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 24)
