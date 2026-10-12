@@ -45,6 +45,7 @@ import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coac
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
+import { trendFacts } from "./trend-facts.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { loadSeries, dailyLoads, sessionsFrom } from "./training-load.js";
 import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
@@ -601,6 +602,27 @@ async function todayPlace(env,ctx,date){
 // Everything the coaches look at for one day: the day, fitness, three weeks
 // around it, gym history, sleep and Google Health.
 // Cached for a few minutes per user and day; any change the user makes resets it.
+// What the coach's screen texts get beside the screen's own data
+// (screen-texts.js): the long-term facts (trend-facts.js) for Today and
+// Training, and for Training the recovery model's readiness of today, as the
+// day review gets it (A2). Readiness is computed here and only here, so a
+// shared readiness function can replace dayReadiness in one line.
+async function coachTextExtras(env,ctx,internalAuth,screen){
+  if(screen!=='today'&&screen!=='training')return {};
+  const date=localToday(),from=shiftDate(date,-14);
+  const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
+  const [fitness,health,sleep,profile,checkin]=await Promise.all([
+    cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(r=>r.json()).catch(()=>({}))).catch(()=>({})),
+    googleHealthFor(env,ctx,date).catch(()=>({})),
+    app.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})).then(d=>withIntervalsSleep(env,d,from,shiftDate(date,1))).catch(()=>({})),
+    dashboardProfile(env).catch(()=>null),
+    screen==='training'?getCheckin(env.DB,date).catch(()=>null):null
+  ]);
+  const sessions=sleep?.sessions||[];
+  const coachTrends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions,age:profile?.age??null});
+  const readiness=screen==='training'?dayReadiness({date,fitness,health:{...health,sleep:sessions},profile,checkin}):null;
+  return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{})};
+}
 function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
 // The recorded intervals of a day's completed rides and runs, keyed by activity id (one
 // small Intervals.icu request per ride, cached).
@@ -1647,7 +1669,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!SCREENS.includes(screen))return Response.json({message:L('Neznámá obrazovka.', 'Unknown screen.')},{status:400});
     const path={today:'/app/api/today',training:'/app/api/training',food:'/app/api/food-today'}[screen];
     const kept=session.user?.id!=null?recentScreen(session.user.id,path):null;
-    const load=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
+    const screenData=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
+    // The screen's data plus what only the coach reads (long-term facts, Training's readiness).
+    const load=()=>Promise.all([screenData(),coachTextExtras(env,ctx,internalAuth,screen).catch(()=>({}))]).then(([data,extra])=>data?{...data,...extra}:data);
     try{return Response.json(await screenText(env,{screen,load}),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }
