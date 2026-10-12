@@ -8,7 +8,6 @@ import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEven
 import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
-import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
 import { withIntervalsSleep } from './intervals-sleep.js';
@@ -39,11 +38,7 @@ import { addLoads } from "./training-load.js";
 import { savePersonalFood } from './personal-foods.js';
 import { processFoodGoogle, backfillFoodGoogle } from './food-google-sync.js';
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
-import dashboardClient from "./dashboard-client.js";
 import { loadRecoveryValidation } from "./recovery-validation.js";
-import { assetVersion, scriptCacheControl } from "./asset-version.js";
-
-const CLIENT_VERSION = assetVersion(dashboardClient);
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
 import { explainWorkout } from "./workout-explanation.js";
@@ -72,11 +67,11 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
-import { handleAppleLogin, handleNativeAppleLogin, appleConfigured } from "./apple-login.js";
+import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
-import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
+import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
@@ -95,7 +90,6 @@ import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, pushConfigured } from "./push.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
-import { englishScript } from './i18n.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactHeartRate } from "./heart-rate-compaction.js";
@@ -133,7 +127,7 @@ function forgetScreens(userId) {
 }
 // Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
 const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|passkeys$|passkeys\/options$)/;
-const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
+const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
@@ -295,8 +289,6 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (nativeApple) return nativeApple;
     const googleLogin = await handleGoogleLogin(request, rawEnv, url.pathname);
     if (googleLogin) return googleLogin;
-    const appleLogin = await handleAppleLogin(request, rawEnv, url.pathname, { user: signedIn ? user : null });
-    if (appleLogin) return appleLogin;
     const passkeyLogin = await handlePasskeyLogin(request, rawEnv, url.pathname);
     if (passkeyLogin) return passkeyLogin;
     const emailLogin = await handleEmailLogin(request, rawEnv, url.pathname, ctx);
@@ -337,15 +329,11 @@ export default {
 };
 
 async function staticRoute(url, request, env) {
-  if (url.pathname === "/app") return dashboardPage({ clientVersion: CLIENT_VERSION, account: (await verifyDashboardSession(request, sessionSecret(env)))?.uid ?? "", signIn: { apple: appleConfigured(env), email: emailConfigured(env) } });
-  if (url.pathname === "/app/i18n-en.js") return englishScript(url);
-  if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": scriptCacheControl(url, CLIENT_VERSION) } });
   if (url.pathname === "/") return overviewPage(request);
-  if (url.pathname === "/privacy") return privacyPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
+  if (url.pathname === "/privacy") return privacyPage(request, { apple: true, email: emailConfigured(env) });
   if (url.pathname === "/terms") return termsPage(request);
-  if (url.pathname === "/support") return supportPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
-  if (url.pathname === "/logo.svg") return logoResponse();
-  return Response.json({name:"Loadwise",short_name:"Loadwise",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
+  if (url.pathname === "/support") return supportPage(request, { apple: true, email: emailConfigured(env) });
+  return logoResponse();
 }
 
 
