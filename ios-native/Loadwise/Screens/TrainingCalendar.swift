@@ -436,7 +436,9 @@ struct CalendarActivityRow: View {
 /// no heart-rate curve, no track), so this is what there is to show.
 struct WatchActivityDetail: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     let activity: CalendarActivity
+    @State private var changingType = false
 
     var body: some View {
         NavigationStack {
@@ -464,10 +466,23 @@ struct WatchActivityDetail: View {
                     Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
                         .accessibilityLabel("Zavřít")
                 }
+                if !model.demo, ["intervals", "google-wearables", "apple-health"].contains(activity.source ?? "") {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                        } label: {
+                            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
+                        }
+                        .accessibilityLabel("Další volby")
+                    }
+                }
             }
         }
         .tint(Palette.ink)
         .presentationDetents([.medium, .large])
+        .sheet(isPresented: $changingType) {
+            ActivityTypeSheet(activityId: activity.id, current: activity.type, source: activity.source) { dismiss() }
+        }
     }
 
     /// "Chůze · st 8. 10. · 10:00–11:10".

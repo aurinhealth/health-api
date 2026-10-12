@@ -11,6 +11,7 @@ import { matchPlannedWorkouts } from "./plan-match.js";
 import { daySessions, dayPlanState } from "./app-training.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { bilingual, L } from "./lang.js";
+import { groupOfType } from "./activity-type.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -21,6 +22,9 @@ const SPORTS = [[/virtualride|ride|cycl|bik|kolo/i, "ride"], [/run|běh/i, "run"
 export function sportOf(text) {
   return (SPORTS.find(([re]) => re.test(String(text || ""))) || [null, "other"])[1];
 }
+// A known type decides (a run renamed to a walk keeps "Afternoon Run" as its
+// name); only an unknown one is guessed from the type and the name.
+const sportOfActivity = (type, name) => groupOfType(type) ?? sportOf(type + " " + (name || ""));
 
 const GOOGLE_TYPES = { WALKING: "Walk", RUNNING: "Run", BIKING: "Ride", CYCLING: "Ride", MOUNTAIN_BIKING: "Ride", INDOOR_BIKING: "VirtualRide", TREADMILL_RUNNING: "VirtualRun", SWIMMING: "Swim", HIKING: "Hike", WEIGHTLIFTING: "WeightTraining", WEIGHTS: "WeightTraining", STRENGTH_TRAINING: "WeightTraining" };
 const NAMES = bilingual(
@@ -34,12 +38,12 @@ const minutesBetween = (a, b) => { const m = (Date.parse(b) - Date.parse(a)) / 6
 function intervalsActivity(row) {
   const p = parse(row.payload_json);
   const type = p.type || p.category || "";
-  const sport = sportOf(type + " " + (p.name || ""));
+  const sport = sportOfActivity(type, p.name);
   const minutes = (seconds(p.moving_time) ?? seconds(p.elapsed_time) ?? seconds(p.duration_seconds) ?? seconds(p.duration)) / 60 || minutesBetween(row.start_time, row.end_time);
   const meters = num(p.distance) ?? num(p.icu_distance);
   const id = String(p.id || String(row.external_id || "").replace(/^activity:/, ""));
   return {
-    row, id: String(row.external_id || id), sport, status: "done",
+    row, id: String(row.external_id || id), sport, type: type || null, source: row.source_family, status: "done",
     title: String(p.name || NAMES[sport]).slice(0, 120),
     date: localDate(sessionLocalStart(row) || row.start_time) || String(row.start_time || "").slice(0, 10),
     time: (sessionLocalStart(row) || "").slice(11, 16) || null,
@@ -90,13 +94,13 @@ function googleSummary(row, metrics) {
 function googleActivity(row) {
   const p = parse(row.payload_json), ex = p.exercise || {}, metrics = ex.metricsSummary || {};
   const type = GOOGLE_TYPES[String(ex.exerciseType || "")] || String(ex.exerciseType || "");
-  const sport = sportOf(type + " " + (ex.displayName || ""));
+  const sport = sportOfActivity(type, ex.displayName);
   const minutes = (seconds(ex.activeDuration) ?? 0) / 60 || minutesBetween(row.start_time, row.end_time);
   const mm = num(metrics.distanceMillimeters), m = num(metrics.distanceMeters);
   const meters = m ?? (mm != null ? mm / 1000 : null);
   const local = sessionLocalStart(row) || "";
   return {
-    row, id: String(row.external_id), sport, status: "done",
+    row, id: String(row.external_id), sport, type: type || null, source: row.source_family, status: "done",
     title: String(ex.displayName || NAMES[sport]).slice(0, 120),
     date: local.slice(0, 10) || localDate(row.start_time),
     time: local.slice(11, 16) || null,
