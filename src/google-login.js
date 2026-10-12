@@ -1,4 +1,4 @@
-import { signText, sessionCookie, sessionSecret, SESSION_SECONDS, timingSafeEqualString } from "./dashboard-auth.js";
+import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 
 // "Sign in with Google" for the dashboard. Only identity scopes are requested;
@@ -25,6 +25,7 @@ export const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 
 let cachedJwks = null;
 let cachedJwksAt = 0;
+let forcedJwksAt = 0;
 
 export async function handleGoogleLogin(request, env, pathname) {
   if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env), request);
@@ -94,9 +95,8 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   }
 
   if (app) return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env)));
-  const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
   const headers = new Headers({ Location: "/app", "Cache-Control": "no-store" });
-  headers.append("Set-Cookie", await sessionCookie(user.id, exp, sessionSecret(env)));
+  headers.append("Set-Cookie", await userSessionCookie(env.DB, user.id, sessionSecret(env)));
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
   return new Response(null, { status: 302, headers });
 }
@@ -141,7 +141,7 @@ async function finishAppLogin(request, env) {
   if (!Number.isInteger(uid) || uid <= 0 || !(Number(data?.exp) > now)) return fail();
   if (!timingSafeEqualString(base64url(await sha256(verifier)), String(data.ch || ""))) return fail();
   const headers = new Headers({ "Cache-Control": "no-store" });
-  headers.append("Set-Cookie", await sessionCookie(uid, now + SESSION_SECONDS, sessionSecret(env)));
+  headers.append("Set-Cookie", await userSessionCookie(env.DB, uid, sessionSecret(env)));
   return Response.json({ status: "ok" }, { headers });
 }
 
@@ -158,7 +158,7 @@ export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fe
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new Error("Email is not verified");
   if (!claims.sub) throw new Error("Missing subject");
 
-  const jwks = await googleJwks(fetchImpl);
+  const jwks = await googleJwks(fetchImpl, header.kid);
   const jwk = jwks.keys.find(key => key.kid === header.kid && key.kty === "RSA");
   if (!jwk) throw new Error("Signing key not found");
   const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
@@ -167,17 +167,22 @@ export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fe
   return claims;
 }
 
-async function googleJwks(fetchImpl) {
+// Google's keys, kept for ten minutes. A token signed with a key the cached
+// list does not have (Google rotates its keys) fetches the list again, past
+// the cache, at most once a minute.
+async function googleJwks(fetchImpl, kid) {
   const now = Date.now();
-  if (cachedJwks && now - cachedJwksAt < 10 * 60 * 1000) return cachedJwks;
-  const response = await fetchImpl(GOOGLE_JWKS_URL, { cf: { cacheTtl: 600 } });
+  const fresh = cachedJwks && now - cachedJwksAt < 10 * 60 * 1000;
+  if (fresh && (cachedJwks.keys.some(key => key.kid === kid) || now - forcedJwksAt < 60 * 1000)) return cachedJwks;
+  if (fresh) forcedJwksAt = now;
+  const response = await fetchImpl(GOOGLE_JWKS_URL, fresh ? { cache: "no-store" } : { cf: { cacheTtl: 600 } });
   if (!response.ok) throw new Error("Google JWKS HTTP " + response.status);
   const data = await response.json();
   if (!data || !Array.isArray(data.keys)) throw new Error("Invalid Google JWKS response");
   cachedJwks = data; cachedJwksAt = now;
   return data;
 }
-export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; }
+export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 function page(title, message, status) {
   return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">Zpět na přihlášení</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });

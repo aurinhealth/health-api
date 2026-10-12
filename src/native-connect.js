@@ -10,7 +10,7 @@
 //    the sender's account. Each ticket works once,
 // 3. the provider's callback ends at loadwise://connected?event=…, which
 //    closes the sheet (connect-return.js).
-import { signText, sessionCookie, sessionSecret, SESSION_SECONDS, timingSafeEqualString } from "./dashboard-auth.js";
+import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { findUser } from "./tenancy.js";
 
 const TICKET_SECONDS = 120;
@@ -69,7 +69,7 @@ async function continueToProvider(env, ticket) {
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
   const next = { google: "/oauth/google?consent=1&return=native", "google-extra": "/oauth/google?consent=1&extra=1&return=native", strava: "/oauth/strava?return=native" }[ticket.provider] || "/oauth/intervals?return=native";
   const headers = new Headers({ Location: next, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  headers.append("Set-Cookie", await sessionCookie(ticket.uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, sessionSecret(env)));
+  headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });
 }
 

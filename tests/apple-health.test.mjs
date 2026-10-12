@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { appleRow, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync } from "../src/apple-health.js";
+import { appleRow, saveAppleHealth, disconnectAppleHealth, appleHealthStatus, afterGoogleSync, appleBodyTooLarge, MAX_BODY_BYTES } from "../src/apple-health.js";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { sleepSessionFromRow } from "../src/sleep-sessions.js";
 import { averageRestingHeartRate } from "../src/profile-suggestions.js";
@@ -134,4 +134,63 @@ test("too many records are refused", async () => {
   const { db } = setup();
   const result = await saveAppleHealth(db, 1, { records: Array.from({ length: 5001 }, () => ({})) });
   assert.equal(result.code, 413);
+});
+
+const NOW = Date.parse("2026-10-12T12:00:00Z");
+
+test("days have to exist and lie within the last 400 days up to tomorrow; instants too", () => {
+  const daily = (date, extra = {}) => appleRow({ type: "daily-resting-heart-rate", id: "rhr:" + date, date, value: 50, ...extra }, NOW);
+  assert.equal(daily("2026-10-10").sample_time, "2026-10-10");
+  assert.equal(daily("2026-10-13").sample_time, "2026-10-13", "tomorrow (the phone may be a day ahead)");
+  assert.equal(daily("2026-10-14"), null, "the day after tomorrow");
+  assert.equal(daily("2025-09-07").sample_time, "2025-09-07", "400 days back");
+  assert.equal(daily("2025-09-06"), null, "401 days back");
+  assert.equal(daily("2026-02-30"), null, "no such day");
+  assert.equal(daily("2026-13-01"), null);
+  assert.equal(daily("2026-1-01"), null);
+  const steps = (start, end) => appleRow({ type: "steps", id: "s", start, end, value: 10 }, NOW);
+  assert.ok(steps("2026-10-12T10:00:00Z", "2026-10-12T11:00:00Z"));
+  assert.equal(steps("2024-10-12T10:00:00Z", "2024-10-12T11:00:00Z"), null, "two years ago");
+  assert.equal(steps("2026-10-13T11:00:00Z", "2026-10-13T13:00:00Z"), null, "past tomorrow noon");
+  assert.equal(appleRow({ type: "weight", id: "w", time: "2026-10-20T07:00:00Z", value: 80 }, NOW), null);
+  assert.equal(appleRow({ type: "exercise", id: "W", activity: "running", start: "2025-01-01T06:00:00Z", end: "2025-01-01T07:00:00Z" }, NOW), null);
+});
+
+test("heart-rate points and sleep stages are capped, not refused", () => {
+  const ride = appleRow({ type: "exercise", id: "W1", activity: "cycling", start: "2026-10-10T06:00:00Z", end: "2026-10-10T07:30:00Z", heartRate: Array.from({ length: 1000 }, (_, i) => [i * 5, 100 + (i % 50)]) }, NOW);
+  assert.equal(ride.payload.samples.heartRate.length, 720);
+  assert.deepEqual(ride.payload.samples.heartRate[719], [3595, 100 + (719 % 50)]);
+  const stage = i => ({ type: i % 2 ? "core" : "deep", start: new Date(Date.parse("2026-10-09T21:00:00Z") + i * 60000).toISOString(), end: new Date(Date.parse("2026-10-09T21:00:00Z") + (i + 1) * 60000).toISOString() });
+  const night = appleRow({ type: "sleep", id: "N1", start: "2026-10-09T21:00:00Z", end: "2026-10-10T05:30:00Z", stages: Array.from({ length: 500 }, (_, i) => stage(i)) }, NOW);
+  assert.equal(night.payload.sleep.stages.length, 400);
+});
+
+test("only accepted rows set how far back Google is replaced, and a window never reaches past the range", async () => {
+  const { raw, db } = setup();
+  google(raw, "steps", "2024-10-10", 2900, "ancient");
+  google(raw, "steps", "2026-10-10", 3100, "recent");
+  const result = await saveAppleHealth(db, 1, { records: [
+    { type: "steps", id: "steps:old", start: "2024-10-10T08:00:00Z", end: "2024-10-10T09:00:00Z", value: 1 },
+    { type: "steps", id: "steps:2026-10-10T08", start: "2026-10-10T08:00:00Z", end: "2026-10-10T09:00:00Z", value: 3000 }
+  ] }, { now: NOW });
+  assert.deepEqual([result.saved, result.skipped, result.replaced], [1, 1, 1]);
+  const role = id => rows(raw, `external_id='${id}'`)[0].record_role;
+  assert.equal(role("recent"), "duplicate");
+  assert.equal(role("ancient"), "primary", "the refused old row did not widen the replacement");
+  // Workouts from before the range stay when the phone's window starts further back than the app reads.
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,end_time,payload_json) VALUES(1,'apple-health','exercise','apple:W0','2024-06-01T06:00:00Z','2024-06-01T07:00:00Z','{}')").run();
+  const w = { type: "exercise", id: "W1", activity: "running", start: "2026-10-01T06:00:00Z", end: "2026-10-01T07:00:00Z" };
+  await saveAppleHealth(db, 1, { records: [w], windows: { exercise: { from: "2024-01-01T00:00:00Z", to: "2026-10-12T00:00:00Z" } } }, { now: NOW });
+  assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W0", "apple:W1"]);
+  const gone = await saveAppleHealth(db, 1, { records: [], windows: { exercise: { from: "2024-01-01T00:00:00Z", to: "2026-10-12T00:00:00Z" } } }, { now: NOW });
+  assert.equal(gone.removed, 1, "inside the range the window still deletes what the phone no longer has");
+  assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W0"]);
+});
+
+test("a request declared over 4 MB is refused before it is read", () => {
+  const request = size => new Request("https://petrfitnessdata.eu/app/api/health/apple", { method: "POST", headers: size == null ? {} : { "Content-Length": String(size) }, body: "{}" });
+  assert.equal(MAX_BODY_BYTES, 4 * 1024 * 1024);
+  assert.equal(appleBodyTooLarge(request(MAX_BODY_BYTES)), false);
+  assert.equal(appleBodyTooLarge(request(MAX_BODY_BYTES + 1)), true);
+  assert.equal(appleBodyTooLarge(request(null)), false);
 });

@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { ensureTenancy, scopedDb, signInGoogleUser, inviteUser, setUserDisabled, userEnv, usersWithProviders, _resetTenancyForTest } from "../src/tenancy.js";
+import { ensureTenancy, scopedDb, signInGoogleUser, inviteUser, setUserDisabled, userEnv, usersWithProviders, PERSONAL_TABLES, _resetTenancyForTest } from "../src/tenancy.js";
 import { savePersonalFood, searchPersonalFoods } from "../src/personal-foods.js";
 import { logFood, updateFoodEntry } from "../src/food-log.js";
 
@@ -184,4 +185,24 @@ test("preview deployments cannot upgrade the shared production database", async 
   // Once upgraded, previews simply use the new schema.
   _resetTenancyForTest();
   await ensureTenancy(db, env, { request: preview });
+});
+
+// Every table a module creates with a user_id column holds one person's data:
+// it has to be in PERSONAL_TABLES, which drives the user_id guard, the shard
+// routing, the data download and the account deletion.
+test("every table created with user_id is a personal table", () => {
+  const dir = new URL("../src/", import.meta.url), missing = [];
+  for (const name of readdirSync(dir).filter(f => f.endsWith(".js"))) {
+    const text = readFileSync(new URL(name, dir), "utf8"), pattern = /CREATE TABLE(?:\s+IF NOT EXISTS)?\s+([a-z_]+)\s*\(/gi;
+    for (let m; (m = pattern.exec(text));) {
+      // The statement ends where the string holding it ends: the quote before CREATE.
+      let i = m.index - 1; while (i >= 0 && /\s/.test(text[i])) i--;
+      const quote = text[i], end = ["'", '"', "`"].includes(quote) ? text.indexOf(quote, m.index) : -1;
+      const body = text.slice(m.index, end < 0 ? m.index + 2000 : end);
+      if (/\buser_id\b/i.test(body) && !PERSONAL_TABLES[m[1].toLowerCase()]) missing.push(`${m[1]} (${name})`);
+    }
+  }
+  assert.deepEqual(missing, []);
+  assert.deepEqual(PERSONAL_TABLES.manual_activity_pairs, { pk: ["user_id", "planned_id"] });
+  assert.deepEqual(PERSONAL_TABLES.activity_energy_choices, { pk: ["user_id", "activity_id"] });
 });

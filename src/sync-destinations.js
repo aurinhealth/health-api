@@ -17,6 +17,13 @@ import { stravaConfigured, stravaSendActivity, readStravaTokens } from './strava
 // Done activities logged in the app (a manual workout, a gym session) go out
 // through sendActivity; each destination's result is kept in sync_sends so
 // the app can show it ("Odesláno do 2 aplikací") and try again.
+//
+// A send is never made twice by accident. A first send that got no answer
+// (timeout, network) may well have gone through, so its row becomes 'unknown'
+// instead of 'pending': the next try asks Intervals.icu for the day's activity
+// with our external_id and updates it, Strava refuses a repeated external_id
+// (409) and that counts as sent, and Google Health, which cannot be asked, is
+// sent again only by hand ("Zkusit znovu").
 
 export const DESTINATIONS = ['apple', 'google', 'intervals', 'strava'];
 // Sent from the server; Apple Health is written by the iPhone.
@@ -194,15 +201,34 @@ export function intervalsActivity(userId, activity) {
   return body;
 }
 
+// A fetch whose missing answer (timeout, network) is told apart from a
+// refusal: the request may well have gone through.
+async function reach(fetchImpl, url, init) {
+  try { return await fetchImpl(url, init); }
+  catch (error) { throw Object.assign(new Error('No answer: ' + (error?.name || error?.message)), { noAnswer: true }); }
+}
+
+// The day's activity Intervals.icu already has with our external_id (a send
+// whose answer was lost), so it is updated instead of made twice.
+async function intervalsActivityId(headers, body, fetchImpl) {
+  const day = body.start_date_local.slice(0, 10), next = new Date(Date.parse(day + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+  const response = await fetchImpl('https://intervals.icu/api/v1/athlete/0/activities?oldest=' + day + '&newest=' + next, { headers, signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
+  const list = await response.json().catch(() => []);
+  const match = (Array.isArray(list) ? list : []).find(a => a?.external_id === body.external_id);
+  return match?.id == null ? null : String(match.id);
+}
+
 async function pushIntervals(env, row, { fetchImpl }) {
   const activity = JSON.parse(row.payload_json || '{}'), body = intervalsActivity(env.USER_ID, activity);
   const headers = { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: 'application/json', 'Content-Type': 'application/json' };
   // Sent before: the same activity is updated instead of made twice.
-  const url = row.remote_id ? 'https://intervals.icu/api/v1/activity/' + encodeURIComponent(row.remote_id) : 'https://intervals.icu/api/v1/athlete/0/activities/manual';
-  const response = await fetchImpl(url, { method: row.remote_id ? 'PUT' : 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+  const known = row.remote_id || await intervalsActivityId(headers, body, fetchImpl);
+  const url = known ? 'https://intervals.icu/api/v1/activity/' + encodeURIComponent(known) : 'https://intervals.icu/api/v1/athlete/0/activities/manual';
+  const response = await reach(fetchImpl, url, { method: known ? 'PUT' : 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error('Intervals.icu HTTP ' + response.status);
   const saved = await response.json().catch(() => null);
-  const id = saved?.id ?? row.remote_id;
+  const id = saved?.id ?? known;
   if (id == null) throw new Error(L('Intervals.icu nepotvrdilo uložení.', 'Intervals.icu didn\'t confirm the save.'));
   return String(id);
 }
@@ -225,7 +251,7 @@ async function pushGoogle(env, row, { fetchImpl, googleToken }) {
   const activity = JSON.parse(row.payload_json || '{}'), known = GOOGLE_EXERCISE.test(row.remote_id || '');
   const access = await googleToken(env);
   const url = 'https://health.googleapis.com/v4/' + (known ? row.remote_id : 'users/me/dataTypes/exercise/dataPoints');
-  const response = await fetchImpl(url, { method: known ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + access, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(googleExercise(activity)), signal: AbortSignal.timeout(15000) });
+  const response = await reach(fetchImpl, url, { method: known ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + access, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(googleExercise(activity)), signal: AbortSignal.timeout(15000) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error('Google Health HTTP ' + response.status);
   if (data.error) throw new Error('Google operation failed');
@@ -249,7 +275,12 @@ function failure(destination, error) {
 const setStatus = (env, row, status, message, remoteId = null) => env.DB.prepare(`UPDATE sync_sends SET status = ?, message = ?, remote_id = COALESCE(?, remote_id), attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP
   WHERE user_id = ? AND activity_key = ? AND destination = ?`).bind(status, message, remoteId, env.USER_ID, row.activity_key, row.destination).run();
 
+const NO_ANSWER = () => L('Odpověď nedorazila; aktivita už tam může být. Zkus to znovu, až si to ověříš.', 'No answer came; the activity may already be there. Try again once you have checked.');
+// A first send Google Health never answered: only "Zkusit znovu" sends it again.
+const googleUnsure = row => row.destination === 'google' && row.status === 'unknown' && !GOOGLE_EXERCISE.test(row.remote_id || '');
+
 // Sends one stored activity to one destination and records the result.
+// `force` is the user's own "Zkusit znovu".
 async function deliver(env, row, options) {
   if (!PUSH[row.destination]) return { destination: row.destination, status: row.status, message: row.message || null };
   if (!destinationConnected(env, row.destination)) {
@@ -257,12 +288,19 @@ async function deliver(env, row, options) {
     await setStatus(env, row, 'error', message);
     return { destination: row.destination, status: 'error', message };
   }
+  if (googleUnsure(row) && !options.force) return { destination: row.destination, status: 'unknown', message: row.message || NO_ANSWER() };
   try {
     const remoteId = await PUSH[row.destination](env, row, options);
     await setStatus(env, row, 'sent', null, remoteId);
-    return { destination: row.destination, status: 'sent', remoteId };
+    return { destination: row.destination, status: 'sent', remoteId: remoteId ?? row.remote_id ?? null };
   } catch (error) {
     console.error('Activity send failed', row.destination, error.message);
+    // No answer to a first send: it may be there, so the next try looks before it sends again.
+    if (error.noAnswer && !row.remote_id) {
+      const message = NO_ANSWER();
+      await setStatus(env, row, 'unknown', message);
+      return { destination: row.destination, status: 'unknown', message };
+    }
     const message = failure(row.destination, error);
     await setStatus(env, row, 'error', message);
     return { destination: row.destination, status: 'error', message, ...(error.scope ? { needsScope: error.scope } : {}) };
@@ -280,9 +318,12 @@ export async function sendActivity(env, input, { fetchImpl = fetch, googleToken 
   for (const destination of SERVER_DESTINATIONS) {
     const prefs = await readSyncPrefs(env.DB, env.USER_ID, destination);
     if (!prefs.pushActivities || !offered(env, destination) || !destinationConnected(env, destination)) continue;
-    // A changed activity (the same key) is sent again with its new content.
+    // A changed activity (the same key) is sent again with its new content; a
+    // first send nobody answered stays 'unknown', so Google Health is not sent twice.
     await env.DB.prepare(`INSERT INTO sync_sends (user_id, activity_key, destination, status, payload_json) VALUES (?, ?, ?, 'pending', ?)
-      ON CONFLICT(user_id, activity_key, destination) DO UPDATE SET payload_json = excluded.payload_json, status = 'pending', message = NULL, attempts = 0, updated_at = CURRENT_TIMESTAMP`)
+      ON CONFLICT(user_id, activity_key, destination) DO UPDATE SET payload_json = excluded.payload_json,
+        status = CASE WHEN sync_sends.status = 'unknown' AND sync_sends.remote_id IS NULL THEN 'unknown' ELSE 'pending' END,
+        message = CASE WHEN sync_sends.status = 'unknown' AND sync_sends.remote_id IS NULL THEN sync_sends.message ELSE NULL END, attempts = 0, updated_at = CURRENT_TIMESTAMP`)
       .bind(env.USER_ID, activity.key, destination, JSON.stringify(activity)).run();
     const row = await env.DB.prepare('SELECT * FROM sync_sends WHERE user_id = ? AND activity_key = ? AND destination = ?').bind(env.USER_ID, activity.key, destination).first();
     sends.push(await deliver(env, row, { fetchImpl, googleToken }));
@@ -307,14 +348,16 @@ export async function retrySend(env, key, destination, { fetchImpl = fetch, goog
   await ensureSyncTables(env.DB);
   const row = await env.DB.prepare('SELECT * FROM sync_sends WHERE user_id = ? AND activity_key = ? AND destination = ?').bind(env.USER_ID, String(key || ''), String(destination || '')).first();
   if (!row) throw Object.assign(new Error(L('Odeslání nebylo nalezeno.', 'The send wasn\'t found.')), { status: 404 });
-  return deliver(env, row, { fetchImpl, googleToken });
+  return deliver(env, row, { fetchImpl, googleToken, force: true });
 }
 
-// Cron: sends that never finished (no answer) or failed only a few times.
+// Cron: sends that never started, failed only a few times or got no answer
+// where a second try is safe (Intervals.icu looks the activity up first,
+// Strava refuses a repeated external_id). Google Health waits for the user.
 export async function retrySyncSends(env, { fetchImpl = fetch, googleToken = null, limit = 10 } = {}) {
   let rows = [];
   try {
-    rows = (await env.DB.prepare("SELECT * FROM sync_sends WHERE user_id = ? AND destination IN ('google', 'intervals', 'strava') AND status IN ('pending', 'error') AND attempts < 3 AND updated_at < datetime('now', '-5 minutes') ORDER BY updated_at LIMIT ?").bind(env.USER_ID, limit).all()).results || [];
+    rows = (await env.DB.prepare("SELECT * FROM sync_sends WHERE user_id = ? AND destination IN ('google', 'intervals', 'strava') AND status IN ('pending', 'error', 'unknown') AND NOT (destination = 'google' AND status = 'unknown') AND attempts < 3 AND updated_at < datetime('now', '-5 minutes') ORDER BY updated_at LIMIT ?").bind(env.USER_ID, limit).all()).results || [];
   } catch (error) {
     if (/no such table/i.test(error.message)) return [];
     throw error;
