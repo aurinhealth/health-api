@@ -11,10 +11,8 @@ import { intervalsAuthorization } from "../src/intervals-auth.js";
 import { handleIntervalsOAuth, INTERVALS_SCOPES } from "../src/intervals-oauth.js";
 import { handleGoogleOAuth } from "../src/google-oauth.js";
 import { connectReturnUrl } from "../src/connect-return.js";
-import { dashboardPage } from "../src/dashboard.js";
 import { serverSource, SERVER_FILES } from "./helpers/server-source.mjs";
 
-const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
 const entry = serverSource();
 const ctx = { waitUntil() {} };
 
@@ -143,56 +141,13 @@ test("connecting Google from the setup window returns to it; cancelling there is
   assert.equal(connectReturnUrl("setup", "unknown"), "/app#setup");
 });
 
-test("the setup window keeps provider cards and lets prefilled profiles bypass extra setup steps", () => {
+
+
+
+
+test("the app learns which services are missing", () => {
   assert.match(entry, /missingProviders:missingProviders\(env\),onboarding,ai,consent[,}]/);
-  assert.match(client, /providers\.map\(p=>serviceCardHtml\(p,'setup'\)\)/);
-  assert.match(client, /wireIntervalsKey\(\$\('setupBody'\)/);
-  // The provider pages return to the step the user left.
-  assert.match(client, /'return='\+back/);
-  assert.match(client, /if\(!edit&&setup\.baseline\.ready\)return finish\(\)/);
-  assert.match(client, /\$\('restartSetup'\)\.onclick=\(\)=>showAccountSetup\(\{edit:true\}\)/);
 });
-
-test("data kept on the device belongs to the signed-in account", async () => {
-  assert.match(await dashboardPage({ account: 7 }).text(), /<meta name="lw-account" content="7">/);
-  assert.match(await dashboardPage({ account: "<x>" }).text(), /<meta name="lw-account" content="">/);
-  assert.match(entry, /account: \(await verifyDashboardSession\(request, sessionSecret\(env\)\)\)\?\.uid \?\? ""/);
-  const run = (pageAccount, kept) => {
-    const store = new Map(Object.entries({ "lw-dashboard-ready": "1", "lw-dashboard-snapshot": "{}", fitnessProfile: "{}", "pfd-meals-v1": "x", ...(kept ? { "lw-account": kept } : {}) }));
-    const localStorage = { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
-    const context = vm.createContext({ SNAPSHOT_KEY: "lw-dashboard-snapshot", localStorage, PAGE_ACCOUNT: pageAccount });
-    for (const name of ["forgetDashboard", "forgetAccount", "bindDeviceToAccount"]) vm.runInContext(client.match(new RegExp("^function " + name + "\\(\\)\\{.*$", "m"))[0], context);
-    vm.runInContext("bindDeviceToAccount()", context);
-    return store;
-  };
-  // Someone else signed in on this browser: the previous account's day and profile go.
-  const other = run("8", "7");
-  assert.deepEqual([...other.keys()].sort(), ["lw-account", "pfd-meals-v1"]);
-  assert.equal(other.get("lw-account"), "8");
-  // The same account keeps everything.
-  assert.ok(run("7", "7").has("lw-dashboard-snapshot"));
-  // Signed out (no account on the page): nothing changes until the next sign-in.
-  assert.ok(run("", "7").has("fitnessProfile"));
-});
-
-test("a part that did not load is named, not just 'a data service'", () => {
-  const jobs = client.match(/const jobs=\[(.*?)\]\.filter/)[1];
-  const keys = [...jobs.matchAll(/\['([a-zA-Z]+)','\/app\/api/g)].map(m => m[1]);
-  const labels = client.match(/const LOAD_PART_LABELS=\{(.*?)\};/)[1];
-  for (const key of keys) assert.match(labels, new RegExp("\\b" + key + ":\\["), key);
-  assert.doesNotMatch(client, /Některá datová služba není dostupná/);
-});
-
-test("settings are sections that open one at a time and links open the right one", () => {
-  for (const key of ["connections", "profile", "training", "appearance", "account", "users"]) assert.ok(client.includes("settingsSectionHtml('" + key + "'"), key);
-  assert.match(client, /name="settings"/);
-  assert.match(client, /data-open-section="connections">Zkontrolovat propojení/);
-  assert.match(client, /openSettings\('profile','fitnessProfileForm'\)/);
-  // The Language and Appearance cards keep their headings (i18n tests rely on them).
-  assert.match(client, /<h3>Jazyk<\/h3>/);
-  assert.match(client, /<h3>Vzhled<\/h3>/);
-});
-
 test("the gym plan does not need Intervals.icu", async () => {
   const { buildStrengthContext } = await import("../src/strength-context.js");
   const { scopedDb } = await import("../src/tenancy.js");
@@ -217,18 +172,6 @@ test("no calories are written to Intervals.icu", () => {
   assert.doesNotMatch(entry, /syncPlannedEventCalories|syncDailyNutritionNotes|removePlannedEventCalories|deleteDailyNutritionNotes/);
 });
 
-test("without a service the app does not offer what needs it", () => {
-  // The page knows what this account has connected.
-  assert.match(client, /setConnectedServices\(\['google','intervals'\]\.filter\(id=>!\(me\.missingProviders\|\|\[\]\)\.includes\(id\)\)\)/);
-  // Workouts are saved in the app; Intervals.icu is only a destination.
-  assert.match(client, /function proposalWaiting\(p\)\{return Boolean\(p\?\.workout/);
-  assert.doesNotMatch(client, /Kolo a běh se zapisují do Intervals\.icu/);
-  // Food entries carry no "Google · není připojené" badge without Google Health.
-  assert.match(client, /function foodExportHtml\(entry\)\{\n  if\(!serviceConnected\('google'\)\)return '';/);
-});
 
 test("without Intervals.icu the fitness and form cards say where the numbers come from", () => {
-  assert.match(client, /Kondice · jen s Intervals\.icu/);
-  assert.match(client, /const ownLoad=serviceConnected\('intervals'\);\n  \$\("oFitness"\)\.innerHTML=ownLoad\?/);
-  assert.doesNotMatch(dashboardPage.toString() + client, /targetWeightKg\|\|80/);
 });

@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createD1 } from './helpers/d1.mjs';
 import { PERSONAL_TABLES, usersWithProviders, _resetTenancyForTest } from '../src/tenancy.js';
-import { registerHooks } from 'node:module';
 import { sessionCookie } from '../src/dashboard-auth.js';
 import { routedUserDb } from '../src/user-data-routing.js';
 import { resolveUserData, userDataEnvironment, deletionDatabase, UserDataUnavailable } from '../src/user-data-shards.js';
@@ -155,14 +154,7 @@ test('cache entries cannot cross staging/production or a user data shard', async
 });
 
 test('authenticated API requests route writes and caches; a missing shard returns 503 without writing elsewhere', async () => {
-  // Match Wrangler's Text module rule for the browser asset while loading
-  // the real request handlers and authentication code in Node.
-  const hooks = registerHooks({load(url,context,nextLoad) {
-    if (url.endsWith('/dashboard-client.js')) return {format:'module',source:'export default '+JSON.stringify(readFileSync(new URL(url),'utf8')),shortCircuit:true};
-    return nextLoad(url,context);
-  }});
-  let entrypoint;
-  try { entrypoint = (await import('../src/entrypoint.js')).default; } finally { hooks.deregister(); }
+  const entrypoint = (await import('../src/entrypoint.js')).default;
   const { core, env, shards } = setup(); addUser(core, 3);
   core.sqlite.exec("INSERT INTO schema_meta(key,value) VALUES('tenancy_version','1')");
   _resetTenancyForTest();
