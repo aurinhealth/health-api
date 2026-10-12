@@ -55,7 +55,6 @@
 "Anaerobní" = "Anaerobic";
 "Animace" = "Animation";
 "Aplikace" = "App";
-"Automaticky se vzhled řídí nastavením iPhonu." = "Automatic follows your iPhone's setting.";
 "Ať sedí dnešní příjem a zítřejší doporučení." = "So today's intake and tomorrow's advice are accurate.";
 "Bdění" = "Awake";
 "Bez dat" = "No data";
@@ -426,7 +425,6 @@
 "Plánuji…" = "Scheduling…";
 "Po splnění cíle: %@." = "At your goal: %@.";
 "Podle budíku a potřeby spánku ti každý den řeknu, kdy jít spát." = "Based on your alarm and sleep need, I'll tell you each day when to go to bed.";
-"Podle data závodu se plánují fáze přípravy: základ, rozvoj v posledních 12 týdnech a ladění v posledním týdnu." = "Training phases are planned from the race date: base, build in the last 12 weeks, and taper in the final week.";
 "Podle historie" = "From history";
 "Podržením smažeš" = "Touch and hold to delete";
 "Pohlaví" = "Sex";
@@ -486,7 +484,6 @@
 "Proč mám nízkou připravenost?" = "Why is my readiness low?";
 "Proč se dnes hodí" = "Why it fits today";
 "Práh" = "Threshold";
-"Prázdné hodnoty Loadwise průběžně dopočítává z tréninků, Apple Health a Google Health. Zadaná hodnota platí i pro tepové zóny." = "Loadwise keeps filling in blank values from your workouts, Apple Health and Google Health. A value you enter also sets your heart rate zones.";
 "Průběh" = "Structure";
 "Průměr 7 dní" = "7-day average";
 "Pár otázek a připravím ti cíl kalorií a živin, potřebu spánku s večerkou a tréninky, které sedí k tvému vybavení. Zabere to asi minutu." = "A few questions and I'll set up your calorie and macro targets, your sleep need with a bedtime, and workouts that fit your equipment. It takes about a minute.";
@@ -627,7 +624,6 @@
 "Server neodpověděl." = "The server didn't respond.";
 "Server nevrátil přihlášení. Zkus to znovu." = "The server didn't return a sign-in. Try again.";
 "Server odpověděl chybou %@." = "The server returned error %@.";
-"Server ukládá hodnoty metricky, převádí se jen to, co vidíš a zadáváš." = "The server stores metric values; only what you see and enter is converted.";
 "Sestavit posilovnu" = "Build a gym workout";
 "Sestavit trénink" = "Build workout";
 "Sestavuji…" = "Building…";
@@ -652,7 +648,6 @@
 "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou." = "Deletes your account and all data on the server. This can't be undone. Data in Intervals.icu and Google stays where it is.";
 "Snídaně" = "Breakfast";
 "Snímek obrazovky" = "Screenshot";
-"Soubor JSON se vším, co o tobě Loadwise ukládá." = "A JSON file with everything Loadwise stores about you.";
 "Souhlas" = "Consent";
 "Souhlasím, aby Loadwise takto používal moje data z Google Health." = "I agree to Loadwise using my Google Health data this way.";
 "Souhlasím, aby Loadwise zpracovával moje údaje o zdraví, jak je popsáno výše, včetně AI funkcí." = "I agree that Loadwise processes my health data as described above, including the AI features.";
@@ -704,7 +699,6 @@
 "Teplota zápěstí" = "Wrist temperature";
 "Tepové zóny pro běh" = "Running heart rate zones";
 "Tepové zóny pro kolo" = "Cycling heart rate zones";
-"Texty od kouče a ze serveru přijdou v novém jazyce s dalším načtením." = "Coach and server texts switch to the new language on the next refresh.";
 "Teď" = "Now";
 "Teď ne" = "Not now";
 "Tohle jídlo dnes není." = "This meal isn't in today's plan.";
@@ -712,7 +706,6 @@
 "Trenažér" = "Trainer";
 "Trend" = "Trend";
 "Trenér" = "Coach";
-"Trenér podle hlavního sportu volí tréninky a ostatní sporty bere jako doplněk." = "The coach picks workouts for your main sport and treats other sports as extras.";
 "Trenér podle toho volí tréninky a posilovnu sestaví jen z toho, co máš." = "The coach picks workouts accordingly and builds gym sessions only from what you have.";
 "Trenér píše zpětnou vazbu…" = "The coach is writing feedback…";
 "Triceps" = "Triceps";
@@ -1186,23 +1179,19 @@
 "Odebrat fotku" = "Remove photo";
 "Fotku se nepodařilo načíst." = "The photo couldn't be loaded.";
 "Osobní údaje" = "Personal details";
-"Z pohlaví, věku a výšky (a váhy) se počítá klidový výdej a denní cíl kalorií." = "Your sex, age and height (and weight) give your resting burn and daily calorie target.";
 "Jméno" = "Name";
 "tvé jméno" = "your name";
 "Datum narození" = "Date of birth";
 "Zadat" = "Set";
 "Účet" = "Account";
-"Přihlašuješ se přes tento účet. Fotka zůstává jen v tomhle telefonu." = "You sign in with this account. The photo stays on this phone only.";
 "E-mail" = "Email";
 "E-mail %@, zkopírovat" = "Email %@, copy";
 "Tep a aktivita" = "Heart rate and activity";
-"Z běžného dne, sportu a cíle se počítá denní cíl kalorií." = "Your usual day, sport and goal give your daily calorie target.";
 "max %@" = "max %@";
 "klid %@" = "rest %@";
 "fotka, jméno, věk a výška" = "photo, name, age and height";
 "Přidat propojení" = "Add integration";
 "Zatím není nic propojené." = "Nothing is connected yet.";
-"Bez propojení běží Loadwise z toho, co zapíšeš ručně." = "Without integrations Loadwise runs on what you log yourself.";
 "Synchronizovat vše" = "Sync everything";
 "Sloučit stejné záznamy" = "Merge duplicate records";
 "Když stejnou noc nebo trénink pošle víc zdrojů, započítá se jednou." = "When several sources send the same night or workout, it counts once.";
