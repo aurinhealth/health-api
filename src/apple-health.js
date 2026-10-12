@@ -34,7 +34,9 @@ const DAILY = {
   "daily-heart-rate-variability": ["dailyHeartRateVariability", "averageHeartRateVariabilityMilliseconds", "ms", 1, 400],
   "daily-respiratory-rate": ["dailyRespiratoryRate", "breathsPerMinute", "breaths/min", 4, 60],
   "daily-vo2-max": ["dailyVo2Max", "vo2Max", "ml/kg/min", 10, 95],
-  "daily-oxygen-saturation": ["dailyOxygenSaturation", "percentage", "%", 50, 100]
+  "daily-oxygen-saturation": ["dailyOxygenSaturation", "percentage", "%", 50, 100],
+  "daily-walking-heart-rate": ["dailyWalkingHeartRate", "beatsPerMinute", "bpm", 40, 200],
+  "daily-heart-rate-recovery": ["dailyHeartRateRecovery", "beatsPerMinute", "bpm", 1, 120]
 };
 const INTERVAL = {
   steps: ["steps", "count", "count", 0, 100000],

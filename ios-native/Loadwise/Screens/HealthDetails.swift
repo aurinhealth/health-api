@@ -79,8 +79,7 @@ struct SleepDetailContent: View {
                 }
                 if let r = health.respiration { StatRow(title: "Dechová frekvence", value: Fmt.decimal(r.value), unit: "/ min") }
                 if let t = health.skinTemp { StatRow(title: "Teplota zápěstí", value: Fmt.signed(Units.temperatureChange(t.deviation), digits: 1), unit: L10n.f("%@ od normy", Units.temperatureUnit)) }
-                if let o = health.oxygen { StatRow(title: "Kyslík v krvi", value: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1), unit: "%") } else { AppleHealthRow(title: "Kyslík v krvi") }
-                AppleHealthRow(title: "Poruchy dýchání")
+                if let o = health.oxygen { StatRow(title: "Kyslík v krvi", value: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1), unit: "%") }
             }
             .padding(.top, 14)
 
@@ -129,7 +128,6 @@ struct SleepDetailContent: View {
                 VStack(spacing: 0) {
                     if let latency = night.latencyMinutes { StatRow(title: "Doba do usnutí", value: Fmt.int(latency), unit: "min") }
                     if let eff = night.efficiency { StatRow(title: "Efektivita spánku", value: String(eff), unit: "%") }
-                    AppleHealthRow(title: "Večerní hluk v ložnici")
                 }
                 .padding(.top, 18)
             }
@@ -193,22 +191,6 @@ struct StatRow: View {
             Spacer()
             Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
             if let unit { Text(unit).font(Typo.small).foregroundStyle(Palette.faint) }
-        }
-        .padding(.vertical, 13)
-        .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// A value Apple Health has no data for yet.
-struct AppleHealthRow: View {
-    let title: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(.body).foregroundStyle(Palette.ink)
-            Spacer()
-            Text("zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.vertical, 13)
         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -361,14 +343,14 @@ struct HeartDetailContent: View {
                 Text(Self.restingSentence(rhr)).font(Typo.small).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
             }
-            SectionLabel(text: "Srdce a návyky").padding(.top, 32)
-            VStack(spacing: 0) {
-                AppleHealthRow(title: "Zotavení tepu po tréninku")
-                AppleHealthRow(title: "Tep při chůzi")
-                AppleHealthRow(title: "Dechová cvičení")
-                AppleHealthRow(title: "Nálada")
+            if health.hrRecovery != nil || health.walkingHR != nil {
+                SectionLabel(text: "Srdce a návyky").padding(.top, 32)
+                VStack(spacing: 0) {
+                    if let r = health.hrRecovery { StatRow(title: "Zotavení tepu po tréninku", value: Fmt.int(r.value), unit: "bpm") }
+                    if let w = health.walkingHR { StatRow(title: "Tep při chůzi", value: Fmt.int(w.value), unit: "bpm") }
+                }
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
         }
     }
 
@@ -460,21 +442,18 @@ struct WeightDetailContent: View {
                 ThreeCells(cells: [("Průměr 7 dní", Fmt.decimal(w.average.map { Units.weight($0) })), ("Za 30 dní", w.change.map { Fmt.signed(Units.weight($0), digits: 1) } ?? "–"),
                                    ("Do cíle", w.goal.map { Units.weightText(abs((w.average ?? w.latest) - $0)) } ?? "–")])
                     .padding(.top, 20)
-                SectionLabel(text: "Složení těla").padding(.top, 32)
-                VStack(spacing: 0) {
-                    if let fat = w.bodyFat {
-                        StatRow(title: "Tělesný tuk", value: Fmt.decimal(fat.value), unit: "%" + (fat.change.map { " · " + ($0 < 0 ? "↓ " : "↑ ") + Fmt.decimal(abs($0)) } ?? ""))
-                    } else {
-                        AppleHealthRow(title: "Tělesný tuk")
+                if w.bodyFat != nil || w.muscle != nil {
+                    SectionLabel(text: "Složení těla").padding(.top, 32)
+                    VStack(spacing: 0) {
+                        if let fat = w.bodyFat {
+                            StatRow(title: "Tělesný tuk", value: Fmt.decimal(fat.value), unit: "%" + (fat.change.map { " · " + ($0 < 0 ? "↓ " : "↑ ") + Fmt.decimal(abs($0)) } ?? ""))
+                        }
+                        if let muscle = w.muscle {
+                            StatRow(title: "Svalová hmota", value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
+                        }
                     }
-                    if let muscle = w.muscle {
-                        StatRow(title: "Svalová hmota", value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
-                    } else {
-                        AppleHealthRow(title: "Svalová hmota")
-                    }
-                    AppleHealthRow(title: "Obvod pasu")
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
             } else {
                 Text("Zatím žádné vážení.").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 24)
             }

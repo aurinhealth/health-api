@@ -90,6 +90,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const skin = series("skinTempDeviation", 14, 2, google);
   // Oxygen from the watch (Apple Health, Google) first, Intervals.icu filling the rest (mergeWellnessRows).
   const spo2 = series("spO2", 14, 1);
+  const walkingHR = series("walkingHR", 30), hrRecovery = series("hrRecovery", 30);
 
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).
@@ -150,6 +151,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
     respiration: respiration.length ? { value: c.respiration ? round(c.respiration.value, 1) : respiration.at(-1).value, baseline: c.respiration ? round(c.respiration.baseline, 1) : null, elevated: !!c.respiration?.elevated, series: respiration } : null,
     skinTemp: skin.length ? { deviation: c.skinTemp ? round(c.skinTemp.deviation, 2) : skin.at(-1).value, elevated: !!c.skinTemp?.elevated, series: skin } : null,
     oxygen: spo2.length ? { value: spo2.at(-1).value, low: Math.min(...spo2.map(p => p.value)), high: Math.max(...spo2.map(p => p.value)), series: spo2 } : null,
+    walkingHR: walkingHR.length ? { value: walkingHR.at(-1).value, series: walkingHR } : null,
+    hrRecovery: hrRecovery.length ? { value: hrRecovery.at(-1).value, series: hrRecovery } : null,
     weight: weights.length ? {
       latest: weights.at(-1).value,
       date: weights.at(-1).date,
