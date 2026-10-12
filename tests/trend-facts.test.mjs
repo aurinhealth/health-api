@@ -96,7 +96,7 @@ test("the Training text gets today's readiness, the trends and the zone rule in 
 
 test("the coach-text route adds the readiness and trends in one place", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.equal(entry.match(/dayReadiness\(/g).length, 2, "the day review and the screen texts");
+  assert.equal(entry.match(/\bdayReadiness\(/g).length, 2, "the day review and the screen texts");
   assert.match(entry, /async function coachTextExtras\(env,ctx,internalAuth,screen\)/);
   assert.match(entry, /coachTextExtras\(env,ctx,internalAuth,screen\)\.catch/);
 });
