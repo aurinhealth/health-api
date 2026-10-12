@@ -374,6 +374,7 @@ struct SetRow: View {
                     .font(.system(size: 26))
                     .foregroundStyle(set.done ? Palette.green : Palette.faint)
             }
+            .sensoryFeedback(.impact(weight: .light), trigger: set.done) { was, now in !was && now }
             .accessibilityLabel(L10n.tr(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou"))
         }
         .opacity(set.done ? 0.75 : 1)
