@@ -3,7 +3,8 @@ import UIKit
 
 // Colour tokens from the design (artifact "Loadwise iOS návrh"): a warm paper
 // light mode and an almost black dark mode. Every token has both variants, so
-// views never check the colour scheme themselves.
+// views never check the colour scheme themselves. In Shared, so the widgets
+// use the same colours.
 enum Palette {
     static let background = Color(light: 0xF3EFE8, dark: 0x0A0B0C)
     /// Settings pages: flat, a touch greyer than the other screens.
