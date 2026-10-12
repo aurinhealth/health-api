@@ -138,6 +138,12 @@ final class AppModel {
 
     /// Notes whether a refresh reached the server; true when the error was a
     /// missing connection and saved data is on screen instead.
+    nonisolated static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let url = error as? URLError, url.code == .cancelled { return true }
+        return (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled
+    }
+
     private func noteConnection(_ error: Error?) -> Bool {
         let lost = error.map(Outbox.isNoConnection) ?? false
         offline = lost
@@ -328,6 +334,8 @@ final class AppModel {
             signOut(expired: true)
         } catch {
             // Without signal the saved screen stays; an error only without one.
+            // A request cut short (a newer load of the same data, a closed screen) is no error.
+            if Self.isCancellation(error) { return }
             let lost = noteConnection(error)
             if !(lost && today != nil) { errorMessage = error.localizedDescription }
             if !lost && today != nil { notice = error.localizedDescription }
@@ -397,6 +405,8 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut(expired: true)
         } catch {
+            // A request cut short (a newer load of the same data, a closed screen) is no error.
+            if Self.isCancellation(error) { return }
             let lost = noteConnection(error)
             if !(lost && training != nil) { trainingError = error.localizedDescription }
             if !lost && training != nil { notice = error.localizedDescription }
@@ -415,6 +425,8 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut(expired: true)
         } catch {
+            // A request cut short (a newer load of the same data, a closed screen) is no error.
+            if Self.isCancellation(error) { return }
             let lost = noteConnection(error)
             if !(lost && health != nil) { healthError = error.localizedDescription }
             if !lost && health != nil { notice = error.localizedDescription }
@@ -437,6 +449,8 @@ final class AppModel {
         } catch APIError.unauthorized {
             signOut(expired: true)
         } catch {
+            // A request cut short (a newer load of the same data, a closed screen) is no error.
+            if Self.isCancellation(error) { return }
             let lost = noteConnection(error)
             if !(lost && food != nil) { foodError = error.localizedDescription }
             if !lost && food != nil { notice = error.localizedDescription }

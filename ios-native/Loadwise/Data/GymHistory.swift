@@ -122,6 +122,13 @@ extension AppModel {
             ?? sameDay.first { $0.sport == activity.sport && $0.time != nil && $0.time == activity.time }
     }
 
+    /// The calories a calendar row counts with: the estimate once the user
+    /// chose it for a flagged session (the calendar itself has the device's).
+    func countedKcal(_ activity: CalendarActivity) -> Double? {
+        guard let session = doneSession(for: activity), let estimate = session.kcalEstimate?.value, session.kcal != nil else { return activity.kcal }
+        return KcalChoiceStore.shared.choice(for: session) == "estimate" ? estimate : activity.kcal
+    }
+
     func doneStrengthSession(on date: String) -> WeekSession? {
         let pick: (WeekSession) -> Bool = { $0.date == date && $0.sport == "strength" && $0.status == "done" && $0.kind == "activity" }
         if let found = training?.sessions?.first(where: pick) { return found }
