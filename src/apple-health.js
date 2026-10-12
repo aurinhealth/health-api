@@ -1,8 +1,8 @@
 // Apple Health (HealthKit) from the native iPhone app. Apple Health has no web
 // API: the app reads HealthKit on the phone, sums it up (steps and energy per
-// hour, one value a day for resting heart rate, HRV, breathing, VO2max and
-// oxygen, minutes in heart-rate zones per day, nights with stages, workouts)
-// and sends it to POST /app/api/health/apple.
+// hour, one value a day for resting heart rate, HRV, breathing, VO2max,
+// oxygen and wrist temperature in sleep, minutes in heart-rate zones per day,
+// nights with stages, workouts) and sends it to POST /app/api/health/apple.
 //
 // The rows are stored in health_datapoints as source_family 'apple-health'
 // with the same data types and the same payload shape as Google Health, so the
@@ -36,7 +36,9 @@ const DAILY = {
   "daily-vo2-max": ["dailyVo2Max", "vo2Max", "ml/kg/min", 10, 95],
   "daily-oxygen-saturation": ["dailyOxygenSaturation", "percentage", "%", 50, 100],
   "daily-walking-heart-rate": ["dailyWalkingHeartRate", "beatsPerMinute", "bpm", 40, 200],
-  "daily-heart-rate-recovery": ["dailyHeartRateRecovery", "beatsPerMinute", "bpm", 1, 120]
+  "daily-heart-rate-recovery": ["dailyHeartRateRecovery", "beatsPerMinute", "bpm", 1, 120],
+  // Apple Watch's wrist temperature in sleep, one value a night on the day of waking up.
+  "daily-wrist-temperature": ["dailyWristTemperature", "temperatureCelsius", "°C", 30, 42]
 };
 const INTERVAL = {
   steps: ["steps", "count", "count", 0, 100000],

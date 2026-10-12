@@ -1238,7 +1238,7 @@
 "tréninky z hodinek a aplikací, tep během tréninku" = "workouts from the watch and apps, heart rate during workouts";
 "tep, klidový tep, HRV, VO₂max" = "heart rate, resting heart rate, HRV, VO₂max";
 "kroky a aktivní energie" = "steps and active energy";
-"dechová frekvence a okysličení krve" = "respiratory rate and blood oxygen";
+"dechová frekvence, okysličení krve a teplota zápěstí ve spánku" = "respiratory rate, blood oxygen and wrist temperature in sleep";
 "hmotnost a tělesný tuk" = "weight and body fat";
 "Apple Health na tomhle zařízení není." = "Apple Health isn't available on this device.";
 "Vyber aspoň jednu oblast." = "Choose at least one area.";

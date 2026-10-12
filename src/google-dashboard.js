@@ -26,6 +26,9 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     // drop in the first minute after a workout.
     if(row.data_type==='daily-walking-heart-rate'){key='walkingHR';value=finite(row.value_numeric)??finite(obj.beatsPerMinute);}
     if(row.data_type==='daily-heart-rate-recovery'){key='hrRecovery';value=finite(row.value_numeric)??finite(obj.beatsPerMinute);}
+    // Apple Watch's wrist temperature in sleep (°C); recovery-model.js
+    // wristTempDeviation compares it with the athlete's own nights.
+    if(row.data_type==='daily-wrist-temperature'){key='wristTemp';value=finite(row.value_numeric)??finite(obj.temperatureCelsius);}
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
     // Every source's HRV and resting HR of the day: the days two sources share
@@ -65,7 +68,7 @@ export async function googleDashboard(db,today){
   // An interval starts at most a day before it ends, hence the extra day.
   const recent='COALESCE(sample_time,end_time,start_time,\'\')';
   const [daily,intervals,zones]=await Promise.all([
-    db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max','daily-oxygen-saturation','daily-walking-heart-rate','daily-heart-rate-recovery') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-61),end).all(),
+    db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max','daily-oxygen-saturation','daily-walking-heart-rate','daily-heart-rate-recovery','daily-wrist-temperature') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-61),end).all(),
     db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('steps','active-energy-burned') AND start_time>=? AND start_time<? AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-32),end,shift(-31),end).all(),
     db.prepare(`SELECT start_time,end_time,json_extract(payload_json,'$.timeInHeartRateZone.heartRateZoneType') AS zone FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND record_role='primary' AND data_type='time-in-heart-rate-zone' AND start_time>=? AND start_time<? LIMIT 20000`).bind(db.userId,shift(-31),end).all().catch(()=>({results:[]}))
   ]);

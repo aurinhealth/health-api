@@ -269,7 +269,7 @@ export function focusGoal(focus){
 export function compactWellnessRow(w={}){
   const ctl=num(w.ctl),atl=num(w.atl),sleepMinutes=w.sleepMinutes!=null?num(w.sleepMinutes):w.sleepSecs!=null?round(num(w.sleepSecs)/60):null;
   return compactObject({date:String(w.id||w.date||'').slice(0,10)||null,ctl:round(ctl,1),atl:round(atl,1),tsb:round(num(w.tsb)??(ctl!=null&&atl!=null?ctl-atl:null),1),
-    hrv:round(num(w.hrv),1),restingHR:round(num(w.restingHR)),sleepMinutes,respiration:round(num(w.respiration),1),skinTempDeviation:round(num(w.skinTempDeviation),2),steps:round(num(w.steps)),spO2:round(num(w.spO2),1)});
+    hrv:round(num(w.hrv),1),restingHR:round(num(w.restingHR)),sleepMinutes,respiration:round(num(w.respiration),1),skinTempDeviation:round(num(w.skinTempDeviation),2),wristTemp:round(num(w.wristTemp),2),steps:round(num(w.steps)),spO2:round(num(w.spO2),1)});
 }
 // The last `days` rows up to `date` (rows after it are the future).
 export function compactWellness(rows,{date=null,days=14}={}){
@@ -394,8 +394,8 @@ export function safetyNote(feature){
   if(feature==='barcode')return '';
   const food=L('Nikdy nedoporučuj jíst pod rozumnou hranicí (pod bazálním metabolismem ani pod 1200 kcal denně) a nechval velký kalorický deficit.','Never recommend eating below a reasonable floor (below the basal metabolic rate or 1200 kcal a day) and never praise a large calorie deficit.');
   if(FOOD_FEATURES.includes(feature))return L('\n\nBEZPEČNOST: ','\n\nSAFETY: ')+food+L(' Nestanovuj diagnózy.',' No diagnoses.');
-  return L('\n\nBEZPEČNOST: ','\n\nSAFETY: ')+food+L(' Bolest, která se zhoršuje nebo mění pohyb, znamená trénink přerušit a doporučit lékaře. Známky nemoci (horečka, zvýšený dech nebo teplota kůže ve spánku: flags respiration_elevated, skin_temp_elevated, checkin_sick) znamenají odpočinek bez intenzity. Nestanovuj diagnózy ani léčbu. Respektuj deterministickou readiness aplikace (zónu, skóre a flags): červená znamená jen volno nebo lehkou regeneraci, žlutá žádnou novou intenzitu.',
-    ' Pain that worsens or changes movement means stopping the session and seeing a doctor. Signs of illness (fever, raised breathing or skin temperature in sleep: the flags respiration_elevated, skin_temp_elevated, checkin_sick) mean rest without intensity. No diagnoses, no treatment. Respect the app\'s deterministic readiness (zone, score and flags): red allows only rest or easy recovery, yellow no new intensity.');
+  return L('\n\nBEZPEČNOST: ','\n\nSAFETY: ')+food+L(' Bolest, která se zhoršuje nebo mění pohyb, znamená trénink přerušit a doporučit lékaře. Známky nemoci (horečka, zvýšený dech nebo teplota kůže či zápěstí ve spánku: flags respiration_elevated, skin_temp_elevated, wrist_temp_elevated, checkin_sick) znamenají odpočinek bez intenzity. Nestanovuj diagnózy ani léčbu. Respektuj deterministickou readiness aplikace (zónu, skóre a flags): červená znamená jen volno nebo lehkou regeneraci, žlutá žádnou novou intenzitu.',
+    ' Pain that worsens or changes movement means stopping the session and seeing a doctor. Signs of illness (fever, raised breathing, skin or wrist temperature in sleep: the flags respiration_elevated, skin_temp_elevated, wrist_temp_elevated, checkin_sick) mean rest without intensity. No diagnoses, no treatment. Respect the app\'s deterministic readiness (zone, score and flags): red allows only rest or easy recovery, yellow no new intensity.');
 }
 // How long one answer may take (A8b): the light tasks a minute, a plan three,
 // a block four.
