@@ -107,6 +107,7 @@ import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
+import { handleCycleApi } from "./routes-cycle.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 
 
@@ -892,6 +893,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
   {const r=await handleFoodApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
+  {const r=await handleCycleApi(request,env,ctx,url,session);if(r!==undefined)return r;}
 
   // "Nahlásit problém": the user's report with a screenshot and diagnostics (support-report.js).
   if (url.pathname === "/app/api/support/report") return handleSupportReport(request, env, { signedIn: session.signedIn, origin: url.origin });

@@ -30,7 +30,8 @@ export function readinessParts(readiness) {
   const used = Object.keys(WEIGHTS).filter(k => c[k]);
   const total = used.reduce((s, k) => s + WEIGHTS[k], 0);
   if (readiness?.score == null || !total) return [];
-  const parts = used.map(k => ({ key: k, points: Math.round(WEIGHTS[k] * (c[k].score - 70) / total) }));
+  // cycle: compared with the athlete's luteal normal (cycle tracking).
+  const parts = used.map(k => ({ key: k, points: Math.round(WEIGHTS[k] * (c[k].score - 70) / total), ...(c[k].cycle ? { cycle: true } : {}) }));
   if (c.respiration?.elevated) parts.push({ key: "respiration", points: -10 });
   if (c.skinTemp?.elevated) parts.push({ key: "skinTemp", points: -10 });
   if (c.wristTemp?.points < 0) parts.push({ key: "wristTemp", points: c.wristTemp.points });

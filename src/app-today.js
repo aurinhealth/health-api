@@ -11,6 +11,8 @@ import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { daySessions, deviceEnergyExtra } from "./app-training.js";
 import { recoveryToday } from "./recovery-today.js";
+import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
+import { qualityDomain } from "./session-intensity.js";
 
 const STEP_GOAL = 10000;
 
@@ -182,9 +184,32 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     done: r.done,
     status: r.done ? "done" : "planned"
   }));
+  // Cycle tracking (cycle-model.js, profile.cycle from dashboard-shared.js):
+  // on a bleeding day with heavy flow, cramps or fatigue a hard ride or run
+  // shows as an easy one ("eased", the original kept for "vrátit"), unless
+  // the athlete kept the plan that day; the pill of the pack joins the plan.
+  const cycleIn = profile?.cycle || null;
+  const cyc = cycleIn ? cycleState({ settings: cycleIn.settings, days: cycleIn.days, date }) : null;
+  const keepPlan = !!cycleIn?.days?.find(d => d.date === date)?.keepPlan;
+  const caution = cyc ? cycleTrainingCaution(cyc) : null;
+  let eased = false;
+  const easy = (s, item) => {
+    if (!caution || keepPlan || s.status !== "planned" || !["ride", "run"].includes(s.sport) || !qualityDomain(s.title, s.sport)) return item;
+    eased = true;
+    return { ...item, title: s.sport === "run" ? L("Lehký běh 30 min", "Easy run 30 min") : L("Lehká jízda 45 min", "Easy ride 45 min"), detail: null, eased: { title: s.title } };
+  };
+  const pill = cyc?.pill && !cyc.pill.pause ? cyc.pill : null;
+  const pillItems = pill ? [{
+    kind: "pill",
+    time: /^\d\d:\d\d$/.test(String(pill.taken || "")) ? pill.taken : null,
+    title: L(`Prášek ${pill.number} z ${pill.of}`, `Pill ${pill.number} of ${pill.of}`),
+    detail: null,
+    done: !!pill.taken,
+    status: pill.taken ? "done" : "planned"
+  }] : [];
   const byTime = (a, b) => String(a.time || "99").localeCompare(String(b.time || "99"));
   const planItems = [
-    ...[...done, ...open].map(s => ({
+    ...[...done, ...open].map(s => easy(s, {
       kind: "workout",
       // ride, run or strength: the app opens the gym session for strength.
       sport: s.sport === "strength" ? "strength" : ["run", "ride"].includes(s.sport) ? s.sport : "other",
@@ -196,7 +221,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       status: s.status,
       session: s
     })),
-    ...recoveryItems
+    ...recoveryItems,
+    ...pillItems
   ];
   // Done first in the order of the day, then what is still open, then bedtime.
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
@@ -239,6 +265,20 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       water: { ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml) }
     },
     plan: ordered,
+    // Cycle tracking, null when off: the morning question, the day's log, the
+    // pill and whether the coach eased the day.
+    cycle: cyc ? {
+      ask: askPeriodToday(cyc),
+      hormonal: !!cyc.hormonal,
+      cycleDay: cyc.cycleDay ?? null,
+      phase: cyc.phase ?? null,
+      flow: cyc.today?.flow || 0,
+      symptoms: cyc.today?.symptoms || [],
+      pill,
+      eased,
+      keptPlan: keepPlan && !!caution,
+      note: eased ? L("Dnes jen lehce, náročný trénink počká na lepší den.", "Easy today; the hard session can wait for a better day.") : null
+    } : null,
     recovery: recoveryCard,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },

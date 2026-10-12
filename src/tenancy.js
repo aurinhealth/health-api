@@ -63,6 +63,9 @@ export const PERSONAL_TABLES = {
   // tests offered from the data (threshold-check.js).
   morning_checkins: {},
   threshold_checks: {},
+  // Cycle tracking (cycle-store.js): the settings and the logged days.
+  cycle_settings: {},
+  cycle_days: {},
   // The athlete's training plans (training-plans.js).
   training_plans: {},
   // Pairings made by hand (manual-pairs.js) and the choice of an activity's
