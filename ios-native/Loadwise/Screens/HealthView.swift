@@ -136,7 +136,7 @@ enum ReadinessText {
         case "restingHR": return "Tep"
         case "sleep": return "Spánek"
         case "respiration": return "Dech"
-        case "skinTemp": return "Teplota"
+        case "skinTemp", "wristTemp": return "Teplota"
         case "checkin": return "Pocit"
         default: return key
         }
@@ -216,6 +216,7 @@ struct ReadinessDetailContent: View {
         case "sleep": return Fmt.hoursMinutes(r.sleepMinutes)
         case "respiration": return health.respiration.map { Fmt.decimal($0.value) + " /min" } ?? "–"
         case "skinTemp": return health.skinTemp.map { Fmt.signed(Units.temperatureChange($0.deviation), digits: 1) + " " + Units.temperatureUnit } ?? "–"
+        case "wristTemp": return health.wristTemp?.deviation.map { Fmt.signed(Units.temperatureChange($0), digits: 1) + " " + Units.temperatureUnit } ?? "–"
         case "checkin": return MorningCheckinCard.options.first { $0.id == r.checkin }.map { L10n.tr($0.label) } ?? ""
         default: return ""
         }

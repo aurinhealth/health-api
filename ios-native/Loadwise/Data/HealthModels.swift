@@ -17,9 +17,12 @@ struct HealthSnapshot: Decodable, Equatable {
     let walkingHR: Latest?
     let hrRecovery: Latest?
     let weight: Weight?
+    /// Apple Watch only: wrist temperature in sleep (°C) and how far last
+    /// night is from the athlete's own nights (null under 7 of them).
+    var wristTemp: WristTemp? = nil
 
     struct Part: Decodable, Equatable, Identifiable {
-        /// "hrv", "restingHR", "sleep", "respiration" or "skinTemp".
+        /// "hrv", "restingHR", "sleep", "respiration", "skinTemp", "wristTemp" or "checkin".
         let key: String
         let points: Int
         var id: String { key }
@@ -120,6 +123,12 @@ struct HealthSnapshot: Decodable, Equatable {
     struct SkinTemp: Decodable, Equatable {
         let deviation: Double
         let elevated: Bool
+        let series: [Point]
+    }
+
+    struct WristTemp: Decodable, Equatable {
+        let value: Double
+        let deviation: Double?
         let series: [Point]
     }
 
