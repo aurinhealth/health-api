@@ -35,8 +35,6 @@ struct SleepDetailContent: View {
             } else {
                 Text("Dnešní noc ještě není nahraná.").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
             }
-            Text(sentence).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                .fixedSize(horizontal: false, vertical: true).padding(.top, 12)
 
             if let night = sleep.night {
                 ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
@@ -122,7 +120,6 @@ struct SleepDetailContent: View {
                          highlighted: reg.nights.count - 1,
                          height: 80)
                     .padding(.top, 14)
-                Text("vyšší sloupec = dřívější usnutí").font(Typo.tiny).foregroundStyle(Palette.faint).padding(.top, 6)
             }
             if let night = sleep.night {
                 VStack(spacing: 0) {
@@ -132,20 +129,6 @@ struct SleepDetailContent: View {
                 .padding(.top, 18)
             }
         }
-    }
-
-    private var sentence: String {
-        let t = health.sleep.tonight
-        var s = ""
-        if let night = health.sleep.night, let minutes = night.minutes {
-            s = (minutes >= Double(health.sleep.need) ? L10n.tr("Noc pokryla tvoji potřebu.") : L10n.f("O %@ méně, než potřebuješ.", Fmt.duration(health.sleep.need - Int(minutes)))) + " "
-        }
-        if let bed = t.bedtime {
-            s += L10n.f("Dnes potřebuješ %@, jdi spát do %@.", Fmt.duration(t.need), ClockText.format(bed))
-        } else {
-            s += L10n.f("Dnes potřebuješ %@.", Fmt.duration(t.need))
-        }
-        return s
     }
 
     private func weekday(_ iso: String) -> String {
@@ -315,8 +298,6 @@ struct HeartDetailContent: View {
                     Text("ms").font(Typo.small).foregroundStyle(Palette.faint)
                     if let s = status(hrv) { Pill(text: s.0, foreground: s.1, background: s.2) }
                 }
-                Text(sentence(hrv)).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 Card {
                     WidgetHeader(title: "HRV po nocích", color: Palette.green, trailing: L10n.f("%@ dní", String(hrv.series.count)))
                     TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
@@ -340,8 +321,6 @@ struct HeartDetailContent: View {
                                bandLabel: L10n.tr("norma ± 2 bpm"), height: 160)
                 }
                 .padding(.top, 12)
-                Text(Self.restingSentence(rhr)).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
             }
             if health.hrRecovery != nil || health.walkingHR != nil {
                 SectionLabel(text: "Srdce a návyky").padding(.top, 32)
@@ -365,15 +344,6 @@ struct HeartDetailContent: View {
         return low...high
     }
 
-    /// What the resting heart rate says against its normal.
-    static func restingSentence(_ rhr: HealthSnapshot.RestingHR) -> String {
-        guard let value = rhr.value, let base = rhr.baseline else { return "Klidový tep se měří v noci, nejnižší hodnota dne." }
-        let d = value - base
-        if d >= 4 { return L10n.f("O %@ tepů nad normou. Bývá to únavou, nemocí, alkoholem nebo pozdním jídlem.", Fmt.int(d)) }
-        if d <= -3 { return "Pod normou, dobré znamení zotavení a rostoucí kondice." }
-        return "V normě. Klidový tep je nejnižší tep za noc, sleduj hlavně jeho dlouhý trend."
-    }
-
     private func status(_ hrv: HealthSnapshot.HRV) -> (String, Color, Color)? {
         guard let v = hrv.value, let low = hrv.low, let high = hrv.high else { return nil }
         if v > high { return ("nad normou", Palette.green, Palette.greenSoft) }
@@ -387,14 +357,6 @@ struct HeartDetailContent: View {
         case "down": return "↓ klesá"
         case "stable": return "stabilní"
         default: return "–"
-        }
-    }
-
-    private func sentence(_ hrv: HealthSnapshot.HRV) -> String {
-        switch hrv.trend {
-        case "down": return "Týdenní průměr klesl pod tvoji normu. Tělo nestíhá vstřebat zátěž, zařaď lehčí dny."
-        case "up": return "Týdenní průměr stoupá. Nervová soustava je v klidu a tělo zvládá zátěž."
-        default: return "HRV se drží ve tvé normě, zátěž a odpočinek jsou v rovnováze."
         }
     }
 }
@@ -427,16 +389,11 @@ struct WeightDetailContent: View {
                     Text(Units.weightUnit).font(Typo.small).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 24)
-                if let s = sentence(w) {
-                    Text(s).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                        .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
-                }
                 Card {
                     let raw = w.series.map { Units.weight($0.value) }
                     let goal = w.goal.map { Units.weight($0) }
                     let all = raw + [goal].compactMap { $0 }
                     TrendDotsChart(raw: raw, trend: smoothed(raw), goal: goal, lo: (all.min() ?? 70) - 0.5, hi: (all.max() ?? 90) + 0.5, height: 160)
-                    Text("90 dní · body = vážení, čára = trend").font(Typo.tiny).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 20)
                 ThreeCells(cells: [("Průměr 7 dní", Fmt.decimal(w.average.map { Units.weight($0) })), ("Za 30 dní", w.change.map { Fmt.signed(Units.weight($0), digits: 1) } ?? "–"),
@@ -471,17 +428,6 @@ struct WeightDetailContent: View {
         var out: [Double] = []
         for v in values { out.append(out.last.map { $0 + 0.25 * (v - $0) } ?? v) }
         return out
-    }
-
-    private func sentence(_ w: HealthSnapshot.Weight) -> String? {
-        guard let change = w.change else { return nil }
-        var s = change < 0 ? L10n.f("Za měsíc o %@ méně.", Units.weightText(abs(change))) : change > 0 ? L10n.f("Za měsíc o %@ více.", Units.weightText(change)) : L10n.tr("Za měsíc beze změny.")
-        // Towards the goal from either side: losing down to it, or gaining up to it.
-        if let goal = w.goal, let avg = w.average, change != 0, (change < 0 && avg > goal) || (change > 0 && avg < goal) {
-            let weeks = Int((abs(avg - goal) / (abs(change) / 30 * 7)).rounded(.up))
-            s += " " + L10n.f("Tímhle tempem jsi na cíli %@ zhruba za %@ %@.", Units.weightText(goal, digits: 0), String(weeks), Fmt.plural(weeks, "týden", "týdny", "týdnů"))
-        }
-        return s
     }
 }
 

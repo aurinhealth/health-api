@@ -225,8 +225,7 @@ struct WeatherDetails: View {
                 }
             }
 
-            SettingsGroup(title: "Kde dnes trénovat",
-                          footer: "Stejné pravidlo používá kouč při plánu týdne: dovnitř při teplotě pod 8 °C na kole (pod 0 °C při běhu), větru od 35 km/h (při běhu od 50 km/h), od 3 mm srážek, pravděpodobnosti deště od 70 % nebo bouřce. Od listopadu do února plánuje kolo raději na trenažéru.") {
+            SettingsGroup(title: "Kde dnes trénovat") {
                 advice("bicycle", "Kolo", weather.outdoor)
                 SettingsDivider()
                 advice("figure.run", "Běh", weather.outdoorRun)
@@ -387,10 +386,6 @@ struct WeatherPlaceView: View {
 
     var body: some View {
         SettingsPage(title: "Poloha pro počasí") {
-            Text("Podle předpovědi pro toto místo kouč doporučí trénink venku nebo uvnitř a Dnes ukáže počasí.")
-                .font(Typo.small).foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                 TextField("Město nebo obec", text: $query)
@@ -447,7 +442,7 @@ struct WeatherPlaceView: View {
             }
 
             if let current {
-                SettingsGroup(title: "Teď", footer: "Poloha platí pro obvyklý týden v plánu. Kouč ji použije i pro další týdny.") {
+                SettingsGroup(title: "Teď") {
                     SettingsRow(icon: SettingsIcon(systemImage: "location.fill", color: Palette.blue), title: current, chevron: false)
                     SettingsDivider()
                     Button { Task { await save(nil) } } label: {

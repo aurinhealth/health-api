@@ -907,7 +907,7 @@ struct ManualWorkoutSheet: View {
                     Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)
-                SettingsGroup(footer: completed ? "Zapíše se jako odcvičený a pošle do aplikací ze Synchronizace." : "Budoucí den: zapíše se jako plán do Intervals.icu.") {
+                SettingsGroup {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna"))
                     SettingsDivider()
                     SettingsField(title: "Délka", text: $minutes, unit: "min", keyboard: .numberPad)
