@@ -21,16 +21,22 @@ struct TrainingModeView: View {
     @AppStorage("restSets") private var restSets = 90
     @AppStorage("restExercises") private var restExercises = 120
     @State private var restEnd: Date?
+    @State private var restTotal = 90
+    @State private var restStart: Date?
     @State private var catalog: [GymCatalogExercise] = []
     @State private var dumbbells: [Double] = []
     @State private var editing = false
     @State private var muscles: [String: [String: Double]] = [:]
+    @State private var history: GymHistory = .empty
+    /// The heart rate zones' lower bounds (Nastavení → Tréninkové zóny).
+    @State private var zoneLows: [Double] = []
     @State private var technique: String?
+    @State private var historyFor: String?
     @State private var saving = false
     @State private var rating = false
     /// Dokončit trénink was tapped: the summary shows the totals.
     @State private var finishedSession = false
-    @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool)?
+    @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool, zones: [Double])?
     private var live: LiveWorkout { LiveWorkout.shared }
 
     var body: some View {
@@ -40,26 +46,35 @@ struct TrainingModeView: View {
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             VStack(alignment: .leading, spacing: 0) {
                 header
-                if live.running && !finishedSession {
-                    LiveWorkoutStrip(live: live).padding(.top, 16)
-                }
                 if loading && day == nil {
                     Spacer()
                     ProgressView().frame(maxWidth: .infinity)
                     Spacer()
                 } else if let day, !day.exercises.isEmpty {
-                    if let exercise = current(day) {
-                        session(day, exercise)
+                    if !finishedSession, let exercise = current(day) {
+                        ScrollView(showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if live.running {
+                                    LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
+                                }
+                                if let restEnd {
+                                    rest(day, exercise, until: restEnd)
+                                } else {
+                                    session(day, exercise)
+                                }
+                            }
+                            .padding(.bottom, 24)
+                        }
+                        .scrollDismissesKeyboard(.interactively)
                     } else {
-                        finished(day)
+                        ScrollView(showsIndicators: false) { finished(day).padding(.bottom, 24) }
                     }
                 } else {
                     empty
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, 24)
         }
         .toolbar(.hidden, for: .navigationBar)
         .keyboardDoneButton()
@@ -68,134 +83,216 @@ struct TrainingModeView: View {
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
+        .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
+            ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
+        }
         // Rated or skipped: the workout is done, the mode closes.
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
         .sheet(isPresented: $editing) {
             if let day {
-                PlanEditorSheet(day: day, catalog: catalog) { edited in Task { await saveEdited(edited) } }
+                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index) { edited in Task { await saveEdited(edited) } }
             }
         }
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 10) {
             CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { dismiss() }
-            Spacer()
-            if let day {
+            if let day, !day.exercises.isEmpty {
                 let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
-                Text("\(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií")).font(Typo.small).foregroundStyle(Palette.muted)
-                if !day.exercises.isEmpty {
-                    CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
-                        .padding(.leading, 8)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(day.planName?.nilIfBlank ?? L10n.tr("Posilovna")).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(L10n.f("Cvik %@ z %@", String(min(index, day.exercises.count - 1) + 1), String(day.exercises.count))
+                         + " · \(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií"))
+                        .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 }
+                Spacer(minLength: 4)
+                if !finishedSession, current(day) != nil {
+                    CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
+                    Button { Task { await finish() } } label: {
+                        Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onAccent)
+                            .padding(.horizontal, 14).frame(height: 36).background(Palette.green, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                }
+            } else {
+                Spacer()
             }
         }
     }
 
-    // MARK: The set
+    // MARK: The exercise
 
     private func session(_ day: GymDay, _ exercise: GymExercise) -> some View {
         let set = nextSet(exercise)
+        let last = history.last(exercise.name, before: date)
         return VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: L10n.f("Cvik %@ z %@", String(index + 1), String(day.exercises.count)))
-                .padding(.top, 18)
-            HStack(alignment: .firstTextBaseline) {
-                Text(exercise.name).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+            HStack(alignment: .center, spacing: 8) {
+                Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                Button { technique = exercise.name } label: { Image(systemName: "info.circle").font(.system(size: 20)) }
-                    .foregroundStyle(Palette.muted)
-                    .accessibilityLabel("Technika")
+                Spacer(minLength: 4)
+                CircleButton(systemImage: "chart.bar", label: L10n.tr("Historie cviku")) { historyFor = exercise.name }
+                CircleButton(systemImage: "info", label: L10n.tr("Technika")) { technique = exercise.name }
             }
-            .padding(.top, 6)
+            .padding(.top, 18)
 
-            let superset = ExerciseOrder.letter(exercise.superset)
-            let failure = set.map { day.isToFailure(row: $0.row) } ?? false
-            if superset != nil || failure {
-                HStack(spacing: 6) {
-                    if let superset { GymTag.superset(superset) }
-                    if failure { GymTag.failure }
+            chips(day, exercise, set)
+
+            VStack(spacing: 2) {
+                HStack(spacing: 8) {
+                    Text("Série").frame(width: 26, alignment: .leading)
+                    Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+                    Text(Units.weightUnit).frame(width: 64)
+                    Text("Opak.").frame(width: 52)
+                    Color.clear.frame(width: 34, height: 1)
                 }
-                .padding(.top, 8)
-            }
-
-            if let map = muscles[exercise.name], !map.isEmpty {
-                BodyMap(load: map, height: 170, legend: true).padding(.top, 10)
-            }
-
-            HStack(spacing: 6) {
-                ForEach(exercise.sets.filter { !$0.warmup }) { s in
-                    Capsule().fill(s.done ? Palette.green : s.row == set?.row ? Palette.amberBar : Palette.track).frame(height: 6)
-                }
-                setButton("minus", label: "O sérii méně") { Task { await changeSets(by: -1) } }
-                    .disabled(saving || exercise.sets.count < 2 || set == nil)
-                    .padding(.leading, 4)
-                setButton("plus", label: "O sérii víc") { Task { await changeSets(by: 1) } }
-                    .disabled(saving)
-            }
-            .padding(.top, 16)
-
-            Spacer(minLength: 12)
-
-            if let restEnd {
-                rest(until: restEnd)
-            } else if let set {
-                VStack(spacing: 14) {
-                    Text((set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number)) + plan(set))
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                    HStack(spacing: 12) {
-                        stepper(uses(exercise, "dumbbells") && !dumbbells.isEmpty ? L10n.f("%@ na ruku", Units.weightUnit) : Units.weightUnit, $kg, step: Units.weightStep,
-                                weights: uses(exercise, "dumbbells") ? dumbbells.map { LiftWeight.shownValue($0) } : [])
-                        stepper("opakování", $reps, step: 1)
+                .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+                .padding(.horizontal, 10).padding(.bottom, 4)
+                ForEach(exercise.sets) { s in
+                    let state: GymSetRow.Phase = s.done ? .done : s.row == set?.row ? .current : .next
+                    GymSetRow(label: s.warmup ? "W" : s.number,
+                              lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
+                              kg: LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? "",
+                              reps: (s.done ? s.reps : s.plannedReps) ?? "",
+                              state: state,
+                              kgText: $kg, repsText: $reps) {
+                        switch state {
+                        case .done: Task { await undo(s) }
+                        case .current: Task { await complete(s) }
+                        case .next: break
+                        }
                     }
-                    effort
-                    PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
-                        Task { await complete(set) }
+                }
+                HStack(spacing: 8) {
+                    pill("plus", L10n.tr("Série")) { Task { await changeSets(by: 1) } }.disabled(saving)
+                    if exercise.sets.count > 1, set != nil {
+                        pill("minus", L10n.tr("Série")) { Task { await changeSets(by: -1) } }.disabled(saving)
                     }
-                    .disabled(saving)
+                    if uses(exercise, "barbells"), let value = LiftWeight.number(LiftWeight.kgText(kg)), let plates = GymSessionMath.plates(value) {
+                        Text(L10n.f("Kotouče: %@ na stranu", plates)).font(Typo.caption).foregroundStyle(Palette.secondary)
+                            .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                    }
+                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10).padding(.top, 8)
             }
+            .padding(.vertical, 12).padding(.horizontal, 4)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .padding(.top, 14)
 
-            Spacer(minLength: 12)
-            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
-            HStack {
-                Button { move(-1) } label: { Label("Předchozí", systemImage: "chevron.left") }
-                    .disabled(index == 0)
-                Spacer()
-                if index >= day.exercises.count - 1 {
-                    Button { Task { await finish() } } label: { Label("Dokončit trénink", systemImage: "flag.checkered").labelStyle(TrailingIcon()) }
-                        .disabled(saving)
-                } else {
-                    Button { move(1) } label: { Label("Další cvik", systemImage: "chevron.right").labelStyle(TrailingIcon()) }
+            if let set {
+                effort.padding(.top, 14)
+                PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
+                    Task { await complete(set) }
                 }
+                .disabled(saving)
+                .padding(.top, 14)
             }
-            .font(Typo.bodyStrong)
-            .foregroundStyle(Palette.ink)
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
+            nextExercise(day).padding(.top, 14)
         }
         .onChange(of: set?.row) { _, _ in prefill(set) }
         .onAppear { prefill(set) }
         .task(id: exercise.name) { await loadMuscles(day) }
     }
 
-    private func rest(until end: Date) -> some View {
-        VStack(spacing: 12) {
-            Text("Pauza").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                let left = max(0, Int(end.timeIntervalSince(context.date).rounded()))
-                Text(String(format: "%d:%02d", left / 60, left % 60))
-                    .font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
-                    .monospacedDigit()
+    @ViewBuilder
+    private func chips(_ day: GymDay, _ exercise: GymExercise, _ set: GymSet?) -> some View {
+        let main = (muscles[exercise.name] ?? [:]).filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }.prefix(3).map(\.key)
+        let record = GymSessionMath.record(history.exercise(exercise.name), before: date)
+        let superset = ExerciseOrder.letter(exercise.superset)
+        let failure = set.map { day.isToFailure(row: $0.row) } ?? false
+        if !main.isEmpty || record != nil || superset != nil || failure {
+            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) {
+                ForEach(main, id: \.self) { id in
+                    Text(BodyFigure.label(id)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 9).frame(height: 24).background(Palette.track, in: Capsule())
+                }
+                if let record, let text = GymSessionMath.lift(record) {
+                    Text(L10n.f("Rekord %@", text)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                        .padding(.horizontal, 9).frame(height: 24).background(Palette.amberSoft, in: Capsule())
+                }
+                if let superset { GymTag.superset(superset) }
+                if failure { GymTag.failure }
+            } }
+            .padding(.top, 10)
+        }
+    }
+
+    private func pill(_ systemImage: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(systemImage == "plus" ? "O sérii víc" : "O sérii méně"))
+    }
+
+    @ViewBuilder
+    private func nextExercise(_ day: GymDay) -> some View {
+        if let next = day.exercises[safe: index + 1] {
+            Button { move(1) } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
+                        .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(next.name + " · " + PlanEditorSheet.summary(sets: next.workCount, reps: next.sets.first { !$0.warmup }?.plannedReps?.nilIfBlank, done: 0))
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                }
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
+            .buttonStyle(.plain)
+        } else if index > 0 {
+            Button { move(-1) } label: {
+                Label("Předchozí cvik", systemImage: "chevron.left").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: The rest
+
+    private func rest(_ day: GymDay, _ exercise: GymExercise, until end: Date) -> some View {
+        let set = nextSet(exercise)
+        let last = history.last(exercise.name, before: date)
+        let points = restStart.map { start in live.trail.filter { $0.date >= start.addingTimeInterval(-5) }.map(\.bpm) } ?? []
+        return VStack(alignment: .leading, spacing: 14) {
+            RestRing(end: end, total: restTotal).padding(.top, 24)
             HStack(spacing: 10) {
                 SecondaryButton(title: "−15 s") { shiftRest(-15) }
                 SecondaryButton(title: "+15 s") { shiftRest(15) }
+                SecondaryButton(title: "Přeskočit") { restEnd = nil }
             }
-            PrimaryButton(title: "Přeskočit pauzu", systemImage: "forward.fill") { restEnd = nil }
+            .padding(.top, 6)
+            if points.count >= 2 { HeartRecoveryCard(points: points) }
+            if let set {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(exercise.name + " · " + (set.warmup ? L10n.tr("rozcvička") : L10n.f("série %@", set.number)))
+                            .font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Text((LiftWeight.shown(set.plannedKg).map { $0 + " " + Units.weightUnit + " × " } ?? "") + (set.plannedReps ?? ""))
+                            .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
+                    }
+                    if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
+                        Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                .padding(16)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            let progress = GymSessionMath.muscleProgress(day.exercises, muscles: muscles)
+            if !progress.isEmpty { MuscleProgressCard(items: progress) }
         }
-        .frame(maxWidth: .infinity)
         .task(id: end) {
             let wait = end.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
@@ -204,36 +301,90 @@ struct TrainingModeView: View {
         }
     }
 
+    // MARK: The end
+
     private func finished(_ day: GymDay) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Spacer()
-            Image(systemName: "checkmark.seal.fill").font(.system(size: 48)).foregroundStyle(Palette.green)
-            Text("Trénink je hotový").font(Typo.sentence(36, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-            let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
-            Text(L10n.f("%@ %@ v %@ %@. Série jsou uložené i pro příští plán.", String(sets), Fmt.plural(sets, "série", "série", "sérií"),
-                        String(day.exercises.count), Fmt.plural(day.exercises.count, "cviku", "cvicích", "cvicích")))
-                .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            if let totals {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) {
+        let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let volume = GymSessionMath.volume(day.exercises)
+        let before = day.exercises.compactMap { e -> Double? in
+            guard let last = history.last(e.name, before: date) else { return nil }
+            return last.sets.reduce(0) { $0 + ($1.kg ?? 0) * ($1.reps ?? 0) }
+        }.reduce(0, +)
+        let records = day.exercises.compactMap { e -> (String, GymHistory.Lift)? in
+            guard let best = GymSessionMath.lifts(e).max(by: { GymSessionMath.e1rm($0) < GymSessionMath.e1rm($1) }),
+                  let old = GymSessionMath.record(history.exercise(e.name), before: date),
+                  GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 else { return nil }
+            return (e.name, best)
+        }
+        let changes = day.exercises.compactMap { e -> (GymExercise, (text: String, better: Bool?))? in
+            guard e.doneCount > 0, let change = GymSessionMath.change(e, last: history.last(e.name, before: date)) else { return nil }
+            return (e, change)
+        }
+        return VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 8) {
+                SectionLabel(text: "Trénink dokončen")
+                Text(day.planName?.nilIfBlank ?? L10n.tr("Posilovna")).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 22)
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 14) {
+                if let totals {
                     total(L10n.tr("Čas"), Fmt.duration(totals.minutes))
                     if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
                     if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
-                    if let hr = totals.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
                 }
-                if totals.saved {
-                    HStack(spacing: 12) {
-                        Image(systemName: "heart.fill").foregroundStyle(Palette.rust)
-                        Text("Uloženo do Apple Health").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Spacer()
-                        Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
-                    }
-                    .padding(16)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
-            } else {
-                BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 220, legend: true)
+                total(L10n.tr("Série"), String(sets))
+                let v = GymSessionMath.volumeText(volume)
+                total(L10n.tr("Objem"), v.value + " " + v.unit,
+                      change: before > 0 && volume > 0 ? Fmt.signed(Units.weight(volume - before) / 1000, digits: 1) + " " + v.unit : nil,
+                      better: volume >= before)
+                if let hr = totals?.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
             }
-            Spacer()
+            .padding(.top, 6)
+            ForEach(Array(records.enumerated()), id: \.offset) { _, record in
+                let (name, lift) = record
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles").foregroundStyle(Palette.amber)
+                        .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Nový rekord").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(name + " " + (GymSessionMath.lift(lift) ?? "")).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer()
+                }
+                .padding(16)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            if let zones = totals?.zones, zones.reduce(0, +) >= 1 { ZoneMinutesCard(minutes: zones) }
+            if !changes.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(changes.enumerated()), id: \.offset) { i, item in
+                        HStack(spacing: 8) {
+                            Text(item.0.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                            Spacer(minLength: 6)
+                            Text(work(item.0)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                            Text(item.1.text).font(Typo.caption.weight(.semibold))
+                                .foregroundStyle(item.1.better == true ? Palette.green : item.1.better == false ? Palette.rust : Palette.muted)
+                                .frame(minWidth: 52, alignment: .trailing)
+                        }
+                        .padding(.vertical, 12)
+                        .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            if totals?.saved == true {
+                HStack(spacing: 12) {
+                    Image(systemName: "heart.fill").foregroundStyle(Palette.rust)
+                    Text("Uloženo do Apple Health").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+                }
+                .padding(16)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
@@ -244,10 +395,18 @@ struct TrainingModeView: View {
         }
     }
 
-    private func total(_ title: String, _ value: String) -> some View {
+    /// "4 × 80 kg": the work sets and their top weight.
+    private func work(_ exercise: GymExercise) -> String {
+        let lifts = GymSessionMath.lifts(exercise)
+        guard let top = lifts.compactMap(\.kg).max(), top > 0 else { return L10n.f("%@ ×", String(lifts.count)) }
+        return "\(lifts.count) × " + GymCoach.shown(top) + " " + Units.weightUnit
+    }
+
+    private func total(_ title: String, _ value: String, change: String? = nil, better: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(Typo.small).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+            if let change { Text(change).font(Typo.caption).foregroundStyle(better ? Palette.green : Palette.rust) }
         }
     }
 
@@ -302,61 +461,11 @@ struct TrainingModeView: View {
                     .accessibilityAddTraits(rpe == e.rpe ? .isSelected : [])
                 }
             }
-            if let e = Self.efforts.first(where: { $0.rpe == rpe }) {
-                Text(Self.reserve(e))
-                    .font(Typo.caption).foregroundStyle(Palette.faint)
-            }
         }
-    }
-
-    private func setButton(_ systemImage: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage).font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28).background(Palette.track, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(Palette.ink)
-        .accessibilityLabel(L10n.tr(label))
     }
 
     private func uses(_ exercise: GymExercise, _ station: String) -> Bool {
         catalog.first { $0.name == exercise.name }?.stations?.contains(station) == true
-    }
-
-    /// kg with − and +: by 2.5, or through the dumbbells there are.
-    private func stepper(_ unit: String, _ text: Binding<String>, step: Double, weights: [Double] = []) -> some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 0) {
-                Button { bump(text, -step, weights) } label: { Image(systemName: "minus").frame(width: 40, height: 56) }
-                TextField("–", text: text)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.center)
-                    .font(Typo.number(40))
-                    .frame(maxWidth: .infinity)
-                Button { bump(text, step, weights) } label: { Image(systemName: "plus").frame(width: 40, height: 56) }
-            }
-            .font(.system(size: 17, weight: .semibold))
-            .foregroundStyle(Palette.ink)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            Text(unit).font(Typo.caption).foregroundStyle(Palette.muted)
-        }
-    }
-
-    private func bump(_ text: Binding<String>, _ by: Double, _ weights: [Double] = []) {
-        let value = Double(text.wrappedValue.replacingOccurrences(of: ",", with: ".")) ?? 0
-        let next: Double
-        if !weights.isEmpty {
-            next = (by > 0 ? weights.first { $0 > value + 0.01 } : weights.last { $0 < value - 0.01 }) ?? value
-        } else {
-            next = max(0, value + by)
-        }
-        text.wrappedValue = next.rounded() == next ? String(Int(next)) : String(next)
-    }
-
-    private func plan(_ set: GymSet) -> String {
-        let reps = set.plannedReps.map { " · " + L10n.f("plán %@", $0) } ?? ""
-        let kg = set.plannedKg.map { " × " + (LiftWeight.shown($0) ?? $0) + " " + Units.weightUnit } ?? ""
-        return reps + kg
     }
 
     private func current(_ day: GymDay) -> GymExercise? {
@@ -386,18 +495,23 @@ struct TrainingModeView: View {
     private func shiftRest(_ seconds: Int) {
         guard let end = restEnd else { return }
         let next = end.addingTimeInterval(TimeInterval(seconds))
+        restTotal = max(1, restTotal + seconds)
         restEnd = next.timeIntervalSinceNow <= 0 ? nil : next
     }
 
     // MARK: Server
 
     private func load() async {
-        if model.demo { day = DemoData.gym; loading = false; startAtFirstOpen(); return }
+        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); return }
         loading = true
         defer { loading = false }
         do {
             day = try await model.gymDay(date: date)
             startAtFirstOpen()
+            history = await model.gymHistory()
+            if let profile = try? await model.api.trainingProfile() {
+                zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
+            }
             // The clock, calories and heart rate while sets are left.
             if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }) {
                 await live.begin(since: nil, weightKg: model.today?.weight?.latest)
@@ -464,7 +578,7 @@ struct TrainingModeView: View {
         let hadLive = live.running
         if live.running {
             let saved = await live.finish()
-            totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved)
+            totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
             finishedSession = true
             live.reset()
         }
@@ -484,6 +598,21 @@ struct TrainingModeView: View {
         if !hadLive { rating = true }
     }
 
+    /// A ticked set back to not done (tapped by mistake).
+    private func undo(_ set: GymSet) async {
+        guard var next = day else { return }
+        next.undo(row: set.row)
+        day = next
+        restEnd = nil
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
         let k = LiftWeight.kgText(kg)
@@ -498,6 +627,8 @@ struct TrainingModeView: View {
             rest = restExercises
         }
         if next.exercises.contains(where: { $0.sets.contains { !$0.done } }), rest > 0 {
+            restTotal = rest
+            restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
         }
         guard !model.demo else { return }

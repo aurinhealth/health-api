@@ -26,6 +26,8 @@ final class LiveWorkout: NSObject {
     private(set) var heartRate: Double?
     private(set) var avgHeartRate: Double?
     private(set) var maxHeartRate: Double?
+    /// Every heart rate seen, for the rest's recovery line and the zones.
+    private(set) var trail: [(date: Date, bpm: Double)] = []
     /// The session saved its own workout to Apple Health.
     private(set) var savedToHealth = false
     var running: Bool { start != nil }
@@ -54,6 +56,7 @@ final class LiveWorkout: NSObject {
         savedToHealth = false
         kcal = nil; heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
+        trail = []
         sensor.onBeat = { [weak self] bpm in self?.sensorBeat(bpm) }
         sensor.connectSaved()
         guard HKHealthStore.isHealthDataAvailable() else { tick(); return }
@@ -86,6 +89,20 @@ final class LiveWorkout: NSObject {
         if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running { session.end() }
         session = nil; builder = nil; liveKcal = false
         start = nil
+    }
+
+    /// Minutes per heart rate zone: `lows` are the zones' lower bounds (bpm),
+    /// from zone 1 up. Each reading counts until the next (at most a minute).
+    func zoneMinutes(lows: [Double]) -> [Double] {
+        var out = Array(repeating: 0.0, count: lows.count)
+        guard !lows.isEmpty else { return out }
+        for (i, point) in trail.enumerated() {
+            let next = i + 1 < trail.count ? trail[i + 1].date : point.date.addingTimeInterval(15)
+            let seconds = min(60, max(0, next.timeIntervalSince(point.date)))
+            let zone = lows.lastIndex { point.bpm >= $0 } ?? 0
+            out[zone] += seconds / 60
+        }
+        return out
     }
 
     var minutes: Int { start.map { max(1, Int((Date().timeIntervalSince($0) / 60).rounded())) } ?? 0 }
@@ -141,6 +158,7 @@ final class LiveWorkout: NSObject {
 
     private func note(_ bpm: Double) {
         heartRate = bpm
+        trail.append((Date(), bpm))
         hrSum += bpm; hrCount += 1
         avgHeartRate = hrSum / Double(hrCount)
         maxHeartRate = max(maxHeartRate ?? 0, bpm)
@@ -244,20 +262,42 @@ extension LiveWorkout: HKLiveWorkoutBuilderDelegate {
     nonisolated func workoutBuilderDidCollectEvent(_ workoutBuilder: HKLiveWorkoutBuilder) {}
 }
 
-/// "Čas · Kalorie · Tep" on top of the live gym screens.
+/// "Čas · Kalorie · Tep · Objem" on top of Režim tréninku, and under it the
+/// heart rate zone the beat is in.
 struct LiveWorkoutStrip: View {
     let live: LiveWorkout
+    /// kg × reps of the done sets.
+    var volume: Double = 0
+    /// The heart rate zones' lower bounds, zone 1 first (empty: no bar).
+    var zoneLows: [Double] = []
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
-            HStack(spacing: 0) {
-                cell(L10n.tr("Čas"), clock(at: context.date), nil, Palette.ink)
-                divider
-                cell(L10n.tr("Kalorie"), live.kcal.map { Fmt.int($0) } ?? "–", "kcal", Palette.amber)
-                // Only an iPhone, nothing measuring the heart: no tile at all.
-                if let bpm = live.heartRate {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    cell(L10n.tr("Čas"), clock(at: context.date), nil, Palette.ink)
                     divider
-                    cell(L10n.tr("Tep"), Fmt.int(bpm), "bpm", Palette.rust)
+                    cell(L10n.tr("Kalorie"), live.kcal.map { Fmt.int($0) } ?? "–", "kcal", Palette.amber)
+                    // Only an iPhone, nothing measuring the heart: no tile at all.
+                    if let bpm = live.heartRate {
+                        divider
+                        cell(L10n.tr("Tep"), Fmt.int(bpm), "bpm", Palette.rust)
+                    }
+                    divider
+                    let v = GymSessionMath.volumeText(volume)
+                    cell(L10n.tr("Objem"), v.value, v.unit, Palette.indigo)
+                }
+                if let bpm = live.heartRate, !zoneLows.isEmpty {
+                    let zone = zoneLows.lastIndex { bpm >= $0 } ?? 0
+                    HStack(spacing: 2) {
+                        ForEach(zoneLows.indices, id: \.self) { i in
+                            Rectangle().fill(ZoneMinutesCard.colors[min(i, ZoneMinutesCard.colors.count - 1)].opacity(i == zone ? 1 : 0.22))
+                        }
+                    }
+                    .frame(height: 6)
+                    .clipShape(Capsule())
+                    .padding(.horizontal, 12).padding(.bottom, 11)
+                    .accessibilityLabel(L10n.f("Zóna %@", String(zone + 1)))
                 }
             }
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -275,13 +315,13 @@ struct LiveWorkoutStrip: View {
 
     private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(Typo.small).foregroundStyle(color == Palette.ink ? Palette.secondary : color)
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(value).font(Typo.number(28)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
-                if let unit { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted) }
+            Text(title).font(Typo.small).foregroundStyle(color == Palette.ink ? Palette.secondary : color).lineLimit(1)
+            HStack(alignment: .lastTextBaseline, spacing: 3) {
+                Text(value).font(Typo.number(25)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+                if let unit { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1) }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        .padding(.horizontal, 11).padding(.vertical, 10)
     }
 }

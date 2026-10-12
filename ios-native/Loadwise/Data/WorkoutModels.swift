@@ -206,6 +206,29 @@ struct GymDay: Decodable, Equatable {
         write(list, rest)
     }
 
+    /// Joins the exercise with the next one into a superset, or takes its
+    /// superset apart when it already is in one.
+    mutating func toggleSuperset(at offset: Int) {
+        var (list, rest) = blocks
+        guard list.indices.contains(offset) else { return }
+        func letter(_ i: Int) -> String? { ExerciseOrder.letter(list[i].first { $0.count > 12 }?[12].string) }
+        func mark(_ i: Int, _ value: String) {
+            for r in list[i].indices {
+                while list[i][r].count < Self.columns.count { list[i][r].append(.string("")) }
+                list[i][r][12] = .string(value)
+            }
+        }
+        if let current = letter(offset) {
+            for i in list.indices where letter(i) == current { mark(i, "") }
+        } else if list.indices.contains(offset + 1) {
+            let used = Set(list.indices.compactMap(letter))
+            let value = letter(offset + 1) ?? "ABCDEFGHIJ".map(String.init).first { !used.contains($0) } ?? "A"
+            mark(offset, value)
+            mark(offset + 1, value)
+        }
+        write(list, rest)
+    }
+
     /// Adds an exercise at the end: its work sets with the planned reps.
     mutating func addExercise(_ name: String, sets: Int, reps: String, kg: String = "") {
         var (list, rest) = blocks
