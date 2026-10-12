@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { handleEmailLogin, handleEmailChange } from "../src/email-login.js";
 import { ensureTenancy, inviteUser, signInEmailUser, signInGoogleUser, findUser, changeUserEmail, _resetTenancyForTest } from "../src/tenancy.js";
+import { resolvePrincipal, sessionMatchesUser } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://petrfitnessdata.eu";
 const MIGRATION = readFileSync(new URL("../migrations/0014_passkeys_email_codes.sql", import.meta.url), "utf8");
@@ -56,6 +57,14 @@ test("a user moves the account to another address with a code sent there, and th
   assert.deepEqual(await done.json(), { status: "ok", email: "new@example.com" });
   const moved = await findUser(env.DB, user.id, env);
   assert.equal(moved.email, "new@example.com", "same account id, new address");
+  // Every other device is signed out (the epoch moved on); this one got a fresh cookie.
+  assert.equal(moved.sessionEpoch, 1);
+  const fresh = (done.headers.get("Set-Cookie") || "").split(";")[0];
+  assert.match(fresh, /^pfd_session=/);
+  const principal = await resolvePrincipal(new Request(ORIGIN + "/app/api/me", { headers: { Cookie: fresh } }), env);
+  assert.equal(principal.epoch, 1);
+  assert.equal(sessionMatchesUser(principal, moved), true);
+  assert.equal(sessionMatchesUser({ kind: "user", userId: user.id, epoch: 0 }, moved), false);
   assert.equal(sent.at(-1).to, "friend@example.com");
   assert.match(sent.at(-1).text, /změnil na new@example\.com/);
   assert.equal((await change(env, moved, "/app/api/account/email/verify", { email: "new@example.com", code })).status, 400, "a code works once");

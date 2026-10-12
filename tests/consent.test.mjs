@@ -89,3 +89,15 @@ test("the app asks before it loads anything, and the AI features ask on first us
   assert.match(client, /if\(s\.aiConsent===false\)\{if\(!\(await askAiConsent\(\)\)\)throw/);
   assert.match(entry, /url\.pathname==='\/app\/api\/consent'&&request\.method==='POST'[\s\S]{0,300}request\.headers\.get\('Origin'\)!==url\.origin/);
 });
+
+test("the consent gate fails closed: any env with a database needs consent, whether or not it says CONSENT_REQUIRED", async () => {
+  const { raw } = setup();
+  const unmarked = { DB: scopedDb(raw, 2), USER_ID: 2 };
+  assert.equal((await subscriptionStatus(unmarked)).aiAccess, false);
+  await assert.rejects(assertAIAccess(unmarked), e => e.status === 403 && e.consent === true);
+  // An anonymous request (no user database, the raw one at hand) is closed too.
+  assert.equal((await subscriptionStatus({ DB: null, RAW_DB: raw })).aiAccess, false);
+  // The owner has consent until he turns it off; a bare env without any database (tests, scripts) is not a user.
+  assert.equal((await subscriptionStatus({ ...unmarked, USER_IS_OWNER: true })).aiAccess, true);
+  assert.equal((await subscriptionStatus({ OPENAI_API_KEY: "sk" })).aiAccess, true);
+});

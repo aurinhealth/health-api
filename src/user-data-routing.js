@@ -7,13 +7,15 @@ export const FOOD_CATALOG_TABLES = new Set([
 export const CENTRAL_PERSONAL_TABLES = new Set([
   'connection_credentials', 'user_consents', 'user_identities', 'user_passkeys',
   'user_language', 'user_time_zone', 'subscriptions', 'ai_usage',
-  'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports'
+  'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports',
+  // A phone's push token belongs to one account at a time (push.js).
+  'push_tokens'
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
   'account_deletions', 'user_data_routes', 'user_data_shards',
   'shared_foods', 'shared_recipes', 'workout_library', 'exercise_techniques',
-  'cookbook', 'auth_challenges', 'email_login_codes', 'd1_migrations'
+  'cookbook', 'auth_challenges', 'email_login_codes', 'request_limits', 'd1_migrations'
 ]);
 const TARGET = Symbol('database target');
 const STATEMENT = Symbol('database statement');

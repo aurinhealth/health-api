@@ -1,4 +1,4 @@
-import { sessionCookie, sessionSecret, SESSION_SECONDS, signText, timingSafeEqualString, signedInResponse } from "./dashboard-auth.js";
+import { userSessionCookie, sessionSecret, signText, timingSafeEqualString, signedInResponse } from "./dashboard-auth.js";
 import { ensureTenancy, normalizeEmail, ownerEmail, publicUser, mayCreateAccount } from "./tenancy.js";
 import { loginPage } from "./google-login.js";
 
@@ -15,6 +15,7 @@ const NOT_CONFIGURED = ["Přihlášení přes Apple není nastavené", "Chybí k
 
 let cachedJwks = null;
 let cachedJwksAt = 0;
+let forcedJwksAt = 0;
 
 export function appleConfigured(env) {
   return Boolean(env?.APPLE_CLIENT_ID && env.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
@@ -87,7 +88,7 @@ async function finishLogin(request, env, fetchImpl) {
     console.warn("Apple login denied for an account without an invitation");
     return loginPage("Přístup odepřen", "Tento Apple účet nemá do aplikace pozvánku. Pokud u Apple používáš Skrýt můj e-mail, přihlas se přes Google a Apple si připoj v Nastavení, nebo požádej správce o pozvánku.", 403);
   }
-  headers.append("Set-Cookie", await sessionCookie(user.id, Math.floor(Date.now() / 1000) + SESSION_SECONDS, sessionSecret(env)));
+  headers.append("Set-Cookie", await userSessionCookie(env.DB, user.id, sessionSecret(env)));
   return new Response(null, { status: 302, headers });
 }
 
@@ -189,24 +190,29 @@ export async function verifyAppleIdToken(token, audience, nonce, fetchImpl = fet
   if (!Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1000)) throw new Error("Expired ID token");
   if (claims.nonce !== nonce) throw new Error("Invalid nonce");
   if (!claims.sub) throw new Error("Missing subject");
-  const jwk = (await appleJwks(fetchImpl)).keys.find(key => key.kid === header.kid && key.kty === "RSA");
+  const jwk = (await appleJwks(fetchImpl, header.kid)).keys.find(key => key.kid === header.kid && key.kty === "RSA");
   if (!jwk) throw new Error("Signing key not found");
   const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
   if (!(await crypto.subtle.verify({ name: "RSASSA-PKCS1-v1_5" }, key, fromBase64url(parts[2]), utf8(parts[0] + "." + parts[1])))) throw new Error("Invalid ID token signature");
   return claims;
 }
 
-async function appleJwks(fetchImpl) {
+// Apple's keys, kept for ten minutes. A token signed with a key the cached
+// list does not have (Apple rotated its keys) fetches the list again, past
+// the cache, at most once a minute.
+async function appleJwks(fetchImpl, kid) {
   const now = Date.now();
-  if (cachedJwks && now - cachedJwksAt < 10 * 60 * 1000) return cachedJwks;
-  const response = await fetchImpl(APPLE + "/auth/keys", { cf: { cacheTtl: 600 } });
+  const fresh = cachedJwks && now - cachedJwksAt < 10 * 60 * 1000;
+  if (fresh && (cachedJwks.keys.some(key => key.kid === kid) || now - forcedJwksAt < 60 * 1000)) return cachedJwks;
+  if (fresh) forcedJwksAt = now;
+  const response = await fetchImpl(APPLE + "/auth/keys", fresh ? { cache: "no-store" } : { cf: { cacheTtl: 600 } });
   if (!response.ok) throw new Error("Apple JWKS HTTP " + response.status);
   const data = await response.json();
   if (!data || !Array.isArray(data.keys)) throw new Error("Invalid Apple JWKS response");
   cachedJwks = data; cachedJwksAt = now;
   return data;
 }
-export function _resetAppleJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; }
+export function _resetAppleJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 // Apple IDs linked to users. One Apple ID per user; a row goes with the user (user_id).
 async function ensureIdentities(db) {

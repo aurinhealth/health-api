@@ -41,9 +41,19 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
         com.apple.developer.healthkit.background-delivery: true
+        # Passkeys (Data/Passkeys.swift): the server must serve
+        # /.well-known/apple-app-site-association with a webcredentials entry
+        # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
+        com.apple.developer.associated-domains:
+          - webcredentials:petrfitnessdata.eu
+        # Push notifications (App/PushRegistration.swift, src/push.js): the
+        # morning readiness. One entitlements file serves every build, and
+        # TestFlight and the App Store use APNs production; the App ID needs
+        # the Push Notifications capability or the App Store export fails.
+        aps-environment: production
     settings:
       base:
-        # Its own bundle ID, so it installs next to the Capacitor app (mobile/).
+        # Its own bundle ID (eu.petrfitnessdata.loadwise was the retired Capacitor shell).
         PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native
         PRODUCT_NAME: Loadwise
         TARGETED_DEVICE_FAMILY: "1"
@@ -56,6 +66,8 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
+        # The permission prompts in Czech, the development language; the phone's
+        # language picks the text from Shared/{cs,en}.lproj/InfoPlist.strings.
         NSCameraUsageDescription: Loadwise čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku.
         NSPhotoLibraryUsageDescription: Loadwise načte fotku jídla nebo posilovny, kterou vybereš.
         NSLocationWhenInUseUsageDescription: Loadwise vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.
@@ -128,3 +140,5 @@ schemes:
     test:
       targets:
         - LoadwiseTests
+      # The tests check the Czech source texts; the simulator itself speaks English.
+      language: cs

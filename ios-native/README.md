@@ -2,13 +2,20 @@
 
 The native SwiftUI app with the new design. It reads the same server as the
 web app (`/app/api/today` for the Today screen), so the numbers match.
-`mobile/` is the older Capacitor app that wraps the web page; both can be
-installed side by side (different bundle IDs).
 
 ## What it does now
 
-- Sign-in with Google via Safari: the same handoff as `mobile/`
-  (`/auth/google?app=…` → `loadwise://auth` → `POST /auth/app/session`).
+- Sign-in with Apple, with Google via Safari (the handoff
+  `/auth/google?app=…` → `loadwise://auth` → `POST /auth/app/session`) or
+  with a code sent to the e-mail. After the first e-mail sign-in the app
+  offers a passkey ("Příště přes Face ID", Data/Passkeys.swift); the sign-in
+  screen then has "Přihlásit přes passkey". Passkeys need the
+  `webcredentials:petrfitnessdata.eu` entitlement (project.yml) and the
+  server's `/.well-known/apple-app-site-association` (APPLE_TEAM_ID).
+- The first-run setup (Screens/SetupFlowView.swift): "Odkud brát data"
+  (Apple Health on by default, Google Health, Intervals.icu, the consent to
+  health data) and "O tobě" (sex, year of birth, height and weight, filled
+  in from Apple Health or the server's suggestions).
 - The Today screen:
   - readiness;
   - sleep, strain and HRV;
@@ -89,8 +96,6 @@ On the phone: install TestFlight from the App Store, open the invitation,
 and new builds arrive on their own. Builds expire after 90 days.
 
 ## Install with Sideloadly (free Apple ID)
-
-The same as `mobile/README.md`:
 
 1. Open `Loadwise-native-unsigned.ipa` in Sideloadly and sign it with your
    Apple ID.

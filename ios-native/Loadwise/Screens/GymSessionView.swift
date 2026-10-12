@@ -19,6 +19,7 @@ struct GymSessionView: View {
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var changing = false
     @State private var rating = false
+    @State private var ratingDone = false
     @State private var finishing = false
     /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
     @State private var doneMode = false
@@ -71,6 +72,9 @@ struct GymSessionView: View {
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
+        .sheet(isPresented: $ratingDone) {
+            GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
+        }
         .keyboardDoneButton()
     }
 
@@ -96,6 +100,17 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
+                // A session done live, logged by hand or from the watch can be rated too.
+                if !model.demo, !(day?.exerciseNames.isEmpty ?? true) {
+                    Button { ratingDone = true } label: {
+                        Label("Ohodnotit", systemImage: "hand.thumbsup")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 24)
+                }
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)

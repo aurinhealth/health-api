@@ -44,6 +44,9 @@ final class AppModel {
     /// When each tab's data last came from the server, and for which day. The
     /// screens open with the copy saved on the phone; refreshIfStale loads it again.
     @ObservationIgnored private var fetched: [AppTab: (at: Date, day: String)] = [:]
+    /// Counts every load of a tab's data: the coach's text asks again after
+    /// any change (CoachTextCard), and the server writes it anew when it differs.
+    private(set) var dataRevision = 0
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     private var shownDay: String { selectedDate ?? Self.localDate(Date()) }
@@ -58,6 +61,9 @@ final class AppModel {
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
+    /// After the first e-mail sign-in on this phone: the "Příště přes Face ID"
+    /// sheet, shown before the setup (RootView).
+    var passkeyOffer = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
     /// Writes made without signal, oldest first (Outbox.swift); the screens
@@ -76,10 +82,13 @@ final class AppModel {
 
     let api: APIClient
     private let auth: AuthService
+    /// Passkeys (Data/Passkeys.swift): the sign-in and "Příště přes Face ID".
+    @ObservationIgnored let passkeys: PasskeyService
 
     init(api: APIClient = APIClient(), demo: Bool = false) {
         self.api = api
         self.auth = AuthService(api: api)
+        self.passkeys = PasskeyService()
         self.demo = demo
         if demo {
             phase = .signedIn
@@ -226,9 +235,22 @@ final class AppModel {
         }
     }
 
-    /// Signs in with the code from the e-mail.
+    /// Signs in with the code from the e-mail. The first time on this phone
+    /// the app then offers a passkey ("Příště přes Face ID", RootView).
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
+        if !PasskeyService.mayHaveOne { passkeyOffer = true }
+        await signedIn()
+        await refresh()
+    }
+
+    /// Signs in with a passkey of this phone (Data/Passkeys.swift). Throws
+    /// CancellationError when the sheet was closed; any other error means the
+    /// e-mail code is the way in.
+    func signInWithPasskey() async throws {
+        signingIn = true
+        defer { signingIn = false }
+        try await passkeys.signIn(api: api)
         await signedIn()
         await refresh()
     }
@@ -256,6 +278,8 @@ final class AppModel {
         }
         await loadAccountInitial()
         await checkSetup()
+        // The morning readiness push for this account (PushRegistration.swift).
+        await PushRegistration.refresh(api: api)
     }
 
     /// Connects a data source; the event says how it went ("intervals",
@@ -286,6 +310,7 @@ final class AppModel {
             today = snapshot
             todayBase = data
             fetched[.today] = (Date(), shownDay)
+            dataRevision += 1
             applyOutbox()
             errorMessage = nil
             _ = noteConnection(nil)
@@ -329,6 +354,7 @@ final class AppModel {
         guard !demo, let today else { return }
         try await api.setMorningCheckin(feeling, date: today.date)
         await refresh()
+        if health != nil { await refreshHealth() }
     }
 
     /// A new Stav sportovce. The coach and the plans follow it, so Today and
@@ -354,6 +380,7 @@ final class AppModel {
         do {
             training = try await api.training()
             fetched[.training] = (Date(), Self.localDate(Date()))
+            dataRevision += 1
             trainingError = nil
             _ = noteConnection(nil)
             // The calendar too: loadCalendar alone fetches only missing days, so a
@@ -375,6 +402,7 @@ final class AppModel {
         do {
             health = try await api.health(date: selectedDate)
             fetched[.health] = (Date(), shownDay)
+            dataRevision += 1
             healthError = nil
             _ = noteConnection(nil)
         } catch APIError.unauthorized {
@@ -395,6 +423,7 @@ final class AppModel {
             // The day's food and water to Apple Health when switched on in Synchronizace.
             Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
             fetched[.food] = (Date(), shownDay)
+            dataRevision += 1
             applyOutbox()
             foodError = nil
             _ = noteConnection(nil)
@@ -836,7 +865,11 @@ final class AppModel {
 
     /// Settings → "Odhlásit se": ends the session on the server as well.
     func logout() async {
-        if !demo { await api.logout() }
+        if !demo {
+            // While the session still works: no more pushes to this phone.
+            await PushRegistration.unregister(api: api)
+            await api.logout()
+        }
         signOut()
     }
 
@@ -862,10 +895,13 @@ final class AppModel {
         todayBase = nil
         foodBase = nil
         Reminders.cancelAll()
+        // The next sign-in sends the push token again for its own account.
+        PushRegistration.forget()
         WidgetBridge.clear()
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
+        passkeyOffer = false
         paths = [:]
         tab = .today
         offline = false

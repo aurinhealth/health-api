@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleAppleLogin, handleNativeAppleLogin, revokeApple, appleConfigured, appleClientSecret, appleIdentity, unlinkAppleIdentity, _resetAppleJwksCacheForTest } from "../src/apple-login.js";
+import { handleAppleLogin, handleNativeAppleLogin, revokeApple, appleConfigured, appleClientSecret, appleIdentity, unlinkAppleIdentity, verifyAppleIdToken, _resetAppleJwksCacheForTest } from "../src/apple-login.js";
 import { isPublicPath, resolvePrincipal } from "../src/dashboard-auth.js";
 import { ensureTenancy, scopedDb, _resetTenancyForTest } from "../src/tenancy.js";
 import { deleteAccount } from "../src/account-data.js";
@@ -87,7 +87,7 @@ test("an invited e-mail gets an account and a session; Apple's second visit find
   assert.equal(ok.headers.get("Location"), "/app");
   const user = await env.DB.prepare("SELECT id, name, role FROM users WHERE email='friend@example.com'").first();
   assert.deepEqual({ name: user.name, role: user.role }, { name: "Jana Nová", role: "user" });
-  assert.deepEqual(await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/me", { headers: { Cookie: sessionOf(ok) } }), env), { kind: "user", userId: user.id });
+  assert.deepEqual(await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/me", { headers: { Cookie: sessionOf(ok) } }), env), { kind: "user", userId: user.id, epoch: 0 });
   assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM user_invites").first().then(r => r.n), 0);
   // Later Apple sends a relay address: the Apple ID still finds the account.
   const later = await start(env);
@@ -133,7 +133,7 @@ test("a signed-in user links their Apple ID in Settings, even with a hidden e-ma
   // Now the hidden address signs in to the friend's account.
   const signIn = await start(env);
   const response = await callback(env, signIn, {}, appleFetch({ email: "hidden@privaterelay.appleid.com" }, { nonce: signIn.nonce }));
-  assert.deepEqual(await resolvePrincipal(new Request("https://petrfitnessdata.eu/app", { headers: { Cookie: sessionOf(response) } }), env), { kind: "user", userId: friend.id });
+  assert.deepEqual(await resolvePrincipal(new Request("https://petrfitnessdata.eu/app", { headers: { Cookie: sessionOf(response) } }), env), { kind: "user", userId: friend.id, epoch: 0 });
   // The owner's Apple ID cannot be taken over by linking it to another account.
   const steal = await start(env, { path: "/auth/apple?link=1", user: { id: friend.id } });
   assert.equal((await callback(env, steal, {}, appleFetch({ sub: "apple-owner", email: "owner@example.com" }, { nonce: steal.nonce }))).status, 409);
@@ -210,4 +210,24 @@ test("the app's Apple sign-in refuses a web token, a wrong nonce, a form post an
   const open = await nativeRequest({ ...env, OPEN_SIGNUP: "true" }, { identityToken: app, nonce: APP_NONCE }, { fetchImpl });
   assert.equal(open.status, 200);
   assert.ok(await env.DB.prepare("SELECT id FROM users WHERE email='friend@example.com'").first());
+});
+
+test("a token signed with a key Apple rotated in fetches the keys again, at most once a minute", async () => {
+  _resetAppleJwksCacheForTest();
+  const rotated = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const newJwk = { ...(await crypto.subtle.exportKey("jwk", rotated.publicKey)), kid: "apple-2" };
+  const body = { iss: "https://appleid.apple.com", aud: apple.APPLE_CLIENT_ID, sub: "apple-friend", exp: Math.floor(Date.now() / 1000) + 300, nonce: "n1" };
+  const data = b64({ alg: "RS256", kid: "apple-2" }) + "." + b64(body);
+  const token = data + "." + Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", rotated.privateKey, new TextEncoder().encode(data))).toString("base64url");
+  // The key appears only on the second fetch; the first fetch is cached from an old token's check.
+  const fetches = [];
+  const fetchImpl = async (url, init) => { fetches.push(init); return Response.json({ keys: fetches.length === 1 ? [jwk] : [jwk, newJwk] }); };
+  assert.equal((await verifyAppleIdToken(await idToken({ nonce: "n1" }), apple.APPLE_CLIENT_ID, "n1", fetchImpl)).sub, "apple-friend");
+  assert.equal((await verifyAppleIdToken(token, apple.APPLE_CLIENT_ID, "n1", fetchImpl)).sub, "apple-friend");
+  assert.equal(fetches.length, 2);
+  assert.deepEqual(fetches[1], { cache: "no-store" }, "the forced fetch goes past the cache");
+  // A third unknown key within the minute does not fetch again.
+  const unknown = b64({ alg: "RS256", kid: "apple-3" }) + "." + b64(body) + "." + b64("x");
+  await assert.rejects(verifyAppleIdToken(unknown, apple.APPLE_CLIENT_ID, "n1", fetchImpl), /Signing key not found/);
+  assert.equal(fetches.length, 2);
 });

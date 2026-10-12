@@ -48,5 +48,5 @@ export function applyGymSwap(values,action){
 // so "Jiný trénink na kole" stays a ride request. [nň]/[dď]: "Změň", "Nahraď".
 export const gymAdjustmentRequest=(message,appContext=null)=>{
   const m=String(message||'');
-  return /(?:uprav|zm[eě][nň]|vym[eě][nň]|nahra[dď]|jin[eéýá]|alternativ|skladb|cvik)/i.test(m)&&(/(?:gym|posil|cvi[cč]en|cvik|s[eé]ri|bench|d[řr]ep|mrtv|přítah|tlak|činky|stroj)/i.test(m)||appContext?.sport==='gym'&&/tr[eé]nink/i.test(m));
+  return /(?:uprav|zm[eě][nň]|vym[eě][nň]|nahra[dď]|jin[eéýá]|alternativ|skladb|cvik|adjust|chang|swap|replac|different|alternative)/i.test(m)&&(/(?:gym|posil|cvi[cč]en|cvik|s[eé]ri|bench|d[řr]ep|mrtv|přítah|tlak|činky|stroj|exercise|lift|squat|deadlift|press|(?<!\p{L})rows?(?!\p{L})|dumbbell|barbell|machine|(?<!\p{L})sets?(?!\p{L}))/iu.test(m)||appContext?.sport==='gym'&&/tr[eé]nink|workout|session/i.test(m));
 };

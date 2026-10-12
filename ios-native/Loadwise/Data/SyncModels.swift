@@ -82,7 +82,7 @@ struct SyncPrefsSaved: Decodable {
 /// One destination's result for a done activity.
 struct SyncSend: Decodable, Equatable {
     let destination: String
-    /// sent, pending or error.
+    /// sent, pending, error or unknown (a first send nobody answered).
     let status: String
     let message: String?
     var needsScope: String? = nil
@@ -185,7 +185,9 @@ struct SyncReport: Identifiable, Equatable {
     static func status(_ text: String) -> Status {
         switch text {
         case "sent": return .sent
-        case "error": return .error
+        // "unknown": a send nobody answered, which the server does not repeat on
+        // its own; the message and "Zkusit znovu" let the user decide.
+        case "error", "unknown": return .error
         default: return .pending
         }
     }

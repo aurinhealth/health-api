@@ -87,3 +87,9 @@ test('"Vygenerovat tréninky" prepares the week without the chat and gym waits f
   assert.doesNotMatch(server, /WEEK_REVIEW_REQUEST/);
   assert.match(server, /if\(Array\.isArray\(body\.rows\)\)plan\.rows=cleanGymRows/);
 });
+
+test('the model\'s numbers are checked: a load within 0–500 kg or none, reps as a number or range, else the plan\'s', () => {
+  const original = [['WARMUP', 'Bench', '1', '20', '6', '', '', '', 'FALSE', '[WARMUP]', '', 'FALSE', ''], ['WORK', 'Bench', '1', '40', '8-10', '', '', '', 'FALSE', 'Hrudník', '', 'FALSE', '']];
+  const rows = rowsFromModel([{ name: 'Bench', sets: [{ type: 'WARMUP', kg: -5, reps: 'a few' }, { type: 'WORK', kg: 900, reps: 'lots' }, { type: 'WORK', kg: 42.5, reps: '8–10' }, { type: 'WORK', kg: 500, reps: '12' }] }], original, new Map());
+  assert.deepEqual(rows.map(r => [r[0], r[3], r[4]]), [['WARMUP', '', '6'], ['WORK', '', '8-10'], ['WORK', '42,5', '8-10'], ['WORK', '500', '12']]);
+});

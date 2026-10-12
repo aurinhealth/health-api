@@ -17,13 +17,14 @@ struct MealDetailView: View {
                         .padding(.bottom, 100)
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
-                        CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
+                        BackSlot { dismiss() }
                         Text("Tohle jídlo dnes není.").font(Typo.body).foregroundStyle(Palette.muted)
                     }
                     .padding(24)
                 }
             }
         }
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $adding) { AddFoodSheet(meal: type) }
     }
@@ -43,7 +44,7 @@ struct MealDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                CircleButton(systemImage: "chevron.left", label: "Zpět", action: back)
+                BackSlot(action: back)
                 Spacer()
                 SectionLabel(text: L10n.f("Jídlo · %@", meal.time))
                 Spacer()
