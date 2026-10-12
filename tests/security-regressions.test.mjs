@@ -74,3 +74,18 @@ test("signing out leaves nothing of the account on the device; onboarding keeps 
   vm.runInContext("forgetAccount()", context);
   assert.deepEqual([...store.keys()].sort(), ["lw-training-tab", "pfd-meals-v1"]);
 });
+
+test("a session cookie counts only with the user's current epoch, and the epoch moves on where it must", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  // The check sits right after the user row is loaded, before any route.
+  const loaded = entry.indexOf("user = await findUser(env.DB, principal.userId, env);");
+  const checked = entry.indexOf("if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }", loaded);
+  assert.ok(loaded > 0 && checked > loaded && checked - loaded < 400);
+  assert.ok(entry.indexOf("async function routeRequest(") > checked);
+  // Unlinking Apple and signing out everywhere bump it with a fresh cookie for the caller.
+  assert.match(entry, /unlinkAppleIdentity\(env\.RAW_DB, session\.user\.id\);[\s\S]{0,600}return signedOutElsewhere\(env\.RAW_DB, session\.user\.id, env, Response\.json\(\{status:"ok"\}/);
+  assert.match(entry, /if \(url\.pathname === "\/app\/api\/account\/sign-out-everywhere"\) return handleSignOutEverywhere\(request, env, url, session\);/);
+  assert.match(entry, /sign-out-everywhere\)\$/, "signing out everywhere keeps the cached coach inputs");
+  // Apple Health uploads over the size limit are refused before the body is read.
+  assert.match(entry, /if\(appleBodyTooLarge\(request\)\)return Response\.json\(\{message:L\([^)]*\)\},\{status:413\}\);\s*const body=await request\.json\(\)/);
+});

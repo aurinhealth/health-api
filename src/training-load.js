@@ -13,13 +13,17 @@
 //   k, b = 0.64, 1.92 for men and 0.86, 1.67 for women, Banister 1991) scaled
 //   so an hour at the threshold heart rate is 100, which is how TrainingPeaks
 //   defines hrTSS;
-// - a gym session: session RPE (Foster 2001) as hours × (RPE/10)² × 100, RPE 6
-//   when none was given (≈ 36 an hour);
+// - a gym session: session RPE (Foster 2001), see strengthLoad; it goes before
+//   the heart rate, which understates lifting (short sets, long rests);
 // - anything else without heart rate: an easy hour, 36 for a ride or run and
 //   20 for the rest.
 // CTL and ATL are exponentially weighted averages with 42- and 7-day time
 // constants (Banister's model as TrainingPeaks and Intervals.icu use it), and
 // the ramp rate is the change of CTL over 7 days.
+//
+// With Intervals.icu connected its CTL stays the base and the workouts only
+// the watch recorded are added to it (watchOnly, addLoads).
+import { estimateStrengthTiming } from "./strength-timing.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -36,6 +40,60 @@ function trimpWeight(hrr, sex) {
   return sex === "female" ? 0.86 * Math.exp(1.67 * hrr) : 0.64 * Math.exp(1.92 * hrr);
 }
 
+// Session RPE for the gym (Foster 2001): the session's RPE (0–10) × its
+// minutes in arbitrary units, × SRPE_SCALE for the TSS-like scale. 0.1 keeps
+// the earlier fixed value for an ordinary session (an hour at RPE 6 = 36) and
+// makes an hour at RPE 10 worth 60: lifting felt as hard loads the heart and
+// the endurance fitness less than an hour at threshold (100).
+export const SRPE_SCALE = 0.1;
+// RPE when the session has none and no volume: a moderate session.
+export const DEFAULT_STRENGTH_RPE = 6;
+// Without any RPE the volume lifted (kg × reps) stands in: an ordinary hour of
+// some 9 t lifted ≈ 36, kept between an easy (RPE 3) and a maximal (RPE 10)
+// session of the same length, so a light or bodyweight session (no kg) still
+// counts and a big volume does not run away.
+export const VOLUME_PER_LOAD = 250;
+
+// The load of a gym session ({minutes, rpe, volume}), null without minutes.
+export function strengthLoad(session) {
+  const minutes = n(session?.minutes);
+  if (!(minutes > 0)) return null;
+  const rpe = n(session.rpe), volume = n(session.volume);
+  if (rpe != null && rpe > 0) return Math.round(minutes * clamp(rpe, 1, 10) * SRPE_SCALE);
+  if (volume > 0) return Math.round(clamp(volume / VOLUME_PER_LOAD, minutes * 3 * SRPE_SCALE, minutes * 10 * SRPE_SCALE));
+  return Math.round(minutes * DEFAULT_STRENGTH_RPE * SRPE_SCALE);
+}
+
+// The gym sessions of the logged sets (strength_sets rows: workout_date, type,
+// exercise, set_no, actual_kg, actual_reps, rpe), one per day:
+// - minutes from the sets as the gym planner times them (strength-timing.js:
+//   each set's work by its reps, 90 s rest between the sets of an exercise,
+//   setting up each station and a few minutes' buffer);
+// - RPE as the mean of the working sets' RPE (warm-ups left out), else the
+//   athlete's own rating of the day (`ratings`, date → RPE 1–10);
+// - the volume, kg × reps of the working sets.
+export function gymSessions(sets, ratings = {}) {
+  const byDay = new Map();
+  for (const s of sets || []) {
+    const date = String(s?.workout_date || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !s.exercise) continue;
+    if (!byDay.has(date)) byDay.set(date, []);
+    byDay.get(date).push(s);
+  }
+  const out = [];
+  for (const [date, list] of byDay) {
+    const rows = list.map(s => [String(s.type || "WORK").toUpperCase() === "WARMUP" ? "WARMUP" : "WORK", s.exercise, s.set_no, s.actual_kg, n(s.actual_reps) > 0 ? String(Math.round(n(s.actual_reps))) : ""]);
+    const minutes = estimateStrengthTiming(rows, {}, 0).estimatedMinutes;
+    const work = list.filter(s => String(s.type || "WORK").toUpperCase() !== "WARMUP");
+    const rpes = work.map(s => n(s.rpe)).filter(v => v != null && v >= 1 && v <= 10);
+    const rated = n(ratings[date]);
+    const rpe = rpes.length ? Math.round(rpes.reduce((a, b) => a + b, 0) / rpes.length * 10) / 10 : rated != null && rated >= 1 && rated <= 10 ? rated : null;
+    const volume = Math.round(work.reduce((t, s) => t + (n(s.actual_kg) > 0 && n(s.actual_reps) > 0 ? n(s.actual_kg) * n(s.actual_reps) : 0), 0));
+    out.push({ date, kind: "strength", minutes, rpe, volume, sets: list.length });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
 // The load of one session, or null when its length is unknown.
 export function sessionLoad(session, athlete = {}) {
   const minutes = n(session?.minutes);
@@ -43,6 +101,8 @@ export function sessionLoad(session, athlete = {}) {
   if (known != null && known >= 0) return Math.round(known);
   if (!(minutes > 0)) return null;
   const hours = minutes / 60, kind = session.kind;
+  // A gym session with its RPE or the volume logged: session RPE.
+  if (kind === "strength" && (n(session.rpe) > 0 || n(session.volume) > 0)) return strengthLoad(session);
   const power = n(session.avgPower), ftp = n(athlete.ftp);
   if (kind === "ride" && power > 0 && ftp > 0) return Math.round(hours * (power / ftp) ** 2 * 100);
   const hr = n(session.avgHr), rest = n(athlete.restHr), max = n(athlete.maxHr);
@@ -53,10 +113,7 @@ export function sessionLoad(session, athlete = {}) {
     const perMinute = hrr * trimpWeight(hrr, athlete.sex), thresholdPerMinute = threshold * trimpWeight(threshold, athlete.sex);
     return Math.round(minutes * perMinute / (60 * thresholdPerMinute) * 100);
   }
-  if (kind === "strength") {
-    const rpe = clamp(n(session.rpe) ?? 6, 1, 10);
-    return Math.round(hours * (rpe / 10) ** 2 * 100);
-  }
+  if (kind === "strength") return strengthLoad(session);
   return Math.round(hours * (kind === "ride" || kind === "run" ? 36 : 20));
 }
 
@@ -95,7 +152,9 @@ export function dailyLoads(sessions, athlete = {}) {
 
 // Watch workouts (health_datapoints rows, already parsed by activityFromRow and
 // deduplicated) plus their heart rate and power from the payload, and the gym
-// days that have no recorded workout as a one-hour session.
+// sessions logged in Loadwise (gymSessions; a bare date is a one-hour session).
+// A watch strength workout on a gym day keeps its own length and takes the
+// day's RPE and volume; a gym day without one counts as its sets estimate.
 export function sessionsFrom(activities, rowsById, gymDays = []) {
   const out = [];
   for (const a of activities || []) {
@@ -104,6 +163,48 @@ export function sessionsFrom(activities, rowsById, gymDays = []) {
     const m = p.exercise?.metricsSummary || {};
     out.push({ date: a.date, kind: a.kind, minutes: a.minutes, tss: a.tss, avgHr: n(m.averageHeartRateBeatsPerMinute ?? p.average_heartrate), avgPower: n(m.averagePowerWatts ?? p.icu_average_watts ?? p.average_watts) });
   }
-  for (const date of gymDays) if (!out.some(s => s.date === date && s.kind === "strength")) out.push({ date, kind: "strength", minutes: 60 });
+  for (const g of gymDays || []) {
+    const gym = typeof g === "string" ? { date: g, kind: "strength", minutes: 60 } : g;
+    if (!gym?.date) continue;
+    const watch = out.find(s => s.date === gym.date && s.kind === "strength");
+    if (watch) { if (watch.rpe == null && gym.rpe != null) watch.rpe = gym.rpe; if (watch.volume == null && gym.volume != null) watch.volume = gym.volume; }
+    else out.push({ date: gym.date, kind: "strength", minutes: n(gym.minutes) > 0 ? n(gym.minutes) : 60, rpe: gym.rpe ?? null, volume: gym.volume ?? null });
+  }
   return out;
+}
+
+// Watch workouts Intervals.icu does not have (Apple Health or Google Health
+// only), for its CTL. One recorded by both starts within `minutes` (10) of the
+// Intervals.icu activity and is of the same sport ("other" may be any); those
+// stay out, as does anything before the first Intervals.icu activity known
+// here (older history may simply not be imported yet). Activities are
+// activityFromRow results: {start, kind, source} and the start instant.
+export function watchOnly(watch, intervals, minutes = 10) {
+  const at = a => (Number.isFinite(a?.session?.at) ? a.session.at : Date.parse(String(a?.start || "") + ":00Z"));
+  const known = (intervals || []).filter(a => a && Number.isFinite(at(a)));
+  if (!known.length) return [];
+  const first = Math.min(...known.map(at)) - minutes * 60000;
+  const same = (a, b) => !a.kind || !b.kind || a.kind === b.kind || a.kind === "other" || b.kind === "other";
+  return (watch || []).filter(w => w && Number.isFinite(at(w)) && at(w) >= first && !known.some(i => same(w, i) && Math.abs(at(w) - at(i)) <= minutes * 60000));
+}
+
+// Intervals.icu wellness rows with the load of the watch-only workouts added:
+// CTL and ATL are linear in the daily loads, so the series of the extra loads
+// (loadSeries, from zero before the history) adds to Intervals.icu's own.
+// The day's load (ctlLoad, atlLoad) grows by it as well, and watchLoad says how
+// much came from the watch.
+export function addLoads(rows, extra) {
+  const byDay = new Map((extra || []).map(r => [r.id, r]));
+  if (!byDay.size) return rows;
+  return (rows || []).map(r => {
+    const x = byDay.get(r?.id);
+    if (!x || !(x.ctl > 0 || x.atl > 0 || x.load > 0)) return r;
+    const ctl = n(r.ctl), atl = n(r.atl), out = { ...r, watchLoad: x.load };
+    if (ctl != null) out.ctl = round1(ctl + x.ctl);
+    if (atl != null) out.atl = round1(atl + x.atl);
+    if (out.ctl != null && out.atl != null && ctl != null && atl != null) out.tsb = round1(out.ctl - out.atl);
+    if (n(r.rampRate) != null) out.rampRate = round1(n(r.rampRate) + x.rampRate);
+    for (const k of ["ctlLoad", "atlLoad"]) if (n(r[k]) != null) out[k] = n(r[k]) + x.load;
+    return out;
+  });
 }

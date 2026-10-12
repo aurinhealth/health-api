@@ -24,7 +24,9 @@ async function member(env, email = "friend@example.com") {
   await inviteUser(env.DB, email, 1);
   return signInEmailUser(env.DB, env, email);
 }
-const post = (path, body, { origin = ORIGIN, ua = IPHONE } = {}) => new Request(ORIGIN + path, { method: body === undefined ? "GET" : "POST", headers: { Origin: origin, "Content-Type": "application/json", "User-Agent": ua }, body: body === undefined ? undefined : JSON.stringify(body) });
+// Each request comes from another address unless a test says otherwise (the per-caller limit, ip-rate-limit.js).
+let nextAddress = 0;
+const post = (path, body, { origin = ORIGIN, ua = IPHONE, ip = "203.0.113." + (++nextAddress % 250) } = {}) => new Request(ORIGIN + path, { method: body === undefined ? "GET" : "POST", headers: { Origin: origin, "Content-Type": "application/json", "User-Agent": ua, "CF-Connecting-IP": ip }, body: body === undefined ? undefined : JSON.stringify(body) });
 const api = (env, user, request, ctx) => handlePasskeyApi(request, env, new URL(request.url), { signedIn: true, user }, ctx);
 
 // Adds a passkey for the user through the API, as Settings does.
@@ -67,7 +69,7 @@ test("a passkey added in Settings signs the user in", async () => {
   const cookie = login.headers.get("Set-Cookie");
   assert.match(cookie, /^pfd_session=.+HttpOnly; Secure; SameSite=Lax/);
   const principal = await resolvePrincipal(new Request(ORIGIN + "/app", { headers: { Cookie: cookie.split(";")[0] } }), env);
-  assert.deepEqual(principal, { kind: "user", userId: user.id });
+  assert.deepEqual(principal, { kind: "user", userId: user.id, epoch: 0 });
   const [stored] = await listPasskeys(env.DB, user.id);
   assert.ok(stored.lastUsedAt);
   assert.equal("publicKey" in stored, false);
@@ -168,11 +170,17 @@ test("only the signed-in browser manages passkeys, and only its own", async () =
   assert.deepEqual(listed.passkeys.map(p => p.id), [mine.id]);
   assert.equal(listed.rpId, "petrfitnessdata.eu");
   const remove = id => api(env, user, new Request(ORIGIN + "/app/api/passkeys?id=" + encodeURIComponent(id), { method: "DELETE", headers: { Origin: ORIGIN } }));
-  await remove(theirs.id);
+  const nothing = await remove(theirs.id);
   assert.equal((await listPasskeys(env.DB, other.id)).length, 1, "another user's passkey stays");
-  const removed = await (await remove(mine.id)).json();
+  assert.equal(nothing.headers.get("Set-Cookie"), null, "nothing removed, nobody signed out");
+  assert.equal((await findUser(env.DB, user.id, env)).sessionEpoch, 0);
+  const response = await remove(mine.id), removed = await response.json();
   assert.deepEqual(removed.passkeys, []);
   assert.match(removed.userHandle, /^[A-Za-z0-9_-]{43}$/);
+  // Removing a passkey signs every other device out (the epoch moved on); this one got a fresh cookie.
+  assert.equal((await findUser(env.DB, user.id, env)).sessionEpoch, 1);
+  const fresh = response.headers.get("Set-Cookie").split(";")[0];
+  assert.deepEqual(await resolvePrincipal(new Request(ORIGIN + "/app/api/me", { headers: { Cookie: fresh } }), env), { kind: "user", userId: user.id, epoch: 1 });
   assert.equal((await api(env, user, new Request(ORIGIN + "/app/api/passkeys?id=x", { method: "DELETE", headers: { Origin: "https://evil.example" } }))).status, 403);
 });
 
@@ -197,6 +205,33 @@ test("too many open sign-ins are refused instead of filling the database", async
   env.DB.sqlite.exec("UPDATE auth_challenges SET expires_at = 1");
   assert.equal((await handlePasskeyLogin(post("/auth/passkey/options", {}), env, "/auth/passkey/options")).status, 200);
   assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM auth_challenges").get().n, 1, "expired challenges are cleared");
+});
+
+test("one caller gets five sign-in challenges a minute; a crowded pool drops sign-ins nobody answered", async () => {
+  const env = await setup();
+  const options = ip => handlePasskeyLogin(post("/auth/passkey/options", {}, { ip }), env, "/auth/passkey/options");
+  for (let i = 0; i < 5; i++) assert.equal((await options("198.51.100.7")).status, 200);
+  const refused = await options("198.51.100.7");
+  assert.equal(refused.status, 429);
+  assert.match((await refused.json()).message, /Příliš mnoho pokusů/);
+  assert.equal((await options("198.51.100.8")).status, 200, "another caller");
+  // 450 open sign-ins, started 100 s ago: over 80 % full, so the abandoned ones go and new sign-ins get in.
+  const now = Math.floor(Date.now() / 1000);
+  env.DB.sqlite.exec("DELETE FROM auth_challenges");
+  const insert = env.DB.sqlite.prepare("INSERT INTO auth_challenges(challenge, purpose, expires_at) VALUES(?, 'login', ?)");
+  for (let i = 0; i < 450; i++) insert.run("old" + i, now + 200);
+  insert.run("fresh", now + 290);
+  insert.run("adding", now + 200);
+  env.DB.sqlite.prepare("UPDATE auth_challenges SET purpose = 'register', user_id = 1 WHERE challenge = 'adding'").run();
+  assert.equal((await options("198.51.100.9")).status, 200);
+  const left = env.DB.sqlite.prepare("SELECT challenge FROM auth_challenges ORDER BY challenge").all().map(r => r.challenge);
+  assert.equal(left.length, 3, "the 450 abandoned sign-ins are gone; the fresh one, the passkey being added and the new one stay");
+  assert.ok(left.includes("fresh") && left.includes("adding"));
+  // Under 80 % nothing is dropped early.
+  env.DB.sqlite.exec("DELETE FROM auth_challenges");
+  for (let i = 0; i < 100; i++) insert.run("old" + i, now + 200);
+  assert.equal((await options("198.51.100.10")).status, 200);
+  assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM auth_challenges").get().n, 101);
 });
 
 test("the data download lists the passkeys and deleting the account removes them", async () => {

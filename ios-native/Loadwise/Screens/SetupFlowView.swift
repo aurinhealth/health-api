@@ -1,26 +1,19 @@
 import SwiftUI
 
-/// After the first sign-in, the web's account setup (src/dashboard-client.js
-/// showAccountSetup): the consent to health data, the data sources, who you
-/// are, your day and goal, how you train and sleep. Every value can be changed
-/// later in Settings. An account set up earlier that still owes the consent
-/// sees only that page.
+/// After the first sign-in, two pages: where the data comes from ("Odkud brát
+/// data": Apple Health, Google Health, Intervals.icu and the consent to health
+/// data) and who you are ("O tobě": sex, year of birth, height and weight,
+/// filled in from Apple Health or the server's suggestions). Everything else
+/// (the day, goals, training, sleep) lives in Settings. An account set up
+/// earlier that still owes the consent sees only the consent page.
 struct SetupFlowView: View {
     @Environment(AppModel.self) private var model
     @State private var index = 0
+    // O tobě: the fields as typed, in the chosen units (Units).
     @State private var sex = ""
-    @State private var age = 35
-    @State private var height = 175.0
-    @State private var weight = 75.0
-    @State private var activity = "light"
-    @State private var goal = "maintain"
-    @State private var sportHours = "3-6"
-    @State private var mainSport = "general"
-    @State private var equipment = "gym"
-    @State private var experience = "auto"
-    @State private var limitations = ""
-    @State private var sleepGoal = 0
-    @State private var wake = SleepSettingsForm.clock("07:00")
+    @State private var birthYear = ""
+    @State private var heightText = ""
+    @State private var weightText = ""
     @State private var saving = false
     @State private var error: String?
     @State private var loaded = false
@@ -30,6 +23,10 @@ struct SetupFlowView: View {
     @State private var consentOnly = false
     @State private var agree = false
     // Data sources
+    @State private var appleOn = true
+    @State private var appleWorking = false
+    @State private var appleRead = false
+    @State private var appleFilled = false
     @State private var providers: [ConnectionsResponse.Provider] = []
     @State private var working: String?
     @State private var sourceMessage: String?
@@ -37,33 +34,17 @@ struct SetupFlowView: View {
     @State private var intervalsKey = false
     @State private var syncRun = 0
     @State private var syncState: String?
-    // Values the user set here; the services' suggestions never overwrite them.
-    @State private var touched: Set<String> = []
-    // Values filled in from the services' suggestions, sent back empty when left
-    // alone so they keep following the services.
+    // What the server's suggestions (Google Health) filled in, as shown in the
+    // field; left alone it goes back empty so it keeps following the service.
     @State private var suggested: [String: String] = [:]
-    @State private var loadedWeight: Double?
+    /// The weight as prefilled; unchanged it is not saved again as today's.
+    @State private var prefilledWeight: String?
 
-    private enum Page: Equatable { case welcome, consent, sources, about, day, training, sleep }
+    private enum Page: Equatable { case consent, sources, about }
 
-    private var pages: [Page] {
-        if consentOnly { return [.consent] }
-        return [.welcome] + (consentNeeded ? [.consent] : []) + [.sources, .about, .day, .training, .sleep]
-    }
+    private var pages: [Page] { consentOnly ? [.consent] : [.sources, .about] }
     private var page: Page { pages[min(index, pages.count - 1)] }
-    private var counted: [Page] { pages.filter { $0 != .welcome } }
-
-    private func name(_ page: Page) -> String {
-        switch page {
-        case .welcome: return ""
-        case .consent: return "Souhlas"
-        case .sources: return "Zdroje dat"
-        case .about: return "O tobě"
-        case .day: return "Den a cíl"
-        case .training: return "Trénink"
-        case .sleep: return "Spánek"
-        }
-    }
+    private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
         ZStack {
@@ -77,38 +58,44 @@ struct SetupFlowView: View {
                     // Without the consent the app cannot be used: the way out is signing out.
                     if page == .consent {
                         Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                    } else if ready && !consentNeeded {
+                    } else if page == .about && ready {
                         Button("Teď ne") { model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     }
                 }
                 .frame(height: 40)
 
-                if page != .welcome && !consentOnly, let position = counted.firstIndex(of: page) {
-                    HStack(spacing: 6) {
-                        ForEach(counted.indices, id: \.self) { i in
-                            Capsule().fill(i <= position ? Palette.green : Palette.ink.opacity(0.12)).frame(height: 5)
-                        }
-                    }
-                    .padding(.top, 12)
-                    SectionLabel(text: L10n.f("Krok %@ z %@", String(position + 1), String(counted.count)) + " · " + L10n.tr(name(page))).padding(.top, 16)
-                }
-
                 PageScroll {
                     VStack(alignment: .leading, spacing: 14) { content }
-                        .padding(.top, 14)
+                        .padding(.top, 8)
                         .padding(.bottom, 20)
                 }
                 .scrollDismissesKeyboard(.interactively)
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
-                PrimaryButton(title: buttonTitle, busy: saving) { Task { await next() } }
-                    .disabled(saving || !ready || (page == .about && sex.isEmpty) || (page == .consent && !agree))
+                PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
+                    .disabled(saving || appleWorking || !ready || (page == .about && sex.isEmpty) || (page != .about && consentNeeded && !agree))
+                if page == .sources {
+                    Button(L10n.tr(consentNeeded ? "Odhlásit se" : "Teď ne")) {
+                        if consentNeeded { Task { await model.logout() } } else { model.needsSetup = false }
+                    }
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity).frame(height: 44)
+                    .disabled(!ready)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
+        .task(id: index) { if page == .about { await readAppleProfile() } }
+        .onChange(of: appleOn) { _, on in
+            if on {
+                Task { await connectApple() }
+            } else if health.enabled {
+                health.disconnect()
+            }
+        }
         .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
             googleDisclosure = false
             // The browser sheet opens once this one has closed.
@@ -119,38 +106,26 @@ struct SetupFlowView: View {
     }
 
     private var buttonTitle: String {
-        if page == .welcome { return "Začít" }
         if saving { return "Ukládám…" }
-        if page == .consent { return "Pokračovat" }
-        return index < pages.count - 1 ? "Pokračovat" : "Hotovo"
+        if appleWorking { return "Moment…" }
+        return page == .about ? "Hotovo" : "Pokračovat"
     }
 
     @ViewBuilder
     private var content: some View {
         switch page {
-        case .welcome: welcomePage
         case .consent: consentPage
         case .sources: sourcesPage
         case .about: aboutPage
-        case .day: dayPage
-        case .training: trainingPage
-        case .sleep: sleepPage
         }
     }
 
-    @ViewBuilder
-    private var welcomePage: some View {
-        Spacer(minLength: 40)
-        Image(systemName: "hand.wave.fill").font(.system(size: 40)).foregroundStyle(Palette.amberBar)
-        Text("Vítej v Loadwise").font(Typo.sentence(40, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-        Text("Pár otázek a připravím ti cíl kalorií a živin, potřebu spánku s večerkou a tréninky, které sedí k tvému vybavení. Zabere to asi minutu.")
-            .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-    }
+    // MARK: - Consent (accounts set up before the consent, after a version bump)
 
     // The same points as the web's consent (consentDataList in dashboard-client.js).
     private static let consentPoints: [(String, String)] = [
         ("Co", "Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly."),
-        ("Odkud", "Ze služeb, které připojíš (Google Health, Intervals.icu), a z toho, co zadáš sám."),
+        ("Odkud", "Ze služeb, které připojíš (Apple Zdraví, Google Health, Intervals.icu), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Loadwise. Data neprodáváme a nepoužíváme k reklamě."),
         ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Loadwise potřebné údaje, včetně údajů o zdraví a fotek jídla, společnosti OpenAI v USA."),
         ("Odvolání", "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data.")
@@ -158,7 +133,7 @@ struct SetupFlowView: View {
 
     @ViewBuilder
     private var consentPage: some View {
-        title("Tvoje data o zdraví", "Loadwise pracuje s údaji o tvém zdraví. Podle GDPR k tomu potřebujeme tvůj výslovný souhlas.")
+        title("Tvoje data o zdraví")
         Card {
             ForEach(Self.consentPoints, id: \.0) { point in
                 VStack(alignment: .leading, spacing: 3) {
@@ -169,17 +144,27 @@ struct SetupFlowView: View {
         }
         Toggle("Souhlasím, aby Loadwise zpracovával moje údaje o zdraví, jak je popsáno výše, včetně AI funkcí.", isOn: $agree)
             .font(Typo.small).tint(Palette.green)
-        Link("Zásady ochrany soukromí", destination: URL(string: "https://petrfitnessdata.eu/privacy")!).font(Typo.small)
+        Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
     }
+
+    private static let privacyURL = URL(string: "https://petrfitnessdata.eu/privacy")!
+
+    // MARK: - Odkud brát data
 
     @ViewBuilder
     private var sourcesPage: some View {
-        title("Propoj své služby", nil)
+        title("Odkud brát data")
+        SectionLabel(text: "Zdravotní data").padding(.top, 6)
         SettingsGroup {
-            ForEach(Array(shownProviders.enumerated()), id: \.element.id) { i, provider in
-                if i > 0 { SettingsDivider() }
-                sourceRow(provider)
+            if health.isAvailable {
+                appleRow
+                SettingsDivider()
             }
+            if let google = provider("google") { sourceRow(google) }
+        }
+        SectionLabel(text: "Tréninkové aplikace").padding(.top, 10)
+        SettingsGroup {
+            if let intervals = provider("intervals") { sourceRow(intervals) }
         }
         if let line = syncLine {
             HStack(spacing: 8) {
@@ -190,14 +175,35 @@ struct SetupFlowView: View {
                 Text(line).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
+        if let message = health.message {
+            Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+        }
         if let sourceMessage {
             Text(sourceMessage).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
         }
+        if consentNeeded { consentRow.padding(.top, 10) }
+    }
+
+    /// Apple Health: a switch, on by default; turning it on asks iOS for the
+    /// permissions (the health categories plus the profile, AppleHealthProfile).
+    private var appleRow: some View {
+        HStack(spacing: 12) {
+            IntegrationIcon(id: "apple", size: 30)
+            if appleWorking {
+                Text("Apple Zdraví").font(.body).foregroundStyle(Palette.ink)
+                Spacer()
+                ProgressView().padding(.trailing, 16)
+            } else {
+                SettingsToggle(title: "Apple Zdraví", isOn: $appleOn).padding(.leading, -16)
+            }
+        }
+        .padding(.leading, 16)
+        .frame(minHeight: 56)
     }
 
     private func sourceRow(_ provider: ConnectionsResponse.Provider) -> some View {
         HStack(spacing: 12) {
-            SettingsIcon(systemImage: provider.id == "google" ? "g.circle.fill" : "waveform.path.ecg", color: provider.id == "google" ? Palette.blue : Palette.rust)
+            IntegrationIcon(id: provider.id, size: 30)
             Text(provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
             Spacer()
             if working == provider.id {
@@ -226,13 +232,35 @@ struct SetupFlowView: View {
             .background(Palette.button, in: Capsule())
     }
 
-    /// Google and Intervals.icu, also before /app/api/connections answers.
-    private var shownProviders: [ConnectionsResponse.Provider] {
-        let known = providers.filter { $0.id == "google" || $0.id == "intervals" }
-        if !known.isEmpty { return known }
-        return [("google", "Google Health"), ("intervals", "Intervals.icu")].map {
-            ConnectionsResponse.Provider(id: $0.0, name: $0.1, connected: false, configured: nil, missingPermissions: nil, metrics: nil, note: nil)
+    /// One checkbox for the health-data consent (the same POST /app/api/consent
+    /// as the consent page), with the policy next to it.
+    private var consentRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Button { agree.toggle() } label: {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: agree ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 24, weight: .regular))
+                        .foregroundStyle(agree ? Palette.green : Palette.faint)
+                    Text("Souhlasím se zpracováním zdravotních dat")
+                        .font(Typo.small).foregroundStyle(Palette.ink)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(L10n.tr(agree ? "zapnuto" : "vypnuto"))
+            Spacer(minLength: 8)
+            Link("Zásady", destination: Self.privacyURL).font(Typo.bodyStrong).foregroundStyle(Palette.blue)
         }
+    }
+
+    /// Google and Intervals.icu, also before /app/api/connections answers.
+    private func provider(_ id: String) -> ConnectionsResponse.Provider? {
+        if let known = providers.first(where: { $0.id == id }) { return known }
+        let names = ["google": "Google Health", "intervals": "Intervals.icu"]
+        guard let name = names[id] else { return nil }
+        return ConnectionsResponse.Provider(id: id, name: name, connected: false, configured: nil, missingPermissions: nil, metrics: nil, note: nil)
     }
 
     private var syncLine: String? {
@@ -244,104 +272,59 @@ struct SetupFlowView: View {
         }
     }
 
+    // MARK: - O tobě
+
+    /// Where the prefilled values came from, for the line above the fields.
+    private var prefillSource: String? {
+        if appleFilled { return "apple" }
+        if !suggested.isEmpty || prefilledWeight != nil { return "google" }
+        return nil
+    }
+
     @ViewBuilder
     private var aboutPage: some View {
-        title("Řekni mi něco o sobě", "Z toho se počítá klidový výdej a denní cíl kalorií.")
-        HStack(spacing: 10) {
-            ChoiceCard(title: "Muž", systemImage: "figure.stand", selected: sex == "male") { sex = "male" }
-            ChoiceCard(title: "Žena", systemImage: "figure.stand.dress", selected: sex == "female") { sex = "female" }
-        }
-        NumberStepper(title: "Věk", value: Binding(get: { Double(age) }, set: { age = Int($0); touched.insert("age") }), range: 18...100, step: 1, unit: "let")
-        // Shown in the chosen units, kept in cm and kg.
-        NumberStepper(title: "Výška", value: Binding(get: { Units.length(height) }, set: { height = Units.cm(Units.imperial ? $0.rounded() : $0); touched.insert("height") }),
-                      range: Units.length(120)...Units.length(230), step: 1, unit: Units.lengthUnit)
-        NumberStepper(title: "Váha", value: Binding(get: { Units.weight(weight) }, set: { weight = Units.kg(Units.imperial ? $0.rounded() : $0); touched.insert("weight") }),
-                      range: Units.weight(35)...Units.weight(250), step: Units.imperial ? 1 : 0.5, unit: Units.weightUnit, digits: Units.imperial ? 0 : 1)
-    }
-
-    @ViewBuilder
-    private var dayPage: some View {
-        title("Jak vypadá tvůj den?", "Bez sportu. Sport se přičte podle tréninků.")
-        ForEach(Self.activities.indices, id: \.self) { i in
-            let a = Self.activities[i]
-            ChoiceCard(title: a.1, subtitle: a.2, selected: activity == a.0) { activity = a.0; touched.insert("activity") }
-        }
-        title("Cíl", nil).padding(.top, 10)
-        ForEach(HeartActivitySettingsView.goals.indices, id: \.self) { i in
-            let g = HeartActivitySettingsView.goals[i]
-            ChoiceCard(title: Fmt.capitalized(g.1), selected: goal == g.0) { goal = g.0 }
-        }
-    }
-
-    @ViewBuilder
-    private var trainingPage: some View {
-        title("Jak trénuješ?", "Trenér podle toho volí tréninky a posilovnu sestaví jen z toho, co máš.")
-        Text("Hlavní sport").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
-        ChipFlow(items: GoalsSettingsView.sports.map { $0.0 }, label: { id in GoalsSettingsView.sports.first { $0.0 == id }?.1 ?? id },
-                 isOn: { $0 == mainSport }, toggle: { mainSport = $0 })
-        Text("Sportu týdně").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
-        ChipFlow(items: HeartActivitySettingsView.sportHourOptions.map { $0.0 }.filter { $0 != "auto" },
-                 label: { id in HeartActivitySettingsView.sportHourOptions.first { $0.0 == id }?.1 ?? id },
-                 isOn: { $0 == sportHours }, toggle: { sportHours = $0 })
-        Text("Posilování").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
-        ForEach(EquipmentView.setupKinds.indices, id: \.self) { i in
-            let k = EquipmentView.setupKinds[i]
-            ChoiceCard(title: k.1, subtitle: k.2, selected: equipment == k.0) { equipment = k.0 }
-        }
-        Text("Které stroje v posilovně jsou a jaké máš doma jednoručky, nastavíš v Trénink → Vybavení, i z fotky.")
-            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-        Text("Zkušenosti s posilováním").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
-        ChipFlow(items: ["auto", "beginner", "regular", "experienced"],
-                 label: { ["auto": "podle záznamů", "beginner": "začínám", "regular": "cvičím pravidelně", "experienced": "pokročilý"][$0] ?? $0 },
-                 isOn: { $0 == experience }, toggle: { experience = $0 })
-        Text("Omezení nebo poznámka pro trenéra").font(Typo.bodyStrong).foregroundStyle(Palette.secondary).padding(.top, 6)
-        TextField("Např. bolavé koleno", text: $limitations, axis: .vertical)
-            .lineLimit(2...5)
-            .padding(14)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .onChange(of: limitations) { _, value in if value.count > 500 { limitations = String(value.prefix(500)) } }
-    }
-
-    @ViewBuilder
-    private var sleepPage: some View {
-        title("A spánek", "Podle budíku a potřeby spánku ti každý den řeknu, kdy jít spát.")
-        Card {
-            DatePicker("Ve všední dny vstávám v", selection: $wake, displayedComponents: .hourAndMinute)
-                .environment(\.locale, Fmt.locale)
-            HStack {
-                Text("Chci spát").font(.body)
-                Spacer()
-                Picker("Chci spát", selection: $sleepGoal) {
-                    Text("podle věku").tag(0)
-                    ForEach(SleepSettingsForm.goals, id: \.self) { Text(Fmt.hoursMinutes(Double($0)) + " h").tag($0) }
+        title("O tobě")
+        SettingsGroup {
+            if let source = prefillSource {
+                HStack(spacing: 10) {
+                    IntegrationIcon(id: source, size: 24)
+                    Text(source == "apple" ? "Z Apple Zdraví jsme vzali:" : "Z Google Health jsme vzali:")
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 }
-                .pickerStyle(.menu).tint(Palette.muted)
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                SettingsDivider()
             }
+            SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "Muž"), ("female", "Žena")])
+            SettingsDivider()
+            SettingsField(title: "Narození", text: $birthYear, keyboard: .numberPad, placeholder: "Rok")
+            SettingsDivider()
+            SettingsField(title: "Výška", text: $heightText, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
+            SettingsDivider()
+            SettingsField(title: "Váha", text: $weightText, unit: Units.weightUnit, keyboard: .decimalPad)
         }
-        Text("Budík na víkend a další nastavení najdeš v Nastavení → Spánek a budík.")
-            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+        .onChange(of: birthYear) { _, value in birthYear = String(value.filter(\.isNumber).prefix(4)) }
     }
 
-    private func title(_ text: String, _ subtitle: String?) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(text).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-            if let subtitle { Text(subtitle).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
-        }
+    private func title(_ text: String) -> some View {
+        Text(text).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
     }
 
-    static let activities = [
-        ("sedentary", "Sedavá práce", "Kancelář, málo chůze"),
-        ("light", "Lehce aktivní", "Hodně chůze, práce vestoje"),
-        ("active", "Aktivní", "Většinu dne v pohybu"),
-        ("heavy", "Fyzicky náročná práce", "Stavba, sklad, manuální práce")
-    ]
+    // MARK: - Flow
 
     private func next() async {
         error = nil
         switch page {
-        case .consent: await giveConsent()
-        case _ where index < pages.count - 1: withAnimation { index += 1 }
-        default: await finish()
+        case .consent:
+            _ = await giveConsent()
+        case .sources:
+            if consentNeeded {
+                let given = await giveConsent()
+                if !given { return }
+            }
+            if appleOn && !health.enabled { await connectApple() }
+            withAnimation { index += 1 }
+        case .about:
+            await finish()
         }
     }
 
@@ -359,48 +342,101 @@ struct SetupFlowView: View {
             consentOnly = consentNeeded && s.completed == true
             let p = s.savedProfile ?? [:]
             if let v = p["sex"]?.string { sex = v }
-            if let v = p["goal"]?.string { goal = v }
-            if let v = p["sportHours"]?.string, v != "auto" { sportHours = v }
-            if let v = p["mainSport"]?.string { mainSport = v }
-            if let v = p["age"]?.number { age = Int(v) }
-            if let v = p["height"]?.number { height = v.rounded() }
-            if let v = p["activity"]?.string { activity = v }
-            if let t = s.training {
-                if let v = t.equipment { equipment = v == "custom" ? "gym" : v == "home" ? "dumbbells" : v }
-                if t.experienceMode == "manual", let v = t.experience { experience = v }
-                if let v = t.limitations { limitations = v }
-            }
+            if let v = p["age"]?.number { birthYear = String(Self.currentYear - Int(v)) }
+            if let v = p["height"]?.number { heightText = Self.lengthText(v) }
             apply(s)
         }
+        appleOn = health.isAvailable
         ready = true
         guard !consentOnly else { return }
         await loadProviders()
         if providers.contains(where: { $0.connected == true }) { syncRun += 1 }
     }
 
-    /// Fills in what the services suggest (height, everyday activity, age from
-    /// the birth date, the latest weight) where the user has not set it.
+    private static var currentYear: Int { Calendar.current.component(.year, from: Date()) }
+
+    /// Height in the chosen units as the field shows it, from centimetres.
+    private static func lengthText(_ cm: Double) -> String {
+        Fmt.decimal(Units.length(cm), digits: Units.imperial ? 1 : 0)
+    }
+
+    /// Weight in the chosen units as the field shows it, from kilograms.
+    private static func weightTextOf(_ kg: Double) -> String {
+        Fmt.decimal(Units.weight(kg), digits: 1)
+    }
+
+    /// A field's number, with a comma or a dot; nil when empty or not a number.
+    private static func number(_ text: String) -> Double? {
+        let t = text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
+        return t.isEmpty ? nil : Double(t)
+    }
+
+    /// Fills in what the services suggest (height, the age from the birth
+    /// date, the latest weight) where the field is empty or still shows the
+    /// earlier suggestion; what the user typed, or Apple Health gave, stays.
     private func apply(_ s: SetupStatus) {
+        guard !appleFilled else { return }
         let saved = s.savedProfile ?? [:], profile = s.profile ?? [:], suggestions = s.suggestions ?? [:]
-        if saved["height"]?.number == nil, !touched.contains("height"), let v = profile["height"]?.number {
-            height = v.rounded()
-            suggested["height"] = String(Int(height))
+        if saved["height"]?.number == nil, heightText.isEmpty || heightText == suggested["height"], let v = profile["height"]?.number {
+            heightText = Self.lengthText(v.rounded())
+            suggested["height"] = heightText
         }
-        if saved["activity"]?.string == nil, !touched.contains("activity"), let v = profile["activity"]?.string {
-            activity = v
-            suggested["activity"] = v
+        if saved["age"]?.number == nil, suggestions["birthDate"]?.string != nil, birthYear.isEmpty || birthYear == suggested["age"], let v = profile["age"]?.number {
+            birthYear = String(Self.currentYear - Int(v))
+            suggested["age"] = birthYear
         }
-        if saved["age"]?.number == nil, suggestions["birthDate"]?.string != nil, !touched.contains("age"), let v = profile["age"]?.number {
-            age = Int(v)
-            suggested["age"] = String(age)
-        }
-        if !touched.contains("weight"), let v = s.weightKg {
-            weight = (v * 2).rounded() / 2
-            loadedWeight = weight
+        if weightText.isEmpty || weightText == prefilledWeight, let v = s.weightKg {
+            weightText = Self.weightTextOf((v * 2).rounded() / 2)
+            prefilledWeight = weightText
         }
     }
 
-    private func giveConsent() async {
+    /// The "Apple Zdraví" switch: one iOS sheet for the health categories and
+    /// the profile, then the history loads in the background (AppleHealth).
+    private func connectApple() async {
+        guard health.isAvailable, !health.enabled, !appleWorking else { return }
+        appleWorking = true
+        do {
+            try await AppleHealthProfile.requestAccess(Set(HealthCategory.allCases))
+        } catch {
+            appleWorking = false
+            health.message = error.localizedDescription
+            appleOn = false
+            return
+        }
+        appleWorking = false
+        appleRead = false
+        let api = model.api
+        Task { _ = await health.connect(Set(HealthCategory.allCases), api: api) }
+    }
+
+    /// "O tobě" opens: sex, year of birth, height and weight from Apple Health
+    /// when it is allowed; they go over the server's suggestions.
+    private func readAppleProfile() async {
+        guard health.enabled, !appleRead else { return }
+        appleRead = true
+        let p = await AppleHealthProfile.read()
+        guard !p.isEmpty else { return }
+        if let v = p.sex, sex.isEmpty { sex = v; appleFilled = true }
+        if let v = p.birthYear, birthYear.isEmpty || birthYear == suggested["age"] {
+            birthYear = String(v)
+            suggested["age"] = nil
+            appleFilled = true
+        }
+        if let v = p.heightCm, heightText.isEmpty || heightText == suggested["height"] {
+            heightText = Self.lengthText(v)
+            suggested["height"] = nil
+            appleFilled = true
+        }
+        if let v = p.weightKg, weightText.isEmpty || weightText == prefilledWeight {
+            weightText = Self.weightTextOf(v)
+            prefilledWeight = weightText
+            appleFilled = true
+        }
+    }
+
+    /// Returns false when the consent could not be saved (the error is shown).
+    private func giveConsent() async -> Bool {
         saving = true
         defer { saving = false }
         do {
@@ -408,11 +444,12 @@ struct SetupFlowView: View {
             if consentOnly {
                 await model.finishSetup()
             } else {
-                // The consent page drops out; the same index is now the next page.
-                withAnimation { consentNeeded = false }
+                consentNeeded = false
             }
+            return true
         } catch {
             self.error = error.localizedDescription
+            return false
         }
     }
 
@@ -462,24 +499,30 @@ struct SetupFlowView: View {
     private func finish() async {
         saving = true
         defer { saving = false }
-        // Suggested values left alone stay automatic, as on the web.
-        let keep = { (key: String, value: String, json: JSONValue) -> JSONValue in
-            !touched.contains(key) && suggested[key] == value ? .string("") : json
+        // A suggestion left alone goes back empty and stays automatic, as on the web.
+        let keep = { (key: String, text: String, json: JSONValue) -> JSONValue in
+            suggested[key] == text ? .string("") : json
         }
-        let profile: JSONObject = [
-            "sex": .string(sex), "age": keep("age", String(age), .number(Double(age))),
-            "height": keep("height", String(Int(height.rounded())), .number(height.rounded())),
-            "activity": keep("activity", activity, .string(activity)), "goal": .string(goal), "sportHours": .string(sportHours), "mainSport": .string(mainSport),
-            "sleepGoal": sleepGoal == 0 ? .null : .number(Double(sleepGoal)), "wakeTime": .string(SleepSettingsForm.text(wake))
-        ]
-        let training: JSONObject = [
-            "equipment": .string(equipment), "experience": .string(experience),
-            "limitations": .string(limitations.trimmingCharacters(in: .whitespacesAndNewlines))
-        ]
+        var profile: JSONObject = ["sex": .string(sex)]
+        let year = Int(birthYear.trimmingCharacters(in: .whitespaces)) ?? 0
+        if year > 1900, year <= Self.currentYear - 10 {
+            let age = Self.currentYear - year
+            profile["age"] = keep("age", birthYear, .number(Double(age)))
+        } else {
+            profile["age"] = .null
+        }
+        if let shown = Self.number(heightText) {
+            profile["height"] = keep("height", heightText, .number(Units.cm(shown).rounded()))
+        } else {
+            profile["height"] = .null
+        }
         // The weight already known is not saved again as today's.
-        let newWeight = loadedWeight != nil && loadedWeight == weight && !touched.contains("weight") ? nil : (weight * 10).rounded() / 10
+        var newWeight: Double?
+        if weightText != prefilledWeight, let shown = Self.number(weightText) {
+            newWeight = (Units.kg(shown) * 10).rounded() / 10
+        }
         do {
-            try await model.api.completeOnboarding(profile: profile, weightKg: newWeight, training: training)
+            try await model.api.completeOnboarding(profile: profile, weightKg: newWeight, training: JSONObject())
             await model.finishSetup()
         } catch {
             self.error = error.localizedDescription

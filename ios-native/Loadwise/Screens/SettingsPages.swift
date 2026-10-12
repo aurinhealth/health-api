@@ -1166,7 +1166,7 @@ struct UnitsSettingsView: View {
 
 struct LanguageSettingsView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage(L10n.key) private var language = "cs"
+    @AppStorage(L10n.key) private var language = L10n.defaultLanguage
 
     static func label(_ value: String) -> String {
         value == "en" ? "English" : "čeština"

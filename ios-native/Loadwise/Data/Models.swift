@@ -70,6 +70,17 @@ struct TodaySnapshot: Decodable, Equatable {
     struct Strain: Decodable, Equatable {
         let score: Double?
         let planned: Double?
+        /// The range to aim for today and what set it (src/app-today.js strainTarget).
+        var target: Target? = nil
+
+        struct Target: Decodable, Equatable {
+            let low: Double
+            let high: Double
+            let readiness: Int?
+            let debt: Double?
+            let feeling: String?
+            let plan: String?
+        }
     }
 
     struct Point: Decodable, Equatable {

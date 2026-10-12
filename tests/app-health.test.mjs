@@ -93,3 +93,31 @@ test("The server answers GET /app/api/health with buildHealth", () => {
   assert.match(src, /url\.pathname==='\/app\/api\/health'&&request\.method==='GET'/);
   assert.match(src, /buildHealth\(\{date,hour:date===localToday\(\)\?localHour\(\):null,health,fitness,sleep,weight,profile/);
 });
+
+test("Health: oxygen from the watch first, Intervals.icu filling the rest; the HRV measure when known", () => {
+  const google = wellness.map(r => (r.id === DATE ? { ...r, spO2: 98.2, hrvSource: "apple-health:rmssd" } : r));
+  const h = buildHealth({ ...input, health: { wellness: google } });
+  assert.equal(h.oxygen.value, 98.2, "today's Apple value wins over Intervals");
+  assert.equal(h.oxygen.series.length, 14, "the earlier days come from Intervals");
+  assert.equal(h.oxygen.high, 98.2);
+  assert.equal(h.hrv.metric, "rmssd");
+  assert.equal(buildHealth(input).hrv.metric, null);
+  assert.equal(buildHealth({ ...input, fitness: { wellness: [] } }).oxygen, null, "no oxygen anywhere");
+});
+
+test("Health: the morning check-in lowers readiness as on Today and shows as its own part", () => {
+  const body = buildHealth(input).readiness;
+  const tired = buildHealth({ ...input, checkin: "tired" }).readiness;
+  assert.equal(tired.score, Math.min(body.score, 60));
+  assert.equal(tired.zone, "yellow");
+  assert.equal(tired.checkin, "tired");
+  assert.deepEqual(tired.parts.at(-1), { key: "checkin", points: tired.score - body.score });
+  assert.ok(Math.abs(70 + tired.parts.reduce((s, p) => s + p.points, 0) - tired.score) <= 2, "parts still add up");
+  assert.equal(buildHealth({ ...input, checkin: "fresh" }).readiness.score, body.score, "a good answer never raises it");
+});
+
+test("Health: muscle mass from a scale through Apple Health, nothing without one", () => {
+  assert.equal(buildHealth(input).weight.muscle, null);
+  const muscle = [{ sample_time: day(-30) + "T06:00:00Z", value_numeric: 64.2 }, { sample_time: day(0) + "T06:00:00Z", value_numeric: 64.9 }];
+  assert.deepEqual(buildHealth({ ...input, muscle }).weight.muscle, { value: 64.9, change: 0.7, series: [{ date: day(-30), value: 64.2 }, { date: day(0), value: 64.9 }] });
+});
