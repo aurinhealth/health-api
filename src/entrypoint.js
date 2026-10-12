@@ -49,6 +49,7 @@ import { trendFacts } from "./trend-facts.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { loadSeries, dailyLoads, sessionsFrom, gymSessions, watchOnly, addLoads } from "./training-load.js";
 import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
+import {searchWorldFoods,barcodeKey} from './world-foods.js';
 import {listPersonalFoods} from './personal-foods.js';
 import {queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from './food-google-sync.js';
 async function queueFoodGoogleSafely(env,ctx,id,options){
@@ -1599,8 +1600,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
-    // Private saved foods first, then the common food-label catalogue.
-    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),candidates=[...await searchPersonalFoods(env.DB,name,barcode),...(!barcode?await searchRecipes(env.DB,name):[])];return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
+    // Private saved foods first, then the common food-label catalogue, then
+    // the read-only world catalogue in R2. A food users saved or corrected
+    // replaces the world record with the same barcode.
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,world]=await Promise.all([(async()=>[...await searchPersonalFoods(env.DB,name,barcode),...(!barcode?await searchRecipes(env.DB,name):[])])(),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),candidates=[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))];return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.'),detail:String(error.message).slice(0,160)},{status:500});}
   }
   // A food not saved yet: AI looks up its label values on the web. Only a
