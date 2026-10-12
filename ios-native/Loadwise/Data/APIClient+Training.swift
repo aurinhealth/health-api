@@ -25,7 +25,7 @@ extension APIClient {
     func detectGymEquipment(photos: [Data], url: String) async throws -> GymDetectResult {
         var body: JSONObject = ["images": .array(photos.map { .string("data:image/jpeg;base64," + $0.base64EncodedString()) })]
         if !url.isEmpty { body["url"] = .string(url) }
-        return try await send("/app/api/gym/equipment/detect", method: "POST", body: body)
+        return try await send("/app/api/gym/equipment/detect", method: "POST", body: body, timeout: 180)
     }
 
     // MARK: Exercises and the AI builder
