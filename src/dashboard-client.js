@@ -1642,7 +1642,7 @@ function sleepNeedMinutes(options) {
   const age = options && options.age != null ? Number(options.age) : null, strain = options && options.strain != null ? Number(options.strain) : null;
   const goal = options && Number(options.goal) >= 360 && Number(options.goal) <= 600 ? Math.round(Number(options.goal)) : null;
   let need = goal != null ? goal : age != null && age >= 65 ? 450 : 480;
-  if (strain >= 18) need += 30; else if (strain >= 14) need += 15;
+  if (strain > 10) need += Math.round(Math.min(30, (strain - 10) * 30 / 8));
   return goal != null ? Math.max(360, Math.min(600, need)) : Math.max(420, Math.min(540, need));
 }
 function sleepDebtMinutes(nights, date, need) {
@@ -1673,7 +1673,7 @@ function sleepNeedFor(input) {
   const base = sleepNeedMinutes({ age: input.age, strain, goal });
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
   const debtState = sleepDebtMinutes(sessions.filter(s => (s.date || String(s.endTime || "").slice(0, 10)) <= prev), prev, sleepNeedMinutes({ age: input.age, goal }));
-  const debt = debtState ? Math.min(30, Math.round(debtState.minutes / 4)) : 0;
+  const debt = debtState ? Math.min(60, debtState.minutes) : 0;
   const naps = sessions.filter(s => (s.nap || Number(s.durationMin) < 180) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
   const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));
   return { need, base, hrv, debt, naps: Math.round(naps) };

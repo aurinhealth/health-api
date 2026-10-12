@@ -196,3 +196,18 @@ test('active minutes count vigorous minutes twice, today and since Monday', () =
   assert.deepEqual(activeMinutes(rows, '2026-10-07'), { today: 21, week: 61, target: 150 });
   assert.equal(activeMinutes([{ id: '2026-10-07', steps: 100 }], '2026-10-07'), null);
 });
+
+test("Today shows today's HRV even when its source has no baseline yet", () => {
+  // Today's value from a new source (Apple Health), every earlier day from Google.
+  const fresh = wellness.map(r => r.id === DATE ? { ...r, hrvSource: "apple-health" } : { ...r, hrvSource: "google-wearables" });
+  const t = buildToday({ ...input, health: { wellness: fresh } });
+  assert.equal(t.hrv.value, 66);
+  assert.equal(t.hrv.baseline, null);
+});
+
+test("a day's Apple Health HRV wins over Google's copy of it", () => {
+  const hrvRow = (source, ms) => ({ data_type: "daily-heart-rate-variability", source_family: source, sample_time: DATE + "T06:00:00Z", value_numeric: ms, payload_json: "{}" });
+  const s = googleHealthSummary([hrvRow("apple-health", 48), hrvRow("google-wearables", 61)], DATE);
+  assert.equal(s.today.hrv, 48);
+  assert.equal(s.today.hrvSource, "apple-health");
+});

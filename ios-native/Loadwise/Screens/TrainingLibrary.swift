@@ -36,14 +36,13 @@ struct TrainingLibraryView: View {
 struct LibrarySport: Identifiable {
     let id: String
     let label: String
-    let subtitle: String
     let symbol: String
     let color: Color
 
     static let all = [
-        LibrarySport(id: "ride", label: "Kolo", subtitle: "jízdy a intervaly", symbol: "bicycle", color: Palette.amberBar),
-        LibrarySport(id: "run", label: "Běh", subtitle: "tempo a výběhy", symbol: "figure.run", color: Palette.rust),
-        LibrarySport(id: "gym", label: "Posilovna", subtitle: "cviky a AI", symbol: "dumbbell.fill", color: Palette.indigo)
+        LibrarySport(id: "ride", label: "Kolo", symbol: "bicycle", color: Palette.amberBar),
+        LibrarySport(id: "run", label: "Běh", symbol: "figure.run", color: Palette.rust),
+        LibrarySport(id: "gym", label: "Posilovna", symbol: "dumbbell.fill", color: Palette.indigo)
     ]
 
     static func find(_ id: String) -> LibrarySport? { all.first { $0.id == id } }
@@ -63,7 +62,6 @@ struct LibrarySportPanel: View {
                     .background(sport.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .padding(.bottom, 4)
                 Text(sport.label).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
-                Text(sport.subtitle).font(.caption2).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -71,7 +69,7 @@ struct LibrarySportPanel: View {
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(L10n.tr(sport.label) + ", " + L10n.tr(sport.subtitle))
+        .accessibilityLabel(L10n.tr(sport.label))
     }
 }
 
@@ -85,10 +83,7 @@ struct GymLibrarySection: View {
                         .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
                         .frame(width: 38, height: 38)
                         .background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text("podle únavy, partií a tvého vybavení").font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
+                    Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
                 }

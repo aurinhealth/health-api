@@ -31,6 +31,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let sleepMinutes: Double?
         let strainYesterday: Double?
         let history: [Point]
+        /// Today's "Jak se dnes cítíš?" answer, when it is part of the number.
+        var checkin: String? = nil
     }
 
     struct Stages: Decodable, Equatable {

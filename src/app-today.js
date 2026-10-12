@@ -211,7 +211,9 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       end: clockOf(night.endTime)
     } : null,
     strain: { score: strainNow, planned: plannedStrain(plannedTss) },
-    hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, series: last(30, "hrv") } : null,
+    // Today's HRV shows even before its source has the 14 days a baseline needs.
+    hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, series: last(30, "hrv") }
+      : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, series: last(30, "hrv") } : null,
     restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), series: last(14, "restingHR") } : null,
     summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
     nutrition: {

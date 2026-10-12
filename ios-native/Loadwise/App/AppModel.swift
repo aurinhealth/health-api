@@ -329,6 +329,7 @@ final class AppModel {
         guard !demo, let today else { return }
         try await api.setMorningCheckin(feeling, date: today.date)
         await refresh()
+        if health != nil { await refreshHealth() }
     }
 
     /// A new Stav sportovce. The coach and the plans follow it, so Today and

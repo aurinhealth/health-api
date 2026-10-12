@@ -200,17 +200,15 @@ struct StatRow: View {
     }
 }
 
-/// A value that will come from Apple Health once the app may read it (it
-/// needs the paid developer signing); until then the row stays empty.
+/// A value Apple Health has no data for yet.
 struct AppleHealthRow: View {
     let title: String
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(.body).foregroundStyle(Palette.ink)
-            HealthKitTag()
             Spacer()
-            Text("–").font(Typo.number(22)).foregroundStyle(Palette.faint)
+            Text("z Apple Health · zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.vertical, 13)
         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }

@@ -36,7 +36,7 @@ struct CoachTextCard: View {
                 card
             }
         }
-        .task(id: live ? screen + "|" + AppModel.localDate(Date()) : "") { await load() }
+        .task(id: live ? memoryKey : "") { await load() }
     }
 
     private var card: some View {
@@ -125,9 +125,15 @@ struct CoachTextCard: View {
         return out
     }
 
+    /// The rule-based text follows the day's plan, so a cancelled or moved
+    /// session changes it and asks the server again (it writes a new text).
+    private var memoryKey: String {
+        screen + "|" + AppModel.localDate(Date()) + "|" + String((fallbackText ?? "") + (fallbackAdvice ?? "")).hashValue.description
+    }
+
     private func load() async {
         guard live, !model.demo else { return }
-        let key = screen + "|" + AppModel.localDate(Date())
+        let key = memoryKey
         if let kept = CoachTextMemory.values[key] {
             loaded = kept.text
             // Kept for ten minutes, then asked again (the server answers from its cache).
