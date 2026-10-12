@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { ensureStrengthTable, importStrengthHistory, resolveStrengthPerformance } from "../src/strength-history.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const date = "2026-10-02";
 const columns = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video"];
@@ -80,6 +81,6 @@ test('a saved set taken out of the day leaves the history too', async () => {
   const rows = await getStrengthHistory(db);
   assert.deepEqual(rows.filter(r => r.workout_date === '2026-10-04').map(r => r.exercise + ':' + r.actual_kg), ['Lat pulldown:50', 'Low row:40']);
   assert.equal(rows.filter(r => r.workout_date === '2026-10-03').length, 1);
-  const entry = fs.readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  const entry = serverSource();
   assert.match(entry, /const before = storedPlan\.stored \? completedSets\(storedPlan\.values\.slice\(7\)\)\.length : 0;\s*if\(before>sets\.length\) await removeManualSets\(env\.DB,date,sets\.length,before\);/);
 });

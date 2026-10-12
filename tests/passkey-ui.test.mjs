@@ -5,9 +5,10 @@ import { dashboardPage } from "../src/dashboard.js";
 import { signInButtons, signInButtonsCss } from "../src/sign-in-buttons.js";
 import { privacyPage, supportPage } from "../src/site-pages.js";
 import { EN, EN_TEMPLATES } from "../src/i18n-en.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+const entry = serverSource();
 const template = html => html.match(/<template id="signInButtons">([\s\S]*?)<\/template>/)[1];
 
 test("the sign-in screen offers a passkey always and the e-mail code only once e-mail is set up", async () => {

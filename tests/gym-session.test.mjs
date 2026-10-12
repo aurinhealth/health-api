@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { cleanGymRows, rowsFromModel, planForModel } from '../src/gym-adjust.js';
+import { serverSource } from "./helpers/server-source.mjs";
 
 const source = readFileSync(new URL('../src/dashboard-client.js', import.meta.url), 'utf8');
 const between = (from, to) => source.slice(source.indexOf(from), source.indexOf(to));
@@ -82,7 +83,7 @@ test('"Vygenerovat tréninky" prepares the week without the chat and gym waits f
   assert.match(generate, /\/app\/api\/coach\/week/);
   assert.doesNotMatch(generate, /openFloatingAssistant|appendCoachTurn/);
   assert.match(source, /✓ Potvrdit trénink/);
-  const server = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+  const server = serverSource();
   assert.match(server, /return Response\.json\(\{status:'ok',start,proposal\}/);
   assert.doesNotMatch(server, /WEEK_REVIEW_REQUEST/);
   assert.match(server, /if\(Array\.isArray\(body\.rows\)\)plan\.rows=cleanGymRows/);
