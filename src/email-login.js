@@ -11,6 +11,7 @@ import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { normalizeEmail, mayGetEmailCode, signInEmailUser, changeUserEmail } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
+import { reviewCodeActive } from "./app-review.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -60,15 +61,16 @@ function codeHash(env, email, code, purpose = "email-code") {
 }
 
 // App Review: APP_REVIEW_EMAIL gets the fixed code APP_REVIEW_CODE (six digits, a secret) instead
-// of a random one, so Apple's reviewer can sign in without the inbox. The usual limits still
-// apply: the code works only after "send code", for 10 minutes and 5 tries.
-export function reviewCode(env, email) {
+// of a random one, so Apple's reviewer can sign in without the inbox, but only until the end of
+// the APP_REVIEW_UNTIL day (UTC); without that date it gets a random code like anyone (app-review.js).
+// The usual limits still apply: the code works only after "send code", for 10 minutes and 5 tries.
+export function reviewCode(env, email, now = Date.now()) {
   const address = normalizeEmail(env?.APP_REVIEW_EMAIL), code = String(env?.APP_REVIEW_CODE || "").trim();
-  return address && address === email && /^\d{6}$/.test(code) ? code : null;
+  return address && address === email && /^\d{6}$/.test(code) && reviewCodeActive(env, now) ? code : null;
 }
 
 // Returns true when a code went out.
-export async function sendCode(env, email, lang = "cs", { now = Date.now(), code = reviewCode(env, email) || randomCode() } = {}) {
+export async function sendCode(env, email, lang = "cs", { now = Date.now(), code = reviewCode(env, email, now) || randomCode() } = {}) {
   if (!(await mayGetEmailCode(env.DB, env, email))) return false;
   return claimAndSend(env.DB, env, email, code, "email-code", signInCodeEmail(lang, code), now);
 }
