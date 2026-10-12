@@ -81,7 +81,6 @@ struct TrendChart: View {
                 if band != nil { legend(color.opacity(0.25), bandLabel ?? "tvoje norma", dashed: false) }
                 Spacer()
             }
-            Text("Podrž a táhni prstem pro hodnotu v daný den.").font(Typo.tiny).foregroundStyle(Palette.faint)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.summary(points, unit: unit, digits: digits))

@@ -51,7 +51,7 @@ struct GymPlanActionsSheet: View {
                     Text(Fmt.capitalized(Fmt.relativeDay(date, today: AppModel.localDate(Date())))).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 if cancelled {
-                    SettingsGroup(footer: L10n.tr("Trénink se na tento den vrátí do plánu.")) {
+                    SettingsGroup {
                         Button { Task { await run { try await model.api.uncancelGym(date: date) } } } label: {
                             SettingsRow(icon: SettingsIcon(systemImage: "arrow.uturn.backward", color: Palette.green), title: L10n.tr("Obnovit"), chevron: false)
                         }
@@ -71,7 +71,7 @@ struct GymPlanActionsSheet: View {
                         .disabled(target == date)
                     }
                     .disabled(working || model.demo)
-                    SettingsGroup(footer: L10n.tr(event != nil ? "Zmizí i z kalendáře v Intervals.icu." : "Plán i zapsané série zůstanou uložené.")) {
+                    SettingsGroup {
                         Button { confirmCancel = true } label: {
                             SettingsRow(icon: SettingsIcon(systemImage: "xmark", color: Palette.rust), title: L10n.tr("Zrušit trénink"), chevron: false, titleColor: Palette.rust)
                         }

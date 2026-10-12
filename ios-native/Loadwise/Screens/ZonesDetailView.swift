@@ -34,16 +34,11 @@ struct ZonesDetailContent: View {
                 }
                 Pill(text: ZoneStyle.status(week), foreground: ZoneStyle.statusColor(week),
                      background: week.counted >= TrainingSnapshot.ZoneWeek.whoTarget ? Palette.greenSoft : Palette.amberSoft)
-                Text(Self.sentence(week))
-                    .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 14)
 
                 Card {
                     WidgetHeader(title: "Poslední 4 týdny", color: Palette.rust, trailing: L10n.tr("čísla týdnů"))
                     ZoneWeekBars(weeks: weeks, height: 150, spacing: 14)
                     ZoneLegend(week: week)
-                    Text("Sloupec je střední zóna plus dvojnásobek intenzivní a maximální, jak počítá WHO. Čárkovaně doporučení 150 min týdně.")
-                        .font(Typo.caption).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 20)
 
@@ -60,40 +55,24 @@ struct ZonesDetailContent: View {
 
             SectionLabel(text: "Co znamenají zóny").padding(.top, 30)
             VStack(alignment: .leading, spacing: 12) {
-                zoneRow(ZoneStyle.light, "Lehká", "pod 40 %", "Běžný pohyb přes den: chůze, práce, domácnost. Do doporučení WHO se nepočítá.")
-                zoneRow(ZoneStyle.moderate, "Střední", "40–59 %", "Svižná chůze, klidná jízda nebo běh, kdy ještě zvládneš mluvit.")
-                zoneRow(ZoneStyle.vigorous, "Intenzivní", "60–84 %", "Tempo, při kterém mluvíš jen v krátkých větách. Minuta se počítá dvakrát.")
-                zoneRow(ZoneStyle.peak, "Maximální", "85 % a víc", "Intervaly a závodní úsilí. Minuta se počítá dvakrát.")
+                zoneRow(ZoneStyle.light, "Lehká", "pod 40 %")
+                zoneRow(ZoneStyle.moderate, "Střední", "40–59 %")
+                zoneRow(ZoneStyle.vigorous, "Intenzivní", "60–84 %")
+                zoneRow(ZoneStyle.peak, "Maximální", "85 % a víc")
             }
             .padding(.top, 12)
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Zóny počítá Google Health z tepu během celého dne podle tepové rezervy (Karvonenova metoda): procento je podíl z rozdílu mezi maximálním a klidovým tepem, přičtený ke klidovému tepu.")
-                Text("WHO doporučuje dospělým aspoň 150 minut střední aktivity týdně, nebo 75 minut intenzivní, případně jejich kombinaci. Proto se tu minuta v intenzivní nebo maximální zóně počítá jako dvě minuty střední. Lehký pohyb se nepočítá, ale i ten zdraví prospívá.")
-            }
-            .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 16)
         }
     }
 
-    private func zoneRow(_ color: Color, _ name: String, _ range: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 6, height: 34)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text(L10n.f("%@ tepové rezervy", L10n.tr(range))).font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-                Text(text).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+    private func zoneRow(_ color: Color, _ name: String, _ range: String) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 6, height: 22)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(L10n.f("%@ tepové rezervy", L10n.tr(range))).font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
         .accessibilityElement(children: .combine)
-    }
-
-    /// What the week means against the recommendation.
-    static func sentence(_ week: TrainingSnapshot.ZoneWeek) -> String {
-        let left = TrainingSnapshot.ZoneWeek.whoTarget - week.counted
-        if left <= 0 { return L10n.tr("Doporučení WHO na tento týden máš splněné. Další minuty navíc zdraví dál prospívají.") }
-        return L10n.f("Do doporučení WHO zbývá %@ min střední aktivity, nebo %@ min v intenzivní zóně.", Fmt.int(left), Fmt.int((left / 2).rounded(.up)))
     }
 }
 
@@ -135,10 +114,6 @@ struct ZoneWeekTable: View {
                 .accessibilityLabel(L10n.f("Týden %@: střední %@ min, intenzivní %@ min, maximální %@ min, podle WHO %@ min",
                                            ZoneWeekBars.label(week), Fmt.int(week.moderate), Fmt.int(week.vigorous), Fmt.int(week.peak), Fmt.int(week.counted)))
             }
-            Text("Minuty v zóně. WHO = střední + 2 × (intenzivní + maximální). Tento týden ještě běží.")
-                .font(Typo.caption).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 8)
         }
     }
 
