@@ -62,8 +62,6 @@ test("the owner's account cannot be deleted, and deleting needs the typed confir
   assert.match(entry, /url\.pathname==='\/app\/api\/account\/delete'&&request\.method==='POST'/);
   assert.match(entry, /toUpperCase\(\)!=='SMAZAT'/);
   assert.match(entry, /'Set-Cookie':handleDashboardLogout\(\)\.headers\.get\('Set-Cookie'\)/);
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  assert.match(client, /user\?\.isOwner\?'':'<button class="btn danger" type="button" id="deleteAccount">Smazat účet<\/button>'/);
   // Disconnecting Google Health gives up the access at Google too; the owner's token can be the shared Worker secret.
   assert.match(entry, /body\.provider==='google'&&!env\.USER_IS_OWNER\) await revokeGoogle\(env\);/);
 });

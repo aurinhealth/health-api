@@ -2,12 +2,12 @@
 // photos, the cookbook and drinks.
 import { searchRecipes } from "./personal-recipes.js";
 import { savePersonalFood, listPersonalFoods, searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
-import { parseNutritionPortion, parseNutritionLabel, nutritionConsistency } from "./food-label.js";
+
 import { readBarcodeWithAI, readFoodPhotoWithAI } from "./food-photo.js";
 import { foodIntake } from "./food-portions.js";
 import { productFromLabel } from "./food-sources.js";
 import { getCookbookRecipeByPage } from "./cookbook.js";
-import { queueFoodGoogle, processFoodGoogle, retryFoodGoogle, foodGoogleStatus } from "./food-google-sync.js";
+import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI } from "./food-ai.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, FluidInputError } from "./fluids.js";
 import { searchCookbookRecipes, mealConsumedAt } from "./food-log.js";
@@ -31,13 +31,6 @@ export async function queueFoodGoogleSafely(env,ctx,id,options){
 export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
   if(url.pathname==='/app/api/food/personal'&&request.method==='GET')return Response.json({status:'ok',products:await listPersonalFoods(env.DB,{sort:url.searchParams.get('sort')==='frequent'?'frequent':'recent'})},{headers:{'Cache-Control':'no-store'}});
-  if(url.pathname==='/app/api/food/sync'){
-    if(request.method==='POST'){
-      try{const body=await request.json();await retryFoodGoogle(env.DB,body.id);ctx.waitUntil(processFoodGoogle(env,{token:googleToken}).catch(error=>console.error('Food export',error.message)));return Response.json({status:'queued'});}
-      catch(error){return Response.json({message:error.message},{status:400});}
-    }
-    if(request.method==='GET')return Response.json({entries:await foodGoogleStatus(env.DB)},{headers:{'Cache-Control':'no-store'}});
-  }
 
   if(url.pathname==='/app/api/food/entry'&&['PATCH','POST','DELETE'].includes(request.method)){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -50,14 +43,6 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
 
-  if(url.pathname==='/app/api/food/day'&&request.method==='GET'){
-    const target=new URL('/food/log',request.url);target.searchParams.set('date',url.searchParams.get('date')||localToday());
-    const response=await legacyHealthApi.fetch(new Request(target,{headers:internalAuth}),env,ctx);
-    if(!response.ok)return response;
-    const data=await response.json(),exports=await foodGoogleStatus(env.DB);
-    data.entries=(data.entries||[]).map(entry=>({...entry,google:exports.find(e=>Number(e.id)===Number(entry.id))||{status:'not_exported'}}));
-    return Response.json(data,{headers:{'Cache-Control':'no-store'}});
-  }
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
     // Private saved foods first, then the common food-label catalogue.
@@ -74,10 +59,6 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       if(!r.product)return Response.json({status:'not_found',message:L('AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).', 'The AI couldn\'t find the product with certainty. Enter the values from the label (or take a photo of it).')},{headers:{'Cache-Control':'no-store'}});
       return Response.json({status:'ok',product:{...r.product,name:r.product.name||name},model:r.model},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.limit?error.message:L('Dohledání přes AI selhalo: ', 'The AI lookup failed: ')+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):502});}
-  }
-  if(url.pathname==='/app/api/food/label'&&request.method==='POST'){
-    const body=await request.json().catch(()=>({})),text=String(body.text||'').slice(0,12000),parsed=body.mode==='portion'?parseNutritionPortion(text):{values:parseNutritionLabel(text)};
-    return Response.json({status:'ok',...parsed,warning:nutritionConsistency(parsed.values)});
   }
   // A label, a portion summary or a meal photographed: AI vision reads the
   // values as a draft for the food editor. Without AI the client uses OCR.

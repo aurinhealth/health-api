@@ -4,8 +4,7 @@
 //   GET /app/api/passkeys                                       the user's passkeys
 //   POST /app/api/passkeys/options, POST /app/api/passkeys      adding one
 //   DELETE /app/api/passkeys?id=…                               removing one
-// The passkey's RP ID is the host the app runs on, so passkeys made on the
-// staging copy never work on the live app and the other way round.
+// The passkey's RP ID is the host the app runs on.
 import { verifyRegistration, verifyAuthentication, clientDataChallenge, randomChallenge, SUPPORTED_ALGORITHMS, WebAuthnError } from "./webauthn.js";
 import { signedInResponse, sessionSecret, signedOutElsewhere } from "./dashboard-auth.js";
 import { findUser } from "./tenancy.js";

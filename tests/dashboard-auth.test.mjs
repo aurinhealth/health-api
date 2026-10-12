@@ -11,16 +11,17 @@ const req = (headers = {}) => new Request("https://petrfitnessdata.eu/app/api/da
 const future = () => Math.floor(Date.now() / 1000) + 60;
 
 test("personal data routes are not public", () => {
-  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/profile", "/app/api/food/log", "/app/api/inbox", "/app/api/me", "/app/api/admin/users", "/health/sleep", "/health/db", "/sync/google", "/sync/intervals", "/daily/plan", "/food/resolve", "/mcp", "/authorize", "/token", "/register", "/auth-test", "/test/intervals", "/strength/history"]) {
+  for (const path of ["/app/api/daily", "/app/api/sleep", "/app/api/profile", "/app/api/food/log", "/app/api/me", "/app/api/admin/users", "/health/sleep", "/health/db", "/sync/google", "/sync/intervals", "/daily/plan", "/food/resolve", "/mcp", "/authorize", "/token", "/register", "/auth-test", "/test/intervals", "/strength/history"]) {
     assert.equal(isPublicPath(path), false, path);
   }
 });
 
 test("static pages, Google login and self-authenticating routes stay public", () => {
-  for (const path of ["/", "/app", "/app/dashboard-client.js", "/app/logout", "/auth/google", "/.well-known/apple-developer-domain-association.txt", "/oauth/google/callback", "/automation/strength"]) {
+  for (const path of ["/", "/app/logout", "/auth/google", "/auth/app/apple", "/.well-known/apple-app-site-association", "/oauth/google/callback", "/automation/strength"]) {
     assert.equal(isPublicPath(path), true, path);
   }
-  assert.equal(isPublicPath("/app/login"), false);
+  // The old web app and its browser sign-in are gone.
+  for (const path of ["/app", "/app/login", "/app/dashboard-client.js", "/manifest.webmanifest", "/auth/apple", "/auth/apple/callback"]) assert.equal(isPublicPath(path), false, path);
 });
 
 test("anonymous and wrong-key requests have no principal", async () => {

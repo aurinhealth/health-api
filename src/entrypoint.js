@@ -1,5 +1,5 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
-import {reportFood} from './shared-foods.js';
+
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
@@ -8,7 +8,6 @@ import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEven
 import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
-import { dashboardPage } from "./dashboard.js";
 import { connectionStatus } from "./connections.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
 import { withIntervalsSleep } from './intervals-sleep.js';
@@ -39,11 +38,7 @@ import { addLoads } from "./training-load.js";
 import { savePersonalFood } from './personal-foods.js';
 import { processFoodGoogle, backfillFoodGoogle } from './food-google-sync.js';
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
-import dashboardClient from "./dashboard-client.js";
 import { loadRecoveryValidation } from "./recovery-validation.js";
-import { assetVersion, scriptCacheControl } from "./asset-version.js";
-
-const CLIENT_VERSION = assetVersion(dashboardClient);
 import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
 import { explainWorkout } from "./workout-explanation.js";
@@ -72,11 +67,10 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
-import { handleAppleLogin, handleNativeAppleLogin, appleConfigured } from "./apple-login.js";
+import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
-import { isStaging, markStaging } from "./staging.js";
-import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
+import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
@@ -95,13 +89,12 @@ import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, pushConfigured } from "./push.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
-import { englishScript } from './i18n.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactHeartRate } from "./heart-rate-compaction.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour } from "./user-time.js";
 import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
-import { recentCoachProposals, ensureCoachInboxTable, handleCoachInbox } from "./coach-inbox.js";
+import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, planForWeek, syncedPlans, planSportDates, todayPlace, trainingGymPlans } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
@@ -133,7 +126,7 @@ function forgetScreens(userId) {
 }
 // Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
 const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|passkeys$|passkeys\/options$)/;
-const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
+const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
@@ -274,10 +267,6 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
-    if (url.pathname === "/.well-known/apple-developer-domain-association.txt" && request.method === "GET") {
-      if (!env.APPLE_DOMAIN_ASSOCIATION) return new Response("Not configured", { status: 404 });
-      return new Response(env.APPLE_DOMAIN_ASSOCIATION, { status: 200, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
-    }
     if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
@@ -295,8 +284,6 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (nativeApple) return nativeApple;
     const googleLogin = await handleGoogleLogin(request, rawEnv, url.pathname);
     if (googleLogin) return googleLogin;
-    const appleLogin = await handleAppleLogin(request, rawEnv, url.pathname, { user: signedIn ? user : null });
-    if (appleLogin) return appleLogin;
     const passkeyLogin = await handlePasskeyLogin(request, rawEnv, url.pathname);
     if (passkeyLogin) return passkeyLogin;
     const emailLogin = await handleEmailLogin(request, rawEnv, url.pathname, ctx);
@@ -330,22 +317,17 @@ export default {
   async fetch(request, env, ctx) {
     // An installed iPhone app older than the API answers with 426 (app-version.js).
     const outdated = appUpdateRequired(request);
-    if (outdated) return isStaging(env) ? markStaging(outdated) : outdated;
-    const response = await worker.fetch(request, env, ctx);
-    return isStaging(env) ? markStaging(response) : response;
+    if (outdated) return outdated;
+    return worker.fetch(request, env, ctx);
   }
 };
 
 async function staticRoute(url, request, env) {
-  if (url.pathname === "/app") return dashboardPage({ clientVersion: CLIENT_VERSION, account: (await verifyDashboardSession(request, sessionSecret(env)))?.uid ?? "", signIn: { apple: appleConfigured(env), email: emailConfigured(env) } });
-  if (url.pathname === "/app/i18n-en.js") return englishScript(url);
-  if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": scriptCacheControl(url, CLIENT_VERSION) } });
   if (url.pathname === "/") return overviewPage(request);
-  if (url.pathname === "/privacy") return privacyPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
+  if (url.pathname === "/privacy") return privacyPage(request, { apple: true, email: emailConfigured(env) });
   if (url.pathname === "/terms") return termsPage(request);
-  if (url.pathname === "/support") return supportPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
-  if (url.pathname === "/logo.svg") return logoResponse();
-  return Response.json({name:"Loadwise",short_name:"Loadwise",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
+  if (url.pathname === "/support") return supportPage(request, { apple: true, email: emailConfigured(env) });
+  return logoResponse();
 }
 
 
@@ -546,10 +528,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   {const r=await handleAccountApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
-  if(url.pathname==='/app/api/food/report'&&request.method==='POST'){
-    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    try{return Response.json(await reportFood(env.DB,await request.json()));}catch(error){return Response.json({message:error.message},{status:400});}
-  }
   if(url.pathname==='/app/api/food/recipes'){
     if(request.method==='GET')return Response.json({status:'ok',recipes:await listRecipes(env.DB)},{headers:{'Cache-Control':'no-store'}});
     if(['POST','PATCH','DELETE'].includes(request.method)){
@@ -586,11 +564,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
   if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
-  if(url.pathname==='/app/api/google-health'&&request.method==='GET'){
-    const date=url.searchParams.get('date')||localToday();
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||date>localToday())return Response.json({message:L('Neplatné datum.', 'Invalid date.')},{status:400});
-    return Response.json(await googleHealthFor(env,ctx,date),{headers:{'Cache-Control':'no-store'}});
-  }
   {const r=await handleTrainingEditsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   // "Revize dne": the coach checks one planned day in the context of the week.
   if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
@@ -949,7 +922,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!known)return Response.json({message:L('Aktivita není v tvé synchronizované historii.', 'The activity isn\'t in your synced history.')},{status:404});
     return activityDetail(request,env,id,true);
   }
-  if (url.pathname === "/app/api/inbox") return handleCoachInbox(request, env, ctx, internalAuth);
 
   // The coach's sentence on the app's Today, Training and Food screens
   // (screen-texts.js): written by the AI from the screen's own data once a
@@ -1169,14 +1141,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     }
   }
 
-  if(url.pathname==='/app/api/connections/intervals/sync'&&['POST','GET'].includes(request.method)){
-    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
-    if(request.method==='GET')return Response.json(await dashboardSyncStatus(env.DB,'initial_intervals'),{headers:{'Cache-Control':'no-store'}});
-    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    if(!(env.CONNECTED_PROVIDERS||[]).includes('intervals'))return Response.json({message:L('Nejdřív připoj Intervals.icu.', 'Connect Intervals.icu first.')},{status:409});
-    const run=await initialImport(env,ctx,{provider:'intervals',force:true});
-    return Response.json(run,{status:202,headers:{'Cache-Control':'no-store'}});
-  }
 
   // Apple Health from the iPhone app (apple-health.js): the phone reads
   // HealthKit and sends sums, nights and workouts; DELETE disconnects.
@@ -1366,14 +1330,6 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
       return Response.json({status:'ok',source:library?'library':'intervals',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
-    }
-    if(url.pathname==='/app/api/workouts/render'&&request.method==='GET'){
-      const workout=await getWorkout(env.DB,String(url.searchParams.get('id')||''));
-      if(!workout)return Response.json({status:'error',message:'Workout nebyl nalezen.'},{status:404});
-      const environment=url.searchParams.get('environment')==='indoor'?'indoor':'outdoor',thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=renderForEnvironment(workout,environment),kind=w.sport==='run'?'run':'ride';
-      let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-      w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
-      return Response.json({status:'ok',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
       await cached(env,ctx,'reconcile:'+localToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
