@@ -4,6 +4,7 @@ import {gymExerciseCatalog,findGymExercises} from '../src/gym-catalog.js';
 import {EXERCISES} from '../src/strength-generator.js';
 import {readFileSync} from 'node:fs';
 import {EXERCISE_INTELLIGENCE} from '../src/strength-intelligence.js';
+import { serverSource } from "./helpers/server-source.mjs";
 
 test('picker offers only canonical plan exercises with set prescriptions',()=>{
   const catalog=gymExerciseCatalog();
@@ -22,6 +23,6 @@ test('gym no longer accepts arbitrary exercise text through browser prompt',()=>
 
 test('every picker exercise has a fatigue for ordering an added exercise in the app',()=>{
   assert.ok(gymExerciseCatalog().every(item=>Number.isFinite(EXERCISE_INTELLIGENCE[item.name]?.fatigue)));
-  const src=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  const src=serverSource();
   assert.match(src,/fatigue:EXERCISE_INTELLIGENCE\[e\.name\]\?\.fatigue\?\?null/);
 });

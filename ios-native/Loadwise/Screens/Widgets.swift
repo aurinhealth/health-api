@@ -101,7 +101,8 @@ struct PlanWidget: View {
             // A planned session has no clock: it comes after the last record.
             Group {
                 if let time = item.time {
-                    Text(time).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
+                    Text(ClockText.format(time)).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.5)
                 } else {
                     Image(systemName: item.status == "missed" ? "xmark.circle" : "circle.dashed")
                         .font(.system(size: 17, weight: .medium))
@@ -171,10 +172,6 @@ struct StepsWidget: View {
                     weekChart(height: height)
                 }
             }
-            if size != .small {
-                Text(steps.hourly == nil ? "7 dní" : "kroky během dne")
-                    .font(Typo.tiny).foregroundStyle(Palette.faint)
-            }
         }
     }
 
@@ -230,9 +227,6 @@ struct RestingHRWidget: View {
                           lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
                           band: restingHR.baseline.map { ($0 - 2)...($0 + 2) }, height: height)
             }
-            if size == .large {
-                Text("30 dní · pásmo = tvoje norma").font(Typo.tiny).foregroundStyle(Palette.faint)
-            }
         }
     }
 
@@ -261,9 +255,6 @@ struct HRVWidget: View {
                 LineChart(values: values, color: Palette.green,
                           lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
                           band: band, height: height)
-            }
-            if size != .small {
-                Text("30 dní · pásmo = tvoje norma").font(Typo.tiny).foregroundStyle(Palette.faint)
             }
         }
     }
@@ -312,9 +303,6 @@ struct WeightWidget: View {
             } chart: { height in
                 TrendDotsChart(raw: raw, trend: trend(raw), goal: goal,
                                lo: (all.min() ?? 70) - 0.4, hi: (all.max() ?? 90) + 0.4, height: height)
-            }
-            if size != .small {
-                Text("30 dní · body = vážení, čára = trend").font(Typo.tiny).foregroundStyle(Palette.faint)
             }
         }
     }

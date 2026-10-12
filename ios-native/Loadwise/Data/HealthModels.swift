@@ -12,6 +12,10 @@ struct HealthSnapshot: Decodable, Equatable {
     let respiration: Respiration?
     let skinTemp: SkinTemp?
     let oxygen: Oxygen?
+    /// Apple Health only: average heart rate while walking, and the drop in
+    /// the first minute after a workout.
+    let walkingHR: Latest?
+    let hrRecovery: Latest?
     let weight: Weight?
 
     struct Part: Decodable, Equatable, Identifiable {
@@ -116,6 +120,11 @@ struct HealthSnapshot: Decodable, Equatable {
     struct SkinTemp: Decodable, Equatable {
         let deviation: Double
         let elevated: Bool
+        let series: [Point]
+    }
+
+    struct Latest: Decodable, Equatable {
+        let value: Double
         let series: [Point]
     }
 

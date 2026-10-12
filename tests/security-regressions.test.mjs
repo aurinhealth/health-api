@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { createD1 } from "./helpers/d1.mjs";
 import legacy from "../src/index.js";
 import { planValues } from "../src/gym-plan-store.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const ctx = { waitUntil() {} };
 const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
@@ -30,7 +31,7 @@ test("the debugging routes are gone", async () => {
     const response = await legacy.fetch(new Request("https://internal" + path), { DB: healthDb(), USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx);
     assert.equal(response.status, 404, path);
   }
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.doesNotMatch(entry, /health-db|\/health\/db/);
 });
 
@@ -76,7 +77,7 @@ test("signing out leaves nothing of the account on the device; onboarding keeps 
 });
 
 test("a session cookie counts only with the user's current epoch, and the epoch moves on where it must", () => {
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   // The check sits right after the user row is loaded, before any route.
   const loaded = entry.indexOf("user = await findUser(env.DB, principal.userId, env);");
   const checked = entry.indexOf("if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }", loaded);

@@ -16,15 +16,6 @@ enum AthleteStatusKind: String, CaseIterable, Identifiable {
         }
     }
 
-    var subtitle: String {
-        switch self {
-        case .active: return L10n.tr("Trénuji podle plánu")
-        case .sick: return L10n.tr("Odpočívám během nemoci")
-        case .injured: return L10n.tr("Zotavuji se ze zranění")
-        case .on_break: return L10n.tr("Dávám si od tréninku volno")
-        }
-    }
-
     var symbol: String {
         switch self {
         case .active: return "figure.run"
@@ -124,10 +115,7 @@ struct AthleteStatusSheet: View {
                                     .foregroundStyle(Palette.onAccent)
                                     .frame(width: 40, height: 40)
                                     .background(option.color, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(option.title).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                                    Text(option.subtitle).font(Typo.caption).foregroundStyle(Palette.muted)
-                                }
+                                Text(option.title).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                                 Spacer()
                                 Image(systemName: kind == option ? "largecircle.fill.circle" : "circle")
                                     .font(.system(size: 20)).foregroundStyle(kind == option ? Palette.ink : Palette.faint)
@@ -162,10 +150,6 @@ struct AthleteStatusSheet: View {
                                 .padding(14)
                                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
-                        Text(kind == .injured
-                             ? "Kouč nenavrhne běžné tréninky ani náhradní cviky, dokud nepopíšeš, co tě omezuje."
-                             : "Kouč nenavrhne běžné tréninky a doporučí odpočinek. Kalendář se sám nemění.")
-                            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
 
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
