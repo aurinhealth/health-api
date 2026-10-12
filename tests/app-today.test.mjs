@@ -141,6 +141,23 @@ test("Google Health steps are counted per local hour", () => {
   assert.equal(s.stepsByHour[day(-20)], undefined, "only the last 15 days");
 });
 
+test("An hourly bucket that ends at midnight counts on the day it started", async () => {
+  const { appleRow } = await import("../src/apple-health.js");
+  // Apple Health's 23:00–24:00 steps bucket on 10 October (Prague, UTC+2) ends exactly at midnight.
+  const r = appleRow({ type: "steps", id: "s1", value: 500, start: "2026-10-10T23:00:00+02:00", end: "2026-10-11T00:00:00+02:00" });
+  const s = googleHealthSummary([{ ...r, source_family: "apple-health", payload_json: JSON.stringify(r.payload) }], "2026-10-11");
+  assert.equal(s.wellness.find(x => x.id === "2026-10-10").steps, 500);
+  assert.equal(s.today.steps, undefined, "nothing on 11 October");
+  assert.equal(s.stepsByHour["2026-10-10"][23], 500);
+  assert.equal(s.coverage.steps, "2026-10-10");
+});
+
+test("Today says how the HRV was measured when the source does", () => {
+  const sdnn = wellness.map(r => ({ ...r, hrvSource: "apple-health:sdnn" }));
+  assert.equal(buildToday({ ...input, health: { wellness: sdnn } }).hrv.metric, "sdnn");
+  assert.equal(buildToday(input).hrv.metric, null);
+});
+
 test("Before tonight's sleep has synced, Today stays empty and the coming night is the current one", () => {
   // 00:54: the night that ends this morning is not over yet, Google has no HRV for today.
   const early = {
