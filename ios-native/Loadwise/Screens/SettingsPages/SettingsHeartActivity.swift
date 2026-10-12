@@ -49,12 +49,12 @@ struct HeartActivitySettingsView: View {
     var body: some View {
         SettingsPage(title: "Tep a aktivita") {
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            SettingsGroup(title: "Tep", footer: "Prázdné hodnoty Loadwise průběžně dopočítává z tréninků, Apple Health a Google Health. Zadaná hodnota platí i pro tepové zóny.") {
+            SettingsGroup(title: "Tep") {
                 SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"))
                 SettingsDivider()
                 SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad, placeholder: suggested("rhr"))
             }
-            SettingsGroup(title: "Aktivita a cíl", footer: "Z běžného dne, sportu a cíle se počítá denní cíl kalorií.") {
+            SettingsGroup(title: "Aktivita a cíl") {
                 SettingsPicker(title: "Běžný den", selection: $activity, options: activityOptions)
                 SettingsDivider()
                 SettingsPicker(title: "Sport týdně", selection: $sportHours, options: sportOptions)

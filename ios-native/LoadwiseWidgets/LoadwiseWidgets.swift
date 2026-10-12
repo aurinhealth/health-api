@@ -121,7 +121,7 @@ struct ReadinessWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Připravenost")))
-        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a zátěž.")))
+        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a námaha.")))
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -143,7 +143,7 @@ struct ReadinessWidgetView: View {
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
-                    Text(L10n.f("Spánek %@ · zátěž %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
+                    Text(L10n.f("Spánek %@ · námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
                     if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
@@ -222,7 +222,7 @@ struct DayWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Můj den")))
-        .description(Text(verbatim: L10n.tr("Připravenost, spánek, zátěž, jídlo, pití a další trénink.")))
+        .description(Text(verbatim: L10n.tr("Připravenost, spánek, námaha, jídlo, pití a další trénink.")))
         .supportedFamilies([.systemMedium])
     }
 }
@@ -246,7 +246,7 @@ struct DayWidgetView: View {
                 }
                 VStack(alignment: .leading, spacing: 7) {
                     Link(destination: URL(string: "loadwise://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
-                    Link(destination: URL(string: "loadwise://open/training")!) { row("flame.fill", W.amber, "Zátěž", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
+                    Link(destination: URL(string: "loadwise://open/training")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
                     Link(destination: URL(string: "loadwise://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
                     Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
                     if let bed = s.bedtime {

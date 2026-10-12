@@ -97,9 +97,6 @@ struct ReadinessCard: View {
                     Text(String(score)).font(Typo.number(88)).foregroundStyle(Palette.ink)
                     if let pill = ReadinessText.pill(readiness.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
-                Text(ReadinessText.sentence(readiness))
-                    .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
                 PartsRow(parts: readiness.parts)
             } else {
                 Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
@@ -153,35 +150,6 @@ enum ReadinessText {
         default: return nil
         }
     }
-
-    /// One sentence from the biggest parts: "HRV nad průměrem, tep pod ním."
-    static func sentence(_ r: HealthSnapshot.Readiness) -> String {
-        var bits: [String] = []
-        for part in r.parts.sorted(by: { abs($0.points) > abs($1.points) }).prefix(2) {
-            switch (part.key, part.points >= 0) {
-            case ("hrv", true): bits.append("HRV je nad tvým průměrem")
-            case ("hrv", false): bits.append("HRV je pod tvým průměrem")
-            case ("restingHR", true): bits.append("klidový tep je nízko")
-            case ("restingHR", false): bits.append("klidový tep je zvýšený")
-            case ("sleep", true): bits.append("spánku bylo dost")
-            case ("sleep", false): bits.append("spánku bylo málo")
-            case ("respiration", _): bits.append("dech ve spánku je zrychlený")
-            case ("skinTemp", _): bits.append("teplota je zvýšená")
-            case ("checkin", _): bits.append("ranní pocit ji snížil")
-            default: break
-            }
-        }
-        let parts = bits.map { L10n.tr($0) }
-        let joined = parts.count > 1 ? L10n.f("%@ a %@", parts[0], parts[1]) : parts.joined()
-        var text = parts.isEmpty ? L10n.tr("Tělo je ve své normě") : Fmt.capitalized(joined)
-        text += "."
-        if r.flags.contains("respiration_elevated") || r.flags.contains("skin_temp_elevated") {
-            text += " " + L10n.tr("Může to být začínající nemoc, dnes raději lehce.")
-        } else if let strain = r.strainYesterday, strain >= 14 {
-            text += " " + L10n.tr("Včerejší zátěž ještě trochu doznívá.")
-        }
-        return text
-    }
 }
 
 struct ReadinessDetailContent: View {
@@ -199,8 +167,6 @@ struct ReadinessDetailContent: View {
                     if let pill = ReadinessText.pill(r.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
                 .padding(.top, 12)
-                Text(ReadinessText.sentence(r)).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
             }
 
             if let checkin {
@@ -223,10 +189,6 @@ struct ReadinessDetailContent: View {
                 }
             }
             .padding(.top, 8)
-            Text("Základ je 70, tvoje běžná hodnota. HRV váží polovinou, klidový tep a spánek čtvrtinou. Zrychlený dech nebo zvýšená teplota ubírají po 10 bodech.")
-                .font(Typo.caption).foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
 
             if r.history.count > 1 {
                 HStack {

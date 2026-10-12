@@ -140,8 +140,6 @@ struct GymSessionView: View {
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
-                Text("Sestavím ji podle tvé únavy, svalů od posledního tréninku a týdenního plánu. Uloží se i do Intervals.icu.")
-                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
                 Picker("Délka", selection: $minutes) {
                     ForEach([30, 45, 60, 75, 90], id: \.self) { Text("\($0) min").tag($0) }
                 }
@@ -473,7 +471,6 @@ struct TechniqueSheet: View {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                Text("U cviku mimo katalog může první načtení chvíli trvat.").font(Typo.caption).foregroundStyle(Palette.faint)
             }
         }
         .padding(.top, 6)
@@ -652,11 +649,8 @@ struct SupersetGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
-            HStack(spacing: 8) {
-                GymTag.superset(letter)
-                Text("Střídej cviky, pauza až po kole").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-            }
-            .padding(.top, spacing == 0 ? 10 : 0)
+            GymTag.superset(letter)
+                .padding(.top, spacing == 0 ? 10 : 0)
             content
         }
         .padding(.leading, 12)

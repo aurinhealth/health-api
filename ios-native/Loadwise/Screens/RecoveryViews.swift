@@ -207,11 +207,6 @@ struct RecoveryRoutineView: View {
                 .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
                 .padding(.top, 22)
 
-                Text("Pomalu, s klidným dechem, do mírného tahu, ne do bolesti.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
-
                 if saved {
                     Label("Uloženo do plánu dne", systemImage: "checkmark.circle.fill")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.green)

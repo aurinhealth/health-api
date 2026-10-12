@@ -230,7 +230,6 @@ struct DrinkSheet: View {
                             Spacer()
                             Text(Units.volumeText((Double(ml) * d.factor).rounded())).font(Typo.number(24)).foregroundStyle(Palette.blue)
                         }
-                        Text(note(d)).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
@@ -257,17 +256,6 @@ struct DrinkSheet: View {
             ml = min(2000, Units.roundedMl(fluidOunces: ounces))
         } else {
             ml = min(2000, max(50, ml + 50 * direction))
-        }
-    }
-
-    private func note(_ d: DrinkKind) -> String {
-        switch d.id {
-        case "coffee": return "Káva hydratuje skoro jako voda, kofein ubere asi desetinu."
-        case "milk", "sport": return "Mléko a ionťák díky minerálům zavodní o něco víc než voda."
-        case "beer": return "Alkohol odvádí vodu, pivo se počítá jen napůl."
-        case "wine": return "Víno a destiláty do hydratace nepočítám."
-        case "soda": return "Sladké limonády hydratují o něco méně než voda."
-        default: return "Počítá se celé množství."
         }
     }
 }
