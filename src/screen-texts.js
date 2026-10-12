@@ -13,6 +13,7 @@ import { callOpenAI, lightModel } from "./coach-assistant.js";
 
 export const SCREENS = ["today", "training", "food"];
 export const MAX_PER_DAY = 12;
+const GAP_MINUTES = 5;
 // A failed AI call is not repeated on every opening of the screen.
 const RETRY_MINUTES = 60;
 
@@ -174,15 +175,14 @@ function answer(source, { text = null, advice = null, chips = [], basis = [], cr
   return { status: "ok", source, text, advice, chips, basis, time: clock(createdAt), reason };
 }
 
-// The user changed the day's plan (cancelled, moved or added a session,
-// answered the check-in): every screen's text is written again on the next
-// opening.
-const STALE = "stale";
+// The user changed something (cancelled a session, logged food, answered the
+// check-in): the next opening writes a new text at once if the state differs.
+const STALE = "stale:";
 export async function markScreenTextsStale(env) {
   const userId = userOf(env);
   if (!userId) return;
   await ensureTable(env.DB);
-  await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=? WHERE user_id=? AND day=?").bind(STALE, userId, localToday()).run();
+  await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=? || COALESCE(fingerprint,'') WHERE user_id=? AND day=? AND COALESCE(fingerprint,'') NOT LIKE 'stale:%'").bind(STALE, userId, localToday()).run();
 }
 
 // load: () => the screen's data (the same JSON the app shows); ask: the AI
@@ -208,7 +208,12 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const info = screenFacts(screen, data);
   if (!info) return cached || answer("rules", { reason: "no-data" });
   const fallback = () => answer("rules", { text: info.fallback?.text || null, advice: info.fallback?.advice || null, chips: info.chips, basis: info.basis, reason: "fallback" });
-  if (cached && row.fingerprint === info.fingerprint) return cached;
+  // After the user's own change (markScreenTextsStale) a different state gets
+  // a new text at once; background data (a sync, the watch) changes it often,
+  // so for it at most one new text in GAP_MINUTES.
+  const stale = String(row?.fingerprint || "").startsWith(STALE);
+  if (cached && (stale ? row.fingerprint.slice(STALE.length) : row.fingerprint) === info.fingerprint) return cached;
+  if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < GAP_MINUTES * 60000) return cached;
   if (!info.ready) return cached || fallback();
   const failedAt = sqlTime(row?.failed_at);
   if (failedAt && now - Date.parse(failedAt) < RETRY_MINUTES * 60000) return cached || fallback();

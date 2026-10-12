@@ -141,7 +141,22 @@ const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:"
 
 // Requests that read or preview only and so keep the cache.
 // Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
-const PLAN_CHANGE = /^\/app\/api\/(gym\/confirm|planned\/(delete|move|environment)|plans(\/week)?|week-plan|workouts\/(schedule|manual)|morning-checkin|athlete-state|coach\/week)$/;
+// The screen data the app just loaded, per user and path, for 30 s: the
+// coach's text asks right after and compares the same state instead of
+// building it again. Any write by the user drops it.
+const SCREEN_PATHS = new Set(["/app/api/today", "/app/api/training", "/app/api/food-today"]);
+const recentScreens = new Map();
+function rememberScreen(userId, path, json) {
+  if (recentScreens.size > 500) recentScreens.clear();
+  recentScreens.set(userId + "|" + path, { at: Date.now(), json });
+}
+function recentScreen(userId, path) {
+  const hit = recentScreens.get(userId + "|" + path);
+  return hit && Date.now() - hit.at < 30000 ? hit.json : null;
+}
+function forgetScreens(userId) {
+  for (const key of recentScreens.keys()) if (key.startsWith(userId + "|")) recentScreens.delete(key);
+}
 const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|support\/report$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
@@ -302,14 +317,19 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
-      // A gym plan cancelled, restored or moved changes the day's plan; saved sets don't.
-      const planChange = request.method !== "GET" && (PLAN_CHANGE.test(url.pathname) || (url.pathname === "/app/api/gym" && ["move", "cancel", "uncancel", "restore"].includes((await request.clone().json().catch(() => ({})))?.action)));
+      // Any change by the user lets the coach's texts answer it at once (screen-texts.js).
+      const planChange = request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname);
+      if (request.method !== "GET") forgetScreens(user.id);
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
       // A change by the user makes the cached coach inputs outdated.
       if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
       // A changed plan makes the coach's text of the day outdated (screen-texts.js).
       if (planChange && response.ok) await markScreenTextsStale(env).catch(() => {});
+      // Today's screen data, kept a moment for the coach's text that follows it.
+      if (request.method === "GET" && response.ok && SCREEN_PATHS.has(url.pathname) && !url.searchParams.get("date")) {
+        response.clone().json().then(json => rememberScreen(user.id, url.pathname, json)).catch(() => {});
+      }
       return response;
     }
     if (!user) return unauthorizedResponse();
@@ -1608,7 +1628,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const screen=String(url.searchParams.get('screen')||'');
     if(!SCREENS.includes(screen))return Response.json({message:L('Neznámá obrazovka.', 'Unknown screen.')},{status:400});
     const path={today:'/app/api/today',training:'/app/api/training',food:'/app/api/food-today'}[screen];
-    const load=()=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
+    const kept=session.user?.id!=null?recentScreen(session.user.id,path):null;
+    const load=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
     try{return Response.json(await screenText(env,{screen,load}),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }
