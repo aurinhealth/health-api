@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { HEALTH_SCOPES, EXTRA_SCOPES, grantedExtras, healthScopes } from "../src/google-scopes.js";
 import { saveConnectionSecret, connectionEnvironment } from "../src/connection-secrets.js";
@@ -38,13 +37,6 @@ test("Google's consent screen comes only after the app's own disclosure and cons
     assert.equal(response.status, 302);
     assert.equal(response.headers.get("Location"), back);
   }
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  // An unticked box that must be ticked before continuing to Google.
-  assert.match(client, /<input type="checkbox" id="googleConsentAgree">/);
-  assert.match(client, /id="googleConsentGo" disabled>/);
-  // Agreeing continues to the link the user chose, with its extra=1 or return=setup.
-  assert.match(client, /googleHealthConsent\(a\.getAttribute\('href'\)\)/);
-  assert.match(client, /target\.searchParams\.set\('consent','1'\);location\.href=target\.pathname\+target\.search;/);
 });
 
 test("granted scopes are stored per user and offered in the connection status", async () => {

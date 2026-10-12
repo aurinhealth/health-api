@@ -2,13 +2,6 @@
   "name": "health-api",
   // main.js is entrypoint.js behind HTTPS and security headers (web-security.js).
   "main": "src/main.js",
-  "rules": [
-    {
-      "type": "Text",
-      "globs": ["**/dashboard-client.js"],
-      "fallthrough": false
-    }
-  ],
   "compatibility_date": "2026-09-15",
   // AsyncLocalStorage (node:async_hooks) holds the user's language during a
   // request, see src/lang.js.

@@ -17,10 +17,11 @@ test("personal data routes are not public", () => {
 });
 
 test("static pages, Google login and self-authenticating routes stay public", () => {
-  for (const path of ["/", "/app", "/app/dashboard-client.js", "/app/logout", "/auth/google", "/.well-known/apple-developer-domain-association.txt", "/oauth/google/callback", "/automation/strength"]) {
+  for (const path of ["/", "/app/logout", "/auth/google", "/auth/app/apple", "/.well-known/apple-app-site-association", "/oauth/google/callback", "/automation/strength"]) {
     assert.equal(isPublicPath(path), true, path);
   }
-  assert.equal(isPublicPath("/app/login"), false);
+  // The old web app and its browser sign-in are gone.
+  for (const path of ["/app", "/app/login", "/app/dashboard-client.js", "/manifest.webmanifest", "/auth/apple", "/auth/apple/callback"]) assert.equal(isPublicPath(path), false, path);
 });
 
 test("anonymous and wrong-key requests have no principal", async () => {

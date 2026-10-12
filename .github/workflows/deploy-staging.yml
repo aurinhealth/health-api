@@ -117,9 +117,9 @@ jobs:
             echo "Waiting for staging (HTTP $code, attempt $attempt)"; sleep 10
           done
           [ "$code" = "401" ] && grep -qiE '^x-storage-routing: 1' "$RUNNER_TEMP/routing-headers" && grep -qiE '^x-food-catalog-routing: 1' "$RUNNER_TEMP/routing-headers" || { echo "Staging did not come up"; exit 1; }
-          page="$(curl -fsS "$STAGING_URL/app")"
+          page="$(curl -fsS "$STAGING_URL/")"
           grep -q "TEST · staging" <<< "$page" || { echo "Staging badge missing"; exit 1; }
-          echo "Staging: $STAGING_URL/app (${GITHUB_HEAD_REF:-$GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" >> "$GITHUB_STEP_SUMMARY"
+          echo "Staging: $STAGING_URL (${GITHUB_HEAD_REF:-$GITHUB_REF_NAME} @ ${GITHUB_SHA::7})" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify independent user databases
         env:

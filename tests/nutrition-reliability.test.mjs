@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {createD1} from './helpers/d1.mjs';
 import {scopedDb} from '../src/tenancy.js';
@@ -78,13 +77,6 @@ test('a lifting session the watch counts like cardio is flagged with a realistic
   const a={type:'WeightTraining',name:'WeightTraining',durationHours:1.55,calories:711,source:'google-health'};const c=strengthEnergyCheck(a,82);
   assert.equal(c.status,'review');assert.equal(c.estimated,318);assert.ok(c.high<711);
   assert.equal(strengthEnergyCheck({...a,calories:300},82).status,'consistent');assert.equal(strengthEnergyCheck({...a,type:'Walk',name:'Walk'},82),null);assert.equal(strengthEnergyCheck(a,null).status,'unavailable');
-});
-test('weekly balance excludes future meals and days without a log from accumulated differences',()=>{
-  const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8'),ctx=vm.createContext({num:v=>Number(v)||0,measured:v=>v!=null});
-  vm.runInContext(source.slice(source.indexOf('function weeklyEnergySummary('),source.indexOf('function renderWeeklyEnergy(')),ctx);
-  const make=(date,kcal)=>({date,daily:{calories:{target:2000}},food:{totals:{kcal}}});
-  const b=ctx.weeklyEnergySummary([make('2026-10-01',1500),make('2026-10-02',0),make('2026-10-03',400),make('2026-10-04',1000)],'2026-10-03');
-  assert.equal(b.target,8000);assert.equal(b.consumed,1900);assert.equal(b.missing,1);assert.equal(b.closedDifference,500);
 });
 test('exercise active energy uses complete intraday coverage, excludes daily rollups and never doubles overlapping points',()=>{
   const a={start:'2026-10-04T10:00:00Z',end:'2026-10-04T10:10:00Z'},rows=Array.from({length:10},(_,i)=>({start_time:'2026-10-04T10:'+String(i).padStart(2,'0')+':00Z',end_time:'2026-10-04T10:'+String(i+1).padStart(2,'0')+':00Z',value_numeric:5}));

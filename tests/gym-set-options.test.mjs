@@ -1,13 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
-import { readFileSync } from 'node:fs';
 import { strengthSetOptions,strengthOptionNote } from '../src/gym-set-options.js';
 import { planValues,saveGymPlan,readGymPlan,syncGymPlanHistory } from '../src/gym-plan-store.js';
 import { getStrengthHistory,parseStrengthPlan,importStrengthHistory } from '../src/strength-history.js';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
-const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
 const row=(exercise,n,type='WORK',group='A')=>[type,exercise,String(n),'40','10','','','','FALSE','Moje poznámka','','FALSE',group];
 
 test('options use bounded groups and preserve plain notes without duplicating tags',()=>{
@@ -38,19 +35,4 @@ test('legacy replacement and execution columns are not read as new options',()=>
   const parsed=parseStrengthPlan(values);
   assert.equal(parsed.rows[0].toFailure,false);assert.equal(parsed.rows[0].superset,'');
   assert.equal(parsed.rows[0].replacement,'TRUE');
-});
-test('workout mode puts all warmups first and alternates supersets without losing row identities',()=>{
-  const context=vm.createContext({});vm.runInContext(source.slice(source.indexOf('function orderGymSets('),source.indexOf('function gymSets(')),context);
-  const values=Array(7).fill([]).concat([row('Press',1,'WARMUP',''),row('Press',1),row('Press',2),row('Row',1,'WARMUP',''),row('Row',1),row('Row',2),row('Row',3),row('Curl',1,'WORK','')]);
-  const sets=context.orderGymSets(values);
-  assert.equal(sets.map(x=>x.r[0]+':'+x.r[1]+':'+x.r[2]).join('|'),'WARMUP:Press:1|WARMUP:Row:1|WORK:Press:1|WORK:Row:1|WORK:Press:2|WORK:Row:2|WORK:Row:3|WORK:Curl:1');
-  assert.equal(new Set(sets.map(x=>x.i)).size,8);
-  assert.equal(sets[2].round,sets[3].round);assert.notEqual(sets[3].round,sets[4].round);
-});
-test('chat renders readable headings, emphasis and lists while escaping HTML',()=>{
-  const context=vm.createContext({});
-  vm.runInContext(source.slice(source.indexOf('function esc('),source.indexOf('function num('))+source.slice(source.indexOf('function coachRichText('),source.indexOf('function coachTurnHtml(')),context);
-  const html=context.coachRichText('## Hodnocení\n\n**Závěr:** vynech gym.\n\n- Odpočinek\n- Kratší kolo\n\n<img src=x onerror=alert(1)>');
-  assert.match(html,/<h4>Hodnocení<\/h4>/);assert.match(html,/<strong>Závěr:<\/strong>/);assert.match(html,/<ul><li>Odpočinek<\/li>/);
-  assert.doesNotMatch(html,/<img/);assert.match(html,/&lt;img/);
 });

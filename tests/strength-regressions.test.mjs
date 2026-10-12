@@ -6,17 +6,6 @@ import { normalizeExerciseName } from "../src/strength-normalization.js";
 import { parseStrengthPlan } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
 import { FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles } from "../src/strength-generator.js";
-import { gymFocusView } from "../src/gym-focus-view.js";
-
-test('every focused muscle has a visual target and text choice', () => {
-  const markup=gymFocusView();
-  for(const id of Object.keys(FOCUS_GROUPS)){
-    assert.match(markup,new RegExp('<path[^>]+data-muscle="'+id+'"'));
-    assert.match(markup,new RegExp('<button[^>]+data-muscle="'+id+'"'));
-  }
-  assert.match(markup,/data-side="front"/);
-  assert.match(markup,/data-side="back"/);
-});
 
 test('focused gym validates the selected groups', () => {
   assert.deepEqual(validateFocusMuscles(['chest', 'upper_back']), ['chest', 'upper_back']);
@@ -409,26 +398,6 @@ test("adaptive strength volume reduces sets under low readiness", async () => {
   const work=plan.rows.filter(r=>r[0]==="WORK");
   assert.ok(work.length<=9);
   assert.equal(plan.adaptive.volumeModifier,0.75);
-});
-
-test("on a phone, warm-up sets are labelled and each exercise is one block", async () => {
-  const { readFileSync } = await import("node:fs");
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const theme = readFileSync(new URL("../src/workouts-hub-theme.js", import.meta.url), "utf8");
-  // Rows carry their type and where an exercise starts and ends.
-  assert.match(client, /data-type="'\+kind\+'" class="'\+\(prev\[1\]===exercise\?'':'gym-first '\)\+\(next\[1\]===exercise\?'':'gym-last'\)/);
-  assert.match(theme, /tr\[data-type=WARMUP\] td:nth-child\(3\):before\{content:"rozcvička "\}/);
-  assert.match(theme, /tr:not\(\.gym-first\) td:nth-child\(2\)/);
-  // Workout mode counts warm-up and work sets separately.
-  assert.match(client, /\(warm\(cur\)\?uiText\('Rozcvička ','Warm-up '\):uiText\('Série ','Set '\)\)\+k\+uiText\(' z ',' of '\)\+same\.length/);
-});
-
-test("workout mode shows what the load of a work set is based on", async () => {
-  const { readFileSync } = await import("node:fs");
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  // The line comes from the set's note, without the rest marker, never for warm-ups.
-  assert.match(client, /const why=!warm\(cur\)&&String\(r\[9\]\|\|''\)\.replace\(\/\\s\*\\\[Pauza \\d\+ s\\\]\/g,''\)\.split\('; '\)\.find\(x=>\/\^\(↑\|↓\|= \|po delší pauze\)\/\.test\(x\)\)/);
-  assert.match(client, /<p class="small gm-why">/);
 });
 
 test("after four solid weeks the fifth is a deload week, then training goes on", async () => {
