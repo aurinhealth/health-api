@@ -9,7 +9,7 @@ import { bumpCacheVersion } from "./api-cache.js";
 import { appleIdentity, unlinkAppleIdentity, revokeApple } from "./apple-login.js";
 import { handleSignOutEverywhere, signedOutElsewhere, handleDashboardLogout } from "./dashboard-auth.js";
 import { aiAllowance } from "./ai-usage.js";
-import { exportAccountData, deleteAccount } from "./account-data.js";
+import { exportAccountStream, deleteAccount } from "./account-data.js";
 import { listPasskeys, handlePasskeyApi } from "./passkeys.js";
 import { handleEmailChange } from "./email-login.js";
 import { emailConfigured } from "./email-sender.js";
@@ -54,8 +54,8 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   // The user's own data: download everything, or delete the account with it.
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
-    const data=await exportAccountData(env,session.user);
-    return new Response(JSON.stringify(data,null,1),{headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="loadwise-data-'+localToday()+'.json"','Cache-Control':'no-store'}});
+    // NDJSON, streamed page by page (account-data.js): a large account never sits in memory whole.
+    return new Response(exportAccountStream(env,session.user),{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Content-Disposition':'attachment; filename="loadwise-data-'+localToday()+'.ndjson"','Cache-Control':'no-store'}});
   }
   if(url.pathname==='/app/api/account/delete'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
