@@ -130,6 +130,7 @@ import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
+import { handlePushToken, sendMorningReadiness, hasLastNight, pushConfigured } from "./push.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
@@ -160,7 +161,7 @@ function forgetScreens(userId) {
   for (const key of recentScreens.keys()) if (key.startsWith(userId + "|")) recentScreens.delete(key);
 }
 // Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
-const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|passkeys$|passkeys\/options$)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -203,6 +204,9 @@ const worker = {
     await forEachUser(env, ["google", "intervals"], async scoped => {
       const result = await app.scheduled(controller, scoped, ctx);
       if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
+      // The morning readiness push once the night's data has synced (push.js),
+      // checked every five minutes; it goes out at most once a local day.
+      if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
       return result;
     });
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
@@ -373,6 +377,31 @@ async function staticRoute(url, request, env) {
   return Response.json({name:"Loadwise",short_name:"Loadwise",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
 }
 
+
+// Today's readiness exactly as /app/api/today computes it (buildToday), from
+// only the inputs it needs. fresh skips the short-lived cache: right after an
+// Apple Health upload the cached copies are older than the night just sent.
+async function todayReadiness(env, ctx, date, { fresh = false } = {}) {
+  const internalAuth = internalHeaders();
+  const read = path => app.fetch(new Request('https://internal' + path, { headers: internalAuth }), env, ctx).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  const internal = path => handleDashboardApi(new Request('https://internal' + path), env, ctx, new URL('https://internal' + path)).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  const from = shiftDate(date, -30), to = shiftDate(date, 1);
+  const [health, fitness, sleep, profile, checkin] = await Promise.all([
+    (fresh ? googleDashboard(env.DB, date) : googleHealthFor(env, ctx, date)).catch(() => ({})),
+    (fresh ? internal('/app/api/fitness?days=90') : cached(env, ctx, 'fitness:90', () => internal('/app/api/fitness?days=90'))).catch(() => ({})),
+    read('/health/sleep?start=' + from + '&end=' + to).then(d => withIntervalsSleep(env, d, from, to)).catch(() => ({})),
+    dashboardProfile(env).catch(() => null),
+    getCheckin(env.DB, date).catch(() => null)
+  ]);
+  return buildToday({ date, hour: localHour(), health, fitness, sleep, profile: profile || {}, checkin }).readiness;
+}
+
+// The morning readiness push (push.js); it computes the readiness only when a
+// push may go out (5–11 local, a device token, nothing sent today).
+function morningPush(env, ctx, options = {}) {
+  if (!pushConfigured(env)) return Promise.resolve({ sent: 0, reason: 'not-configured' });
+  return sendMorningReadiness(env, { readiness: date => todayReadiness(env, ctx, date, options) });
+}
 
 // The dashboard profile (age, height, sex, …) with height and activity from
 // Google Health and steps filling the gaps; null when there is nothing yet.
@@ -1622,6 +1651,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 
   // "Nahlásit problém": the user's report with a screenshot and diagnostics (support-report.js).
   if (url.pathname === "/app/api/support/report") return handleSupportReport(request, env, { signedIn: session.signedIn, origin: url.origin });
+  // The phone's push token for the morning readiness (push.js): POST saves, DELETE removes.
+  if (url.pathname === "/app/api/push/token") return handlePushToken(request, env, { signedIn: session.signedIn, origin: url.origin });
   if (url.pathname === "/app/api/connections" && request.method === "GET") {
     return Response.json(await connectionStatus(env), {headers:{"Cache-Control":"no-store"}});
   }
@@ -1901,6 +1932,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(result.saved&&Number.isFinite(from))ctx.waitUntil(matchActivities(env,{days:Math.min(400,Math.ceil((Date.now()-from)/86400000)+1)}).catch(error=>console.error('Activity matching failed',error.message)));
         // New resting and maximum heart rate reach the profile's automatic values now, not the next day.
         if(result.saved)ctx.waitUntil(refreshSuggestions(env,{force:true}).catch(error=>console.error('Profile suggestions not refreshed',error.message)));
+        // Last night arrived: the morning readiness push, once a day (push.js).
+        if(result.saved&&hasLastNight(body.records))ctx.waitUntil(morningPush(env,ctx,{fresh:true}).catch(error=>console.error('Morning push failed',error.message)));
         return Response.json(result,{headers:{'Cache-Control':'no-store'}});
       }
       if(request.method==='DELETE')return Response.json(await disconnectAppleHealth(env.DB,env.USER_ID),{headers:{'Cache-Control':'no-store'}});
