@@ -19,7 +19,7 @@ test('baseline excludes today, uses 60 days and needs 14 values',()=>{
 });
 test('sleep need follows NSF ranges by age and rises after a hard day',()=>{
   assert.equal(sleepNeedMinutes({age:30}),480);assert.equal(sleepNeedMinutes({age:70}),450);
-  assert.equal(sleepNeedMinutes({age:30,strain:15}),495);assert.equal(sleepNeedMinutes({age:30,strain:19}),510);
+  assert.equal(sleepNeedMinutes({age:30,strain:10}),480);assert.equal(sleepNeedMinutes({age:30,strain:14}),495);assert.equal(sleepNeedMinutes({age:30,strain:15}),499);assert.equal(sleepNeedMinutes({age:30,strain:19}),510);
 });
 test('sleep debt accumulates, a long night repays at most an hour',()=>{
   const nights=[0,1,2,3,4,5,6].map(i=>({date:day(i),durationMin:i===6?600:420}));
@@ -74,7 +74,7 @@ test('sleep need: naps lower it, a low HRV status and sleep debt raise it, withi
   const low=calm.map((r,i)=>i>=34?{...r,hrv:45}:r);
   assert.equal(sleepNeedFor({date,age:30,rows:low,sessions:nights}).hrv,15);
   const short=nights.map(n=>({...n,durationMin:390}));
-  const s=sleepNeedFor({date,age:30,rows:calm,sessions:short});assert.equal(s.debt,30);assert.equal(s.need,510);
+  const s=sleepNeedFor({date,age:30,rows:calm,sessions:short});assert.equal(s.debt,60);assert.equal(s.need,540);
   assert.equal(sleepNeedFor({date,age:30,strain:19,rows:low,sessions:short}).need,540);
 });
 test('sleep debt adds a day\'s naps to its night',()=>{
@@ -104,6 +104,8 @@ test("an own sleep goal replaces the age baseline and a set alarm plans bedtime 
   assert.equal(sleepNeedMinutes({ age: 40, goal: 450, strain: 18 }), 480, "a hard day still adds 30 min");
   assert.equal(sleepNeedMinutes({ age: 40, goal: 200 }), 480, "a goal outside 6–10 h is ignored");
   assert.equal(sleepNeedFor({ date: "2026-10-08", age: 40, goal: 390, rows: [], sessions: [] }).need, 390, "a 6.5 h goal may go under 7 h");
+  const sixHours = Array.from({ length: 6 }, (_, i) => ({ date: `2026-10-0${i + 1}`, durationMin: 355 }));
+  assert.equal(sleepNeedFor({ date: "2026-10-08", age: 40, goal: 360, rows: [], sessions: sixHours }).need, 390, "a 30 min debt on a 6 h goal moves the bedtime by 30 min");
   // 2026-10-08 is a Thursday: the next morning is a work day.
   const plan = bedtimePlan({ date: "2026-10-08", need: 480, nights: [], wake: { workday: 390, weekend: 480 } });
   assert.equal(plan.wake, 390);

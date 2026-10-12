@@ -4,7 +4,7 @@
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { environmentFor } from "./adaptive-week.js";
-import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore, hrvMetric } from "./recovery-model.js";
+import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
@@ -53,6 +53,23 @@ export function dayStrain(rows, date) {
   const row = rows.find(r => r.id === date);
   const load = heartRateLoad(row?.hrZoneMinutes);
   return load == null ? null : strainScore(load);
+}
+
+// The day's strain to aim for, a range on the 0–21 scale: the readiness sets
+// its middle (50 → 10, 72 → 12.6, 90 → 14.8; without a number 10), the day's
+// plan pulls it halfway to the plan's strain, the week's sleep debt takes off
+// 0.5 per half hour (at most 2), and a yellow morning caps it at 12, a red one
+// at 6, as WHOOP's strain target follows recovery. The morning check-in is in
+// the readiness already. ±1.5 around the middle.
+export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false } = {}) {
+  let mid = readiness != null ? 4 + 0.12 * readiness : 10;
+  if (planned > 0) mid = (mid + planned) / 2;
+  // A day with nothing planned or done is a rest day: walking, light movement.
+  else if (rest) mid = Math.min(mid, 6.5);
+  mid -= Math.min(2, (Number(debt) || 0) / 30 * 0.5);
+  if (zone === "red") mid = Math.min(mid, 6); else if (zone === "yellow") mid = Math.min(mid, 12);
+  const r1 = v => Math.round(v * 10) / 10;
+  return { low: r1(Math.max(1, mid - 1.5)), high: r1(Math.min(20, mid + 1.5)) };
 }
 
 // Planned training on the same 0–21 scale, from TSS (as the web dashboard).
@@ -109,6 +126,9 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     need: tonightNeed,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
+
+  // The week's sleep debt up to last night, for the strain target.
+  const debtNow = sleepDebtMinutes(sessions.filter(x => (x.date || String(x.endTime || "").slice(0, 10)) <= date), date, sleepNeedMinutes({ age, goal: sleepSet.goal }));
 
   // Training: planned and completed sessions of the day.
   const training = daily.training || {};
@@ -210,9 +230,11 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       start: clockOf(night.startTime),
       end: clockOf(night.endTime)
     } : null,
-    strain: { score: strainNow, planned: plannedStrain(plannedTss) },
+    strain: { score: strainNow, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
-    hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
+    // Today's HRV shows even before its source has the 14 days a baseline needs.
+    hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
+      : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
     restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), series: last(14, "restingHR") } : null,
     summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
     nutrition: {

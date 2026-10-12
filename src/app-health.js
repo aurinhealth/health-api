@@ -3,9 +3,10 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan, hrvMetric } from "./recovery-model.js";
+import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan, hrvMetric } from "./recovery-model.js";
 import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
 import { sleepSettings } from "./energy-profile.js";
+import { localDate } from "./user-time.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -34,7 +35,7 @@ export function readinessParts(readiness) {
   return parts;
 }
 
-export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {} }) {
+export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -46,7 +47,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
 
   // Readiness today and for the last 14 days.
   const readinessOn = d => recoveryReadiness({ rows, date: d, night: nights.get(d) || null, sleepNeed: needOn(d).need });
-  const readiness = readinessOn(date);
+  // The morning check-in lowers today's number as on Today (applyCheckin);
+  // what it took off is its own part.
+  const body = readinessOn(date);
+  const readiness = applyCheckin(body, checkin);
   const history = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
     .map(d => ({ date: d, value: d === date ? readiness.score : readinessOn(d).score }))
     .filter(p => p.value != null);
@@ -96,6 +100,13 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const avg = (from, to) => mean(weights.filter(p => p.date > from && p.date <= to).map(p => p.value));
   const nowAvg = avg(shift(date, -7), date), monthAgo = avg(shift(date, -37), shift(date, -30));
   const fat = series("bodyFat", 60, 1, intervals);
+  // Muscle mass (lean body mass, kg) from a scale, the last reading of each day.
+  const leanByDay = new Map();
+  for (const r of Array.isArray(muscle) ? muscle : []) {
+    const t = new Date(r.sample_time), d = Number.isFinite(+t) ? localDate(t) : null, v = num(r.value_numeric);
+    if (d && d <= date && d > shift(date, -60) && v > 0) leanByDay.set(d, round(v, 1));
+  }
+  const lean = [...leanByDay].sort((a, b) => a[0].localeCompare(b[0])).map(([d, value]) => ({ date: d, value }));
 
   return {
     status: "ok",
@@ -105,7 +116,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       zone: readiness.zone,
       missing: readiness.missing || [],
       flags: readiness.flags || [],
-      parts: readinessParts(readiness),
+      parts: [...readinessParts(body), ...(body.score != null && readiness.score < body.score ? [{ key: "checkin", points: readiness.score - body.score }] : [])],
+      checkin: checkin || null,
       hrv: c.hrv ? round(c.hrv.value) : null,
       restingHR: c.restingHR ? round(c.restingHR.value) : null,
       sleepMinutes: c.sleep ? c.sleep.minutes : null,
@@ -143,7 +155,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       change: nowAvg != null && monthAgo != null ? round(nowAvg - monthAgo, 1) : null,
       goal: num(profile.targetWeight),
       series: weights,
-      bodyFat: fat.length ? { value: fat.at(-1).value, change: fat.length > 1 ? round(fat.at(-1).value - fat[0].value, 1) : null, series: fat } : null
+      bodyFat: fat.length ? { value: fat.at(-1).value, change: fat.length > 1 ? round(fat.at(-1).value - fat[0].value, 1) : null, series: fat } : null,
+      muscle: lean.length ? { value: lean.at(-1).value, change: lean.length > 1 ? round(lean.at(-1).value - lean[0].value, 1) : null, series: lean } : null
     } : null
   };
 }
