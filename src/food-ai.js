@@ -67,20 +67,23 @@ export function foodLookupLanguages(language='cs'){
   const valid=/^[a-z]{2,3}$/.test(code)?code:'cs';
   return [...new Set([valid,'en','any'])];
 }
+// The order of the sources' languages, said in the prompt (A9): one call
+// searches the interface language first, then English, then any language,
+// instead of a web search per language.
+export const foodLookupOrderText = languages => {
+  const [first, ...rest] = languages, named = rest.filter(x => x !== "any");
+  return L(`\nJazyk rozhraní: ${first}. Odpověď (note) napiš v tomto jazyce. Zdroje hledej v tomto pořadí: nejdřív v jazyce ${first}${named.length ? ", potom v jazyce " + named.join(", ") : ""}, a teprve když konkrétní výrobek nenajdeš, v jakémkoli jazyce. Nepoužívej jinou variantu výrobku jen kvůli jazyku.`,
+    `\nInterface language: ${first}. Write the note in that language. Search sources in this order: the language ${first} first${named.length ? ", then " + named.join(", ") : ""}, and only when the specific product is not found there, any language. Never switch to another variant of the product just because of the language.`);
+};
 export async function lookupFoodWithAI(env, { name = "", barcode = "", language=env.INTERFACE_LANGUAGE||'cs' } = {}) {
   const product = String(name || "").trim().slice(0, 180), code = normalizeBarcode(barcode);
   if (!product && !code) throw new Error(L("Napiš název potraviny nebo načti čárový kód.", "Write the food name or scan the barcode."));
-  let model=null;
-  for(const sourceLanguage of foodLookupLanguages(language)){
-    const r = await callOpenAI(env, { feature: "food-lookup",
-      instructions: foodLookupInstructionsText()+L('\nJazyk rozhraní: '+foodLookupLanguages(language)[0]+'. Odpověď (note) napiš v tomto jazyce. V tomto pokusu hledej '+(sourceLanguage==='any'?'ve všech jazycích.':'pouze zdroje v jazyce '+sourceLanguage+'. Pokud v něm konkrétní výrobek nenajdeš, vrať found=false; aplikace pak zkusí další jazyk. Nepoužívej jinou variantu výrobku jen kvůli jazyku.'),
-        '\nInterface language: '+foodLookupLanguages(language)[0]+'. Write the note in that language. In this attempt search '+(sourceLanguage==='any'?'in every language.':'only sources in the language '+sourceLanguage+'. When the specific product is not found there, return found=false; the app then tries the next language. Never switch to another variant of the product just because of the language.')),
-      input: L("Potravina: ", "Food: ") + JSON.stringify({ name: product || null, barcode: code || null }),
-      tools: [{ type: "web_search" }], format: FOOD_LOOKUP_SCHEMA,
-      maxOutputTokens: 2000, model: lightModel(env)
-    });
-    model=r.model;const found=productFromLookup(r.text,{barcode:code,citations:r.citations});
-    if(found&&found.confidence!=='low'&&found.sources.length)return {product:found,model,sourceLanguage};
-  }
-  return {product:null,model};
+  const r = await callOpenAI(env, { feature: "food-lookup",
+    instructions: foodLookupInstructionsText() + foodLookupOrderText(foodLookupLanguages(language)),
+    input: L("Potravina: ", "Food: ") + JSON.stringify({ name: product || null, barcode: code || null }),
+    tools: [{ type: "web_search" }], format: FOOD_LOOKUP_SCHEMA,
+    maxOutputTokens: 2000, model: lightModel(env)
+  });
+  const found = productFromLookup(r.text, { barcode: code, citations: r.citations });
+  return { product: found && found.confidence !== 'low' && found.sources.length ? found : null, model: r.model };
 }

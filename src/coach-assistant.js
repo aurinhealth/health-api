@@ -10,6 +10,7 @@ import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, recordAiUsage } from './ai-usage.js';
+import { trendFacts } from './trend-facts.js';
 
 // The parts of the prompt that depend on the athlete's main sport (A5): the
 // priorities, the hard-days rule, what a plan lists and when gym legs are
@@ -80,6 +81,8 @@ Daily availability limits automatic proposals. When userInitiated=true the user 
 
 When the context has a cyclingCoachV2 object, take its readiness guardrails, capability progression and load balance as the basis for decisions. Judge HRV and resting heart rate only against the athlete's own average (cyclingCoachV2.readiness.hrv and restingHr), never against generic values. Take the season phase from cyclingCoachV2.constraints.phase: base, build, taper (the week before the main race: less volume, only short sharp intensity), openers (a short activation the day before the race) and race. You may change the exact structure of a workout when it fits the goal better, but you must never ignore red readiness, excessive accumulated fatigue or a clash with lower-body gym work without saying so explicitly.
 
+trends holds long-term facts computed by the app (HRV and resting heart rate over 6 weeks, sleep debt over the last 7 nights, nights in a row under the sleep need, CTL over 6 weeks). Use at most one of them per answer, and only when it bears on the question; never work out trends of your own from the daily rows.
+
 When workoutLibraryRecommendations is available, prefer the most suitable existing library workout over inventing a new structure. Weigh suitability, challenge gap, duration, load, source and how it fits the surrounding days. Propose a new workout only when the library has no suitable option, and say so clearly.
 
 thresholds holds the FTP, LTHR, maximum and resting heart rate, running threshold pace (s/km) and the power, heart-rate and pace zones from the athlete's settings; athlete holds their weight, sex and age. Give intensity in watts and heart rate from these zones. When critical data is missing, set a conservative intensity and say what would sharpen the decision. Never pretend to know an FTP, VO2max, heart-rate zones, pain or a medical condition that is not in the data. Do not prescribe treatment.
@@ -133,6 +136,8 @@ Respektuj athleteState: Sick, Injured a On break pozastavují běžné tréninky
 Denní availability omezuje automatické návrhy. Pokud userInitiated=true, uživatel vybírá nebo mění trénink v chatu: jeho výslovná délka, přidání dalšího tréninku i přesun mají před uloženým denním časem přednost, včetně dne s nulovou dostupností. Takový požadavek neodmítej ani nezkracuj kvůli availability; bez výslovné volby dál plánuj podle časových možností. Již naplánovaný trénink neruš bez žádosti uživatele.
 
 Pokud je v kontextu objekt cyclingCoachV2, ber jeho readiness guardrails, capability progression a load balance jako rozhodovací základ. HRV a klidový tep posuzuj jen vůči vlastnímu průměru sportovce (cyclingCoachV2.readiness.hrv a restingHr), nikdy podle obecných hodnot. Fázi sezóny ber z cyclingCoachV2.constraints.phase: base, build, taper (týden před hlavním závodem méně objemu a jen krátká ostrá intenzita), openers (den před závodem krátká aktivace) a race. Můžeš změnit konkrétní strukturu workoutu, pokud to lépe odpovídá cíli, ale nesmíš ignorovat červenou readiness, nadměrnou kumulovanou únavu nebo konflikt s lower-body gymem bez výslovného vysvětlení.
+
+trends obsahuje dlouhodobá fakta spočítaná aplikací (HRV a klidový tep za 6 týdnů, spánkový dluh za posledních 7 nocí, kolik nocí po sobě byl spánek pod potřebou, CTL za 6 týdnů). V jedné odpovědi použij nejvýš jedno z nich, a jen když k otázce patří; vlastní trendy z denních řádků nepočítej.
 
 Pokud je k dispozici workoutLibraryRecommendations, preferuj nejvhodnější existující workout z knihovny před vymýšlením nové struktury. Posuzuj suitability, challenge gap, délku, zátěž, zdroj a návaznost na okolní dny. Nový workout navrhni jen tehdy, když knihovna nemá vhodnou variantu, a jasně to uveď.
 
@@ -272,6 +277,11 @@ export function compactWellness(rows,{date=null,days=14}={}){
   return rows.filter(w=>w&&(!date||String(w.id||w.date||'').slice(0,10)<=date)).slice(-days).map(compactWellnessRow);
 }
 
+// The long-term facts for the chat, as { trends } or nothing.
+export function coachTrends({date,fitness,health,profile}){
+  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null});
+  return trends?{trends}:{};
+}
 export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
@@ -297,6 +307,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     fitness:compactWellness(fitness?.wellness,{date,days:14}),
     sleep:sleepNights(health?.sleep,date),
     health:compactWellness(health?.wellness,{date,days:31}),
+    // Weeks, not days (trend-facts.js); left out when the data is too short.
+    ...coachTrends({date,fitness,health,profile}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null})),
     strengthProgress:strengthProgress(gym?.history,date),
     todayGym:todayGymContext(gym,date),

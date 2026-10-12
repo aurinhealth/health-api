@@ -8,6 +8,9 @@ import { searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
 
 const MEALS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 const MAX_ITEMS = 8;
+// At most this many items of one sentence are looked up on the web (A9);
+// the rest stay without values, as a food the lookup did not find.
+export const MAX_LOOKUPS = 3;
 
 // A sentence about what was eaten or drunk, not a question or a training
 // request: "Mám sníst banán před jízdou?" or "Měl jsem dnes jet intervaly"
@@ -86,12 +89,13 @@ const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 
 export async function buildFoodDraft(env, message, today, { parse = parseFoodSentence, lookup = lookupFoodWithAI, saved = searchPersonalFoods } = {}) {
   const parsed = await parse(env, message);
   const items = [];
+  let lookups = 0;
   for (const item of parsed.items) {
     const query = [item.brand, item.name].filter(Boolean).join(" ");
     let product = null;
     try { product = (await saved(env.DB, query, null))[0] || (await saved(env.DB, item.name, null))[0] || null; } catch { product = null; }
     if (product) product = { ...product, source: "personal" };
-    else { try { product = (await lookup(env, { name: query })).product; } catch (error) { console.error("Food lookup failed", error.message); } }
+    else if (lookups < MAX_LOOKUPS) { lookups++; try { product = (await lookup(env, { name: query })).product; } catch (error) { console.error("Food lookup failed", error.message); } }
     const basis = product?.nutrition_basis === "ml" ? "ml" : product?.nutrition_basis === "portion" ? "portion" : item.basis;
     items.push({ ...item, basis, product, totals: product && basis !== "portion" ? itemTotals(product, item.grams) : null });
   }
