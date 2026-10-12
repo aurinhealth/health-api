@@ -338,17 +338,6 @@ ${check(t('Účet i se všemi daty kdykoli smažeš v Nastavení.', 'You can del
   });
 }
 
-// What /app shows now that the web app is switched off (web-app-closed.js).
-export function webAppClosedPage(request) {
-  const {lang, device} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
-  return sitePage({lang, device, path: '/app', index: false,
-    title: t('Webová aplikace je vypnutá · Loadwise', 'The web app is switched off · Loadwise'),
-    description: t('Loadwise teď běží jen v aplikaci pro iPhone.', 'Loadwise now runs only in the iPhone app.'),
-    body: `<main class="wrap doc"><h1>${t('Webová aplikace je vypnutá', 'The web app is switched off')}</h1>
-<p>${t('Loadwise teď běží jen v aplikaci pro iPhone. Tvoje data zůstávají uložená a uvidíš je tam, když se přihlásíš stejným účtem.', 'Loadwise now runs only in the iPhone app. Your data stays saved, and you will see it there when you sign in with the same account.')}</p>
-<p><a href="/">${t('Zpět na úvod', 'Back to the overview')}</a></p></main>`});
-}
-
 // Policy pages. The English text is the reference version (Google verification reads it);
 // the Czech one says the same.
 function doc(request, path, title, html) {
