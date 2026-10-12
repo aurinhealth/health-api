@@ -217,6 +217,26 @@ export function wristTempPenalty(deviation) {
   return d >= 1 ? 10 : d >= 0.5 ? 5 : 0;
 }
 
+// How much higher a value runs in the luteal phase than over all days: rows
+// carry `cyclePhase` (cycle-model.js markCyclePhases, natural cycle only).
+// Resting heart rate rises 1–3 bpm and temperature 0.2–0.5 °C after
+// ovulation (Shilaih 2017; Maijala 2019). The athlete's own difference over
+// the last 60 days once there are 5 luteal and 5 other days with the value,
+// else `fallback`; kept between 0 and `max`.
+export function lutealOffset(rows, date, key, fallback, max) {
+  const end = Date.parse(date + "T12:00:00Z"), luteal = [], other = [];
+  for (const r of rows || []) {
+    if (!r || !(r.id < date) || !r.cyclePhase) continue;
+    const v = Number(r[key]);
+    if ((end - Date.parse(r.id + "T12:00:00Z")) / 86400000 > 60 || !Number.isFinite(v) || r[key] == null || r[key] === "") continue;
+    (r.cyclePhase === "luteal" ? luteal : other).push(v);
+  }
+  if (luteal.length < 5 || other.length < 5) return fallback;
+  const mean = xs => xs.reduce((s, v) => s + v, 0) / xs.length;
+  const diff = mean(luteal) - mean([...luteal, ...other]);
+  return Math.round(Math.max(0, Math.min(max, diff)) * 100) / 100;
+}
+
 // A component score from a z-score: the personal average is 70 (normal), one
 // SD on the bad side 50 and two 30. The personal normal range is the mean ±
 // 1 SD; HRV-guided training eases off when a value leaves it (Kiviniemi 2007,
@@ -271,8 +291,12 @@ export function recoveryReadiness(input) {
   let rb = sourceBaseline(rows, date, "restingHR", today.restingHRSource || null), mixed = false;
   if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { rb = all; mixed = true; } }
   if (Number(today.restingHR) > 0 && rb.mean != null) {
-    const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean) / sd;
-    components.restingHR = { value: Number(today.restingHR), baseline: rb.mean, z, score: recoveryComponentScore(-z), days: rb.count };
+    // In the luteal phase the normal is the athlete's luteal normal: the
+    // baseline over all days plus the luteal rise (lutealOffset).
+    const cycle = today.cyclePhase === "luteal" ? lutealOffset(rows, date, "restingHR", 1, 3) : 0;
+    const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean - cycle) / sd;
+    components.restingHR = { value: Number(today.restingHR), baseline: rb.mean + cycle, z, score: recoveryComponentScore(-z), days: rb.count };
+    if (cycle) components.restingHR.cycle = cycle;
     if (mixed) flags.push("restingHRMixed");
   }
   const bb = personalBaseline(rows, date, "respiration");
@@ -298,8 +322,12 @@ export function recoveryReadiness(input) {
   // counts once: with Google's skin temperature flagged too, the larger cost
   // applies, not both.
   const wrist = wristTempDeviation(rows, date);
+  // In the luteal phase the deviation is counted above the luteal rise.
   if (wrist && wrist.night === date && wrist.deviation != null) {
-    components.wristTemp = { value: wrist.value, baseline: wrist.baseline, deviation: wrist.deviation, nights: wrist.nights, raised: wrist.deviation >= 0.5, elevated: wrist.deviation >= 1, points: 0 };
+    const cycle = today.cyclePhase === "luteal" ? lutealOffset(rows, date, "wristTemp", 0.2, 0.5) : 0;
+    const deviation = Math.round((wrist.deviation - cycle) * 100) / 100;
+    components.wristTemp = { value: wrist.value, baseline: wrist.baseline, deviation, nights: wrist.nights, raised: deviation >= 0.5, elevated: deviation >= 1, points: 0 };
+    if (cycle) components.wristTemp.cycle = cycle;
     if (components.wristTemp.elevated) flags.push("wrist_temp_elevated");
   }
   const nightDate = night && (night.date || String(night.endTime || "").slice(0, 10));
@@ -389,4 +417,4 @@ export function hrvMetric(row) {
 }
 
 // The self-contained model functions (tests/helpers/recovery-model.mjs runs them on their own).
-export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];
+export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, lutealOffset, recoveryReadiness, heartRateLoad, strainScore];
