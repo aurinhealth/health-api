@@ -6,10 +6,14 @@
 import { parseStrengthPlan } from './strength-history.js';
 import { progressionDecision, EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
 import { recoverySignals } from './ride-review.js';
-import { L as t, isEnglish } from './lang.js';
+import { L as t, isEnglish, isImperial, kgToLb } from './lang.js';
 
 const n = v => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
-const kgText = v => { const s = String(Math.round(v * 10) / 10); return isEnglish() ? s : s.replace('.', ','); };
+// A number in the app language; a load (kg in the data) in the athlete's units, "45 kg" or "99.2 lb".
+const numText = v => { const s = String(Math.round(v * 10) / 10); return isEnglish() ? s : s.replace('.', ','); };
+const loadNum = kg => numText(isImperial() ? kgToLb(kg) : kg);
+const unit = () => isImperial() ? ' lb' : ' kg';
+const kgText = kg => loadNum(kg) + unit();
 const e1rm = (kg, reps) => kg > 0 && reps > 0 ? kg * (1 + Math.min(reps, 15) / 30) : null;
 function repRange(text) {
   const m = String(text || '').match(/(\d+)\s*(?:[-–]\s*(\d+))?/);
@@ -57,24 +61,24 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
 
   // Progress against the last time the exercise was done.
   const up = exercises.filter(e => e.lastBest && e.best > e.lastBest * 1.01), down = exercises.filter(e => e.lastBest && e.best < e.lastBest * .95);
-  for (const e of up.slice(0, 3)) wins.push(t(e.name + ': odhad maxima ' + kgText(e.best) + ' kg, o ' + kgText(e.best - e.lastBest) + ' kg víc než minule (' + fmtDate(e.lastDate) + ').', e.name + ': estimated max ' + kgText(e.best) + ' kg, ' + kgText(e.best - e.lastBest) + ' kg more than on ' + fmtDate(e.lastDate) + '.'));
+  for (const e of up.slice(0, 3)) wins.push(t(e.name + ': odhad maxima ' + kgText(e.best) + ', o ' + kgText(e.best - e.lastBest) + ' víc než minule (' + fmtDate(e.lastDate) + ').', e.name + ': estimated max ' + kgText(e.best) + ', ' + kgText(e.best - e.lastBest) + ' more than on ' + fmtDate(e.lastDate) + '.'));
   const clean = exercises.filter(e => e.doneSets === e.plannedSets && e.sets.every(s => s.status !== 'under') && !up.includes(e));
   if (clean.length) wins.push(t('Podle plánu: ' + clean.map(e => e.name).join(', ') + '.', 'As planned: ' + clean.map(e => e.name).join(', ') + '.'));
   for (const e of new Set([...skipped, ...under])) {
     const low = e.sets.filter(x => x.status === 'under'), parts = [];
     if (e.doneSets < e.plannedSets) parts.push(t(e.doneSets + ' z ' + e.plannedSets + ' sérií', e.doneSets + ' of ' + e.plannedSets + ' sets'));
-    if (low.length) parts.push(low.map(x => kgText(x.kg) + '×' + x.reps).join(t(' a ', ' and ')) + t(' pod rozsahem ' + e.range.min + '–' + e.range.max + ' opakování', ' below the ' + e.range.min + '–' + e.range.max + ' rep range'));
+    if (low.length) parts.push(low.map(x => loadNum(x.kg) + '×' + x.reps).join(t(' a ', ' and ')) + t(' pod rozsahem ' + e.range.min + '–' + e.range.max + ' opakování', ' below the ' + e.range.min + '–' + e.range.max + ' rep range'));
     fixes.push(e.name + ': ' + parts.join(', ') + '.');
   }
-  for (const e of exercises.filter(e => e.maxRpe != null && e.maxRpe >= 9.5 && !under.includes(e))) fixes.push(t(e.name + ': RPE ' + kgText(e.maxRpe) + ', série skoro do selhání. Nech si 1–2 opakování v rezervě.', e.name + ': RPE ' + kgText(e.maxRpe) + ', close to failure. Keep 1–2 reps in reserve.'));
-  for (const e of down) fixes.push(t(e.name + ': odhad maxima o ' + kgText(e.lastBest - e.best) + ' kg níž než minule (' + fmtDate(e.lastDate) + '). Jednou se to stane; pokud se to zopakuje, zkontroluj spánek a regeneraci.', e.name + ': estimated max ' + kgText(e.lastBest - e.best) + ' kg lower than on ' + fmtDate(e.lastDate) + '. It happens; if it repeats, check sleep and recovery.'));
+  for (const e of exercises.filter(e => e.maxRpe != null && e.maxRpe >= 9.5 && !under.includes(e))) fixes.push(t(e.name + ': RPE ' + numText(e.maxRpe) + ', série skoro do selhání. Nech si 1–2 opakování v rezervě.', e.name + ': RPE ' + numText(e.maxRpe) + ', close to failure. Keep 1–2 reps in reserve.'));
+  for (const e of down) fixes.push(t(e.name + ': odhad maxima o ' + kgText(e.lastBest - e.best) + ' níž než minule (' + fmtDate(e.lastDate) + '). Jednou se to stane; pokud se to zopakuje, zkontroluj spánek a regeneraci.', e.name + ': estimated max ' + kgText(e.lastBest - e.best) + ' lower than on ' + fmtDate(e.lastDate) + '. It happens; if it repeats, check sleep and recovery.'));
 
   // Next time: the load the generator will use.
   const plan = exercises.filter(e => e.decision).map(e => {
     const d = e.decision, kg = kgText(d.kg);
-    if (d.decision === 'increase') return t(e.name + ' ' + kg + ' kg (+' + kgText(d.kg - d.topKg) + ')', e.name + ' ' + kg + ' kg (+' + kgText(d.kg - d.topKg) + ')');
-    if (d.decision === 'decrease') return t(e.name + ' ' + kg + ' kg (−' + kgText(d.topKg - d.kg) + ')', e.name + ' ' + kg + ' kg (−' + kgText(d.topKg - d.kg) + ')');
-    return t(e.name + ' ' + kg + ' kg, přidat opakování', e.name + ' ' + kg + ' kg, add reps') + (d.stalled ? t(' (třetí trénink beze změny, zkus jinou variantu)', ' (third session without change, try a variation)') : '');
+    if (d.decision === 'increase') return t(e.name + ' ' + kg + ' (+' + loadNum(d.kg - d.topKg) + ')', e.name + ' ' + kg + ' (+' + loadNum(d.kg - d.topKg) + ')');
+    if (d.decision === 'decrease') return t(e.name + ' ' + kg + ' (−' + loadNum(d.topKg - d.kg) + ')', e.name + ' ' + kg + ' (−' + loadNum(d.topKg - d.kg) + ')');
+    return t(e.name + ' ' + kg + ', přidat opakování', e.name + ' ' + kg + ', add reps') + (d.stalled ? t(' (třetí trénink beze změny, zkus jinou variantu)', ' (third session without change, try a variation)') : '');
   });
   if (plan.length) next.push(...plan.slice(0, 6));
 
@@ -82,7 +86,8 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
   const tonnage = exercises.reduce((a, e) => a + e.sets.filter(s => s.status !== 'missing').reduce((x, s) => x + s.kg * s.reps, 0), 0);
   const groups = new Map();
   for (const e of exercises) if (e.muscle && e.doneSets) groups.set(e.muscle, (groups.get(e.muscle) || 0) + e.doneSets);
-  if (tonnage > 0) load.push(t('Objem ' + Math.round(tonnage).toLocaleString('cs-CZ') + ' kg (váha × opakování)', 'Volume ' + Math.round(tonnage).toLocaleString('en-US') + ' kg (load × reps)') + (groups.size ? t(', série podle partií: ', ', sets by muscle group: ') + [...groups].sort((a, b) => b[1] - a[1]).map(([m, c]) => muscleName(m) + ' ' + c).join(', ') : '') + '.');
+  const tonnageText = Math.round(isImperial() ? kgToLb(tonnage) : tonnage).toLocaleString(isEnglish() ? 'en-US' : 'cs-CZ') + unit();
+  if (tonnage > 0) load.push(t('Objem ' + tonnageText + ' (váha × opakování)', 'Volume ' + tonnageText + ' (load × reps)') + (groups.size ? t(', série podle partií: ', ', sets by muscle group: ') + [...groups].sort((a, b) => b[1] - a[1]).map(([m, c]) => muscleName(m) + ' ' + c).join(', ') : '') + '.');
   const rec = recoverySignals(wellness, date), flags = [rec.hrv?.drop, rec.rhr?.high, rec.sleep?.nights >= 3].filter(Boolean).length;
   if (rec.hrv?.drop) load.push(t('Ranní HRV ' + Math.round(rec.hrv.value) + ' je pod tvým běžným rozsahem (' + Math.round(rec.hrv.low) + '–' + Math.round(rec.hrv.high) + ').', 'Morning HRV ' + Math.round(rec.hrv.value) + ' is below your usual range (' + Math.round(rec.hrv.low) + '–' + Math.round(rec.hrv.high) + ').'));
   if (flags >= 2) load.push(t('Regenerace je dnes slabší: další těžký trénink nohou nebo intervaly nech až na den, kdy se HRV a spánek vrátí.', 'Recovery is weaker today: leave the next heavy leg session or intervals until HRV and sleep are back.'));
@@ -90,8 +95,8 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
   if (legs >= 6) load.push(t('Hodně sérií na nohy (' + legs + '): zítřejší jízdu nebo běh drž spíš lehce.', 'Plenty of leg sets (' + legs + '): keep tomorrow\'s ride or run on the easy side.'));
   void fitness;
 
-  const table = { columns: [t('Cvik', 'Exercise'), t('Plán', 'Plan'), t('Odcvičeno', 'Done'), 'RPE'], rows: exercises.map(e => [e.name, e.plannedSets + '× ' + (e.sets[0].plannedKg != null ? kgText(e.sets[0].plannedKg) + ' kg × ' : '') + (e.sets[0].plannedReps || '—'), e.sets.filter(s => s.status !== 'missing').map(s => kgText(s.kg) + '×' + s.reps).join(', ') || '—', e.maxRpe != null ? kgText(e.maxRpe) : '—']) };
-  const sets = exercises.map(e => ({ name: e.name, sets: e.sets.map(s => ({ label: s.status === 'missing' ? (s.plannedKg != null ? kgText(s.plannedKg) + '×' + (s.plannedReps || '') : '—') : kgText(s.kg) + '×' + s.reps, status: s.status })) }));
+  const table = { columns: [t('Cvik', 'Exercise'), t('Plán', 'Plan'), t('Odcvičeno', 'Done'), 'RPE'], rows: exercises.map(e => [e.name, e.plannedSets + '× ' + (e.sets[0].plannedKg != null ? kgText(e.sets[0].plannedKg) + ' × ' : '') + (e.sets[0].plannedReps || '—'), e.sets.filter(s => s.status !== 'missing').map(s => loadNum(s.kg) + '×' + s.reps).join(', ') || '—', e.maxRpe != null ? numText(e.maxRpe) : '—']) };
+  const sets = exercises.map(e => ({ name: e.name, sets: e.sets.map(s => ({ label: s.status === 'missing' ? (s.plannedKg != null ? loadNum(s.plannedKg) + '×' + (s.plannedReps || '') : '—') : loadNum(s.kg) + '×' + s.reps, status: s.status })) }));
   const sections = [
     wins.length ? { kind: 'good', label: t('Co se povedlo', 'What went well'), items: wins } : null,
     fixes.length ? { kind: 'fix', label: t('Co příště líp', 'Do better next time'), items: fixes } : null,
