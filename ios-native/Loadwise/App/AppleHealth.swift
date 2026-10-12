@@ -311,9 +311,15 @@ final class HealthReader: @unchecked Sendable {
         return (try? await store.requestAuthorization(toShare: [], read: read)) != nil
     }
 
-    /// Not what Loadwise wrote itself (AppleHealthExport): the server has it already.
+    /// Not what Loadwise wrote itself from its own records (AppleHealthExport,
+    /// marked with a loadwise: sync identifier): the server has it already.
+    /// A workout recorded live in Režim tréninku (LiveWorkout) has no such
+    /// mark and is read like a watch's, so its calories and heart rate count.
     private var notOurs: NSPredicate {
-        NSCompoundPredicate(notPredicateWithSubpredicate: HKQuery.predicateForObjects(from: HKSource.default()))
+        NSCompoundPredicate(notPredicateWithSubpredicate: NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: HKSource.default()),
+            HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier)
+        ]))
     }
 
     private func stamp(_ date: Date) -> String { iso.string(from: date) }

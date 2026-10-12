@@ -6,3 +6,4 @@
 "NSHealthShareUsageDescription" = "Loadwise čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky a váhu, aby spočítal regeneraci, zátěž a kalorický cíl.";
 "NSHealthUpdateUsageDescription" = "Loadwise do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.";
 "NSAlarmKitUsageDescription" = "Loadwise tě vzbudí v čase budíku, podle kterého počítá večerku.";
+"NSBluetoothAlwaysUsageDescription" = "Loadwise se připojí ke snímači tepu, který si spáruješ, aby v režimu tréninku ukázal tep.";

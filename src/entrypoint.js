@@ -983,7 +983,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // same target as Today (energy budget), with water.
   if(url.pathname==='/app/api/food-today'&&request.method==='GET'){
     try{
-      const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
+      // Up to two weeks ahead: meals planned or copied into the coming days.
+      const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=shiftDate(localToday(),14)?requested:localToday();
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const [daily,food,fluids,health,profile]=await Promise.all([

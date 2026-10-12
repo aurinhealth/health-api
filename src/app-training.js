@@ -3,6 +3,7 @@
 // phase of the preparation, form (fitness, fatigue), VO2max, time in heart-rate
 // zones, the weeks' load, the acute:chronic workload ratio and monotony.
 // Pure: GET /app/api/training loads the inputs.
+import { groupOfType } from "./activity-type.js";
 import { mergeWellnessRows, heartRateLoad, strainScore } from "./recovery-model.js";
 import { athleteFocus } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
@@ -312,6 +313,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
 
 const SPORTS = [[/virtualride|ride|cycl|bike|kolo/i, "ride"], [/run|běh/i, "run"], [/weight|strength|gym|posil|síl/i, "strength"], [/swim|plav/i, "swim"], [/walk|hike|chůze/i, "walk"]];
 function sportOf(w) {
+  const known = groupOfType(w?.type);
+  if (known) return known;
   const text = String(w?.type || "") + " " + String(w?.name || "");
   return (SPORTS.find(([re]) => re.test(text)) || [null, "other"])[1];
 }

@@ -6,3 +6,4 @@
 "NSHealthShareUsageDescription" = "Loadwise reads sleep, workouts, heart rate, HRV, wrist temperature, steps and weight from Apple Health to work out your recovery, strain and calorie target.";
 "NSHealthUpdateUsageDescription" = "Loadwise writes to Apple Health only what you log in the app yourself and turn on in Sync, such as workouts, weight, food and drinks.";
 "NSAlarmKitUsageDescription" = "Loadwise wakes you at your alarm time, which it uses to work out your bedtime.";
+"NSBluetoothAlwaysUsageDescription" = "Loadwise connects to the heart rate sensor you pair, to show your heart rate in workout mode.";

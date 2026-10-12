@@ -228,11 +228,26 @@ struct ActivityDetailView: View {
     @State private var detail: ActivityDetail?
     @State private var error: String?
     @State private var feedback = false
+    @State private var changingType = false
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
+                HStack {
+                    SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
+                    Spacer()
+                    if !model.demo {
+                        Menu {
+                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                        } label: {
+                            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                                .frame(width: 36, height: 32).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Další volby")
+                    }
+                }
+                .padding(.top, 24)
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     ActivityDetailContent(detail: detail)
@@ -252,6 +267,9 @@ struct ActivityDetailView: View {
             }
         }
         .sheet(isPresented: $feedback) { FeedbackSheet(session: session) }
+        .sheet(isPresented: $changingType) {
+            ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
+        }
         .task {
             guard detail == nil, let id = session.activityId, !model.demo else {
                 if model.demo { error = "V ukázce se detail nenačítá." }

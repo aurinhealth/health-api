@@ -14,6 +14,7 @@
 // Google Health rows of that type and day become record_role 'duplicate'
 // (marked matched_activity_id 'apple-health', which keeps them out of the
 // activity matching).
+import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
 
 export const SOURCE = "apple-health";
@@ -158,7 +159,7 @@ const upsert = (db, userId, row) => db.prepare(
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'primary')
    ON CONFLICT (user_id, source_family, data_type, external_id) DO UPDATE SET
      sample_time = excluded.sample_time, start_time = excluded.start_time, end_time = excluded.end_time,
-     value_numeric = excluded.value_numeric, value_unit = excluded.value_unit, payload_json = excluded.payload_json, updated_at = CURRENT_TIMESTAMP
+     value_numeric = excluded.value_numeric, value_unit = excluded.value_unit, ${KEEP_TYPE_SQL}, updated_at = CURRENT_TIMESTAMP
    WHERE health_datapoints.sample_time IS NOT excluded.sample_time
      OR health_datapoints.start_time IS NOT excluded.start_time
      OR health_datapoints.end_time IS NOT excluded.end_time

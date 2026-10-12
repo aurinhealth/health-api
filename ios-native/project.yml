@@ -74,6 +74,8 @@ targets:
         NSHealthShareUsageDescription: Loadwise čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky a váhu, aby spočítal regeneraci, zátěž a kalorický cíl.
         # Settings → Synchronizace → Apple Zdraví writes workouts, weight, food and water (App/AppleHealthExport.swift).
         NSHealthUpdateUsageDescription: Loadwise do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.
+        # Nastavení → Snímač tepu: a Bluetooth chest strap or band for Režim tréninku (App/HeartRateSensor.swift).
+        NSBluetoothAlwaysUsageDescription: Loadwise se připojí ke snímači tepu, který si spáruješ, aby v režimu tréninku ukázal tep.
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Loadwise tě vzbudí v čase budíku, podle kterého počítá večerku.
         # Built with the iOS 26 SDK for AlarmKit, the app keeps its own design.

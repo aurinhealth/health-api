@@ -118,7 +118,7 @@ struct FoodContent: View {
 
     @ViewBuilder private var content: some View {
         HStack {
-            DayNavigator(date: food.date)
+            DayNavigator(date: food.date, ahead: true)
             Spacer()
             CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
         }
