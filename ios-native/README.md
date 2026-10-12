@@ -2,12 +2,10 @@
 
 The native SwiftUI app with the new design. It reads the same server as the
 web app (`/app/api/today` for the Today screen), so the numbers match.
-`mobile/` is the older Capacitor app that wraps the web page; both can be
-installed side by side (different bundle IDs).
 
 ## What it does now
 
-- Sign-in with Google via Safari: the same handoff as `mobile/`
+- Sign-in with Google via Safari
   (`/auth/google?app=…` → `loadwise://auth` → `POST /auth/app/session`).
 - The Today screen:
   - readiness;
@@ -89,8 +87,6 @@ On the phone: install TestFlight from the App Store, open the invitation,
 and new builds arrive on their own. Builds expire after 90 days.
 
 ## Install with Sideloadly (free Apple ID)
-
-The same as `mobile/README.md`:
 
 1. Open `Loadwise-native-unsigned.ipa` in Sideloadly and sign it with your
    Apple ID.

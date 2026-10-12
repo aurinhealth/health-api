@@ -13,12 +13,12 @@ const STATE_SECONDS = 600;
 const GOOGLE_ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 
-// The iPhone app (mobile/) cannot sign in inside its web view: Google refuses
-// embedded browsers. It opens /auth/google?app=<challenge> in Safari instead;
+// The iPhone app (ios-native/) signs in through Safari: Google refuses
+// embedded browsers. It opens /auth/google?app=<challenge> in Safari;
 // the callback sends Safari back to loadwise://auth with a short-lived token,
-// and the app's web view trades that token plus the verifier behind the
-// challenge for its own session at /auth/app/session. Another app grabbing the
-// loadwise:// link gets nothing without the verifier.
+// and the app trades that token plus the verifier behind the challenge for
+// its own session at /auth/app/session. Another app grabbing the loadwise://
+// link gets nothing without the verifier.
 const APP_RETURN_URL = "loadwise://auth";
 const APP_HANDOFF_SECONDS = 300;
 export const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;

@@ -6,8 +6,8 @@ struct LoadwiseApp: App {
     @State private var model = AppModel(demo: ProcessInfo.processInfo.arguments.contains("-demo"))
     /// Settings → Vzhled: "system", "light" or "dark".
     @AppStorage("appearance") private var appearance = "system"
-    /// Settings → Jazyk: "cs" or "en".
-    @AppStorage(L10n.key) private var language = "cs"
+    /// Settings → Jazyk: "cs" or "en"; the phone's language until it is chosen.
+    @AppStorage(L10n.key) private var language = L10n.defaultLanguage
 
     var body: some Scene {
         WindowGroup {
