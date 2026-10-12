@@ -6,7 +6,8 @@ import { createPasskey, signInWith } from "./helpers/passkey.mjs";
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys, passkeyName } from "../src/passkeys.js";
 import { ensureTenancy, findUser, inviteUser, scopedDb, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
 import { isPublicPath, resolvePrincipal } from "../src/dashboard-auth.js";
-import { exportAccountData, deleteAccount } from "../src/account-data.js";
+import { deleteAccount } from "../src/account-data.js";
+import { exportAccount } from "./helpers/account-export.mjs";
 
 const ORIGIN = "https://petrfitnessdata.eu";
 const MIGRATION = readFileSync(new URL("../migrations/0014_passkeys_email_codes.sql", import.meta.url), "utf8");
@@ -238,7 +239,7 @@ test("the data download lists the passkeys and deleting the account removes them
   const env = await setup(), user = await member(env);
   const { passkey } = await addPasskey(env, user);
   const own = { DB: scopedDb(env.DB, user.id), USER_ID: user.id };
-  const [exported] = (await exportAccountData(own, user)).tables.user_passkeys;
+  const [exported] = (await exportAccount(own, user)).tables.user_passkeys;
   assert.equal(exported.id, passkey.id);
   assert.equal(exported.user_id, undefined);
   env.DB.sqlite.exec(readFileSync(new URL("../migrations/0011_account_deletions.sql", import.meta.url), "utf8"));
