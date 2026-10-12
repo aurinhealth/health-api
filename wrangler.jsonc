@@ -51,7 +51,7 @@
   "r2_buckets": [
     {
       "binding": "FOOD_CATALOG_R2",
-      "bucket_name": "loadwise-foods"
+      "bucket_name": "loadwise-food-catalog"
     }
   ],
   // Cloudflare Email Service: sign-in codes and notices about new passkeys. Nothing is sent
