@@ -111,6 +111,14 @@ struct SettingsMenu: View {
                 NavigationLink { SleepSettingsView(given: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "moon.zzz.fill", color: Palette.indigo), title: "Spánek a budík", value: sleepValue)
                 }
+                // Cycle tracking: only with the profile's sex set to female.
+                if store.profile["sex"]?.string == "female" {
+                    SettingsDivider()
+                    NavigationLink { CycleSettingsView() } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.pink), title: "Cyklus",
+                                    value: L10n.tr(model.cycle?.enabled == true ? "zapnuto" : "vypnuto"))
+                    }
+                }
                 SettingsDivider()
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "heart.text.square", color: Palette.rust), title: "Tréninkové zóny", value: "běh, kolo")

@@ -68,6 +68,11 @@ struct HealthContent: View {
 
                 RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
                     .padding(.top, 24)
+
+                // Cycle tracking, only for today.
+                if model.selectedDate == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
+                    CycleHealthSection(state: state).padding(.top, 12)
+                }
             }
 
             WidgetBoard(panel: .health,
@@ -77,6 +82,7 @@ struct HealthContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }
 

@@ -91,6 +91,10 @@ struct TodayContent: View {
 
         if model.selectedDate == nil {
             MorningCheckinCard(feeling: today.checkin, top: 20)
+            // Cycle tracking: the morning question, or the day's log.
+            if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
+                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+            }
         }
 
         // Today's weather at the week plan's place (or the offer to set

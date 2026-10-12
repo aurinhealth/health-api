@@ -35,11 +35,13 @@ enum AppRoute: Hashable {
     case weekPlan
     case dayReview
     case insights
+    /// Cycle tracking's calendar (Health → Cyklus).
+    case cycle
 
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
-        case .readiness, .sleep, .heart, .weight: return .health
+        case .readiness, .sleep, .heart, .weight, .cycle: return .health
         case .sleepSettings, .dayReview, .steps, .strain: return .today
         default: return .training
         }
@@ -68,6 +70,7 @@ enum AppRoute: Hashable {
         case "week-plan": self = .weekPlan
         case "day-review": self = .dayReview
         case "records": self = .insights
+        case "cycle": self = .cycle
         default: return nil
         }
     }
@@ -126,6 +129,7 @@ struct RouteScreen: View {
         case .weekPlan: WeekPlanView()
         case .dayReview: DayReviewView()
         case .insights: InsightsView()
+        case .cycle: CycleCalendarView()
         }
     }
 }

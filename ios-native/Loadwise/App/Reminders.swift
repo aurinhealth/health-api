@@ -165,6 +165,24 @@ enum Reminders {
             addRepeating(center, "weight", at: minute(weightTimeKey, 7 * 60), days: days(weightKey),
                          title: L10n.tr("Zvaž se"), body: L10n.tr("Ráno nalačno, ať je trend váhy přesný."))
         }
+        // The pill (Settings → Oznámení → Antikoncepce): the coming 8 days of
+        // the pack at the chosen time, pause days only when asked, today left
+        // out once taken. "Vzato" and "Za 30 minut" right on the notification.
+        if let pill = storedPill(), pill.on {
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: Date())
+            let takenToday = today.cycle?.pill?.taken != nil
+            for offset in 0..<8 {
+                if offset == 0 && takenToday { continue }
+                guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
+                let date = AppModel.localDate(day)
+                guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
+                if number == 0 && !pill.inPause { continue }
+                addOnce(center, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
+                        body: number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
+                        category: pillCategory, info: ["date": date])
+            }
+        }
         // Sunday evening (or the chosen days): a look at the coming week's plan.
         if isOn(weekKey) {
             addRepeating(center, "week", at: minute(weekTimeKey, 19 * 60), days: days(weekKey),
@@ -232,16 +250,86 @@ enum Reminders {
     }
 
     /// One reminder on the given day, skipped when its time has passed.
-    private static func addOnce(_ center: UNUserNotificationCenter, _ id: String, day: Date, at minute: Int, title: String, body: String) {
+    private static func addOnce(_ center: UNUserNotificationCenter, _ id: String, day: Date, at minute: Int, title: String, body: String,
+                                category: String? = nil, info: [String: String] = [:]) {
         let calendar = Calendar.current
         guard let fire = calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: day), fire > Date() else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
+        if let category { content.categoryIdentifier = category }
+        if !info.isEmpty { content.userInfo = info }
         let when = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
         let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: false)
         center.add(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
+    }
+
+    // MARK: - The pill
+
+    /// The notification's category with "Vzato" and "Za 30 minut"
+    /// (AppDelegate registers it and handles the answer).
+    static let pillCategory = "loadwise.pill"
+    static let pillTakenAction = "loadwise.pill.taken"
+    static let pillSnoozeAction = "loadwise.pill.snooze"
+    private static let pillKey = "cycle.pill"
+
+    static var pillNotificationCategory: UNNotificationCategory {
+        UNNotificationCategory(identifier: pillCategory, actions: [
+            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: []),
+            UNNotificationAction(identifier: pillSnoozeAction, title: L10n.tr("Za 30 minut"), options: [])
+        ], intentIdentifiers: [], options: [])
+    }
+
+    struct StoredPill: Codable, Equatable {
+        var on: Bool
+        var minute: Int
+        var inPause: Bool
+        var packStart: String
+        var active: Int
+    }
+
+    /// The cycle settings the reminder needs, kept on the phone so the
+    /// reminders are planned without the server (nil: no pill reminder).
+    static func storePill(_ settings: CycleSettings?) {
+        guard let settings, settings.contraception == "pill", let packStart = settings.packStart else {
+            UserDefaults.standard.removeObject(forKey: pillKey)
+            return
+        }
+        let active = ["21+7": 21, "24+4": 24, "28": 28][settings.pillPack] ?? 21
+        let stored = StoredPill(on: settings.pillReminder, minute: minutes(settings.pillReminderTime) ?? 21 * 60,
+                                inPause: settings.pillReminderInPause, packStart: packStart, active: active)
+        if let data = try? JSONEncoder().encode(stored) { UserDefaults.standard.set(data, forKey: pillKey) }
+    }
+
+    static func storedPill() -> StoredPill? {
+        guard let data = UserDefaults.standard.data(forKey: pillKey) else { return nil }
+        return try? JSONDecoder().decode(StoredPill.self, from: data)
+    }
+
+    /// The pill of the pack on `date` (1…active), 0 on a pause day, nil
+    /// before the pack started. Packs are 28 days.
+    static func pillNumber(on date: String, packStart: String, active: Int) -> Int? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: date), let s = f.date(from: packStart), d >= s else { return nil }
+        let index = Int((d.timeIntervalSince(s) / 86400).rounded()) % 28
+        return index < active ? index + 1 : 0
+    }
+
+    /// "Za 30 minut": the same reminder once more (outside the "loadwise."
+    /// prefix, so planning the day keeps it).
+    static func snoozePill(date: String, title: String, body: String) async {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        content.categoryIdentifier = pillCategory
+        content.userInfo = ["date": date]
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 30 * 60, repeats: false)
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "loadwise-pill-snooze", content: content, trigger: trigger))
     }
 
     /// "22:40" → 1360.
