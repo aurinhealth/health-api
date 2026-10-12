@@ -372,7 +372,7 @@ final class APIClient: @unchecked Sendable {
         struct Values: Decodable { let calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g: Double? }
         struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String? }
         let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string(mode)]
-        let r: Response = try await send("/app/api/food/photo", method: "POST", body: body)
+        let r: Response = try await send("/app/api/food/photo", method: "POST", body: body, timeout: 180)
         guard r.status == "ok", let v = r.values else { throw APIError.message(r.message ?? L10n.tr("Na fotce se hodnoty nepodařilo přečíst.")) }
         var product = FoodProduct(name: (r.name?.isEmpty == false ? r.name! : L10n.tr("Jídlo z fotky")), calories_100g: v.calories_100g, protein_100g: v.protein_100g,
                                   carbs_100g: v.carbs_100g, fat_100g: v.fat_100g,
@@ -552,8 +552,11 @@ final class APIClient: @unchecked Sendable {
         }
     }
 
-    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B) async throws -> T {
+    /// timeout: longer for AI that reads photos, which may wait in line on the
+    /// server behind the user's other AI calls (src/ai-usage.js claimAiSlot).
+    func send<T: Decodable, B: Encodable>(_ path: String, method: String, body: B, timeout: TimeInterval? = nil) async throws -> T {
         var request = makeRequest(path, method: method)
+        if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
         let (data, response) = try await session.data(for: request)

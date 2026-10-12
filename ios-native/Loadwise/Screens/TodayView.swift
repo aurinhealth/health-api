@@ -121,10 +121,18 @@ struct TodayContent: View {
     }
 }
 
-/// "‹ ČTVRTEK 8. ŘÍJNA ›": a day back, a day forward (not past today).
+/// "‹ ČTVRTEK 8. ŘÍJNA ›": a day back, a day forward (not past today; Food
+/// goes two weeks ahead for planned and copied meals).
 struct DayNavigator: View {
     @Environment(AppModel.self) private var model
     let date: String
+    var ahead = false
+
+    private var canGoForward: Bool {
+        guard ahead else { return model.selectedDate != nil }
+        let last = AppModel.shift(AppModel.localDate(Date()), by: AppModel.foodDaysAhead) ?? date
+        return date < last
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -133,11 +141,13 @@ struct DayNavigator: View {
             }
             .accessibilityLabel("Předchozí den")
             SectionLabel(text: Fmt.dayHeading(date))
-            if model.selectedDate != nil {
-                Button { Task { await model.showDay(offset: 1) } } label: {
+            if canGoForward {
+                Button { Task { await model.showDay(offset: 1, ahead: ahead) } } label: {
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 36)
                 }
                 .accessibilityLabel("Další den")
+            }
+            if model.selectedDate != nil {
                 Button { Task { await model.showToday() } } label: {
                     Text("Dnes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 10).frame(height: 28)

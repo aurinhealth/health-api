@@ -656,7 +656,7 @@ struct EquipmentView: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: "Poznat z fotky nebo webu").padding(.top, 26)
             Card {
-                PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
+                PhotosPicker(selection: $photos, maxSelectionCount: 8, matching: .images) {
                     Label(L10n.tr(busy == "photo" ? "Čtu fotky…" : "Vybrat fotky posilovny"), systemImage: "photo.on.rectangle.angled")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 44)

@@ -79,6 +79,8 @@ test("The server answers GET /app/api/food-today with buildFood", () => {
   const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.match(src, /url\.pathname==='\/app\/api\/food-today'&&request\.method==='GET'/);
   assert.match(src, /buildFood\(\{date,hour:date===localToday\(\)\?localHour\(\):null,daily,food,fluids,slots:profile\?\.meals\}\)/);
+  // Meals copied or planned into the coming days can be opened there.
+  assert.match(src, /requested<=shiftDate\(localToday\(\),14\)\?requested:localToday\(\)/);
 });
 
 test("Every meal has its part of the day's target, in the slots the athlete chose", () => {
