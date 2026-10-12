@@ -7,9 +7,10 @@ import { mealConsumedAt } from "../src/food-log.js";
 import { buildCoachCouncil } from "../src/coach-engine.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-const entrypoint = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+const entrypoint = serverSource();
 
 async function setup(type = "VirtualRide") {
   const raw = createD1();

@@ -12,9 +12,10 @@ import { handleIntervalsOAuth, INTERVALS_SCOPES } from "../src/intervals-oauth.j
 import { handleGoogleOAuth } from "../src/google-oauth.js";
 import { connectReturnUrl } from "../src/connect-return.js";
 import { dashboardPage } from "../src/dashboard.js";
+import { serverSource, SERVER_FILES } from "./helpers/server-source.mjs";
 
 const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+const entry = serverSource();
 const ctx = { waitUntil() {} };
 
 function profileDb() {
@@ -91,7 +92,7 @@ test("Intervals.icu takes a personal API key or an access token from its own sig
   assert.equal(intervalsAuthorization("abc"), "Basic " + btoa("API_KEY:abc"));
   assert.equal(intervalsAuthorization("Bearer tok"), "Bearer tok");
   // No request builds the Basic header by hand any more.
-  for (const file of ["entrypoint.js", "index.js", "weight-sync.js", "wellness-sync.js", "planned-events.js", "workout-library.js", "intervals-athlete.js"]) {
+  for (const file of [...SERVER_FILES, "index.js", "weight-sync.js", "wellness-sync.js", "planned-events.js", "workout-library.js", "intervals-athlete.js"]) {
     assert.doesNotMatch(readFileSync(new URL("../src/" + file, import.meta.url), "utf8"), /API_KEY:/, file);
   }
 });
