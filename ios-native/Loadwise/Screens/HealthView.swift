@@ -41,7 +41,7 @@ struct DetailScreen<Content: View>: View {
             ScreenBackground(glow: glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět")) { dismiss() }
+                    BackSlot { dismiss() }
                     content
                 }
                 .padding(.horizontal, 24)
@@ -49,6 +49,7 @@ struct DetailScreen<Content: View>: View {
                 .padding(.bottom, 100)
             }
         }
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }
