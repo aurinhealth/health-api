@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createD1 } from './helpers/d1.mjs';
+import { grantAiConsent } from './helpers/consent.mjs';
 import { scopedDb } from '../src/tenancy.js';
 import { EXERCISES } from '../src/strength-generator.js';
 import { TECHNIQUE } from '../src/exercise-technique-data.js';
@@ -51,7 +52,7 @@ test('every catalog exercise says where to feel it and what must not hurt',async
 test('an exercise outside the catalog gets its card written once by AI, stored and reused',async()=>{
   const { storedTechnique, generateTechnique, exerciseInUse } = await import('../src/exercise-technique.js');
   const { importStrengthHistory } = await import('../src/strength-history.js');
-  const raw=createD1(),db=scopedDb(raw,1),other=scopedDb(raw,2),original=globalThis.fetch,calls=[];
+  const raw=grantAiConsent(createD1(),1,2),db=scopedDb(raw,1),other=scopedDb(raw,2),original=globalThis.fetch,calls=[];
   const answer={setup:['Kettlebell v ruce nad hlavou.','Záda rovná.'],steps:['Boky dozadu.','Pomalu do lehu.','Nahoře zpevni hýždě.'],feel:['Hýždě a zadní stehna.','Spodní záda nebolí.'],mistakes:['Dřep místo předklonu.'],breathing:'Výdech nahoře.',videoId:'abcdefghijk',videoTitle:'Turkish get-up',query:'kettlebell swing form'};
   globalThis.fetch=async(_,options)=>{const body=JSON.parse(options.body);calls.push(body);return Response.json({model:body.model,output_text:JSON.stringify(answer)});};
   try{
