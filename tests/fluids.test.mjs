@@ -50,7 +50,8 @@ test("training hours count done sessions, or the plan when more is planned", asy
 test("the server routes drinks and saved meals", () => {
   const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/fluids'/);
-  assert.match(entry, /url\.pathname==='\/app\/api\/food\/recipes'&&request\.method==='GET'/);
+  // Saved meals (personal-recipes.js), which the iPhone app lists.
+  assert.match(entry, /url\.pathname==='\/app\/api\/food\/recipes'\)\{\s*if\(request\.method==='GET'\)return Response\.json\(\{status:'ok',recipes:await listRecipes\(env\.DB\)\}/);
 });
 
 test("drinks logged as food count automatically; alcohol and foods in grams do not", async () => {

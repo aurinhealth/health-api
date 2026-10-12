@@ -106,6 +106,7 @@ import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
+import { ownerOnlyRefusal } from "./owner-only-routes.js";
 
 
 // Requests that read or preview only and so keep the cache.
@@ -254,6 +255,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
+    // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
+    const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
+    if (ownerOnly) return ownerOnly;
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }
