@@ -4,9 +4,10 @@
 // active energy of the day follow it. No row: the automatic choice.
 const ID = /^[A-Za-z0-9:._-]{1,120}$/;
 export const ENERGY_CHOICES = ["estimate", "device"];
+export const ENERGY_CHOICES_TABLE = "CREATE TABLE IF NOT EXISTS activity_energy_choices (user_id INTEGER NOT NULL, activity_id TEXT NOT NULL, date TEXT NOT NULL, choice TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, activity_id))";
 
 async function ensureTable(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS activity_energy_choices (user_id INTEGER NOT NULL, activity_id TEXT NOT NULL, date TEXT NOT NULL, choice TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, activity_id))").run();
+  await db.prepare(ENERGY_CHOICES_TABLE).run();
 }
 
 // Map of activity id → "estimate" | "device" for these activities.
