@@ -55,8 +55,8 @@ struct ZonesSettingsView: View {
             SettingsDivider()
             SettingsField(title: "Prahový tep", text: $runLthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.runLthr.map { Fmt.int($0) } ?? "–")
         }
-        SettingsGroup(title: "Tempové zóny", footer: "Procenta jsou z prahové rychlosti.") {
-            OptionListRow(title: "Předvolba", selection: $paceModel, options: t.paceZoneModels.map { ($0.id, $0.label) }, footer: Self.presetFooter)
+        SettingsGroup(title: "Tempové zóny") {
+            OptionListRow(title: "Předvolba", selection: $paceModel, options: t.paceZoneModels.map { ($0.id, $0.label) })
             ForEach(t.paceZones) { z in
                 SettingsDivider()
                 ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " %" },
@@ -84,15 +84,15 @@ struct ZonesSettingsView: View {
             SettingsDivider()
             SettingsField(title: "Maximální tep", text: $maxHr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.maxHr.map { Fmt.int($0) } ?? "–")
         }
-        SettingsGroup(title: "Výkonové zóny", footer: "Procenta jsou z FTP.") {
-            OptionListRow(title: "Předvolba", selection: $powerModel, options: t.powerZoneModels.map { ($0.id, $0.label) }, footer: Self.presetFooter)
+        SettingsGroup(title: "Výkonové zóny") {
+            OptionListRow(title: "Předvolba", selection: $powerModel, options: t.powerZoneModels.map { ($0.id, $0.label) })
             ForEach(t.powerZones) { z in
                 SettingsDivider()
                 ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.int($0) + " %" }, range: wattRange(z))
             }
         }
         SettingsGroup(title: "Tepové zóny pro kolo") {
-            OptionListRow(title: "Předvolba", selection: $hrModel, options: t.hrZoneModels.map { ($0.id, $0.label) }, footer: Self.presetFooter)
+            OptionListRow(title: "Předvolba", selection: $hrModel, options: t.hrZoneModels.map { ($0.id, $0.label) })
             ForEach(t.hrZones) { z in
                 SettingsDivider()
                 ZoneRow(name: z.name, percent: nil, range: bpmRange(z))
@@ -104,14 +104,9 @@ struct ZonesSettingsView: View {
 
     @ViewBuilder
     private func intervals(_ t: TrainingProfileResponse) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            PillToggle(title: "Zapisovat do Intervals.icu",
-                       subtitle: t.intervalsConnected == false ? "Intervals.icu není připojené" : writeIntervals ? "Prahy a zóny se po uložení pošlou do Intervals.icu" : "Zóny zůstanou jen v Loadwise",
-                       systemImage: "arrow.triangle.2.circlepath", isOn: $writeIntervals, disabled: t.intervalsConnected == false)
-            Text("Kalendář, hodinky i trenér pak počítají se stejnými čísly. Prázdné prahy se berou z Intervals.icu.")
-                .font(Typo.caption).foregroundStyle(Palette.muted).padding(.horizontal, 4)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        PillToggle(title: "Zapisovat do Intervals.icu",
+                   subtitle: t.intervalsConnected == false ? "Intervals.icu není připojené" : writeIntervals ? "Prahy a zóny se po uložení pošlou do Intervals.icu" : "Zóny zůstanou jen v Loadwise",
+                   systemImage: "arrow.triangle.2.circlepath", isOn: $writeIntervals, disabled: t.intervalsConnected == false)
         if let result = t.intervals {
             switch result.status {
             case "ok":
@@ -138,8 +133,6 @@ struct ZonesSettingsView: View {
     }
 
     // MARK: Values
-
-    static let presetFooter = "Předvolby jsou stejné jako v Intervals.icu. Hranice zón se přepočítají po uložení."
 
     static func pace(_ seconds: Double) -> String {
         let s = Int(seconds.rounded())
