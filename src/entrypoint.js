@@ -74,6 +74,7 @@ import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory, parseStrengthPlan, removeManualSets, strengthSessions } from "./strength-history.js";
 import { searchCookbookRecipes, logFood, mealConsumedAt } from "./food-log.js";
 import { explainWorkout } from "./workout-explanation.js";
+import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
@@ -2230,6 +2231,13 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       }
       let generated=planWorkout?await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:planWorkout.id,resizeTo:planWorkout.minutes}):await generateWorkout(env.DB,{sport:genSport,environment,date,coach,availabilityMinutes:resizeTo??sessionMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo});
       if(!planWorkout&&sessionMinutes&&resizeTo==null&&generated.workout?.duration_minutes>sessionMinutes)generated=await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:generated.workout.id,resizeTo:sessionMinutes});
+      // Today's proposal in the library: the AI picks among the rules' safe
+      // candidates for the morning and says why (ai-workout-pick.js).
+      if(body.ai===true&&date===localToday()&&!planWorkout&&!body.workoutId&&!(Number(body.variant)>0)&&resizeTo==null&&generated.status==='ok'){
+        const before=generated.workout?.id;
+        generated=await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today:{score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await getCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null}});
+        if(generated.workout?.id!==before)try{generated.explanation=explainWorkout(generated.workout,{coach,environment:generated.workout.environment||environment,thresholds,sport:genSport});}catch{}
+      }
       const planInfo=planned&&plan.pw?{name:plan.pw.template.name,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec.phase,kind:planned.kind,followed:Boolean(planWorkout)}:null;
       if(planInfo&&generated.explanation?.why){
         const head=planInfo.name+L(' · týden ',' · week ')+planInfo.week+'/'+planInfo.weeks;
