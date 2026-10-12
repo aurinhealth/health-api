@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
+import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { reflectionSignals, rulesReflection, createReflection, listReflections, activityFromRow, dedupeActivities, reflectionInput, reflectionInstructions } from "../src/coach-reflection.js";
 import { localDateTime } from "../src/user-time.js";
@@ -65,7 +66,7 @@ test("activities from Intervals.icu and Google Health become one Prague timeline
 });
 
 function env(key) {
-  const db = createD1();
+  const db = grantAiConsent(createD1(), 7);
   return { DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: key };
 }
 
@@ -116,15 +117,9 @@ test("the coach sees the next two days' plan and suggests recovery that fits", (
   assert.match(reflectionInstructions, /Sauna, vířivka a ledová lázeň ne při nemoci/);
 });
 
-test("RPE feedback starts the coach's note in the background and the dashboard shows it", () => {
+test("RPE feedback starts the coach's note in the background", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(entry, /if\(reflect\)ctx\.waitUntil\(createReflection\(/);
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
   assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
-  assert.match(client, /x\.rating\?ratingCard\(x\)/);
-  assert.match(client, /x\.rated\?'<div class="review-rating">/);
-  // AI has one way in, the AI button: no separate coach button on the day's timeline.
-  assert.doesNotMatch(client, /timelineCoach|openCoachSheet/);
-  assert.match(client, /awaitReflection\(body\.scheduledDate\)/);
 });

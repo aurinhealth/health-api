@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { lookupFoodWithAI, productFromLookup } from "../src/food-ai.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const answer = { found: true, name: "Snickers", brand: "Mars", nutrition_basis: "g", calories: 481, protein_g: 8.6, carbs_g: 60.5, fat_g: 22.5, fiber_g: null, salt_g: 0.6, serving_size: "50 g", package_size: "50 g", confidence: "high", note: "" };
 
@@ -32,12 +32,8 @@ test("not found, missing macros or impossible values are not offered", () => {
   assert.equal(productFromLookup("not json"), null);
 });
 
-test("the dashboard offers the AI lookup and saves the confirmed food for next time", () => {
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+test("the server offers the AI lookup and saves the confirmed food for next time", () => {
+  const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/food\/ai-lookup'/);
-  assert.match(client, /id="foodAiLookup"/);
-  assert.match(client, /async function rememberAiFood\(p\)\{try\{await jsonFetch\('\/app\/api\/food\/personal'/);
-  assert.match(client, /for\(const a of ingredients\)if\(a\.product\)await rememberAiFood\(a\.product\);/);
   assert.match(entry, /personal=await savePersonalFood\(env\.DB,p,\{used:true\}\)/);
 });

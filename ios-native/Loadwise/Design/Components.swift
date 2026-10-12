@@ -100,12 +100,56 @@ struct CircleButton: View {
     }
 }
 
-/// Two-column grid for widgets: wide widgets span both columns.
-struct WidgetGrid<Content: View>: View {
-    @ViewBuilder var content: Content
+/// The back button of a drill-down page, pinned in the top-left corner so it
+/// stays reachable while the page scrolls under it.
+struct FloatingBackButton: View {
+    var action: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) { content }
+        Button(action: action) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Palette.ink)
+                .frame(width: 40, height: 40)
+                .background(.regularMaterial, in: Circle())
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Zpět"))
+    }
+}
+
+private struct FloatingBackKey: EnvironmentKey { static let defaultValue = false }
+
+extension EnvironmentValues {
+    /// The page pins its back button (FloatingBackButton); the inline one keeps only its place.
+    var floatingBack: Bool {
+        get { self[FloatingBackKey.self] }
+        set { self[FloatingBackKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Pins the back button over the page (top-left, above the scroll).
+    func floatingBack(_ action: @escaping () -> Void) -> some View {
+        environment(\.floatingBack, true)
+            .overlay(alignment: .topLeading) {
+                FloatingBackButton(action: action).padding(.leading, 22).padding(.top, 14)
+            }
+    }
+}
+
+/// A page's own back button: its place only when the page pins one.
+struct BackSlot: View {
+    @Environment(\.floatingBack) private var floating
+    var action: () -> Void
+
+    var body: some View {
+        if floating {
+            Color.clear.frame(width: 36, height: 36)
+        } else {
+            CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět"), action: action)
+        }
     }
 }
 

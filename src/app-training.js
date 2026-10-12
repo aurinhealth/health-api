@@ -95,7 +95,10 @@ const isWorkout = a => a && (num(a.durationHours) ?? 0) >= 0.15;
 // (its event id, to move or delete it). A plan that was done is shown once, as
 // done; on a past day a plan nothing was done for is "missed".
 export function daySessions(d, date, training = {}, gymDay = null) {
-  const planned = (training.planned || []).filter(Boolean);
+  // The app's own copy of that day's gym plan (a planned:local-… strength
+  // event kept for Intervals.icu) is the same session as the gym plan.
+  const appGymCopy = w => gymDay?.exercises?.length && sportOf(w) === "strength" && /^(planned:)?local-/.test(String(w.id ?? ""));
+  const planned = (training.planned || []).filter(w => w && !appGymCopy(w));
   const matchedPlans = (training.matched || []).filter(m => m?.planned);
   // An activity paired with a plan counts even without a length (a Strava stub).
   const pairedIds = new Set(matchedPlans.map(m => String(m.actualId ?? "")).filter(Boolean));
@@ -147,7 +150,16 @@ export function dayPlanState(sessions = []) {
   return DAY_ORDER.find(s => states.has(s)) || null;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, gym = {} }) {
+// The Training screen's "Nastav si zaměření a cíle" card shows until the
+// athlete has chosen a main sport and a goal (the saved profile, not what the
+// suggestions fill in: effectiveProfile always has a sport).
+export function profileIncomplete(saved) {
+  if (!saved || typeof saved !== "object") return true;
+  const sport = String(saved.mainSport || "").trim(), goal = String(saved.sportGoal || "").trim();
+  return !sport || !goal;
+}
+
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {} }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -284,7 +296,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
-    thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
+    thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) },
+    profileIncomplete: profileIncomplete(savedProfile === undefined ? profile : savedProfile)
   };
 }
 

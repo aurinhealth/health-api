@@ -35,11 +35,11 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # The tenancy tests use node:sqlite, available from Node 22.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
@@ -58,10 +58,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
@@ -77,7 +77,7 @@ jobs:
           npx --yes wrangler@4 secret list | node scripts/require-secrets.mjs SESSION_SECRET
 
       - name: Apply D1 migrations
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -95,8 +95,21 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/provision-food-catalog.mjs
 
+      # A secret saved in the Cloudflare dashboard marks the Worker as last
+      # deployed from the dashboard. Wrangler then downloads the dashboard
+      # config before every deploy, and that call times out for this Worker.
+      # Saving a harmless secret through Wrangler first clears the mark.
+      - name: Clear the dashboard deploy mark
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'wrangler' | npx --yes wrangler@4 secret put DEPLOY_SOURCE --name health-api
+
       - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v4
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -218,26 +231,25 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/smoke-food-catalog.mjs
 
-      - name: Smoke test dashboard
+      - name: Smoke test the server
         env:
           OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
-          page="$(curl -fsS "https://petrfitnessdata.eu/app")"
+          # The old web app is gone: /app leads to the overview page.
+          old_app="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://petrfitnessdata.eu/app")"
+          [ "$old_app" = "301 https://petrfitnessdata.eu/" ] || { echo "/app must redirect to the overview page, got $old_app"; exit 1; }
           anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/daily")"
           [ "$anonymous" = "401" ] || { echo "Dashboard API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
           # Sessions are signed with SESSION_SECRET only: without it nobody can sign in.
           # Google sign-in stays open only for the iPhone app (?app=<challenge>).
           login="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://petrfitnessdata.eu/auth/google?app=$(printf 'a%.0s' $(seq 1 43))")"
           case "$login" in "302 https://accounts.google.com/"*) ;; *) echo "Google sign-in is not set up (HTTP ${login%% *}); is SESSION_SECRET set?"; exit 1;; esac
-          python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "vypnut" in s; assert "dashboard-client.js" not in s' <<< "$page"
-          curl -fsS "https://petrfitnessdata.eu/app/dashboard-client.js?deployment=$GITHUB_SHA" -o /tmp/dashboard-client.js
           home="$(curl -fsS "https://petrfitnessdata.eu/")"
           python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "Google Health data disclosure" in s; assert "href=\"/privacy\"" in s' <<< "$home"
           shot_type="$(curl -fsS -o /dev/null -w '%{content_type}' "https://petrfitnessdata.eu/site/today-dark.webp")"
           [ "$shot_type" = "image/webp" ] || { echo "Overview screenshot not served, got $shot_type"; exit 1; }
-          node --check /tmp/dashboard-client.js
           daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/daily")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"' <<< "$daily"
           sleep="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/sleep")"

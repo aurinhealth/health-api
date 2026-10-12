@@ -10,14 +10,24 @@
 // passing it along.
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+// The store holds the language and the units of the request or job.
 const current = new AsyncLocalStorage();
+const store = () => current.getStore() || {};
 
 export const normalizeLang = value => String(value || '').toLowerCase().startsWith('en') ? 'en' : 'cs';
-export const lang = () => current.getStore() || 'cs';
+export const lang = () => store().lang || 'cs';
 export const isEnglish = () => lang() === 'en';
 // The text in the current language.
 export const L = (cs, en) => lang() === 'en' ? en : cs;
-export function withLang(value, fn) { return current.run(normalizeLang(value), fn); }
+export function withLang(value, fn) { return current.run({ ...store(), lang: normalizeLang(value) }, fn); }
+// Units follow the device (X-Units: metric|imperial) and are remembered per
+// user like the language. The data stays metric; texts for an imperial user convert.
+export const normalizeUnits = value => String(value || '').toLowerCase().startsWith('imp') ? 'imperial' : 'metric';
+export const units = () => store().units || 'metric';
+export const isImperial = () => units() === 'imperial';
+export function withUnits(value, fn) { return current.run({ ...store(), units: normalizeUnits(value) }, fn); }
+export const KG_PER_LB = 0.45359237, M_PER_MILE = 1609.344;
+export const kgToLb = kg => kg / KG_PER_LB;
 
 // Czech plural: 1 trénink, 2–4 tréninky, 5+ tréninků; English: 1 workout, 2 workouts.
 export function plural(count, cs1, cs2, cs5, en1, en2) {
@@ -33,50 +43,79 @@ export function num(value, digits = 0) {
   return lang() === 'en' ? s : s.replace('.', ',');
 }
 
-// ---- The remembered language of each user ----------------------------------
+// ---- The remembered language and units of each user ------------------------
 const known = new Map();
+const schemaDone = new WeakSet();
 async function ensureTable(db) {
-  await db.prepare('CREATE TABLE IF NOT EXISTS user_language (user_id INTEGER PRIMARY KEY, language TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
+  await db.prepare('CREATE TABLE IF NOT EXISTS user_language (user_id INTEGER PRIMARY KEY, language TEXT NOT NULL, units TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();
+  // A table made before units existed gets the column, once per database.
+  if (schemaDone.has(db)) return;
+  schemaDone.add(db);
+  await db.prepare('ALTER TABLE user_language ADD COLUMN units TEXT').run().catch(() => {});
 }
 // fresh skips this isolate's memory (cron jobs: the choice may have changed
 // in another isolate).
+async function storedPrefs(db, userId, fresh) {
+  if (!fresh && known.has(userId)) return known.get(userId);
+  await ensureTable(db);
+  const row = await db.prepare('SELECT language, units FROM user_language WHERE user_id=?').bind(userId).first();
+  const value = { language: normalizeLang(row?.language), units: normalizeUnits(row?.units) };
+  known.set(userId, value);
+  return value;
+}
 export async function storedLanguage(db, userId, { fresh = false } = {}) {
   if (!db || userId == null) return 'cs';
-  if (!fresh && known.has(userId)) return known.get(userId);
-  try {
-    await ensureTable(db);
-    const row = await db.prepare('SELECT language FROM user_language WHERE user_id=?').bind(userId).first();
-    const value = normalizeLang(row?.language);
-    known.set(userId, value);
-    return value;
-  } catch { return 'cs'; }
+  try { return (await storedPrefs(db, userId, fresh)).language; } catch { return 'cs'; }
+}
+export async function storedUnits(db, userId, { fresh = false } = {}) {
+  if (!db || userId == null) return 'metric';
+  try { return (await storedPrefs(db, userId, fresh)).units; } catch { return 'metric'; }
 }
 // Saves the app language of a request when it changed; one write per change.
 export async function rememberLanguage(db, userId, value) {
   if (!db || userId == null || !value) return;
   const next = normalizeLang(value);
-  if (known.get(userId) === next) return;
+  if (known.get(userId)?.language === next) return;
   if (await storedLanguage(db, userId) === next) return;
   try {
     await db.prepare('INSERT INTO user_language(user_id,language,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET language=excluded.language,updated_at=CURRENT_TIMESTAMP').bind(userId, next).run();
-    known.set(userId, next);
+    known.set(userId, { ...(known.get(userId) || { units: 'metric' }), language: next });
   } catch { /* the language is remembered on the next request */ }
+}
+// The same for the units; `language` fills the row of a user seen for the first time.
+export async function rememberUnits(db, userId, value, language = 'cs') {
+  if (!db || userId == null || !value) return;
+  const next = normalizeUnits(value);
+  if (known.get(userId)?.units === next) return;
+  if (await storedUnits(db, userId) === next) return;
+  try {
+    await db.prepare('INSERT INTO user_language(user_id,language,units,updated_at) VALUES(?,?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET units=excluded.units,updated_at=CURRENT_TIMESTAMP').bind(userId, normalizeLang(language), next).run();
+    // A first-seen user's row now carries the request language too: the next read takes it from the table.
+    known.delete(userId);
+  } catch { /* remembered on the next request */ }
 }
 export function _resetLanguagesForTest() { known.clear(); }
 
-// Added to every AI request (coach-assistant.js callOpenAI). The instructions
-// are written in Czech, so English needs saying. Free-form chat answers in the
-// language the athlete writes in; what the app stores follows the app language.
-// Food parsing and lookups keep the athlete's own food names and have their
-// own language handling.
+// Added to every AI request (coach-assistant.js callOpenAI). Every prompt has
+// its own English version (English is a separate language version of the app,
+// never a translation), so this note only settles what the data's language
+// means: free-form chat answers in the language the athlete writes in; what the
+// app stores follows the app language. Food parsing and lookups keep the
+// athlete's own food names and have their own language handling.
 export function aiLanguageNote(feature) {
   if (['food-sentence', 'food-lookup', 'food-photo', 'barcode'].includes(feature)) return '';
-  if (feature === 'assistant') return lang() === 'en'
-    ? '\n\nLANGUAGE: Reply in the language the athlete writes in (English unless they write in another language). Everything that is saved in the app or sent to Intervals.icu (workout names and descriptions, plans, labels, reasons of proposed actions, memories) must be in English, the app language, regardless of the language of these instructions or the data.'
-    : '\n\nJAZYK: Odpovídej v jazyce, ve kterém sportovec píše (obvykle česky). Vše, co se ukládá do aplikace nebo posílá do Intervals.icu (názvy a popisy tréninků, plány, popisky, důvody navržených akcí), piš česky.';
-  return lang() === 'en'
-    ? '\n\nLANGUAGE: The athlete uses the app in English. Write every user-facing text in natural English, even where these instructions say "česky" or the data is in Czech. Keep names the athlete wrote (foods, workouts, notes) as they are.'
-    : '';
+  if (feature === 'assistant') return (lang() === 'en'
+    ? '\n\nLANGUAGE: Reply in the language the athlete writes in (English unless they write in another language). Everything that is saved in the app or sent to Intervals.icu (workout names and descriptions, plans, labels, reasons of proposed actions, memories) must be in English, the app language, whatever the language of the data.'
+    : '\n\nJAZYK: Odpovídej v jazyce, ve kterém sportovec píše (obvykle česky). Vše, co se ukládá do aplikace nebo posílá do Intervals.icu (názvy a popisy tréninků, plány, popisky, důvody navržených akcí), piš česky.') + aiUnitsNote();
+  return (lang() === 'en'
+    ? '\n\nLANGUAGE: The athlete uses the app in English. Write every user-facing text in natural English, even where the data is in Czech. Keep names the athlete wrote (foods, workouts, notes) as they are.'
+    : '') + aiUnitsNote();
+}
+// An imperial user reads pounds and miles; the data the model gets stays metric.
+export function aiUnitsNote() {
+  if (!isImperial()) return '';
+  return L('\n\nJEDNOTKY: Sportovec používá imperiální jednotky. Piš libry (lb), míle, stopy/palce, °F a fl oz; data jsou metrická, převeď je.',
+    '\n\nUNITS: The athlete uses imperial units. Use pounds, miles, feet/inches, °F and fl oz; the data is metric, convert it.');
 }
 
 // A table of texts whose values follow the current language when read, for

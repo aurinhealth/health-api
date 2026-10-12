@@ -169,12 +169,26 @@ final class APIClient: @unchecked Sendable {
         let _: JSONValue = try await send("/app/api/consent", method: "POST", body: ["ai": JSONValue.bool(allowed)])
     }
 
-    /// All the account's data as a JSON file in the temporary folder, to share.
+    /// All the account's data as an NDJSON file in the temporary folder, to
+    /// share (one JSON object per line: a header, then a line per record).
+    /// A long-used account runs to hundreds of megabytes, so the server
+    /// streams it and the app downloads it straight to a file.
     func exportData() async throws -> URL {
-        let (data, response) = try await session.data(for: makeRequest("/app/api/account/export"))
-        try check(response, data)
-        let url = FileManager.default.temporaryDirectory.appending(path: "loadwise-data-" + Self.localToday() + ".json")
-        try data.write(to: url, options: .atomic)
+        var request = makeRequest("/app/api/account/export")
+        request.setValue("application/x-ndjson, application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 300
+        let (downloaded, response) = try await session.download(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if !(200..<300).contains(status) {
+            // Errors come as a short JSON message.
+            let data = (try? Data(contentsOf: downloaded)) ?? Data()
+            try? FileManager.default.removeItem(at: downloaded)
+            try check(response, data)
+            throw APIError.message(L10n.f("Server odpověděl chybou %@.", String(status)))
+        }
+        let url = FileManager.default.temporaryDirectory.appending(path: "loadwise-data-" + Self.localToday() + ".ndjson")
+        try? FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: downloaded, to: url)
         return url
     }
 
@@ -557,9 +571,11 @@ final class APIClient: @unchecked Sendable {
         var request = URLRequest(url: URL(string: path, relativeTo: baseURL)!.absoluteURL)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        // The server counts days in the user's zone and answers in Czech.
+        // The server counts days in the user's zone and writes its texts in the
+        // app's language and units.
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
+        request.setValue(Units.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
         request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {

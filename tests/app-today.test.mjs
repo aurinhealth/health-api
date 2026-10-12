@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildToday, activeMinutes } from "../src/app-today.js";
 import { googleHealthSummary } from "../src/google-dashboard.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const DATE = "2026-10-08";
 const day = offset => new Date(Date.parse(DATE + "T12:00:00Z") + offset * 86400000).toISOString().slice(0, 10);
@@ -141,6 +142,23 @@ test("Google Health steps are counted per local hour", () => {
   assert.equal(s.stepsByHour[day(-20)], undefined, "only the last 15 days");
 });
 
+test("An hourly bucket that ends at midnight counts on the day it started", async () => {
+  const { appleRow } = await import("../src/apple-health.js");
+  // Apple Health's 23:00–24:00 steps bucket on 10 October (Prague, UTC+2) ends exactly at midnight.
+  const r = appleRow({ type: "steps", id: "s1", value: 500, start: "2026-10-10T23:00:00+02:00", end: "2026-10-11T00:00:00+02:00" });
+  const s = googleHealthSummary([{ ...r, source_family: "apple-health", payload_json: JSON.stringify(r.payload) }], "2026-10-11");
+  assert.equal(s.wellness.find(x => x.id === "2026-10-10").steps, 500);
+  assert.equal(s.today.steps, undefined, "nothing on 11 October");
+  assert.equal(s.stepsByHour["2026-10-10"][23], 500);
+  assert.equal(s.coverage.steps, "2026-10-10");
+});
+
+test("Today says how the HRV was measured when the source does", () => {
+  const sdnn = wellness.map(r => ({ ...r, hrvSource: "apple-health:sdnn" }));
+  assert.equal(buildToday({ ...input, health: { wellness: sdnn } }).hrv.metric, "sdnn");
+  assert.equal(buildToday(input).hrv.metric, null);
+});
+
 test("Before tonight's sleep has synced, Today stays empty and the coming night is the current one", () => {
   // 00:54: the night that ends this morning is not over yet, Google has no HRV for today.
   const early = {
@@ -182,7 +200,7 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   assert.match(offline.weather.outdoor.reason, /není dostupná/);
   // No place chosen: no weather, the app offers to set it.
   assert.equal(buildToday(input).weather, null);
-  const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const src = serverSource();
   assert.match(src, /location:place\.location,forecast:place\.forecast/);
   assert.match(src, /cached\(env,ctx,'weather:'/);
 });
@@ -195,4 +213,33 @@ test('active minutes count vigorous minutes twice, today and since Monday', () =
   ];
   assert.deepEqual(activeMinutes(rows, '2026-10-07'), { today: 21, week: 61, target: 150 });
   assert.equal(activeMinutes([{ id: '2026-10-07', steps: 100 }], '2026-10-07'), null);
+});
+
+test("Today shows today's HRV even when its source has no baseline yet", () => {
+  // Today's value from a new source (Apple Health), every earlier day from Google.
+  const fresh = wellness.map(r => r.id === DATE ? { ...r, hrvSource: "apple-health" } : { ...r, hrvSource: "google-wearables" });
+  const t = buildToday({ ...input, health: { wellness: fresh } });
+  assert.equal(t.hrv.value, 66);
+  assert.equal(t.hrv.baseline, null);
+});
+
+test("a day's Apple Health HRV wins over Google's copy of it", () => {
+  const hrvRow = (source, ms) => ({ data_type: "daily-heart-rate-variability", source_family: source, sample_time: DATE + "T06:00:00Z", value_numeric: ms, payload_json: "{}" });
+  const s = googleHealthSummary([hrvRow("apple-health", 48), hrvRow("google-wearables", 61)], DATE);
+  assert.equal(s.today.hrv, 48);
+  assert.equal(s.today.hrvSource, "apple-health");
+});
+
+test("the day's strain target follows readiness, the plan, sleep debt and the zone", async () => {
+  const { strainTarget } = await import("../src/app-today.js");
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green" }), { low: 11.1, high: 14.1 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", debt: 30 }), { low: 10.6, high: 13.6 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", planned: 8.6 }), { low: 9.1, high: 12.1 });
+  assert.ok(strainTarget({ readiness: 50, zone: "yellow", planned: 18 }).high <= 13.5);
+  assert.ok(strainTarget({ readiness: 25, zone: "red" }).high <= 7.5);
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", rest: true }), { low: 5, high: 8 });
+  const t = buildToday(input);
+  assert.ok(t.strain.target.low < t.strain.target.high);
+  assert.equal(t.strain.target.readiness, t.readiness.score);
+  assert.equal(t.strain.target.plan, "Silový trénink");
 });

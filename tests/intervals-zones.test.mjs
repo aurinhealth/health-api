@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { intervalsSportSettings, writeIntervalsZones } from "../src/intervals-zones.js";
 import { powerZones, hrZones, paceZones } from "../src/training-zones.js";
 import { INTERVALS_SCOPES } from "../src/intervals-oauth.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const profile = { ftp: 260, lthr: 165, maxHr: 188, powerZoneModel: "coggan7", hrZoneModel: "frielLthr", runThresholdPace: 275, runLthr: 172, paceZoneModel: "friel" };
 const thresholds = {
@@ -70,6 +71,6 @@ test("A connection without SETTINGS:WRITE asks to connect again", async () => {
 test("The OAuth connection asks for SETTINGS:WRITE and saving zones writes them", () => {
   assert.ok(INTERVALS_SCOPES.includes("SETTINGS:WRITE"));
   assert.ok(!INTERVALS_SCOPES.includes("SETTINGS:READ"));
-  const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const src = serverSource();
   assert.match(src, /body&&body\.writeIntervals!==false\?await writeIntervalsZones\(env,t\):null/);
 });

@@ -19,6 +19,7 @@ struct GymSessionView: View {
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var changing = false
     @State private var rating = false
+    @State private var ratingDone = false
     @State private var finishing = false
     /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
     @State private var doneMode = false
@@ -71,6 +72,9 @@ struct GymSessionView: View {
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
+        .sheet(isPresented: $ratingDone) {
+            GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
+        }
         .keyboardDoneButton()
     }
 
@@ -96,6 +100,17 @@ struct GymSessionView: View {
                               day: Binding(get: { day ?? GymDay(date: date, values: [], cancelled: nil) }, set: { day = $0 }),
                               session: doneSession,
                               save: { await save() })
+                // A session done live, logged by hand or from the watch can be rated too.
+                if !model.demo, !(day?.exerciseNames.isEmpty ?? true) {
+                    Button { ratingDone = true } label: {
+                        Label("Ohodnotit", systemImage: "hand.thumbsup")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 24)
+                }
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
@@ -125,8 +140,6 @@ struct GymSessionView: View {
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
-                Text("Sestavím ji podle tvé únavy, svalů od posledního tréninku a týdenního plánu. Uloží se i do Intervals.icu.")
-                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 8)
                 Picker("Délka", selection: $minutes) {
                     ForEach([30, 45, 60, 75, 90], id: \.self) { Text("\($0) min").tag($0) }
                 }
@@ -359,6 +372,7 @@ struct SetRow: View {
                     .font(.system(size: 26))
                     .foregroundStyle(set.done ? Palette.green : Palette.faint)
             }
+            .sensoryFeedback(.impact(weight: .light), trigger: set.done) { was, now in !was && now }
             .accessibilityLabel(L10n.tr(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou"))
         }
         .opacity(set.done ? 0.75 : 1)
@@ -457,7 +471,6 @@ struct TechniqueSheet: View {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                Text("U cviku mimo katalog může první načtení chvíli trvat.").font(Typo.caption).foregroundStyle(Palette.faint)
             }
         }
         .padding(.top, 6)
@@ -636,11 +649,8 @@ struct SupersetGroup<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
-            HStack(spacing: 8) {
-                GymTag.superset(letter)
-                Text("Střídej cviky, pauza až po kole").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-            }
-            .padding(.top, spacing == 0 ? 10 : 0)
+            GymTag.superset(letter)
+                .padding(.top, spacing == 0 ? 10 : 0)
             content
         }
         .padding(.leading, 12)

@@ -1,9 +1,8 @@
-import { signText, sessionCookie, sessionSecret, SESSION_SECONDS, timingSafeEqualString } from "./dashboard-auth.js";
+import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 
-// "Sign in with Google" for the dashboard. Only identity scopes are requested;
+// "Sign in with Google" for the iPhone app. Only identity scopes are requested;
 // health data access stays in the separate /oauth/google connector flow.
-// APP_ORIGIN lets the staging copy send Google back to itself.
 const ORIGIN = "https://petrfitnessdata.eu";
 export function googleLoginRedirectUri(env) {
   return (env?.APP_ORIGIN || ORIGIN) + "/auth/google/callback";
@@ -13,18 +12,19 @@ const STATE_SECONDS = 600;
 const GOOGLE_ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 
-// The iPhone app (mobile/) cannot sign in inside its web view: Google refuses
-// embedded browsers. It opens /auth/google?app=<challenge> in Safari instead;
+// The iPhone app (ios-native/) signs in through Safari: Google refuses
+// embedded browsers. It opens /auth/google?app=<challenge> in Safari;
 // the callback sends Safari back to loadwise://auth with a short-lived token,
-// and the app's web view trades that token plus the verifier behind the
-// challenge for its own session at /auth/app/session. Another app grabbing the
-// loadwise:// link gets nothing without the verifier.
+// and the app trades that token plus the verifier behind the challenge for
+// its own session at /auth/app/session. Another app grabbing the loadwise://
+// link gets nothing without the verifier.
 const APP_RETURN_URL = "loadwise://auth";
 const APP_HANDOFF_SECONDS = 300;
 export const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
 
 let cachedJwks = null;
 let cachedJwksAt = 0;
+let forcedJwksAt = 0;
 
 export async function handleGoogleLogin(request, env, pathname) {
   if (pathname === "/auth/google" && request.method === "GET") return startLogin(googleClientEnv(env), request);
@@ -42,11 +42,12 @@ function googleClientEnv(env) {
 function configured(env) {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.SESSION_SECRET && env.OWNER_EMAIL && env.DB);
 }
-const NOT_CONFIGURED = ["Přihlášení přes Google není nastavené", "Chybí GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET nebo OWNER_EMAIL.", 503];
+const APP_ONLY = ["Přihlášení selhalo", "Přihlášení přes Google je jen v aplikaci Loadwise pro iPhone.", 400];
 
 async function startLogin(env, request) {
   const app = new URL(request.url).searchParams.get("app") || "";
-  if (!configured(env)) return APP_CHALLENGE.test(app) ? appError("unavailable") : page(...NOT_CONFIGURED);
+  if (!APP_CHALLENGE.test(app)) return page(...APP_ONLY);
+  if (!configured(env)) return appError("unavailable");
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
@@ -58,7 +59,7 @@ async function startLogin(env, request) {
   u.searchParams.set("code_challenge", base64url(await sha256(verifier)));
   u.searchParams.set("code_challenge_method", "S256");
   u.searchParams.set("prompt", "select_account");
-  const cookie = STATE_COOKIE + "=" + [state, nonce, verifier, APP_CHALLENGE.test(app) ? app : ""].join(".") + "; Max-Age=" + STATE_SECONDS + "; Path=/auth/google; Secure; HttpOnly; SameSite=Lax";
+  const cookie = STATE_COOKIE + "=" + [state, nonce, verifier, app].join(".") + "; Max-Age=" + STATE_SECONDS + "; Path=/auth/google; Secure; HttpOnly; SameSite=Lax";
   return new Response(null, { status: 302, headers: { Location: u.toString(), "Set-Cookie": cookie, "Cache-Control": "no-store" } });
 }
 
@@ -66,13 +67,14 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   const url = new URL(request.url);
   const match = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
   const [expectedState, nonce, verifier, app] = (match?.[1] || "").split(".");
-  // Started by the iPhone app: every failure goes back to it as loadwise://auth?error=…,
+  // Every failure goes back to the iPhone app as loadwise://auth?error=…,
   // so its browser sheet closes and the app says what happened.
-  const fail = (reason, title, message, status) => APP_CHALLENGE.test(app || "") ? appError(reason) : page(title, message, status);
-  if (!configured(env)) return fail("unavailable", ...NOT_CONFIGURED);
-  if (url.searchParams.get("error")) return fail("cancelled", "Přihlášení zrušeno", "Google přihlášení nebylo dokončeno.", 400);
+  if (!APP_CHALLENGE.test(app || "")) return page(...APP_ONLY);
+  const fail = reason => appError(reason);
+  if (!configured(env)) return fail("unavailable");
+  if (url.searchParams.get("error")) return fail("cancelled");
   const code = url.searchParams.get("code"), state = url.searchParams.get("state");
-  if (!code || !state || !expectedState || state !== expectedState || !nonce || !verifier) return fail("expired", "Přihlášení selhalo", "Neplatný nebo prošlý požadavek. Zkus to znovu.", 400);
+  if (!code || !state || !expectedState || state !== expectedState || !nonce || !verifier) return fail("expired");
 
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -80,27 +82,22 @@ async function finishLogin(request, env, fetchImpl = fetch) {
     body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleLoginRedirectUri(env), grant_type: "authorization_code", code_verifier: verifier })
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.id_token) return fail("failed", "Přihlášení selhalo", "Google nevrátil identitu účtu.", 502);
+  if (!response.ok || !data.id_token) return fail("failed");
 
   let claims;
   try { claims = await verifyGoogleIdToken(data.id_token, env.GOOGLE_CLIENT_ID, nonce, fetchImpl); }
-  catch (error) { console.error("Google ID token rejected", error.message); return fail("failed", "Přihlášení selhalo", "Identitu Google účtu se nepodařilo ověřit.", 401); }
+  catch (error) { console.error("Google ID token rejected", error.message); return fail("failed"); }
 
   await ensureTenancy(env.DB, env, { request });
   const user = await signInGoogleUser(env.DB, env, { sub: claims.sub, email: claims.email, name: claims.name });
   if (!user) {
     console.warn("Google login denied for an account without an invitation");
-    return fail("not_invited", "Přístup odepřen", "Tento Google účet nemá do aplikace pozvánku. Požádej správce o přístup.", 403);
+    return fail("not_invited");
   }
 
-  if (app) return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env)));
-  const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
-  const headers = new Headers({ Location: "/app", "Cache-Control": "no-store" });
-  headers.append("Set-Cookie", await sessionCookie(user.id, exp, sessionSecret(env)));
-  headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
-  return new Response(null, { status: 302, headers });
+  return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env)));
 }
-export { finishLogin as _finishLoginForTest, page as loginPage };
+export { finishLogin as _finishLoginForTest };
 
 async function appHandoffToken(uid, challenge, secret) {
   const payload = base64url(new TextEncoder().encode(JSON.stringify({ uid, ch: challenge, exp: Math.floor(Date.now() / 1000) + APP_HANDOFF_SECONDS })));
@@ -141,7 +138,7 @@ async function finishAppLogin(request, env) {
   if (!Number.isInteger(uid) || uid <= 0 || !(Number(data?.exp) > now)) return fail();
   if (!timingSafeEqualString(base64url(await sha256(verifier)), String(data.ch || ""))) return fail();
   const headers = new Headers({ "Cache-Control": "no-store" });
-  headers.append("Set-Cookie", await sessionCookie(uid, now + SESSION_SECONDS, sessionSecret(env)));
+  headers.append("Set-Cookie", await userSessionCookie(env.DB, uid, sessionSecret(env)));
   return Response.json({ status: "ok" }, { headers });
 }
 
@@ -158,7 +155,7 @@ export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fe
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new Error("Email is not verified");
   if (!claims.sub) throw new Error("Missing subject");
 
-  const jwks = await googleJwks(fetchImpl);
+  const jwks = await googleJwks(fetchImpl, header.kid);
   const jwk = jwks.keys.find(key => key.kid === header.kid && key.kty === "RSA");
   if (!jwk) throw new Error("Signing key not found");
   const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
@@ -167,17 +164,22 @@ export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fe
   return claims;
 }
 
-async function googleJwks(fetchImpl) {
+// Google's keys, kept for ten minutes. A token signed with a key the cached
+// list does not have (Google rotates its keys) fetches the list again, past
+// the cache, at most once a minute.
+async function googleJwks(fetchImpl, kid) {
   const now = Date.now();
-  if (cachedJwks && now - cachedJwksAt < 10 * 60 * 1000) return cachedJwks;
-  const response = await fetchImpl(GOOGLE_JWKS_URL, { cf: { cacheTtl: 600 } });
+  const fresh = cachedJwks && now - cachedJwksAt < 10 * 60 * 1000;
+  if (fresh && (cachedJwks.keys.some(key => key.kid === kid) || now - forcedJwksAt < 60 * 1000)) return cachedJwks;
+  if (fresh) forcedJwksAt = now;
+  const response = await fetchImpl(GOOGLE_JWKS_URL, fresh ? { cache: "no-store" } : { cf: { cacheTtl: 600 } });
   if (!response.ok) throw new Error("Google JWKS HTTP " + response.status);
   const data = await response.json();
   if (!data || !Array.isArray(data.keys)) throw new Error("Invalid Google JWKS response");
   cachedJwks = data; cachedJwksAt = now;
   return data;
 }
-export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; }
+export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 function page(title, message, status) {
   return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">Zpět na přihlášení</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });

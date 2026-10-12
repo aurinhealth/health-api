@@ -89,7 +89,7 @@ struct TodayContent: View {
         .padding(.top, 40)
 
         if model.selectedDate == nil {
-            MorningCheckinCard(feeling: today.checkin).padding(.top, 20)
+            MorningCheckinCard(feeling: today.checkin, top: 20)
         }
 
         // Today's weather at the week plan's place (or the offer to set
@@ -161,7 +161,7 @@ struct ReadinessHero: View {
             if let score = readiness.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(String(score))
-                        .font(Typo.number(132))
+                        .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
                     if let pill = pill {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
@@ -194,12 +194,24 @@ struct ReadinessHero: View {
 /// "Jak se dnes cítíš?" under the readiness: one tap (src/morning-checkin.js).
 /// The answer can only lower the readiness, for Today and the coach alike.
 /// Tapping the chosen one again clears it; "Nemocný" offers the status Nemoc.
+/// On Today it goes away once answered; the readiness detail keeps it, so the
+/// answer can be changed there.
 struct MorningCheckinCard: View {
     @Environment(AppModel.self) private var model
     let feeling: String?
+    var keepAnswered = false
+    var top: CGFloat = 0
     @State private var chosen: String?
     @State private var saving = false
     @State private var offerSick = false
+    @State private var answers = 0
+
+    init(feeling: String?, keepAnswered: Bool = false, top: CGFloat = 0) {
+        self.feeling = feeling
+        self.keepAnswered = keepAnswered
+        self.top = top
+        _chosen = State(initialValue: feeling)
+    }
 
     struct Option: Identifiable {
         let id: String
@@ -215,6 +227,17 @@ struct MorningCheckinCard: View {
     ]
 
     var body: some View {
+        if keepAnswered || chosen == nil || saving || offerSick {
+            card.padding(.top, top)
+        } else {
+            // Holds onChange while the card is gone, so clearing the answer
+            // elsewhere brings it back.
+            Color.clear.frame(height: 0)
+                .onChange(of: feeling) { _, new in chosen = new }
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Jak se dnes cítíš?").font(Typo.small).foregroundStyle(Palette.muted)
             HStack(spacing: 8) {
@@ -236,8 +259,8 @@ struct MorningCheckinCard: View {
                 }
             }
         }
-        .onAppear { chosen = feeling }
         .onChange(of: feeling) { _, new in chosen = new }
+        .sensoryFeedback(.impact(weight: .light), trigger: answers)
         .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
             Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
             Button("Teď ne", role: .cancel) {}
@@ -250,6 +273,7 @@ struct MorningCheckinCard: View {
         let before = chosen
         chosen = id
         saving = true
+        answers += 1
         defer { saving = false }
         do {
             try await model.setMorningCheckin(id)
@@ -271,7 +295,7 @@ struct KeyNumbers: View {
             RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
             RouteLink(route: .strain) {
-                cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, Palette.amber)
+                cell("Námaha", Fmt.decimal(today.strain.score), strainNote, today.strain.target != nil ? Palette.green : Palette.amber)
             }
             Divider().overlay(Palette.hairline)
             RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
@@ -279,6 +303,11 @@ struct KeyNumbers: View {
         .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
+    }
+
+    private var strainNote: String? {
+        if let t = today.strain.target { return L10n.f("cíl %@–%@", Fmt.decimal(t.low), Fmt.decimal(t.high)) }
+        return today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
     }
 
     private var hrvDifference: Double? {
@@ -324,11 +353,7 @@ struct BedtimeSetupCard: View {
         Card {
             HStack(spacing: 12) {
                 Image(systemName: "moon.zzz").font(.system(size: 20)).foregroundStyle(Palette.indigo)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text("Nastav si budík a cíl spánku, večerka se pak ukáže v plánu dne.").font(Typo.caption).foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
             }

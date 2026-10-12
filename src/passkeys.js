@@ -4,16 +4,19 @@
 //   GET /app/api/passkeys                                       the user's passkeys
 //   POST /app/api/passkeys/options, POST /app/api/passkeys      adding one
 //   DELETE /app/api/passkeys?id=…                               removing one
-// The passkey's RP ID is the host the app runs on, so passkeys made on the
-// staging copy never work on the live app and the other way round.
+// The passkey's RP ID is the host the app runs on.
 import { verifyRegistration, verifyAuthentication, clientDataChallenge, randomChallenge, SUPPORTED_ALGORITHMS, WebAuthnError } from "./webauthn.js";
-import { signedInResponse } from "./dashboard-auth.js";
+import { signedInResponse, sessionSecret, signedOutElsewhere } from "./dashboard-auth.js";
 import { findUser } from "./tenancy.js";
+import { allowClient } from "./ip-rate-limit.js";
 import { emailConfigured, sendEmail, passkeyAddedEmail } from "./email-sender.js";
 import { requestLanguage } from "./email-login.js";
 
 const CHALLENGE_SECONDS = 5 * 60;
 const MAX_OPEN_SIGN_INS = 500;
+// With the pool of open sign-ins over 80 % full, sign-ins nobody answered in a minute go.
+const CROWDED_SIGN_INS = Math.floor(MAX_OPEN_SIGN_INS * 0.8);
+const ABANDONED_SECONDS = 60;
 const MAX_PASSKEYS = 20;
 const NOT_VERIFIED = "Přístupový klíč se nepodařilo ověřit. Zkus to znovu.";
 
@@ -80,6 +83,7 @@ async function issueChallenge(db, purpose, { userId = null, userHandle = null } 
   const statements = [db.prepare("DELETE FROM auth_challenges WHERE expires_at <= ?").bind(now)];
   // Each user has at most one pending passkey to add; anonymous sign-ins are capped as a whole.
   if (userId !== null) statements.push(db.prepare("DELETE FROM auth_challenges WHERE purpose = ? AND user_id = ?").bind(purpose, userId));
+  else statements.push(db.prepare("DELETE FROM auth_challenges WHERE purpose = ? AND expires_at <= ? AND (SELECT COUNT(*) FROM auth_challenges WHERE purpose = ?) > ?").bind(purpose, now + CHALLENGE_SECONDS - ABANDONED_SECONDS, purpose, CROWDED_SIGN_INS));
   statements.push(db.prepare("INSERT INTO auth_challenges(challenge, purpose, user_id, user_handle, expires_at) SELECT ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM auth_challenges WHERE purpose = ?) < ?")
     .bind(challenge, purpose, userId, userHandle, now + CHALLENGE_SECONDS, purpose, MAX_OPEN_SIGN_INS));
   const results = await db.batch(statements);
@@ -98,6 +102,7 @@ export async function handlePasskeyLogin(request, env, pathname) {
   if (!sameOrigin(request)) return json({ message: "Neplatný původ požadavku." }, 403);
   const db = env.DB, { origin, rpId } = relyingParty(request);
   if (pathname === "/auth/passkey/options") {
+    if (!(await allowClient(db, request, sessionSecret(env), "passkey"))) return json({ message: "Příliš mnoho pokusů o přihlášení. Zkus to za chvíli." }, 429);
     const challenge = await issueChallenge(db, "login");
     if (!challenge) return json({ message: "Právě se přihlašuje moc lidí najednou. Zkus to za pár minut." }, 429);
     return json({ challenge, rpId, timeout: CHALLENGE_SECONDS * 1000, userVerification: "required", allowCredentials: [] });
@@ -181,8 +186,10 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
   if (request.method === "DELETE" && url.pathname === "/app/api/passkeys") {
     // The handle goes back with the list, so the browser can forget the removed passkey too.
     const userHandle = await handleOf();
-    await db.prepare("DELETE FROM user_passkeys WHERE id = ? AND user_id = ?").bind(String(url.searchParams.get("id") || ""), user.id).run();
-    return json({ status: "ok", rpId, userHandle, passkeys: await listPasskeys(db, user.id) });
+    const removed = await db.prepare("DELETE FROM user_passkeys WHERE id = ? AND user_id = ?").bind(String(url.searchParams.get("id") || ""), user.id).run();
+    const response = json({ status: "ok", rpId, userHandle, passkeys: await listPasskeys(db, user.id) });
+    // Whoever signed in with the removed passkey elsewhere is signed out; this device stays.
+    return Number(removed.meta?.changes) > 0 ? signedOutElsewhere(db, user.id, env, response) : response;
   }
   return json({ message: "Nepodporovaná metoda." }, 405);
 }

@@ -27,6 +27,7 @@ struct LiveGymView: View {
     @State private var picking = false
     @State private var historyFor: String?
     @State private var summary = false
+    @State private var rating = false
     @State private var saving = false
     @State private var loaded = false
     @State private var error: String?
@@ -65,6 +66,10 @@ struct LiveGymView: View {
         }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
+        }
+        // After Dokončit, as after a planned session: thumbs for each exercise.
+        .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
+            GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
     }
 
@@ -352,7 +357,6 @@ struct LiveGymView: View {
             }
         }
         day = next
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let rest = set.warmup ? 60 : restSets
         if rest > 0 {
             let following: GymSet? = upcoming.flatMap { row in next.exercises.flatMap { $0.sets }.first { $0.row == row } }
@@ -436,6 +440,7 @@ struct LiveGymView: View {
                 await model.shareActivity(activity)
             }
             await model.refreshTraining()
+            if !names.isEmpty { rating = true; return }
         }
         dismiss()
     }

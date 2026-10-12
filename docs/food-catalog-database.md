@@ -1,7 +1,6 @@
 # Separate food catalogue
 
 Production uses EU D1 database `petrfitness-foods` with binding `FOODS`.
-Staging uses `petrfitness-foods-staging`, with its own database and contents.
 The catalogue is shared across accounts and independent of personal data shards.
 No external food datasets or R2 bucket are created by this change.
 
@@ -61,8 +60,6 @@ automatic rollback to stale data, even if the activation response was lost.
 A later run verifies the active directory and resumes pending cleanup, but does
 not copy old data over the live catalogue. Do not run cutovers concurrently.
 
-Staging owner-history refreshes preserve a separate active food catalogue.
-Migration copies the staging catalogue, not production food/report data.
 
 ## Operations
 

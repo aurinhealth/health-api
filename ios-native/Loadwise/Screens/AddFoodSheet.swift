@@ -413,8 +413,6 @@ struct FoodAmountView: View {
                     Label(note, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(product.perPortion ? L10n.tr("Hodnoty na porci.") : L10n.f("Hodnoty ze 100 %@ přepočtené na množství.", product.unit))
-                    .font(Typo.caption).foregroundStyle(Palette.faint)
 
                 Button { withAnimation(.easeOut(duration: 0.2)) { edit.toggle() } } label: {
                     HStack {
@@ -426,11 +424,8 @@ struct FoodAmountView: View {
                 }
                 .buttonStyle(.plain)
                 if edit {
-                    let footer = (product.perPortion
-                        ? L10n.tr("Hodnoty na porci. Uloží se k potravině, příště je najdeš opravené.")
-                        : L10n.f("Hodnoty na 100 %@. Uloží se k potravině, příště je najdeš opravené.", product.unit))
-                        + (product.isShared ? " " + L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : "")
-                    SettingsGroup(footer: footer) {
+                    SettingsGroup(title: product.perPortion ? "Jedna porce" : L10n.f("Na 100 %@", product.unit),
+                                  footer: product.isShared ? L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : nil) {
                         SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Potravina")
                         SettingsDivider()
                         SettingsField(title: "Výrobce, značka", text: $brand, keyboard: .default, placeholder: "nepovinné")
@@ -660,7 +655,7 @@ struct ManualFoodView: View {
             VStack(alignment: .leading, spacing: 20) {
                 CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
                 Text("Zadat ručně").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                SettingsGroup(footer: "Hodnoty jedné porce. Potravina se uloží mezi tvoje, příště ji najdeš hledáním.") {
+                SettingsGroup(title: "Jedna porce") {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Kuřecí rizoto")
                     SettingsDivider()
                     SettingsField(title: "Energie", text: $kcal, unit: "kcal", keyboard: .numberPad)

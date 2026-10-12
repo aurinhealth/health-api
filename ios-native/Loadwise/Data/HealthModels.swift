@@ -12,6 +12,10 @@ struct HealthSnapshot: Decodable, Equatable {
     let respiration: Respiration?
     let skinTemp: SkinTemp?
     let oxygen: Oxygen?
+    /// Apple Health only: average heart rate while walking, and the drop in
+    /// the first minute after a workout.
+    let walkingHR: Latest?
+    let hrRecovery: Latest?
     let weight: Weight?
 
     struct Part: Decodable, Equatable, Identifiable {
@@ -31,6 +35,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let sleepMinutes: Double?
         let strainYesterday: Double?
         let history: [Point]
+        /// Today's "Jak se dnes cítíš?" answer, when it is part of the number.
+        var checkin: String? = nil
     }
 
     struct Stages: Decodable, Equatable {
@@ -117,6 +123,11 @@ struct HealthSnapshot: Decodable, Equatable {
         let series: [Point]
     }
 
+    struct Latest: Decodable, Equatable {
+        let value: Double
+        let series: [Point]
+    }
+
     struct Oxygen: Decodable, Equatable {
         let value: Double
         let low: Double
@@ -138,6 +149,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let goal: Double?
         let series: [Point]
         let bodyFat: BodyFat?
+        /// Muscle mass (lean body mass, kg) from a scale through Apple Health.
+        var muscle: BodyFat? = nil
     }
 }
 

@@ -179,7 +179,7 @@ struct TrainingModeView: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let left = max(0, Int(end.timeIntervalSince(context.date).rounded()))
                 Text(String(format: "%d:%02d", left / 60, left % 60))
-                    .font(Typo.number(96)).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
+                    .font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
                     .monospacedDigit()
             }
             HStack(spacing: 10) {
@@ -441,7 +441,7 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {

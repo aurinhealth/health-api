@@ -1,13 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import vm from "node:vm";
 import { createD1 } from "./helpers/d1.mjs";
 import legacy from "../src/index.js";
 import { planValues } from "../src/gym-plan-store.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const ctx = { waitUntil() {} };
-const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
 
 function healthDb() {
   const d = createD1();
@@ -30,7 +29,7 @@ test("the debugging routes are gone", async () => {
     const response = await legacy.fetch(new Request("https://internal" + path), { DB: healthDb(), USER_ID: 7, INTERVALS_API_KEY: "key" }, ctx);
     assert.equal(response.status, 404, path);
   }
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.doesNotMatch(entry, /health-db|\/health\/db/);
 });
 
@@ -61,16 +60,20 @@ test("a sheet-era video formula becomes a link only when it is http(s)", () => {
   const values = planValues({ date: "2026-10-06", rows: [row("Dřep", '=HYPERLINK("javascript:alert(document.cookie)";"🎥 Video")'), row("Bench", '=HYPERLINK("https://youtu.be/abc";"🎥 Video")')] });
   assert.equal(values[7][10], "https://www.youtube.com/results?search_query=D%C5%99ep%20exercise%20technique");
   assert.equal(values[8][10], "https://youtu.be/abc");
-  // The Video button in the app checks the same for plans saved earlier.
-  assert.ok(client.includes("const video=/^https?:\\/\\//i.test(formula)?formula:/^https?:\\/\\//i.test(formulaUrl)?formulaUrl:("));
 });
 
-test("signing out leaves nothing of the account on the device; onboarding keeps the profile", () => {
-  const store = new Map(["lw-dashboard-ready", "lw-dashboard-snapshot", "fitnessProfile", "fitnessProfileSuggested", "pfd-assistant-chat", "pfd-meals-v1", "lw-training-tab"].map(key => [key, "x"]));
-  const context = vm.createContext({ SNAPSHOT_KEY: "lw-dashboard-snapshot", localStorage: { removeItem: key => store.delete(key) } });
-  vm.runInContext(client.match(/^function forgetDashboard\(\)\{.*$/m)[0] + "\n" + client.match(/^function forgetAccount\(\)\{.*$/m)[0], context);
-  vm.runInContext("forgetDashboard()", context);
-  assert.ok(store.has("fitnessProfile") && store.has("pfd-assistant-chat"));
-  vm.runInContext("forgetAccount()", context);
-  assert.deepEqual([...store.keys()].sort(), ["lw-training-tab", "pfd-meals-v1"]);
+
+test("a session cookie counts only with the user's current epoch, and the epoch moves on where it must", () => {
+  const entry = serverSource();
+  // The check sits right after the user row is loaded, before any route.
+  const loaded = entry.indexOf("user = await findUser(env.DB, principal.userId, env);");
+  const checked = entry.indexOf("if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }", loaded);
+  assert.ok(loaded > 0 && checked > loaded && checked - loaded < 400);
+  assert.ok(entry.indexOf("async function routeRequest(") > checked);
+  // Unlinking Apple and signing out everywhere bump it with a fresh cookie for the caller.
+  assert.match(entry, /unlinkAppleIdentity\(env\.RAW_DB, session\.user\.id\);[\s\S]{0,600}return signedOutElsewhere\(env\.RAW_DB, session\.user\.id, env, Response\.json\(\{status:"ok"\}/);
+  assert.match(entry, /if \(url\.pathname === "\/app\/api\/account\/sign-out-everywhere"\) return handleSignOutEverywhere\(request, env, url, session\);/);
+  assert.match(entry, /sign-out-everywhere\)\$/, "signing out everywhere keeps the cached coach inputs");
+  // Apple Health uploads over the size limit are refused before the body is read.
+  assert.match(entry, /if\(appleBodyTooLarge\(request\)\)return Response\.json\(\{message:L\([^)]*\)\},\{status:413\}\);\s*const body=await request\.json\(\)/);
 });

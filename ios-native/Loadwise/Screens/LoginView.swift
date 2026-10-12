@@ -73,7 +73,8 @@ struct LoginView: View {
                         .background(Palette.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .padding(.bottom, 12)
                 }
-                SignInWithAppleButton(.signIn) { request in
+                // Three ways in, the same size: Apple (App Store rule 4.8), Google, the e-mail code.
+                SignInWithAppleButton(.continue) { request in
                     model.errorMessage = nil
                     appleNonce = AuthService.randomVerifier()
                     request.requestedScopes = [.fullName, .email]
@@ -91,29 +92,35 @@ struct LoginView: View {
                 .frame(height: 52)
                 .clipShape(Capsule())
                 .disabled(model.signingIn)
-                .padding(.bottom, 10)
+                .accessibilityLabel(L10n.tr("Pokračovat přes Apple"))
                 Button {
                     model.errorMessage = nil
                     Task { await model.signIn() }
                 } label: {
                     HStack(spacing: 10) {
-                        if model.signingIn { ProgressView().tint(Palette.onButton) } else { Image(systemName: "person.crop.circle") }
-                        Text("Přihlásit se přes Google")
+                        if model.signingIn { ProgressView().tint(Palette.ink) } else { Text(verbatim: "G").font(.system(size: 17, weight: .bold)) }
+                        Text("Pokračovat přes Google")
                     }
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(Palette.button, in: Capsule())
+                    .modifier(SignInButtonLook())
                 }
                 .disabled(model.signingIn)
-                Button { emailLogin = true } label: {
-                    Label("Přihlásit se e-mailem", systemImage: "envelope")
-                        .font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 52)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-                }
                 .padding(.top, 10)
+                Button { emailLogin = true } label: {
+                    Label("Pokračovat e-mailem", systemImage: "envelope")
+                        .modifier(SignInButtonLook())
+                }
+                .disabled(model.signingIn)
+                .padding(.top, 10)
+                if PasskeyService.mayHaveOne {
+                    // A passkey was made on this phone (Data/Passkeys.swift).
+                    Button { Task { await signInWithPasskey() } } label: {
+                        Label("Přihlásit přes passkey", systemImage: "faceid")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            .frame(maxWidth: .infinity).frame(height: 44)
+                    }
+                    .disabled(model.signingIn)
+                    .padding(.top, 4)
+                }
                 Button("Prohlédnout ukázku") { model.showDemo() }
                     .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.muted)
@@ -124,6 +131,67 @@ struct LoginView: View {
             .padding(.vertical, 24)
         }
         .sheet(isPresented: $emailLogin) { EmailLoginSheet() }
+    }
+
+    /// The passkey sheet; when it fails for any reason but a cancel, the e-mail
+    /// code takes over without a message.
+    private func signInWithPasskey() async {
+        model.errorMessage = nil
+        do {
+            try await model.signInWithPasskey()
+        } catch is CancellationError {
+            // The user closed the sheet.
+        } catch {
+            emailLogin = true
+        }
+    }
+}
+
+/// The outlined sign-in buttons under the Apple one, the same height as it.
+private struct SignInButtonLook: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+            .frame(maxWidth: .infinity).frame(height: 52)
+            .background(Palette.card.opacity(0.6), in: Capsule())
+            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            .contentShape(Capsule())
+    }
+}
+
+/// After the first e-mail sign-in: a passkey, so next time Face ID is enough.
+/// "Teď ne" and any failure just close it; Settings → Účet can add one later.
+struct PasskeyOfferSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var busy = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: "faceid").font(.system(size: 40, weight: .light)).foregroundStyle(Palette.green)
+                Text("Příště přes Face ID").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Loadwise si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu.")
+                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                Spacer()
+                PrimaryButton(title: busy ? "Moment…" : "Zapnout", systemImage: "faceid", busy: busy) { Task { await register() } }
+                    .disabled(busy)
+                SecondaryButton(title: "Teď ne") { dismiss() }
+                    .disabled(busy)
+            }
+            .padding(24)
+            .background(ScreenBackground(glow: Palette.Glow.today))
+        }
+        .presentationDetents([.medium, .large])
+        .interactiveDismissDisabled(busy)
+    }
+
+    private func register() async {
+        busy = true
+        defer { busy = false }
+        // Errors fall back silently: the e-mail code keeps working.
+        try? await model.passkeys.register(api: model.api)
+        dismiss()
     }
 }
 

@@ -1,8 +1,5 @@
-import {modelContext} from './helpers/recovery-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
-import {readFileSync} from 'node:fs';
 import {analyzeRide,rideReviewSections} from '../src/ride-analysis.js';
 import {foodIntake} from '../src/food-portions.js';
 test('manual cycling drink uses whole portion and permits zero protein and fat',()=>{
@@ -16,9 +13,4 @@ test('ride review uses actual Intervals aliases and time weighted stream zones',
 test('missing power and gaps are not fabricated as zero or interpolated across long pauses',()=>{
   const a=analyzeRide({icu_ftp:200},[{type:'time',data:[0,5,1000,1005]},{type:'watts',data:[null,150,100,100]}]);
   assert.equal(a.powerSeconds,5);assert.equal(a.averageWatts,100);assert.equal(a.normalizedWatts,null);assert.equal(a.aerobicDrift,null);
-});
-test('recovery compares current Google metrics to prior baseline without invented percentage',()=>{
-  const src=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8'),ctx=modelContext({measured:v=>v!=null&&Number.isFinite(Number(v)),num:v=>Number(v)||0,fmt:v=>String(Math.round(Number(v)*10)/10),hm:v=>v+' min',nightNeed:()=>480});vm.runInContext(src.slice(src.indexOf('function recoveryIndex('),src.indexOf('function correctDataPresentation(')),ctx);vm.runInContext(src.slice(src.indexOf('function recoverySignals('),src.indexOf('function renderTrainingClarity(')),ctx);
-  const rows=Array.from({length:16},(_,i)=>({id:'2026-09-'+String(i+10).padStart(2,'0'),hrv:98+(i%5),restingHR:49+(i%3)}));rows.push({id:'2026-09-26',hrv:60,restingHR:60});
-  const result=ctx.recoverySignals(rows,{date:'2026-09-26',durationMin:300},'2026-09-26');assert.match(result.title,/zvolni/);assert.match(result.text,/HRV 60/);assert.doesNotMatch(result.text,/%/);
 });

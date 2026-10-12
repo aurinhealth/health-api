@@ -49,9 +49,9 @@ test('verification failure cleans the canary and never touches real user rows', 
 });
 
 test('provisioning refuses mismatched core identity and reducing the deployed binding set', async () => {
-  const plan = shardPlan(parseConfig(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8')),'staging');
+  const plan = shardPlan(parseConfig(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8')));
   const args = {accountId:'a'.repeat(32),token:'test-token',plan};
   await assert.rejects(provisionDatabases({...args,fetchImpl:async()=>Response.json({success:true,result:[]})}),/identity mismatch/);
-  const all = [{name:plan.core.database_name,uuid:plan.core.database_id},{name:plan.core.database_name+'-users-003',uuid:'another'}];
+  const all = [{name:plan.core.database_name,uuid:plan.core.database_id},{name:plan.core.database_name+'-users-021',uuid:'another'}];
   await assert.rejects(provisionDatabases({...args,fetchImpl:async()=>Response.json({success:true,result:all})}),/Refusing to remove/);
 });

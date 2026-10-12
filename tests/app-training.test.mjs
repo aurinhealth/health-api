@@ -188,6 +188,12 @@ test("A saved gym plan is listed next to another sport that day, unless strength
   assert.deepEqual(done.map(s => s.kind), ["activity"]);
   const logged = withGym({ planned: [], completed: [], matched: [] }, { name: "Celé tělo", exercises: ["Dřep"], logged: 3 });
   assert.deepEqual(logged.map(s => [s.kind, s.status]), [["gym", "done"]]);
+  // The app's own copy of the gym plan for Intervals.icu is the same session.
+  const copy = { id: "planned:local-ae66", name: "Strength — Celé tělo", type: "WeightTraining" };
+  const copied = withGym({ planned: [copy], completed: [], matched: [] }, { name: "Celé tělo", exercises: ["Dřep"], logged: 3 });
+  assert.deepEqual(copied.map(s => [s.kind, s.status]), [["gym", "done"]]);
+  const open = withGym({ planned: [copy], completed: [], matched: [] });
+  assert.deepEqual(open.map(s => [s.kind, s.status]), [["gym", "planned"]]);
 });
 
 test("A missed gym plan stays on a past day where a ride was done", () => {
@@ -214,4 +220,22 @@ test("a done session carries its calories and, when implausible, the realistic e
   assert.deepEqual(sessions[0].kcalEstimate, { value: 318, low: 191, high: 636, reason: "x" });
   assert.equal(sessions[1].kcal, 250);
   assert.equal(sessions[1].kcalEstimate, undefined);
+});
+
+test("the Training screen says while the athlete has no focus and goal yet", async () => {
+  const { profileIncomplete } = await import("../src/app-training.js");
+  assert.equal(profileIncomplete(null), true);
+  assert.equal(profileIncomplete({}), true);
+  assert.equal(profileIncomplete({ mainSport: "cycling" }), true, "a sport without a goal");
+  assert.equal(profileIncomplete({ sportGoal: "zhubnout" }), true, "a goal without a sport");
+  assert.equal(profileIncomplete({ mainSport: "auto", sportGoal: "zlepšit kondici" }), false, "'auto' is a choice too");
+  assert.equal(profileIncomplete({ mainSport: "running", sportGoal: "  " }), true);
+  // The saved profile decides, not the effective one (suggestions fill the sport in).
+  const fresh = buildTraining({ ...input, profile: { mainSport: "general", sportGoal: "" }, savedProfile: null });
+  assert.equal(fresh.profileIncomplete, true);
+  const set = buildTraining({ ...input, profile: { mainSport: "cycling", sportGoal: "závod" }, savedProfile: { mainSport: "cycling", sportGoal: "závod" } });
+  assert.equal(set.profileIncomplete, false);
+  // Without a saved profile given, the profile itself is judged.
+  assert.equal(buildTraining({ ...input, profile: { mainSport: "cycling", sportGoal: "závod" } }).profileIncomplete, false);
+  assert.equal(buildTraining(input).profileIncomplete, true);
 });

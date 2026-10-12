@@ -3,16 +3,21 @@
 // page never tells who has access; the code is sent in the background, and only to
 // active users, invited addresses and the owner. POST /auth/email/verify
 // { email, code } signs in. A code is valid for 10 minutes and allows 5 tries; an
-// address gets at most one code a minute and 10 a day.
-import { signText, sessionSecret, timingSafeEqualString, signedInResponse } from "./dashboard-auth.js";
+// address gets at most one code a minute and 10 a day, one caller starts at most 5 sign-ins
+// a minute and 30 an hour (ip-rate-limit.js), and all codes together stay under
+// EMAIL_CODES_PER_DAY (500) a day.
+import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie } from "./dashboard-auth.js";
+import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { normalizeEmail, mayGetEmailCode, signInEmailUser, changeUserEmail } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
+import { reviewCodeActive } from "./app-review.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
 const MAX_ATTEMPTS = 5;
 const MAX_SENDS_PER_DAY = 10;
+const DEFAULT_CODES_PER_DAY = 500;
 const STALE_SECONDS = 2 * 24 * 60 * 60;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPIRED = "Kód už neplatí. Nech si poslat nový.";
@@ -33,6 +38,7 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   const email = normalizeEmail(body?.email);
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: "Zadej platný e-mail." }, 400);
   if (pathname === "/auth/email/start") {
+    if (!(await allowClient(env.DB, request, sessionSecret(env), "email"))) return json({ message: "Příliš mnoho pokusů o přihlášení. Zkus to za chvíli." }, 429);
     // Whether a code goes out (and how long that takes) stays out of the answer.
     const work = sendCode(env, email, requestLanguage(request)).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
@@ -55,15 +61,16 @@ function codeHash(env, email, code, purpose = "email-code") {
 }
 
 // App Review: APP_REVIEW_EMAIL gets the fixed code APP_REVIEW_CODE (six digits, a secret) instead
-// of a random one, so Apple's reviewer can sign in without the inbox. The usual limits still
-// apply: the code works only after "send code", for 10 minutes and 5 tries.
-export function reviewCode(env, email) {
+// of a random one, so Apple's reviewer can sign in without the inbox, but only until the end of
+// the APP_REVIEW_UNTIL day (UTC); without that date it gets a random code like anyone (app-review.js).
+// The usual limits still apply: the code works only after "send code", for 10 minutes and 5 tries.
+export function reviewCode(env, email, now = Date.now()) {
   const address = normalizeEmail(env?.APP_REVIEW_EMAIL), code = String(env?.APP_REVIEW_CODE || "").trim();
-  return address && address === email && /^\d{6}$/.test(code) ? code : null;
+  return address && address === email && /^\d{6}$/.test(code) && reviewCodeActive(env, now) ? code : null;
 }
 
 // Returns true when a code went out.
-export async function sendCode(env, email, lang = "cs", { now = Date.now(), code = reviewCode(env, email) || randomCode() } = {}) {
+export async function sendCode(env, email, lang = "cs", { now = Date.now(), code = reviewCode(env, email, now) || randomCode() } = {}) {
   if (!(await mayGetEmailCode(env.DB, env, email))) return false;
   return claimAndSend(env.DB, env, email, code, "email-code", signInCodeEmail(lang, code), now);
 }
@@ -77,10 +84,14 @@ async function claimAndSend(db, env, email, code, purpose, message, now) {
     WHERE email_login_codes.sent_at <= ? AND (email_login_codes.day IS NOT excluded.day OR email_login_codes.day_count < ?)`)
     .bind(email, await codeHash(env, email, code, purpose), seconds + CODE_SECONDS, seconds, day, seconds - RESEND_SECONDS, MAX_SENDS_PER_DAY).run();
   if (!(Number(claimed.meta?.changes) > 0)) return false;
+  // All codes together: the budget of a day, so an open sign-up cannot turn the sender into a spam source.
+  if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return false; }
   await db.prepare("DELETE FROM email_login_codes WHERE sent_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
   await sendEmail(env, { to: email, ...message });
   return true;
 }
+
+export const codesPerDay = env => { const n = Number(env?.EMAIL_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CODES_PER_DAY; };
 
 async function verifyCode(env, email, input) {
   const refused = await useCode(env.DB, env, email, input, "email-code");
@@ -144,7 +155,10 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   const changed = await changeUserEmail(db, env, user.id, email);
   if (changed.error) return emailChangeRefusal(changed.error);
   await notifyOldAddress(env, changed, requestLanguage(request), ctx);
-  return json({ status: "ok", email: changed.email });
+  // The change signs every other device out (session_epoch); this one gets a fresh cookie.
+  const response = json({ status: "ok", email: changed.email });
+  response.headers.append("Set-Cookie", await userSessionCookie(db, user.id, sessionSecret(env)));
+  return response;
 }
 
 export async function notifyOldAddress(env, { previous, email }, lang, ctx) {

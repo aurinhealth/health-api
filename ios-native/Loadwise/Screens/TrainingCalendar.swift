@@ -43,8 +43,11 @@ struct TrainingCalendarCard: View {
                 strip
             }
             handle
-            CalendarDayList(date: day, today: today, day: model.calendar[day])
-                .padding(.top, 6)
+            // An empty day shows no row at all, only the strip.
+            if model.calendar[day].map({ !$0.activities.isEmpty }) ?? true {
+                CalendarDayList(date: day, today: today, day: model.calendar[day])
+                    .padding(.top, 6)
+            }
         }
         .padding(.vertical, 14)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -407,7 +410,7 @@ struct CalendarActivityRow: View {
         default: head = L10n.tr("V plánu")
         }
         var parts: [String] = [head]
-        if let t = a.time { parts.append(t) }
+        if let t = a.time { parts.append(ClockText.format(t)) }
         if let m = a.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
         if let km = a.km, km > 0 { parts.append(Units.distanceText(km)) }
         return parts.joined(separator: " · ")
@@ -437,10 +440,6 @@ struct WatchActivityDetail: View {
                     }
                     .padding(.bottom, 18)
                     ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
-                    Text("Google Health posílá jen souhrn aktivity, ne průběh výkonu ani trasu.")
-                        .font(Typo.caption).foregroundStyle(Palette.faint)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 16)
                 }
                 .padding(24)
             }
@@ -459,7 +458,7 @@ struct WatchActivityDetail: View {
     /// "Chůze · st 8. 10. · 10:00–11:10".
     private var when: String {
         let s = activity.summary
-        let time = [s?.start ?? activity.time, s?.end].compactMap { $0 }.joined(separator: "–")
+        let time = [s?.start ?? activity.time, s?.end].compactMap { $0 }.map { ClockText.format($0) }.joined(separator: "–")
         return [Fmt.capitalized(L10n.tr(SportStyle.name(activity.sport))), Fmt.weekdayShort(activity.date) + " " + Fmt.dayMonth(activity.date), time.isEmpty ? nil : time]
             .compactMap { $0 }.joined(separator: " · ")
     }

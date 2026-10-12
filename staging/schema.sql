@@ -1,8 +1,7 @@
 -- Structure of the live database (health-data) without any rows, so a new
--- empty staging database matches it. Some tables predate the migrations, which
--- is why `d1 migrations apply` alone cannot build a database from scratch.
--- Every statement is idempotent; deploy-staging.yml runs this before the
--- migrations on each deploy. The migrations already reflected here are marked
+-- empty database (a user data shard, the tests) matches it. Some tables predate
+-- the migrations, which is why `d1 migrations apply` alone cannot build a
+-- database from scratch. Every statement is idempotent. The migrations already reflected here are marked
 -- as applied at the end; newer ones are applied normally.
 
 CREATE TABLE IF NOT EXISTS api_cache_versions (

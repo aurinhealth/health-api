@@ -62,6 +62,7 @@ struct TrainingContent: View {
     var addWorkout: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
     @State private var editing = false
+    @State private var focusSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -70,6 +71,12 @@ struct TrainingContent: View {
                     SectionLabel(text: L10n.f("Trénink · týden %@", String(training.week)))
                     Spacer()
                     CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
+                }
+
+                // Until the main sport and goal are set (FocusSheet.swift).
+                if training.profileIncomplete == true {
+                    FocusPromptCard { focusSheet = true }
+                        .padding(.top, 18)
                 }
 
                 TrainingCalendarCard(today: training.date)
@@ -106,6 +113,7 @@ struct TrainingContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
 }
 
@@ -116,39 +124,17 @@ struct StrainHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Zátěž dnes").font(Typo.body).foregroundStyle(Palette.muted)
+            Text("Námaha dnes").font(Typo.body).foregroundStyle(Palette.muted)
             HStack(alignment: .lastTextBaseline, spacing: 14) {
                 Text(Fmt.decimal(training.strain.score ?? 0))
-                    .font(Typo.number(104))
+                    .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
                     .foregroundStyle(Palette.ink)
                 if let target = training.strain.target {
                     Pill(text: L10n.f("cíl ~%@", Fmt.decimal(target)), foreground: Palette.amber, background: Palette.amberSoft)
                 }
             }
-            if let sentence {
-                Text(sentence)
-                    .font(Typo.sentence(21))
-                    .foregroundStyle(Palette.secondary)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 10)
-            }
         }
         .accessibilityElement(children: .combine)
-    }
-
-    private var sentence: String? {
-        let score = training.strain.score ?? 0
-        if let target = training.strain.target, target > score + 0.5, let next = training.next, next.date == training.date {
-            return L10n.f("%@ tě dostane zhruba na %@.", next.title, Fmt.decimal(target)) + " " + L10n.tr(target >= 18 ? "Náročný den, večer počítej s delší regenerací." : "Přesně podle plánu.")
-        }
-        if let band = training.strain.band, let target = training.strain.target, score >= target - 0.5 {
-            return L10n.f("Dnešní plán je splněný, zátěž je %@.", band)
-        }
-        if training.strain.target == nil {
-            return L10n.tr(score > 0 ? "Dnes nemáš nic v plánu, zátěž je jen z běžného pohybu." : "Dnes je volno. Lehká procházka regeneraci pomůže.")
-        }
-        return nil
     }
 }
 
@@ -182,7 +168,7 @@ struct WeekStrainBars: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Zátěž po dnech tohoto týdne")
+        .accessibilityLabel("Námaha po dnech tohoto týdne")
         .accessibilityValue(days.map { Fmt.weekdayShort($0.date) + " " + value($0) }.joined(separator: ", "))
     }
 
@@ -256,12 +242,12 @@ struct NextSession: View {
 
     private var when: String {
         let day = Fmt.capitalized(Fmt.relativeDay(session.date, today: today))
-        guard let time = session.time else { return day }
+        guard let time = ClockText.format(optional: session.time) else { return day }
         return session.date == today ? time : day + " " + time
     }
 
     private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, session.strain.map { L10n.f("+%@ zátěže", Fmt.decimal($0)) }]
+        [session.minutes.map { Fmt.duration($0) }, session.strain.map { L10n.f("+%@ námahy", Fmt.decimal($0)) }]
             .compactMap { $0 }.joined(separator: " · ")
     }
 
@@ -347,10 +333,6 @@ struct FormWidget: View {
             } chart: { height in
                 FormLines(series: Array(form.series.suffix(size == .large ? 90 : 42)), height: height)
             }
-            if size == .large {
-                Text(form.text).font(Typo.small).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otevře detail formy a kondice")
@@ -399,9 +381,6 @@ struct VO2maxWidget: View {
             } chart: { height in
                 LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: height)
             }
-            if size == .large {
-                Text("půl roku").font(Typo.tiny).foregroundStyle(Palette.faint)
-            }
         }
     }
 
@@ -434,9 +413,6 @@ struct ThisWeekWidget: View {
                              highlighted: loads.count - 1,
                              height: height)
                 }
-            }
-            if size != .small {
-                Text("zátěž po týdnech (TSS)").font(Typo.tiny).foregroundStyle(Palette.faint)
             }
         }
     }

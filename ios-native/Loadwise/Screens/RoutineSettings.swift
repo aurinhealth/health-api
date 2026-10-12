@@ -10,13 +10,11 @@ struct GymRestSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Pauzy v posilovně") {
-            SettingsGroup(title: "Délka pauzy", footer: "Pauza se po sérii spustí sama. V režimu tréninku ji můžeš o 15 s zkrátit, prodloužit nebo přeskočit, výchozí délka se tím nemění.") {
+            SettingsGroup(title: "Délka pauzy") {
                 row("Mezi sériemi", $restSets)
                 SettingsDivider()
                 row("Před dalším cvikem", $restExercises)
             }
-            Text("Těžké vícekloubové cviky (dřep, mrtvý tah, tlaky) snesou 2 až 3 minuty, menší cviky na stroji stačí 60 až 90 s.")
-                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -52,7 +50,7 @@ struct MealSlotsSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Jídla dne") {
-            SettingsGroup(title: "Jím obvykle", footer: "Denní cíl se rozdělí jen mezi vybraná jídla: snídaně a večeře po čtvrtině, oběd 30 %, svačiny po 10 %, druhá večeře 8 %. Jídlo zapsané jinam se v přehledu ukáže i tak.") {
+            SettingsGroup(title: "Jím obvykle") {
                 ForEach(Array(MealSlot.all.enumerated()), id: \.element.id) { index, slot in
                     if index > 0 { SettingsDivider() }
                     SettingsToggle(title: slot.label, subtitle: Self.hint(slot.id), isOn: Binding(

@@ -13,7 +13,6 @@ test("an app built for an older API is told to update", async () => {
   assert.match(body.message, /Nainstaluj novou/);
 });
 
-// entrypoint.js loads dashboard-client.js as text (wrangler rule), so Node cannot import it.
 test("the Worker checks the app version before anything else runs", () => {
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const exported = source.slice(source.lastIndexOf("export default {"));

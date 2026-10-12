@@ -7,7 +7,11 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
   // and the usual one to compare (the app's Pohyb widget).
   const stepsByHour={},hourFrom=new Date(Date.parse(today+'T12:00:00Z')-14*86400000).toISOString().slice(0,10);
   for(const row of rows){let p;try{p=JSON.parse(row.payload_json||'{}');}catch{continue;}
-    const camel=row.data_type.replace(/-([a-z])/g,(_,c)=>c.toUpperCase()),obj=p[camel]||p,date=obj.date?`${obj.date.year}-${String(obj.date.month).padStart(2,'0')}-${String(obj.date.day).padStart(2,'0')}`:day(row.sample_time||row.end_time||row.start_time||obj.interval?.endTime||obj.interval?.startTime);
+    // A daily value keeps its payload date. An interval (hourly steps and energy
+    // buckets) belongs to the day it starts: the 23:00–24:00 bucket ends exactly
+    // at midnight, which would put it on the next day while stepsByHour and the
+    // Intervals.icu sync (wellness-sync.js) count it on the day it started.
+    const camel=row.data_type.replace(/-([a-z])/g,(_,c)=>c.toUpperCase()),obj=p[camel]||p,date=obj.date?`${obj.date.year}-${String(obj.date.month).padStart(2,'0')}-${String(obj.date.day).padStart(2,'0')}`:day(row.start_time||obj.interval?.startTime||row.sample_time||row.end_time||obj.interval?.endTime);
     if(!date)continue;coverage[row.data_type]=[coverage[row.data_type],date].filter(Boolean).sort().at(-1);
     const item=days.get(date)||{id:date,source:'google-health'};let key,value;
     if(row.data_type==='daily-resting-heart-rate'){key='restingHR';value=finite(row.value_numeric)??finite(obj.beatsPerMinute);}
@@ -16,12 +20,29 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     // Skin temperature in sleep as the deviation from Google's own 30-day baseline.
     if(row.data_type==='daily-sleep-temperature-derivations'){const t=finite(obj.nightlyTemperatureCelsius)??finite(row.value_numeric),b=finite(obj.baselineTemperatureCelsius);if(t!=null&&b!=null){key='skinTempDeviation';value=Math.round((t-b)*100)/100;const sd=finite(obj.relativeNightlyStddev30dCelsius);if(sd!=null)item.skinTempSd=sd;}}
     if(row.data_type==='daily-vo2-max'){key='vo2max';value=finite(row.value_numeric)??finite(obj.vo2Max);}
+    // Blood oxygen in sleep (percent): Apple Health sends it daily, as Google does.
+    if(row.data_type==='daily-oxygen-saturation'){key='spO2';value=finite(row.value_numeric)??finite(obj.percentage);}
+    // Apple Health only: the day's average heart rate while walking and the
+    // drop in the first minute after a workout.
+    if(row.data_type==='daily-walking-heart-rate'){key='walkingHR';value=finite(row.value_numeric)??finite(obj.beatsPerMinute);}
+    if(row.data_type==='daily-heart-rate-recovery'){key='hrRecovery';value=finite(row.value_numeric)??finite(obj.beatsPerMinute);}
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
+    // Every source's HRV and resting HR of the day: the days two sources share
+    // carry a new source's baseline over (recovery-model.js sourceBaseline).
+    if(['hrv','restingHR'].includes(key)&&value!=null&&row.source_family)(item[key+'BySource']||(item[key+'BySource']={}))[row.source_family+(key==='hrv'&&['rmssd','sdnn'].includes(obj.metric)?':'+obj.metric:'')]=value;
+    // A day's Apple Health HRV wins over a Google copy of it (Google Health on the
+    // iPhone imports Apple Health), so the day keeps the baseline of its source.
+    if(key==='hrv'&&String(item.hrvSource||'').startsWith('apple-health')&&row.source_family!=='apple-health')continue;
     if(key&&value!=null)item[key]=['steps','activeCalories'].includes(key)?(item[key]||0)+value:value;
-    // Apple Watch measures HRV as SDNN, Google (Fitbit, Pixel Watch) as RMSSD: the
-    // recovery model compares each day only with days of the same source.
-    if(key==='hrv'&&value!=null&&row.source_family)item.hrvSource=row.source_family;
+    // Apple Watch measures HRV as SDNN, Google (Fitbit, Pixel Watch) as RMSSD, and
+    // the iPhone app says which it sent (apple-health.js metric), so an Apple day
+    // is "apple-health:sdnn" or "apple-health:rmssd": the recovery model compares
+    // each day only with days of the same source and measure. Resting heart rate
+    // differs by source too (each watch's own night algorithm), so it is tagged
+    // the same way; Intervals.icu values get "intervals" in mergeWellnessRows.
+    const metric=key==='hrv'&&['rmssd','sdnn'].includes(obj.metric)?':'+obj.metric:'';
+    if(['hrv','restingHR'].includes(key)&&value!=null&&row.source_family)item[key+'Source']=row.source_family+metric;
     if(key==='steps'&&value!=null){const local=localDateTime(row.start_time||row.sample_time||obj.interval?.startTime||''),d=local.slice(0,10),h=Number(local.slice(11,13));
       if(local.length>=13&&d>=hourFrom&&d<=today&&h>=0&&h<24)(stepsByHour[d]||(stepsByHour[d]=Array(24).fill(0)))[h]+=value;}
     days.set(date,item);
@@ -30,6 +51,8 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
   for(const z of zoneRows){const date=day(z.start_time),key=String(z.zone||'').toLowerCase(),minutes=(Date.parse(z.end_time)-Date.parse(z.start_time))/60000;
     if(!date||!['light','moderate','vigorous','peak'].includes(key)||!(minutes>0&&minutes<=1440))continue;
     const item=days.get(date)||{id:date,source:'google-health'},zones=item.hrZoneMinutes||(item.hrZoneMinutes={light:0,moderate:0,vigorous:0,peak:0});zones[key]=Math.round((zones[key]+minutes)*10)/10;days.set(date,item);coverage['time-in-heart-rate-zone']=[coverage['time-in-heart-rate-zone'],date].filter(Boolean).sort().at(-1);}
+  // One source on a day has nothing to compare: only the days of two stay.
+  for(const item of days.values())for(const k of ['hrvBySource','restingHRBySource'])if(item[k]&&Object.keys(item[k]).length<2)delete item[k];
   return{status:'ok',source:'google-health',coverage,stepsByHour,wellness:[...days.values()].sort((a,b)=>a.id.localeCompare(b.id)),today:days.get(today)||{id:today,source:'google-health'}};
 }
 export async function googleDashboard(db,today){
@@ -42,7 +65,7 @@ export async function googleDashboard(db,today){
   // An interval starts at most a day before it ends, hence the extra day.
   const recent='COALESCE(sample_time,end_time,start_time,\'\')';
   const [daily,intervals,zones]=await Promise.all([
-    db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-61),end).all(),
+    db.prepare(`SELECT data_type,source_family,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('daily-resting-heart-rate','daily-heart-rate-variability','daily-respiratory-rate','daily-sleep-temperature-derivations','daily-vo2-max','daily-oxygen-saturation','daily-walking-heart-rate','daily-heart-rate-recovery') AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-61),end).all(),
     db.prepare(`SELECT data_type,sample_time,start_time,end_time,value_numeric,payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type IN ('steps','active-energy-burned') AND start_time>=? AND start_time<? AND record_role='primary' AND ${recent}>=? AND ${recent}<? ORDER BY id LIMIT 40000`).bind(db.userId,shift(-32),end,shift(-31),end).all(),
     db.prepare(`SELECT start_time,end_time,json_extract(payload_json,'$.timeInHeartRateZone.heartRateZoneType') AS zone FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND record_role='primary' AND data_type='time-in-heart-rate-zone' AND start_time>=? AND start_time<? LIMIT 20000`).bind(db.userId,shift(-31),end).all().catch(()=>({results:[]}))
   ]);

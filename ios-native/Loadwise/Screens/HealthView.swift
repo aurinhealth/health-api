@@ -41,7 +41,7 @@ struct DetailScreen<Content: View>: View {
             ScreenBackground(glow: glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět")) { dismiss() }
+                    BackSlot { dismiss() }
                     content
                 }
                 .padding(.horizontal, 24)
@@ -49,6 +49,7 @@ struct DetailScreen<Content: View>: View {
                 .padding(.bottom, 100)
             }
         }
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -96,9 +97,6 @@ struct ReadinessCard: View {
                     Text(String(score)).font(Typo.number(88)).foregroundStyle(Palette.ink)
                     if let pill = ReadinessText.pill(readiness.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
-                Text(ReadinessText.sentence(readiness))
-                    .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
                 PartsRow(parts: readiness.parts)
             } else {
                 Text("Zatím bez čísla").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
@@ -139,6 +137,7 @@ enum ReadinessText {
         case "sleep": return "Spánek"
         case "respiration": return "Dech"
         case "skinTemp": return "Teplota"
+        case "checkin": return "Pocit"
         default: return key
         }
     }
@@ -151,38 +150,12 @@ enum ReadinessText {
         default: return nil
         }
     }
-
-    /// One sentence from the biggest parts: "HRV nad průměrem, tep pod ním."
-    static func sentence(_ r: HealthSnapshot.Readiness) -> String {
-        var bits: [String] = []
-        for part in r.parts.sorted(by: { abs($0.points) > abs($1.points) }).prefix(2) {
-            switch (part.key, part.points >= 0) {
-            case ("hrv", true): bits.append("HRV je nad tvým průměrem")
-            case ("hrv", false): bits.append("HRV je pod tvým průměrem")
-            case ("restingHR", true): bits.append("klidový tep je nízko")
-            case ("restingHR", false): bits.append("klidový tep je zvýšený")
-            case ("sleep", true): bits.append("spánku bylo dost")
-            case ("sleep", false): bits.append("spánku bylo málo")
-            case ("respiration", _): bits.append("dech ve spánku je zrychlený")
-            case ("skinTemp", _): bits.append("teplota je zvýšená")
-            default: break
-            }
-        }
-        let parts = bits.map { L10n.tr($0) }
-        let joined = parts.count > 1 ? L10n.f("%@ a %@", parts[0], parts[1]) : parts.joined()
-        var text = parts.isEmpty ? L10n.tr("Tělo je ve své normě") : Fmt.capitalized(joined)
-        text += "."
-        if r.flags.contains("respiration_elevated") || r.flags.contains("skin_temp_elevated") {
-            text += " " + L10n.tr("Může to být začínající nemoc, dnes raději lehce.")
-        } else if let strain = r.strainYesterday, strain >= 14 {
-            text += " " + L10n.tr("Včerejší zátěž ještě trochu doznívá.")
-        }
-        return text
-    }
 }
 
 struct ReadinessDetailContent: View {
     let health: HealthSnapshot
+    /// Today's answer to "Jak se dnes cítíš?" (.some(nil) unanswered); nil hides the question.
+    var checkin: String?? = nil
 
     var body: some View {
         let r = health.readiness
@@ -190,12 +163,14 @@ struct ReadinessDetailContent: View {
             SectionLabel(text: "Připravenost").padding(.top, 24)
             if let score = r.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(String(score)).font(Typo.number(116)).foregroundStyle(Palette.ink)
+                    Text(String(score)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     if let pill = ReadinessText.pill(r.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
                 .padding(.top, 12)
-                Text(ReadinessText.sentence(r)).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            }
+
+            if let checkin {
+                MorningCheckinCard(feeling: checkin, keepAnswered: true, top: 24)
             }
 
             SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
@@ -214,10 +189,6 @@ struct ReadinessDetailContent: View {
                 }
             }
             .padding(.top, 8)
-            Text("Základ je 70, tvoje běžná hodnota. HRV váží polovinou, klidový tep a spánek čtvrtinou. Zrychlený dech nebo zvýšená teplota ubírají po 10 bodech.")
-                .font(Typo.caption).foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
 
             if r.history.count > 1 {
                 HStack {
@@ -245,6 +216,7 @@ struct ReadinessDetailContent: View {
         case "sleep": return Fmt.hoursMinutes(r.sleepMinutes)
         case "respiration": return health.respiration.map { Fmt.decimal($0.value) + " /min" } ?? "–"
         case "skinTemp": return health.skinTemp.map { Fmt.signed(Units.temperatureChange($0.deviation), digits: 1) + " " + Units.temperatureUnit } ?? "–"
+        case "checkin": return MorningCheckinCard.options.first { $0.id == r.checkin }.map { L10n.tr($0.label) } ?? ""
         default: return ""
         }
     }
@@ -379,16 +351,24 @@ struct HRVWideWidget: View {
     }
 }
 
-/// A widget for an Apple Health value; empty until the app may read Apple Health.
-struct AppleHealthWidget: View {
-    let title: String
-    let color: Color
+struct MuscleWidget: View {
+    let muscle: HealthSnapshot.BodyFat
+    var size: WidgetSize = .medium
 
     var body: some View {
         Card {
-            WidgetHeader(title: title, color: color, appleHealth: true)
-            Text("–").font(Typo.number(34)).foregroundStyle(Palette.faint)
-            Text("z Apple Health · zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint)
+            WidgetHeader(title: "Svalová hmota", color: Palette.brown)
+            SizedWidgetBody(size: size, mediumChart: 44) {
+                NumberText(value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
+                if let change = muscle.change, change != 0 {
+                    Text(L10n.f("%@ %@ za 2 měsíce", change > 0 ? "↑" : "↓", Fmt.decimal(abs(Units.weight(change))))).font(Typo.caption)
+                        .foregroundStyle(change > 0 ? Palette.green : Palette.amber)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            } chart: { height in
+                let values = muscle.series.map { Units.weight($0.value) }
+                LineChart(values: values, color: Palette.brown, lo: (values.min() ?? 0) - 0.5, hi: (values.max() ?? 1) + 0.5, height: height)
+            }
         }
         .accessibilityElement(children: .combine)
     }

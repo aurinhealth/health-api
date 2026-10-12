@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { energyBaseline, normalizeProfile, restingMetabolicRate, OWNER_CALIBRATION, sleepSettings } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const woman = { sex: "female", age: 30, height: 165, activity: "sedentary", goal: "lose_0.5" };
 
@@ -113,14 +113,6 @@ test("the owner without a complete profile keeps the calibrated 2000 kcal rest d
   assert.equal(daily.nutrition.energySource, "owner-calibration");
 });
 
-test("the dashboard collects activity, sport, goal and target weight", () => {
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  for (const id of ["profileActivity", "profileSportHours", "profileGoal", "profileTargetWeight"]) assert.ok(client.includes(`['${id}',`), id);
-  assert.match(client, /Kalorický cíl zatím nepočítám/);
-  // Saving the base fields must not drop the new ones.
-  assert.match(client, /JSON\.stringify\(\{\.\.\.savedProfile\(\),sex:\$\('profileSex'\)\.value,/);
-});
-
 test("without Google Health a manual weight is stored here and feeds the target", async () => {
   const db = createD1();
   db.sqlite.exec(`CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY, user_id INTEGER, source_family TEXT, data_type TEXT, external_id TEXT, start_time TEXT, end_time TEXT, sample_time TEXT, value_numeric REAL, value_unit TEXT, payload_json TEXT, record_role TEXT, updated_at TEXT, UNIQUE (user_id, source_family, data_type, external_id));
@@ -137,11 +129,8 @@ test("without Google Health a manual weight is stored here and feeds the target"
   assert.equal(daily.nutrition.calorieTarget, rest + sport - 275);
 });
 
-test("the dashboard works without connections", () => {
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
+test("the server works without connections", () => {
+  const entry = serverSource();
   assert.doesNotMatch(entry, /status:"onboarding"/);
   assert.match(entry, /source:"loadwise",connected:false/);
-  assert.match(client, /Přeskočit a otevřít aplikaci/);
-  assert.match(client, /me\.onboarding\?\.completed===true/);
 });

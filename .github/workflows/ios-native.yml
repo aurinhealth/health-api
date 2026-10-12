@@ -39,7 +39,7 @@ jobs:
         working-directory: ios-native
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
       # The newest Xcode on the runner: with Xcode 26 the iOS 26 SDK brings
       # AlarmKit (the alarm in Nastavení → Spánek); older Xcode builds without it.
@@ -77,6 +77,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO test
 
       # The real app on the simulator with sample data, as the phone shows it.
+      # The app follows the phone's language, so the English simulator is told Czech.
       - name: Screenshot the running app
         run: |
           udid=${{ steps.sim.outputs.udid }}
@@ -86,7 +87,7 @@ jobs:
           for mode in light dark; do
             xcrun simctl ui "$udid" appearance "$mode"
             for tab in today training health food; do
-              xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab"
+              xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab" -AppleLanguages "(cs)"
               sleep 6
               xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/simulator-$tab-$mode.png"
             done
@@ -108,7 +109,7 @@ jobs:
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Loadwise-native-unsigned.ipa" Payload)
 
       - name: Upload the app
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Loadwise-native-ios
           path: Loadwise-native-unsigned.ipa
@@ -116,7 +117,7 @@ jobs:
 
       - name: Upload the screens
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Loadwise-native-screens
           path: screens

@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createD1 } from './helpers/d1.mjs';
 import { PERSONAL_TABLES, usersWithProviders, _resetTenancyForTest } from '../src/tenancy.js';
-import { registerHooks } from 'node:module';
 import { sessionCookie } from '../src/dashboard-auth.js';
 import { routedUserDb } from '../src/user-data-routing.js';
 import { resolveUserData, userDataEnvironment, deletionDatabase, UserDataUnavailable } from '../src/user-data-shards.js';
 import { saveConnectionSecret, connectionEnvironment } from '../src/connection-secrets.js';
 import { saveConsent } from '../src/consent.js';
-import { exportAccountData, deleteAccount, finishAccountDeletions } from '../src/account-data.js';
+import { deleteAccount, finishAccountDeletions } from '../src/account-data.js';
+import { exportAccount } from './helpers/account-export.mjs';
 import { completeOnboarding } from '../src/onboarding.js';
 import { saveSharedFood, searchSharedFoods } from '../src/shared-foods.js';
 import { cached } from '../src/api-cache.js';
@@ -18,7 +18,7 @@ const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8'
 function db() {
   const raw = createD1();
   raw.sqlite.exec(read('staging/schema.sql'));
-  for (const name of ['0009_account_workflow.sql','0011_account_deletions.sql','0012_user_time_zone.sql','0013_cookbook_and_consents.sql','0014_passkeys_email_codes.sql','0016_support_reports.sql']) raw.sqlite.exec(read('migrations/' + name));
+  for (const name of ['0009_account_workflow.sql','0011_account_deletions.sql','0012_user_time_zone.sql','0013_cookbook_and_consents.sql','0014_passkeys_email_codes.sql','0016_support_reports.sql','0020_request_limits.sql','0021_session_epoch.sql']) raw.sqlite.exec(read('migrations/' + name));
   const prepare = raw.prepare.bind(raw);
   // D1 returns the database's size in meta.size_after on a query.
   raw.prepare = sql => { const statement = prepare(sql), all = statement.all; statement.all = async () => ({ ...await all(), meta: { size_after: raw.size ?? 100000 } }); return statement; };
@@ -133,7 +133,7 @@ test('account export and resumable deletion find both central and shard records'
   const { core, env, shards } = setup(2, 1); addUser(core, 3); addUser(core, 4);
   const a = await userDataEnvironment(env, user(3)), b = await userDataEnvironment(env, user(4));
   await point(a.DB, 3, 70); await point(b.DB, 4, 80); await saveConsent(a, { health: true });
-  const data = await exportAccountData(a, user(3));
+  const data = await exportAccount(a, user(3));
   assert.equal(data.tables.health_datapoints[0].value_numeric, 70);
   assert.equal(data.tables.user_consents.length, 1);
   await deleteAccount(a, user(3), { budgetMs: 0, chunkRows: 1 });
@@ -155,14 +155,7 @@ test('cache entries cannot cross staging/production or a user data shard', async
 });
 
 test('authenticated API requests route writes and caches; a missing shard returns 503 without writing elsewhere', async () => {
-  // Match Wrangler's Text module rule for the browser asset while loading
-  // the real request handlers and authentication code in Node.
-  const hooks = registerHooks({load(url,context,nextLoad) {
-    if (url.endsWith('/dashboard-client.js')) return {format:'module',source:'export default '+JSON.stringify(readFileSync(new URL(url),'utf8')),shortCircuit:true};
-    return nextLoad(url,context);
-  }});
-  let entrypoint;
-  try { entrypoint = (await import('../src/entrypoint.js')).default; } finally { hooks.deregister(); }
+  const entrypoint = (await import('../src/entrypoint.js')).default;
   const { core, env, shards } = setup(); addUser(core, 3);
   core.sqlite.exec("INSERT INTO schema_meta(key,value) VALUES('tenancy_version','1')");
   _resetTenancyForTest();

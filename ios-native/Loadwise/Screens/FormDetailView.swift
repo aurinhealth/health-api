@@ -13,6 +13,7 @@ struct FormDetailView: View {
                     .padding(.bottom, 100)
             }
         }
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -24,7 +25,7 @@ struct FormDetailContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět"), action: back)
+                BackSlot(action: back)
                 Spacer()
                 SectionLabel(text: "Forma a kondice")
                 Spacer()
@@ -34,16 +35,9 @@ struct FormDetailContent: View {
             if let form = training.form {
                 Text("Forma").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.signed(form.form)).font(Typo.number(116)).foregroundStyle(Palette.ink)
+                    Text(Fmt.signed(form.form)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Pill(text: form.label, foreground: zoneColor(form.zone), background: form.zone == "risk" ? Palette.rust.opacity(0.14) : form.zone == "optimal" || form.zone == "fresh" ? Palette.greenSoft : Palette.amberSoft)
                 }
-                Text(form.text)
-                    .font(Typo.sentence(20))
-                    .foregroundStyle(Palette.secondary)
-                    .lineSpacing(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 14)
-
                 Card {
                     HStack(spacing: 18) {
                         legend("Kondice", form.fitness, Palette.green)
@@ -55,9 +49,6 @@ struct FormDetailContent: View {
                         Spacer()
                         Text("dnes").font(Typo.tiny.weight(.semibold)).foregroundStyle(Palette.ink)
                     }
-                    Text("Kondice je průměr zátěže za 6 týdnů, únava za poslední týden. Forma je jejich rozdíl.")
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 24)
             }
@@ -82,11 +73,6 @@ struct FormDetailContent: View {
                 header("Intenzita · 4 týdny", trailing: nil)
                 ZoneBar(parts: [("Lehká", intensity.low, Palette.sand), ("Vysoká", intensity.high, Palette.amberBar), ("Anaerobní", intensity.anaerobic, Palette.rust)])
                     .padding(.top, 14)
-                Text(intensityText(intensity))
-                    .font(Typo.sentence(17))
-                    .foregroundStyle(Palette.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 14)
             }
         }
         .padding(.horizontal, 24)
@@ -108,12 +94,6 @@ struct FormDetailContent: View {
             if let trailing { Text(trailing).font(Typo.caption).foregroundStyle(Palette.faint) }
         }
         .padding(.top, 34)
-    }
-
-    private func intensityText(_ i: TrainingSnapshot.Intensity) -> String {
-        if i.low >= 70 { return "Většina tréninku je lehká, jak má být. Kvalitu dodávají kratší tvrdé úseky." }
-        if i.low >= 55 { return "Dobře rozložené: víc než polovina lehce, zbytek ve vyšší intenzitě." }
-        return "Hodně tréninku ve vysoké intenzitě. Přidej lehké objemové jednotky, ať se stihneš zotavit."
     }
 }
 

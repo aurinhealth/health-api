@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { isFoodLogMessage, buildFoodDraft, foodDraftSummary, itemTotals, parseFoodSentence } from "../src/food-chat.js";
+import { isFoodLogMessage, buildFoodDraft, foodDraftSummary, itemTotals, parseFoodSentence, foodParseInstructionsText } from "../src/food-chat.js";
+import { withLang } from "../src/lang.js";
 import { lightModel } from "../src/coach-assistant.js";
 
 test("food sentences go to the food draft, training requests do not", () => {
@@ -43,10 +44,15 @@ test("the sentence is parsed by the light model with a JSON schema", async () =>
   assert.deepEqual(itemTotals(snickers, 100), { kcal: 481, protein_g: 8.6, carbs_g: 60.5, fat_g: 22.5 });
 });
 
-test("the assistant returns the draft and the dialog logs it only on confirmation", () => {
+test("the assistant returns a food draft instead of logging the sentence", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(entry, /if\(body\.mode!=='coach'&&isFoodLogMessage\(message\)\)/);
-  assert.match(client, /if\(r\.kind==='food_draft'\)\{renderFoodDraft\(message,r\);scrollAssistant\(\);return;\}/);
-  assert.match(client, /\$\('foodDraftSave'\)\.onclick=async\(\)=>/);
+});
+
+test("English food sentences go to the food draft too; questions and training do not", () => {
+  for (const m of ["I had a banana and a coffee", "I ate oats with milk for breakfast", "Snack: an apple and some nuts", "I've just had two eggs", "Log my lunch: chicken and rice"]) assert.ok(isFoodLogMessage(m), m);
+  for (const m of ["I had a hard ride today", "Should I eat before the ride", "I had a great run", "Can I have a banana"]) assert.ok(!isFoodLogMessage(m), m);
+  assert.match(withLang("en", foodParseInstructionsText), /^From the user's sentence \(in English\)/);
+  assert.doesNotMatch(withLang("en", foodParseInstructionsText), /[ěščřžýůňťď]/);
+  assert.match(withLang("cs", foodParseInstructionsText), /^Z věty uživatele \(česky\)/);
 });

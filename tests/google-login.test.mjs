@@ -23,14 +23,17 @@ function googleFetch(token) {
     ? Response.json({ keys: [jwk] })
     : Response.json(token ? { id_token: token } : { error: "invalid_grant" }, { status: token ? 200 : 400 });
 }
-const callback = (query, cookie = "pfd_google_login=s1.n1.verifier") => new Request("https://petrfitnessdata.eu/auth/google/callback?" + query, { headers: { Cookie: cookie } });
+// Google sign-in serves only the iPhone app: /auth/google?app=<43-character challenge>.
+const challenge = "c".repeat(43), appCookie = "pfd_google_login=s1.n1.verifier." + challenge;
+const start = (e, query = "?app=" + challenge) => handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google" + query), e, "/auth/google");
+const callback = (query, cookie = appCookie) => new Request("https://petrfitnessdata.eu/auth/google/callback?" + query, { headers: { Cookie: cookie } });
 
 test("a client id pasted with spaces still reaches Google intact", async () => {
   const padded = { ...freshEnv(), GOOGLE_CLIENT_ID: " client-123 \n", GOOGLE_CLIENT_SECRET: " secret " };
-  const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), padded, "/auth/google");
+  const response = await start(padded);
   assert.equal(new URL(response.headers.get("Location")).searchParams.get("client_id"), "client-123");
-  const missing = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), { ...padded, GOOGLE_CLIENT_ID: "   " }, "/auth/google");
-  assert.equal(missing.status, 503);
+  const missing = await start({ ...padded, GOOGLE_CLIENT_ID: "   " });
+  assert.equal(missing.headers.get("Location"), "loadwise://auth?error=unavailable");
 });
 
 test("Google login routes are public", () => {
@@ -39,7 +42,7 @@ test("Google login routes are public", () => {
 });
 
 test("login start requests only identity scopes with state, nonce and PKCE", async () => {
-  const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), env, "/auth/google");
+  const response = await start(env);
   assert.equal(response.status, 302);
   const location = new URL(response.headers.get("Location"));
   assert.equal(location.origin, "https://accounts.google.com");
@@ -53,26 +56,23 @@ test("login start requests only identity scopes with state, nonce and PKCE", asy
 });
 
 test("login is disabled without an owner", async () => {
-  const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), { ...env, OWNER_EMAIL: "" }, "/auth/google");
-  assert.equal(response.status, 503);
+  const response = await start({ ...env, OWNER_EMAIL: "" });
+  assert.equal(response.headers.get("Location"), "loadwise://auth?error=unavailable");
 });
 
 test("sessions are never signed with the owner API key", async () => {
-  const response = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google"), { ...env, SESSION_SECRET: "", STRENGTH_API_KEY: "owner-key" }, "/auth/google");
-  assert.equal(response.status, 503);
+  const response = await start({ ...env, SESSION_SECRET: "", STRENGTH_API_KEY: "owner-key" });
+  assert.equal(response.headers.get("Location"), "loadwise://auth?error=unavailable");
 });
 
-test("the owner's Google account gets a session bound to their user", async () => {
+test("the owner's Google account is bound to their user and the callback hands off to the app, not a browser session", async () => {
   _resetJwksCacheForTest();
   const e = freshEnv();
   const response = await _finishLoginForTest(callback("code=c1&state=s1"), e, googleFetch(await idToken()));
-  assert.equal(response.status, 302);
-  assert.equal(response.headers.get("Location"), "/app");
-  const session = response.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
-  const request = new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } });
-  const principal = await resolvePrincipal(request, e, async () => { throw new Error("no"); });
+  assert.equal(response.status, 200);
+  assert.ok(!response.headers.getSetCookie().some(c => c.startsWith("pfd_session=")));
+  assert.match(await response.text(), /loadwise:\/\/auth\?token=/);
   const owner = await e.DB.prepare("SELECT id, google_sub FROM users WHERE email='owner@example.com'").first();
-  assert.deepEqual(principal, { kind: "user", userId: owner.id });
   assert.equal(owner.google_sub, "google-owner");
 });
 
@@ -80,18 +80,18 @@ test("an invited account can sign in, an uninvited one cannot", async () => {
   _resetJwksCacheForTest();
   const e = freshEnv();
   const denied = await _finishLoginForTest(callback("code=c1&state=s1"), e, googleFetch(await idToken({ sub: "g2", email: "friend@example.com" })));
-  assert.equal(denied.status, 403);
-  assert.equal(denied.headers.get("Set-Cookie"), null);
+  assert.equal(denied.headers.get("Location"), "loadwise://auth?error=not_invited");
+  assert.ok(!denied.headers.getSetCookie().some(c => c.startsWith("pfd_session=")));
   await e.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
   const allowed = await _finishLoginForTest(callback("code=c1&state=s1"), e, googleFetch(await idToken({ sub: "g2", email: "Friend@Example.com" })));
-  assert.equal(allowed.status, 302);
+  assert.equal(allowed.status, 200);
   assert.ok(await e.DB.prepare("SELECT id FROM users WHERE email='friend@example.com' AND role='user'").first());
 });
 
 test("state mismatch is rejected before contacting Google", async () => {
   let called = false;
   const response = await _finishLoginForTest(callback("code=c1&state=other"), env, async () => { called = true; });
-  assert.equal(response.status, 400);
+  assert.equal(response.headers.get("Location"), "loadwise://auth?error=expired");
   assert.equal(called, false);
 });
 
@@ -115,10 +115,10 @@ test("the iPhone app signs in through Safari and redeems the token with its veri
   _resetJwksCacheForTest();
   const e = freshEnv();
   const verifier = "v".repeat(43), challenge = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
-  const start = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google?app=" + challenge), e, "/auth/google");
-  const cookie = start.headers.get("Set-Cookie").split(";")[0];
+  const begin = await start(e, "?app=" + challenge);
+  const cookie = begin.headers.get("Set-Cookie").split(";")[0];
   assert.equal(cookie.split("=")[1].split(".")[3], challenge);
-  const state = new URL(start.headers.get("Location")).searchParams.get("state"), nonce = cookie.split("=")[1].split(".")[1];
+  const state = new URL(begin.headers.get("Location")).searchParams.get("state"), nonce = cookie.split("=")[1].split(".")[1];
   const back = await _finishLoginForTest(callback("code=c1&state=" + state, cookie), e, googleFetch(await idToken({ nonce })));
   assert.equal(back.status, 200);
   assert.ok(!back.headers.getSetCookie().some(c => c.startsWith("pfd_session=")), "Safari gets no session");
@@ -132,23 +132,26 @@ test("the iPhone app signs in through Safari and redeems the token with its veri
   const session = ok.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
   const principal = await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
   const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
-  assert.deepEqual(principal, { kind: "user", userId: owner.id });
+  assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 0 });
   assert.equal(isPublicPath("/auth/app/session"), true);
 });
 
-test("a handoff token is not a session and an invalid app challenge is ignored", async () => {
-  const start = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google?app=short"), env, "/auth/google");
-  assert.equal(start.headers.get("Set-Cookie").split(";")[0].split("=")[1].split(".")[3], "");
+test("a handoff token is not a session and sign-in without a valid app challenge is refused", async () => {
+  for (const query of ["", "?app=short"]) {
+    const refused = await start(env, query);
+    assert.equal(refused.status, 400);
+    assert.match(refused.headers.get("content-type"), /text\/html/);
+    assert.equal(refused.headers.get("Set-Cookie"), null);
+  }
   const form = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "token=x&verifier=y" }), env, "/auth/app/session");
   assert.equal(form.status, 401);
 });
 
 // A failed sign-in started by the app goes back to it, so its browser sheet
-// closes and the app can say why; the web keeps its HTML pages.
+// closes and the app can say why; a callback without the app's challenge gets an HTML page.
 test("a failed app sign-in returns to the app with an error code", async () => {
   _resetJwksCacheForTest();
   const e = freshEnv();
-  const challenge = "c".repeat(43), appCookie = "pfd_google_login=s1.n1.verifier." + challenge;
   const back = response => {
     assert.equal(response.status, 302);
     assert.match(response.headers.getSetCookie().join("\n"), /pfd_google_login=; Max-Age=0/);
@@ -160,10 +163,31 @@ test("a failed app sign-in returns to the app with an error code", async () => {
   assert.equal(back(await _finishLoginForTest(callback("code=c1&state=other", appCookie), e, googleFetch())), "loadwise://auth?error=expired");
   assert.equal(back(await _finishLoginForTest(callback("code=c1&state=s1", appCookie), e, googleFetch())), "loadwise://auth?error=failed");
   assert.equal(back(await _finishLoginForTest(callback("code=c1&state=s1", appCookie), e, googleFetch(await idToken({ nonce: "other" })))), "loadwise://auth?error=failed");
-  assert.equal(back(await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google?app=" + challenge), { ...e, OWNER_EMAIL: "" }, "/auth/google")), "loadwise://auth?error=unavailable");
+  assert.equal(back(await start({ ...e, OWNER_EMAIL: "" })), "loadwise://auth?error=unavailable");
 
-  const web = await _finishLoginForTest(callback("code=c1&state=s1"), e, googleFetch(await idToken({ sub: "g9", email: "stranger@example.com" })));
-  assert.equal(web.status, 403);
+  let called = false;
+  const web = await _finishLoginForTest(callback("code=c1&state=s1", "pfd_google_login=s1.n1.verifier"), e, async () => { called = true; });
+  assert.equal(web.status, 400);
   assert.match(web.headers.get("content-type"), /text\/html/);
-  assert.equal((await _finishLoginForTest(callback("error=access_denied&state=s1"), e, googleFetch())).status, 400);
+  assert.equal(called, false);
+  assert.ok(!web.headers.getSetCookie().some(c => c.startsWith("pfd_session=")));
+  assert.equal((await _finishLoginForTest(callback("error=access_denied&state=s1", "pfd_google_login=s1.n1.verifier"), e, googleFetch())).status, 400);
+});
+
+test("a token signed with a key Google rotated in fetches the keys again, at most once a minute", async () => {
+  _resetJwksCacheForTest();
+  const rotated = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const newJwk = { ...(await crypto.subtle.exportKey("jwk", rotated.publicKey)), kid: "k2" };
+  const claims = { iss: "https://accounts.google.com", aud: "client-123", sub: "google-owner", exp: Math.floor(Date.now() / 1000) + 300, nonce: "n1", email: "owner@example.com", email_verified: true };
+  const data = b64({ alg: "RS256", kid: "k2" }) + "." + b64(claims);
+  const token = data + "." + Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", rotated.privateKey, new TextEncoder().encode(data))).toString("base64url");
+  const fetches = [];
+  const fetchImpl = async (url, init) => { fetches.push(init); return Response.json({ keys: fetches.length === 1 ? [jwk] : [jwk, newJwk] }); };
+  assert.equal((await verifyGoogleIdToken(await idToken(), "client-123", "n1", fetchImpl)).sub, "google-owner");
+  assert.equal((await verifyGoogleIdToken(token, "client-123", "n1", fetchImpl)).sub, "google-owner");
+  assert.equal(fetches.length, 2);
+  assert.deepEqual(fetches[1], { cache: "no-store" });
+  const unknown = b64({ alg: "RS256", kid: "k3" }) + "." + b64(claims) + "." + b64("x");
+  await assert.rejects(verifyGoogleIdToken(unknown, "client-123", "n1", fetchImpl), /Signing key not found/);
+  assert.equal(fetches.length, 2, "no second forced fetch within a minute");
 });

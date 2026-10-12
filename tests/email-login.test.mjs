@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleEmailLogin, sendCode } from "../src/email-login.js";
+import { handleEmailLogin, sendCode, codesPerDay } from "../src/email-login.js";
 import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail } from "../src/email-sender.js";
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
 import { resolvePrincipal } from "../src/dashboard-auth.js";
@@ -18,7 +18,7 @@ async function setup(extra = {}) {
   env.DB.sqlite.exec(MIGRATION);
   return { env, sent };
 }
-const request = (path, body, { origin = ORIGIN, lang } = {}) => new Request(ORIGIN + path, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...(lang ? { "X-Interface-Language": lang } : {}) }, body: JSON.stringify(body) });
+const request = (path, body, { origin = ORIGIN, lang, ip } = {}) => new Request(ORIGIN + path, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...(lang ? { "X-Interface-Language": lang } : {}), ...(ip ? { "CF-Connecting-IP": ip } : {}) }, body: JSON.stringify(body) });
 async function start(env, email, options) {
   const pending = [];
   const response = await handleEmailLogin(request("/auth/email/start", { email }, options), env, "/auth/email/start", { waitUntil: p => pending.push(p) });
@@ -62,7 +62,7 @@ test("an invited address gets a code and signs in with it once", async () => {
   const user = env.DB.sqlite.prepare("SELECT id, role, last_login_at FROM users WHERE email = 'friend@example.com'").get();
   // Signing in counts as activity: accounts unused for two years are deleted by last_login_at.
   assert.ok(user.last_login_at);
-  assert.deepEqual(principal, { kind: "user", userId: user.id });
+  assert.deepEqual(principal, { kind: "user", userId: user.id, epoch: 0 });
   assert.equal(user.role, "user");
   assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM user_invites").get().n, 0, "the invitation is used up");
   assert.equal((await verify(env, "friend@example.com", code)).status, 400, "a code works once");
@@ -147,7 +147,7 @@ test("e-mail texts in Czech and English", () => {
 });
 
 test("App Review: the review address gets the fixed code, which still needs sending and works once", async () => {
-  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810" });
+  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810", APP_REVIEW_UNTIL: "2999-12-31" });
   await inviteUser(env.DB, "review@example.com", 1);
   assert.equal((await verify(env, "review@example.com", "246810")).status, 400, "no code sent yet");
   await start(env, "review@example.com");
@@ -166,4 +166,36 @@ test("OPEN_SIGNUP: any address gets a code and an account", async () => {
   assert.equal(sent.length, 1);
   assert.equal((await verify(env, "stranger@example.com", codeIn(sent[0]))).status, 200);
   assert.ok(env.DB.sqlite.prepare("SELECT id FROM users WHERE email = 'stranger@example.com'").get());
+});
+
+test("one caller starts at most five sign-ins a minute, whatever the addresses", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true" });
+  for (let i = 0; i < 5; i++) assert.equal((await start(env, "person" + i + "@example.com", { ip: "203.0.113.5" })).status, 200);
+  const refused = await start(env, "person5@example.com", { ip: "203.0.113.5" });
+  assert.equal(refused.status, 429);
+  assert.deepEqual(await refused.json(), { message: "Příliš mnoho pokusů o přihlášení. Zkus to za chvíli." });
+  assert.equal(sent.length, 5);
+  assert.equal((await start(env, "person5@example.com", { ip: "203.0.113.6" })).status, 200, "another caller");
+  assert.equal(sent.length, 6);
+  // Verifying a code is not limited by this: the code itself allows five tries.
+  assert.equal((await verify(env, "person0@example.com", codeIn(sent[0]), { ip: "203.0.113.5" })).status, 200);
+});
+
+test("all codes together stay under the day's budget (EMAIL_CODES_PER_DAY, 500 by default)", async () => {
+  assert.equal(codesPerDay({}), 500);
+  assert.equal(codesPerDay({ EMAIL_CODES_PER_DAY: "20" }), 20);
+  assert.equal(codesPerDay({ EMAIL_CODES_PER_DAY: "nonsense" }), 500);
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "2" });
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  assert.equal(await sendCode(env, "a@example.com", "cs", { now }), true);
+  assert.equal(await sendCode(env, "b@example.com", "cs", { now }), true);
+  const warnings = [], original = console.warn;
+  console.warn = (...args) => warnings.push(args.join(" "));
+  try { assert.equal(await sendCode(env, "c@example.com", "cs", { now }), false, "the third code of the day"); }
+  finally { console.warn = original; }
+  assert.deepEqual(warnings, ["Sign-in code e-mail budget of the day is used up"]);
+  assert.equal(sent.length, 2);
+  // The next day the budget is back.
+  assert.equal(await sendCode(env, "c@example.com", "cs", { now: Date.parse("2026-10-08T00:01:00Z") }), true);
+  assert.equal(sent.length, 3);
 });

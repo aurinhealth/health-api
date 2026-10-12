@@ -3,6 +3,8 @@
 // Intervals Companion, Health Sync), Garmin or another app. Google Health
 // nights stay first; Intervals only fills the nights Google does not have.
 // The wellness sync to Intervals reads Google nights only, so nothing loops.
+// Such a night has no time in bed, so the sleep index falls back to its
+// sleepScore (readiness.js sleepIndexFor).
 import { intervalsAuthorization } from "./intervals-auth.js";
 
 export function mergeIntervalsSleep(sessions = [], wellness = [], { start = "", end = "9999-12-31" } = {}) {
