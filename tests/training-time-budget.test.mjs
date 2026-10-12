@@ -20,6 +20,10 @@ import { exercisePreferences } from '../src/exercise-feedback.js';
 
 const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
+const coachInbox = readFileSync(new URL('../src/coach-inbox.js', import.meta.url), 'utf8');
+// The dashboard API's route modules, called from handleDashboardApi in order.
+const routeModules = ['routes-account.js', 'routes-sync.js', 'routes-gym.js', 'routes-training.js', 'routes-food.js']
+  .map(file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'));
 const gateway = readFileSync(new URL('../src/strength-gateway.js', import.meta.url), 'utf8');
 const client = readFileSync(new URL('../src/dashboard-client.js', import.meta.url), 'utf8');
 const slice = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to));
@@ -48,9 +52,10 @@ async function api(minutes) {
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({})
   });
-  vm.runInContext(slice(source, 'async function ensureCoachInboxTable(', '\nfunction coachChannel('), context);
+  vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\nexport function coachChannel('), context);
+  for (const text of routeModules) vm.runInContext(text.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
   vm.runInContext(slice(source, 'async function handleDashboardApi(', '\n// The concrete workout'), context);
-  vm.runInContext(slice(source, 'async function workoutPreview(', '\nasync function handleAdminApi('), context);
+  vm.runInContext(slice(source, 'async function workoutPreview(', '\nfunction logoResponse('), context);
   vm.runInContext(slice(gateway, 'async function generateStrengthPlanRoute(', '\nasync function syncStrength('), context);
   context.app = { fetch: async (request, requestEnv, ctx) => {
     const url = new URL(request.url);

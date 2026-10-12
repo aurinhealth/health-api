@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { energyBaseline, normalizeProfile, restingMetabolicRate, OWNER_CALIBRATION, sleepSettings } from "../src/energy-profile.js";
 import legacy from "../src/index.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const woman = { sex: "female", age: 30, height: 165, activity: "sedentary", goal: "lose_0.5" };
 
@@ -138,7 +139,7 @@ test("without Google Health a manual weight is stored here and feeds the target"
 });
 
 test("the dashboard works without connections", () => {
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.doesNotMatch(entry, /status:"onboarding"/);
   assert.match(entry, /source:"loadwise",connected:false/);

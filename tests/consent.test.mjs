@@ -5,6 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { consentStatus, saveConsent, CONSENT_VERSION } from "../src/consent.js";
 import { assertAIAccess, subscriptionStatus } from "../src/subscription.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const migration = readFileSync(new URL("../migrations/0013_cookbook_and_consents.sql", import.meta.url), "utf8");
 function setup({ owner = false } = {}) {
@@ -81,7 +82,7 @@ test("consents are personal data: exported and deleted with the account", () => 
 
 test("the app asks before it loads anything, and the AI features ask on first use", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   // A new account answers in the setup guide; one set up earlier gets the consent screen once.
   assert.match(client, /loadAccount\(\)\.then\(async me=>\{if\(me\.consent\?\.needed&&me\.onboarding\?\.completed\)\{forgetDashboard\(\);await showConsentGate\(me\);/);
   assert.match(client, /askConsent=Boolean\(accountConsent\?\.needed\)&&!edit/);
