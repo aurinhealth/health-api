@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "../src/account-data.js";
+import { exportAccountStream, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "../src/account-data.js";
+import { exportAccount, readExport } from "./helpers/account-export.mjs";
 import { findUser } from "../src/tenancy.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
@@ -31,13 +32,66 @@ function addSamples(db, id, n) {
 
 test("the export holds everything of this account and none of its keys or other people's data", async () => {
   const db = database();
-  const data = await exportAccountData({ DB: scopedDb(db, 3), USER_ID: 3 }, user);
-  assert.equal(data.account.email, "a@example.com");
+  const data = await exportAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, user);
+  assert.equal(data.header.account.email, "a@example.com");
   assert.equal(data.tables.health_datapoints.length, 1);
   assert.equal(data.tables.dashboard_profile[0].profile_json, '{"sex":"female"}');
   assert.equal(data.tables.connection_credentials, undefined);
   assert.ok(!JSON.stringify(data).includes("secret"));
   assert.ok(!JSON.stringify(data).includes("user_id"));
+});
+
+test("the export is NDJSON: a header line, then one line per row", async () => {
+  const db = database();
+  const now = new Date("2026-10-12T08:00:00Z");
+  const { header, rows, text } = await exportAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, { ...user, name: "A" }, { now });
+  assert.deepEqual(header, { format: "loadwise-export", version: 2, exportedAt: "2026-10-12T08:00:00.000Z", account: { email: "a@example.com", name: "A" } });
+  assert.equal(text.split("\n").length, rows.length + 2);
+  for (const line of rows) assert.deepEqual(Object.keys(line), ["table", "row"]);
+  assert.deepEqual(rows.map(line => line.table).sort(), ["dashboard_profile", "health_datapoints"]);
+});
+
+test("a large account is exported in keyset pages, never with one query over all its rows", async () => {
+  const db = database();
+  addSamples(db, 3, 23);
+  addSamples(db, 4, 7);
+  const selects = [];
+  const prepare = db.prepare;
+  db.prepare = sql => { if (/FROM health_datapoints/.test(sql)) selects.push(sql); return prepare(sql); };
+  const { tables } = await exportAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, user, { pageRows: 5 });
+  // 24 rows of this account in pages of 5: five pages, each bounded.
+  assert.equal(selects.length, 5);
+  assert.ok(selects.every(sql => /WHERE user_id = \? AND rowid > \? ORDER BY rowid LIMIT \?/.test(sql)));
+  const ids = tables.health_datapoints.map(row => row.external_id);
+  assert.equal(ids.length, 24);
+  assert.equal(new Set(ids).size, 24);
+  assert.ok(!tables.health_datapoints.some(row => "export_rowid__" in row || "user_id" in row));
+});
+
+test("the export stream reads a page only when the reader asks for more, and stops when cancelled", async () => {
+  const db = database();
+  addSamples(db, 3, 20);
+  let queries = 0;
+  const prepare = db.prepare;
+  db.prepare = sql => { if (/^SELECT rowid AS export_rowid__/.test(sql)) queries++; return prepare(sql); };
+  const reader = exportAccountStream({ DB: scopedDb(db, 3), USER_ID: 3 }, user, { pageRows: 5 }).getReader();
+  const decoder = new TextDecoder();
+  assert.equal(JSON.parse(decoder.decode((await reader.read()).value)).format, "loadwise-export");
+  const page = decoder.decode((await reader.read()).value).trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(page.length, 5);
+  assert.equal(page[0].table, "health_datapoints");
+  assert.ok(queries <= 2);
+  await reader.cancel();
+  assert.ok(queries <= 2);
+  assert.equal((await readExport(exportAccountStream({ DB: scopedDb(db, 3), USER_ID: 3 }, user, { pageRows: 5 }))).tables.health_datapoints.length, 21);
+});
+
+test("the export route streams NDJSON as a .ndjson download", () => {
+  const source = serverSource();
+  assert.match(source, /new Response\(exportAccountStream\(env,session\.user\)/);
+  assert.match(source, /'Content-Type':'application\/x-ndjson; charset=utf-8'/);
+  assert.match(source, /loadwise-data-'\+localToday\(\)\+'\.ndjson"/);
+  assert.doesNotMatch(source, /exportAccountData/);
 });
 
 test("deleting the account removes its data and the account, revokes Google and leaves others alone", async () => {
@@ -80,7 +134,7 @@ test("Apple sign-in links are exported and deleted with the account", async () =
   db.sqlite.exec("CREATE TABLE user_identities (provider TEXT NOT NULL, subject TEXT NOT NULL, user_id INTEGER NOT NULL, email TEXT, created_at TEXT, last_login_at TEXT, PRIMARY KEY (provider, subject))");
   db.sqlite.exec("INSERT INTO user_identities (provider, subject, user_id, email) VALUES ('apple', 'sub-3', 3, 'relay@privaterelay.appleid.com'), ('apple', 'sub-4', 4, NULL)");
   const env = { DB: scopedDb(db, 3), USER_ID: 3 };
-  assert.deepEqual((await exportAccountData(env, user)).tables.user_identities, [{ provider: "apple", subject: "sub-3", email: "relay@privaterelay.appleid.com", created_at: null, last_login_at: null }]);
+  assert.deepEqual((await exportAccount(env, user)).tables.user_identities, [{ provider: "apple", subject: "sub-3", email: "relay@privaterelay.appleid.com", created_at: null, last_login_at: null }]);
   await deleteAccount(env, user, { fetchImpl: async () => new Response("") });
   assert.deepEqual(db.sqlite.prepare("SELECT subject FROM user_identities").all().map(r => r.subject), ["sub-4"]);
 });

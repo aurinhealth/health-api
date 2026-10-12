@@ -516,13 +516,6 @@ final class SnapshotTests: XCTestCase {
             ActiveEnergyContent(active: active, today: DemoData.training.date, calendar: DemoData.calendarByDate)
                 .padding(.horizontal, 24).padding(.bottom, 40).environment(model)
         }
-        try render("weather-pill", height: 120) {
-            HStack(spacing: 8) {
-                WeatherPill(weather: weather)
-                WeatherPill(weather: nil)
-            }
-            .padding(24)
-        }
         try render("weather-details", height: 900) {
             NavigationStack { WeatherDetails(weather: weather) }.environment(model)
         }

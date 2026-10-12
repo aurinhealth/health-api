@@ -4,9 +4,11 @@
 // user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
 // (default 5 USD a month). How it is spread over the month is up to the user;
 // a daily limit applies only when AI_DAILY_LIMIT_USD is set. 0 in either turns
-// AI off for everyone but the owner. The owner is never limited.
+// AI off for everyone but the owner. The owner is never limited. The App Review
+// account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
+import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -30,8 +32,9 @@ export function aiDailyLimitUsd(env) {
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
 export function aiMonthlyLimitUsd(env) {
   if (env.USER_IS_OWNER === true) return null;
-  const limit = n(env.AI_MONTHLY_LIMIT_USD);
-  return limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
+  const limit = n(env.AI_MONTHLY_LIMIT_USD), base = limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
+  // The App Review demo account gets a small fixed budget (app-review.js).
+  return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;
 }
 
 const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0);

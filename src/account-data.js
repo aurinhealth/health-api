@@ -10,18 +10,64 @@ import { revokeApple } from "./apple-login.js";
 const SECRET_TABLES = new Set(["connection_credentials"]);
 const missingTable = error => /no such table/i.test(String(error?.message || error));
 
-export async function exportAccountData(env, user) {
-  const tables = {};
-  for (const table of Object.keys(PERSONAL_TABLES)) {
-    if (SECRET_TABLES.has(table)) continue;
-    try {
-      const rows = (await env.DB.prepare(`SELECT * FROM ${table} WHERE user_id = ?`).bind(env.USER_ID).all()).results || [];
-      if (rows.length) tables[table] = rows.map(({ user_id, ...row }) => row);
-    } catch (error) {
-      if (!missingTable(error)) throw error;
+// The download is NDJSON: a header line, then one line per row
+// ({"table":…,"row":…}). A long-used account holds around a million rows, so
+// nothing is gathered in memory: each table is read in keyset pages of
+// EXPORT_PAGE_ROWS (by rowid) and every page is written out before the next is
+// read. The stream pulls, so a slow download does not pile pages up either.
+export const EXPORT_FORMAT = "loadwise-export";
+export const EXPORT_VERSION = 2;
+const EXPORT_PAGE_ROWS = 5000;
+const EXPORT_TABLES = Object.keys(PERSONAL_TABLES).filter(table => !SECRET_TABLES.has(table));
+
+// Yields the user's rows table by table, one page at a time. env.DB is the
+// user's scoped database; with user data shards it routes each table to the
+// database that holds it.
+export async function* exportPages(db, userId, { pageRows = EXPORT_PAGE_ROWS } = {}) {
+  for (const table of EXPORT_TABLES) {
+    let after = 0;
+    for (;;) {
+      let rows;
+      try {
+        rows = (await db.prepare(`SELECT rowid AS export_rowid__, * FROM ${table} WHERE user_id = ? AND rowid > ? ORDER BY rowid LIMIT ?`).bind(Number(userId), after, pageRows).all()).results || [];
+      } catch (error) {
+        if (missingTable(error)) break;
+        throw error;
+      }
+      if (!rows.length) break;
+      after = rows[rows.length - 1].export_rowid__;
+      yield { table, rows: rows.map(({ export_rowid__, user_id, ...row }) => row) };
+      if (rows.length < pageRows) break;
     }
   }
-  return { exportedAt: new Date().toISOString(), account: { email: user?.email || null, name: user?.name || null }, tables };
+}
+
+export function exportAccountStream(env, user, { now = new Date(), pageRows = EXPORT_PAGE_ROWS } = {}) {
+  const encoder = new TextEncoder();
+  const header = { format: EXPORT_FORMAT, version: EXPORT_VERSION, exportedAt: now.toISOString(), account: { email: user?.email || null, name: user?.name || null } };
+  let pages = null;
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(JSON.stringify(header) + "\n"));
+    },
+    async pull(controller) {
+      pages ||= exportPages(env.DB, env.USER_ID, { pageRows });
+      try {
+        const next = await pages.next();
+        if (next.done) { controller.close(); return; }
+        const { table, rows } = next.value;
+        let text = "";
+        for (const row of rows) text += JSON.stringify({ table, row }) + "\n";
+        controller.enqueue(encoder.encode(text));
+      } catch (error) {
+        console.error("Account export failed", error.message);
+        controller.error(error);
+      }
+    },
+    async cancel() {
+      await pages?.return();
+    }
+  }, { highWaterMark: 1 });
 }
 
 // Google keeps a granted consent until it is revoked; the app gives it back
