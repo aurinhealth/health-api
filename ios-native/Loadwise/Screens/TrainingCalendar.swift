@@ -440,10 +440,6 @@ struct WatchActivityDetail: View {
                     }
                     .padding(.bottom, 18)
                     ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
-                    Text("Google Health posílá jen souhrn aktivity, ne průběh výkonu ani trasu.")
-                        .font(Typo.caption).foregroundStyle(Palette.faint)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 16)
                 }
                 .padding(24)
             }

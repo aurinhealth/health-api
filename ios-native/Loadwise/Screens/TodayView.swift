@@ -353,11 +353,7 @@ struct BedtimeSetupCard: View {
         Card {
             HStack(spacing: 12) {
                 Image(systemName: "moon.zzz").font(.system(size: 20)).foregroundStyle(Palette.indigo)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text("Nastav si budík a cíl spánku, večerka se pak ukáže v plánu dne.").font(Typo.caption).foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
             }

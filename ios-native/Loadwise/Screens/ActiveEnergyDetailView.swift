@@ -64,7 +64,6 @@ struct ActiveEnergyContent: View {
                          highlighted: all.count - 1,
                          spacing: 2,
                          height: 140)
-                Text("Čárkovaně průměr za den, pod sloupci pondělky.").font(Typo.caption).foregroundStyle(Palette.faint)
             }
             .padding(.top, 20)
 
@@ -78,11 +77,6 @@ struct ActiveEnergyContent: View {
                 }
             }
             .padding(.top, 10)
-
-            Text("Aktivní výdej je energie nad klidovým metabolismem za celý den, včetně běžného pohybu (Google Health). Kalorie u aktivit pochází z hodinek nebo Intervals.icu a často zahrnují i klidovou energii, proto se s aktivním výdejem dne nemusí sečíst.")
-                .font(Typo.caption).foregroundStyle(Palette.faint)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
         }
     }
 
