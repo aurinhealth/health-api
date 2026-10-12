@@ -3,8 +3,9 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan, hrvMetric } from "./recovery-model.js";
-import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
+import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric } from "./recovery-model.js";
+import { clockOf, minutesOf, dayStrain } from "./app-today.js";
+import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings } from "./energy-profile.js";
 import { localDate } from "./user-time.js";
 
@@ -38,19 +39,18 @@ export function readinessParts(readiness) {
 export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
-  const rows = mergeWellnessRows(google, intervals);
+  const rows = readinessRows(google, intervals, date);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
   const age = num(profile.age);
   const sleepSet = sleepSettings(profile);
   const needOn = d => sleepNeedFor({ date: d, age, goal: sleepSet.goal, strain: dayStrain(google, shift(d, -1)), rows, sessions });
 
-  // Readiness today and for the last 14 days.
-  const readinessOn = d => recoveryReadiness({ rows, date: d, night: nights.get(d) || null, sleepNeed: needOn(d).need });
-  // The morning check-in lowers today's number as on Today (applyCheckin);
-  // what it took off is its own part.
-  const body = readinessOn(date);
-  const readiness = applyCheckin(body, checkin);
+  // Readiness today and for the last 14 days, the same as Today and the
+  // coaches (readiness.js). The morning check-in lowers today's number as on
+  // Today (applyCheckin); what it took off is its own part.
+  const readinessOn = d => readinessFor({ date: d, rows, sessions, profile });
+  const readiness = readinessFor({ date, rows, sessions, profile, checkin }), body = readiness.body;
   const history = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
     .map(d => ({ date: d, value: d === date ? readiness.score : readinessOn(d).score }))
     .filter(p => p.value != null);
@@ -116,6 +116,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       zone: readiness.zone,
       missing: readiness.missing || [],
       flags: readiness.flags || [],
+      // A baseline carried over from another source until the new one has 14 days.
+      provisional: !!readiness.provisional,
       parts: [...readinessParts(body), ...(body.score != null && readiness.score < body.score ? [{ key: "checkin", points: readiness.score - body.score }] : [])],
       checkin: checkin || null,
       hrv: c.hrv ? round(c.hrv.value) : null,
@@ -129,7 +131,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
         date,
         minutes: num(night.durationMin),
         inBedMinutes: num(night.timeInBedMin),
-        index: sleepIndexScore(night, needToday.need),
+        index: sleepIndexFor(night, needToday.need),
         start: clockOf(night.startTime),
         end: clockOf(night.endTime),
         latencyMinutes: round(num(night.latencyMin ?? night.minutesToFallAsleep)),

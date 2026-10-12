@@ -4,7 +4,8 @@
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { environmentFor } from "./adaptive-week.js";
-import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
+import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
+import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
@@ -28,16 +29,8 @@ export const minutesOf = iso => {
   return c ? Number(c.slice(0, 2)) * 60 + Number(c.slice(3, 5)) : null;
 };
 
-// The main night of each day (naps and short fragments left out).
-export function primaryNights(sessions) {
-  const byDay = new Map();
-  for (const s of sessions || []) {
-    if (!s || s.nap || !(num(s.durationMin) >= 180)) continue;
-    const d = nightDate(s), best = byDay.get(d);
-    if (d && (!best || num(s.durationMin) > num(best.durationMin))) byDay.set(d, s);
-  }
-  return byDay;
-}
+// The main night of each day (readiness.js, where the readiness picks it too).
+export { primaryNights };
 
 // Minutes at moderate heart rate or above, the way WHO counts them (a vigorous
 // or peak minute counts twice): today and since Monday.
@@ -99,19 +92,16 @@ export function todayWeather(location, forecast, date) {
 
 export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
-  const rows = mergeWellnessRows(google, Array.isArray(fitness.wellness) ? fitness.wellness : []);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
   const age = num(profile.age);
   const sleepSet = sleepSettings(profile);
 
   // Sleep and readiness for the night that ended this morning. Until it has
-  // synced they stay empty: an earlier day is a tap away (?date=).
-  const night = nights.get(date) || null;
-  const need = sleepNeedFor({ date, age, goal: sleepSet.goal, strain: dayStrain(google, shift(date, -1)), rows, sessions }).need;
-  // The morning check-in can lower it, as it does for the coach.
-  const body = recoveryReadiness({ rows, date, night, sleepNeed: need });
-  const readiness = applyCheckin(body, checkin);
+  // synced they stay empty: an earlier day is a tap away (?date=). The same
+  // readiness the coaches use (readiness.js); the morning check-in can lower it.
+  const readiness = readinessFor({ date, google, intervals: fitness.wellness, sessions, profile, checkin });
+  const rows = readiness.rows, night = readiness.night, need = readiness.need.need;
   const hrv = readiness.components?.hrv || null;
 
   // The coming night: the need from the strain of the day before it and the
@@ -218,14 +208,16 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     date,
     // Connected services that need the user (connection-health.js), shown at the top.
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
-    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [] },
+    // provisional: the baseline is carried over from another source until the
+    // new one has 14 days of its own (recovery-model.js sourceBaseline).
+    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional },
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
     trainingPlan: trainingPlan || null,
     sleep: night ? {
       minutes: num(night.durationMin),
       inBedMinutes: num(night.timeInBedMin),
-      index: sleepIndexScore(night, need),
+      index: sleepIndexFor(night, need),
       need,
       start: clockOf(night.startTime),
       end: clockOf(night.endTime)

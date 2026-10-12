@@ -1642,6 +1642,38 @@ function personalBaseline(rows, date, key, options) {
   if (sd > 0) { const kept = values.filter(v => Math.abs(v - mean) <= 3 * sd); if (kept.length < values.length && kept.length > 1) { used = kept; ({ mean, sd } = stats(kept)); } }
   return { count: used.length, mean, sd };
 }
+function sourceBaseline(rows, date, key, source, options) {
+  const log = !!(options && options.log), days = (options && options.days) || 60, tagKey = key + "Source", mapKey = key + "BySource", own = source || "";
+  const list = (rows || []).filter(r => r && r.id);
+  const mine = personalBaseline(list.filter(r => (r[tagKey] || "") === own), date, key, options);
+  if (mine.mean != null) return mine;
+  const end = Date.parse(date + "T12:00:00Z");
+  const valueOf = (r, s) => {
+    const m = r[mapKey], v = Number(m && m[s] != null ? m[s] : (r[tagKey] || "") === s ? r[key] : NaN);
+    return Number.isFinite(v) && v > 0 ? (log ? Math.log(v) : v) : null;
+  };
+  const recent = list.filter(r => r.id < date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 <= days);
+  const others = new Set();
+  for (const r of recent) {
+    if ((r[tagKey] || "") !== own && Number(r[key]) > 0) others.add(r[tagKey] || "");
+    for (const s of Object.keys(r[mapKey] || {})) if (s !== own) others.add(s);
+  }
+  let best = null;
+  for (const s of others) {
+    const pairs = recent.map(r => [valueOf(r, own), valueOf(r, s)]).filter(p => p[0] != null && p[1] != null);
+    if (pairs.length < 5 || (best && pairs.length <= best.overlap)) continue;
+    best = { source: s, overlap: pairs.length, offset: pairs.reduce((t, p) => t + p[0] - p[1], 0) / pairs.length };
+  }
+  if (!best) return mine;
+  const filled = [];
+  for (const r of recent) {
+    const a = valueOf(r, own), b = valueOf(r, best.source), v = a != null ? a : b != null ? b + best.offset : null;
+    if (v != null) filled.push({ id: r.id, [key]: log ? Math.exp(v) : v });
+  }
+  const carried = personalBaseline(filled, date, key, options);
+  if (carried.mean == null) return mine;
+  return { count: carried.count, mean: carried.mean, sd: carried.sd, carried: { from: best.source || null, offset: best.offset, overlap: best.overlap, own: mine.count } };
+}
 function sleepNeedMinutes(options) {
   const age = options && options.age != null ? Number(options.age) : null, strain = options && options.strain != null ? Number(options.strain) : null;
   const goal = options && Number(options.goal) >= 360 && Number(options.goal) <= 600 ? Math.round(Number(options.goal)) : null;
@@ -1735,9 +1767,11 @@ function recoveryReadiness(input) {
   // HRV only against days measured the same way: Apple Watch reports SDNN,
   // Google's watches RMSSD, so one baseline over both mixes two scales. The
   // source tag carries the measure ("apple-health:sdnn", google-dashboard.js).
-  // A new source starts its own baseline.
+  // A new source starts its own baseline; until it has 14 days, one carried
+  // over from an overlapping source (sourceBaseline) makes the score
+  // provisional.
   const hrvRows = rows.filter(r => r && (r.hrvSource || null) === (today.hrvSource || null));
-  const hb = personalBaseline(hrvRows, date, "hrv", { log: true });
+  const hb = sourceBaseline(rows, date, "hrv", today.hrvSource || null, { log: true });
   if (Number(today.hrv) > 0 && hb.mean != null) {
     const sd = Math.max(settled(hb, 0.10), 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
     const week = hrvRows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
@@ -1747,11 +1781,12 @@ function recoveryReadiness(input) {
   }
   // Resting heart rate the same way: each watch's night algorithm (and an
   // Intervals.icu value from another device) sits a few bpm apart, as much as
-  // the SD floor. A source with under 14 days falls back to the baseline over
-  // every source, so the number does not vanish on a new watch, flagged
-  // "restingHRMixed" for the UI and the coach.
-  const rhrRows = rows.filter(r => r && (r.restingHRSource || null) === (today.restingHRSource || null));
-  let rb = personalBaseline(rhrRows, date, "restingHR"), mixed = false;
+  // the SD floor. A source with under 14 days takes a baseline carried over
+  // from an overlapping source (sourceBaseline, provisional); without an
+  // overlap it falls back to the baseline over every source, so the number
+  // does not vanish on a new watch, flagged "restingHRMixed" for the UI and
+  // the coach.
+  let rb = sourceBaseline(rows, date, "restingHR", today.restingHRSource || null), mixed = false;
   if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { rb = all; mixed = true; } }
   if (Number(today.restingHR) > 0 && rb.mean != null) {
     const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean) / sd;
@@ -1780,15 +1815,19 @@ function recoveryReadiness(input) {
     const performance = Math.min(105, Number(night.durationMin) / need * 100);
     components.sleep = { minutes: Number(night.durationMin), need, performance: Math.round(performance), score: Math.round(Math.max(0, Math.min(100, 70 + 2 * (performance - 90)))) };
   }
+  // A baseline carried over from another source: the number is provisional
+  // until the new source has 14 days of its own.
+  const provisional = !!((components.hrv && hb.carried) || (components.restingHR && rb.carried));
+  if (provisional) flags.push("provisional");
   const weights = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
   const used = Object.keys(weights).filter(k => components[k]);
   const missing = Object.keys(weights).filter(k => !components[k]);
-  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing };
+  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional };
   let score = used.reduce((s, k) => s + weights[k] * components[k].score, 0) / used.reduce((s, k) => s + weights[k], 0);
   if (components.respiration && components.respiration.elevated) score -= 10;
   if (components.skinTemp && components.skinTemp.elevated) score -= 10;
   score = Math.round(Math.max(0, Math.min(100, score)));
-  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing };
+  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional };
 }
 function heartRateLoad(zoneMinutes) {
   if (!zoneMinutes) return null;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildAdaptiveDecision } from '../src/adaptive-engine.js';
 import { generateStrengthPlan } from '../src/strength-generator.js';
 import { recoveryReadiness, mergeWellnessRows } from '../src/recovery-model.js';
+import { buildToday } from '../src/app-today.js';
 
 const date='2026-10-08';
 const day=o=>new Date(Date.parse(date+'T12:00:00Z')+o*86400000).toISOString().slice(0,10);
@@ -10,11 +11,14 @@ const series=today=>[...Array.from({length:30},(_,i)=>({id:day(-30+i),hrv:70+(i%
 const context=today=>({date,wellnessSeries:series(today),recovery:{sleep_duration_minutes:[{sampleTime:date+'T06:30:00',value:470}]},cycling:{recentRideTss:300,recentRideHours:5,recentActivities:[],plannedWorkouts:[]}});
 
 test('the coach uses the same recovery score as the dashboard',()=>{
-  const ctx=context({hrv:73,restingHR:50});
+  const sleepSessions=[{date,startTime:day(-1)+'T22:40:00Z',endTime:date+'T06:30:00Z',durationMin:470,timeInBedMin:490}];
+  const ctx={...context({hrv:73,restingHR:50}),sleepSessions,profile:{age:40,sleepGoal:500}};
   const d=buildAdaptiveDecision(ctx);
-  const same=recoveryReadiness({rows:ctx.wellnessSeries,date,night:{date,durationMin:470}});
-  assert.equal(d.recovery.model,'shared');assert.equal(d.recovery.score,same.score);
-  assert.ok(buildAdaptiveDecision(context({hrv:45,restingHR:60})).recovery.score<same.score);
+  // Today with the same rows, nights and profile shows this number.
+  const today=buildToday({date,health:{wellness:ctx.wellnessSeries},sleep:{sessions:sleepSessions},profile:ctx.profile});
+  assert.equal(d.recovery.model,'shared');assert.equal(d.recovery.score,today.readiness.score);
+  assert.equal(d.recovery.sleepNeed,500);
+  assert.ok(buildAdaptiveDecision({...ctx,wellnessSeries:series({hrv:45,restingHR:60})}).recovery.score<today.readiness.score);
 });
 test('without a personal baseline the coach falls back to the older rules',()=>{
   assert.equal(buildAdaptiveDecision({date,wellnessSeries:[],recovery:{},cycling:{}}).recovery.model,'legacy');

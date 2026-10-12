@@ -4,7 +4,7 @@ import { qualityDomain } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown } from './week-planner.js';
 import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
-import { recoveryReadiness, mergeWellnessRows, sleepNeedFor } from "./recovery-model.js";
+import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
@@ -239,14 +239,18 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // yet, deep fatigue (TSB), can only lower it, and so can the athlete's own
   // morning check-in.
   const readinessReasons=[],ZONES=["red","yellow","green"],lower=(a,b)=>ZONES[Math.min(ZONES.indexOf(a),ZONES.indexOf(b))];
-  const rows=mergeWellnessRows(health?.wellness,fitness?.wellness);
+  // The same readiness and the same inputs as Today (readiness.js): the sleep
+  // goal, the strain of the day before and the morning check-in included, so
+  // the number quoted here is the one Today shows. A readiness number sent
+  // with the request wins over the stored check-in (see below).
   const sessions=Array.isArray(health?.sleep)?health.sleep:[];
-  const mainNight=sessions.filter(x=>x&&(x.date||String(x.endTime||"").slice(0,10))===targetDate&&!x.nap&&n(x.durationMin,0)>=180).sort((a,b)=>n(b.durationMin,0)-n(a.durationMin,0))[0];
-  const night=mainNight||(sleepMinutes!=null?{date:targetDate,durationMin:sleepMinutes}:null);
-  const sleepNeed=sessions.length?sleepNeedFor({date:targetDate,age:profile?.age??null,rows,sessions}).need:480;
-  const body=recoveryReadiness({rows,date:targetDate,night,sleepNeed}),bh=body.components?.hrv,br=body.components?.restingHR,bs=body.components?.sleep;
+  const ready=readinessFor({date:targetDate,google:health?.wellness,intervals:fitness?.wellness,sessions,profile,checkin:manualReadiness==null?checkin:null});
+  const rows=ready.rows,body=ready.body,bh=body.components?.hrv,br=body.components?.restingHR,bs=body.components?.sleep;
   const hrv=wellnessTrend({wellness:rows},targetDate,"hrv"),rhr=wellnessTrend({wellness:rows},targetDate,"restingHR");
-  if(body.score!=null)readinessReasons.push(L("připravenost těla "+body.score+" (HRV, klidový tep a spánek proti tvému průměru)","body readiness "+body.score+" (HRV, resting heart rate and sleep against your average)"));
+  if(ready.score!=null)readinessReasons.push(ready.score<body.score
+    ?L("připravenost "+ready.score+" (HRV, klidový tep a spánek proti tvému průměru, snížená ranním pocitem)","readiness "+ready.score+" (HRV, resting heart rate and sleep against your average, lowered by the morning check-in)")
+    :L("připravenost "+ready.score+" (HRV, klidový tep a spánek proti tvému průměru)","readiness "+ready.score+" (HRV, resting heart rate and sleep against your average)"));
+  if(ready.provisional)readinessReasons.push(L("průměr nového zdroje dat je zatím převzatý z dřívějšího zdroje, číslo je orientační","the new data source's average is carried over from the earlier source for now, so the number is provisional"));
   if(bh&&bh.z<=-1)readinessReasons.push(L("HRV "+Math.round(bh.value)+" ms je pod tvým běžným pásmem "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms","HRV "+Math.round(bh.value)+" ms is below your usual range of "+Math.round(bh.low)+"–"+Math.round(bh.high)+" ms"));
   if(br&&br.z>=1)readinessReasons.push(L("klidový tep "+Math.round(br.value)+" je o "+Math.round(br.value-br.baseline)+" "+pluralWord(Math.round(br.value-br.baseline),"tep","tepy","tepů")+" nad tvým průměrem","resting heart rate "+Math.round(br.value)+" is "+Math.round(br.value-br.baseline)+" beats above your average"));
   // Both at once is a strong sign of fatigue or a coming illness.
@@ -257,7 +261,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(body.flags?.includes("skin_temp_elevated"))readinessReasons.push(L("teplota kůže ve spánku je zvýšená, může jít o nastupující nemoc","skin temperature during sleep is raised, which may be an oncoming illness"));
   // Without the body's signals (no watch, or under 14 days of baseline) the
   // load decides, and only fatigue data plus a full night allow green.
-  let readiness=body.zone||(tsb!=null&&sleepMinutes!=null&&sleepMinutes>=420?"green":"yellow");
+  let readiness=ready.zone||(tsb!=null&&sleepMinutes!=null&&sleepMinutes>=420?"green":"yellow");
   if(!body.zone)readinessReasons.push(L("chybí HRV nebo klidový tep s aspoň 14denním průměrem, připravenost odhaduji ze zátěže","no HRV or resting heart rate with at least a 14-day average yet, so readiness comes from the training load"));
   const loadCap=(zone,text)=>{readiness=lower(readiness,zone);readinessReasons.push(text);};
   if(tsb!=null&&tsb<=-30)loadCap("red",L("forma/únava je hluboko v záporných hodnotách","form is deep in negative territory")+" (TSB "+Math.round(tsb)+")");
@@ -276,7 +280,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     const m=clamp(n(manualReadiness,50),0,100),feeling={fresh:L("svěží","fresh"),normal:L("normál","normal"),tired:L("unavený","tired"),sick:L("nemocný","sick")}[checkin];
     loadCap(m<34?"red":m<67?"yellow":"green",feeling&&manualReadiness===manualReadinessFor(checkin)?L("ranní pocit: ","morning check-in: ")+feeling:L("zohledněn ruční readiness check-in","manual readiness check-in taken into account"));
   }
-  const score=body.score;
+  // The number Today shows (after the morning check-in).
+  const score=ready.score;
   // A beginner: low fitness, or without fitness data only a few sessions of
   // this sport. Intervals, long sessions and the load-based recovery week wait
   // until the base is there.
@@ -468,7 +473,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     sport,
     date:targetDate,
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, hrv_trend_down) and a tired or sick check-in.
-    readiness:{score,status:readiness,reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,manualReadiness:manualReadiness??null},
+    readiness:{score,status:readiness,reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,novice,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},

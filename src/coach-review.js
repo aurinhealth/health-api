@@ -4,7 +4,7 @@
 import { L } from './lang.js';
 import { callOpenAI, lightModel, compactWellness } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
-import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor } from "./recovery-model.js";
+import { readinessFor } from "./readiness.js";
 import { readinessParts } from "./app-health.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -22,12 +22,9 @@ export { MODEL_PRICES, usageCost } from "./ai-usage.js";
 // app-today.js): the score, the zone, what made it, the flags and the morning
 // check-in. The review gets it beside the raw HRV/RHR/TSB (A2).
 export function dayReadiness({ date, fitness = {}, health = {}, profile = null, checkin = null }) {
-  const rows = mergeWellnessRows(health?.wellness, fitness?.wellness), sessions = Array.isArray(health?.sleep) ? health.sleep : [];
-  const night = sessions.filter(x => x && (x.date || String(x.endTime || "").slice(0, 10)) === date && !x.nap && n(x.durationMin) >= 180).sort((a, b) => n(b.durationMin) - n(a.durationMin))[0] || null;
-  const sleepNeed = sessions.length ? sleepNeedFor({ date, age: profile?.age ?? null, rows, sessions }).need : 480;
-  const r = applyCheckin(recoveryReadiness({ rows, date, night, sleepNeed }), checkin);
+  const r = readinessFor({ date, google: health?.wellness, intervals: fitness?.wellness, sessions: Array.isArray(health?.sleep) ? health.sleep : [], profile, checkin });
   if (r.zone == null && !r.checkin) return null;
-  return { date, score: r.score, zone: r.zone, parts: readinessParts(r), flags: r.flags || [], missing: r.missing || [], checkin: r.checkin || null };
+  return { date, score: r.score, zone: r.zone, parts: readinessParts(r), flags: r.flags || [], missing: r.missing || [], checkin: r.checkin || null, provisional: !!r.provisional };
 }
 
 // The data for one day's review, kept compact.
@@ -37,7 +34,7 @@ export function buildReviewInput({ date, today, week = {}, fitness = {}, health 
   const gym = {};
   for (const row of gymRows) if (String(row.type || "").toUpperCase() === "WORK" && row.exercise) (gym[row.exercise] ||= { sets: 0, kg: n(row.plannedKg), reps: row.plannedReps || null }).sets++;
   const wellness = compactWellness(fitness.wellness || [], { date, days: 14 });
-  const sleep = (health.sleep || []).map(s => ({ date: s.date || String(s.endTime || "").slice(0, 10), minutes: n(s.durationMin) })).filter(s => s.date && s.date <= date).slice(-5);
+  const sleep = (health.sleep || []).map(s => ({ date: s.date || String(s.endTime || "").slice(0, 10), minutes: n(s.durationMin) })).filter(s => s.date && s.date <= date).sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
   const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
   return {
     date, today, isPast: date < today,
