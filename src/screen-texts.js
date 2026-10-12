@@ -69,7 +69,8 @@ function todayFacts(d) {
     fallback: d.summary && (d.summary.text || d.summary.recommendation) ? { text: d.summary.text || null, advice: d.summary.recommendation || null } : null,
     // Without last night the numbers are not there yet.
     ready: sleep != null || facts.readiness != null,
-    fingerprint: [sleep ? 1 : 0, plan.filter(i => i.done).length].join(":")
+    // The plan itself is in it: a cancelled or moved session asks for a new text.
+    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|")].join(":").slice(0, 500)
   };
 }
 
@@ -174,6 +175,17 @@ function answer(source, { text = null, advice = null, chips = [], basis = [], cr
   return { status: "ok", source, text, advice, chips, basis, time: clock(createdAt), reason };
 }
 
+// The user changed the day's plan (cancelled, moved or added a session,
+// answered the check-in): Today's and Training's texts are written again on
+// the next opening.
+const STALE = "stale";
+export async function markScreenTextsStale(env) {
+  const userId = userOf(env);
+  if (!userId) return;
+  await ensureTable(env.DB);
+  await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=? WHERE user_id=? AND day=? AND screen IN ('today','training')").bind(STALE, userId, localToday()).run();
+}
+
 // load: () => the screen's data (the same JSON the app shows); ask: the AI
 // call (callOpenAI by default, a stub in tests).
 export async function screenText(env, { screen, load, ask = callOpenAI, now = Date.now() }) {
@@ -189,8 +201,11 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const row = await env.DB.prepare("SELECT * FROM ai_screen_texts WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(userId, day, screen, language).first();
   const cached = row?.text ? answer("ai", { text: row.text, advice: row.advice, ...parseBasis(row.basis_json), createdAt: sqlTime(row.created_at) }) : null;
   // A text is kept for the day once the AI has been asked MAX_PER_DAY times.
-  if (cached && Number(row.generations) >= MAX_PER_DAY) return cached;
-  if (cached && now - Date.parse(sqlTime(row.created_at)) < FRESH_MINUTES * 60000) return cached;
+  // A change of the plan (markScreenTextsStale) asks again right away, with
+  // MAX_PER_DAY more answers for such changes.
+  const stale = row?.fingerprint === STALE;
+  if (cached && Number(row.generations) >= MAX_PER_DAY * (stale ? 2 : 1)) return cached;
+  if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < FRESH_MINUTES * 60000) return cached;
 
   const data = await load();
   const info = screenFacts(screen, data);

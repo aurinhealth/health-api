@@ -18,6 +18,9 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     if(row.data_type==='daily-vo2-max'){key='vo2max';value=finite(row.value_numeric)??finite(obj.vo2Max);}
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
+    // A day's Apple Health HRV wins over a Google copy of it (Google Health on the
+    // iPhone imports Apple Health), so the day keeps the baseline of its source.
+    if(key==='hrv'&&item.hrvSource==='apple-health'&&row.source_family!=='apple-health')continue;
     if(key&&value!=null)item[key]=['steps','activeCalories'].includes(key)?(item[key]||0)+value:value;
     // Apple Watch measures HRV as SDNN, Google (Fitbit, Pixel Watch) as RMSSD: the
     // recovery model compares each day only with days of the same source.

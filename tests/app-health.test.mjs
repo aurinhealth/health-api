@@ -93,3 +93,14 @@ test("The server answers GET /app/api/health with buildHealth", () => {
   assert.match(src, /url\.pathname==='\/app\/api\/health'&&request\.method==='GET'/);
   assert.match(src, /buildHealth\(\{date,hour:date===localToday\(\)\?localHour\(\):null,health,fitness,sleep,weight,profile/);
 });
+
+test("Health: the morning check-in lowers readiness as on Today and shows as its own part", () => {
+  const body = buildHealth(input).readiness;
+  const tired = buildHealth({ ...input, checkin: "tired" }).readiness;
+  assert.equal(tired.score, Math.min(body.score, 60));
+  assert.equal(tired.zone, "yellow");
+  assert.equal(tired.checkin, "tired");
+  assert.deepEqual(tired.parts.at(-1), { key: "checkin", points: tired.score - body.score });
+  assert.ok(Math.abs(70 + tired.parts.reduce((s, p) => s + p.points, 0) - tired.score) <= 2, "parts still add up");
+  assert.equal(buildHealth({ ...input, checkin: "fresh" }).readiness.score, body.score, "a good answer never raises it");
+});

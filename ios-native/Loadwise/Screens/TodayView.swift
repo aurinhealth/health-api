@@ -89,7 +89,7 @@ struct TodayContent: View {
         .padding(.top, 40)
 
         if model.selectedDate == nil {
-            MorningCheckinCard(feeling: today.checkin).padding(.top, 20)
+            MorningCheckinCard(feeling: today.checkin, top: 20)
         }
 
         // Today's weather at the week plan's place (or the offer to set
@@ -194,12 +194,23 @@ struct ReadinessHero: View {
 /// "Jak se dnes cítíš?" under the readiness: one tap (src/morning-checkin.js).
 /// The answer can only lower the readiness, for Today and the coach alike.
 /// Tapping the chosen one again clears it; "Nemocný" offers the status Nemoc.
+/// On Today it goes away once answered; the readiness detail keeps it, so the
+/// answer can be changed there.
 struct MorningCheckinCard: View {
     @Environment(AppModel.self) private var model
     let feeling: String?
+    var keepAnswered = false
+    var top: CGFloat = 0
     @State private var chosen: String?
     @State private var saving = false
     @State private var offerSick = false
+
+    init(feeling: String?, keepAnswered: Bool = false, top: CGFloat = 0) {
+        self.feeling = feeling
+        self.keepAnswered = keepAnswered
+        self.top = top
+        _chosen = State(initialValue: feeling)
+    }
 
     struct Option: Identifiable {
         let id: String
@@ -215,6 +226,17 @@ struct MorningCheckinCard: View {
     ]
 
     var body: some View {
+        if keepAnswered || chosen == nil || saving || offerSick {
+            card.padding(.top, top)
+        } else {
+            // Holds onChange while the card is gone, so clearing the answer
+            // elsewhere brings it back.
+            Color.clear.frame(height: 0)
+                .onChange(of: feeling) { _, new in chosen = new }
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Jak se dnes cítíš?").font(Typo.small).foregroundStyle(Palette.muted)
             HStack(spacing: 8) {
@@ -236,7 +258,6 @@ struct MorningCheckinCard: View {
                 }
             }
         }
-        .onAppear { chosen = feeling }
         .onChange(of: feeling) { _, new in chosen = new }
         .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
             Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }

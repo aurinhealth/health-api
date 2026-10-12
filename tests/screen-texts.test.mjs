@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, MAX_PER_DAY } from "../src/screen-texts.js";
+import { screenText, screenFacts, MAX_PER_DAY, markScreenTextsStale } from "../src/screen-texts.js";
 
 const today = (extra = {}) => ({
   date: "2026-10-11",
@@ -113,4 +113,18 @@ test("an English app gets its own cached text", async () => {
   assert.equal(cs.text, "Česky.");
   assert.equal(en.text, "In English.");
   assert.equal(en.chips[0], "Sleep 6:40");
+});
+
+test("a cancelled session writes the text again at once, even right after the last one", async () => {
+  const env = owner();
+  let asked = 0, plan = [{ kind: "workout", title: "Posilovna", done: false }];
+  const ask = async () => { asked++; return { text: JSON.stringify({ text: asked === 1 ? "V posilovně uber sérii." : "Dnes volno, jdi se projít.", advice: "" }) }; };
+  const load = async () => today({ plan });
+  await screenText(env, { screen: "today", load, ask });
+  plan = [];
+  await markScreenTextsStale(env);
+  const next = await screenText(env, { screen: "today", load, ask });
+  assert.equal(asked, 2);
+  assert.equal(next.text, "Dnes volno, jdi se projít.");
+  assert.notEqual(screenFacts("today", today({ plan: [] })).fingerprint, screenFacts("today", today()).fingerprint, "the plan is in the fingerprint");
 });

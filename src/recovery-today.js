@@ -5,6 +5,8 @@
 // (app-today.js) passes the day's sessions, tomorrow's plan and tonight's sleep.
 import { L } from "./lang.js";
 import { recoveryRoutine, describeRecovery, routineAreas } from "./recovery-plan.js";
+import { EXERCISES } from "./strength-generator.js";
+import { normalizeExerciseName } from "./strength-normalization.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const sportOf = s => (s?.sport === "strength" ? "gym" : ["ride", "run"].includes(s?.sport) ? s.sport : null);
@@ -21,12 +23,52 @@ function loaded(s, yesterday = false) {
   return yesterday ? tss >= 60 || minutes >= 90 : tss >= 30 || minutes >= 30;
 }
 
-function loadText(s, when, lower) {
+// The body parts a muscle of the exercise catalogue (strength-generator.js)
+// belongs to, as the sentence names them ("dala zabrat předním stehnům").
+const AREAS = {
+  quads: ["předním stehnům", "quads"], hamstrings: ["zadním stehnům", "hamstrings"], glutes: ["hýždím", "glutes"], abductors: ["hýždím", "glutes"],
+  adductors: ["vnitřním stehnům", "inner thighs"], calves: ["lýtkům", "calves"], lower_back: ["spodním zádům", "lower back"],
+  chest: ["hrudníku", "chest"], back: ["zádům", "back"], traps: ["zádům", "back"], shoulders: ["ramenům", "shoulders"], side_delts: ["ramenům", "shoulders"], rear_delts: ["ramenům", "shoulders"],
+  biceps: ["pažím", "arms"], triceps: ["pažím", "arms"], forearms: ["pažím", "arms"], core: ["středu těla", "core"]
+};
+// Squats, lunges and hinges work the glutes too, at about half.
+const ALSO = { quad: { glutes: 0.5 }, unilateral_quad: { glutes: 0.5 }, lunge: { glutes: 0.5 }, hinge: { glutes: 0.5 } };
+
+// What a strength session worked: each done set counts with its exercise's
+// fatigue for its main muscle (and the glutes at half for squats, lunges and
+// hinges). The areas with at least half the load of the first are named, two
+// at most. Few sets make it "trochu". Names outside the catalogue fall back to
+// legs or upper body by their name.
+export function gymAreas(sets) {
+  const load = new Map();
+  let total = 0;
+  for (const [name, count] of Object.entries(sets || {})) {
+    const n = num(count) || 0;
+    if (!(n > 0)) continue;
+    total += n;
+    const def = EXERCISES[normalizeExerciseName(name)] || EXERCISES[name];
+    const parts = def ? { ...(ALSO[def.pattern] || {}), [def.muscle]: 1 } : { [LOWER.test(name) ? "legs" : "upper"]: 1 };
+    for (const [muscle, weight] of Object.entries(parts)) {
+      const area = AREAS[muscle] || (muscle === "legs" ? ["nohám", "legs"] : ["horní části těla", "upper body"]);
+      const key = area[0];
+      load.set(key, { area, value: (load.get(key)?.value || 0) + n * weight * (def?.fatigue || 0.8) });
+    }
+  }
+  const ranked = [...load.values()].sort((a, b) => b.value - a.value);
+  if (!ranked.length) return null;
+  return { areas: ranked.filter(a => a.value >= ranked[0].value / 2).slice(0, 2).map(a => a.area), light: total <= 4 };
+}
+
+function loadText(s, when, worked) {
   const today = when === "today", sport = sportOf(s), tss = num(s.tss);
   const load = tss ? " (" + Math.round(tss) + " TSS)" : "";
-  if (sport === "gym") return lower
-    ? L(today ? "Posilovna dala zabrat nohám" : "Včerejší posilovna dala zabrat nohám", today ? "The gym session worked your legs" : "Yesterday's gym session worked your legs")
-    : L(today ? "Posilovna dala zabrat horní části těla" : "Včerejší posilovna dala zabrat horní části těla", today ? "The gym session worked your upper body" : "Yesterday's gym session worked your upper body");
+  if (sport === "gym") {
+    const areas = worked?.areas || [["celému tělu", "your whole body"]];
+    const cs = areas.map(a => a[0]).join(" a "), en = areas.map(a => a[1]).join(" and ");
+    const verb = worked?.light ? "dala trochu zabrat " : "dala zabrat ";
+    return L((today ? "Posilovna " : "Včerejší posilovna ") + verb + cs,
+      (today ? "The gym session " : "Yesterday's gym session ") + (worked?.light ? "gave your " + en + " a light workout" : "worked your " + en));
+  }
   if (sport === "ride") return L((today ? "Dnešní jízda" : "Včerejší jízda") + load + " zatížila nohy a kyčle", (today ? "Today's ride" : "Yesterday's ride") + load + " loaded your legs and hips");
   if (sport === "run") return L((today ? "Dnešní běh" : "Včerejší běh") + load + " zatížil lýtka a stehna", (today ? "Today's run" : "Yesterday's run") + load + " loaded your calves and thighs");
   return L((today ? "Dnešní trénink" : "Včerejší trénink") + load + " tě zatížil", (today ? "Today's workout" : "Yesterday's workout") + load + " loaded you");
@@ -67,8 +109,11 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
   const main = list.find(s => sportOf(s) === "gym") || [...list].sort((a, b) => (num(b.tss) || 0) - (num(a.tss) || 0))[0];
   const sport = sportOf(main);
   const gymDay = sport === "gym" ? gym?.[main.date || (when === "today" ? date : null)] || null : null;
-  const focus = [main.title, ...(gymDay?.exercises || [])].filter(Boolean).join(", ").slice(0, 200);
-  const lower = sport === "gym" && LOWER.test(focus);
+  // The exercises actually done when sets were ticked off; else the plan's.
+  const sets = gymDay ? (gymDay.done && Object.keys(gymDay.done).length ? gymDay.done : Object.fromEntries((gymDay.exercises || []).map(n => [n, gymDay.setsBy?.[n] || 3]))) : null;
+  const focus = (sets && Object.keys(sets).length ? Object.keys(sets) : [main.title]).filter(Boolean).join(", ").slice(0, 200);
+  const counted = !!(gymDay?.setsBy || (gymDay?.done && Object.keys(gymDay.done).length));
+  const worked = sport === "gym" ? (sets && Object.keys(sets).length ? { ...gymAreas(sets), ...(counted ? {} : { light: false }) } : LOWER.test(String(main.title || "")) ? { areas: [["nohám", "legs"]], light: false } : main.title ? { areas: [["horní části těla", "upper body"]], light: false } : null) : null;
 
   const routine = recoveryRoutine({ sport, focus });
   const described = describeRecovery({ kind: "stretch", items: routine.items });
@@ -86,5 +131,5 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
   if (when === "today") items.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna") });
   if (tonight?.bedtime && num(tonight.need) > 0) items.push({ kind: "bedtime", title: L("Do postele v ", "Bed at ") + tonight.bedtime, detail: L("dnes potřebuješ " + sleepText(num(tonight.need)) + " spánku", "you need " + sleepText(num(tonight.need)) + " of sleep tonight"), time: tonight.bedtime, done: false });
 
-  return { title: L("Regenerace na dnes", "Recovery for today"), text: loadText(main, when, lower) + tomorrowText(tomorrow), basedOn: when, items };
+  return { title: L("Regenerace na dnes", "Recovery for today"), text: loadText(main, when, worked) + tomorrowText(tomorrow), basedOn: when, items };
 }

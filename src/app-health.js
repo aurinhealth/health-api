@@ -3,7 +3,7 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan } from "./recovery-model.js";
+import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan } from "./recovery-model.js";
 import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
 import { sleepSettings } from "./energy-profile.js";
 
@@ -34,7 +34,7 @@ export function readinessParts(readiness) {
   return parts;
 }
 
-export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {} }) {
+export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -46,7 +46,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
 
   // Readiness today and for the last 14 days.
   const readinessOn = d => recoveryReadiness({ rows, date: d, night: nights.get(d) || null, sleepNeed: needOn(d).need });
-  const readiness = readinessOn(date);
+  // The morning check-in lowers today's number as on Today (applyCheckin);
+  // what it took off is its own part.
+  const body = readinessOn(date);
+  const readiness = applyCheckin(body, checkin);
   const history = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
     .map(d => ({ date: d, value: d === date ? readiness.score : readinessOn(d).score }))
     .filter(p => p.value != null);
@@ -104,7 +107,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       zone: readiness.zone,
       missing: readiness.missing || [],
       flags: readiness.flags || [],
-      parts: readinessParts(readiness),
+      parts: [...readinessParts(body), ...(body.score != null && readiness.score < body.score ? [{ key: "checkin", points: readiness.score - body.score }] : [])],
+      checkin: checkin || null,
       hrv: c.hrv ? round(c.hrv.value) : null,
       restingHR: c.restingHR ? round(c.restingHR.value) : null,
       sleepMinutes: c.sleep ? c.sleep.minutes : null,
