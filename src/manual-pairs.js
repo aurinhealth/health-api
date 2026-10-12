@@ -3,9 +3,10 @@
 // matchPlannedWorkouts) missed it or picked the wrong one. activity_id ''
 // keeps a plan unpaired.
 const ID = /^[A-Za-z0-9:._-]{1,120}$/;
+export const MANUAL_PAIRS_TABLE = "CREATE TABLE IF NOT EXISTS manual_activity_pairs (user_id INTEGER NOT NULL, planned_id TEXT NOT NULL, activity_id TEXT NOT NULL, date TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, planned_id))";
 
 async function ensureTable(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS manual_activity_pairs (user_id INTEGER NOT NULL, planned_id TEXT NOT NULL, activity_id TEXT NOT NULL, date TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, planned_id))").run();
+  await db.prepare(MANUAL_PAIRS_TABLE).run();
 }
 
 // Map of planned id → activity id ('' = no activity) for these plans.
