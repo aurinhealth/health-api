@@ -17,7 +17,7 @@ struct GoalsSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Cíle") {
-            SettingsGroup(title: "Sport", footer: "Trenér podle hlavního sportu volí tréninky a ostatní sporty bere jako doplněk.") {
+            SettingsGroup(title: "Sport") {
                 SettingsPicker(title: "Hlavní sport", selection: $mainSport, options: sportOptions)
                 SettingsDivider()
                 SettingsField(title: "Hodin týdně", text: $weeklyHours, unit: "h", placeholder: recentHours.map { Fmt.decimal($0, digits: $0 < 10 ? 1 : 0) } ?? "–")
@@ -28,7 +28,7 @@ struct GoalsSettingsView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
             }
-            SettingsGroup(title: "Hlavní závod", footer: "Podle data závodu se plánují fáze přípravy: základ, rozvoj v posledních 12 týdnech a ladění v posledním týdnu.") {
+            SettingsGroup(title: "Hlavní závod") {
                 SettingsToggle(title: "Mám hlavní závod", isOn: $hasEvent)
                 if hasEvent {
                     SettingsDivider()
