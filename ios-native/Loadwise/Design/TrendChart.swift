@@ -134,8 +134,6 @@ struct TrendChart: View {
             .chartXSelection(value: $picked)
             .frame(height: height)
             HStack(spacing: 14) {
-                legendDot(color.opacity(0.4), "hodnota za den")
-                legend(color, "průměr 7 dní")
                 if band != nil { legend(color.opacity(0.25), bandLabel ?? "tvoje norma") }
                 Spacer()
             }
@@ -160,13 +158,6 @@ struct TrendChart: View {
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
             Spacer(minLength: 0)
-        }
-    }
-
-    private func legendDot(_ c: Color, _ text: String) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(c).frame(width: 6, height: 6)
-            Text(text).font(Typo.tiny).foregroundStyle(Palette.muted)
         }
     }
 

@@ -896,7 +896,6 @@
 "doporučená pro dnešek" = "recommended for today";
 "e-mail" = "email";
 "export tréninků" = "workout export";
-"hodnota za den" = "daily value";
 "hotovo" = "done";
 "hotovo %@" = "%@ done";
 "https://posilovna.cz" = "https://mygym.com";
@@ -1614,5 +1613,4 @@
 "%@ proti normálu" = "%@ vs. your normal";
 "Poměr zátěže %@" = "Load ratio %@";
 "jednotvárný týden" = "monotonous week";
-"průměr 7 dní" = "7-day average";
 "90 dní" = "90 days";

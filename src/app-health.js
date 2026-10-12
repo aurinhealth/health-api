@@ -85,8 +85,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const series = (key, n, d = 0, from = rows) => from.filter(r => r.id <= date && r.id > shift(date, -n) && num(r[key]) != null && (key === "skinTempDeviation" || num(r[key]) > 0)).map(r => ({ date: r.id, value: round(num(r[key]), d) }));
   const c = readiness.components || {};
   // HRV and resting heart rate for 90 days: Health's detail charts pick 7, 30
-  // or 90 of them (the rows reach 61 days of Apple/Google values and 90 of
-  // Intervals.icu wellness).
+  // or 90 of them.
   const hrvSeries = series("hrv", 90), rhrSeries = series("restingHR", 90);
   const lastWeek = hrvSeries.filter(p => p.date > shift(date, -7)).map(p => p.value);
   const today = rows.find(r => r.id === date) || {};
