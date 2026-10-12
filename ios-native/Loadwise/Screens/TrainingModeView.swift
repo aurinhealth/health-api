@@ -101,12 +101,9 @@ struct TrainingModeView: View {
         HStack(spacing: 10) {
             CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { dismiss() }
             if let day, !day.exercises.isEmpty {
-                let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(day.planName?.nilIfBlank ?? L10n.tr("Posilovna")).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                    Text(L10n.f("Cvik %@ z %@", String(min(index, day.exercises.count - 1) + 1), String(day.exercises.count))
-                         + " · \(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií"))
-                        .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                    Text(title(day)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(progressLine(day)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 }
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil {
@@ -122,6 +119,18 @@ struct TrainingModeView: View {
                 Spacer()
             }
         }
+    }
+
+    private func title(_ day: GymDay) -> String {
+        day.planName?.nilIfBlank ?? L10n.tr("Posilovna")
+    }
+
+    /// "Cvik 2 z 5 · 6/16 sérií".
+    private func progressLine(_ day: GymDay) -> String {
+        let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
+        let position = L10n.f("Cvik %@ z %@", String(min(index, day.exercises.count - 1) + 1), String(day.exercises.count))
+        return position + " · \(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií")
     }
 
     // MARK: The exercise
@@ -141,47 +150,7 @@ struct TrainingModeView: View {
 
             chips(day, exercise, set)
 
-            VStack(spacing: 2) {
-                HStack(spacing: 8) {
-                    Text("Série").frame(width: 26, alignment: .leading)
-                    Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
-                    Text(Units.weightUnit).frame(width: 64)
-                    Text("Opak.").frame(width: 52)
-                    Color.clear.frame(width: 34, height: 1)
-                }
-                .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
-                .padding(.horizontal, 10).padding(.bottom, 4)
-                ForEach(exercise.sets) { s in
-                    let state: GymSetRow.Phase = s.done ? .done : s.row == set?.row ? .current : .next
-                    GymSetRow(label: s.warmup ? "W" : s.number,
-                              lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
-                              kg: LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? "",
-                              reps: (s.done ? s.reps : s.plannedReps) ?? "",
-                              state: state,
-                              kgText: $kg, repsText: $reps) {
-                        switch state {
-                        case .done: Task { await undo(s) }
-                        case .current: Task { await complete(s) }
-                        case .next: break
-                        }
-                    }
-                }
-                HStack(spacing: 8) {
-                    pill("plus", L10n.tr("Série")) { Task { await changeSets(by: 1) } }.disabled(saving)
-                    if exercise.sets.count > 1, set != nil {
-                        pill("minus", L10n.tr("Série")) { Task { await changeSets(by: -1) } }.disabled(saving)
-                    }
-                    if uses(exercise, "barbells"), let value = LiftWeight.number(LiftWeight.kgText(kg)), let plates = GymSessionMath.plates(value) {
-                        Text(L10n.f("Kotouče: %@ na stranu", plates)).font(Typo.caption).foregroundStyle(Palette.secondary)
-                            .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
-                    }
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 10).padding(.top, 8)
-            }
-            .padding(.vertical, 12).padding(.horizontal, 4)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .padding(.top, 14)
+            setTable(exercise, set, last)
 
             if let set {
                 effort.padding(.top, 14)
@@ -199,9 +168,69 @@ struct TrainingModeView: View {
         .task(id: exercise.name) { await loadMuscles(day) }
     }
 
+    private func setTable(_ exercise: GymExercise, _ set: GymSet?, _ last: GymHistory.Session?) -> some View {
+        VStack(spacing: 2) {
+            tableHeader
+            ForEach(exercise.sets) { s in setRow(s, exercise, current: set, last: last) }
+            tableActions(exercise, set)
+        }
+        .padding(.vertical, 12).padding(.horizontal, 4)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .padding(.top, 14)
+    }
+
+    private var tableHeader: some View {
+        HStack(spacing: 8) {
+            Text("Série").frame(width: 26, alignment: .leading)
+            Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+            Text(Units.weightUnit).frame(width: 64)
+            Text("Opak.").frame(width: 52)
+            Color.clear.frame(width: 34, height: 1)
+        }
+        .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+        .padding(.horizontal, 10).padding(.bottom, 4)
+    }
+
+    private func setRow(_ s: GymSet, _ exercise: GymExercise, current: GymSet?, last: GymHistory.Session?) -> GymSetRow {
+        let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
+        let shownKg: String = LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? ""
+        let shownReps: String = (s.done ? s.reps : s.plannedReps) ?? ""
+        return GymSetRow(label: s.warmup ? "W" : s.number,
+                         lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
+                         kg: shownKg, reps: shownReps, state: phase,
+                         kgText: $kg, repsText: $reps) {
+            switch phase {
+            case .done: Task { await undo(s) }
+            case .current: Task { await complete(s) }
+            case .next: break
+            }
+        }
+    }
+
+    private func tableActions(_ exercise: GymExercise, _ set: GymSet?) -> some View {
+        HStack(spacing: 8) {
+            pill("plus", L10n.tr("Série")) { Task { await changeSets(by: 1) } }.disabled(saving)
+            if exercise.sets.count > 1, set != nil {
+                pill("minus", L10n.tr("Série")) { Task { await changeSets(by: -1) } }.disabled(saving)
+            }
+            if let plates = platesText(exercise) {
+                Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
+                    .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10).padding(.top, 8)
+    }
+
+    /// "Kotouče: 20 + 10 na stranu" for a barbell lift.
+    private func platesText(_ exercise: GymExercise) -> String? {
+        guard uses(exercise, "barbells"), let value = LiftWeight.number(LiftWeight.kgText(kg)), let plates = GymSessionMath.plates(value) else { return nil }
+        return L10n.f("Kotouče: %@ na stranu", plates)
+    }
+
     @ViewBuilder
     private func chips(_ day: GymDay, _ exercise: GymExercise, _ set: GymSet?) -> some View {
-        let main = (muscles[exercise.name] ?? [:]).filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }.prefix(3).map(\.key)
+        let main: [String] = mainMuscles(exercise)
         let record = GymSessionMath.record(history.exercise(exercise.name), before: date)
         let superset = ExerciseOrder.letter(exercise.superset)
         let failure = set.map { day.isToFailure(row: $0.row) } ?? false
@@ -222,6 +251,12 @@ struct TrainingModeView: View {
         }
     }
 
+    private func mainMuscles(_ exercise: GymExercise) -> [String] {
+        let map: [String: Double] = muscles[exercise.name] ?? [:]
+        let strong = map.filter { $0.value >= 0.5 }.sorted { $0.value > $1.value }
+        return Array(strong.prefix(3).map { $0.key })
+    }
+
     private func pill(_ systemImage: String, _ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
@@ -240,7 +275,7 @@ struct TrainingModeView: View {
                         .frame(width: 34, height: 34).background(Palette.track, in: Circle())
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
-                        Text(next.name + " · " + PlanEditorSheet.summary(sets: next.workCount, reps: next.sets.first { !$0.warmup }?.plannedReps?.nilIfBlank, done: 0))
+                        Text(nextLine(next))
                             .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                     }
                     Spacer(minLength: 4)
@@ -258,12 +293,17 @@ struct TrainingModeView: View {
         }
     }
 
+    private func nextLine(_ next: GymExercise) -> String {
+        let reps: String? = next.sets.first { !$0.warmup }?.plannedReps?.nilIfBlank
+        return next.name + " · " + PlanEditorSheet.summary(sets: next.workCount, reps: reps, done: 0)
+    }
+
     // MARK: The rest
 
     private func rest(_ day: GymDay, _ exercise: GymExercise, until end: Date) -> some View {
         let set = nextSet(exercise)
         let last = history.last(exercise.name, before: date)
-        let points = restStart.map { start in live.trail.filter { $0.date >= start.addingTimeInterval(-5) }.map(\.bpm) } ?? []
+        let points: [Double] = recoveryPoints()
         return VStack(alignment: .leading, spacing: 14) {
             RestRing(end: end, total: restTotal).padding(.top, 24)
             HStack(spacing: 10) {
@@ -277,10 +317,10 @@ struct TrainingModeView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
                     HStack(alignment: .firstTextBaseline) {
-                        Text(exercise.name + " · " + (set.warmup ? L10n.tr("rozcvička") : L10n.f("série %@", set.number)))
+                        Text(nowLine(exercise, set))
                             .font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                         Spacer(minLength: 6)
-                        Text((LiftWeight.shown(set.plannedKg).map { $0 + " " + Units.weightUnit + " × " } ?? "") + (set.plannedReps ?? ""))
+                        Text(plannedLine(set))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
@@ -301,90 +341,38 @@ struct TrainingModeView: View {
         }
     }
 
+    private func recoveryPoints() -> [Double] {
+        guard let start = restStart else { return [] }
+        let from = start.addingTimeInterval(-5)
+        return live.trail.filter { $0.date >= from }.map { $0.bpm }
+    }
+
+    private func nowLine(_ exercise: GymExercise, _ set: GymSet) -> String {
+        let which: String = set.warmup ? L10n.tr("rozcvička") : L10n.f("série %@", set.number)
+        return exercise.name + " · " + which
+    }
+
+    /// "80 kg × 8".
+    private func plannedLine(_ set: GymSet) -> String {
+        let weight: String = LiftWeight.shown(set.plannedKg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
+        return weight + (set.plannedReps ?? "")
+    }
+
     // MARK: The end
 
     private func finished(_ day: GymDay) -> some View {
-        let sets = day.exercises.reduce(0) { $0 + $1.doneCount }
-        let volume = GymSessionMath.volume(day.exercises)
-        let before = day.exercises.compactMap { e -> Double? in
-            guard let last = history.last(e.name, before: date) else { return nil }
-            return last.sets.reduce(0) { $0 + ($1.kg ?? 0) * ($1.reps ?? 0) }
-        }.reduce(0, +)
-        let records = day.exercises.compactMap { e -> (String, GymHistory.Lift)? in
-            guard let best = GymSessionMath.lifts(e).max(by: { GymSessionMath.e1rm($0) < GymSessionMath.e1rm($1) }),
-                  let old = GymSessionMath.record(history.exercise(e.name), before: date),
-                  GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 else { return nil }
-            return (e.name, best)
-        }
-        let changes = day.exercises.compactMap { e -> (GymExercise, (text: String, better: Bool?))? in
-            guard e.doneCount > 0, let change = GymSessionMath.change(e, last: history.last(e.name, before: date)) else { return nil }
-            return (e, change)
-        }
-        return VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
             VStack(spacing: 8) {
                 SectionLabel(text: "Trénink dokončen")
-                Text(day.planName?.nilIfBlank ?? L10n.tr("Posilovna")).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                Text(title(day)).font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 22)
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
-                      alignment: .leading, spacing: 14) {
-                if let totals {
-                    total(L10n.tr("Čas"), Fmt.duration(totals.minutes))
-                    if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
-                    if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
-                }
-                total(L10n.tr("Série"), String(sets))
-                let v = GymSessionMath.volumeText(volume)
-                total(L10n.tr("Objem"), v.value + " " + v.unit,
-                      change: before > 0 && volume > 0 ? Fmt.signed(Units.weight(volume - before) / 1000, digits: 1) + " " + v.unit : nil,
-                      better: volume >= before)
-                if let hr = totals?.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
-            }
-            .padding(.top, 6)
-            ForEach(Array(records.enumerated()), id: \.offset) { _, record in
-                let (name, lift) = record
-                HStack(spacing: 12) {
-                    Image(systemName: "sparkles").foregroundStyle(Palette.amber)
-                        .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Nový rekord").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(name + " " + (GymSessionMath.lift(lift) ?? "")).font(Typo.caption).foregroundStyle(Palette.muted)
-                    }
-                    Spacer()
-                }
-                .padding(16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
+            summaryGrid(day).padding(.top, 6)
+            ForEach(newRecords(day)) { record in recordCard(record) }
             if let zones = totals?.zones, zones.reduce(0, +) >= 1 { ZoneMinutesCard(minutes: zones) }
-            if !changes.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(changes.enumerated()), id: \.offset) { i, item in
-                        HStack(spacing: 8) {
-                            Text(item.0.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
-                            Spacer(minLength: 6)
-                            Text(work(item.0)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                            Text(item.1.text).font(Typo.caption.weight(.semibold))
-                                .foregroundStyle(item.1.better == true ? Palette.green : item.1.better == false ? Palette.rust : Palette.muted)
-                                .frame(minWidth: 52, alignment: .trailing)
-                        }
-                        .padding(.vertical, 12)
-                        .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) } }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
-            if totals?.saved == true {
-                HStack(spacing: 12) {
-                    Image(systemName: "heart.fill").foregroundStyle(Palette.rust)
-                    Text("Uloženo do Apple Health").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
-                }
-                .padding(16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            }
+            changesCard(day)
+            if totals?.saved == true { healthCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
@@ -393,6 +381,124 @@ struct TrainingModeView: View {
                     .disabled(saving)
             }
         }
+    }
+
+    private func summaryGrid(_ day: GymDay) -> some View {
+        let sets: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let volume: Double = GymSessionMath.volume(day.exercises)
+        let shown = GymSessionMath.volumeText(volume)
+        let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            if let totals {
+                total(L10n.tr("Čas"), Fmt.duration(totals.minutes))
+                if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
+                if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
+            }
+            total(L10n.tr("Série"), String(sets))
+            total(L10n.tr("Objem"), shown.value + " " + shown.unit, change: volumeChange(day, volume), better: volume >= lastVolume(day))
+            if let hr = totals?.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
+        }
+    }
+
+    /// kg × reps of the same exercises last time.
+    private func lastVolume(_ day: GymDay) -> Double {
+        var sum = 0.0
+        for exercise in day.exercises {
+            guard let last = history.last(exercise.name, before: date) else { continue }
+            for lift in last.sets { sum += (lift.kg ?? 0) * (lift.reps ?? 0) }
+        }
+        return sum
+    }
+
+    /// "+0,6 t" against last time.
+    private func volumeChange(_ day: GymDay, _ volume: Double) -> String? {
+        let before = lastVolume(day)
+        guard before > 0, volume > 0 else { return nil }
+        let unit: String = GymSessionMath.volumeText(volume).unit
+        return Fmt.signed(Units.weight(volume - before) / 1000, digits: 1) + " " + unit
+    }
+
+    struct NewRecord: Identifiable {
+        let name: String
+        let lift: GymHistory.Lift
+        var id: String { name }
+    }
+
+    private func newRecords(_ day: GymDay) -> [NewRecord] {
+        var out: [NewRecord] = []
+        for exercise in day.exercises {
+            let lifts = GymSessionMath.lifts(exercise)
+            guard let best = lifts.max(by: { GymSessionMath.e1rm($0) < GymSessionMath.e1rm($1) }),
+                  let old = GymSessionMath.record(history.exercise(exercise.name), before: date) else { continue }
+            if GymSessionMath.e1rm(best) > GymSessionMath.e1rm(old) + 0.01 { out.append(NewRecord(name: exercise.name, lift: best)) }
+        }
+        return out
+    }
+
+    private func recordCard(_ record: NewRecord) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "sparkles").foregroundStyle(Palette.amber)
+                .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Nový rekord").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(record.name + " " + (GymSessionMath.lift(record.lift) ?? "")).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    struct ExerciseChange: Identifiable {
+        let name: String
+        let work: String
+        let text: String
+        let better: Bool?
+        var id: String { name }
+    }
+
+    private func exerciseChanges(_ day: GymDay) -> [ExerciseChange] {
+        var out: [ExerciseChange] = []
+        for exercise in day.exercises where exercise.doneCount > 0 {
+            guard let change = GymSessionMath.change(exercise, last: history.last(exercise.name, before: date)) else { continue }
+            out.append(ExerciseChange(name: exercise.name, work: work(exercise), text: change.text, better: change.better))
+        }
+        return out
+    }
+
+    @ViewBuilder
+    private func changesCard(_ day: GymDay) -> some View {
+        let changes = exerciseChanges(day)
+        if !changes.isEmpty {
+            VStack(spacing: 0) {
+                ForEach(changes) { item in changeRow(item, first: item.id == changes.first?.id) }
+            }
+            .padding(.horizontal, 16)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
+    }
+
+    private func changeRow(_ item: ExerciseChange, first: Bool) -> some View {
+        let color: Color = item.better == true ? Palette.green : (item.better == false ? Palette.rust : Palette.muted)
+        return HStack(spacing: 8) {
+            Text(item.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+            Spacer(minLength: 6)
+            Text(item.work).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Text(item.text).font(Typo.caption.weight(.semibold)).foregroundStyle(color).frame(minWidth: 52, alignment: .trailing)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+    }
+
+    private var healthCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "heart.fill").foregroundStyle(Palette.rust)
+            Text("Uloženo do Apple Health").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            Spacer()
+            Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+        }
+        .padding(16)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     /// "4 × 80 kg": the work sets and their top weight.

@@ -33,7 +33,10 @@ enum GymSessionMath {
 
     /// The best set before today by the estimated one-rep max.
     static func record(_ exercise: GymHistory.Exercise?, before date: String) -> GymHistory.Lift? {
-        exercise?.sessions.filter { $0.date < date }.flatMap(\.sets).max { e1rm($0) < e1rm($1) }.flatMap { e1rm($0) > 0 ? $0 : nil }
+        guard let exercise else { return nil }
+        let lifts: [GymHistory.Lift] = exercise.sessions.filter { $0.date < date }.flatMap { $0.sets }
+        guard let best = lifts.max(by: { e1rm($0) < e1rm($1) }), e1rm(best) > 0 else { return nil }
+        return best
     }
 
     static func e1rm(_ lift: GymHistory.Lift) -> Double {
@@ -69,7 +72,13 @@ enum GymSessionMath {
                 done[muscle, default: 0] += Double(exercise.doneCount)
             }
         }
-        return planned.sorted { $0.value > $1.value }.prefix(4).map { ($0.key, min(1, (done[$0.key] ?? 0) / max(1, $0.value))) }
+        let top = planned.sorted { $0.value > $1.value }.prefix(4)
+        var out: [(id: String, share: Double)] = []
+        for (muscle, count) in top {
+            let share: Double = min(1, (done[muscle] ?? 0) / max(1, count))
+            out.append((id: muscle, share: share))
+        }
+        return out
     }
 
     /// Today against last time: "+2,5 kg", "+1 op." or "=".
@@ -77,7 +86,9 @@ enum GymSessionMath {
         let now = lifts(exercise)
         guard let last, let top = now.compactMap(\.kg).max(), let before = GymCoach.topKg(last) else { return nil }
         if abs(top - before) > 0.01 {
-            return ((top > before ? "+" : "−") + GymCoach.shown(abs(top - before)) + " " + Units.weightUnit, top > before)
+            let sign: String = top > before ? "+" : "−"
+            let text: String = sign + GymCoach.shown(abs(top - before)) + " " + Units.weightUnit
+            return (text, top > before)
         }
         let repsNow = now.filter { $0.kg == top }.compactMap(\.reps).max() ?? 0
         let repsBefore = last.sets.filter { $0.kg == before }.compactMap(\.reps).max() ?? 0
@@ -163,7 +174,7 @@ struct RestRing: View {
             ZStack {
                 Circle().stroke(Palette.track, lineWidth: 12)
                 Circle().trim(from: 0, to: share)
-                    .stroke(left == 0 ? Palette.green : Palette.green, style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    .stroke(Palette.green, style: StrokeStyle(lineWidth: 12, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 1), value: share)
                 VStack(spacing: 2) {
@@ -191,10 +202,12 @@ struct HeartRecoveryCard: View {
                 Text("Tep se vrací").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 if let first = points.first, let last = points.last {
-                    Text(Fmt.int(first)).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                    + Text(" → ").font(Typo.small).foregroundStyle(Palette.muted)
-                    + Text(Fmt.int(last)).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                    + Text(" bpm").font(Typo.small).foregroundStyle(Palette.muted)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(Fmt.int(first)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Text(verbatim: "→").font(Typo.small).foregroundStyle(Palette.muted)
+                        Text(Fmt.int(last)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Text(verbatim: "bpm").font(Typo.small).foregroundStyle(Palette.muted)
+                    }
                 }
             }
             if points.count >= 2, let lo = points.min(), let hi = points.max() {
