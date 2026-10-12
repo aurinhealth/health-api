@@ -93,3 +93,14 @@ test("The server answers GET /app/api/health with buildHealth", () => {
   assert.match(src, /url\.pathname==='\/app\/api\/health'&&request\.method==='GET'/);
   assert.match(src, /buildHealth\(\{date,hour:date===localToday\(\)\?localHour\(\):null,health,fitness,sleep,weight,profile/);
 });
+
+test("Health: oxygen from the watch first, Intervals.icu filling the rest; the HRV measure when known", () => {
+  const google = wellness.map(r => (r.id === DATE ? { ...r, spO2: 98.2, hrvSource: "apple-health:rmssd" } : r));
+  const h = buildHealth({ ...input, health: { wellness: google } });
+  assert.equal(h.oxygen.value, 98.2, "today's Apple value wins over Intervals");
+  assert.equal(h.oxygen.series.length, 14, "the earlier days come from Intervals");
+  assert.equal(h.oxygen.high, 98.2);
+  assert.equal(h.hrv.metric, "rmssd");
+  assert.equal(buildHealth(input).hrv.metric, null);
+  assert.equal(buildHealth({ ...input, fitness: { wellness: [] } }).oxygen, null, "no oxygen anywhere");
+});

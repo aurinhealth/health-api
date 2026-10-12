@@ -3,7 +3,7 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan } from "./recovery-model.js";
+import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan, hrvMetric } from "./recovery-model.js";
 import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
 import { sleepSettings } from "./energy-profile.js";
 
@@ -84,7 +84,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const today = rows.find(r => r.id === date) || {};
   const respiration = series("respiration", 14, 1);
   const skin = series("skinTempDeviation", 14, 2, google);
-  const spo2 = series("spO2", 14, 1, intervals);
+  // Oxygen from the watch (Apple Health, Google) first, Intervals.icu filling the rest (mergeWellnessRows).
+  const spo2 = series("spO2", 14, 1);
 
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).
@@ -129,7 +130,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       debt: debt ? { minutes: debt.minutes, nights: debt.nights } : null,
       regularity: beds.length >= 3 ? { bedtime: clock(bedAvg + 18 * 60), spread: Math.round(bedSd), nights: beds.map(b => ({ date: b.date, value: b.value })) } : null
     },
-    hrv: c.hrv ? { value: round(c.hrv.value), baseline: round(c.hrv.baseline), low: round(c.hrv.low), high: round(c.hrv.high), trend: c.hrv.trend, week: round(mean(lastWeek)), series: hrvSeries } : hrvSeries.length ? { value: null, baseline: null, low: null, high: null, trend: null, week: round(mean(lastWeek)), series: hrvSeries } : null,
+    // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
+    hrv: c.hrv ? { value: round(c.hrv.value), baseline: round(c.hrv.baseline), low: round(c.hrv.low), high: round(c.hrv.high), trend: c.hrv.trend, week: round(mean(lastWeek)), metric: hrvMetric(today), series: hrvSeries } : hrvSeries.length ? { value: null, baseline: null, low: null, high: null, trend: null, week: round(mean(lastWeek)), metric: hrvMetric(today), series: hrvSeries } : null,
     restingHR: rhrSeries.length ? { value: c.restingHR ? round(c.restingHR.value) : round(num(today.restingHR)), baseline: c.restingHR ? round(c.restingHR.baseline, 1) : null, series: rhrSeries } : null,
     respiration: respiration.length ? { value: c.respiration ? round(c.respiration.value, 1) : respiration.at(-1).value, baseline: c.respiration ? round(c.respiration.baseline, 1) : null, elevated: !!c.respiration?.elevated, series: respiration } : null,
     skinTemp: skin.length ? { deviation: c.skinTemp ? round(c.skinTemp.deviation, 2) : skin.at(-1).value, elevated: !!c.skinTemp?.elevated, series: skin } : null,

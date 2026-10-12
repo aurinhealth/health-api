@@ -2,14 +2,21 @@
 // heart rate in 5-minute buckets with its spikes, HRV through the night and
 // the previous nights for comparison. Reads only the signed-in user's rows.
 import { sleepSessionFromRow } from "./sleep-sessions.js";
+import { localDateTime } from "./user-time.js";
 
 const n = v => v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
 const ms = v => new Date(v).getTime();
 const shift = (date, days) => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : null;
-const offsetMin = v => { const m = /^(-?\d+)s$/.exec(String(v || "")); return m ? Number(m[1]) / 60 : 0; };
+// Google's nights carry the clock offset the watch had ("7200s"); Apple's
+// (apple-health.js) have none, so null stands for the user's own zone.
+const offsetMin = v => { const m = /^(-?\d+)s$/.exec(String(v || "")); return m ? Number(m[1]) / 60 : null; };
 // Minutes after local midnight, wrapped so that a bedtime after midnight stays next to one before it.
-const clockMin = (iso, offset) => { const d = new Date(ms(iso) + offset * 60000); const m = d.getUTCHours() * 60 + d.getUTCMinutes(); return m < 12 * 60 ? m + 24 * 60 : m; };
+const clockMin = (iso, offset) => {
+  const local = offset == null ? localDateTime(iso) : "", d = new Date(ms(iso) + (offset || 0) * 60000);
+  const m = offset == null ? Number(local.slice(11, 13)) * 60 + Number(local.slice(14, 16)) : d.getUTCHours() * 60 + d.getUTCMinutes();
+  return m < 12 * 60 ? m + 24 * 60 : m;
+};
 
 function parsePayload(row) { try { const p = JSON.parse(row.payload_json || "{}"); return p.sleep || p; } catch { return {}; } }
 
