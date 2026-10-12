@@ -47,7 +47,7 @@ import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
-import { loadSeries, dailyLoads, sessionsFrom } from "./training-load.js";
+import { loadSeries, dailyLoads, sessionsFrom, gymSessions, watchOnly, addLoads } from "./training-load.js";
 import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
 import {listPersonalFoods} from './personal-foods.js';
 import {queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from './food-google-sync.js';
@@ -681,7 +681,8 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health]=await Promise.all([
     app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
     cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>Response.json(d)),internal('/app/api/gym?date='+date),
-    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-7)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-7),shiftDate(date,1))).then(d=>Response.json(d)),
+    // The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-30),shiftDate(date,1))).then(d=>Response.json(d)),
     googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
   // The three weeks are the heavy part (every day's analysis, food and
@@ -691,7 +692,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
   const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
-  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
 }
 
 // CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
@@ -699,19 +700,48 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
 // what it would be with the full history.
 async function ownFitness(env,from,to){
   const warmup=120,start=shiftDate(from,-warmup);
-  const [rows,gymDays,thresholds,profile,rest]=await Promise.all([
-    env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,shiftDate(to,1)).all().then(r=>r.results||[]).catch(()=>[]),
-    env.DB.prepare('SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,to).all().then(r=>(r.results||[]).map(x=>x.workout_date)).catch(()=>[]),
-    athleteThresholds(env).catch(()=>({})),
-    dashboardProfile(env).catch(()=>null),
-    env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(to,-30)).all().then(r=>(r.results||[]).map(x=>Number(x.value_numeric)).sort((a,b)=>a-b)).catch(()=>[])
+  const [rows,sets,ratings,athlete]=await Promise.all([
+    loadActivityRows(env,start,to),
+    // The logged sets give each gym session its length, RPE and volume (training-load.js gymSessions).
+    env.DB.prepare('SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,to).all().then(r=>r.results||[]).catch(()=>[]),
+    // The athlete's RPE of the day's session (Po tréninku), for a gym session without set RPE.
+    env.DB.prepare('SELECT date,rpe FROM coach_reflections WHERE user_id=? AND date>=? AND date<=? AND workout_id IS NULL AND rpe IS NOT NULL ORDER BY id').bind(env.USER_ID,start,to).all().then(r=>r.results||[]).catch(()=>[]),
+    loadAthlete(env,to)
   ]);
   const byActivity=new Map(),activities=[];
   for(const row of rows){const a=activityFromRow(row);if(a){byActivity.set(a,row);activities.push(a);}}
   const kept=dedupeActivities(activities);
+  // The day's rating is the gym's only when nothing else was trained that day.
+  const otherDays=new Set(kept.filter(a=>a.kind!=='strength').map(a=>a.date)),dayRpe={};
+  for(const r of ratings)if(!otherDays.has(r.date))dayRpe[r.date]=r.rpe;
+  return loadSeries(dailyLoads(sessionsFrom(kept,byActivity,gymSessions(sets,dayRpe)),athlete),{from,to,warmup});
+}
+// Workouts of the watch and Intervals.icu from `start` to `to` (duplicates marked by the sync left out).
+function loadActivityRows(env,start,to){
+  return env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,shiftDate(to,1)).all().then(r=>r.results||[]).catch(()=>[]);
+}
+// FTP, LTHR, heart-rate range and sex for the load of a session (training-load.js).
+async function loadAthlete(env,to,ctx=null){
+  const [thresholds,profile,rest]=await Promise.all([
+    (ctx?cached(env,ctx,'thresholds',()=>athleteThresholds(env)):athleteThresholds(env)).catch(()=>({})),
+    dashboardProfile(env).catch(()=>null),
+    env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(to,-30)).all().then(r=>(r.results||[]).map(x=>Number(x.value_numeric)).sort((a,b)=>a-b)).catch(()=>[])
+  ]);
   const age=Number(profile?.age)||null;
-  const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
-  return loadSeries(dailyLoads(sessionsFrom(kept,byActivity,gymDays),athlete),{from,to,warmup});
+  return {ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
+}
+// With Intervals.icu connected: the load of the workouts only the watch
+// recorded (Apple Health, Google Health), as rows to add to its CTL and ATL
+// (training-load.js watchOnly, addLoads); null when there are none.
+async function watchOnlyFitness(env,ctx,from,to){
+  const warmup=120,start=shiftDate(from,-warmup);
+  const rows=await loadActivityRows(env,start,to);
+  const byActivity=new Map(),watch=[],intervals=[];
+  for(const row of rows){const a=activityFromRow(row);if(!a)continue;byActivity.set(a,row);
+    if(row.source_family==='google-wearables'||row.source_family==='apple-health')watch.push(a);else if(row.source_family==='intervals')intervals.push(a);}
+  const extra=watchOnly(dedupeActivities(watch),intervals);
+  if(!extra.length)return null;
+  return loadSeries(dailyLoads(sessionsFrom(extra,byActivity,[]),await loadAthlete(env,to,ctx)),{from,to,warmup});
 }
 
 // Thresholds from the data and the test to confirm them (threshold-check.js):
@@ -1899,7 +1929,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const response = await fetch(target,{headers:{Authorization:auth,Accept:"application/json"}});
       const data = await response.json().catch(()=>[]);
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
-      const wellness = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+      const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+      // Workouts only the watch recorded (not in Intervals.icu) count into CTL too.
+      const watchExtra = await watchOnlyFitness(env,ctx,isoDate(oldest),isoDate(newest)).catch(error=>{console.error('Watch-only load',error.message);return null;});
+      const wellness = watchExtra ? addLoads(intervalsRows,watchExtra) : intervalsRows;
       return Response.json({status:"ok",source:"intervals.icu",days,wellness},{headers:{"Cache-Control":"no-store"}});
     } catch (error) {
       return Response.json({status:"error",message:error.message},{status:502});
