@@ -157,8 +157,6 @@ struct SyncSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Synchronizace") {
-            Text("Kam Loadwise posílá, co zaznamenáš.")
-                .font(Typo.small).foregroundStyle(Palette.muted)
             if let sync {
                 if let message = sync.message { Text(message).font(Typo.small).foregroundStyle(Palette.rust) }
                 SettingsGroup {

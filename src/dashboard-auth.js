@@ -22,17 +22,12 @@ const PUBLIC_PATHS = new Set([
   "/terms",
   "/support",
   "/logo.svg",
-  "/manifest.webmanifest",
-  "/app",
-  "/app/dashboard-client.js",
   "/app/logout",
   "/auth/google",
   "/auth/google/callback",
   "/auth/app/session",
   "/auth/app/connect",
   "/auth/app/apple",
-  "/auth/apple",
-  "/auth/apple/callback",
   "/auth/passkey/options",
   "/auth/passkey/verify",
   "/auth/email/start",
@@ -62,8 +57,7 @@ export async function resolvePrincipal(request, env, verifyOidc = verifyGitHubAc
 }
 
 // The browser sends the session cookie also with requests that pages of other
-// sites under petrfitnessdata.eu make here (the test copy at
-// staging.petrfitnessdata.eu is one): it treats them as the same site, so
+// sites under petrfitnessdata.eu make here: it treats them as the same site, so
 // SameSite=Lax does not stop them. A change made with the session therefore
 // has to come from a page of this very address.
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

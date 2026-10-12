@@ -1,16 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {recoveryModelBlock} from '../src/recovery-model-block.js';
 import {personalBaseline,sleepNeedMinutes,sleepDebtMinutes,recoveryReadiness,heartRateLoad,strainScore,recoveryComponentScore,bedtimePlan,sleepNeedFor} from '../src/recovery-model.js';
 
 const day=i=>new Date(Date.UTC(2026,7,1)+i*86400000).toISOString().slice(0,10);
 const history=(n,f)=>Array.from({length:n},(_,i)=>({id:day(i),...f(i)}));
 
-test('the dashboard client carries the exact shared model (run scripts/sync-recovery-model.mjs)',()=>{
-  const client=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
-  assert.ok(client.includes(recoveryModelBlock()));
-});
 test('baseline excludes today, uses 60 days and needs 14 values',()=>{
   const rows=history(80,i=>({hrv:i<10?20:50}));
   const b=personalBaseline(rows,day(79),'hrv');assert.equal(b.count,60);assert.equal(b.mean,50);

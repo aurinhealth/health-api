@@ -72,7 +72,7 @@ struct VO2maxContent: View {
 
             Text(selected.map { Fmt.dayMonth($0.iso) } ?? "Teď").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text(Self.text(selected?.value ?? vo2.value)).font(Typo.number(96)).foregroundStyle(Palette.ink)
+                Text(Self.text(selected?.value ?? vo2.value)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                 Text("ml/kg/min").font(Typo.small).foregroundStyle(Palette.muted)
             }
             if let change = vo2.change, change != 0 {
@@ -80,9 +80,6 @@ struct VO2maxContent: View {
                      foreground: change > 0 ? Palette.green : Palette.rust,
                      background: change > 0 ? Palette.greenSoft : Palette.rust.opacity(0.14))
             }
-            Text(Self.sentence(vo2: vo2, samples: all.map(\.value)))
-                .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true).padding(.top, 14)
 
             Picker("Období", selection: $span) {
                 ForEach(Span.allCases) { Text($0.label).tag($0) }
@@ -126,7 +123,6 @@ struct VO2maxContent: View {
                 }
                 .chartXSelection(value: $picked)
                 .frame(height: 220)
-                Text("Podrž a táhni prstem pro hodnotu v daný den.").font(Typo.caption).foregroundStyle(Palette.faint)
             }
             .padding(.top, 14)
 
@@ -142,15 +138,6 @@ struct VO2maxContent: View {
             SectionLabel(text: "Historie po měsících").padding(.top, 30)
             VO2maxMonths(months: Self.months(all.map { ($0.iso, $0.value) }))
                 .padding(.top, 10)
-
-            SectionLabel(text: "Co to je").padding(.top, 30)
-            VStack(alignment: .leading, spacing: 10) {
-                Text("VO2max je nejvíc kyslíku, které tělo při maximální zátěži zpracuje, na kilogram váhy za minutu. Je to strop vytrvalosti: čím vyšší, tím rychleji zvládneš jet nebo běžet aerobně.")
-                Text("Hodinky ho odhadují z tepu a tempa nebo výkonu při bězích a jízdách venku. Jednotlivé hodnoty kolísají, důležitý je trend za týdny.")
-                Text("Nejvíc ho zvedají intervaly kolem 3 až 5 minut v pásmu VO2max a dost lehkého objemu okolo. Klesá s nemocí, pauzou v tréninku a vyšší váhou.")
-            }
-            .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            .padding(.top, 10)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
@@ -197,15 +184,6 @@ struct VO2maxContent: View {
 
     static func text(_ value: Double) -> String {
         Fmt.decimal(value, digits: value.rounded() == value ? 0 : 1)
-    }
-
-    static func sentence(vo2: TrainingSnapshot.VO2max, samples: [Double]) -> String {
-        let first = samples.first ?? vo2.value
-        let whole = vo2.value - first
-        if let change = vo2.change, change >= 0.5 { return "Za poslední měsíc roste, trénink zabírá." }
-        if let change = vo2.change, change <= -0.5 { return "Za poslední měsíc mírně klesá. Častá příčina je únava, nemoc nebo méně intenzity." }
-        if whole >= 1 { return L10n.f("Za celé období je výš o %@, poslední týdny se drží.", Fmt.decimal(whole)) }
-        return "Drží se stabilně. Na posun nahoru pomohou intervaly v pásmu VO2max."
     }
 
     private static let day: DateFormatter = {

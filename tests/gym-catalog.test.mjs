@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {gymExerciseCatalog,findGymExercises} from '../src/gym-catalog.js';
 import {EXERCISES} from '../src/strength-generator.js';
-import {readFileSync} from 'node:fs';
 import {EXERCISE_INTELLIGENCE} from '../src/strength-intelligence.js';
+import { serverSource } from "./helpers/server-source.mjs";
 
 test('picker offers only canonical plan exercises with set prescriptions',()=>{
   const catalog=gymExerciseCatalog();
@@ -14,14 +14,8 @@ test('picker offers only canonical plan exercises with set prescriptions',()=>{
   assert.deepEqual(findGymExercises('náhodný cvik',catalog),[]);
 });
 
-test('gym no longer accepts arbitrary exercise text through browser prompt',()=>{
-  const src=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
-  assert.doesNotMatch(src,/prompt\("Název cviku:/);
-  assert.match(src,/gymExerciseCatalog\.find\(item=>item\.name===exercise\?\.name\)/);
-});
-
 test('every picker exercise has a fatigue for ordering an added exercise in the app',()=>{
   assert.ok(gymExerciseCatalog().every(item=>Number.isFinite(EXERCISE_INTELLIGENCE[item.name]?.fatigue)));
-  const src=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  const src=serverSource();
   assert.match(src,/fatigue:EXERCISE_INTELLIGENCE\[e\.name\]\?\.fatigue\?\?null/);
 });

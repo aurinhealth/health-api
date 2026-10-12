@@ -121,3 +121,14 @@ test("Health: muscle mass from a scale through Apple Health, nothing without one
   const muscle = [{ sample_time: day(-30) + "T06:00:00Z", value_numeric: 64.2 }, { sample_time: day(0) + "T06:00:00Z", value_numeric: 64.9 }];
   assert.deepEqual(buildHealth({ ...input, muscle }).weight.muscle, { value: 64.9, change: 0.7, series: [{ date: day(-30), value: 64.2 }, { date: day(0), value: 64.9 }] });
 });
+
+test("Health: walking heart rate and heart rate recovery from Apple Health", () => {
+  const rows = wellness.map((r, i) => i > 35 ? { ...r, walkingHR: 98 + i % 2, hrRecovery: 24 + i % 3 } : r);
+  const h = buildHealth({ ...input, health: { wellness: rows } });
+  assert.equal(h.walkingHR.value, 98 + 39 % 2);
+  assert.equal(h.walkingHR.series.length, 4);
+  assert.equal(h.hrRecovery.value, 24 + 39 % 3);
+  const none = buildHealth(input);
+  assert.equal(none.walkingHR, null);
+  assert.equal(none.hrRecovery, null);
+});

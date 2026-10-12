@@ -6,7 +6,6 @@ import { strengthPlanToIntervalsEvent } from '../src/intervals-strength.js';
 import { explainWorkout } from '../src/workout-explanation.js';
 import { CYCLING_WORKOUTS } from '../src/workout-library.js';
 import { renderForEnvironment } from '../src/workout-model.js';
-import { EN, EN_TEMPLATES } from '../src/i18n-en.js';
 
 // Letters only Czech uses. Machine markers ([Pauza 90 s], [Do selhání]) stay
 // Czech on purpose because the app reads them back.
@@ -42,6 +41,3 @@ test('label tables read in the current language', () => {
   assert.equal(withLang('en', () => L('váha', 'weight')), 'weight');
 });
 
-test('no English dictionary entry is left in Czech', () => {
-  for (const [cs, en] of [...Object.entries(EN), ...Object.entries(EN_TEMPLATES)]) assert.doesNotMatch(en, CZECH, cs);
-});

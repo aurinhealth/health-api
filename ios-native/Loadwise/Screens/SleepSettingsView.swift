@@ -49,21 +49,21 @@ struct SleepSettingsForm: View {
                 Card {
                     WidgetHeader(title: "Dnešní večerka", color: Palette.indigo)
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(bed).font(Typo.number(46)).foregroundStyle(Palette.ink)
+                        Text(ClockText.format(bed)).font(Typo.number(46)).foregroundStyle(Palette.ink)
                         Text("do postele").font(Typo.small).foregroundStyle(Palette.muted)
                         Spacer()
                         if let wake = tonight.wake {
-                            Label(wake, systemImage: "alarm").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
+                            Label(ClockText.format(wake), systemImage: "alarm").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
                         }
                     }
                     if let need = tonight.need {
-                        Text(L10n.f("Potřeba na dnešní noc %@. Počítá se z cíle, dnešní zátěže, HRV a spánkového dluhu.", Fmt.duration(need)))
+                        Text(L10n.tr("Potřeba na dnešní noc") + " " + Fmt.duration(need))
                             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
 
-            SettingsGroup(title: "Cíl spánku", footer: "Automaticky podle věku (dospělí 7 h 30 min až 8 h). Vlastní cíl nahradí základ, dnešní zátěž a dluh se k němu dál přičítají.") {
+            SettingsGroup(title: "Cíl spánku") {
                 HStack {
                     Text("Chci spát").font(.body).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)
@@ -78,23 +78,20 @@ struct SleepSettingsForm: View {
                 .padding(.leading, 16).padding(.trailing, 8).frame(minHeight: 50)
             }
 
-            SettingsGroup(title: "Budík", footer: "Podle budíku se počítá, kdy jít spát. Bez budíku se bere obvyklé vstávání z posledních nocí, a když ještě žádné nejsou, večerka se nespočítá.") {
+            SettingsGroup(title: "Budík") {
                 alarmRow("Pracovní dny", subtitle: "pondělí až pátek", isOn: $workAlarm, time: $workTime)
                 SettingsDivider()
                 alarmRow("Víkend", subtitle: "sobota a neděle", isOn: $weekendAlarm, time: $weekendTime)
             }
 
             if SystemAlarm.supported {
-                SettingsGroup(footer: "iPhone pak v tyto časy zazvoní jako budík v Hodinách, i v tichém režimu. Když časy změníš a uložíš, budík se posune.") {
-                    SettingsToggle(title: "Budit mě v iPhonu", subtitle: "budík od Loadwise, pracovní dny i víkend", isOn: $systemAlarm)
+                SettingsGroup {
+                    SettingsToggle(title: "Budit mě v iPhonu", isOn: $systemAlarm)
                 }
                 if let alarmNote {
                     Text(alarmNote).font(Typo.small).foregroundStyle(alarmOK ? Palette.green : Palette.rust)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            } else {
-                Text("Budík tady počítá večerku. Aby iPhone podle něj i zvonil, potřebuje iOS 26; do té doby si stejný čas nastav v Hodinách.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
 
             if saved {
@@ -159,8 +156,8 @@ struct SleepSettingsForm: View {
             systemAlarm = false
         } else {
             var when: [String] = []
-            if let work { when.append(L10n.f("v pracovní dny v %@", work)) }
-            if let weekend { when.append(L10n.f("o víkendu v %@", weekend)) }
+            if let work { when.append(L10n.f("v pracovní dny v %@", ClockText.format(work))) }
+            if let weekend { when.append(L10n.f("o víkendu v %@", ClockText.format(weekend))) }
             let joined = when.count > 1 ? L10n.f("%@ a %@", when[0], when[1]) : when.joined()
             alarmOK = true
             alarmNote = L10n.f("Budík zvoní %@.", joined)
@@ -190,14 +187,13 @@ struct SleepSettingsCard: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     if let bed = tonight.bedtime {
-                        Text(L10n.f("Do postele v %@", bed)).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                        Text([tonight.wake.map { tonight.wakeSet == true ? L10n.f("budík %@", $0) : L10n.f("budík %@ (obvyklé vstávání)", $0) },
+                        Text(L10n.f("Do postele v %@", ClockText.format(bed))).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                        Text([tonight.wake.map { tonight.wakeSet == true ? L10n.f("budík %@", ClockText.format($0)) : L10n.f("budík %@ (obvyklé vstávání)", ClockText.format($0)) },
                               tonight.goalSet == true ? L10n.f("cíl %@", Fmt.duration(tonight.base)) : L10n.f("cíl %@ podle věku", Fmt.duration(tonight.base))]
                             .compactMap { $0 }.joined(separator: " · "))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     } else {
                         Text("Nastav si budík").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                        Text("Podle budíku a cíle spánku spočítám, kdy jít spát.").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 Spacer(minLength: 8)

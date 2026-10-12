@@ -46,7 +46,7 @@ struct WeekSessionsList: View {
                             if !candidates.isEmpty {
                                 Menu {
                                     ForEach(candidates) { activity in
-                                        Button(activity.title + (activity.time.map { " · " + $0 } ?? "")) {
+                                        Button(activity.title + (activity.time.map { " · " + ClockText.format($0) } ?? "")) {
                                             Task { await pair(plannedId: session.id, activityId: activity.id, date: session.date) }
                                         }
                                     }
@@ -201,7 +201,7 @@ struct SessionRow: View {
     private var subtitle: String {
         var parts = [session.date < today ? Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date)
                                           : Fmt.capitalized(Fmt.relativeDay(session.date, today: today))]
-        if let t = session.time { parts.append(t) }
+        if let t = session.time { parts.append(ClockText.format(t)) }
         if let m = session.minutes { parts.append(Fmt.duration(m)) }
         return parts.joined(separator: " · ")
     }
@@ -232,7 +232,7 @@ struct ActivityDetailView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + $0 } ?? "")).padding(.top, 24)
+                SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     ActivityDetailContent(detail: detail)
@@ -560,7 +560,7 @@ struct PlannedWorkoutView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (session.time.map { " · " + $0 } ?? "")).padding(.top, 24)
+                SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (session.time.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
                 Text(session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 HStack(spacing: 18) {
                     if let m = session.minutes { meta("Délka", Fmt.duration(m)) }
@@ -907,7 +907,7 @@ struct ManualWorkoutSheet: View {
                     Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)
-                SettingsGroup(footer: completed ? "Zapíše se jako odcvičený a pošle do aplikací ze Synchronizace." : "Budoucí den: zapíše se jako plán do Intervals.icu.") {
+                SettingsGroup {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna"))
                     SettingsDivider()
                     SettingsField(title: "Délka", text: $minutes, unit: "min", keyboard: .numberPad)

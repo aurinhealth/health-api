@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildReviewInput, reviewDay, usageCost, dayReadiness, reviewInstructions, reviewInstructionsText } from "../src/coach-review.js";
 import { withLang } from "../src/lang.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const week = { days: [
   { date: "2026-10-03", daily: { training: { completed: [{ name: "Leg day", type: "WeightTraining", durationHours: 1, tss: 60 }], planned: [] } } },
@@ -39,25 +40,7 @@ test("each model is asked with the same schema; time, tokens and cost are report
   assert.equal(usageCost("unknown-model", { input_tokens: 1 }), null);
 });
 
-test("the dashboard offers Revize dne on the light model, without a model comparison", () => {
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /url\.pathname==='\/app\/api\/coach\/review'&&request\.method==='POST'/);
-  assert.match(entry, /const reviews=\[await reviewDay\(env,input,null,inputs\.focus\)/);
-  assert.doesNotMatch(entry, /body\.compare/);
-  assert.match(client, /data-review="'\+esc\(pick\)\+'">🔍 Revize dne/);
-  assert.match(client, /async function openReviewSheet\(date\)\{/);
-  assert.doesNotMatch(client, /Luna × Sol|assistantCompare/);
-});
 
-test("Hodnocení replaces the bare RPE button: RPE and a note for any finished session", () => {
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  assert.match(client, /data-today="rate" data-name="'\+esc\(x\.name\|\|'Trénink'\)\+'">Hodnocení<\/button>/);
-  assert.doesNotMatch(client, /data-today="rpe">RPE<\/button>/);
-  // A library workout gets the RPE (and Intervals.icu); any other session goes to the coach.
-  assert.match(client, /if\(match&&rpe\)\{\s*const res=await jsonFetch\('\/app\/api\/workouts\/feedback'/);
-  assert.match(client, /jsonFetch\('\/app\/api\/coach\/reflections',\{method:'POST'[^)]*body:JSON\.stringify\(\{date,rpe,notes:\(pick\?pick\+': ':''\)\+notes\}\)/);
-});
 
 test("the review gets the recovery model's readiness and may not be more aggressive than its zone", async () => {
   const rows = []; for (let i = 20; i >= 0; i--) { const d = new Date(Date.parse("2026-10-07T12:00:00Z") - i * 86400000).toISOString().slice(0, 10); rows.push({ id: d, hrv: i === 0 ? 40 : 60 + (i % 3), restingHR: i === 0 ? 58 : 50 + (i % 2), ctl: 50, atl: 60 }); }

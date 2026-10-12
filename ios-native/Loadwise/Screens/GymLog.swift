@@ -445,6 +445,7 @@ struct GymSetTableRow: View {
                     .foregroundStyle(set.done ? Palette.green : highlighted ? Palette.amberBar : Palette.faint)
             }
             .buttonStyle(.borderless)
+            .sensoryFeedback(.impact(weight: .light), trigger: set.done) { was, now in !was && now }
             .accessibilityLabel(L10n.tr(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou"))
         }
         .onAppear { fill(set) }

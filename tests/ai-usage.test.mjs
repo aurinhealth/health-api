@@ -7,6 +7,7 @@ import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
 import { localToday } from "../src/user-time.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const answer = usage => Response.json({ model: "gpt-6-sol", output: [{ content: [{ type: "output_text", text: "ok" }] }], usage });
 
@@ -77,16 +78,6 @@ test("the monthly limit stops AI for the rest of the month and counts only this 
   assert.equal(aiMonthlyLimitUsd({ USER_IS_OWNER: true }), null);
 });
 
-test("settings show this month's AI spending against the limit in the app language", () => {
-  const source = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const fn = source.slice(source.indexOf("function aiUsageHtml("), source.indexOf("\nasync function loadAccount("));
-  for (const lang of ["cs", "en"]) {
-    const uiText = (cs, en) => lang === "en" ? en : cs, esc = v => String(v);
-    const html = new Function("uiText", "esc", fn + "; return aiUsageHtml;")(uiText, esc)({ spentUsd: 0.02, limitUsd: 1, monthSpentUsd: 0.1, monthLimitUsd: 5 });
-    assert.match(html, lang === "en" ? /AI this month: <strong>0\.10 USD of 5\.00 USD<\/strong> · today 0\.02 USD of 1\.00 USD/ : /AI tento měsíc: <strong>0,10 USD z 5,00 USD<\/strong> · dnes 0,02 USD z 1,00 USD/);
-    assert.match(html, /width:2\.0%/);
-  }
-});
 
 test("the limit is set per deployment, and 0 turns AI off for everyone but the owner", async () => {
   assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "2.5" }), 2.5);
@@ -103,7 +94,7 @@ test("the limit is set per deployment, and 0 turns AI off for everyone but the o
 });
 
 test("the AI limit reaches the user as a message, and every AI call names its feature", () => {
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.match(entry, /if\(error\.limit\)return Response\.json\(\{message:error\.message\},\{status:error\.status\|\|429\}\)/);
   assert.match(entry, /aiAllowance\(env\)/);
   for (const file of ["coach-assistant", "coach-reflection", "coach-review", "exercise-technique", "food-ai", "food-chat", "food-photo", "gym-adjust"]) {
@@ -114,7 +105,7 @@ test("the AI limit reaches the user as a message, and every AI call names its fe
   }
 });
 
-test("the AI plans pop up once at the first AI use during the pilot, and on every locked feature later", async () => {
+test("the AI intro is remembered per account", async () => {
   const { subscriptionStatus, markAiIntroSeen } = await import("../src/subscription.js");
   const { createD1 } = await import("./helpers/d1.mjs");
   const { scopedDb } = await import("../src/tenancy.js");
@@ -124,9 +115,4 @@ test("the AI plans pop up once at the first AI use during the pilot, and on ever
   await markAiIntroSeen(env);
   assert.equal((await subscriptionStatus(env)).introSeen, true);
   assert.equal((await subscriptionStatus({ DB: scopedDb(raw, 8), USER_ID: 8 })).introSeen, false);
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  assert.match(client, /async function jsonFetch\(path,options=\{\}\)\{if\(typeof aiIntroBefore==='function'\)await aiIntroBefore\(path,options\);/);
-  assert.match(client, /if\(s\.mode!=='pilot'\|\|s\.introSeen\)return;/);
-  assert.match(client, /if\(r\.status===402&&typeof showAiPlans==='function'\)subscriptionInfo\(\)\.then\(s=>showAiPlans\(s,\{locked:true\}\)\)/);
-  assert.match(client, /if\(typeof aiIntroBefore==='function'\)await aiIntroBefore\('\/app\/api\/assistant',\{method:'POST'\}\);/);
 });
