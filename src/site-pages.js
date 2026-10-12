@@ -484,11 +484,11 @@ function doc(request, path, title, html) {
 
 // Sign in with Apple and e-mail codes are described only once they are set up (signIn from the
 // entrypoint); passkeys need no setup and are always there.
-export function privacyPage(request, {apple = false, email = false} = {}) {
-  const methods = {en: email ? 'Google, a passkey or a one-time code sent to your email' : 'Google or a passkey', cs: email ? 'přes Google, přístupovým klíčem nebo jednorázovým kódem z e-mailu' : 'přes Google nebo přístupovým klíčem'};
+export function privacyPage(request, {apple = false, email = false, open = false} = {}) {
+  const methods = {en: (apple ? 'Apple, ' : '') + (email ? 'Google, a passkey or a one-time code sent to your email' : 'Google or a passkey'), cs: (apple ? 'přes Apple, ' : '') + (email ? 'přes Google, přístupovým klíčem nebo jednorázovým kódem z e-mailu' : 'přes Google nebo přístupovým klíčem')};
   return doc(request, '/privacy', {cs: 'Zásady ochrany soukromí', en: 'Privacy Policy'}, {
     en: `<p class="muted">Last updated: ${UPDATED.en}</p>
-<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Loadwise is currently available only by personal invitation.</p>
+<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Loadwise is currently available only by personal invitation.'}</p>
 <h2>In short</h2>
 <ul>
 <li>We use your data only to provide the Loadwise features you use.</li>
@@ -496,7 +496,7 @@ export function privacyPage(request, {apple = false, email = false} = {}) {
 <li>You choose which services to connect. You can disconnect them, or delete your account and all its data, in the app at any time.</li>
 </ul>
 <h2>Data we collect</h2>
-<p><strong>Your account.</strong> When you sign in with Google, we receive your email address and your Google account ID. We use them to recognize you and check your invitation, and we record when you last signed in.${apple ? ' When you sign in with Apple, we receive your Apple ID user identifier, the email address Apple shares with us (it can be a private relay address) and, the first time, your name if you choose to share it.' : ''}</p>
+<p><strong>Your account.</strong> When you sign in with Google, we receive your email address and your Google account ID. We use them to recognize you${open ? '' : ' and check your invitation'}, and we record when you last signed in.${apple ? ' When you sign in with Apple, we receive your Apple ID user identifier, the email address Apple shares with us (it can be a private relay address) and, the first time, your name if you choose to share it.' : ''}</p>
 <p><strong>Passkeys.</strong> When you add a passkey, we store its public key, its identifier, a random identifier of your account that the passkey keeps, the name of the device or password manager it was made in, and when it was added and last used. The private key stays on your device or in your password manager, and your fingerprint, face or screen lock never leaves your device.${email ? ' When you add a passkey, we send you an email about it, so you notice one you did not add.' : ''}</p>${email ? `
 <p><strong>Codes sent by email.</strong> When you ask for a sign-in code, we send a six-digit code to the address you entered, if it has access to Loadwise. We keep only a keyed hash of the code for 10 minutes, and counters that limit how many codes and attempts an address gets; these counters are deleted two days after the last code. A code sent to a new address also confirms changing your account’s email in Settings → Account; the old address then gets a notice of the change.</p>` : ''}
 <p><strong>Google Health</strong>, only if you connect it and allow it on Google’s consent screen:</p>
@@ -561,7 +561,7 @@ export function privacyPage(request, {apple = false, email = false} = {}) {
 <li>We keep your data while you have an account. An account nobody has signed in to for two years is deleted automatically with all its data.</li>
 <li><strong>Disconnecting a service</strong> in Settings stops Loadwise from reading from and writing to it and removes the stored access; for Google, Loadwise also gives up its access at Google. Data imported so far stays in your account until you delete it or the account.</li>
 <li><strong>Deleting your account</strong> in Settings → Account immediately deletes your account and permanently deletes all its data in Loadwise (for a large account, the rest within minutes): profile, food, workouts, sleep and health data, connections, passkeys and assistant history. The record of your consents is deleted with it. Loadwise also gives up its access to your Google Account and clears its copy on the device you use. Database backups are overwritten within 30 days.</li>
-<li>You can remove a passkey in Settings → Account. Loadwise then no longer accepts it; delete it from your device or password manager as well.</li>
+<li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Loadwise.</li>
 <li>Data that Loadwise copied to Intervals.icu or Google Health stays there; you can delete it in those services.</li>
 <li>You can also remove Loadwise’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Loadwise then can no longer read or write your Google data.</li>
 ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple ID settings, or unlink Apple in Settings → Account.</li>' : ''}
@@ -578,7 +578,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple 
 <h2>Contact</h2>
 <p>For questions about this policy or your data, or to exercise your rights, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`,
     cs: `<p class="muted">Poslední změna: ${UPDATED.cs}</p>
-<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Loadwise je zatím dostupný jen na osobní pozvánku.</p>
+<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Loadwise je zatím dostupný jen na osobní pozvánku.'}</p>
 <h2>Ve zkratce</h2>
 <ul>
 <li>Tvoje data používáme jen k funkcím Loadwise, které používáš.</li>
@@ -586,7 +586,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple 
 <li>Které služby propojíš, je na tobě. Kdykoli je v aplikaci odpojíš, nebo smažeš účet i se všemi daty.</li>
 </ul>
 <h2>Jaká data získáváme</h2>
-<p><strong>Tvůj účet.</strong> Když se přihlásíš přes Google, dostaneme tvou e-mailovou adresu a ID tvého účtu Google. Podle nich tě poznáme a ověříme pozvánku. Zaznamenáváme i čas posledního přihlášení.${apple ? ' Když se přihlásíš přes Apple, dostaneme identifikátor tvého Apple ID, e-mail, který nám Apple předá (může to být skrytá adresa od Apple), a napoprvé i jméno, pokud ho sdílíš.' : ''}</p>
+<p><strong>Tvůj účet.</strong> Když se přihlásíš přes Google, dostaneme tvou e-mailovou adresu a ID tvého účtu Google. Podle nich tě poznáme${open ? '' : ' a ověříme pozvánku'}. Zaznamenáváme i čas posledního přihlášení.${apple ? ' Když se přihlásíš přes Apple, dostaneme identifikátor tvého Apple ID, e-mail, který nám Apple předá (může to být skrytá adresa od Apple), a napoprvé i jméno, pokud ho sdílíš.' : ''}</p>
 <p><strong>Přístupové klíče (passkeys).</strong> Když si přidáš přístupový klíč, uložíme jeho veřejný klíč, jeho identifikátor, náhodný identifikátor tvého účtu, který si klíč pamatuje, název zařízení nebo správce hesel, ve kterém vznikl, a kdy byl přidaný a naposledy použitý. Soukromý klíč zůstává ve tvém zařízení nebo ve správci hesel a otisk prstu, obličej ani zámek obrazovky tvoje zařízení neopustí.${email ? ' Když si přidáš přístupový klíč, pošleme ti o tom e-mail, takže se o každém novém klíči dozvíš.' : ''}</p>${email ? `
 <p><strong>Kódy e-mailem.</strong> Když si řekneš o kód pro přihlášení, pošleme šestimístný kód na zadanou adresu, pokud má do Loadwise přístup. Uchováváme jen jeho otisk vytvořený tajným klíčem, a to 10 minut, a počítadla, která omezují, kolik kódů a pokusů adresa dostane; ta se smažou dva dny po posledním kódu. Kód poslaný na novou adresu potvrzuje i změnu e-mailu účtu v Nastavení → Účet; na starou adresu pak přijde upozornění.</p>` : ''}
 <p><strong>Google Health</strong>, jen když ho připojíš a povolíš na obrazovce souhlasu Google:</p>
@@ -651,7 +651,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple 
 <li>Data uchováváme, dokud máš účet. Účet, do kterého se nikdo dva roky nepřihlásil, automaticky smažeme i se všemi daty.</li>
 <li><strong>Odpojení služby</strong> v Nastavení zastaví čtení i zápis do ní a smaže uložený přístup; u Googlu se Loadwise vzdá přístupu i přímo u Googlu. Data, která se do té doby načetla, zůstanou v tvém účtu, dokud je nesmažeš, nebo nesmažeš účet.</li>
 <li><strong>Smazání účtu</strong> v Nastavení → Účet okamžitě smaže tvůj účet a natrvalo všechna data v Loadwise (u velkého účtu zbytek do několika minut): profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Smaže se i záznam o tvých souhlasech. Loadwise se zároveň vzdá přístupu k tvému účtu Google a smaže svou kopii v zařízení, ve kterém účet mažeš. Zálohy databáze se přepíšou do 30 dní.</li>
-<li>Přístupový klíč odebereš v Nastavení → Účet. Loadwise ho pak už nepřijme; smaž ho i ze zařízení nebo ze správce hesel.</li>
+<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Loadwise všechny tvoje přístupové klíče.</li>
 <li>Co Loadwise zkopíroval do Intervals.icu nebo Google Health, tam zůstane; smazat to můžeš v těchto službách.</li>
 <li>Přístup Loadwise můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Loadwise pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
 ${apple ? '<li>Přihlašování přes Apple pro Loadwise ukončíš v nastavení svého Apple ID, nebo Apple odpojíš v Nastavení → Účet.</li>' : ''}
@@ -678,16 +678,16 @@ export function termsPage(request) {
   });
 }
 
-export function supportPage(request, {apple = false, email = false} = {}) {
+export function supportPage(request, {apple = false, email = false, open = false} = {}) {
   return doc(request, '/support', {cs: 'Podpora', en: 'Support'}, {
-    en: `<p>Loadwise is currently available only by personal invitation. If something does not work, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, and the error message the app showed. Never send passwords, API keys or other secrets.</p>
+    en: `<p>${open ? '' : 'Loadwise is currently available only by personal invitation. '}If something does not work, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, and the error message the app showed. Never send passwords, API keys or other secrets.</p>
 <h2>Signing in</h2>
-<p>Sign in with the Google account your invitation was sent to.${apple ? ' If you also see Sign in with Apple, you can use an Apple ID with the same email address. If you hide your email from Apple, sign in with Google first and link Apple in Settings → Account.' : ''}${email ? ' Without a Google account, enter the invited address under “or with a code by email”: you get a six-digit code that is valid for 10 minutes.' : ''} If the app says your account is not invited, ask the operator to invite the address you use.</p>
+<p>In the iPhone app, choose ${apple ? '<strong>Continue with Apple</strong>, ' : ''}<strong>Continue with Google</strong>${email ? ' or <strong>Continue with e-mail</strong>: you get a six-digit code that is valid for 10 minutes' : ''}. Use the same way each time, so you land in the same account.${open ? '' : ' If the app says your account is not invited, ask the operator to invite the address you use.'}</p>
 <h2>Passkeys</h2>
 <ul>
-<li>Once you are signed in, open <strong>Settings → Account</strong> and choose <strong>Add</strong> next to Passkeys. Your phone or computer saves the passkey, usually in its password manager.</li>
-<li>Next time, choose <strong>Sign in with a passkey</strong> and unlock it with your fingerprint, face or screen lock. A passkey saved in iCloud Keychain or Google Password Manager works on your other devices too.</li>
-<li>To remove a passkey, choose <strong>Remove</strong> next to it in Settings → Account, then delete it from your device or password manager as well.</li>
+<li>After your first sign-in with an e-mail code, the app offers <strong>Next time with Face ID</strong>. Agree, and your iPhone saves a passkey in its password manager.</li>
+<li>Next time, choose <strong>Sign in with a passkey</strong> and unlock it with Face ID, Touch ID or your passcode. A passkey saved in iCloud Keychain works on your other Apple devices too.</li>
+<li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Loadwise.</li>
 </ul>
 <h2>Connecting and disconnecting services</h2>
 <ul>
@@ -709,14 +709,14 @@ export function supportPage(request, {apple = false, email = false} = {}) {
 <li>Choose <strong>Delete account</strong>, type SMAZAT to confirm and choose <strong>Delete account permanently</strong>.</li>
 </ol>
 <p>Loadwise immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`,
-    cs: `<p>Loadwise je zatím dostupný jen na osobní pozvánku. Když něco nefunguje, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy to bylo a jakou chybu aplikace ukázala. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
+    cs: `<p>${open ? '' : 'Loadwise je zatím dostupný jen na osobní pozvánku. '}Když něco nefunguje, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy to bylo a jakou chybu aplikace ukázala. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
 <h2>Přihlášení</h2>
-<p>Přihlas se účtem Google, na který ti přišla pozvánka.${apple ? ' Pokud vidíš i Přihlásit se přes Apple, můžeš použít Apple ID se stejnou e-mailovou adresou. Když před Apple e-mail skrýváš, přihlas se nejdřív přes Google a Apple si připoj v Nastavení → Účet.' : ''}${email ? ' Bez účtu Google zadej pozvanou adresu pod „nebo kódem z e-mailu“: přijde ti šestimístný kód, který platí 10 minut.' : ''} Když aplikace hlásí, že účet není pozvaný, požádej provozovatele, ať pozve adresu, kterou používáš.</p>
+<p>V aplikaci pro iPhone zvol ${apple ? '<strong>Pokračovat přes Apple</strong>, ' : ''}<strong>Pokračovat přes Google</strong>${email ? ' nebo <strong>Pokračovat e-mailem</strong>: přijde ti šestimístný kód, který platí 10 minut' : ''}. Přihlašuj se pokaždé stejně, ať se dostaneš do stejného účtu.${open ? '' : ' Když aplikace hlásí, že účet není pozvaný, požádej provozovatele, ať pozve adresu, kterou používáš.'}</p>
 <h2>Přístupové klíče (passkeys)</h2>
 <ul>
-<li>Po přihlášení otevři <strong>Nastavení → Účet</strong> a u Přístupových klíčů zvol <strong>Přidat</strong>. Telefon nebo počítač si klíč uloží, obvykle do správce hesel.</li>
-<li>Příště zvol <strong>Přihlásit se přístupovým klíčem</strong> a odemkni ho otiskem prstu, obličejem nebo zámkem obrazovky. Klíč uložený v Klíčence na iCloudu nebo ve Správci hesel Google funguje i na tvých dalších zařízeních.</li>
-<li>Klíč odebereš tlačítkem <strong>Odebrat</strong> u něj v Nastavení → Účet; pak ho smaž i ze zařízení nebo ze správce hesel.</li>
+<li>Po prvním přihlášení kódem z e-mailu ti aplikace nabídne <strong>Příště přes Face ID</strong>. Když souhlasíš, iPhone si uloží přístupový klíč do správce hesel.</li>
+<li>Příště zvol <strong>Přihlásit přes passkey</strong> a odemkni ho přes Face ID, Touch ID nebo kódem telefonu. Klíč uložený v Klíčence na iCloudu funguje i na tvých dalších zařízeních Apple.</li>
+<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Loadwise všechny tvoje přístupové klíče.</li>
 </ul>
 <h2>Připojení a odpojení služeb</h2>
 <ul>

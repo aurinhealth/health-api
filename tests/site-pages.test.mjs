@@ -103,3 +103,17 @@ test('the privacy policy names the controller and the contact',async()=>{
   assert.match(cs,/Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI/);
   assert.doesNotMatch(en+cs,/ChatGPT|the same way you received your invitation|stejnou cestou, jakou ti přišla pozvánka/);
 });
+
+test('with open sign-up the privacy policy and support page no longer speak of invitations',async()=>{
+  for(const lang of ['cs','en']){
+    const req=path=>new Request('https://petrfitnessdata.eu'+path+'?lang='+lang);
+    const invite=/invitation|pozvánk|pozvan/i;
+    for(const [page,path] of [[privacyPage,'/privacy'],[supportPage,'/support']]){
+      assert.match(await page(req(path),{apple:true,email:true}).text(),invite,path+' invite only');
+      assert.doesNotMatch(await page(req(path),{apple:true,email:true,open:true}).text(),invite,path+' open');
+    }
+  }
+  const support=await supportPage(new Request('https://petrfitnessdata.eu/support?lang=cs'),{apple:true,email:true,open:true}).text();
+  assert.match(support,/<strong>Pokračovat přes Apple<\/strong>, <strong>Pokračovat přes Google<\/strong> nebo <strong>Pokračovat e-mailem<\/strong>/);
+  assert.match(support,/Příště přes Face ID/);
+});
