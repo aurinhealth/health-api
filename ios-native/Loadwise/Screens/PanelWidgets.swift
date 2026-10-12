@@ -40,8 +40,9 @@ enum WidgetPanel: String {
     var defaults: [PlacedWidget] {
         switch self {
         case .today:
-            return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium),
-                    .init(kind: .restingHR, size: .small), .init(kind: .hrv, size: .small), .init(kind: .weight, size: .medium)]
+            // Today is for deciding; the measurements (HRV, resting heart rate,
+            // weight) are on Health.
+            return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium)]
         case .health:
             return [.init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
                     .init(kind: .respiration, size: .small), .init(kind: .skinTemp, size: .small), .init(kind: .bedtime, size: .medium),
