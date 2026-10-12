@@ -1542,6 +1542,7 @@
 "Hodinky ukazují %@ kcal. Realita je spíš kolem %@ kcal." = "The watch shows %@ kcal. About %@ kcal is more realistic.";
 "Kalorie k ověření" = "Calories to check";
 "k ověření" = "to check";
+"%@ kcal, k ověření" = "%@ kcal, to check";
 "odhad %@" = "estimate %@";
 "hodinky %@" = "watch %@";
 "Počítat %@" = "Count %@";

@@ -103,6 +103,17 @@ extension AppModel {
 
     /// The day's lifting session that was done (the watch or Intervals.icu):
     /// its length and calories for the gym detail.
+    /// The week's or Today's copy of a done calendar row, which carries the
+    /// calorie check (the calendar does not).
+    func doneSession(for activity: CalendarActivity) -> WeekSession? {
+        guard activity.status == "done" else { return nil }
+        let pool = (training?.sessions ?? []) + (today?.plan.compactMap { $0.session } ?? [])
+        let sameDay = pool.filter { $0.date == activity.date && $0.status == "done" && $0.kind == "activity" }
+        return sameDay.first { $0.id == activity.id }
+            ?? sameDay.first { activity.activityId != nil && $0.activityId == activity.activityId }
+            ?? sameDay.first { $0.sport == activity.sport && $0.time != nil && $0.time == activity.time }
+    }
+
     func doneStrengthSession(on date: String) -> WeekSession? {
         let pick: (WeekSession) -> Bool = { $0.date == date && $0.sport == "strength" && $0.status == "done" && $0.kind == "activity" }
         if let found = training?.sessions?.first(where: pick) { return found }

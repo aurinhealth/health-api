@@ -370,8 +370,15 @@ struct CalendarDayList: View {
 }
 
 struct CalendarActivityRow: View {
+    @Environment(AppModel.self) private var model
     let activity: CalendarActivity
     let chevron: Bool
+
+    /// The device's calories still wait for a check (Kalorie k ověření).
+    private var kcalToCheck: Bool {
+        guard let session = model.doneSession(for: activity), session.kcalEstimate?.value != nil, session.kcal != nil else { return false }
+        return KcalChoiceStore.shared.choice(for: session) == nil
+    }
 
     var body: some View {
         let state = PlanState(activity.session)
@@ -389,10 +396,18 @@ struct CalendarActivityRow: View {
             }
             Spacer(minLength: 6)
             if let kcal = activity.kcal, kcal > 0 {
+                let check = kcalToCheck
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(Fmt.int(kcal)).font(Typo.number(17)).foregroundStyle(Palette.ink)
+                    HStack(spacing: 4) {
+                        if check {
+                            Image(systemName: "exclamationmark.triangle").font(.system(size: 11, weight: .semibold))
+                        }
+                        Text(Fmt.int(kcal)).font(Typo.number(17))
+                    }
+                    .foregroundStyle(check ? Palette.amber : Palette.ink)
                     Text("kcal").font(.system(size: 10)).foregroundStyle(Palette.faint)
                 }
+                .accessibilityLabel(check ? L10n.f("%@ kcal, k ověření", Fmt.int(kcal)) : Fmt.int(kcal) + " kcal")
             }
             if chevron { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint) }
         }
