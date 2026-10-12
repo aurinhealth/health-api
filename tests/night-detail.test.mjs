@@ -57,3 +57,17 @@ test('an older night draws heart rate from the 5-minute rows', async () => {
   assert.deepEqual(d.night.hr.map(b => [b.m, b.avg, b.min, b.max]), [[5, 50, 47, 53], [10, 54, 52, 58]]);
   assert.equal(d.night.stats.lowHr, 50);
 });
+
+test('an Apple Health night, which carries no clock offset, is read in the user\'s own zone', async () => {
+  const { withTimeZone } = await import('../src/user-time.js');
+  const { appleRow } = await import('../src/apple-health.js');
+  // Bed at 21:30 UTC: 23:30 in Prague, 17:30 in New York.
+  const r = appleRow({ type: 'sleep', id: 'n1', start, end: at(305), stages: stages.map(s => ({ type: s.type, start: s.startTime, end: s.endTime })) });
+  const rows = [{ external_id: 'n1', start_time: r.start_time, end_time: r.end_time, payload_json: JSON.stringify(r.payload) }];
+  const db = { userId: 7, prepare(q) { return { bind: () => ({ all: async () => ({ results: /data_type='sleep'/.test(q) ? rows : [] }) }) }; } };
+  const prague = await nightDetail(db, { date: '2026-10-08' });
+  assert.equal(prague.night.offset, null); assert.equal(prague.night.bedClock, 23 * 60 + 30); assert.equal(prague.night.wakeClock, 24 * 60 + 4 * 60 + 35);
+  // In New York the night ends at 22:35 on 7 October, so it is that day's night.
+  const newYork = await withTimeZone('America/New_York', () => nightDetail(db, { date: '2026-10-07' }));
+  assert.equal(newYork.night.bedClock, 17 * 60 + 30); assert.equal(newYork.night.wakeClock, 22 * 60 + 35);
+});

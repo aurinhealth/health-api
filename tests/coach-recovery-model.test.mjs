@@ -21,7 +21,7 @@ test('without a personal baseline the coach falls back to the older rules',()=>{
 });
 test('Intervals.icu fills only what Google Health lacks',()=>{
   const rows=mergeWellnessRows([{id:day(0),hrv:60}],[{id:day(0),hrv:90,restingHR:48},{id:day(-1),respiration:14}]);
-  assert.deepEqual(rows,[{id:day(-1),respiration:14},{id:day(0),hrv:60,restingHR:48}]);
+  assert.deepEqual(rows,[{id:day(-1),respiration:14},{id:day(0),hrv:60,restingHR:48,restingHRSource:'intervals'}]);
 });
 test('deep endurance fatigue (TSB) protects the legs instead of a load ratio',()=>{
   const base={date,cycling:{recentRideTss:200,recentRideHours:4,plannedWorkouts:[],recentActivities:[{date:day(-3),type:'Ride',name:'Endurance',tss:60,durationHours:1.5,ctl:60,atl:90}]},recovery:{},strength:{recentCompletedSets:[]}};

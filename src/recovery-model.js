@@ -16,9 +16,13 @@ export function personalBaseline(rows, date, key, options) {
     values.push(log ? Math.log(v) : v);
   }
   if (values.length < min) return { count: values.length, mean: null, sd: null };
-  const mean = values.reduce((s, v) => s + v, 0) / values.length;
-  const sd = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1));
-  return { count: values.length, mean, sd };
+  const stats = xs => { const m = xs.reduce((s, v) => s + v, 0) / xs.length; return { mean: m, sd: Math.sqrt(xs.reduce((s, v) => s + (v - m) ** 2, 0) / (xs.length - 1)) }; };
+  let { mean, sd } = stats(values), used = values;
+  // One wild value (a 200 ms night among 50 ms ones, a misread strap) would
+  // widen the normal range for two months: values more than 3 SD out are
+  // dropped once and the rest averaged again. Without one, nothing changes.
+  if (sd > 0) { const kept = values.filter(v => Math.abs(v - mean) <= 3 * sd); if (kept.length < values.length && kept.length > 1) { used = kept; ({ mean, sd } = stats(kept)); } }
+  return { count: used.length, mean, sd };
 }
 
 // Sleep need in minutes. Adults 18–64 need 7–9 h, 65+ 7–8 h (National Sleep
@@ -161,22 +165,36 @@ export function recoveryReadiness(input) {
   const rows = (input && input.rows) || [], date = input && input.date, night = input && input.night, need = (input && input.sleepNeed) || 480;
   const today = rows.find(r => r && r.id === date) || {};
   const end = Date.parse(date + "T12:00:00Z"), components = {}, flags = [];
+  // A young baseline (under 30 days) has an unreliable SD: 14 near-identical
+  // days would make a normal 5 ms dip look like −2 SD. Until 30 days the SD is
+  // pulled toward a typical one (lnRMSSD 0.10, Plews 2013 athletes; resting HR
+  // 3 bpm) in proportion to the days missing; the floors below still apply.
+  const settled = (b, prior) => b.count >= 30 ? b.sd : (b.count * b.sd + (30 - b.count) * prior) / 30;
   // HRV only against days measured the same way: Apple Watch reports SDNN,
-  // Google's watches RMSSD, so one baseline over both mixes two scales. A new
-  // source starts its own baseline.
+  // Google's watches RMSSD, so one baseline over both mixes two scales. The
+  // source tag carries the measure ("apple-health:sdnn", google-dashboard.js).
+  // A new source starts its own baseline.
   const hrvRows = rows.filter(r => r && (r.hrvSource || null) === (today.hrvSource || null));
   const hb = personalBaseline(hrvRows, date, "hrv", { log: true });
   if (Number(today.hrv) > 0 && hb.mean != null) {
-    const sd = Math.max(hb.sd, 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
+    const sd = Math.max(settled(hb, 0.10), 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
     const week = hrvRows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
     const diff = week.length >= 3 ? week.reduce((s, v) => s + v, 0) / week.length - hb.mean : null, swc = 0.5 * sd;
     components.hrv = { value: Number(today.hrv), baseline: Math.exp(hb.mean), low: Math.exp(hb.mean - sd), high: Math.exp(hb.mean + sd), z, score: recoveryComponentScore(z), trend: diff == null ? null : diff < -swc ? "down" : diff > swc ? "up" : "stable", days: hb.count };
     if (components.hrv.trend === "down") flags.push("hrv_trend_down");
   }
-  const rb = personalBaseline(rows, date, "restingHR");
+  // Resting heart rate the same way: each watch's night algorithm (and an
+  // Intervals.icu value from another device) sits a few bpm apart, as much as
+  // the SD floor. A source with under 14 days falls back to the baseline over
+  // every source, so the number does not vanish on a new watch, flagged
+  // "restingHRMixed" for the UI and the coach.
+  const rhrRows = rows.filter(r => r && (r.restingHRSource || null) === (today.restingHRSource || null));
+  let rb = personalBaseline(rhrRows, date, "restingHR"), mixed = false;
+  if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { rb = all; mixed = true; } }
   if (Number(today.restingHR) > 0 && rb.mean != null) {
-    const sd = Math.max(rb.sd, 1.5), z = (Number(today.restingHR) - rb.mean) / sd;
+    const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean) / sd;
     components.restingHR = { value: Number(today.restingHR), baseline: rb.mean, z, score: recoveryComponentScore(-z), days: rb.count };
+    if (mixed) flags.push("restingHRMixed");
   }
   const bb = personalBaseline(rows, date, "respiration");
   if (Number(today.respiration) > 0 && bb.mean != null) {
@@ -244,16 +262,24 @@ export function strainScore(load) {
 
 // Google Health rows first, Intervals.icu wellness filling the days and fields
 // Google has none of (Apple Watch, Garmin and others sync there), as the
-// dashboard does in vitalWellness.
+// dashboard does in vitalWellness. A resting heart rate filled this way is
+// tagged "intervals": recoveryReadiness keeps each source's own baseline.
 export function mergeWellnessRows(google, intervals) {
   const byDate = new Map((google || []).filter(r => r && r.id).map(r => [r.id, { ...r }]));
   for (const r of intervals || []) {
     if (!r || !r.id) continue;
     const row = byDate.get(r.id) || { id: r.id };
-    for (const key of ["hrv", "restingHR", "respiration"]) if (!(Number(row[key]) > 0) && Number(r[key]) > 0) row[key] = Number(r[key]);
+    for (const key of ["hrv", "restingHR", "respiration", "spO2"]) if (!(Number(row[key]) > 0) && Number(r[key]) > 0) { row[key] = Number(r[key]); if (key === "restingHR") row.restingHRSource = "intervals"; }
     byDate.set(r.id, row);
   }
   return [...byDate.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+}
+
+// The HRV measure of a wellness row from its source tag ("apple-health:sdnn"):
+// "rmssd", "sdnn" or null when the source did not say (Google's is RMSSD).
+export function hrvMetric(row) {
+  const metric = String((row && row.hrvSource) || "").split(":")[1];
+  return metric === "rmssd" || metric === "sdnn" ? metric : null;
 }
 
 // The functions the dashboard client copies verbatim.

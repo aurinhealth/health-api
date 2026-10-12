@@ -4,7 +4,7 @@
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { environmentFor } from "./adaptive-week.js";
-import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore } from "./recovery-model.js";
+import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, bedtimePlan, heartRateLoad, strainScore, hrvMetric } from "./recovery-model.js";
 import { localDateTime } from "./user-time.js";
 import { sleepSettings } from "./energy-profile.js";
 import { L } from "./lang.js";
@@ -211,7 +211,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       end: clockOf(night.endTime)
     } : null,
     strain: { score: strainNow, planned: plannedStrain(plannedTss) },
-    hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, series: last(30, "hrv") } : null,
+    // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
+    hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
     restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), series: last(14, "restingHR") } : null,
     summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
     nutrition: {
