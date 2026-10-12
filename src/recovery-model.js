@@ -25,6 +25,49 @@ export function personalBaseline(rows, date, key, options) {
   return { count: used.length, mean, sd };
 }
 
+// The baseline of one source (Z6). A day is compared only with days of the
+// same source and measure (recoveryReadiness), so a new watch would leave the
+// score empty for the 14 days its own baseline needs. When another source
+// measured on at least 5 of the same days, the mean difference on those days
+// (ln values for HRV, bpm for resting HR) is the offset between the two, and
+// the other source's days shifted by it fill the new source's baseline until
+// it has 14 days of its own; the result says so in `carried`. Rows carry every
+// source's value of a day in "<key>BySource" (google-dashboard.js,
+// mergeWellnessRows); a value without a source tag is "". Without such an
+// overlap the source's own baseline is returned unchanged.
+export function sourceBaseline(rows, date, key, source, options) {
+  const log = !!(options && options.log), days = (options && options.days) || 60, tagKey = key + "Source", mapKey = key + "BySource", own = source || "";
+  const list = (rows || []).filter(r => r && r.id);
+  const mine = personalBaseline(list.filter(r => (r[tagKey] || "") === own), date, key, options);
+  if (mine.mean != null) return mine;
+  const end = Date.parse(date + "T12:00:00Z");
+  const valueOf = (r, s) => {
+    const m = r[mapKey], v = Number(m && m[s] != null ? m[s] : (r[tagKey] || "") === s ? r[key] : NaN);
+    return Number.isFinite(v) && v > 0 ? (log ? Math.log(v) : v) : null;
+  };
+  const recent = list.filter(r => r.id < date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 <= days);
+  const others = new Set();
+  for (const r of recent) {
+    if ((r[tagKey] || "") !== own && Number(r[key]) > 0) others.add(r[tagKey] || "");
+    for (const s of Object.keys(r[mapKey] || {})) if (s !== own) others.add(s);
+  }
+  let best = null;
+  for (const s of others) {
+    const pairs = recent.map(r => [valueOf(r, own), valueOf(r, s)]).filter(p => p[0] != null && p[1] != null);
+    if (pairs.length < 5 || (best && pairs.length <= best.overlap)) continue;
+    best = { source: s, overlap: pairs.length, offset: pairs.reduce((t, p) => t + p[0] - p[1], 0) / pairs.length };
+  }
+  if (!best) return mine;
+  const filled = [];
+  for (const r of recent) {
+    const a = valueOf(r, own), b = valueOf(r, best.source), v = a != null ? a : b != null ? b + best.offset : null;
+    if (v != null) filled.push({ id: r.id, [key]: log ? Math.exp(v) : v });
+  }
+  const carried = personalBaseline(filled, date, key, options);
+  if (carried.mean == null) return mine;
+  return { count: carried.count, mean: carried.mean, sd: carried.sd, carried: { from: best.source || null, offset: best.offset, overlap: best.overlap, own: mine.count } };
+}
+
 // Sleep need in minutes. Adults 18–64 need 7–9 h, 65+ 7–8 h (National Sleep
 // Foundation, Hirshkowitz 2015); the midpoint is the start, as in Garmin's
 // Sleep Coach. A hard day adds up to 30 min: athletes are advised the upper
@@ -175,9 +218,11 @@ export function recoveryReadiness(input) {
   // HRV only against days measured the same way: Apple Watch reports SDNN,
   // Google's watches RMSSD, so one baseline over both mixes two scales. The
   // source tag carries the measure ("apple-health:sdnn", google-dashboard.js).
-  // A new source starts its own baseline.
+  // A new source starts its own baseline; until it has 14 days, one carried
+  // over from an overlapping source (sourceBaseline) makes the score
+  // provisional.
   const hrvRows = rows.filter(r => r && (r.hrvSource || null) === (today.hrvSource || null));
-  const hb = personalBaseline(hrvRows, date, "hrv", { log: true });
+  const hb = sourceBaseline(rows, date, "hrv", today.hrvSource || null, { log: true });
   if (Number(today.hrv) > 0 && hb.mean != null) {
     const sd = Math.max(settled(hb, 0.10), 0.05), z = (Math.log(Number(today.hrv)) - hb.mean) / sd;
     const week = hrvRows.filter(r => r && r.id <= date && (end - Date.parse(r.id + "T12:00:00Z")) / 86400000 < 7 && Number(r.hrv) > 0).map(r => Math.log(Number(r.hrv)));
@@ -187,11 +232,12 @@ export function recoveryReadiness(input) {
   }
   // Resting heart rate the same way: each watch's night algorithm (and an
   // Intervals.icu value from another device) sits a few bpm apart, as much as
-  // the SD floor. A source with under 14 days falls back to the baseline over
-  // every source, so the number does not vanish on a new watch, flagged
-  // "restingHRMixed" for the UI and the coach.
-  const rhrRows = rows.filter(r => r && (r.restingHRSource || null) === (today.restingHRSource || null));
-  let rb = personalBaseline(rhrRows, date, "restingHR"), mixed = false;
+  // the SD floor. A source with under 14 days takes a baseline carried over
+  // from an overlapping source (sourceBaseline, provisional); without an
+  // overlap it falls back to the baseline over every source, so the number
+  // does not vanish on a new watch, flagged "restingHRMixed" for the UI and
+  // the coach.
+  let rb = sourceBaseline(rows, date, "restingHR", today.restingHRSource || null), mixed = false;
   if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { rb = all; mixed = true; } }
   if (Number(today.restingHR) > 0 && rb.mean != null) {
     const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean) / sd;
@@ -220,15 +266,19 @@ export function recoveryReadiness(input) {
     const performance = Math.min(105, Number(night.durationMin) / need * 100);
     components.sleep = { minutes: Number(night.durationMin), need, performance: Math.round(performance), score: Math.round(Math.max(0, Math.min(100, 70 + 2 * (performance - 90)))) };
   }
+  // A baseline carried over from another source: the number is provisional
+  // until the new source has 14 days of its own.
+  const provisional = !!((components.hrv && hb.carried) || (components.restingHR && rb.carried));
+  if (provisional) flags.push("provisional");
   const weights = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
   const used = Object.keys(weights).filter(k => components[k]);
   const missing = Object.keys(weights).filter(k => !components[k]);
-  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing };
+  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional };
   let score = used.reduce((s, k) => s + weights[k] * components[k].score, 0) / used.reduce((s, k) => s + weights[k], 0);
   if (components.respiration && components.respiration.elevated) score -= 10;
   if (components.skinTemp && components.skinTemp.elevated) score -= 10;
   score = Math.round(Math.max(0, Math.min(100, score)));
-  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing };
+  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional };
 }
 
 // The morning check-in (morning-checkin.js) on top of the body's readiness: it
@@ -266,11 +316,18 @@ export function strainScore(load) {
 // Google has none of (Apple Watch, Garmin and others sync there), as the
 // dashboard does in vitalWellness. A resting heart rate filled this way is
 // tagged "intervals": recoveryReadiness keeps each source's own baseline.
+// A day both have keeps the Intervals.icu HRV and resting HR beside Google's
+// in hrvBySource / restingHRBySource (an untagged HRV is ""): the overlap
+// sourceBaseline learns a new source's offset from.
 export function mergeWellnessRows(google, intervals) {
   const byDate = new Map((google || []).filter(r => r && r.id).map(r => [r.id, { ...r }]));
   for (const r of intervals || []) {
     if (!r || !r.id) continue;
     const row = byDate.get(r.id) || { id: r.id };
+    for (const key of ["hrv", "restingHR"]) {
+      const theirs = key === "restingHR" ? "intervals" : "", mine = row[key + "Source"] || "";
+      if (Number(row[key]) > 0 && Number(r[key]) > 0 && mine !== theirs) row[key + "BySource"] = { [mine]: Number(row[key]), ...(row[key + "BySource"] || {}), [theirs]: Number(r[key]) };
+    }
     for (const key of ["hrv", "restingHR", "respiration", "spO2"]) if (!(Number(row[key]) > 0) && Number(r[key]) > 0) { row[key] = Number(r[key]); if (key === "restingHR") row.restingHRSource = "intervals"; }
     byDate.set(r.id, row);
   }
@@ -285,4 +342,4 @@ export function hrvMetric(row) {
 }
 
 // The functions the dashboard client copies verbatim.
-export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];
+export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];

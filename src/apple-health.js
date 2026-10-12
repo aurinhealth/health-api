@@ -106,7 +106,20 @@ export function appleRow(r, now = Date.now()) {
     const stages = (Array.isArray(r.stages) ? r.stages : []).slice(0, MAX_SLEEP_STAGES).map(s => ({ type: STAGES[String(s?.type || "").toUpperCase()], startTime: instant(s?.start, now), endTime: instant(s?.end, now) }))
       .filter(s => s.type && span(s.startTime, s.endTime, 24));
     const awake = stages.filter(s => s.type === "AWAKE").reduce((m, s) => m + (Date.parse(s.endTime) - Date.parse(s.startTime)) / 60000, 0);
-    const sleep = { interval: { startTime: start, endTime: end }, stages, type: stages.some(s => s.type === "DEEP" || s.type === "REM") ? "STAGES" : "CLASSIC", metadata: { nap: r.nap === true }, summary: { minutesAwake: Math.round(awake) } };
+    let summary = { minutesAwake: Math.round(awake) };
+    // The app sends the night from getting into bed to getting up when Apple
+    // Health has "in bed" samples (inBed): the time before the first sleep is
+    // falling asleep, the time after the last one lying awake in the morning,
+    // and the awake stages between them wake after sleep onset, as Google's
+    // summary has them (sleep-sessions.js latencyMin, wasoMin).
+    const asleep = stages.filter(s => s.type !== "AWAKE");
+    if (r.inBed === true && asleep.length) {
+      const first = Math.min(...asleep.map(s => Date.parse(s.startTime))), last = Math.max(...asleep.map(s => Date.parse(s.endTime)));
+      const latency = Math.max(0, (first - Date.parse(start)) / 60000), after = Math.max(0, (Date.parse(end) - last) / 60000);
+      const inside = stages.filter(s => s.type === "AWAKE").reduce((m, s) => m + Math.max(0, Math.min(last, Date.parse(s.endTime)) - Math.max(first, Date.parse(s.startTime))) / 60000, 0);
+      summary = { minutesAwake: Math.round(latency + inside + after), minutesToFallAsleep: Math.round(latency), minutesAfterWakeUp: Math.round(after) };
+    }
+    const sleep = { interval: { startTime: start, endTime: end }, stages, type: stages.some(s => s.type === "DEEP" || s.type === "REM") ? "STAGES" : "CLASSIC", metadata: { nap: r.nap === true }, summary };
     return { ...row, start_time: start, end_time: end, payload: { sleep, source: SOURCE } };
   }
   if (type === "exercise") {
