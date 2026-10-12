@@ -34,8 +34,13 @@ final class AppModel {
     /// The last refresh failed for lack of a connection: the screens show the
     /// data saved on the phone (SnapshotCache) with a note.
     private(set) var offline = false
-    /// The day on the Today, Food and Health screens, nil for today.
+    /// The day on the Today, Food and Health screens, nil for today. Only Food
+    /// goes ahead (meals planned or copied into the coming days).
     private(set) var selectedDate: String?
+    /// Food reaches this many days past today.
+    static let foodDaysAhead = 14
+    /// The chosen day lies after today (Food only).
+    var showsFutureDay: Bool { selectedDate.map { $0 > Self.localDate(Date()) } ?? false }
     /// Stav sportovce on Today (active, sick, injured, on a break).
     private(set) var athleteStatus: AthleteStatus?
 
@@ -336,6 +341,8 @@ final class AppModel {
         guard !demo, phase == .signedIn, !refreshing.contains(tab) else { return }
         // Today is already loading (the app came back): no second request.
         if tab == .today && loading { return }
+        // A coming day is Food's only: Today and Health go back to today.
+        if tab != .food && tab != .training && showsFutureDay { selectedDate = nil }
         let day = tab == .training ? Self.localDate(Date()) : shownDay
         if let last = fetched[tab], last.day == day, Date().timeIntervalSince(last.at) < 300 { return }
         refreshing.insert(tab)
@@ -822,11 +829,18 @@ final class AppModel {
         await addDrink(ml: ml, kind: "water")
     }
 
-    /// One day back or forward from the day on screen; forward stops at today.
-    func showDay(offset: Int) async {
-        guard !demo, let shown = selectedDate ?? today?.date, let date = Self.shift(shown, by: offset) else { return }
+    /// One day back or forward from the day on screen; forward stops at today,
+    /// on Food (ahead) two weeks later.
+    func showDay(offset: Int, ahead: Bool = false) async {
         let todayDate = Self.localDate(Date())
-        selectedDate = date >= todayDate ? nil : date
+        guard !demo, let date = Self.shift(selectedDate ?? todayDate, by: offset) else { return }
+        if date > todayDate {
+            guard ahead, let last = Self.shift(todayDate, by: Self.foodDaysAhead), date <= last else { return }
+            selectedDate = date
+            await refreshFood()
+            return
+        }
+        selectedDate = date == todayDate ? nil : date
         await refreshDay()
     }
 
