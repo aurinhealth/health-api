@@ -967,7 +967,7 @@
 "Zdroj: %@" = "Source: %@";
 "Zdroje dat" = "Data sources";
 "Zdřímnutí" = "Naps";
-"Ze služeb, které připojíš (Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Google Health, Intervals.icu) and what you enter yourself.";
+"Ze služeb, které připojíš (Apple Zdraví, Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Apple Health, Google Health, Intervals.icu) and what you enter yourself.";
 "Zeptat se" = "Ask";
 "Zepředu" = "Front";
 "Zezadu" = "Back";
@@ -1800,3 +1800,29 @@
 "Už jsem v pořádku" = "I'm fine now";
 "Prodloužit" = "Extend";
 "Průběh tréninku, %@" = "Workout profile, %@";
+
+/* Sign-in and the first-run setup (LoginView, SetupFlowView, Passkeys) */
+"Pokračovat přes Apple" = "Continue with Apple";
+"Pokračovat přes Google" = "Continue with Google";
+"Pokračovat e-mailem" = "Continue with e-mail";
+"Přihlásit přes passkey" = "Sign in with a passkey";
+"Příště přes Face ID" = "Next time with Face ID";
+"Loadwise si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Loadwise saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no e-mail code.";
+"Zapnout" = "Turn on";
+"Přístupový klíč se nepodařilo ověřit. Zkus to znovu." = "The passkey couldn't be verified. Try again.";
+"Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
+"Odkud brát data" = "Where to take data from";
+"Tréninkové aplikace" = "Training apps";
+"Souhlasím se zpracováním zdravotních dat" = "I agree to the processing of my health data";
+"Zásady" = "Policy";
+"Z Apple Zdraví jsme vzali:" = "Taken from Apple Health:";
+"Z Google Health jsme vzali:" = "Taken from Google Health:";
+"Narození" = "Born";
+"Rok" = "Year";
+
+/* Training: the focus card and sheet (FocusSheet) */
+"Nastav si zaměření a cíle" = "Set your focus and goals";
+"Obecná kondice" = "General fitness";
+"Kdy máš čas" = "When you have time";
+"Zlepšit kondici" = "Get fitter";
+"Zhubnout" = "Lose weight";
