@@ -174,7 +174,7 @@ struct NotificationsSettingsView: View {
                     ReminderListRow(line: line, isOn: isOn(line.kind)) { editing = line.kind }
                 }
             }
-            SettingsGroup(footer: "Jednou ráno po synchronizaci noci, mezi 5:00 a 11:00: připravenost a krátké doporučení na den.") {
+            SettingsGroup {
                 SettingsToggle(title: "Ranní připravenost", isOn: $morning)
             }
         }
