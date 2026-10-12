@@ -124,7 +124,7 @@ struct StrainHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Zátěž dnes").font(Typo.body).foregroundStyle(Palette.muted)
+            Text("Námaha dnes").font(Typo.body).foregroundStyle(Palette.muted)
             HStack(alignment: .lastTextBaseline, spacing: 14) {
                 Text(Fmt.decimal(training.strain.score ?? 0))
                     .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
@@ -168,7 +168,7 @@ struct WeekStrainBars: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Zátěž po dnech tohoto týdne")
+        .accessibilityLabel("Námaha po dnech tohoto týdne")
         .accessibilityValue(days.map { Fmt.weekdayShort($0.date) + " " + value($0) }.joined(separator: ", "))
     }
 
@@ -247,7 +247,7 @@ struct NextSession: View {
     }
 
     private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, session.strain.map { L10n.f("+%@ zátěže", Fmt.decimal($0)) }]
+        [session.minutes.map { Fmt.duration($0) }, session.strain.map { L10n.f("+%@ námahy", Fmt.decimal($0)) }]
             .compactMap { $0 }.joined(separator: " · ")
     }
 

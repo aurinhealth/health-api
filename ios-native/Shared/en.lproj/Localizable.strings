@@ -25,7 +25,7 @@
 "%@: množství" = "%@: amounts";
 "%lld min" = "%lld min";
 "+%@ trénink" = "+%@ training";
-"+%@ zátěže" = "+%@ strain";
+"+%@ námahy" = "+%@ strain";
 ", pomocně: %@" = ", also: %@";
 "1 porce" = "1 serving";
 "14 dní %@–%@ %%" = "14 days %@–%@ %%";
@@ -130,9 +130,9 @@
 "Dnešní cíl je %@ vody." = "Today's goal is %@ of water.";
 "Dnešní noc ještě není nahraná." = "Last night hasn't synced yet.";
 "Dnešní posilovna je zrušená." = "Today's gym session is canceled.";
-"Dnešní připravenost, spánek a zátěž." = "Today's readiness, sleep and strain.";
+"Dnešní připravenost, spánek a námaha." = "Today's readiness, sleep and strain.";
 "Dnešní večerka" = "Tonight's bedtime";
-"Dnešní zátěž" = "Today's strain";
+"Dnešní námaha" = "Today's strain";
 "Do Google Health jen jídlo a pití, které si tady zapíšeš." = "Only the food and drinks you log here go to Google Health.";
 "Do Intervals.icu se nepodařilo zapsat." = "Couldn't write to Intervals.icu.";
 "Do Intervals.icu se nepodařilo zapsat: %@" = "Couldn't write to Intervals.icu: %@";
@@ -602,7 +602,7 @@
 "Nepoužívat polohu" = "Don't use a location";
 "Hledání se nepovedlo. Zkontroluj připojení." = "The search failed. Check your connection.";
 "V ukázce se poloha neukládá." = "The location isn't saved in the demo.";
-"Připravenost, spánek, zátěž, jídlo, pití a další trénink." = "Readiness, sleep, strain, food, drinks and your next workout.";
+"Připravenost, spánek, námaha, jídlo, pití a další trénink." = "Readiness, sleep, strain, food, drinks and your next workout.";
 "Připravit tyto tréninky" = "Prepare these workouts";
 "Připravuji…" = "Preparing…";
 "Příprava" = "Setup";
@@ -664,7 +664,7 @@
 "Sprint" = "Sprint";
 "Spánek" = "Sleep";
 "Spánek %@" = "Sleep %@";
-"Spánek %@ · zátěž %@" = "Sleep %@ · strain %@";
+"Spánek %@ · námaha %@" = "Sleep %@ · strain %@";
 "Spánek a budík" = "Sleep & alarm";
 "Spánek · noc na %@" = "Sleep · %@ night";
 "Spánkový dluh" = "Sleep debt";
@@ -904,9 +904,10 @@
 "Zvolené partie: %@" = "Selected muscles: %@";
 "Základ podle věku" = "Baseline for your age";
 "Zásady ochrany soukromí" = "Privacy policy";
-"Zátěž" = "Strain";
-"Zátěž dnes" = "Strain today";
-"Zátěž po dnech tohoto týdne" = "Strain by day this week";
+"Zátěž" = "Load";
+"Námaha" = "Strain";
+"Námaha dnes" = "Strain today";
+"Námaha po dnech tohoto týdne" = "Strain by day this week";
 "Zátěž po týdnech" = "Weekly load";
 "Zátěž týdne %@ z %@" = "Week load %@ of %@";
 "Zátěž v týdnu" = "Load this week";

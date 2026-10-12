@@ -90,7 +90,7 @@ struct SleepDetailContent: View {
                 }
                 VStack(spacing: 6) {
                     NeedRow(title: "Základ podle věku", minutes: sleep.tonight.base, signed: false)
-                    if sleep.tonight.strain > 0 { NeedRow(title: "Dnešní zátěž", minutes: sleep.tonight.strain) }
+                    if sleep.tonight.strain > 0 { NeedRow(title: "Dnešní námaha", minutes: sleep.tonight.strain) }
                     if sleep.tonight.hrv > 0 { NeedRow(title: "Nízké HRV", minutes: sleep.tonight.hrv) }
                     if sleep.tonight.debt > 0 { NeedRow(title: "Doplnění dluhu", minutes: sleep.tonight.debt) }
                     if sleep.tonight.naps > 0 { NeedRow(title: "Zdřímnutí", minutes: -sleep.tonight.naps) }
