@@ -61,9 +61,11 @@ export function dayStrain(rows, date) {
 // 0.5 per half hour (at most 2), and a yellow morning caps it at 12, a red one
 // at 6, as WHOOP's strain target follows recovery. The morning check-in is in
 // the readiness already. ±1.5 around the middle.
-export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0 } = {}) {
+export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false } = {}) {
   let mid = readiness != null ? 4 + 0.12 * readiness : 10;
   if (planned > 0) mid = (mid + planned) / 2;
+  // A day with nothing planned or done is a rest day: walking, light movement.
+  else if (rest) mid = Math.min(mid, 6.5);
   mid -= Math.min(2, (Number(debt) || 0) / 30 * 0.5);
   if (zone === "red") mid = Math.min(mid, 6); else if (zone === "yellow") mid = Math.min(mid, 12);
   const r1 = v => Math.round(v * 10) / 10;
@@ -228,7 +230,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       start: clockOf(night.startTime),
       end: clockOf(night.endTime)
     } : null,
-    strain: { score: strainNow, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0 }), readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
+    strain: { score: strainNow, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, series: last(30, "hrv") }
       : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, series: last(30, "hrv") } : null,

@@ -219,6 +219,7 @@ test("the day's strain target follows readiness, the plan, sleep debt and the zo
   assert.deepEqual(strainTarget({ readiness: 72, zone: "green", planned: 8.6 }), { low: 9.1, high: 12.1 });
   assert.ok(strainTarget({ readiness: 50, zone: "yellow", planned: 18 }).high <= 13.5);
   assert.ok(strainTarget({ readiness: 25, zone: "red" }).high <= 7.5);
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", rest: true }), { low: 5, high: 8 });
   const t = buildToday(input);
   assert.ok(t.strain.target.low < t.strain.target.high);
   assert.equal(t.strain.target.readiness, t.readiness.score);
