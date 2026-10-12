@@ -95,7 +95,10 @@ const isWorkout = a => a && (num(a.durationHours) ?? 0) >= 0.15;
 // (its event id, to move or delete it). A plan that was done is shown once, as
 // done; on a past day a plan nothing was done for is "missed".
 export function daySessions(d, date, training = {}, gymDay = null) {
-  const planned = (training.planned || []).filter(Boolean);
+  // The app's own copy of that day's gym plan (a planned:local-… strength
+  // event kept for Intervals.icu) is the same session as the gym plan.
+  const appGymCopy = w => gymDay?.exercises?.length && sportOf(w) === "strength" && /^(planned:)?local-/.test(String(w.id ?? ""));
+  const planned = (training.planned || []).filter(w => w && !appGymCopy(w));
   const matchedPlans = (training.matched || []).filter(m => m?.planned);
   // An activity paired with a plan counts even without a length (a Strava stub).
   const pairedIds = new Set(matchedPlans.map(m => String(m.actualId ?? "")).filter(Boolean));
