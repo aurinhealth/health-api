@@ -225,7 +225,7 @@ struct DrinkSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Oblíbené nápoje") {
-            SettingsGroup(title: "V rychlé nabídce", footer: "Oblíbené nápoje jsou v Jídle a v nabídce „+“. Klepnutím na nápoj se ukážou jeho množství.") {
+            SettingsGroup(title: "V rychlé nabídce") {
                 ForEach(Array(DrinkKind.all.enumerated()), id: \.element.id) { index, d in
                     if index > 0 { SettingsDivider() }
                     SettingsToggle(title: d.label, isOn: Binding(
@@ -249,7 +249,6 @@ struct DrinkSettingsView: View {
                                      amounts[id] = list.sorted()
                                      DrinkPrefs.setAmounts(id, list)
                                  })
-                        Text("Nejvýš 5 množství.").font(Typo.caption).foregroundStyle(Palette.faint)
                     }
                 }
             }
