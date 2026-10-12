@@ -51,7 +51,7 @@ async function api(minutes) {
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({})
   });
-  vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\nexport function coachChannel('), context);
+  vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\n// Earlier proposals of the assistant'), context);
   for (const text of routeModules) vm.runInContext(text.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
   vm.runInContext(slice(source, 'async function handleDashboardApi(', '\n// The concrete workout'), context);
   vm.runInContext(slice(source, 'async function workoutPreview(', '\nfunction logoResponse('), context);

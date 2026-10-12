@@ -1,8 +1,8 @@
 // Account routes of the dashboard API: me, consent, passkeys, e-mail, sign-out,
 // Apple ID, export and delete, subscription, training setup and onboarding.
 import { initialImport } from "./account-sync.js";
-import { onboardingStatus, trainingSetup, updateTrainingSetup, completeOnboarding } from "./onboarding.js";
-import { subscriptionStatus, markAiIntroSeen } from "./subscription.js";
+import { onboardingStatus, completeOnboarding } from "./onboarding.js";
+import { subscriptionStatus } from "./subscription.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
 import { bumpCacheVersion } from "./api-cache.js";
@@ -69,17 +69,6 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     }catch(error){return Response.json({message:error.message},{status:400});}
   }
   if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json(await subscriptionStatus(env),{headers:{'Cache-Control':'no-store'}});
-  if(url.pathname==='/app/api/subscription/intro'&&request.method==='POST'){
-    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    return Response.json(await markAiIntroSeen(env),{headers:{'Cache-Control':'no-store'}});
-  }
-  if(url.pathname==='/app/api/training-setup'){
-    if(request.method==='GET')return Response.json({status:'ok',training:await trainingSetup(env.DB)},{headers:{'Cache-Control':'no-store'}});
-    if(request.method==='PATCH'){
-      if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      try{const training=await updateTrainingSetup(env.DB,await request.json());await bumpCacheVersion(env.DB);return Response.json({status:'ok',training});}catch(error){return Response.json({message:error.message},{status:400});}
-    }
-  }
   if(url.pathname==='/app/api/onboarding'){
     if(request.method==='GET')return Response.json(await onboardingStatus(env),{headers:{'Cache-Control':'no-store'}});
     if(request.method==='POST'){

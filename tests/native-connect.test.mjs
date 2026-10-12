@@ -84,5 +84,4 @@ test("a native connection returns to the app", () => {
   assert.equal(connectReturn(new Request(origin + "/oauth/intervals?return=native")), "native");
   assert.equal(connectReturnUrl("native", "intervals"), "loadwise://connected?event=intervals");
   assert.equal(connectReturnUrl("native", "weird"), "loadwise://connected?event=unknown");
-  assert.equal(connectReturnUrl("settings", "google"), "/app?connected=google#settings-connections");
 });

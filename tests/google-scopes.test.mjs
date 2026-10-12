@@ -32,10 +32,11 @@ test("connecting asks for Google Health only; 'extra' adds the optional scopes i
 
 test("Google's consent screen comes only after the app's own disclosure and consent", async () => {
   // Google Health data policy: the disclosure and consent in the app come right before Google's.
-  for (const [path, back] of [["/oauth/google", "/app?connect=google"], ["/oauth/google?extra=1", "/app?connect=google-extra"], ["/oauth/google?return=setup", "/app?connect=google&return=setup"]]) {
+  // A visit without it (a bookmark, an old link) never reaches Google.
+  for (const path of ["/oauth/google", "/oauth/google?extra=1", "/oauth/google?return=native"]) {
     const response = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu" + path), google, "/oauth/google");
-    assert.equal(response.status, 302);
-    assert.equal(response.headers.get("Location"), back);
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("Location"), null);
   }
 });
 
