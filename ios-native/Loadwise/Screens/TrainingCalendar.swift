@@ -319,6 +319,7 @@ struct MonthGrid: View {
 // MARK: - The chosen day
 
 struct CalendarDayList: View {
+    @Environment(AppModel.self) private var model
     let date: String
     let today: String
     let day: CalendarDay?
@@ -331,7 +332,7 @@ struct CalendarDayList: View {
                 Text(heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
                 if let day, day.count > 0 {
-                    Text(Fmt.hoursMinutesLong(day.minutes) + " · " + Fmt.int(day.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(Fmt.hoursMinutesLong(day.minutes) + " · " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
             .padding(.bottom, 4)
@@ -353,6 +354,11 @@ struct CalendarDayList: View {
         }
         .padding(.horizontal, 16)
         .sheet(item: $watch) { WatchActivityDetail(activity: $0) }
+    }
+
+    /// The day's calories with the user's choices for flagged sessions.
+    private func dayKcal(_ day: CalendarDay) -> Double {
+        day.activities.filter { $0.status == "done" }.reduce(0) { $0 + (model.countedKcal($1) ?? 0) }
     }
 
     private var heading: String {
@@ -395,7 +401,7 @@ struct CalendarActivityRow: View {
                 }
             }
             Spacer(minLength: 6)
-            if let kcal = activity.kcal, kcal > 0 {
+            if let kcal = model.countedKcal(activity), kcal > 0 {
                 let check = kcalToCheck
                 VStack(alignment: .trailing, spacing: 0) {
                     HStack(spacing: 4) {
