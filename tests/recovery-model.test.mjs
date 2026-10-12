@@ -131,7 +131,7 @@ test('a young baseline has its SD pulled toward a typical one until 30 days',()=
   const young=recoveryReadiness({rows:[...same(14),{id:day(14),hrv:45,restingHR:55}],date:day(14)});
   const settled=recoveryReadiness({rows:[...same(30),{id:day(30),hrv:45,restingHR:55}],date:day(30)});
   // 14 identical days then 5 ms less: no longer a −2.1 SD event; at 30 days only the floors apply.
-  assert.ok(young.components.hrv.z>-2&&young.components.hrv.z>settled.components.hrv.z,String(young.components.hrv.z));
+  assert.ok(young.components.hrv.z>-1.5&&young.components.hrv.z>settled.components.hrv.z,String(young.components.hrv.z));
   assert.ok(Math.abs(settled.components.hrv.z-Math.log(45/50)/0.05)<1e-9);
   assert.ok(young.components.restingHR.z<settled.components.restingHR.z);assert.equal(settled.components.restingHR.z,5/1.5);
 });

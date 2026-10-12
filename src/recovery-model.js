@@ -166,10 +166,11 @@ export function recoveryReadiness(input) {
   const today = rows.find(r => r && r.id === date) || {};
   const end = Date.parse(date + "T12:00:00Z"), components = {}, flags = [];
   // A young baseline (under 30 days) has an unreliable SD: 14 near-identical
-  // days would make a normal 5 ms dip look like −2 SD. Until 30 days the SD is
-  // pulled toward a typical one (lnRMSSD 0.10, Plews 2013 athletes; resting HR
-  // 3 bpm) in proportion to the days missing; the floors below still apply.
-  const settled = (b, prior) => b.count >= 30 ? b.sd : (b.count * b.sd + (30 - b.count) * prior) / 30;
+  // days would make a normal 5 ms dip look like −2 SD. Until 30 days the
+  // variance is blended with a typical one (lnRMSSD 0.10, Plews 2013 athletes;
+  // resting HR 3 bpm) in proportion to the days missing, so 14 flat days still
+  // get most of the prior; the floors below still apply.
+  const settled = (b, prior) => { const w = Math.min(1, b.count / 30); return Math.sqrt(w * b.sd ** 2 + (1 - w) * prior ** 2); };
   // HRV only against days measured the same way: Apple Watch reports SDNN,
   // Google's watches RMSSD, so one baseline over both mixes two scales. The
   // source tag carries the measure ("apple-health:sdnn", google-dashboard.js).
