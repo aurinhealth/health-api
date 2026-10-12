@@ -120,7 +120,7 @@ import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { handleStravaOAuth, disconnectStrava, syncStravaWeight } from "./strava.js";
 import { syncOverview, saveSyncPrefs, sendActivity, activitySends, retrySend, retrySyncSends, readSyncPrefs, healthAllowed, DESTINATIONS, googleMissingScopes } from "./sync-destinations.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, listUsersAndInvites, inviteUser, removeInvite, setUserDisabled, changeUserEmail, openSignup } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin, handlePasskeyApi, listPasskeys } from "./passkeys.js";
@@ -370,9 +370,9 @@ async function staticRoute(url, request, env) {
   if (url.pathname === "/app/i18n-en.js") return englishScript(url);
   if (url.pathname === "/app/dashboard-client.js") return new Response(dashboardClient, { status: 200, headers: { "content-type": "application/javascript; charset=utf-8", "cache-control": scriptCacheControl(url, CLIENT_VERSION) } });
   if (url.pathname === "/") return overviewPage(request);
-  if (url.pathname === "/privacy") return privacyPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
+  if (url.pathname === "/privacy") return privacyPage(request, { apple: appleConfigured(env), email: emailConfigured(env), open: openSignup(env) });
   if (url.pathname === "/terms") return termsPage(request);
-  if (url.pathname === "/support") return supportPage(request, { apple: appleConfigured(env), email: emailConfigured(env) });
+  if (url.pathname === "/support") return supportPage(request, { apple: appleConfigured(env), email: emailConfigured(env), open: openSignup(env) });
   if (url.pathname === "/logo.svg") return logoResponse();
   return Response.json({name:"Loadwise",short_name:"Loadwise",start_url:"/app",scope:"/app",display:"standalone",background_color:"#0a0d12",theme_color:"#0d131a",icons:[{src:"/logo.svg",sizes:"any",type:"image/svg+xml",purpose:"any maskable"}]},{headers:{"Content-Type":"application/manifest+json; charset=utf-8","Cache-Control":"public, max-age=3600"}});
 }
