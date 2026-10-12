@@ -179,7 +179,7 @@ struct TrainingModeView: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let left = max(0, Int(end.timeIntervalSince(context.date).rounded()))
                 Text(String(format: "%d:%02d", left / 60, left % 60))
-                    .font(Typo.number(96)).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
+                    .font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
                     .monospacedDigit()
             }
             HStack(spacing: 10) {
