@@ -57,13 +57,13 @@ struct SleepSettingsForm: View {
                         }
                     }
                     if let need = tonight.need {
-                        Text(L10n.f("Potřeba na dnešní noc %@. Počítá se z cíle, dnešní zátěže, HRV a spánkového dluhu.", Fmt.duration(need)))
+                        Text(L10n.tr("Potřeba na dnešní noc") + " " + Fmt.duration(need))
                             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
 
-            SettingsGroup(title: "Cíl spánku", footer: "Automaticky podle věku (dospělí 7 h 30 min až 8 h). Vlastní cíl nahradí základ, dnešní zátěž a dluh se k němu dál přičítají.") {
+            SettingsGroup(title: "Cíl spánku") {
                 HStack {
                     Text("Chci spát").font(.body).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)
@@ -78,23 +78,20 @@ struct SleepSettingsForm: View {
                 .padding(.leading, 16).padding(.trailing, 8).frame(minHeight: 50)
             }
 
-            SettingsGroup(title: "Budík", footer: "Podle budíku se počítá, kdy jít spát. Bez budíku se bere obvyklé vstávání z posledních nocí, a když ještě žádné nejsou, večerka se nespočítá.") {
+            SettingsGroup(title: "Budík") {
                 alarmRow("Pracovní dny", subtitle: "pondělí až pátek", isOn: $workAlarm, time: $workTime)
                 SettingsDivider()
                 alarmRow("Víkend", subtitle: "sobota a neděle", isOn: $weekendAlarm, time: $weekendTime)
             }
 
             if SystemAlarm.supported {
-                SettingsGroup(footer: "iPhone pak v tyto časy zazvoní jako budík v Hodinách, i v tichém režimu. Když časy změníš a uložíš, budík se posune.") {
-                    SettingsToggle(title: "Budit mě v iPhonu", subtitle: "budík od Loadwise, pracovní dny i víkend", isOn: $systemAlarm)
+                SettingsGroup {
+                    SettingsToggle(title: "Budit mě v iPhonu", isOn: $systemAlarm)
                 }
                 if let alarmNote {
                     Text(alarmNote).font(Typo.small).foregroundStyle(alarmOK ? Palette.green : Palette.rust)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            } else {
-                Text("Budík tady počítá večerku. Aby iPhone podle něj i zvonil, potřebuje iOS 26; do té doby si stejný čas nastav v Hodinách.")
-                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
 
             if saved {
@@ -197,7 +194,6 @@ struct SleepSettingsCard: View {
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     } else {
                         Text("Nastav si budík").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                        Text("Podle budíku a cíle spánku spočítám, kdy jít spát.").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 Spacer(minLength: 8)
