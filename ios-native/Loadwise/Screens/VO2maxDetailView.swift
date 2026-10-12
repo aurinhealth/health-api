@@ -19,6 +19,7 @@ struct VO2maxDetailView: View {
                 }
             }
         }
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -62,7 +63,7 @@ struct VO2maxContent: View {
 
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět"), action: back)
+                BackSlot(action: back)
                 Spacer()
                 SectionLabel(text: "VO2max")
                 Spacer()

@@ -324,6 +324,12 @@ struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
     var suitability: Double? = nil
     /// How to ride or run it, fuelling and terrain (src/workout-explanation.js).
     var guide: Guide? = nil
+    /// The AI's pick for today with its reason (src/ai-workout-pick.js).
+    var ai: AIPick? = nil
+
+    struct AIPick: Decodable, Equatable, Hashable {
+        let reason: String
+    }
 
     struct Guide: Decodable, Equatable {
         let title: String?

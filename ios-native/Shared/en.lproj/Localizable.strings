@@ -1826,3 +1826,11 @@
 "Kdy máš čas" = "When you have time";
 "Zlepšit kondici" = "Get fitter";
 "Zhubnout" = "Lose weight";
+
+"Pocit" = "Feeling";
+"ranní pocit ji snížil" = "your morning answer lowered it";
+"zatím bez dat" = "no data yet";
+"cíl %@–%@" = "target %@–%@";
+"Dnešní cíl" = "Today's target";
+"nic v plánu" = "nothing planned";
+"Navrženo AI" = "Suggested by AI";

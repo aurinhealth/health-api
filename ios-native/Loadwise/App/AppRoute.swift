@@ -139,7 +139,11 @@ struct HealthRoute: View {
     var body: some View {
         if let health = model.health {
             switch route {
-            case .readiness: DetailScreen(glow: Palette.Glow.health) { ReadinessDetailContent(health: health) }
+            case .readiness:
+                // Today's check-in stays changeable here once Today hides it.
+                DetailScreen(glow: Palette.Glow.health) {
+                    ReadinessDetailContent(health: health, checkin: model.selectedDate == nil && !model.demo && model.today != nil ? .some(model.today?.checkin) : nil)
+                }
             case .heart: DetailScreen(glow: Palette.Glow.health) { HeartDetailContent(health: health) }
             case .weight: WeightDetailView(health: health)
             default: SleepDetailView(health: health)

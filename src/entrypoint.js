@@ -74,6 +74,7 @@ import { handleGoogleOAuth } from "./google-oauth.js";
 import { importStrengthHistory, getStrengthHistory, parseStrengthPlan, removeManualSets, strengthSessions } from "./strength-history.js";
 import { searchCookbookRecipes, logFood, mealConsumedAt } from "./food-log.js";
 import { explainWorkout } from "./workout-explanation.js";
+import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, pendingScheduledWorkouts, hasFeedback, markScheduleCompleted, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
@@ -93,7 +94,7 @@ import { adjustGymPlan, cleanGymRows, catalogNames } from "./gym-adjust.js";
 import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
 import { readGymPlan, cancelGymPlan, restoreGymPlan, ensureGymPlans, moveGymPlan } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
-import { screenText, SCREENS } from "./screen-texts.js";
+import { screenText, SCREENS, markScreenTextsStale } from "./screen-texts.js";
 import { nightDetail } from "./night-detail.js";
 import { applyGymSwap } from './coach-gym-adjustment.js';
 import { dashboardSyncStatus,startDashboardSync } from './dashboard-sync.js';
@@ -141,6 +142,22 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:" + date, () => googleDashboard(env.DB, date), { ttl: 120 });
 
 // Requests that read or preview only and so keep the cache.
+// The screen data the app just loaded, per user and path, for 30 s: the
+// coach's text asks right after and compares the same state instead of
+// building it again. Any write by the user drops it.
+const SCREEN_PATHS = new Set(["/app/api/today", "/app/api/training", "/app/api/food-today"]);
+const recentScreens = new Map();
+function rememberScreen(userId, path, json) {
+  if (recentScreens.size > 500) recentScreens.clear();
+  recentScreens.set(userId + "|" + path, { at: Date.now(), json });
+}
+function recentScreen(userId, path) {
+  const hit = recentScreens.get(userId + "|" + path);
+  return hit && Date.now() - hit.at < 30000 ? hit.json : null;
+}
+function forgetScreens(userId) {
+  for (const key of recentScreens.keys()) if (key.startsWith(userId + "|")) recentScreens.delete(key);
+}
 // Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
 const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
@@ -311,10 +328,19 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
+      // Any change by the user lets the coach's texts answer it at once (screen-texts.js).
+      const planChange = request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname);
+      if (request.method !== "GET") forgetScreens(user.id);
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
       // A change by the user makes the cached coach inputs outdated.
       if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
+      // A changed plan makes the coach's text of the day outdated (screen-texts.js).
+      if (planChange && response.ok) await markScreenTextsStale(env).catch(() => {});
+      // Today's screen data, kept a moment for the coach's text that follows it.
+      if (request.method === "GET" && response.ok && SCREEN_PATHS.has(url.pathname) && !url.searchParams.get("date")) {
+        response.clone().json().then(json => rememberScreen(user.id, url.pathname, json)).catch(() => {});
+      }
       // A session in use gets a fresh 30-day cookie once a day (dashboard-auth.js).
       return slidingSession(request, response, sessionSecret(rawEnv));
     }
@@ -1620,7 +1646,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const screen=String(url.searchParams.get('screen')||'');
     if(!SCREENS.includes(screen))return Response.json({message:L('Neznámá obrazovka.', 'Unknown screen.')},{status:400});
     const path={today:'/app/api/today',training:'/app/api/training',food:'/app/api/food-today'}[screen];
-    const load=()=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
+    const kept=session.user?.id!=null?recentScreen(session.user.id,path):null;
+    const load=()=>kept?Promise.resolve(kept):handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():null).catch(()=>null);
     try{return Response.json(await screenText(env,{screen,load}),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500});}
   }
@@ -1677,13 +1704,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [health,fitness,sleep,weight,profile]=await Promise.all([
+      const [health,fitness,sleep,weight,profile,checkin,muscle]=await Promise.all([
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
-        read('/health/weight'),dashboardProfile(env).catch(()=>null)
+        read('/health/weight'),dashboardProfile(env).catch(()=>null),getCheckin(env.DB,date).catch(()=>null),
+        // Muscle mass from a scale through Apple Health (lean body mass).
+        env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
       ]);
-      return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -2221,6 +2250,13 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       }
       let generated=planWorkout?await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:planWorkout.id,resizeTo:planWorkout.minutes}):await generateWorkout(env.DB,{sport:genSport,environment,date,coach,availabilityMinutes:resizeTo??sessionMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo});
       if(!planWorkout&&sessionMinutes&&resizeTo==null&&generated.workout?.duration_minutes>sessionMinutes)generated=await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:generated.workout.id,resizeTo:sessionMinutes});
+      // Today's proposal in the library: the AI picks among the rules' safe
+      // candidates for the morning and says why (ai-workout-pick.js).
+      if(body.ai===true&&date===localToday()&&!planWorkout&&!body.workoutId&&!(Number(body.variant)>0)&&resizeTo==null&&generated.status==='ok'){
+        const before=generated.workout?.id;
+        generated=await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today:{score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await getCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null}});
+        if(generated.workout?.id!==before)try{generated.explanation=explainWorkout(generated.workout,{coach,environment:generated.workout.environment||environment,thresholds,sport:genSport});}catch{}
+      }
       const planInfo=planned&&plan.pw?{name:plan.pw.template.name,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec.phase,kind:planned.kind,followed:Boolean(planWorkout)}:null;
       if(planInfo&&generated.explanation?.why){
         const head=planInfo.name+L(' · týden ',' · week ')+planInfo.week+'/'+planInfo.weeks;
@@ -2344,7 +2380,9 @@ async function trainingGymPlans(env,from,to){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))).length};
+    // done: sets per exercise that were ticked off (Hotovo) or have reps written in.
+    const isDone=x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))||Number(x?.[6])>0,count=list=>list.reduce((m,x)=>{const n=String(x[1]).slice(0,80);m[n]=(m[n]||0)+1;return m;},{});
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,setsBy:count(rows),done:count(rows.filter(isDone))};
   }
   return out;
 }
