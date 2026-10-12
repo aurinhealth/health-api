@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createD1} from './helpers/d1.mjs';
+import {grantAiConsent} from './helpers/consent.mjs';
 import {scopedDb} from '../src/tenancy.js';
 import {completeOnboarding,onboardingStatus,hasRecentActivityData} from '../src/onboarding.js';
 import {subscriptionStatus,assertAIAccess} from '../src/subscription.js';
@@ -27,8 +28,8 @@ test('account setup works without providers, persists per account and allows ski
  await completeOnboarding(env,input());assert.equal((await a.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=? AND source_family='manual'").bind(1).first()).n,1);
  assert.equal(await hasRecentActivityData(a),false);
 });
-test('pilot grants AI to invited accounts; an enabled paywall checks server-side expiration',async()=>{
- const {a,env}=setup();assert.equal((await subscriptionStatus(env)).aiAccess,true);await assertAIAccess(env);
+test('pilot grants AI to consenting invited accounts; an enabled paywall checks server-side expiration',async()=>{
+ const {a,raw,env}=setup();grantAiConsent(raw,1);assert.equal((await subscriptionStatus(env)).aiAccess,true);await assertAIAccess(env);
  const paid={...env,AI_PAYWALL_ENABLED:'true'};await assert.rejects(assertAIAccess(paid),e=>e.status===402);
  await a.prepare("INSERT INTO subscriptions(user_id,plan,valid_until) VALUES(1,'ai','2099-01-01')").run();assert.equal((await subscriptionStatus(paid)).aiAccess,true);
  await a.prepare("UPDATE subscriptions SET valid_until='2000-01-01' WHERE user_id=1").run();await assert.rejects(assertAIAccess(paid),e=>e.status===402);

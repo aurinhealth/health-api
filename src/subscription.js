@@ -36,9 +36,11 @@ export async function subscriptionStatus(env) {
     const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first();
     if(row?.plan==='ai' && row.valid_until && Date.parse(row.valid_until)>Date.now())plan='ai';
   }
-  // AI sends the user's data to OpenAI, so a user's requests and jobs (userEnv)
-  // also need the AI consent (consent.js).
-  const aiConsent=env.CONSENT_REQUIRED?(await consentStatus(env)).aiAllowed:true;
+  // AI sends the user's data to OpenAI, so it needs the user's AI consent
+  // (consent.js); the owner has it until he turns it off. Fail-closed: any env
+  // with a database is a user's, whether or not userEnv marked CONSENT_REQUIRED.
+  // Only a bare env without a database (local tools, tests) skips the check.
+  const aiConsent=env.DB||env.RAW_DB||env.CONSENT_REQUIRED||env.USER_ID!=null?(await consentStatus(env)).aiAllowed:true;
   return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiConsent,aiAccess:aiConsent&&(!enforced||plan==='ai'),billingActive:enforced,checkoutAvailable:false,features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
     terms:L('Během pilotu pro pozvané jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'During the invitation-only pilot, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
 }

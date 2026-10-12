@@ -44,7 +44,7 @@ import {gymExerciseCatalog,gymAlternatives,gymLoadEstimate} from './gym-catalog.
 import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import {validateCoachActions,actionSafetyContext,actionsNote,actionSummary} from './coach-actions.js';
-import { buildReviewInput, reviewDay, usageCost } from "./coach-review.js";
+import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { loadSeries, dailyLoads, sessionsFrom } from "./training-load.js";
 import {savePersonalFood,searchFoodCatalog as searchPersonalFoods} from './personal-foods.js';
@@ -130,7 +130,7 @@ import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth } from "./app
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
-import { lang, withLang, storedLanguage, rememberLanguage, L } from "./lang.js";
+import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactHeartRate } from "./heart-rate-compaction.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, dayStartUtc, localNow, localToday, localDate, localHour, timeZone } from "./user-time.js";
@@ -154,8 +154,8 @@ async function forEachUser(env, providers, fn) {
       // Texts written by a job (workouts sent to Intervals.icu, …) use the user's
       // app language, and its days the user's time zone.
       if (providers.some(p => (scoped.CONNECTED_PROVIDERS || []).includes(p))) {
-        const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]);
-        results.push({ userId: user.id, result: await withLang(language, () => withTimeZone(zone, () => fn(scoped, user))) });
+        const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]), unitsChoice = await storedUnits(env.DB, user.id);
+        results.push({ userId: user.id, result: await withLang(language, () => withUnits(unitsChoice, () => withTimeZone(zone, () => fn(scoped, user)))) });
       }
     } catch (error) {
       console.error("Per-user job failed", user.id, error.message);
@@ -245,11 +245,15 @@ const worker = {
     const cookieLang = /(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get('cookie') || '')?.[1];
     if (user && headerLang) await rememberLanguage(rawEnv.DB, user.id, headerLang);
     const language = headerLang || cookieLang || (user ? await storedLanguage(rawEnv.DB, user.id) : 'cs');
+    // Units the same way (X-Units: metric|imperial), remembered so cron jobs and e-mails use them.
+    const headerUnits = /^(metric|imperial)$/i.test(String(request.headers.get('X-Units') || '').trim()) ? request.headers.get('X-Units').trim().toLowerCase() : null;
+    if (user && headerUnits) await rememberUnits(rawEnv.DB, user.id, headerUnits, language);
+    const unitsChoice = headerUnits || (user ? await storedUnits(rawEnv.DB, user.id) : 'metric');
     // Days follow the user's time zone: the browser's, sent with app requests; otherwise the remembered one.
     const headerZone = validTimeZone(request.headers.get('X-Time-Zone'));
     if (user && headerZone) await rememberTimeZone(rawEnv.DB, user.id, headerZone);
     const zone = headerZone || (user ? await storedTimeZone(rawEnv.DB, user.id) : DEFAULT_TIME_ZONE);
-    return withLang(language, () => withTimeZone(zone, () => routeRequest(request, env, ctx, { url, rawEnv, principal, user, isPublic })));
+    return withLang(language, () => withUnits(unitsChoice, () => withTimeZone(zone, () => routeRequest(request, env, ctx, { url, rawEnv, principal, user, isPublic }))));
   }
 };
 
@@ -1087,7 +1091,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({})),date=/^\d{4}-\d{2}-\d{2}$/.test(String(body.date||''))?body.date:localToday();
       const [inputs,gym,prefs,feedback,notes]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),readGymPlan(env.DB,date).catch(()=>null),getWeekPlan(env.DB,date).catch(()=>null),recentWorkoutFeedback(env.DB,shiftDate(date,-21)).catch(()=>[]),listReflections(env.DB,{limit:3}).catch(()=>[])]);
       const gymRows=gym?.stored?parseStrengthPlan(gym.values).rows||[]:[];
-      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text}))});
+      // The recovery model's readiness of the reviewed day, or today's for a day ahead (the inputs are already loaded and cached).
+      const readinessDate=date<localToday()?date:localToday();
+      const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await getCheckin(env.DB,readinessDate).catch(()=>null)});
+      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
       const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date)});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
@@ -2225,8 +2232,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(manual)await completeLocalWorkout(env.DB,link.intervals_event_id,{minutes,rpe,notes});
       const intervals=rpe!=null?await writeIntervalsRpe(env,activityId,rpe):{status:'skipped'};
       // The coach's note is written in the background; the dashboard picks it up.
-      const reflect=validDate(scheduledDate)&&Boolean(env.OPENAI_API_KEY)&&(await subscriptionStatus(env)).aiAccess;
-      if(reflect)ctx.waitUntil(createReflection(env,{date:scheduledDate,workoutId,rpe,notes},day=>reflectionData(env,ctx,internalAuth,day,workoutId)).catch(error=>console.error('Coach reflection failed',error.message)));
+      // Without AI access (consent, subscription, no key) it is the rule-based note, never sent to OpenAI.
+      const reflect=validDate(scheduledDate),aiAllowed=Boolean(env.OPENAI_API_KEY)&&(await subscriptionStatus(env).catch(()=>({aiAccess:false}))).aiAccess;
+      const ruleEnv={...env};if(!aiAllowed)delete ruleEnv.OPENAI_API_KEY;
+      if(reflect)ctx.waitUntil(createReflection(ruleEnv,{date:scheduledDate,workoutId,rpe,notes},day=>reflectionData(env,ctx,internalAuth,day,workoutId)).catch(error=>console.error('Coach reflection failed',error.message)));
       return Response.json({...result,completedPercent,intervals,reflection:reflect?'pending':'unavailable'},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/schedule'&&request.method==='POST'){
