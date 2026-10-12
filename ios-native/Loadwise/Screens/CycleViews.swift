@@ -110,11 +110,11 @@ struct CycleHealthSection: View {
 /// "7. prášek z 21" with Vzato, the pack as a row of bars.
 struct PillCard: View {
     @Environment(AppModel.self) private var model
-    let pill: Pill
+    let pill: PillDay
     let date: String
     @State private var saving = false
 
-    init(pill: Pill, date: String) {
+    init(pill: PillDay, date: String) {
         self.pill = pill
         self.date = date
     }

@@ -68,7 +68,7 @@ struct CycleState: Decodable, Equatable {
     var daysToNext: Int? = nil
     /// Hormonal contraception: days since the last bleeding.
     var daysSinceBleeding: Int? = nil
-    var pill: Pill? = nil
+    var pill: PillDay? = nil
     var today: Logged? = nil
 
     struct Next: Decodable, Equatable {
@@ -86,7 +86,7 @@ struct CycleState: Decodable, Equatable {
 }
 
 /// The pill of the pack on a day (src/cycle-model.js pillState).
-struct Pill: Decodable, Equatable {
+struct PillDay: Decodable, Equatable {
     let pack: String
     let number: Int?
     let of: Int
@@ -117,7 +117,7 @@ struct TodayCycle: Decodable, Equatable {
     var phase: String? = nil
     let flow: Int
     let symptoms: [String]
-    var pill: Pill? = nil
+    var pill: PillDay? = nil
     let eased: Bool
     var keptPlan: Bool? = nil
     var note: String? = nil
