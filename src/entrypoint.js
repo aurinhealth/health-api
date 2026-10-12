@@ -37,7 +37,7 @@ import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
 import {normalizeProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
-import {loadEffectiveProfile,refreshSuggestions} from './profile-suggestions.js';
+import {loadEffectiveProfile,loadProfiles,refreshSuggestions} from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {gymExerciseCatalog,gymAlternatives,gymLoadEstimate} from './gym-catalog.js';
@@ -109,7 +109,8 @@ import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, generateTechnique, exerciseInUse } from "./exercise-technique.js";
-import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange } from "./dashboard-auth.js";
+import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange, slidingSession } from "./dashboard-auth.js";
+import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { internalHeaders } from "./internal-auth.js";
 import { aiAllowance } from "./ai-usage.js";
 import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
@@ -270,6 +271,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       return legacyHealthApi.fetch(request, env, ctx);
     }
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
+    // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
+    const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
+    if (siteAssociation) return siteAssociation;
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
     if (url.pathname === "/.well-known/apple-developer-domain-association.txt" && request.method === "GET") {
       if (!env.APPLE_DOMAIN_ASSOCIATION) return new Response("Not configured", { status: 404 });
@@ -305,7 +309,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
       // A change by the user makes the cached coach inputs outdated.
       if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
-      return response;
+      // A session in use gets a fresh 30-day cookie once a day (dashboard-auth.js).
+      return slidingSession(request, response, sessionSecret(rawEnv));
     }
     if (!user) return unauthorizedResponse();
     return app.fetch(request, env, ctx);
@@ -1678,15 +1683,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=[];for(let d=start;d<=end;d=shiftDate(d,1))dates.push(d);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const [days,gym,health,fitness,insights,coaches,profile]=await Promise.all([
+      const [days,gym,health,fitness,insights,coaches,profiles]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
         trainingGymPlans(env,start,end).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
         loadFitnessInsights(env.DB,date).catch(()=>({})),
-        api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null)
+        api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null}))
       ]);
-      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profile||{}}),{headers:{'Cache-Control':'no-store'}});
+      // The saved profile says whether the athlete has set a focus yet ("Nastav si zaměření a cíle").
+      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
