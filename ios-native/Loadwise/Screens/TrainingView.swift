@@ -127,7 +127,7 @@ struct StrainHero: View {
             Text("Zátěž dnes").font(Typo.body).foregroundStyle(Palette.muted)
             HStack(alignment: .lastTextBaseline, spacing: 14) {
                 Text(Fmt.decimal(training.strain.score ?? 0))
-                    .font(Typo.number(104))
+                    .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
                     .foregroundStyle(Palette.ink)
                 if let target = training.strain.target {
                     Pill(text: L10n.f("cíl ~%@", Fmt.decimal(target)), foreground: Palette.amber, background: Palette.amberSoft)
@@ -264,7 +264,7 @@ struct NextSession: View {
 
     private var when: String {
         let day = Fmt.capitalized(Fmt.relativeDay(session.date, today: today))
-        guard let time = session.time else { return day }
+        guard let time = ClockText.format(optional: session.time) else { return day }
         return session.date == today ? time : day + " " + time
     }
 

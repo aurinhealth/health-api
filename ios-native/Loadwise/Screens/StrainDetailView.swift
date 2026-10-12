@@ -141,7 +141,7 @@ struct StrainDetailContent: View {
     }
 
     private func meta(_ s: WeekSession) -> String {
-        [s.time, s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
+        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var movementMeta: String {
@@ -204,6 +204,7 @@ struct StrainDial: View {
             .frame(width: 150)
             .offset(y: 4)
         }
+        .dynamicTypeSize(...DynamicTypeSize.denseCap)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: L10n.tr("Zátěž") + " " + Fmt.decimal(score) + ", " + subtitle))
     }

@@ -28,7 +28,7 @@ struct SleepDetailContent: View {
             SectionLabel(text: L10n.f("Spánek · noc na %@", weekday(health.date))).padding(.top, 24)
             if let night = sleep.night {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).foregroundStyle(Palette.ink)
+                    Text(Fmt.hoursMinutes(night.minutes)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     if let index = night.index { Pill(text: L10n.f("index %@", String(index)), foreground: Palette.indigo, background: Palette.lilac) }
                 }
                 .padding(.top, 12)
@@ -39,7 +39,7 @@ struct SleepDetailContent: View {
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 12)
 
             if let night = sleep.night {
-                ThreeCells(cells: [("Usnutí", night.start ?? "–"), ("Probuzení", night.end ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
+                ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
                     .padding(.top, 26)
                 if let stages = night.stages {
                     SectionLabel(text: "Fáze spánku").padding(.top, 30)
@@ -47,9 +47,9 @@ struct SleepDetailContent: View {
                         if let segments = detail?.night?.segments, !segments.isEmpty {
                             Hypnogram(segments: segments)
                             HStack {
-                                Text(night.start ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
+                                Text(ClockText.format(optional: night.start) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
                                 Spacer()
-                                Text(night.end ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
+                                Text(ClockText.format(optional: night.end) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
                             }
                             .padding(.leading, 56)
                         }
@@ -111,7 +111,7 @@ struct SleepDetailContent: View {
 
             if let reg = sleep.regularity {
                 SectionLabel(text: L10n.f("Pravidelnost · %@ nocí", String(reg.nights.count))).padding(.top, 32)
-                Text(L10n.f("Usínáš obvykle ve %@, odchylka ± %@ min.", reg.bedtime, String(reg.spread)))
+                Text(L10n.f("Usínáš obvykle ve %@, odchylka ± %@ min.", ClockText.format(reg.bedtime), String(reg.spread)))
                     .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 10)
                 // Later bedtime = lower bar, so a late night stands out.
                 let late: Double = reg.nights.map(\.value).max() ?? 0
@@ -141,7 +141,7 @@ struct SleepDetailContent: View {
             s = (minutes >= Double(health.sleep.need) ? L10n.tr("Noc pokryla tvoji potřebu.") : L10n.f("O %@ méně, než potřebuješ.", Fmt.duration(health.sleep.need - Int(minutes)))) + " "
         }
         if let bed = t.bedtime {
-            s += L10n.f("Dnes potřebuješ %@, jdi spát do %@.", Fmt.duration(t.need), bed)
+            s += L10n.f("Dnes potřebuješ %@, jdi spát do %@.", Fmt.duration(t.need), ClockText.format(bed))
         } else {
             s += L10n.f("Dnes potřebuješ %@.", Fmt.duration(t.need))
         }
@@ -311,7 +311,7 @@ struct HeartDetailContent: View {
             if let hrv = health.hrv {
                 Text("Variabilita srdečního tepu v noci").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
                 HStack(alignment: .lastTextBaseline, spacing: 10) {
-                    Text(Fmt.int(hrv.value ?? hrv.series.last?.value)).font(Typo.number(104)).foregroundStyle(Palette.ink)
+                    Text(Fmt.int(hrv.value ?? hrv.series.last?.value)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text("ms").font(Typo.small).foregroundStyle(Palette.faint)
                     if let s = status(hrv) { Pill(text: s.0, foreground: s.1, background: s.2) }
                 }
@@ -423,7 +423,7 @@ struct WeightDetailContent: View {
             SectionLabel(text: "Váha a složení těla").padding(.top, 24)
             if let w = health.weight {
                 HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    Text(Fmt.decimal(Units.weight(w.latest))).font(Typo.number(104)).foregroundStyle(Palette.ink)
+                    Text(Fmt.decimal(Units.weight(w.latest))).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text(Units.weightUnit).font(Typo.small).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 24)

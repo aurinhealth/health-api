@@ -913,14 +913,13 @@ final class SourceActions {
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let date = iso.date(from: text) ?? ISO8601DateFormatter().date(from: text) ?? sqlite.date(from: text)
         guard let date else { return nil }
+        // The time of day in the phone's 12/24-hour format.
+        let time = ClockText.format(date)
+        if Calendar.current.isDateInToday(date) { return L10n.tr("dnes") + " " + time }
         let out = DateFormatter()
         out.locale = Fmt.locale
-        if L10n.isEnglish {
-            out.dateFormat = Calendar.current.isDateInToday(date) ? "'today' h:mm a" : "MMM d, h:mm a"
-        } else {
-            out.dateFormat = Calendar.current.isDateInToday(date) ? "'dnes' H:mm" : "d. M. H:mm"
-        }
-        return out.string(from: date)
+        out.dateFormat = L10n.isEnglish ? "MMM d," : "d. M."
+        return out.string(from: date) + " " + time
     }
 
     /// "2026-10-08 12:02:00" (SQLite CURRENT_TIMESTAMP, UTC).

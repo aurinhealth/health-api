@@ -430,12 +430,16 @@ struct PanelWidget: View {
         }
     }
 
-    @ViewBuilder private var card: some View {
-        if data.hasData(item.kind) {
-            content
-        } else {
-            WidgetPlaceholder(kind: item.kind)
+    private var card: some View {
+        Group {
+            if data.hasData(item.kind) {
+                content
+            } else {
+                WidgetPlaceholder(kind: item.kind)
+            }
         }
+        // A small card is half the screen wide: its number and chart stop growing sooner.
+        .dynamicTypeSize(...(item.size == .small ? DynamicTypeSize.denseCap : DynamicTypeSize.screenCap))
     }
 
     @ViewBuilder private var content: some View {

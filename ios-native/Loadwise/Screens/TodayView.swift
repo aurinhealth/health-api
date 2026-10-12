@@ -161,7 +161,7 @@ struct ReadinessHero: View {
             if let score = readiness.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(String(score))
-                        .font(Typo.number(132))
+                        .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
                     if let pill = pill {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
@@ -204,6 +204,7 @@ struct MorningCheckinCard: View {
     @State private var chosen: String?
     @State private var saving = false
     @State private var offerSick = false
+    @State private var answers = 0
 
     init(feeling: String?, keepAnswered: Bool = false, top: CGFloat = 0) {
         self.feeling = feeling
@@ -259,6 +260,7 @@ struct MorningCheckinCard: View {
             }
         }
         .onChange(of: feeling) { _, new in chosen = new }
+        .sensoryFeedback(.impact(weight: .light), trigger: answers)
         .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
             Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
             Button("Teď ne", role: .cancel) {}
@@ -271,6 +273,7 @@ struct MorningCheckinCard: View {
         let before = chosen
         chosen = id
         saving = true
+        answers += 1
         defer { saving = false }
         do {
             try await model.setMorningCheckin(id)

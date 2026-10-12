@@ -195,7 +195,7 @@ struct ReadinessDetailContent: View {
             SectionLabel(text: "Připravenost").padding(.top, 24)
             if let score = r.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(String(score)).font(Typo.number(116)).foregroundStyle(Palette.ink)
+                    Text(String(score)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     if let pill = ReadinessText.pill(r.zone) { Pill(text: pill.0, foreground: pill.1, background: pill.2) }
                 }
                 .padding(.top, 12)
