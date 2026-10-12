@@ -36,10 +36,12 @@ export function plan(dir) {
 }
 
 if (process.argv[1]?.endsWith("upload-world-foods.mjs")) {
-  const [dir, bucket = "loadwise-foods"] = process.argv.slice(2);
+  const [dir, bucket = "loadwise-food-catalog"] = process.argv.slice(2);
   if (!dir) { console.error("Usage: node scripts/upload-world-foods.mjs <out-dir>/<version> [bucket]"); process.exit(2); }
   const { version, files } = plan(dir);
   // In Eastern Europe, next to the Worker and D1; an existing bucket stays as it is.
+  // R2 keeps the location of the first bucket ever created under a name, even
+  // after it is deleted, so a bucket placed wrongly needs a new name.
   const created = spawnSync("npx", ["--yes", "wrangler@4", "r2", "bucket", "create", bucket, "--location", "eeur"], { encoding: "utf8", shell: process.platform === "win32" });
   if (created.status !== 0 && !/already exists|10004/i.test(created.stdout + created.stderr)) throw new Error(`Could not create bucket ${bucket}: ${created.stderr.slice(-300)}`);
   console.log(`Uploading ${files.length} files of ${version} to ${bucket}`);
