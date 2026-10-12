@@ -6,6 +6,7 @@ import { scopedDb } from '../src/tenancy.js';
 import { EXERCISES } from '../src/strength-generator.js';
 import { TECHNIQUE } from '../src/exercise-technique-data.js';
 import { techniqueFor, youtubeId, ownExerciseVideo, saveOwnExerciseVideo } from '../src/exercise-technique.js';
+import { serverSource } from "./helpers/server-source.mjs";
 
 test('every catalog exercise has a technique card with steps and a valid video or a search link',()=>{
   for(const name of Object.keys(EXERCISES)){
@@ -76,7 +77,7 @@ test('an exercise outside the catalog gets its card written once by AI, stored a
     answer.steps=['a','b','c'];answer.videoId='javascript:x';
     assert.equal((await generateTechnique(env,'Sandbag carry')).video,null);
   }finally{globalThis.fetch=original;}
-  const entry=(await import('node:fs')).readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  const entry=serverSource();
   assert.match(entry,/if\(!stored&&env\.OPENAI_API_KEY&&await exerciseInUse\(env\.DB,exercise\)\)stored=await generateTechnique\(env,exercise\)/);
 });
 

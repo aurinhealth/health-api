@@ -7,6 +7,7 @@ import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
 import { localToday } from "../src/user-time.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const answer = usage => Response.json({ model: "gpt-6-sol", output: [{ content: [{ type: "output_text", text: "ok" }] }], usage });
 
@@ -103,7 +104,7 @@ test("the limit is set per deployment, and 0 turns AI off for everyone but the o
 });
 
 test("the AI limit reaches the user as a message, and every AI call names its feature", () => {
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.match(entry, /if\(error\.limit\)return Response\.json\(\{message:error\.message\},\{status:error\.status\|\|429\}\)/);
   assert.match(entry, /aiAllowance\(env\)/);
   for (const file of ["coach-assistant", "coach-reflection", "coach-review", "exercise-technique", "food-ai", "food-chat", "food-photo", "gym-adjust"]) {

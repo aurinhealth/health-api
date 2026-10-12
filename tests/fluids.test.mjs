@@ -4,6 +4,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { hydrationTarget, addFluid, listFluids, deleteFluid, updateFluid, dayActivityHours, drinkFromFoodEntry, foodDrinks } from "../src/fluids.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 test("drink target: 30 ml/kg plus 0.5 l per training hour, rounded and bounded", () => {
   assert.deepEqual(hydrationTarget({ weightKg: 81.4, trainingHours: 2 }), { ml: 3400, baseMl: 2400, exerciseMl: 1000, weightKg: 81.4, trainingHours: 2, walkHours: 0 });
@@ -49,7 +50,7 @@ test("training hours count done sessions, or the plan when more is planned", asy
 
 test("the dashboard has the day overview with drinks, compact meals and quick logging", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/fluids'/);
   assert.match(entry, /url\.pathname==='\/app\/api\/food\/recipes'&&request\.method==='GET'/);
   assert.match(client, /<h3>Denní přehled<\/h3>/);

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { buildReviewInput, reviewDay, usageCost, dayReadiness, reviewInstructions, reviewInstructionsText } from "../src/coach-review.js";
 import { withLang } from "../src/lang.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const week = { days: [
   { date: "2026-10-03", daily: { training: { completed: [{ name: "Leg day", type: "WeightTraining", durationHours: 1, tss: 60 }], planned: [] } } },
@@ -41,7 +42,7 @@ test("each model is asked with the same schema; time, tokens and cost are report
 
 test("the dashboard offers Revize dne on the light model, without a model comparison", () => {
   const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/review'&&request\.method==='POST'/);
   assert.match(entry, /const reviews=\[await reviewDay\(env,input,null,inputs\.focus\)/);
   assert.doesNotMatch(entry, /body\.compare/);
