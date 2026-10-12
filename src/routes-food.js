@@ -10,7 +10,7 @@ import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI } from "./food-ai.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, FluidInputError } from "./fluids.js";
-import { searchCookbookRecipes, mealConsumedAt } from "./food-log.js";
+import { mealConsumedAt } from "./food-log.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry } from "./food-entry-management.js";
 import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
@@ -74,12 +74,6 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       return Response.json({status:'ok',...r.result,model:r.model},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.limit?error.message:L('Čtení fotky přes AI selhalo: ', 'Reading the photo with AI failed: ')+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):/JPG|PNG/.test(error.message)?400:502});}
   }
-  // Cookbook by recipe name (the page lookup is below).
-  if(url.pathname==='/app/api/food/recipes'&&request.method==='GET'){
-    const q=String(url.searchParams.get('q')||'').trim().slice(0,120);
-    if(q.length<2)return Response.json({status:'ok',recipes:[]},{headers:{'Cache-Control':'no-store'}});
-    return Response.json(await searchCookbookRecipes({name:q,limit:8}),{headers:{'Cache-Control':'no-store'}});
-  }
   // Drinks of a day with the day's target (body weight and training).
   if(url.pathname==='/app/api/fluids'){
     const validDay=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
@@ -101,6 +95,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){return Response.json({status:'error',message:error.message},{status:error instanceof FluidInputError?400:500});}
   }
+  // A page of the owner's cookbook; other users never reach it (owner-only-routes.js).
   if(url.pathname==='/app/api/food/recipe'&&request.method==='GET'){
     const recipe=await getCookbookRecipeByPage(url.searchParams.get('page'));
     return Response.json(recipe?{recipe}:{message:L('Na této stránce není známý recept.', 'There\'s no known recipe on this page.')},{status:recipe?200:404,headers:{'Cache-Control':'no-store'}});
