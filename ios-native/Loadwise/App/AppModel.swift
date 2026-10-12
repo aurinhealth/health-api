@@ -58,6 +58,9 @@ final class AppModel {
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
+    /// After the first e-mail sign-in on this phone: the "Příště přes Face ID"
+    /// sheet, shown before the setup (RootView).
+    var passkeyOffer = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
     /// Writes made without signal, oldest first (Outbox.swift); the screens
@@ -76,10 +79,13 @@ final class AppModel {
 
     let api: APIClient
     private let auth: AuthService
+    /// Passkeys (Data/Passkeys.swift): the sign-in and "Příště přes Face ID".
+    @ObservationIgnored let passkeys: PasskeyService
 
     init(api: APIClient = APIClient(), demo: Bool = false) {
         self.api = api
         self.auth = AuthService(api: api)
+        self.passkeys = PasskeyService()
         self.demo = demo
         if demo {
             phase = .signedIn
@@ -226,9 +232,22 @@ final class AppModel {
         }
     }
 
-    /// Signs in with the code from the e-mail.
+    /// Signs in with the code from the e-mail. The first time on this phone
+    /// the app then offers a passkey ("Příště přes Face ID", RootView).
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
+        if !PasskeyService.mayHaveOne { passkeyOffer = true }
+        await signedIn()
+        await refresh()
+    }
+
+    /// Signs in with a passkey of this phone (Data/Passkeys.swift). Throws
+    /// CancellationError when the sheet was closed; any other error means the
+    /// e-mail code is the way in.
+    func signInWithPasskey() async throws {
+        signingIn = true
+        defer { signingIn = false }
+        try await passkeys.signIn(api: api)
         await signedIn()
         await refresh()
     }
@@ -866,6 +885,7 @@ final class AppModel {
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
+        passkeyOffer = false
         paths = [:]
         tab = .today
         offline = false

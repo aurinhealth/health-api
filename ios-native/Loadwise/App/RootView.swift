@@ -81,7 +81,9 @@ struct RootView: View {
                 try? await Task.sleep(for: .seconds(7))
                 if !showSyncStatus && model.syncReport?.id == shown { model.syncReport = nil }
             }
-            .fullScreenCover(isPresented: Binding(get: { model.needsSetup }, set: { model.needsSetup = $0 })) { SetupFlowView() }
+            // After the first e-mail sign-in: a passkey for next time, then the setup.
+            .sheet(isPresented: Binding(get: { model.passkeyOffer }, set: { model.passkeyOffer = $0 })) { PasskeyOfferSheet() }
+            .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView() }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
                 await model.checkSetup(); await model.loadAccountInitial()
