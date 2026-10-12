@@ -11,8 +11,11 @@ import SwiftUI
 /// sensor iOS has (AirPods, a chest strap, the watch's samples), and at the end
 /// the workout is saved to Apple Health with them, so it counts in the
 /// activity rings. On older iOS the clock runs, the calories are estimated from
-/// the body weight (strength training ≈ 5 MET) and the heart rate is the
-/// latest sample Apple Health has from the last two minutes.
+/// the body weight (strength training ≈ 5 MET, 4 of them above rest, which is
+/// what Apple Health counts as active) and the heart rate is the latest sample
+/// Apple Health has from the last two minutes. A Bluetooth sensor paired in
+/// Nastavení (HeartRateSensor) gives the heart rate live on any iOS, and its
+/// beats go to Apple Health with the workout.
 @MainActor
 @Observable
 final class LiveWorkout: NSObject {
@@ -36,6 +39,9 @@ final class LiveWorkout: NSObject {
     @ObservationIgnored private var session: AnyObject?
     @ObservationIgnored private var builder: AnyObject?
     @ObservationIgnored private var liveKcal = false
+    /// Beats from the Bluetooth sensor, one per 5 s, saved with the workout.
+    @ObservationIgnored private var sensorBeats: [(Date, Double)] = []
+    private var sensor: HeartRateSensor { HeartRateSensor.shared }
 
     /// Starts once per session; `since` is when the gym sheet started.
     func begin(since: Date?, weightKg: Double?) async {
@@ -47,8 +53,11 @@ final class LiveWorkout: NSObject {
         if let weightKg, weightKg > 30 { self.weightKg = weightKg }
         savedToHealth = false
         kcal = nil; heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
+        sensorBeats = []
+        sensor.onBeat = { [weak self] bpm in self?.sensorBeat(bpm) }
+        sensor.connectSaved()
         guard HKHealthStore.isHealthDataAvailable() else { tick(); return }
-        let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned)]
+        let share: Set<HKSampleType> = [HKObjectType.workoutType(), HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)]
         let read: Set<HKObjectType> = [HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned)]
         try? await store.requestAuthorization(toShare: share, read: read)
         if #available(iOS 26.0, *) { await startSession(at: begun) }
@@ -61,6 +70,7 @@ final class LiveWorkout: NSObject {
     func finish() async -> Bool {
         guard let begun = start else { return false }
         poll?.cancel(); poll = nil
+        stopSensor()
         var saved = false
         if #available(iOS 26.0, *) { saved = await endSession(from: begun) }
         if !saved { saved = await saveWorkout(from: begun, to: Date()) }
@@ -71,6 +81,8 @@ final class LiveWorkout: NSObject {
     /// Clears everything after the summary was shown (or the screen left early).
     func reset() {
         poll?.cancel(); poll = nil
+        stopSensor()
+        sensorBeats = []
         if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running { session.end() }
         session = nil; builder = nil; liveKcal = false
         start = nil
@@ -93,10 +105,38 @@ final class LiveWorkout: NSObject {
     private func update() async {
         guard let start else { return }
         if !liveKcal {
-            // Strength training about 5 MET: kcal = MET × kg × hours.
-            kcal = 5.0 * weightKg * Date().timeIntervalSince(start) / 3600
+            // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
+            kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
         }
-        if builder == nil, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
+        if builder == nil, !sensor.connected, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
+    }
+
+    private func sensorBeat(_ bpm: Double) {
+        guard start != nil else { return }
+        note(bpm)
+        if let last = sensorBeats.last?.0, Date().timeIntervalSince(last) < 5 { return }
+        sensorBeats.append((Date(), bpm))
+    }
+
+    private func stopSensor() {
+        sensor.onBeat = nil
+        sensor.disconnect()
+    }
+
+    /// The sensor's beats as Apple Health samples (write access granted).
+    private func beatSamples() -> [HKQuantitySample] {
+        guard store.authorizationStatus(for: HKQuantityType(.heartRate)) == .sharingAuthorized else { return [] }
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        return sensorBeats.map { date, bpm in
+            HKQuantitySample(type: HKQuantityType(.heartRate), quantity: HKQuantity(unit: unit, doubleValue: bpm), start: date, end: date)
+        }
+    }
+
+    private func add(_ samples: [HKSample], to builder: HKWorkoutBuilder) async {
+        guard !samples.isEmpty else { return }
+        _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            builder.add(samples) { ok, _ in continuation.resume(returning: ok) }
+        }
     }
 
     private func note(_ bpm: Double) {
@@ -132,10 +172,9 @@ final class LiveWorkout: NSObject {
         guard began else { return false }
         if let kcal, kcal > 0, store.authorizationStatus(for: HKQuantityType(.activeEnergyBurned)) == .sharingAuthorized {
             let sample = HKQuantitySample(type: HKQuantityType(.activeEnergyBurned), quantity: HKQuantity(unit: .kilocalorie(), doubleValue: kcal), start: begun, end: end)
-            _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
-                builder.add([sample]) { ok, _ in continuation.resume(returning: ok) }
-            }
+            await add([sample], to: builder)
         }
+        await add(beatSamples(), to: builder)
         builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Loadwise"]) { _, _ in }
         let ended: Bool = await withCheckedContinuation { continuation in
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
@@ -170,6 +209,7 @@ final class LiveWorkout: NSObject {
     @available(iOS 26.0, *)
     private func endSession(from begun: Date) async -> Bool {
         guard let session = session as? HKWorkoutSession, let builder = builder as? HKLiveWorkoutBuilder else { return false }
+        await add(beatSamples(), to: builder)
         session.end()
         let end = Date()
         let ended: Bool = await withCheckedContinuation { continuation in
@@ -187,7 +227,7 @@ final class LiveWorkout: NSObject {
 
     fileprivate func collected(energy: Double?, bpm: Double?) {
         if let energy, energy > 0 { kcal = energy; liveKcal = true }
-        if let bpm, bpm > 0 { note(bpm) }
+        if let bpm, bpm > 0, !sensor.connected { note(bpm) }
     }
 }
 
@@ -214,8 +254,11 @@ struct LiveWorkoutStrip: View {
                 cell(L10n.tr("Čas"), clock(at: context.date), nil, Palette.ink)
                 divider
                 cell(L10n.tr("Kalorie"), live.kcal.map { Fmt.int($0) } ?? "–", "kcal", Palette.amber)
-                divider
-                cell(L10n.tr("Tep"), live.heartRate.map { Fmt.int($0) } ?? "–", "bpm", Palette.rust)
+                // Only an iPhone, nothing measuring the heart: no tile at all.
+                if let bpm = live.heartRate {
+                    divider
+                    cell(L10n.tr("Tep"), Fmt.int(bpm), "bpm", Palette.rust)
+                }
             }
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         }

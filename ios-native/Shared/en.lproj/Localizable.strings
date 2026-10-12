@@ -1719,3 +1719,10 @@
 "Google Health dovolí změnu jen ve své aplikaci." = "Google Health only allows the change in its own app.";
 "Apple Health dovolí změnu jen v aplikaci, která trénink zapsala." = "Apple Health only allows the change in the app that recorded the workout.";
 "Uloženo do Apple Health" = "Saved to Apple Health";
+"Snímač tepu" = "Heart rate sensor";
+"Spárováno" = "Paired";
+"spárováno" = "paired";
+"Zapomenout snímač" = "Forget sensor";
+"V okolí" = "Nearby";
+"Bluetooth je vypnutý nebo nepovolený" = "Bluetooth is off or not allowed";
+"Hrudní pás nebo náramek, který vysílá tep, například Whoop, Polar nebo Garmin." = "A chest strap or a band that broadcasts heart rate, such as Whoop, Polar or Garmin.";
