@@ -49,6 +49,35 @@ test("an Apple night reads as a session with stages and minutes asleep", () => {
   assert.equal(session.durationMin, 460);
   assert.equal(session.timeInBedMin, 480);
   assert.equal(session.nap, false);
+  // Without "in bed" samples nothing says how long falling asleep took.
+  assert.equal(session.latencyMin, null);
+});
+
+test("an Apple night with its time in bed has a real efficiency, latency and wake after sleep onset", () => {
+  // In bed 21:00–06:00, asleep 21:30–05:30 with 20 min awake inside.
+  const night = appleRow({ type: "sleep", id: "sleep:2", inBed: true, start: "2026-10-09T21:00:00Z", end: "2026-10-10T06:00:00Z", stages: [
+    { type: "awake", start: "2026-10-09T21:10:00Z", end: "2026-10-09T21:30:00Z" },
+    { type: "core", start: "2026-10-09T21:30:00Z", end: "2026-10-10T00:00:00Z" },
+    { type: "deep", start: "2026-10-10T00:00:00Z", end: "2026-10-10T01:00:00Z" },
+    { type: "awake", start: "2026-10-10T01:00:00Z", end: "2026-10-10T01:20:00Z" },
+    { type: "rem", start: "2026-10-10T01:20:00Z", end: "2026-10-10T05:30:00Z" }
+  ] });
+  assert.deepEqual(night.payload.sleep.summary, { minutesAwake: 30 + 20 + 30, minutesToFallAsleep: 30, minutesAfterWakeUp: 30 });
+  const session = sleepSessionFromRow({ external_id: night.external_id, start_time: night.start_time, end_time: night.end_time, payload_json: JSON.stringify(night.payload) });
+  assert.equal(session.durationMin, 460);
+  assert.equal(session.timeInBedMin, 540);
+  assert.equal(session.latencyMin, 30);
+  assert.equal(session.wasoMin, 20);
+  assert.equal(session.date, "2026-10-10");
+});
+
+test("the iPhone app keeps in-bed samples and gives breathing and oxygen to the night's wake-up day", () => {
+  const swift = readFileSync(new URL("../ios-native/Loadwise/App/AppleHealth.swift", import.meta.url), "utf8");
+  assert.match(swift, /var inBed: Bool\? = nil/);
+  assert.match(swift, /record\.inBed = true/);
+  assert.match(swift, /nightly\(\.respiratoryRate,/);
+  assert.match(swift, /nightly\(\.oxygenSaturation,/);
+  assert.match(swift, /private func wakeDay\(_ date: Date\) -> String/);
 });
 
 test("saving is idempotent and the Health summary reads Apple rows", async () => {

@@ -24,6 +24,9 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
     if(row.data_type==='daily-oxygen-saturation'){key='spO2';value=finite(row.value_numeric)??finite(obj.percentage);}
     if(row.data_type==='steps'){key='steps';value=finite(row.value_numeric)??finite(obj.count);}
     if(row.data_type==='active-energy-burned'){key='activeCalories';value=finite(row.value_numeric)??finite(obj.kcal);}
+    // Every source's HRV and resting HR of the day: the days two sources share
+    // carry a new source's baseline over (recovery-model.js sourceBaseline).
+    if(['hrv','restingHR'].includes(key)&&value!=null&&row.source_family)(item[key+'BySource']||(item[key+'BySource']={}))[row.source_family+(key==='hrv'&&['rmssd','sdnn'].includes(obj.metric)?':'+obj.metric:'')]=value;
     // A day's Apple Health HRV wins over a Google copy of it (Google Health on the
     // iPhone imports Apple Health), so the day keeps the baseline of its source.
     if(key==='hrv'&&String(item.hrvSource||'').startsWith('apple-health')&&row.source_family!=='apple-health')continue;
@@ -44,6 +47,8 @@ export function googleHealthSummary(rows,today,zoneRows=[]){
   for(const z of zoneRows){const date=day(z.start_time),key=String(z.zone||'').toLowerCase(),minutes=(Date.parse(z.end_time)-Date.parse(z.start_time))/60000;
     if(!date||!['light','moderate','vigorous','peak'].includes(key)||!(minutes>0&&minutes<=1440))continue;
     const item=days.get(date)||{id:date,source:'google-health'},zones=item.hrZoneMinutes||(item.hrZoneMinutes={light:0,moderate:0,vigorous:0,peak:0});zones[key]=Math.round((zones[key]+minutes)*10)/10;days.set(date,item);coverage['time-in-heart-rate-zone']=[coverage['time-in-heart-rate-zone'],date].filter(Boolean).sort().at(-1);}
+  // One source on a day has nothing to compare: only the days of two stay.
+  for(const item of days.values())for(const k of ['hrvBySource','restingHRBySource'])if(item[k]&&Object.keys(item[k]).length<2)delete item[k];
   return{status:'ok',source:'google-health',coverage,stepsByHour,wellness:[...days.values()].sort((a,b)=>a.id.localeCompare(b.id)),today:days.get(today)||{id:today,source:'google-health'}};
 }
 export async function googleDashboard(db,today){

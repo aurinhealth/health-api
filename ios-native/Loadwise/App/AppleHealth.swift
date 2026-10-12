@@ -243,6 +243,8 @@ struct AppleRecord: Encodable {
     var minutes: Double? = nil
     var stages: [Stage]? = nil
     var nap: Bool? = nil
+    /// The night's start and end are the time in bed ("in bed" samples), not only the sleep.
+    var inBed: Bool? = nil
     var activity: String? = nil
     var sourceName: String? = nil
     var kcal: Double? = nil
@@ -358,8 +360,8 @@ final class HealthReader: @unchecked Sendable {
         }
         if categories.contains(.breathing) {
             let start = from(90)
-            rest += await daily(.respiratoryRate, unit: .count().unitDivided(by: .minute()), type: "daily-respiratory-rate", prefix: "resp", from: start, to: now)
-            rest += await daily(.oxygenSaturation, unit: .percent(), type: "daily-oxygen-saturation", prefix: "spo2", scale: 100, from: start, to: now)
+            rest += await nightly(.respiratoryRate, unit: .count().unitDivided(by: .minute()), type: "daily-respiratory-rate", prefix: "resp", from: start, to: now)
+            rest += await nightly(.oxygenSaturation, unit: .percent(), type: "daily-oxygen-saturation", prefix: "spo2", scale: 100, from: start, to: now)
         }
         if categories.contains(.body) {
             let start = from(365)
@@ -420,6 +422,32 @@ final class HealthReader: @unchecked Sendable {
             let date = day(s.startDate)
             return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * 10).rounded() / 10)
         }
+    }
+
+    /// The night's average (breathing, oxygen) on the day of waking up, as the
+    /// nights themselves are dated: the watch measures them in sleep, and a
+    /// calendar day would split one night between two days. A sample from
+    /// 15:00 on belongs to the next day. The query starts at 15:00 the day
+    /// before `from`, so the first day is whole; a day after today (this
+    /// evening's samples) waits for the morning.
+    private func nightly(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, from: Date, to: Date) async -> [AppleRecord] {
+        let list = await samples(HKQuantityType(id), from: from.addingTimeInterval(-9 * 3600), to: to).compactMap { $0 as? HKQuantitySample }
+        var byDay: [String: [Double]] = [:]
+        for q in list {
+            byDay[wakeDay(q.startDate), default: []].append(q.quantity.doubleValue(for: unit))
+        }
+        let last = day(to)
+        return byDay.keys.sorted().compactMap { date -> AppleRecord? in
+            guard date <= last, let values = byDay[date], !values.isEmpty else { return nil }
+            let value = values.reduce(0, +) / Double(values.count)
+            return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * 10).rounded() / 10)
+        }
+    }
+
+    /// The day a night's sample counts for: from 15:00 on the next one.
+    private func wakeDay(_ date: Date) -> String {
+        guard calendar.component(.hour, from: date) >= 15 else { return day(date) }
+        return day(calendar.date(byAdding: .day, value: 1, to: date) ?? date)
     }
 
     /// Each weighing (or body fat measurement) as it was taken.
@@ -542,9 +570,13 @@ final class HealthReader: @unchecked Sendable {
 
     /// Nights (and naps) with their stages. Several apps can record the same
     /// night; the one with stages (the watch) wins, else the one with most sleep.
+    /// "In bed" samples (often the iPhone's, not the watch's) that overlap the
+    /// sleep widen the night to the time in bed, so the server gets the real
+    /// efficiency and the time it took to fall asleep (src/apple-health.js).
     private func nights(from: Date, to: Date) async -> [AppleRecord] {
-        let all = await samples(HKCategoryType(.sleepAnalysis), from: from, to: to).compactMap { $0 as? HKCategorySample }
-            .filter { $0.value != 0 }  // 0 = in bed, not sleep
+        let recorded = await samples(HKCategoryType(.sleepAnalysis), from: from, to: to).compactMap { $0 as? HKCategorySample }
+        let inBed = recorded.filter { $0.value == 0 }  // 0 = in bed, not sleep
+        let all = recorded.filter { $0.value != 0 }
         // Samples closer than an hour belong to one sleep.
         var clusters: [[HKCategorySample]] = []
         var clusterEnd = Date.distantPast
@@ -573,7 +605,13 @@ final class HealthReader: @unchecked Sendable {
             // A short sleep in the day is a nap.
             let hour = calendar.component(.hour, from: start)
             let nap = asleep < 180 && hour >= 9 && hour < 20
-            return AppleRecord(type: "sleep", id: "sleep:" + stamp(start), start: stamp(start), end: stamp(end), stages: stages, nap: nap)
+            // The time in bed around this sleep; the id stays the sleep's start.
+            let bed = inBed.filter { $0.endDate > start && $0.startDate < end }
+            let bedStart = min(start, bed.map(\.startDate).min() ?? start)
+            let bedEnd = max(end, bed.map(\.endDate).max() ?? end)
+            var record = AppleRecord(type: "sleep", id: "sleep:" + stamp(start), start: stamp(bedStart), end: stamp(bedEnd), stages: stages, nap: nap)
+            if !bed.isEmpty { record.inBed = true }
+            return record
         }
     }
 
