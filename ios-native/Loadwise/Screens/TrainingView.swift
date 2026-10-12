@@ -264,7 +264,7 @@ struct NextSession: View {
 
     private var when: String {
         let day = Fmt.capitalized(Fmt.relativeDay(session.date, today: today))
-        guard let time = session.time.map({ ClockText.format($0) }) else { return day }
+        guard let time = ClockText.format(optional: session.time) else { return day }
         return session.date == today ? time : day + " " + time
     }
 

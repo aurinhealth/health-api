@@ -25,13 +25,10 @@ enum ClockText {
         formatter(timeZone: .autoupdatingCurrent).string(from: date)
     }
 
-    /// An ISO date-time ("2026-10-08T13:29:00Z" or with fractional seconds) → its
-    /// local time of day; anything else as it came.
-    static func format(isoDateTime text: String) -> String {
-        let fractional = ISO8601DateFormatter()
-        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = fractional.date(from: text) ?? ISO8601DateFormatter().date(from: text) else { return text }
-        return format(date)
+    /// A clock that may be missing: nil stays nil.
+    static func format(optional clock: String?) -> String? {
+        guard let clock else { return nil }
+        return format(clock)
     }
 
     /// The phone shows "8:30 PM" rather than "20:30".

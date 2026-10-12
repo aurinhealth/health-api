@@ -39,7 +39,7 @@ struct SleepDetailContent: View {
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 12)
 
             if let night = sleep.night {
-                ThreeCells(cells: [("Usnutí", night.start.map { ClockText.format($0) } ?? "–"), ("Probuzení", night.end.map { ClockText.format($0) } ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
+                ThreeCells(cells: [("Usnutí", ClockText.format(optional: night.start) ?? "–"), ("Probuzení", ClockText.format(optional: night.end) ?? "–"), ("V posteli", Fmt.hoursMinutes(night.inBedMinutes))])
                     .padding(.top, 26)
                 if let stages = night.stages {
                     SectionLabel(text: "Fáze spánku").padding(.top, 30)
@@ -47,9 +47,9 @@ struct SleepDetailContent: View {
                         if let segments = detail?.night?.segments, !segments.isEmpty {
                             Hypnogram(segments: segments)
                             HStack {
-                                Text(night.start.map { ClockText.format($0) } ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
+                                Text(ClockText.format(optional: night.start) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
                                 Spacer()
-                                Text(night.end.map { ClockText.format($0) } ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
+                                Text(ClockText.format(optional: night.end) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
                             }
                             .padding(.leading, 56)
                         }
