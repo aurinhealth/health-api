@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
+import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { reflectionSignals, rulesReflection, createReflection, listReflections, activityFromRow, dedupeActivities, reflectionInput, reflectionInstructions } from "../src/coach-reflection.js";
 import { localDateTime } from "../src/user-time.js";
@@ -65,7 +66,7 @@ test("activities from Intervals.icu and Google Health become one Prague timeline
 });
 
 function env(key) {
-  const db = createD1();
+  const db = grantAiConsent(createD1(), 7);
   return { DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: key };
 }
 

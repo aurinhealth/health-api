@@ -3,9 +3,11 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { mergeWellnessRows, recoveryReadiness, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan } from "./recovery-model.js";
-import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
+import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric } from "./recovery-model.js";
+import { clockOf, minutesOf, dayStrain } from "./app-today.js";
+import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings } from "./energy-profile.js";
+import { localDate } from "./user-time.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -34,19 +36,21 @@ export function readinessParts(readiness) {
   return parts;
 }
 
-export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {} }) {
+export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
-  const rows = mergeWellnessRows(google, intervals);
+  const rows = readinessRows(google, intervals, date);
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
   const age = num(profile.age);
   const sleepSet = sleepSettings(profile);
   const needOn = d => sleepNeedFor({ date: d, age, goal: sleepSet.goal, strain: dayStrain(google, shift(d, -1)), rows, sessions });
 
-  // Readiness today and for the last 14 days.
-  const readinessOn = d => recoveryReadiness({ rows, date: d, night: nights.get(d) || null, sleepNeed: needOn(d).need });
-  const readiness = readinessOn(date);
+  // Readiness today and for the last 14 days, the same as Today and the
+  // coaches (readiness.js). The morning check-in lowers today's number as on
+  // Today (applyCheckin); what it took off is its own part.
+  const readinessOn = d => readinessFor({ date: d, rows, sessions, profile });
+  const readiness = readinessFor({ date, rows, sessions, profile, checkin }), body = readiness.body;
   const history = Array.from({ length: 14 }, (_, i) => shift(date, i - 13))
     .map(d => ({ date: d, value: d === date ? readiness.score : readinessOn(d).score }))
     .filter(p => p.value != null);
@@ -84,7 +88,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const today = rows.find(r => r.id === date) || {};
   const respiration = series("respiration", 14, 1);
   const skin = series("skinTempDeviation", 14, 2, google);
-  const spo2 = series("spO2", 14, 1, intervals);
+  // Oxygen from the watch (Apple Health, Google) first, Intervals.icu filling the rest (mergeWellnessRows).
+  const spo2 = series("spO2", 14, 1);
 
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).
@@ -95,6 +100,13 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const avg = (from, to) => mean(weights.filter(p => p.date > from && p.date <= to).map(p => p.value));
   const nowAvg = avg(shift(date, -7), date), monthAgo = avg(shift(date, -37), shift(date, -30));
   const fat = series("bodyFat", 60, 1, intervals);
+  // Muscle mass (lean body mass, kg) from a scale, the last reading of each day.
+  const leanByDay = new Map();
+  for (const r of Array.isArray(muscle) ? muscle : []) {
+    const t = new Date(r.sample_time), d = Number.isFinite(+t) ? localDate(t) : null, v = num(r.value_numeric);
+    if (d && d <= date && d > shift(date, -60) && v > 0) leanByDay.set(d, round(v, 1));
+  }
+  const lean = [...leanByDay].sort((a, b) => a[0].localeCompare(b[0])).map(([d, value]) => ({ date: d, value }));
 
   return {
     status: "ok",
@@ -104,7 +116,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       zone: readiness.zone,
       missing: readiness.missing || [],
       flags: readiness.flags || [],
-      parts: readinessParts(readiness),
+      // A baseline carried over from another source until the new one has 14 days.
+      provisional: !!readiness.provisional,
+      parts: [...readinessParts(body), ...(body.score != null && readiness.score < body.score ? [{ key: "checkin", points: readiness.score - body.score }] : [])],
+      checkin: checkin || null,
       hrv: c.hrv ? round(c.hrv.value) : null,
       restingHR: c.restingHR ? round(c.restingHR.value) : null,
       sleepMinutes: c.sleep ? c.sleep.minutes : null,
@@ -116,7 +131,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
         date,
         minutes: num(night.durationMin),
         inBedMinutes: num(night.timeInBedMin),
-        index: sleepIndexScore(night, needToday.need),
+        index: sleepIndexFor(night, needToday.need),
         start: clockOf(night.startTime),
         end: clockOf(night.endTime),
         latencyMinutes: round(num(night.latencyMin ?? night.minutesToFallAsleep)),
@@ -129,7 +144,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       debt: debt ? { minutes: debt.minutes, nights: debt.nights } : null,
       regularity: beds.length >= 3 ? { bedtime: clock(bedAvg + 18 * 60), spread: Math.round(bedSd), nights: beds.map(b => ({ date: b.date, value: b.value })) } : null
     },
-    hrv: c.hrv ? { value: round(c.hrv.value), baseline: round(c.hrv.baseline), low: round(c.hrv.low), high: round(c.hrv.high), trend: c.hrv.trend, week: round(mean(lastWeek)), series: hrvSeries } : hrvSeries.length ? { value: null, baseline: null, low: null, high: null, trend: null, week: round(mean(lastWeek)), series: hrvSeries } : null,
+    // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
+    hrv: c.hrv ? { value: round(c.hrv.value), baseline: round(c.hrv.baseline), low: round(c.hrv.low), high: round(c.hrv.high), trend: c.hrv.trend, week: round(mean(lastWeek)), metric: hrvMetric(today), series: hrvSeries } : hrvSeries.length ? { value: null, baseline: null, low: null, high: null, trend: null, week: round(mean(lastWeek)), metric: hrvMetric(today), series: hrvSeries } : null,
     restingHR: rhrSeries.length ? { value: c.restingHR ? round(c.restingHR.value) : round(num(today.restingHR)), baseline: c.restingHR ? round(c.restingHR.baseline, 1) : null, series: rhrSeries } : null,
     respiration: respiration.length ? { value: c.respiration ? round(c.respiration.value, 1) : respiration.at(-1).value, baseline: c.respiration ? round(c.respiration.baseline, 1) : null, elevated: !!c.respiration?.elevated, series: respiration } : null,
     skinTemp: skin.length ? { deviation: c.skinTemp ? round(c.skinTemp.deviation, 2) : skin.at(-1).value, elevated: !!c.skinTemp?.elevated, series: skin } : null,
@@ -141,7 +157,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       change: nowAvg != null && monthAgo != null ? round(nowAvg - monthAgo, 1) : null,
       goal: num(profile.targetWeight),
       series: weights,
-      bodyFat: fat.length ? { value: fat.at(-1).value, change: fat.length > 1 ? round(fat.at(-1).value - fat[0].value, 1) : null, series: fat } : null
+      bodyFat: fat.length ? { value: fat.at(-1).value, change: fat.length > 1 ? round(fat.at(-1).value - fat[0].value, 1) : null, series: fat } : null,
+      muscle: lean.length ? { value: lean.at(-1).value, change: lean.length > 1 ? round(lean.at(-1).value - lean[0].value, 1) : null, series: lean } : null
     } : null
   };
 }

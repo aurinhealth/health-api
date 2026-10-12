@@ -16,6 +16,9 @@ struct TrainingSnapshot: Decodable, Equatable {
     /// The week's sessions, done and planned (older saved answers lack it).
     let sessions: [WeekSession]?
     let thisWeek: ThisWeek
+    /// No main sport and goal saved yet: Training shows "Nastav si zaměření a
+    /// cíle" (older saved answers lack it).
+    let profileIncomplete: Bool?
 
     struct Strain: Decodable, Equatable {
         let score: Double?

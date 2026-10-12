@@ -6,7 +6,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { screenText, screenFacts, MAX_PER_DAY } from "../src/screen-texts.js";
+import { screenText, screenFacts, MAX_PER_DAY, markScreenTextsStale } from "../src/screen-texts.js";
 
 const today = (extra = {}) => ({
   date: "2026-10-11",
@@ -38,7 +38,7 @@ test("facts, chips and the data shown under Proč? come from the screen's number
   assert.equal(withLang("en", () => screenFacts("today", today()).chips[0]), "Sleep 6:40");
 });
 
-test("the AI is asked once a day per screen; a fresh cached text comes back without loading", async () => {
+test("the AI is asked once per day state; the same state answers from the cache", async () => {
   const env = owner();
   let asked = 0, loaded = 0, seen = null;
   const ask = async (_env, req) => { asked++; seen = req; return { text: JSON.stringify({ text: "Spal jsi 6 h 40, o 50 minut méně než potřebuješ.", advice: "Drž tep pod 135." }) }; };
@@ -51,13 +51,13 @@ test("the AI is asked once a day per screen; a fresh cached text comes back with
   assert.match(first.time, /^\d{2}:\d{2}$/);
   assert.equal(seen.feature, "screen-text");
   assert.match(seen.input, /"sleepMinutes":400/);
+  // Every opening loads the data to compare; the same state is not asked again.
   const again = await screenText(env, { screen: "today", load, ask });
   assert.equal(asked, 1);
-  assert.equal(loaded, 1);
-  // Later the same day with the same data: loaded to compare, not asked again.
+  assert.equal(loaded, 2);
   await screenText(env, { screen: "today", load, ask, now: Date.now() + 2 * 3600000 });
   assert.equal(asked, 1);
-  assert.equal(loaded, 2);
+  assert.equal(loaded, 3);
   assert.equal(again.text, first.text);
   assert.deepEqual(again.basis, first.basis);
   // Another screen has its own text.
@@ -113,4 +113,18 @@ test("an English app gets its own cached text", async () => {
   assert.equal(cs.text, "Česky.");
   assert.equal(en.text, "In English.");
   assert.equal(en.chips[0], "Sleep 6:40");
+});
+
+test("a cancelled session writes the text again at once, even right after the last one", async () => {
+  const env = owner();
+  let asked = 0, plan = [{ kind: "workout", title: "Posilovna", done: false }];
+  const ask = async () => { asked++; return { text: JSON.stringify({ text: asked === 1 ? "V posilovně uber sérii." : "Dnes volno, jdi se projít.", advice: "" }) }; };
+  const load = async () => today({ plan });
+  await screenText(env, { screen: "today", load, ask });
+  plan = [];
+  await markScreenTextsStale(env);
+  const next = await screenText(env, { screen: "today", load, ask });
+  assert.equal(asked, 2);
+  assert.equal(next.text, "Dnes volno, jdi se projít.");
+  assert.notEqual(screenFacts("today", today({ plan: [] })).fingerprint, screenFacts("today", today()).fingerprint, "the plan is in the fingerprint");
 });

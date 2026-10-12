@@ -329,7 +329,10 @@ struct WidgetData {
         case .respiration: return health?.respiration != nil
         case .skinTemp: return health?.skinTemp != nil
         case .oxygen: return health?.oxygen != nil
-        case .mood, .muscle: return true
+        // Shown only with data (a scale that measures muscle mass); until then
+        // they wait in the widget gallery.
+        case .mood: return false
+        case .muscle: return health?.weight?.muscle != nil
         case .form: return training?.form != nil
         case .thisWeek: return training != nil
         case .sessions: return !(training?.sessions ?? []).isEmpty
@@ -454,7 +457,7 @@ struct PanelWidget: View {
         case .mood:
             AppleHealthWidget(title: "Nálada", color: Palette.gold)
         case .muscle:
-            AppleHealthWidget(title: "Svalová hmota", color: Palette.brown)
+            if let value = data.health?.weight?.muscle { MuscleWidget(muscle: value, size: item.size) }
         case .form:
             if let value = data.training?.form { FormWidget(form: value, size: item.size) }
         case .thisWeek:

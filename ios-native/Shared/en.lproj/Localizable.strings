@@ -9,17 +9,17 @@
 "%@ hotovo" = "%@ done";
 "%@ je připojené, data se začínají stahovat." = "%@ is connected, data is starting to sync.";
 "%@ let" = "%@ years";
-"%@ na ruku" = "%@ per hand";
-"%@ od normy" = "%@ from normal";
+"%@ na ruku" = "%@ per dumbbell";
+"%@ od normy" = "%@ from usual";
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
 "%@ tě dostane zhruba na %@." = "%1$@ will take you to about %2$@.";
 "%@ z %@ %@ · %@ %@" = "%1$@ of %2$@ %3$@ · %4$@ %5$@";
 "%@ z %@ TSS" = "%1$@ of %2$@ TSS";
 "%@ za 4 týdny" = "%@ in 4 weeks";
-"%@ zápis čeká na signál" = "%@ entry waiting for signal";
-"%@ zápisy čekají na signál" = "%@ entries waiting for signal";
-"%@ zápisů čeká na signál" = "%@ entries waiting for signal";
+"%@ zápis čeká na signál" = "%@ entry waiting for a connection";
+"%@ zápisy čekají na signál" = "%@ entries waiting for a connection";
+"%@ zápisů čeká na signál" = "%@ entries waiting for a connection";
 "%@, %@ %% cíle" = "%@, %@ %% of goal";
 "%@, průměr %@, %@" = "%@, average %@, %@";
 "%@. Dej si něco malého a připrav se." = "%@. Have a small snack and get ready.";
@@ -677,7 +677,7 @@
 "Příští týden" = "Next week";
 "R" = "W";
 "RPE je uložené i v Intervals.icu." = "RPE is saved, in Intervals.icu too.";
-"RPE je uložené, zápis do Intervals.icu selhal: %@" = "RPE is saved; writing to Intervals.icu failed: %@";
+"RPE je uložené, zápis do Intervals.icu selhal: %@" = "RPE is saved; write to Intervals.icu failed: %@";
 "Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích." = "Build a recipe from ingredients, then add it one serving at a time with a tap.";
 "Recepty" = "Recipes";
 "Regenerace" = "Recovery";
@@ -967,7 +967,7 @@
 "Zdroj: %@" = "Source: %@";
 "Zdroje dat" = "Data sources";
 "Zdřímnutí" = "Naps";
-"Ze služeb, které připojíš (Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Google Health, Intervals.icu) and what you enter yourself.";
+"Ze služeb, které připojíš (Apple Zdraví, Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Apple Health, Google Health, Intervals.icu) and what you enter yourself.";
 "Zeptat se" = "Ask";
 "Zepředu" = "Front";
 "Zezadu" = "Back";
@@ -1315,7 +1315,7 @@
 "Aktivita a tréninky" = "Activity and workouts";
 "Zdravotní měření" = "Health measurements";
 "Čtení jídla" = "Reading food";
-"Zápis jídla" = "Writing food";
+"Zápis jídla" = "Food logging";
 "Oprávnění" = "Permissions";
 "Oprávnění se mění na stránce Googlu: zaškrtni, co má Loadwise číst a zapisovat." = "Permissions change on Google's page: tick what Loadwise may read and write.";
 "nepovoleno" = "not allowed";
@@ -1481,6 +1481,7 @@
 "Jídla" = "Meals";
 "Zapsat jídlo za celý den" = "Log the whole day's food";
 "Ranní vážení" = "Morning weigh-in";
+"Ranní připravenost" = "Morning readiness";
 "v neděli" = "on Sunday";
 "Za hodinu do postele" = "Bedtime in an hour";
 "Za %@ min do postele" = "Bedtime in %@ min";
@@ -1721,12 +1722,12 @@
 "Strava zatím není dostupná pro další uživatele." = "Strava isn't available to more users yet.";
 "Připojení Stravy bylo zrušeno." = "Connecting Strava was cancelled.";
 "Stravu se nepodařilo připojit. Zkus to znovu." = "Strava couldn't be connected. Try again.";
-"Google zatím nepovolil zápis" = "Google hasn't allowed writing yet";
+"Google zatím nepovolil zápis" = "Google hasn't allowed write access yet";
 "Loadwise otevře souhlas Googlu jen pro zápis toho, co tu zapneš. Číst víc nebude." = "Loadwise opens Google's consent only for writing what you switch on here. It won't read anything more.";
 "Rozšířit oprávnění Google" = "Extend Google permissions";
-"zápis tréninků" = "writing workouts";
-"zápis váhy" = "writing weight";
-"zápis jídla" = "writing food";
+"zápis tréninků" = "logging workouts";
+"zápis váhy" = "logging weight";
+"zápis jídla" = "food logging";
 "Oprávnění Google jsou rozšířená." = "Google permissions are extended.";
 "Do Apple Zdraví jde jen to, co v Loadwise sám zapíšeš." = "Only what you enter in Loadwise yourself goes to Apple Health.";
 "Váhu a jídlo zapsané v Loadwise." = "The weight and food entered in Loadwise.";
@@ -1739,7 +1740,7 @@
 "Odeslání" = "Sending";
 "Odesláno" = "Sent";
 "odešle se" = "will be sent";
-"Apple Zdraví nepovolilo zápis tréninků. Povol ho v Nastavení iPhonu → Zdraví → Přístup k datům." = "Apple Health didn't allow writing workouts. Allow it in iPhone Settings → Health → Data Access.";
+"Apple Zdraví nepovolilo zápis tréninků. Povol ho v Nastavení iPhonu → Zdraví → Přístup k datům." = "Apple Health didn't allow logging workouts. Allow it in iPhone Settings → Health → Data Access.";
 "Zapíše se jako odcvičený a pošle do aplikací ze Synchronizace." = "It's saved as done and sent to the apps chosen in Sync.";
 
 /* Morning check-in on Today */
@@ -1800,3 +1801,37 @@
 "Už jsem v pořádku" = "I'm fine now";
 "Prodloužit" = "Extend";
 "Průběh tréninku, %@" = "Workout profile, %@";
+
+/* Sign-in and the first-run setup (LoginView, SetupFlowView, Passkeys) */
+"Pokračovat přes Apple" = "Continue with Apple";
+"Pokračovat přes Google" = "Continue with Google";
+"Pokračovat e-mailem" = "Continue with e-mail";
+"Přihlásit přes passkey" = "Sign in with a passkey";
+"Příště přes Face ID" = "Next time with Face ID";
+"Loadwise si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu." = "Loadwise saves a passkey on your iPhone. Next time you sign in with your face or fingerprint, no e-mail code.";
+"Zapnout" = "Turn on";
+"Přístupový klíč se nepodařilo ověřit. Zkus to znovu." = "The passkey couldn't be verified. Try again.";
+"Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
+"Odkud brát data" = "Where to take data from";
+"Tréninkové aplikace" = "Training apps";
+"Souhlasím se zpracováním zdravotních dat" = "I agree to the processing of my health data";
+"Zásady" = "Policy";
+"Z Apple Zdraví jsme vzali:" = "Taken from Apple Health:";
+"Z Google Health jsme vzali:" = "Taken from Google Health:";
+"Narození" = "Born";
+"Rok" = "Year";
+
+/* Training: the focus card and sheet (FocusSheet) */
+"Nastav si zaměření a cíle" = "Set your focus and goals";
+"Obecná kondice" = "General fitness";
+"Kdy máš čas" = "When you have time";
+"Zlepšit kondici" = "Get fitter";
+"Zhubnout" = "Lose weight";
+
+"Pocit" = "Feeling";
+"ranní pocit ji snížil" = "your morning answer lowered it";
+"zatím bez dat" = "no data yet";
+"cíl %@–%@" = "target %@–%@";
+"Dnešní cíl" = "Today's target";
+"nic v plánu" = "nothing planned";
+"Navrženo AI" = "Suggested by AI";

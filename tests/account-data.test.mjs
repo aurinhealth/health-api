@@ -11,7 +11,7 @@ function database() {
   db.sqlite.exec("CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE, applied_at TEXT)");
   db.sqlite.exec(readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8"));
   db.sqlite.exec(readFileSync(new URL("../migrations/0011_account_deletions.sql", import.meta.url), "utf8"));
-  db.sqlite.exec("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, google_sub TEXT UNIQUE, name TEXT, role TEXT NOT NULL DEFAULT 'user', disabled INTEGER NOT NULL DEFAULT 0, created_at TEXT, last_login_at TEXT)");
+  db.sqlite.exec(readFileSync(new URL("../migrations/0021_session_epoch.sql", import.meta.url), "utf8"));
   for (const [id, email] of [[3, "a@example.com"], [4, "b@example.com"]]) {
     db.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(id, email);
     db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (?, 'manual', 'weight', 'w', '2026-10-01T07:00:00Z', 70, '{}')").run(id);

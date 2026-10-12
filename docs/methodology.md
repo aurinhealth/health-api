@@ -63,6 +63,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Dech ve spánku o ≥ 1 dech/min a 2 SD nad baseline ubere 10 bodů.
   - Teplota kůže ve spánku o ≥ 0,5 °C a zároveň 2 noční SD nad 30denní baseline Google Health ubere 10 bodů (Google Health typ `daily-sleep-temperature-derivations`).
   - Potřebuje 14 předchozích měření.
+  - HRV a klidový tep se porovnávají jen se dny stejného zdroje (Apple SDNN, Google RMSSD, Intervals.icu). Nový zdroj s méně než 14 dny převezme baseline jiného zdroje, pokud se oba aspoň 5 dní překrývají: posun je průměrný rozdíl ve dnech překryvu (ln HRV, tepy/min). Dokud nový zdroj nemá 14 vlastních dní, je číslo orientační (`provisional`, `sourceBaseline`). Bez překryvu platí původní pravidlo.
+  - Dnes, Zdraví, kouč kola a běhu, kouč posilovny i revize dne berou číslo z jedné funkce se stejnými vstupy: 90 dní wellness, spánek za 30 dní, cíl spánku z profilu, zátěž předchozího dne a ranní pocit (`src/readiness.js`, `readinessFor`).
 - **Zdroje:**
   - Plews DJ et al. Eur J Appl Physiol 2012;112:3729–3741, [PMID 22367011](https://pubmed.ncbi.nlm.nih.gov/22367011/): 7denní průměr lnRMSSD zachytil přetrénování, jednotlivé dny ne.
   - Plews DJ et al. Int J Sports Physiol Perform 2013;8:688–691: týdenní průměry korelovaly s výkonem r = 0,72–0,76, jednotlivé dny ne.
@@ -80,6 +82,8 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Potřeba spánku (`sleepNeedFor`): 8 h (od 65 let 7,5 h); po zátěži dne ≥ 14 o 15 min a po ≥ 18 o 30 min víc; při nízkém HRV statusu (7denní lnRMSSD pod baseline o víc než SWC) o 15 min; se spánkovým dluhem o čtvrtinu dluhu, nejvýš 30 min. Zdřímnutí (Google je označuje jako `nap`) potřebu sníží. Výsledek vždy 7–9 h.
   - Index: délka proti potřebě (50 bodů; nula při polovině potřeby, plný počet při splněné potřebě); kvalita (35): když zařízení hlásí dobu usnutí a bdění, pak efektivita od 85 % (20), usnutí do 30 min (7,5) a bdění po usnutí do 20 min (7,5), jinak jen efektivita (35); podíl hlubokého spánku ≥ 13 % a REM ≥ 20 % (15). Bez fází se přepočítá.
   - Dluh: součet nedospání za 7 dní včetně zdřímnutí; delší den spánku splatí nejvýš hodinu.
+  - Noc z Intervals.icu nemá čas v posteli, takže vlastní index spočítat nejde; pak se ukáže skóre spánku ze zařízení (`sleepScore`), pokud ho Intervals.icu má (`sleepIndexFor`).
+  - Apple Health: noc začíná a končí vzorky „v posteli“, pokud je iPhone zapsal, takže efektivita i doba usnutí odpovídají skutečnosti. Dech a SpO₂ ze spánku patří ke dni probuzení (vzorek od 15:00 počítá k dalšímu dni).
 - **Zdroje:**
   - Hirshkowitz M et al. Sleep Health 2015;1:40–43, [PMID 29073412](https://pubmed.ncbi.nlm.nih.gov/29073412/): 7–9 h pro 18–64 let, 7–8 h od 65.
   - Watson NF et al. (AASM/SRS) Sleep 2015;38:843–844: dospělí ≥ 7 h.
@@ -101,6 +105,14 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Shcherbina A et al. J Pers Med 2017;7:3: chyba kalorií z hodinek 27–93 %, proto kalorie jen jako záloha.
 - **Proti konkurenci:** Whoop počítá kardio zátěž z času v tepových zónách na stejné škále 0–21. My máme stejný princip a zveřejněné váhy. Svalová zátěž je u nás samostatný ukazatel (bod 2.4).
 - **Limity:** Googlovy zóny odpovídají Edwardsovým zónám 2–5 jen přibližně (procenta tepové rezervy vs. maxima). Konstanta 225 je kalibrace škály.
+
+### 2.3a Zátěž posilovny a tréninky jen z hodinek (CTL)
+
+- **Výpočet:** `src/training-load.js`.
+  - Posilovna: session-RPE, tedy RPE × minuty × 0,1 (`SRPE_SCALE`). Hodina při RPE 6 = 36 (dřívější pevná hodnota), při RPE 10 = 60. Minuty se odhadnou ze zapsaných sérií stejně jako v plánovači posilovny (`strength-timing.js`), nebo se vezme délka tréninku z hodinek. RPE je průměr pracovních sérií (`strength_sets.rpe`), jinak hodnocení dne od sportovce. Bez RPE rozhoduje objem: kg × opakování / 250 (`VOLUME_PER_LOAD`), v mezích RPE 3 až 10 pro danou délku. Bez RPE i objemu RPE 6.
+  - S připojeným Intervals.icu zůstává jeho CTL základem a přičtou se tréninky, které má jen hodinky (Apple Health, Google Health). Stejný trénink se pozná podle začátku do 10 min a stejného sportu; tréninky starší než první aktivita Intervals.icu v databázi se nepřičítají.
+- **Zdroje:** Foster C et al. J Strength Cond Res 2001;15:109–115 (session-RPE).
+- **Limity:** konstanty 0,1 a 250 jsou kalibrace na dřívější hodnotu 36 za běžnou hodinu, ne publikovaný převod na TSS.
 
 ### 2.4 Svěžest svalů
 

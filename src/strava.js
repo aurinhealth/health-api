@@ -92,25 +92,33 @@ export async function stravaAccessToken(env, { fetchImpl = fetch, now = Date.now
 const sportType = sport => ({ gym: 'WeightTraining', strength: 'WeightTraining', run: 'Run', ride: 'Ride', walk: 'Walk', swim: 'Swim', yoga: 'Yoga' }[sport] || 'Workout');
 
 // A done activity as a Strava manual activity (POST /activities); with the id
-// from an earlier send it is updated instead (PUT /activities/{id}).
-export function stravaActivityBody(activity) {
-  const body = { name: activity.name, sport_type: sportType(activity.sport), start_date_local: activity.startLocal, elapsed_time: activity.minutes * 60 };
+// from an earlier send it is updated instead (PUT /activities/{id}). The
+// external_id names the app's activity, so a send whose answer was lost
+// cannot make a second copy: Strava answers 409 to a repeated external_id.
+export function stravaActivityBody(activity, userId) {
+  const body = { name: activity.name, sport_type: sportType(activity.sport), start_date_local: activity.startLocal, elapsed_time: activity.minutes * 60, external_id: 'loadwise:' + userId + ':' + activity.key };
   if (activity.notes) body.description = activity.notes;
   return body;
 }
 
+// Returns the Strava id, or null when Strava already had it and did not say which.
 export async function stravaSendActivity(env, activity, remoteId, { fetchImpl = fetch } = {}) {
   const token = await stravaAccessToken(env, { fetchImpl });
-  const body = stravaActivityBody(activity);
-  if (remoteId) { delete body.start_date_local; delete body.elapsed_time; }
-  const response = await fetchImpl(remoteId ? API + '/activities/' + encodeURIComponent(remoteId) : API + '/activities', {
-    method: remoteId ? 'PUT' : 'POST',
-    headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!response.ok) throw Object.assign(new Error('Strava HTTP ' + response.status), { status: response.status });
+  const body = stravaActivityBody(activity, env.USER_ID);
+  if (remoteId) { delete body.start_date_local; delete body.elapsed_time; delete body.external_id; }
+  let response;
+  try {
+    response = await fetchImpl(remoteId ? API + '/activities/' + encodeURIComponent(remoteId) : API + '/activities', {
+      method: remoteId ? 'PUT' : 'POST',
+      headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (error) { throw Object.assign(new Error('No answer: ' + (error?.name || error?.message)), { noAnswer: true }); }
   const saved = await response.json().catch(() => null);
+  // Already there (an earlier send whose answer was lost): sent, with the id when Strava names it.
+  if (response.status === 409 && !remoteId) return saved?.id != null ? String(saved.id) : null;
+  if (!response.ok) throw Object.assign(new Error('Strava HTTP ' + response.status), { status: response.status });
   const id = saved?.id ?? remoteId;
   if (id == null) throw new Error(L('Strava nepotvrdila uložení.', 'Strava didn\'t confirm the save.'));
   return String(id);

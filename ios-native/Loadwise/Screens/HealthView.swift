@@ -41,7 +41,7 @@ struct DetailScreen<Content: View>: View {
             ScreenBackground(glow: glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět")) { dismiss() }
+                    BackSlot { dismiss() }
                     content
                 }
                 .padding(.horizontal, 24)
@@ -49,6 +49,7 @@ struct DetailScreen<Content: View>: View {
                 .padding(.bottom, 100)
             }
         }
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }
@@ -139,6 +140,7 @@ enum ReadinessText {
         case "sleep": return "Spánek"
         case "respiration": return "Dech"
         case "skinTemp": return "Teplota"
+        case "checkin": return "Pocit"
         default: return key
         }
     }
@@ -165,6 +167,7 @@ enum ReadinessText {
             case ("sleep", false): bits.append("spánku bylo málo")
             case ("respiration", _): bits.append("dech ve spánku je zrychlený")
             case ("skinTemp", _): bits.append("teplota je zvýšená")
+            case ("checkin", _): bits.append("ranní pocit ji snížil")
             default: break
             }
         }
@@ -183,6 +186,8 @@ enum ReadinessText {
 
 struct ReadinessDetailContent: View {
     let health: HealthSnapshot
+    /// Today's answer to "Jak se dnes cítíš?" (.some(nil) unanswered); nil hides the question.
+    var checkin: String?? = nil
 
     var body: some View {
         let r = health.readiness
@@ -196,6 +201,10 @@ struct ReadinessDetailContent: View {
                 .padding(.top, 12)
                 Text(ReadinessText.sentence(r)).font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            }
+
+            if let checkin {
+                MorningCheckinCard(feeling: checkin, keepAnswered: true, top: 24)
             }
 
             SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
@@ -245,6 +254,7 @@ struct ReadinessDetailContent: View {
         case "sleep": return Fmt.hoursMinutes(r.sleepMinutes)
         case "respiration": return health.respiration.map { Fmt.decimal($0.value) + " /min" } ?? "–"
         case "skinTemp": return health.skinTemp.map { Fmt.signed(Units.temperatureChange($0.deviation), digits: 1) + " " + Units.temperatureUnit } ?? "–"
+        case "checkin": return MorningCheckinCard.options.first { $0.id == r.checkin }.map { L10n.tr($0.label) } ?? ""
         default: return ""
         }
     }
@@ -379,16 +389,39 @@ struct HRVWideWidget: View {
     }
 }
 
-/// A widget for an Apple Health value; empty until the app may read Apple Health.
+/// A widget for an Apple Health value Apple Health has no data for yet.
 struct AppleHealthWidget: View {
     let title: String
     let color: Color
 
     var body: some View {
         Card {
-            WidgetHeader(title: title, color: color, appleHealth: true)
+            WidgetHeader(title: title, color: color)
             Text("–").font(Typo.number(34)).foregroundStyle(Palette.faint)
-            Text("z Apple Health · zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint)
+            Text("zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct MuscleWidget: View {
+    let muscle: HealthSnapshot.BodyFat
+    var size: WidgetSize = .medium
+
+    var body: some View {
+        Card {
+            WidgetHeader(title: "Svalová hmota", color: Palette.brown)
+            SizedWidgetBody(size: size, mediumChart: 44) {
+                NumberText(value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
+                if let change = muscle.change, change != 0 {
+                    Text(L10n.f("%@ %@ za 2 měsíce", change > 0 ? "↑" : "↓", Fmt.decimal(abs(Units.weight(change))))).font(Typo.caption)
+                        .foregroundStyle(change > 0 ? Palette.green : Palette.amber)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            } chart: { height in
+                let values = muscle.series.map { Units.weight($0.value) }
+                LineChart(values: values, color: Palette.brown, lo: (values.min() ?? 0) - 0.5, hi: (values.max() ?? 1) + 0.5, height: height)
+            }
         }
         .accessibilityElement(children: .combine)
     }

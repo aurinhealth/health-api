@@ -62,6 +62,7 @@ struct TrainingContent: View {
     var addWorkout: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
     @State private var editing = false
+    @State private var focusSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -70,6 +71,12 @@ struct TrainingContent: View {
                     SectionLabel(text: L10n.f("Trénink · týden %@", String(training.week)))
                     Spacer()
                     CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
+                }
+
+                // Until the main sport and goal are set (FocusSheet.swift).
+                if training.profileIncomplete == true {
+                    FocusPromptCard { focusSheet = true }
+                        .padding(.top, 18)
                 }
 
                 TrainingCalendarCard(today: training.date)
@@ -106,6 +113,7 @@ struct TrainingContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
 }
 
