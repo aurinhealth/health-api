@@ -188,6 +188,12 @@ test("A saved gym plan is listed next to another sport that day, unless strength
   assert.deepEqual(done.map(s => s.kind), ["activity"]);
   const logged = withGym({ planned: [], completed: [], matched: [] }, { name: "Celé tělo", exercises: ["Dřep"], logged: 3 });
   assert.deepEqual(logged.map(s => [s.kind, s.status]), [["gym", "done"]]);
+  // The app's own copy of the gym plan for Intervals.icu is the same session.
+  const copy = { id: "planned:local-ae66", name: "Strength — Celé tělo", type: "WeightTraining" };
+  const copied = withGym({ planned: [copy], completed: [], matched: [] }, { name: "Celé tělo", exercises: ["Dřep"], logged: 3 });
+  assert.deepEqual(copied.map(s => [s.kind, s.status]), [["gym", "done"]]);
+  const open = withGym({ planned: [copy], completed: [], matched: [] });
+  assert.deepEqual(open.map(s => [s.kind, s.status]), [["gym", "planned"]]);
 });
 
 test("A missed gym plan stays on a past day where a ride was done", () => {
