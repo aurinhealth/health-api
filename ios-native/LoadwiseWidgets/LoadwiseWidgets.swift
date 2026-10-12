@@ -142,7 +142,7 @@ struct ReadinessWidgetView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
                     Text(L10n.f("Spánek %@ · zátěž %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
-                    if let bed = s.bedtime { Text(L10n.f("Do postele %@", bed)).font(.caption) }
+                    if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
                 VStack(alignment: .leading, spacing: 2) {
@@ -189,7 +189,7 @@ struct SleepWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             if family == .accessoryInline {
-                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { " · " + L10n.f("postel %@", $0) } ?? ""))
+                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { " · " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
@@ -200,7 +200,7 @@ struct SleepWidgetView: View {
                     if let index = s.sleepIndex { Text(L10n.f("index %@", String(index))).font(.caption2).foregroundStyle(W.indigo) }
                     Spacer(minLength: 0)
                     if let bed = s.bedtime {
-                        Label(L10n.f("postel %@", bed), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
+                        Label(L10n.f("postel %@", ClockText.format(bed)), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
                     }
                 }
             }
@@ -238,7 +238,7 @@ struct DayWidgetView: View {
                         Circle().fill(W.zoneColor(s.zone)).frame(width: 8, height: 8)
                         Spacer(minLength: 0)
                         if let title = s.nextTitle {
-                            Text((s.nextTime.map { $0 + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber).lineLimit(2)
+                            Text((s.nextTime.map { ClockText.format($0) + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber).lineLimit(2)
                         }
                     }
                 }
@@ -248,7 +248,7 @@ struct DayWidgetView: View {
                     Link(destination: URL(string: "loadwise://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
                     Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", .blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
                     if let bed = s.bedtime {
-                        Link(destination: URL(string: "loadwise://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", bed) }
+                        Link(destination: URL(string: "loadwise://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", ClockText.format(bed)) }
                     }
                 }
                 .frame(maxWidth: .infinity)

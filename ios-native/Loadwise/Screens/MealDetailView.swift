@@ -46,7 +46,7 @@ struct MealDetailContent: View {
             HStack {
                 BackSlot(action: back)
                 Spacer()
-                SectionLabel(text: L10n.f("Jídlo · %@", meal.time))
+                SectionLabel(text: L10n.f("Jídlo · %@", ClockText.format(meal.time)))
                 Spacer()
                 CircleButton(systemImage: "plus", label: MealSlot.addText(meal.type), action: add)
             }
@@ -161,7 +161,7 @@ struct FoodEntryCard: View {
 
     /// "150 g · Madeta".
     static func detail(_ e: FoodSnapshot.Entry) -> String? {
-        let parts = [e.amount, e.brand, e.time].compactMap { $0?.nilIfBlank }
+        let parts = [e.amount, e.brand, e.time.map { ClockText.format($0) }].compactMap { $0?.nilIfBlank }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 

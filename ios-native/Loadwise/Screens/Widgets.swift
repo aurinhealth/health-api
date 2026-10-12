@@ -101,7 +101,8 @@ struct PlanWidget: View {
             // A planned session has no clock: it comes after the last record.
             Group {
                 if let time = item.time {
-                    Text(time).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
+                    Text(ClockText.format(time)).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.5)
                 } else {
                     Image(systemName: item.status == "missed" ? "xmark.circle" : "circle.dashed")
                         .font(.system(size: 17, weight: .medium))
