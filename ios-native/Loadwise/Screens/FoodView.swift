@@ -397,7 +397,7 @@ struct DrinkLine: View {
         HStack(spacing: 10) {
             Image(systemName: kind?.symbol ?? "drop.fill").font(.system(size: 13)).foregroundStyle(Palette.blue).frame(width: 20)
             Text(kind?.label ?? drink.kind).font(Typo.small).foregroundStyle(Palette.secondary)
-            if let t = drink.time { Text(t).font(Typo.tiny).foregroundStyle(Palette.faint) }
+            if let t = drink.time { Text(ClockText.format(t)).font(Typo.tiny).foregroundStyle(Palette.faint) }
             Spacer()
             Text(Units.volumeText(drink.ml)).font(Typo.number(16)).foregroundStyle(Palette.ink)
             if let h = drink.hydrationMl, let ml = drink.ml, abs(h - ml) >= 1 {
@@ -432,7 +432,7 @@ struct MealRow: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(meal.label).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(meal.time).font(Typo.caption).foregroundStyle(Palette.faint)
+                Text(ClockText.format(meal.time)).font(Typo.caption).foregroundStyle(Palette.faint)
                 Spacer(minLength: 6)
                 Text(Fmt.int(meal.kcal ?? 0)).font(Typo.number(20)).foregroundStyle(empty ? Palette.faint : Palette.ink)
                 if let goal { Text("/ " + Fmt.int(goal.kcal) + " kcal").font(Typo.number(14)).foregroundStyle(Palette.faint) }

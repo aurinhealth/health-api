@@ -49,11 +49,11 @@ struct SleepSettingsForm: View {
                 Card {
                     WidgetHeader(title: "Dnešní večerka", color: Palette.indigo)
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(bed).font(Typo.number(46)).foregroundStyle(Palette.ink)
+                        Text(ClockText.format(bed)).font(Typo.number(46)).foregroundStyle(Palette.ink)
                         Text("do postele").font(Typo.small).foregroundStyle(Palette.muted)
                         Spacer()
                         if let wake = tonight.wake {
-                            Label(wake, systemImage: "alarm").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
+                            Label(ClockText.format(wake), systemImage: "alarm").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
                         }
                     }
                     if let need = tonight.need {
@@ -159,8 +159,8 @@ struct SleepSettingsForm: View {
             systemAlarm = false
         } else {
             var when: [String] = []
-            if let work { when.append(L10n.f("v pracovní dny v %@", work)) }
-            if let weekend { when.append(L10n.f("o víkendu v %@", weekend)) }
+            if let work { when.append(L10n.f("v pracovní dny v %@", ClockText.format(work))) }
+            if let weekend { when.append(L10n.f("o víkendu v %@", ClockText.format(weekend))) }
             let joined = when.count > 1 ? L10n.f("%@ a %@", when[0], when[1]) : when.joined()
             alarmOK = true
             alarmNote = L10n.f("Budík zvoní %@.", joined)
@@ -190,8 +190,8 @@ struct SleepSettingsCard: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     if let bed = tonight.bedtime {
-                        Text(L10n.f("Do postele v %@", bed)).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                        Text([tonight.wake.map { tonight.wakeSet == true ? L10n.f("budík %@", $0) : L10n.f("budík %@ (obvyklé vstávání)", $0) },
+                        Text(L10n.f("Do postele v %@", ClockText.format(bed))).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                        Text([tonight.wake.map { tonight.wakeSet == true ? L10n.f("budík %@", ClockText.format($0)) : L10n.f("budík %@ (obvyklé vstávání)", ClockText.format($0)) },
                               tonight.goalSet == true ? L10n.f("cíl %@", Fmt.duration(tonight.base)) : L10n.f("cíl %@ podle věku", Fmt.duration(tonight.base))]
                             .compactMap { $0 }.joined(separator: " · "))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
