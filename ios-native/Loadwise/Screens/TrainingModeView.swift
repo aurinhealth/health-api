@@ -441,7 +441,7 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {

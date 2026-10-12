@@ -10,6 +10,7 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showCoach = false
     @State private var showSyncStatus = false
+    @State private var tabTaps = 0
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -66,6 +67,7 @@ struct RootView: View {
                         .padding(.horizontal, 20)
                         .padding(.bottom, 8)
                         .dynamicTypeSize(Self.textSizes)
+                        .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
@@ -109,7 +111,7 @@ struct RootView: View {
 
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
-        if model.tab == tab { model.paths[tab] = [] }
+        if model.tab == tab { model.paths[tab] = [] } else { tabTaps += 1 }
         model.tab = tab
     }
 }
