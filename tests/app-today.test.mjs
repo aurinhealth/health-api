@@ -211,3 +211,16 @@ test("a day's Apple Health HRV wins over Google's copy of it", () => {
   assert.equal(s.today.hrv, 48);
   assert.equal(s.today.hrvSource, "apple-health");
 });
+
+test("the day's strain target follows readiness, the plan, sleep debt and the zone", async () => {
+  const { strainTarget } = await import("../src/app-today.js");
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green" }), { low: 11.1, high: 14.1 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", debt: 30 }), { low: 10.6, high: 13.6 });
+  assert.deepEqual(strainTarget({ readiness: 72, zone: "green", planned: 8.6 }), { low: 9.1, high: 12.1 });
+  assert.ok(strainTarget({ readiness: 50, zone: "yellow", planned: 18 }).high <= 13.5);
+  assert.ok(strainTarget({ readiness: 25, zone: "red" }).high <= 7.5);
+  const t = buildToday(input);
+  assert.ok(t.strain.target.low < t.strain.target.high);
+  assert.equal(t.strain.target.readiness, t.readiness.score);
+  assert.equal(t.strain.target.plan, "Silový trénink");
+});

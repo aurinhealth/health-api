@@ -6,6 +6,7 @@
 import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, sleepIndexScore, bedtimePlan } from "./recovery-model.js";
 import { clockOf, minutesOf, primaryNights, dayStrain } from "./app-today.js";
 import { sleepSettings } from "./energy-profile.js";
+import { localDate } from "./user-time.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -34,7 +35,7 @@ export function readinessParts(readiness) {
   return parts;
 }
 
-export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null }) {
+export function buildHealth({ date, hour = null, health = {}, fitness = {}, sleep = {}, weight = {}, profile = {}, checkin = null, muscle = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -98,6 +99,13 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const avg = (from, to) => mean(weights.filter(p => p.date > from && p.date <= to).map(p => p.value));
   const nowAvg = avg(shift(date, -7), date), monthAgo = avg(shift(date, -37), shift(date, -30));
   const fat = series("bodyFat", 60, 1, intervals);
+  // Muscle mass (lean body mass, kg) from a scale, the last reading of each day.
+  const leanByDay = new Map();
+  for (const r of Array.isArray(muscle) ? muscle : []) {
+    const t = new Date(r.sample_time), d = Number.isFinite(+t) ? localDate(t) : null, v = num(r.value_numeric);
+    if (d && d <= date && d > shift(date, -60) && v > 0) leanByDay.set(d, round(v, 1));
+  }
+  const lean = [...leanByDay].sort((a, b) => a[0].localeCompare(b[0])).map(([d, value]) => ({ date: d, value }));
 
   return {
     status: "ok",
@@ -145,7 +153,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       change: nowAvg != null && monthAgo != null ? round(nowAvg - monthAgo, 1) : null,
       goal: num(profile.targetWeight),
       series: weights,
-      bodyFat: fat.length ? { value: fat.at(-1).value, change: fat.length > 1 ? round(fat.at(-1).value - fat[0].value, 1) : null, series: fat } : null
+      bodyFat: fat.length ? { value: fat.at(-1).value, change: fat.length > 1 ? round(fat.at(-1).value - fat[0].value, 1) : null, series: fat } : null,
+      muscle: lean.length ? { value: lean.at(-1).value, change: lean.length > 1 ? round(lean.at(-1).value - lean[0].value, 1) : null, series: lean } : null
     } : null
   };
 }

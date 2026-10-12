@@ -208,12 +208,11 @@ struct AppleHealthRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title).font(.body).foregroundStyle(Palette.ink)
             Spacer()
-            Text("z Apple Health · zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
+            Text("zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
         }
         .padding(.vertical, 13)
         .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         .accessibilityElement(children: .combine)
-        .accessibilityValue("zatím bez dat z Apple Health")
     }
 }
 
@@ -468,7 +467,11 @@ struct WeightDetailContent: View {
                     } else {
                         AppleHealthRow(title: "Tělesný tuk")
                     }
-                    AppleHealthRow(title: "Svalová hmota")
+                    if let muscle = w.muscle {
+                        StatRow(title: "Svalová hmota", value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
+                    } else {
+                        AppleHealthRow(title: "Svalová hmota")
+                    }
                     AppleHealthRow(title: "Obvod pasu")
                 }
                 .padding(.top, 8)

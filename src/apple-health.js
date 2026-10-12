@@ -36,7 +36,8 @@ const INTERVAL = {
 };
 const SAMPLE = {
   weight: ["weight", "weightGrams", "kg", 20, 400],
-  "body-fat": ["bodyFat", "percentage", "%", 2, 75]
+  "body-fat": ["bodyFat", "percentage", "%", 2, 75],
+  "lean-body-mass": ["leanBodyMass", "massKilograms", "kg", 10, 200]
 };
 const ZONES = ["LIGHT", "MODERATE", "VIGOROUS", "PEAK"];
 const STAGES = { DEEP: "DEEP", REM: "REM", LIGHT: "LIGHT", CORE: "LIGHT", ASLEEP: "LIGHT", AWAKE: "AWAKE" };

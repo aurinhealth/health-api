@@ -140,6 +140,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let goal: Double?
         let series: [Point]
         let bodyFat: BodyFat?
+        /// Muscle mass (lean body mass, kg) from a scale through Apple Health.
+        var muscle: BodyFat? = nil
     }
 }
 
