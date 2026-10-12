@@ -5,7 +5,7 @@ import { fitsEquipment } from "./strength-generator.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences } from "./exercise-feedback.js";
-import { gymExerciseCatalog, gymAlternatives, gymLoadEstimate } from "./gym-catalog.js";
+import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
 import { EXERCISE_STATIONS } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
@@ -66,12 +66,6 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});
   }
   // Loads for exercises added by hand, or a plan's sets left without a weight.
-  if(url.pathname==='/app/api/gym/estimate'&&request.method==='GET'){
-    let names=[];try{names=JSON.parse(url.searchParams.get('names')||'[]');}catch{}
-    const list=(Array.isArray(names)?names:[]).slice(0,30).map(n=>String(n).slice(0,120)).filter(Boolean);
-    const history=await getStrengthHistory(env.DB,500).catch(()=>[]);
-    return Response.json({status:'ok',estimates:Object.fromEntries(list.map(name=>[name,gymLoadEstimate(name,history)]).filter(([,e])=>e))},{headers:{'Cache-Control':'no-store'}});
-  }
   // Muscles of exercises added to a proposal (its body figure).
   if(url.pathname==='/app/api/gym/muscles'&&request.method==='GET'){
     let names=[];try{names=JSON.parse(url.searchParams.get('names')||'[]');}catch{}

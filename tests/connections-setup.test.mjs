@@ -10,7 +10,6 @@ import { saveConnectionSecret, connectionEnvironment } from "../src/connection-s
 import { intervalsAuthorization } from "../src/intervals-auth.js";
 import { handleIntervalsOAuth, INTERVALS_SCOPES } from "../src/intervals-oauth.js";
 import { handleGoogleOAuth } from "../src/google-oauth.js";
-import { connectReturnUrl } from "../src/connect-return.js";
 import { serverSource, SERVER_FILES } from "./helpers/server-source.mjs";
 
 const entry = serverSource();
@@ -99,11 +98,11 @@ test("Intervals.icu connects with one button once its app is registered", async 
   const db = createD1();
   const env = { DB: db, STRENGTH_API_KEY: "k", USER_ID: 5, INTERVALS_CLIENT_ID: " cid ", INTERVALS_CLIENT_SECRET: "secret" };
   // Not registered: the key form stays the way in.
-  const off = await handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals?return=setup"), { ...env, INTERVALS_CLIENT_ID: "" }, "/oauth/intervals");
-  assert.equal(off.headers.get("Location"), "/app?connected=intervals-failed#setup");
+  const off = await handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals?return=native"), { ...env, INTERVALS_CLIENT_ID: "" }, "/oauth/intervals");
+  assert.equal(off.headers.get("Location"), "loadwise://connected?event=intervals-failed");
   assert.equal((await connectionStatus({ ...env, INTERVALS_CLIENT_ID: "" })).providers.find(p => p.id === "intervals").method, "key");
 
-  const start = await handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals?return=setup"), env, "/oauth/intervals");
+  const start = await handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals?return=native"), env, "/oauth/intervals");
   const to = new URL(start.headers.get("Location"));
   assert.equal(to.origin + to.pathname, "https://intervals.icu/oauth/authorize");
   assert.equal(to.searchParams.get("client_id"), "cid");
@@ -112,12 +111,12 @@ test("Intervals.icu connects with one button once its app is registered", async 
   const cookie = start.headers.get("Set-Cookie").split(";")[0], state = to.searchParams.get("state");
 
   const callback = (query, fetchImpl) => handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals/callback?" + query, { headers: { Cookie: cookie } }), env, "/oauth/intervals/callback", fetchImpl);
-  assert.equal((await callback("state=other&code=x")).headers.get("Location"), "/app?connected=intervals-failed#settings-connections");
-  assert.equal((await callback("state=" + state + "&error=access_denied")).headers.get("Location"), "/app?connected=intervals-cancelled#setup");
+  assert.equal((await callback("state=other&code=x")).headers.get("Location"), "loadwise://connected?event=intervals-failed");
+  assert.equal((await callback("state=" + state + "&error=access_denied")).headers.get("Location"), "loadwise://connected?event=intervals-cancelled");
 
   let exchanged = null;
   const ok = await callback("state=" + state + "&code=the-code", async (url, init) => { exchanged = { url, body: new URLSearchParams(String(init.body)) }; return Response.json({ token_type: "Bearer", access_token: "tok123", scope: INTERVALS_SCOPES.join(","), athlete: { id: "i1", name: "A" } }); });
-  assert.equal(ok.headers.get("Location"), "/app?connected=intervals#setup");
+  assert.equal(ok.headers.get("Location"), "loadwise://connected?event=intervals");
   assert.equal(exchanged.url, "https://intervals.icu/api/oauth/token");
   assert.deepEqual([exchanged.body.get("client_id"), exchanged.body.get("client_secret"), exchanged.body.get("code")], ["cid", "secret", "the-code"]);
   const resolved = await connectionEnvironment(env);
@@ -127,18 +126,15 @@ test("Intervals.icu connects with one button once its app is registered", async 
   assert.deepEqual([status.connected, status.via, status.method, status.connectUrl], [true, "oauth", "oauth", "/oauth/intervals"]);
 
   const failed = await callback("state=" + state + "&code=bad", async () => new Response("{}", { status: 400 }));
-  assert.equal(failed.headers.get("Location"), "/app?connected=intervals-failed#setup");
+  assert.equal(failed.headers.get("Location"), "loadwise://connected?event=intervals-failed");
 });
 
-test("connecting Google from the setup window returns to it; cancelling there is not a dead end", async () => {
+test("connecting Google returns to the app; cancelling there is not a dead end", async () => {
   const google = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" };
-  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&return=setup"), google, "/oauth/google");
+  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&return=native"), google, "/oauth/google");
   const state = new URL(start.headers.get("Location")).searchParams.get("state"), cookie = start.headers.get("Set-Cookie").split(";")[0];
   const cancelled = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?error=access_denied&state=" + state, { headers: { Cookie: cookie } }), google, "/oauth/google/callback");
-  assert.equal(cancelled.headers.get("Location"), "/app?connected=google-cancelled#setup");
-  // Plain connects (Settings) keep returning to the connections.
-  assert.equal(connectReturnUrl("settings", "google"), "/app?connected=google#settings-connections");
-  assert.equal(connectReturnUrl("setup", "unknown"), "/app#setup");
+  assert.equal(cancelled.headers.get("Location"), "loadwise://connected?event=google-cancelled");
 });
 
 
