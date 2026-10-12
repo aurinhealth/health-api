@@ -70,7 +70,10 @@ test("the Training text gets today's readiness, the trends and the zone rule in 
   // Nothing visible changes: the same chips and basis with or without them.
   assert.deepEqual(info.chips, screenFacts("training", training()).chips);
   assert.deepEqual(info.basis, screenFacts("training", training()).basis);
-  assert.equal(info.fingerprint, screenFacts("training", training()).fingerprint);
+  // A new zone asks for a new text; trends alone do not.
+  assert.notEqual(info.fingerprint, screenFacts("training", training()).fingerprint);
+  assert.equal(info.fingerprint, screenFacts("training", training({ readiness })).fingerprint);
+  assert.notEqual(info.fingerprint, screenFacts("training", training({ readiness: { ...readiness, zone: "yellow" } })).fingerprint);
   assert.equal(screenFacts("training", training()).facts.readiness, null);
   assert.equal(screenFacts("today", { readiness: { score: 70, zone: "green" }, coachTrends: trends }).facts.trends.hrvChange6w.percent, 8);
 

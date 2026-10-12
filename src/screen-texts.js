@@ -109,7 +109,8 @@ function trainingFacts(d) {
     facts, basis, chips,
     fallback: form?.text ? { text: form.text, advice: null } : null,
     ready: week.planned != null || form != null,
-    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || ""].join(":")
+    // A new readiness zone (a morning check-in, last night's sleep) asks for a new text too.
+    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || "", facts.readiness?.zone || ""].join(":")
   };
 }
 
