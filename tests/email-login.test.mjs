@@ -147,7 +147,7 @@ test("e-mail texts in Czech and English", () => {
 });
 
 test("App Review: the review address gets the fixed code, which still needs sending and works once", async () => {
-  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810" });
+  const { env, sent } = await setup({ APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810", APP_REVIEW_UNTIL: "2999-12-31" });
   await inviteUser(env.DB, "review@example.com", 1);
   assert.equal((await verify(env, "review@example.com", "246810")).status, 400, "no code sent yet");
   await start(env, "review@example.com");
