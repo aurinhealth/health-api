@@ -32,22 +32,6 @@ test('night detail reads only the signed-in user and compares with the previous 
   assert.equal((await nightDetail(db, { date: '2026-10-05' })).night, null);
 });
 
-test('the morning card draws the night: stages, heart rate with spikes, tiles and recent nights', async () => {
-  const fs = await import('node:fs'), vm = await import('node:vm');
-  const source = fs.readFileSync(new URL('../src/dashboard-client.js', import.meta.url), 'utf8');
-  const fn = name => { const s = source.indexOf('function ' + name + '('); return source.slice(s, source.indexOf('\nfunction ', s + 1)); };
-  const ctx = { esc: v => String(v), window: { innerWidth: 1200 }, uiText: cs => cs, num: v => Number(v) || 0, measured: v => v != null && Number.isFinite(Number(v)), hm: m => Math.floor(m / 60) + 'h ' + Math.round(m % 60) + 'm', dateLabel: d => d.slice(8) + '.' };
-  vm.createContext(ctx);
-  vm.runInContext(source.match(/const NIGHT_STAGES=.*\n/)[0] + ['nightWidth', 'nightClock', 'clockLabel', 'nightChart', 'nightTiles', 'nightHistory', 'nightNote', 'nightHtml'].map(fn).join('\n') + '\n;this.nightHtml=nightHtml;', ctx);
-  const segments = nightSegments(stages, start), hr = [{ m: 0, avg: 60, min: 58, max: 62 }, { m: 5, avg: 58, min: 55, max: 60 }, { m: 10, avg: 52, min: 50, max: 54 }, { m: 15, avg: 62, min: 55, max: 84 }];
-  const html = ctx.nightHtml({ night: { start, end: at(305), asleepMin: 268, inBedMin: 305, stages: { DEEP: 60, REM: 44, LIGHT: 164, AWAKE: 33 }, bedClock: 23 * 60 + 30, segments, hr, stats: nightStats(segments, hr, [{ m: 0, ms: 50 }]), usual: { asleepMin: 420, bedClock: 22 * 60 + 30, deep: 90, rem: 80 } },
-    history: [{ date: '2026-10-07', asleepMin: 420, stages: { DEEP: 90, REM: 80, LIGHT: 250 } }, { date: '2026-10-06', asleepMin: 400, stages: {} }] });
-  assert.match(html, /Průběh noci/); assert.match(html, /Hluboký/); assert.match(html, /<polyline/); assert.match(html, /Výkyv tepu/);
-  assert.match(html, /Do postele/); assert.match(html, /60 min později/); assert.match(html, /2×/); assert.match(html, /Poslední noci/); assert.match(html, /Dnes/);
-  assert.match(html, /tep vyskočil|Tep vyskočil/);
-  assert.equal(ctx.nightHtml({ night: null }), '');
-});
-
 test('an older night draws heart rate from the 5-minute rows', async () => {
   const startTime = start, endTime = at(305);
   const rows = [{ external_id: 'a', start_time: startTime, end_time: endTime, payload_json: JSON.stringify({ sleep: { interval: { startTime, endTime, startUtcOffset: '7200s' }, stages } }) }];

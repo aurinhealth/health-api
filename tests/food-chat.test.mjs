@@ -44,12 +44,9 @@ test("the sentence is parsed by the light model with a JSON schema", async () =>
   assert.deepEqual(itemTotals(snickers, 100), { kcal: 481, protein_g: 8.6, carbs_g: 60.5, fat_g: 22.5 });
 });
 
-test("the assistant returns the draft and the dialog logs it only on confirmation", () => {
+test("the assistant returns a food draft instead of logging the sentence", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
   assert.match(entry, /if\(body\.mode!=='coach'&&isFoodLogMessage\(message\)\)/);
-  assert.match(client, /if\(r\.kind==='food_draft'\)\{renderFoodDraft\(message,r\);scrollAssistant\(\);return;\}/);
-  assert.match(client, /\$\('foodDraftSave'\)\.onclick=async\(\)=>/);
 });
 
 test("English food sentences go to the food draft too; questions and training do not", () => {

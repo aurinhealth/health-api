@@ -1,7 +1,7 @@
 # Food data sources
 
 The common label/recipe catalogue is stored in the separate `petrfitness-foods`
-D1 database (`petrfitness-foods-staging` in staging). Personal saved foods and
+D1 database. Personal saved foods and
 the diary stay in each user's assigned data database. Contribution links and
 reports follow the shared catalogue with user_id filtering; account export and
 deletion include them. See [catalogue operations](food-catalog-database.md).

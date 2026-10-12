@@ -23,7 +23,7 @@ test("personal tables are known", () => {
 
 test("queries on personal tables filter by user_id", () => {
   const offenders = [];
-  for (const file of readdirSync(new URL("../src/", import.meta.url)).filter(f => f.endsWith(".js") && f !== "dashboard-client.js")) {
+  for (const file of readdirSync(new URL("../src/", import.meta.url)).filter(f => f.endsWith(".js"))) {
     const source = readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8");
     for (const m of source.matchAll(/`[^`]*`|"[^"\n]*"|'[^'\n]*'/g)) {
       const sql = m[0];

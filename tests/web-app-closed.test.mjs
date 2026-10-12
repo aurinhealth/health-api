@@ -9,20 +9,12 @@ const challenge = "a".repeat(43);
 const cookie = async () => (await sessionCookie(6, Math.floor(Date.now() / 1000) + 3600, env.SESSION_SECRET)).split(";")[0];
 const iPhone = { "X-Loadwise-Api": "1" };
 
-test("/app shows the notice in the browser's language instead of the app", async () => {
-  const cs = await closedToBrowser(new Request(BASE + "/app", { headers: { "Accept-Language": "cs" } }), env);
-  assert.equal(cs.status, 200);
-  const html = await cs.text();
-  assert.match(html, /Webová aplikace je vypnutá/);
-  assert.match(html, /noindex/);
-  assert.doesNotMatch(html, /dashboard-client\.js/);
-  const en = await closedToBrowser(new Request(BASE + "/app?lang=en"), env);
-  assert.match(await en.text(), /The web app is switched off/);
-});
-
-test("the staging copy marks the notice", async () => {
-  const response = await closedToBrowser(new Request(BASE + "/app"), { ...env, ENVIRONMENT: "staging" });
-  assert.match(await response.text(), /TEST · staging/);
+test("the old web address /app leads to the overview page", async () => {
+  for (const path of ["/app", "/app/"]) {
+    const response = await closedToBrowser(new Request(BASE + path, { headers: { Cookie: await cookie() } }), env);
+    assert.equal(response.status, 301, path);
+    assert.equal(response.headers.get("Location"), "/", path);
+  }
 });
 
 test("the browser session can neither read nor change anything", async () => {
@@ -32,13 +24,13 @@ test("the browser session can neither read nor change anything", async () => {
   assert.equal((await write.json()).status, "web_app_closed");
   const read = await closedToBrowser(new Request(BASE + "/app/api/today", { headers: { Cookie } }), env);
   assert.equal(read.status, 302);
-  assert.equal(read.headers.get("Location"), "/app");
+  assert.equal(read.headers.get("Location"), "/");
   assert.equal((await closedToBrowser(new Request(BASE + "/sync/google", { method: "POST", headers: { Cookie } }), env)).status, 410);
 });
 
 test("browser sign-in is closed, the iPhone app's Google sheet is not", async () => {
   assert.equal((await closedToBrowser(new Request(BASE + "/auth/google"), env)).status, 302);
-  assert.equal((await closedToBrowser(new Request(BASE + "/auth/google?app=short"), env)).headers.get("Location"), "/app");
+  assert.equal((await closedToBrowser(new Request(BASE + "/auth/google?app=short"), env)).headers.get("Location"), "/");
   assert.equal(await closedToBrowser(new Request(BASE + "/auth/google?app=" + challenge), env), null);
   assert.equal(await closedToBrowser(new Request(BASE + "/auth/google/callback?code=x&state=y"), env), null);
   for (const path of ["/auth/email/start", "/auth/email/verify", "/auth/passkey/options", "/auth/passkey/verify", "/auth/apple/callback", "/auth/app/session"]) {
@@ -62,7 +54,7 @@ test("connecting a service from the iPhone app still goes through the browser", 
 });
 
 test("public pages, the API key, GitHub Actions and anonymous requests carry on", async () => {
-  for (const path of ["/", "/privacy", "/terms", "/support", "/logo.svg", "/manifest.webmanifest", "/app/dashboard-client.js"]) {
+  for (const path of ["/", "/privacy", "/terms", "/support", "/logo.svg"]) {
     assert.equal(await closedToBrowser(new Request(BASE + path, { headers: { Cookie: await cookie() } }), env), null, path);
   }
   assert.equal(await closedToBrowser(new Request(BASE + "/app/api/daily", { headers: { Authorization: "Bearer key" } }), env), null);

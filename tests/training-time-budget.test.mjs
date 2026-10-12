@@ -25,7 +25,6 @@ const coachInbox = readFileSync(new URL('../src/coach-inbox.js', import.meta.url
 const routeModules = ['routes-account.js', 'routes-sync.js', 'routes-gym.js', 'routes-training.js', 'routes-food.js']
   .map(file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'));
 const gateway = readFileSync(new URL('../src/strength-gateway.js', import.meta.url), 'utf8');
-const client = readFileSync(new URL('../src/dashboard-client.js', import.meta.url), 'utf8');
 const slice = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to));
 const setBudget = (db, minutes) => saveWeekPlan(db, { availability: Array.from({ length: 7 }, () => ({ minutes })) });
 
@@ -52,7 +51,7 @@ async function api(minutes) {
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({})
   });
-  vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\nexport function coachChannel('), context);
+  vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\n// Earlier proposals of the assistant'), context);
   for (const text of routeModules) vm.runInContext(text.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
   vm.runInContext(slice(source, 'async function handleDashboardApi(', '\n// The concrete workout'), context);
   vm.runInContext(slice(source, 'async function workoutPreview(', '\nfunction logoResponse('), context);
@@ -137,37 +136,17 @@ test('a user initiated gym request survives both HTTP generation layers without 
   assert.equal((await readGymPlan(app.db, today)).values[4][1], 90);
 });
 
-test('the resize control sends a user initiated request; generation and the focused gym keep the week plan\'s day limit', async () => {
-  const app = await api(0), calls = [], elements = {
-    generateDate: { value: today }, generateEnvironment: { value: 'indoor' }, generateMinutes: { value: '' }, resizeGenerated: {},
-    generateWorkoutBtn: {}, generatedWorkout: {}, generateFocusedGym: {}, gymFocusDate: { value: today },
-    gymFocusStatus: {}
-  };
-  const ui = vm.createContext({
-    state: { generated: { date: today } }, statusCoachingRevision: 0, selectedGymMuscles: new Set(['chest']),
-    $: id => elements[id], localToday: () => today, workoutSport: () => 'ride', gymDay: () => today,
-    esc: String, toast() {}, renderGeneratedWorkout() {}, loadGym: async () => {}, reloadWeek() {}, openTrainingDetail() {},
-    jsonFetch: async (path, options) => {
-      const body = JSON.parse(options.body); calls.push(body);
-      const result = await app.post(path, body);
-      if (result.status !== 200) throw new Error(result.data.message);
-      return result.data;
-    }
-  });
-  vm.runInContext(slice(client, 'async function resizeGeneratedWorkout(', '\nasync function generateWorkoutForDay('), ui);
-  vm.runInContext(slice(client, 'async function generateWorkoutForDay(', '\nlet dashboardLoadRevision='), ui);
-  vm.runInContext(slice(client, 'async function generateFocusedGym(', '\nwindow.addEventListener("error"'), ui);
-  const workout = CYCLING_WORKOUTS.find(w => w.duration_minutes === 60 && w.primary_system === 'endurance');
-  await ui.resizeGeneratedWorkout(workout.id, 180);
-  assert.equal(calls[0].resizeTo, 180);
-  assert.equal(ui.state.generated.workout.duration_minutes, 180);
-  await ui.generateWorkoutForDay();
-  assert.equal(calls[1].userInitiated, undefined);
-  assert.match(elements.generatedWorkout.innerHTML, /nemáš dost času/);
+test('a resize keeps its length; generation and the focused gym keep the week plan\'s day limit', async () => {
+  const app = await api(0), workout = CYCLING_WORKOUTS.find(w => w.duration_minutes === 60 && w.primary_system === 'endurance');
+  const resized = await app.post('/app/api/workouts/generate', { date: today, environment: 'indoor', sport: 'ride', workoutId: workout.id, resizeTo: 180 });
+  assert.equal(resized.status, 200, resized.data.message);
+  assert.equal(resized.data.workout.duration_minutes, 180);
+  const day = await app.post('/app/api/workouts/generate', { date: today, environment: 'indoor', variant: 0, sport: 'ride' });
+  assert.equal(day.status, 400);
+  assert.match(day.data.message, /nemáš dost času/);
   // Training time is set only in the week plan: the focused gym sends no
   // length of its own, and a day without time gets no gym.
-  await ui.generateFocusedGym();
-  assert.equal(calls[2].userInitiated, undefined);
-  assert.equal(calls[2].durationMinutes, undefined);
-  assert.match(elements.gymFocusStatus.textContent, /30 minut/);
+  const gym = await app.post('/app/api/gym/generate', { date: today, focusMuscles: ['chest'] });
+  assert.equal(gym.status, 400);
+  assert.match(gym.data.message, /30 minut/);
 });

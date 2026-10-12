@@ -5,17 +5,14 @@ import { createD1 } from './helpers/d1.mjs';
 import { parseConfig, shardPlan, runtimeConfig, provisionDatabases, ACTIVATION_SQL } from '../scripts/provision-user-shards.mjs';
 
 const config = () => parseConfig(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
-test('generated bindings preserve routes, assets and secrets selectors; environments never share data IDs', () => {
-  const c = config(), prod = shardPlan(c), stage = shardPlan(c,'staging');
-  assert.equal(prod.shards.length, 20); assert.equal(stage.shards.length, 2);
-  assert.ok(prod.shards.every(s => !stage.shards.some(t => t.name === s.name)));
-  const generated = runtimeConfig(c,'staging',stage,stage.shards.map((s,i) => ({name:s.name,uuid:'staging-'+i,jurisdiction:'eu'})));
-  assert.equal(generated.env.staging.d1_databases.length, 3);
-  assert.equal(generated.d1_databases.length, 1);
-  assert.deepEqual(generated.env.staging.routes,c.env.staging.routes);
+test('generated bindings preserve assets and never reuse the central database ID', () => {
+  const c = config(), prod = shardPlan(c);
+  assert.equal(prod.shards.length, 20);
+  const generated = runtimeConfig(c,'',prod,prod.shards.map((s,i) => ({name:s.name,uuid:'shard-'+i,jurisdiction:'eu'})));
+  assert.equal(generated.d1_databases.length, 21);
   assert.deepEqual(generated.assets,c.assets);
-  assert.throws(() => runtimeConfig(c,'staging',stage,stage.shards.map(s => ({name:s.name,uuid:stage.core.database_id,jurisdiction:'eu'}))), /Invalid/);
-  assert.throws(() => shardPlan(c,'other'), /Unsupported/);
+  assert.throws(() => runtimeConfig(c,'',prod,prod.shards.map(s => ({name:s.name,uuid:prod.core.database_id,jurisdiction:'eu'}))), /Invalid/);
+  assert.throws(() => shardPlan(c,'staging'), /Unsupported/);
 });
 
 test('JSONC parser leaves HTTPS URLs, comment-looking strings and escapes intact', () => {
@@ -23,7 +20,7 @@ test('JSONC parser leaves HTTPS URLs, comment-looking strings and escapes intact
 });
 
 test('provisioning reuses existing EU databases and creates only missing names', async () => {
-  const plan = shardPlan(config(),'staging'), calls = [];
+  const plan = shardPlan(config()), calls = [];
   const existing = {name:plan.shards[0].name,uuid:'existing',jurisdiction:'eu'};
   const fetchImpl = async (url, options) => {
     calls.push({url,method:options.method||'GET',body:options.body});
@@ -32,8 +29,8 @@ test('provisioning reuses existing EU databases and creates only missing names',
     return Response.json({success:true,result,result_info:{total_pages:1}});
   };
   const databases = await provisionDatabases({accountId:'a'.repeat(32),token:'test-token',plan,fetchImpl});
-  assert.equal(databases.length,2);
-  assert.equal(calls.filter(c=>c.method==='POST').length,1);
+  assert.equal(databases.length,20);
+  assert.equal(calls.filter(c=>c.method==='POST').length,19);
   assert.equal(JSON.parse(calls.find(c=>c.method==='POST').body).jurisdiction,'eu');
   await assert.rejects(provisionDatabases({accountId:'a'.repeat(32),token:'test-token',plan,fetchImpl:async()=>Response.json({success:false},{status:403})}),/HTTP 403/);
 });

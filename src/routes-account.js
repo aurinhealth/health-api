@@ -1,12 +1,12 @@
 // Account routes of the dashboard API: me, consent, passkeys, e-mail, sign-out,
 // Apple ID, export and delete, subscription, training setup and onboarding.
 import { initialImport } from "./account-sync.js";
-import { onboardingStatus, trainingSetup, updateTrainingSetup, completeOnboarding } from "./onboarding.js";
-import { subscriptionStatus, markAiIntroSeen } from "./subscription.js";
+import { onboardingStatus, completeOnboarding } from "./onboarding.js";
+import { subscriptionStatus } from "./subscription.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
 import { bumpCacheVersion } from "./api-cache.js";
-import { appleConfigured, appleIdentity, unlinkAppleIdentity, revokeApple } from "./apple-login.js";
+import { appleIdentity, unlinkAppleIdentity, revokeApple } from "./apple-login.js";
 import { handleSignOutEverywhere, signedOutElsewhere, handleDashboardLogout } from "./dashboard-auth.js";
 import { aiAllowance } from "./ai-usage.js";
 import { exportAccountData, deleteAccount } from "./account-data.js";
@@ -19,7 +19,7 @@ import { localToday } from "./user-time.js";
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
     const [onboarding,ai,consent]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null,session.signedIn?consentStatus(env):null]);
-    const apple = appleConfigured(env) && session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
+    const apple = session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
     const passkeys = session.user ? await listPasskeys(env.RAW_DB, session.user.id) : [];
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,consent,apple,passkeys,emailLogin:emailConfigured(env)},{headers:{"Cache-Control":"no-store"}});
   }
@@ -40,7 +40,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   }
   // Settings → Účet: every other device is signed out; this one gets a fresh cookie.
   if (url.pathname === "/app/api/account/sign-out-everywhere") return handleSignOutEverywhere(request, env, url, session);
-  // Settings → Účet: unlinks the Apple ID (linking goes through /auth/apple?link=1).
+  // Settings → Účet: unlinks the Apple ID.
   if (url.pathname === "/app/api/me/apple" && request.method === "DELETE") {
     if (!session.signedIn) return Response.json({message:"Přihlas se do dashboardu."},{status:401});
     if (request.headers.get("Origin") !== url.origin) return Response.json({message:"Neplatný původ požadavku."},{status:403});
@@ -69,17 +69,6 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     }catch(error){return Response.json({message:error.message},{status:400});}
   }
   if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json(await subscriptionStatus(env),{headers:{'Cache-Control':'no-store'}});
-  if(url.pathname==='/app/api/subscription/intro'&&request.method==='POST'){
-    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    return Response.json(await markAiIntroSeen(env),{headers:{'Cache-Control':'no-store'}});
-  }
-  if(url.pathname==='/app/api/training-setup'){
-    if(request.method==='GET')return Response.json({status:'ok',training:await trainingSetup(env.DB)},{headers:{'Cache-Control':'no-store'}});
-    if(request.method==='PATCH'){
-      if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-      try{const training=await updateTrainingSetup(env.DB,await request.json());await bumpCacheVersion(env.DB);return Response.json({status:'ok',training});}catch(error){return Response.json({message:error.message},{status:400});}
-    }
-  }
   if(url.pathname==='/app/api/onboarding'){
     if(request.method==='GET')return Response.json(await onboardingStatus(env),{headers:{'Cache-Control':'no-store'}});
     if(request.method==='POST'){
