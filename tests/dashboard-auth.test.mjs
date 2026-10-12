@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { foreignOriginChange, isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession } from "../src/dashboard-auth.js";
+import { readFileSync } from "node:fs";
+import { foreignOriginChange, isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession, SESSION_SECONDS, SESSION_REFRESH_SECONDS, sessionNeedsRefresh, slidingSession } from "../src/dashboard-auth.js";
 
 const env = { STRENGTH_API_KEY: "test-secret-key", SESSION_SECRET: "test-session-secret" };
 const rejectOidc = async () => { throw new Error("invalid"); };
@@ -87,4 +88,76 @@ test("changes made with the session come only from pages of this address", () =>
   for (const method of ["GET", "HEAD", "OPTIONS"]) assert.equal(foreignOriginChange(change("https://example.com", method), user), false, method);
   // A browser never adds an API key or a GitHub token on its own.
   for (const principal of [{ kind: "owner" }, { kind: "system" }, null]) assert.equal(foreignOriginChange(change(null), principal), false);
+});
+
+// ---- Sliding sessions ----
+const NOW = 1_800_000_000;
+const DAY = 24 * 60 * 60;
+const cookieOf = header => header.split(";")[0];
+const payloadOf = header => JSON.parse(Buffer.from(cookieOf(header).slice("pfd_session=".length).split(".")[0], "base64url").toString());
+const apiRequest = cookie => new Request("https://petrfitnessdata.eu/app/api/today", { headers: cookie ? { Cookie: cookie } : {} });
+const okResponse = () => Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } });
+const hmac = async (payload, secret) => {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return Buffer.from(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))).toString("base64url");
+};
+
+test("the cookie carries when it was issued; older cookies count as issued 30 days before they expire", async () => {
+  const fresh = await sessionCookie(7, NOW + SESSION_SECONDS, env.SESSION_SECRET, NOW);
+  assert.deepEqual(payloadOf(fresh), { uid: 7, exp: NOW + SESSION_SECONDS, iat: NOW });
+  assert.deepEqual(await verifyDashboardSession(apiRequest(cookieOf(fresh)), env.SESSION_SECRET), { uid: 7, exp: NOW + SESSION_SECONDS, iat: NOW });
+  // A cookie from before the sliding sessions: {uid, exp} only.
+  const legacyPayload = Buffer.from(JSON.stringify({ uid: 7, exp: NOW + SESSION_SECONDS })).toString("base64url");
+  const legacy = "pfd_session=" + legacyPayload + "." + await hmac(legacyPayload, env.SESSION_SECRET);
+  assert.deepEqual(await verifyDashboardSession(apiRequest(legacy), env.SESSION_SECRET), { uid: 7, exp: NOW + SESSION_SECONDS, iat: NOW });
+});
+
+test("a session a day old needs a fresh cookie, a newer one does not", () => {
+  assert.equal(SESSION_REFRESH_SECONDS, DAY);
+  const session = { uid: 7, exp: NOW + SESSION_SECONDS, iat: NOW };
+  assert.equal(sessionNeedsRefresh(session, NOW + DAY - 1), false);
+  assert.equal(sessionNeedsRefresh(session, NOW + DAY), true);
+  assert.equal(sessionNeedsRefresh(session, NOW + 29 * DAY), true);
+  assert.equal(sessionNeedsRefresh(null, NOW), false);
+});
+
+test("an API answer to a day-old session sets a fresh 30-day cookie for the same user", async () => {
+  const issued = NOW - 25 * 60 * 60;
+  const cookie = cookieOf(await sessionCookie(7, issued + SESSION_SECONDS, env.SESSION_SECRET, issued));
+  const response = await slidingSession(apiRequest(cookie), okResponse(), env.SESSION_SECRET, NOW);
+  const header = response.headers.get("Set-Cookie");
+  assert.match(header, /^pfd_session=.+; Path=\/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax$/);
+  assert.deepEqual(payloadOf(header), { uid: 7, exp: NOW + SESSION_SECONDS, iat: NOW });
+  // The body and the other headers are untouched.
+  assert.deepEqual(await response.json(), { status: "ok" });
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  // The new cookie signs the user in.
+  assert.deepEqual(await resolvePrincipal(apiRequest(cookieOf(header)), env, rejectOidc), { kind: "user", userId: 7 });
+});
+
+test("a session used within the day, no session, an expired one and a sign-in answer get no new cookie", async () => {
+  const recent = cookieOf(await sessionCookie(7, NOW - 3600 + SESSION_SECONDS, env.SESSION_SECRET, NOW - 3600));
+  assert.equal((await slidingSession(apiRequest(recent), okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
+  assert.equal((await slidingSession(apiRequest(null), okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
+  const apiKey = new Request("https://petrfitnessdata.eu/app/api/today", { headers: { Authorization: "Bearer test-secret-key" } });
+  assert.equal((await slidingSession(apiKey, okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
+  // Expired: verifyDashboardSession reads the real clock, so a past exp is refused whatever "now" says.
+  const expired = cookieOf(await sessionCookie(7, Math.floor(Date.now() / 1000) - 1, env.SESSION_SECRET, NOW - 40 * DAY));
+  assert.equal((await slidingSession(apiRequest(expired), okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
+  // Without the secret nothing can be signed.
+  assert.equal((await slidingSession(apiRequest(recent), okResponse(), "", NOW)).headers.get("Set-Cookie"), null);
+  // An answer that already sets the session (a sign-in, a logout) keeps its own cookie.
+  const old = cookieOf(await sessionCookie(7, NOW - 2 * DAY + SESSION_SECONDS, env.SESSION_SECRET, NOW - 2 * DAY));
+  const ownCookie = await sessionCookie(9, NOW + 60, env.SESSION_SECRET, NOW);
+  const kept = await slidingSession(apiRequest(old), new Response("{}", { headers: { "Set-Cookie": ownCookie } }), env.SESSION_SECRET, NOW);
+  assert.equal(kept.headers.getSetCookie().length, 1);
+  assert.equal(kept.headers.get("Set-Cookie"), ownCookie);
+});
+
+test("the Worker slides the session on every /app/api/* answer", () => {
+  const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const block = source.slice(source.indexOf('if (url.pathname.startsWith("/app/api/")) {'));
+  const end = block.indexOf("\n    }\n");
+  assert.ok(end > 0);
+  assert.match(block.slice(0, end), /return slidingSession\(request, response, sessionSecret\(rawEnv\)\);/);
 });

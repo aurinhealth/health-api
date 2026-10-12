@@ -41,6 +41,11 @@ targets:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
         com.apple.developer.healthkit.background-delivery: true
+        # Passkeys (Data/Passkeys.swift): the server must serve
+        # /.well-known/apple-app-site-association with a webcredentials entry
+        # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
+        com.apple.developer.associated-domains:
+          - webcredentials:petrfitnessdata.eu
     settings:
       base:
         # Its own bundle ID, so it installs next to the Capacitor app (mobile/).

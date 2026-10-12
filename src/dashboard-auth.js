@@ -3,6 +3,9 @@ import { verifyGitHubActionsToken } from "./github-oidc.js";
 
 const SESSION_COOKIE = "pfd_session";
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
+// A session in use slides: once it is a day old, an /app/api/* request gets a
+// fresh 30-day cookie, so only 30 days without the app sign the user out.
+export const SESSION_REFRESH_SECONDS = 24 * 60 * 60;
 
 // Routes reachable without a dashboard session or API key. Everything else
 // requires authentication. Routes listed here either serve static/public
@@ -81,7 +84,8 @@ export function handleDashboardLogout() {
   return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":CLEARED_SESSION_COOKIE,"Cache-Control":"no-store"}});
 }
 
-// Returns the session payload ({uid, exp}) or null.
+// Returns the session payload ({uid, exp, iat}) or null. Cookies from before
+// the sliding sessions carry no iat; they count as issued 30 days before exp.
 export async function verifyDashboardSession(request, secret) {
   if (!secret) return null;
   const cookieHeader = request.headers.get("Cookie") || "";
@@ -97,7 +101,8 @@ export async function verifyDashboardSession(request, secret) {
     const data = JSON.parse(new TextDecoder().decode(fromBase64url(payload)));
     const uid = Number(data?.uid);
     if (!(Number(data?.exp) > Math.floor(Date.now()/1000)) || !Number.isInteger(uid) || uid <= 0) return null;
-    return { uid, exp: Number(data.exp) };
+    const exp = Number(data.exp), iat = Number.isFinite(Number(data.iat)) ? Number(data.iat) : exp - SESSION_SECONDS;
+    return { uid, exp, iat };
   } catch { return null; }
 }
 
@@ -108,8 +113,8 @@ export function sessionSecret(env) {
   return String(env.SESSION_SECRET || "");
 }
 
-export async function sessionCookie(uid, exp, secret) {
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp})));
+export async function sessionCookie(uid, exp, secret, iat = Math.floor(Date.now() / 1000)) {
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp,iat})));
   const signature = await dashboardHmac(payload, secret);
   return SESSION_COOKIE+"="+payload+"."+signature+"; Path=/; Max-Age="+SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
 }
@@ -118,6 +123,26 @@ export async function sessionCookie(uid, exp, secret) {
 export async function signedInResponse(userId, env, body = { status: "ok" }) {
   const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
   return Response.json(body, { headers: { "Cache-Control": "no-store", "Set-Cookie": await sessionCookie(userId, exp, sessionSecret(env)) } });
+}
+
+// Whether the session is old enough for a fresh cookie (SESSION_REFRESH_SECONDS since it was issued).
+export function sessionNeedsRefresh(session, now = Math.floor(Date.now() / 1000)) {
+  return Boolean(session) && now - Number(session.iat) >= SESSION_REFRESH_SECONDS;
+}
+
+// The answer to an /app/api/* request with a fresh 30-day cookie when the
+// session in the request is a day old or more: the same user, new times. A
+// response that sets the cookie itself (sign-in, logout) is left alone, and so
+// is a request without a valid session (API key, GitHub).
+export async function slidingSession(request, response, secret, now = Math.floor(Date.now() / 1000)) {
+  if (!response || !secret) return response;
+  const session = await verifyDashboardSession(request, secret);
+  if (!sessionNeedsRefresh(session, now)) return response;
+  const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [response.headers.get("Set-Cookie") || ""];
+  if (setCookies.some(value => String(value).startsWith(SESSION_COOKIE + "="))) return response;
+  const refreshed = new Response(response.body, response);
+  refreshed.headers.append("Set-Cookie", await sessionCookie(session.uid, now + SESSION_SECONDS, secret, now));
+  return refreshed;
 }
 
 // Signs short-lived values with the session secret (the Apple sign-in state, e-mail codes).
