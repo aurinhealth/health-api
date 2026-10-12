@@ -12,11 +12,9 @@ import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 
 export const SCREENS = ["today", "training", "food"];
-export const MAX_PER_DAY = 4;
+export const MAX_PER_DAY = 12;
 // A failed AI call is not repeated on every opening of the screen.
 const RETRY_MINUTES = 60;
-// A fresh text is shown without loading the screen's data again to compare.
-const FRESH_MINUTES = 90;
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -44,7 +42,7 @@ function todayFacts(d) {
     sleepMinutes: num(sleep?.minutes), sleepNeedMinutes: num(sleep?.need), sleepIndex: num(sleep?.index),
     hrv: num(hrv?.value), hrvBaseline: num(hrv?.baseline), hrvUsualRange: hrv ? [num(hrv.low), num(hrv.high)] : null, hrvTrend: hrv?.trend ?? null,
     restingHR: num(rhr?.value), restingHRBaseline: num(rhr?.baseline),
-    strainToday: num(d.strain?.score), strainPlanned: num(d.strain?.planned),
+    strainToday: num(d.strain?.score), strainPlanned: num(d.strain?.planned), strainTarget: d.strain?.target ? [num(d.strain.target.low), num(d.strain.target.high)] : null,
     plan: plan.map(i => ({ title: i.title, detail: i.detail || null, done: Boolean(i.done) })).slice(0, 6),
     kcalEaten: num(n.kcal), kcalTarget: num(n.target),
     bedtimeTonight: d.tonight?.bedtime ?? null,
@@ -70,7 +68,8 @@ function todayFacts(d) {
     // Without last night the numbers are not there yet.
     ready: sleep != null || facts.readiness != null,
     // The plan itself is in it: a cancelled or moved session asks for a new text.
-    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|")].join(":").slice(0, 500)
+    // The coach's rule-based advice follows every change it cares about.
+    fingerprint: [sleep ? 1 : 0, facts.readinessZone || "", plan.map(i => i.title + (i.done ? "✓" : "")).sort().join("|"), facts.ruleBasedSummary || ""].join(":").slice(0, 800)
   };
 }
 
@@ -104,7 +103,7 @@ function trainingFacts(d) {
     facts, basis, chips,
     fallback: form?.text ? { text: form.text, advice: null } : null,
     ready: week.planned != null || form != null,
-    fingerprint: String(done.length)
+    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || ""].join(":")
   };
 }
 
@@ -133,8 +132,8 @@ function foodFacts(d) {
     facts, basis, chips,
     fallback: d.sentence ? { text: d.sentence, advice: null } : null,
     ready: facts.kcalTarget != null,
-    // A new text after every second logged item at most (MAX_PER_DAY caps it).
-    fingerprint: String(Math.floor(logged / 2))
+    // A new text after every logged item (MAX_PER_DAY caps it).
+    fingerprint: String(logged)
   };
 }
 
@@ -176,14 +175,14 @@ function answer(source, { text = null, advice = null, chips = [], basis = [], cr
 }
 
 // The user changed the day's plan (cancelled, moved or added a session,
-// answered the check-in): Today's and Training's texts are written again on
-// the next opening.
+// answered the check-in): every screen's text is written again on the next
+// opening.
 const STALE = "stale";
 export async function markScreenTextsStale(env) {
   const userId = userOf(env);
   if (!userId) return;
   await ensureTable(env.DB);
-  await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=? WHERE user_id=? AND day=? AND screen IN ('today','training')").bind(STALE, userId, localToday()).run();
+  await env.DB.prepare("UPDATE ai_screen_texts SET fingerprint=? WHERE user_id=? AND day=?").bind(STALE, userId, localToday()).run();
 }
 
 // load: () => the screen's data (the same JSON the app shows); ask: the AI
@@ -201,11 +200,9 @@ export async function screenText(env, { screen, load, ask = callOpenAI, now = Da
   const row = await env.DB.prepare("SELECT * FROM ai_screen_texts WHERE user_id=? AND day=? AND screen=? AND lang=?").bind(userId, day, screen, language).first();
   const cached = row?.text ? answer("ai", { text: row.text, advice: row.advice, ...parseBasis(row.basis_json), createdAt: sqlTime(row.created_at) }) : null;
   // A text is kept for the day once the AI has been asked MAX_PER_DAY times.
-  // A change of the plan (markScreenTextsStale) asks again right away, with
-  // MAX_PER_DAY more answers for such changes.
-  const stale = row?.fingerprint === STALE;
-  if (cached && Number(row.generations) >= MAX_PER_DAY * (stale ? 2 : 1)) return cached;
-  if (cached && !stale && now - Date.parse(sqlTime(row.created_at)) < FRESH_MINUTES * 60000) return cached;
+  // Otherwise every opening compares the day's state with the text's, so any
+  // change that matters (the fingerprint) gets a new text at once.
+  if (cached && Number(row.generations) >= MAX_PER_DAY) return cached;
 
   const data = await load();
   const info = screenFacts(screen, data);

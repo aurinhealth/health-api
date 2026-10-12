@@ -292,7 +292,7 @@ struct KeyNumbers: View {
             RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
             RouteLink(route: .strain) {
-                cell("Zátěž", Fmt.decimal(today.strain.score), today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, Palette.amber)
+                cell("Zátěž", Fmt.decimal(today.strain.score), strainNote, today.strain.target != nil ? Palette.green : Palette.amber)
             }
             Divider().overlay(Palette.hairline)
             RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
@@ -300,6 +300,11 @@ struct KeyNumbers: View {
         .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
+    }
+
+    private var strainNote: String? {
+        if let t = today.strain.target { return L10n.f("cíl %@–%@", Fmt.decimal(t.low), Fmt.decimal(t.high)) }
+        return today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
     }
 
     private var hrvDifference: Double? {

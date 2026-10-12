@@ -44,6 +44,9 @@ final class AppModel {
     /// When each tab's data last came from the server, and for which day. The
     /// screens open with the copy saved on the phone; refreshIfStale loads it again.
     @ObservationIgnored private var fetched: [AppTab: (at: Date, day: String)] = [:]
+    /// Counts every load of a tab's data: the coach's text asks again after
+    /// any change (CoachTextCard), and the server writes it anew when it differs.
+    private(set) var dataRevision = 0
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     private var shownDay: String { selectedDate ?? Self.localDate(Date()) }
@@ -286,6 +289,7 @@ final class AppModel {
             today = snapshot
             todayBase = data
             fetched[.today] = (Date(), shownDay)
+            dataRevision += 1
             applyOutbox()
             errorMessage = nil
             _ = noteConnection(nil)
@@ -355,6 +359,7 @@ final class AppModel {
         do {
             training = try await api.training()
             fetched[.training] = (Date(), Self.localDate(Date()))
+            dataRevision += 1
             trainingError = nil
             _ = noteConnection(nil)
             // The calendar too: loadCalendar alone fetches only missing days, so a
@@ -376,6 +381,7 @@ final class AppModel {
         do {
             health = try await api.health(date: selectedDate)
             fetched[.health] = (Date(), shownDay)
+            dataRevision += 1
             healthError = nil
             _ = noteConnection(nil)
         } catch APIError.unauthorized {
@@ -396,6 +402,7 @@ final class AppModel {
             // The day's food and water to Apple Health when switched on in Synchronizace.
             Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
             fetched[.food] = (Date(), shownDay)
+            dataRevision += 1
             applyOutbox()
             foodError = nil
             _ = noteConnection(nil)

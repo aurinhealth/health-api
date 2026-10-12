@@ -59,7 +59,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .breathing:
             return [HKQuantityType(.respiratoryRate), HKQuantityType(.oxygenSaturation)]
         case .body:
-            return [HKQuantityType(.bodyMass), HKQuantityType(.bodyFatPercentage)]
+            return [HKQuantityType(.bodyMass), HKQuantityType(.bodyFatPercentage), HKQuantityType(.leanBodyMass)]
         }
     }
 
@@ -193,6 +193,9 @@ final class AppleHealth {
         if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return true }
         syncing = true
         defer { syncing = false }
+        // A type added in an update (muscle mass) is asked for once, in the app;
+        // granted, its history comes with this sync.
+        if UIApplication.shared.applicationState == .active, await reader.askNewTypes(categories) { lastSync = nil }
         let started = Date()
         // The first sync takes the history; later ones the days since the last
         // one and a day more (late watch data), at most a month.
@@ -298,6 +301,13 @@ final class HealthReader: @unchecked Sendable {
         try await store.requestAuthorization(toShare: share, read: read)
     }
 
+    /// Asks for the categories' types iOS has not asked about yet; true when it did.
+    func askNewTypes(_ categories: Set<HealthCategory>) async -> Bool {
+        let read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
+        guard (try? await store.statusForAuthorizationRequest(toShare: [], read: read)) == .shouldRequest else { return false }
+        return (try? await store.requestAuthorization(toShare: [], read: read)) != nil
+    }
+
     /// Not what Loadwise wrote itself (AppleHealthExport): the server has it already.
     private var notOurs: NSPredicate {
         NSCompoundPredicate(notPredicateWithSubpredicate: HKQuery.predicateForObjects(from: HKSource.default()))
@@ -355,6 +365,7 @@ final class HealthReader: @unchecked Sendable {
             let start = from(365)
             rest += await measurements(.bodyMass, unit: .gramUnit(with: .kilo), type: "weight", from: start, to: now)
             rest += await measurements(.bodyFatPercentage, unit: .percent(), type: "body-fat", scale: 100, from: start, to: now)
+            rest += await measurements(.leanBodyMass, unit: .gramUnit(with: .kilo), type: "lean-body-mass", from: start, to: now)
         }
 
         if closed.get() { return nil }

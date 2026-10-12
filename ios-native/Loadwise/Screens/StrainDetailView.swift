@@ -56,6 +56,10 @@ struct StrainDetailContent: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Zátěž").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             dial
+            if let target = today.strain.target {
+                SectionLabel(text: "Dnešní cíl").padding(.top, 30)
+                targetRows(target).padding(.top, 12)
+            }
             SectionLabel(text: "Z čeho je").padding(.top, 30)
             sources.padding(.top, 12)
             if let form = training?.form, !form.series.isEmpty {
@@ -71,7 +75,7 @@ struct StrainDetailContent: View {
         let split = parts
         let level: (String, Color) = Self.level(score)
         return VStack(spacing: 0) {
-            StrainDial(score: score, planned: today.strain.planned)
+            StrainDial(score: score, planned: today.strain.planned, target: today.strain.target)
                 .frame(maxWidth: .infinity)
                 .padding(.top, 16)
             Pill(text: L10n.tr(level.0), foreground: level.1, background: level.1.opacity(0.14))
@@ -80,6 +84,32 @@ struct StrainDetailContent: View {
             Card { StrainSplitBar(training: split.training, movement: split.movement, planned: split.planned) }
                 .padding(.top, 20)
         }
+    }
+
+    /// What set today's target: readiness, sleep debt, the morning answer, the plan.
+    private func targetRows(_ t: TodaySnapshot.Strain.Target) -> some View {
+        Card(padding: 0) {
+            VStack(spacing: 0) {
+                targetRow("Připravenost", t.readiness.map { String($0) } ?? "–", first: true)
+                targetRow("Spánkový dluh", t.debt.map { Fmt.hoursMinutesLong($0) } ?? "–")
+                if let feeling = t.feeling, let option = MorningCheckinCard.options.first(where: { $0.id == feeling }) {
+                    targetRow("Pocit", L10n.tr(option.label))
+                }
+                targetRow("Plán", t.plan ?? L10n.tr("nic v plánu"))
+            }
+            .padding(.horizontal, 16).padding(.vertical, 4)
+        }
+    }
+
+    private func targetRow(_ title: String, _ value: String, first: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(L10n.tr(title)).font(.body).foregroundStyle(Palette.ink)
+            Spacer(minLength: 12)
+            Text(verbatim: value).font(.body).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .padding(.vertical, 12)
+        .overlay(alignment: .top) { if !first { Rectangle().fill(Palette.hairline).frame(height: 1) } }
+        .accessibilityElement(children: .combine)
     }
 
     private var sources: some View {
@@ -136,13 +166,19 @@ struct StrainDetailContent: View {
 struct StrainDial: View {
     let score: Double
     let planned: Double?
+    var target: TodaySnapshot.Strain.Target? = nil
 
     var body: some View {
         let sweep = 0.75
         ZStack {
             Circle().trim(from: 0, to: sweep)
                 .stroke(Palette.track, style: StrokeStyle(lineWidth: 14, lineCap: .round))
-            if let planned, planned > score {
+            // Today's target as a green band on the track.
+            if let target {
+                Circle().trim(from: sweep * Swift.min(target.low, 21) / 21, to: sweep * Swift.min(target.high, 21) / 21)
+                    .stroke(Palette.green.opacity(0.45), style: StrokeStyle(lineWidth: 14))
+            }
+            if target == nil, let planned, planned > score {
                 Circle().trim(from: 0, to: sweep * Swift.min(planned, 21) / 21)
                     .stroke(Palette.amberBar.opacity(0.35), style: StrokeStyle(lineWidth: 14, lineCap: .round))
             }
@@ -154,7 +190,7 @@ struct StrainDial: View {
         .overlay {
             VStack(spacing: 2) {
                 Text(verbatim: Fmt.decimal(score)).font(Typo.number(54)).foregroundStyle(Palette.ink)
-                Text(verbatim: (planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) + " · " } ?? "") + L10n.f("z %@", "21"))
+                Text(verbatim: subtitle)
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
         }
@@ -169,7 +205,12 @@ struct StrainDial: View {
             .offset(y: 4)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.tr("Zátěž") + " " + Fmt.decimal(score) + " " + L10n.f("z %@", "21")))
+        .accessibilityLabel(Text(verbatim: L10n.tr("Zátěž") + " " + Fmt.decimal(score) + ", " + subtitle))
+    }
+
+    private var subtitle: String {
+        let head: String? = target.map { L10n.f("cíl %@–%@", Fmt.decimal($0.low), Fmt.decimal($0.high)) } ?? planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
+        return (head.map { $0 + " · " } ?? "") + L10n.f("z %@", "21")
     }
 }
 

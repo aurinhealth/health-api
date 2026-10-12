@@ -397,7 +397,30 @@ struct AppleHealthWidget: View {
         Card {
             WidgetHeader(title: title, color: color)
             Text("–").font(Typo.number(34)).foregroundStyle(Palette.faint)
-            Text("z Apple Health · zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint)
+            Text("zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct MuscleWidget: View {
+    let muscle: HealthSnapshot.BodyFat
+    var size: WidgetSize = .medium
+
+    var body: some View {
+        Card {
+            WidgetHeader(title: "Svalová hmota", color: Palette.brown)
+            SizedWidgetBody(size: size, mediumChart: 44) {
+                NumberText(value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
+                if let change = muscle.change, change != 0 {
+                    Text(L10n.f("%@ %@ za 2 měsíce", change > 0 ? "↑" : "↓", Fmt.decimal(abs(Units.weight(change))))).font(Typo.caption)
+                        .foregroundStyle(change > 0 ? Palette.green : Palette.amber)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                }
+            } chart: { height in
+                let values = muscle.series.map { Units.weight($0.value) }
+                LineChart(values: values, color: Palette.brown, lo: (values.min() ?? 0) - 0.5, hi: (values.max() ?? 1) + 0.5, height: height)
+            }
         }
         .accessibilityElement(children: .combine)
     }

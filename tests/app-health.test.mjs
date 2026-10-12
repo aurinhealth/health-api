@@ -104,3 +104,9 @@ test("Health: the morning check-in lowers readiness as on Today and shows as its
   assert.ok(Math.abs(70 + tired.parts.reduce((s, p) => s + p.points, 0) - tired.score) <= 2, "parts still add up");
   assert.equal(buildHealth({ ...input, checkin: "fresh" }).readiness.score, body.score, "a good answer never raises it");
 });
+
+test("Health: muscle mass from a scale through Apple Health, nothing without one", () => {
+  assert.equal(buildHealth(input).weight.muscle, null);
+  const muscle = [{ sample_time: day(-30) + "T06:00:00Z", value_numeric: 64.2 }, { sample_time: day(0) + "T06:00:00Z", value_numeric: 64.9 }];
+  assert.deepEqual(buildHealth({ ...input, muscle }).weight.muscle, { value: 64.9, change: 0.7, series: [{ date: day(-30), value: 64.2 }, { date: day(0), value: 64.9 }] });
+});

@@ -1665,13 +1665,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1);
-      const [health,fitness,sleep,weight,profile,checkin]=await Promise.all([
+      const [health,fitness,sleep,weight,profile,checkin,muscle]=await Promise.all([
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
         read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
-        read('/health/weight'),dashboardProfile(env).catch(()=>null),getCheckin(env.DB,date).catch(()=>null)
+        read('/health/weight'),dashboardProfile(env).catch(()=>null),getCheckin(env.DB,date).catch(()=>null),
+        // Muscle mass from a scale through Apple Health (lean body mass).
+        env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
       ]);
-      return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
