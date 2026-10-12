@@ -351,21 +351,6 @@ struct HRVWideWidget: View {
     }
 }
 
-/// A widget for an Apple Health value Apple Health has no data for yet.
-struct AppleHealthWidget: View {
-    let title: String
-    let color: Color
-
-    var body: some View {
-        Card {
-            WidgetHeader(title: title, color: color)
-            Text("–").font(Typo.number(34)).foregroundStyle(Palette.faint)
-            Text("zatím bez dat").font(Typo.caption).foregroundStyle(Palette.faint)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 struct MuscleWidget: View {
     let muscle: HealthSnapshot.BodyFat
     var size: WidgetSize = .medium

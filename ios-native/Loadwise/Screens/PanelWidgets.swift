@@ -46,7 +46,7 @@ enum WidgetPanel: String {
         case .health:
             return [.init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
                     .init(kind: .respiration, size: .small), .init(kind: .skinTemp, size: .small), .init(kind: .bedtime, size: .medium),
-                    .init(kind: .hrv, size: .medium), .init(kind: .restingHR, size: .small), .init(kind: .mood, size: .small),
+                    .init(kind: .hrv, size: .medium), .init(kind: .restingHR, size: .small),
                     .init(kind: .weight, size: .medium), .init(kind: .bodyFat, size: .medium), .init(kind: .muscle, size: .medium)]
         case .training:
             return [.init(kind: .form, size: .small), .init(kind: .vo2max, size: .small), .init(kind: .thisWeek, size: .medium),
@@ -109,7 +109,7 @@ enum WidgetSection: String, CaseIterable, Identifiable, Hashable {
 
 /// Every widget a panel can show.
 enum WidgetKind: String, CaseIterable, Identifiable {
-    case restingHR, hrv, vo2max, respiration, skinTemp, oxygen, mood
+    case restingHR, hrv, vo2max, respiration, skinTemp, oxygen
     case form, thisWeek, sessions, plan, zones
     case food, drinks, macros
     case sleep, sleepDebt, bedtime
@@ -126,7 +126,6 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .respiration: return "Dech ve spánku"
         case .skinTemp: return "Teplota zápěstí"
         case .oxygen: return "Kyslík v krvi"
-        case .mood: return "Nálada"
         case .form: return "Forma"
         case .thisWeek: return "Tento týden"
         case .sessions: return "Tréninky týdne"
@@ -148,7 +147,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
 
     var section: WidgetSection {
         switch self {
-        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .mood: return .health
+        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen: return .health
         case .form, .thisWeek, .sessions, .plan, .zones: return .training
         case .food, .drinks, .macros: return .food
         case .sleep, .sleepDebt, .bedtime: return .sleep
@@ -162,7 +161,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .restingHR, .hrv, .vo2max, .form, .thisWeek, .sleep, .steps, .activeCalories, .weight, .bodyFat:
             return [.small, .medium, .large]
-        case .respiration, .skinTemp, .oxygen, .mood, .zones, .food, .drinks, .sleepDebt, .muscle:
+        case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle:
             return [.small, .medium]
         case .sessions, .plan, .macros, .bedtime:
             return [.medium]
@@ -171,7 +170,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
 
     var defaultSize: WidgetSize {
         switch self {
-        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .mood, .form, .sleepDebt, .muscle: return .small
+        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .form, .sleepDebt, .muscle: return .small
         default: return .medium
         }
     }
@@ -183,7 +182,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
-        case .mood, .muscle: return nil
+        case .muscle: return nil
         }
     }
 }
@@ -331,8 +330,7 @@ struct WidgetData {
         case .skinTemp: return health?.skinTemp != nil
         case .oxygen: return health?.oxygen != nil
         // Shown only with data (a scale that measures muscle mass); until then
-        // they wait in the widget gallery.
-        case .mood: return false
+        // it waits in the widget gallery.
         case .muscle: return health?.weight?.muscle != nil
         case .form: return training?.form != nil
         case .thisWeek: return training != nil
@@ -459,8 +457,6 @@ struct PanelWidget: View {
             if let value = data.health?.skinTemp { SkinTempWidget(skin: value, size: item.size) }
         case .oxygen:
             if let value = data.health?.oxygen { OxygenWidget(oxygen: value, size: item.size) }
-        case .mood:
-            AppleHealthWidget(title: "Nálada", color: Palette.gold)
         case .muscle:
             if let value = data.health?.weight?.muscle { MuscleWidget(muscle: value, size: item.size) }
         case .form:

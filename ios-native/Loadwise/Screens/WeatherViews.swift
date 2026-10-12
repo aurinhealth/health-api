@@ -76,45 +76,6 @@ enum WeatherText {
     static func indoor(_ advice: TodaySnapshot.Advice?) -> Bool { advice?.environment == "indoor" }
 }
 
-/// On Today, next to the athlete's status: the forecast at the week plan's
-/// place. A tap opens the wind, rain and where to train; without a place it
-/// offers to set one.
-struct WeatherPill: View {
-    let weather: TodaySnapshot.Weather?
-    @State private var open = false
-
-    var body: some View {
-        Button { open = true } label: {
-            HStack(spacing: 10) {
-                Image(systemName: weather == nil ? "location.fill" : WeatherText.symbol(weather?.code))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(weather == nil ? Palette.muted : Palette.blue)
-                    .frame(width: 30, height: 30)
-                    .background((weather == nil ? Palette.muted : Palette.blue).opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                if let weather {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(verbatim: WeatherText.range(weather)).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        Text(verbatim: weather.place ?? L10n.tr("Počasí")).font(.caption2).foregroundStyle(Palette.muted).lineLimit(1)
-                    }
-                } else {
-                    Text("Nastavit polohu pro počasí").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                }
-            }
-            .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
-            .background(Palette.card, in: Capsule())
-            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityText)
-        .sheet(isPresented: $open) { WeatherSheet(weather: weather) }
-    }
-
-    private var accessibilityText: String {
-        guard let weather else { return L10n.tr("Nastavit polohu pro počasí") }
-        return L10n.f("Počasí: %@, %@", WeatherText.range(weather), weather.place ?? "")
-    }
-}
-
 /// Today's card above the key numbers: the place with the location arrow and
 /// the day's temperatures, the athlete's status in the corner and a few
 /// hours of the forecast.
