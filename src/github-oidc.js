@@ -12,8 +12,9 @@ const EXPECTED_WORKFLOWS = new Set([
 
 let cachedJwks = null;
 let cachedJwksAt = 0;
+let forcedJwksAt = 0;
 
-export async function verifyGitHubActionsToken(request) {
+export async function verifyGitHubActionsToken(request, fetchImpl = fetch) {
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) throw new Error("Missing GitHub Actions bearer token");
   const token = authorization.slice(7).trim();
@@ -41,7 +42,7 @@ export async function verifyGitHubActionsToken(request) {
   if (!Number.isFinite(claims.exp) || claims.exp <= now) throw new Error("Expired GitHub Actions token");
   if (Number.isFinite(claims.nbf) && claims.nbf > now + 60) throw new Error("GitHub Actions token is not active yet");
 
-  const jwks = await getJwks();
+  const jwks = await getJwks(fetchImpl, header.kid);
   const jwk = jwks.keys.find((key) => key.kid === header.kid && key.kty === "RSA");
   if (!jwk) throw new Error("GitHub Actions signing key not found");
 
@@ -64,10 +65,15 @@ export async function verifyGitHubActionsToken(request) {
   return claims;
 }
 
-async function getJwks() {
+// GitHub's keys, kept for ten minutes. A token signed with a key the cached
+// list does not have (GitHub rotated its keys) fetches the list again, past
+// the cache, at most once a minute.
+async function getJwks(fetchImpl, kid) {
   const now = Date.now();
-  if (cachedJwks && now - cachedJwksAt < 10 * 60 * 1000) return cachedJwks;
-  const response = await fetch(JWKS_URL, { cf: { cacheTtl: 600 } });
+  const fresh = cachedJwks && now - cachedJwksAt < 10 * 60 * 1000;
+  if (fresh && (cachedJwks.keys.some((key) => key.kid === kid) || now - forcedJwksAt < 60 * 1000)) return cachedJwks;
+  if (fresh) forcedJwksAt = now;
+  const response = await fetchImpl(JWKS_URL, fresh ? { cache: "no-store" } : { cf: { cacheTtl: 600 } });
   if (!response.ok) throw new Error(`GitHub OIDC JWKS HTTP ${response.status}`);
   const data = await response.json();
   if (!data || !Array.isArray(data.keys)) throw new Error("Invalid GitHub OIDC JWKS response");
@@ -75,6 +81,7 @@ async function getJwks() {
   cachedJwksAt = now;
   return data;
 }
+export function _resetGitHubJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 function decodeJson(value) {
   try {

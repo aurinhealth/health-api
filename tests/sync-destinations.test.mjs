@@ -81,16 +81,47 @@ test("a done activity: the gym's own start in the user's zone, noon without one"
 test("Intervals.icu gets the activity as a manual one, recorded; a retry updates it", async () => {
   const d = db();
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" };
-  const { calls, fetchImpl } = recorder(() => Response.json({ id: "i777" }));
+  const { calls, fetchImpl } = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json([]) : Response.json({ id: "i777" }));
   const result = await sendActivity(env, activity, { fetchImpl });
   assert.deepEqual(result.sends, [{ destination: "intervals", status: "sent", remoteId: "i777" }]);
-  assert.equal(calls[0].url, "https://intervals.icu/api/v1/athlete/0/activities/manual");
-  assert.deepEqual(calls[0].body, { start_date_local: "2026-10-10T18:05:00", type: "WeightTraining", name: "Push", moving_time: 3720, elapsed_time: 3720, description: "Bench 4 × 8", external_id: "loadwise:7:gym:2026-10-10", icu_rpe: 7 });
-  assert.equal(sentByLoadwise({ external_id: calls[0].body.external_id }), true);
-  // The same activity again (edited): PUT on the known id, no second copy.
+  // Before a first send Intervals.icu is asked whether the day already has this activity (a lost answer).
+  assert.deepEqual([calls[0].method, calls[0].url], ["GET", "https://intervals.icu/api/v1/athlete/0/activities?oldest=2026-10-10&newest=2026-10-11"]);
+  assert.equal(calls[1].url, "https://intervals.icu/api/v1/athlete/0/activities/manual");
+  assert.deepEqual(calls[1].body, { start_date_local: "2026-10-10T18:05:00", type: "WeightTraining", name: "Push", moving_time: 3720, elapsed_time: 3720, description: "Bench 4 × 8", external_id: "loadwise:7:gym:2026-10-10", icu_rpe: 7 });
+  assert.equal(sentByLoadwise({ external_id: calls[1].body.external_id }), true);
+  // The same activity again (edited): PUT on the known id, no lookup, no second copy.
   await sendActivity(env, { ...activity, name: "Push A" }, { fetchImpl });
-  assert.deepEqual([calls[1].method, calls[1].url], ["PUT", "https://intervals.icu/api/v1/activity/i777"]);
+  assert.deepEqual([calls[2].method, calls[2].url], ["PUT", "https://intervals.icu/api/v1/activity/i777"]);
+  assert.equal(calls.length, 3);
   assert.deepEqual((await activitySends(env, activity.key)).map(s => [s.destination, s.status, s.remoteId]), [["intervals", "sent", "i777"]]);
+});
+
+const timeout = () => { throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }); };
+
+test("Intervals.icu: a first send without an answer is 'unknown'; the retry finds the activity by external_id and updates it", async () => {
+  const d = db();
+  const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" };
+  const lost = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json([]) : timeout());
+  const result = await sendActivity(env, activity, { fetchImpl: lost.fetchImpl });
+  assert.equal(result.sends[0].status, "unknown");
+  assert.match(result.sends[0].message, /už tam může být|may already be there/);
+  assert.deepEqual(lost.calls.map(c => c.method), ["GET", "POST"]);
+  assert.deepEqual((await activitySends(env, activity.key)).map(s => [s.status, s.remoteId]), [["unknown", null]]);
+  // The cron tries again: the lookup finds the copy Intervals.icu made, so it is updated, never posted again.
+  d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
+  const found = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json([{ id: 4242, external_id: "loadwise:7:gym:2026-10-10" }, { id: 1, external_id: null }]) : Response.json({ id: 4242 }));
+  assert.deepEqual(await retrySyncSends(env, { fetchImpl: found.fetchImpl }), [{ destination: "intervals", status: "sent", remoteId: "4242" }]);
+  assert.deepEqual(found.calls.map(c => [c.method, c.url]), [["GET", "https://intervals.icu/api/v1/athlete/0/activities?oldest=2026-10-10&newest=2026-10-11"], ["PUT", "https://intervals.icu/api/v1/activity/4242"]]);
+  // A lookup that fails is an ordinary error (nothing was sent), tried again later.
+  const d2 = db(), env2 = { DB: d2, USER_ID: 7, INTERVALS_API_KEY: "k" };
+  const broken = recorder((url, opts) => (opts.method || "GET") === "GET" ? timeout() : Response.json({ id: 1 }));
+  assert.equal((await sendActivity(env2, activity, { fetchImpl: broken.fetchImpl })).sends[0].status, "error");
+  assert.deepEqual(broken.calls.map(c => c.method), ["GET"]);
+  // A lost answer to an update (the id is known) is an error too: the update is simply repeated.
+  d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes'), attempts = 0");
+  const lostUpdate = recorder(() => timeout());
+  assert.equal((await retrySend(env, activity.key, "intervals", { fetchImpl: lostUpdate.fetchImpl })).status, "error");
+  assert.deepEqual(lostUpdate.calls.map(c => c.method), ["PUT"]);
 });
 
 test("a failed send is recorded with a message and goes out on 'Zkusit znovu'", async () => {
@@ -142,11 +173,56 @@ test("Strava: a manual activity, with the access token refreshed when it ran out
   assert.deepEqual(result.sends, [{ destination: "strava", status: "sent", remoteId: "123" }]);
   assert.equal(calls[0].url, "https://www.strava.com/oauth/token");
   assert.match(calls[0].body, /grant_type=refresh_token/);
-  assert.deepEqual(calls[1].body, { name: "Push", sport_type: "WeightTraining", start_date_local: "2026-10-10T18:05:00", elapsed_time: 3720, description: "Bench 4 × 8" });
+  assert.deepEqual(calls[1].body, { name: "Push", sport_type: "WeightTraining", start_date_local: "2026-10-10T18:05:00", elapsed_time: 3720, external_id: "loadwise:7:gym:2026-10-10", description: "Bench 4 × 8" });
   assert.equal(JSON.parse(env.STRAVA_TOKEN).refresh_token, "r2");
   // The refreshed token is good: no second refresh.
   assert.equal(await stravaAccessToken(env, { fetchImpl }), "new");
   assert.equal(calls.length, 2);
+  // An edit updates the known activity; the external_id is set once, on creation.
+  await sendActivity(env, { ...activity, name: "Push B" }, { fetchImpl });
+  assert.deepEqual([calls[2].method, calls[2].url, calls[2].body], ["PUT", "https://www.strava.com/api/v3/activities/123", { name: "Push B", sport_type: "WeightTraining", description: "Bench 4 × 8" }]);
+});
+
+test("Strava: a first send without an answer is 'unknown'; the retry's repeated external_id counts as sent", async () => {
+  const d = db();
+  const env = { DB: d, USER_ID: 7, ...strava({ access_token: "a", refresh_token: "r", expires_at: 9e9 }) };
+  const lost = recorder(() => timeout());
+  const result = await sendActivity(env, activity, { fetchImpl: lost.fetchImpl });
+  assert.deepEqual([result.sends[0].status, lost.calls.length], ["unknown", 1]);
+  d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
+  // Strava already has it: 409 with the activity named.
+  const named = recorder(() => Response.json({ message: "Resource Already Exists", id: 555 }, { status: 409 }));
+  assert.deepEqual(await retrySyncSends(env, { fetchImpl: named.fetchImpl }), [{ destination: "strava", status: "sent", remoteId: "555" }]);
+  assert.deepEqual(named.calls.map(c => [c.method, c.body.external_id]), [["POST", "loadwise:7:gym:2026-10-10"]]);
+  // 409 without an id: sent, with no id to update later.
+  const d2 = db(), env2 = { ...env, DB: d2 };
+  await sendActivity(env2, activity, { fetchImpl: lost.fetchImpl });
+  d2.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
+  const nameless = recorder(() => Response.json({ message: "Resource Already Exists", errors: [{ resource: "Activity", field: "external_id", code: "already exists" }] }, { status: 409 }));
+  assert.deepEqual(await retrySyncSends(env2, { fetchImpl: nameless.fetchImpl }), [{ destination: "strava", status: "sent", remoteId: null }]);
+  assert.deepEqual((await activitySends(env2, activity.key)).map(s => [s.status, s.remoteId]), [["sent", null]]);
+});
+
+test("Google Health: a first send without an answer is sent again only by hand", async () => {
+  const d = db();
+  await saveSyncPrefs(d, 7, "google", { pushActivities: true });
+  const env = { DB: d, USER_ID: 7, GOOGLE_REFRESH_TOKEN: "r", GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.activityWrite] }, googleToken = async () => "token";
+  const lost = recorder(() => timeout());
+  const result = await sendActivity(env, activity, { fetchImpl: lost.fetchImpl, googleToken });
+  assert.deepEqual([result.sends[0].status, lost.calls.length], ["unknown", 1]);
+  // Neither the cron nor saving the activity again (an edit) posts a possible second copy.
+  d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
+  const ok = recorder(() => Response.json({ name: "users/me/dataTypes/exercise/dataPoints/abc" }));
+  assert.deepEqual(await retrySyncSends(env, { fetchImpl: ok.fetchImpl, googleToken }), []);
+  const edited = await sendActivity(env, { ...activity, name: "Push B" }, { fetchImpl: ok.fetchImpl, googleToken });
+  assert.equal(edited.sends[0].status, "unknown");
+  assert.equal(ok.calls.length, 0);
+  assert.deepEqual((await activitySends(env, activity.key)).map(s => s.status), ["unknown"]);
+  // "Zkusit znovu" is the user's decision: the record is posted and then patched like any other.
+  assert.deepEqual(await retrySend(env, activity.key, "google", { fetchImpl: ok.fetchImpl, googleToken }), { destination: "google", status: "sent", remoteId: "users/me/dataTypes/exercise/dataPoints/abc" });
+  assert.deepEqual(ok.calls.map(c => c.method), ["POST"]);
+  await sendActivity(env, { ...activity, name: "Push C" }, { fetchImpl: ok.fetchImpl, googleToken });
+  assert.deepEqual(ok.calls.map(c => c.method), ["POST", "PATCH"]);
 });
 
 test("Strava: the latest weight once, again only when it changes", async () => {

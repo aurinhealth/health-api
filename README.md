@@ -72,6 +72,7 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Volitelně přihlášení přes Apple: Services ID, Team ID, Key ID a obsah souboru `.p8`. Bez nich se tlačítko Apple nezobrazí. Nastavení popisuje [docs/multi-user-setup.md](docs/multi-user-setup.md). |
 | `APPLE_DOMAIN_ASSOCIATION` | Jen když ho Apple při nastavení domény chce: obsah souboru, který aplikace vrátí na `/.well-known/apple-developer-domain-association.txt`. |
 | `EMAIL_FROM` | Volitelně přihlášení kódem z e-mailu: adresa odesílatele na doméně přidané v Cloudflare Email Service (např. `noreply@petrfitnessdata.eu`). Bez ní se přihlášení kódem nezobrazí. Postup v [docs/multi-user-setup.md](docs/multi-user-setup.md). |
+| `EMAIL_CODES_PER_DAY` | Volitelný denní rozpočet přihlašovacích kódů poslaných e-mailem všem dohromady (výchozí 500). Jedna adresa dostane nejvýš jeden kód za minutu a 10 za den, jeden klient (hash IP adresy) začne nejvýš 5 přihlášení za minutu a 30 za hodinu (`ip-rate-limit.js`). |
 | `INTERVALS_API_KEY` | Intervals.icu správce (ostatní uživatelé si klíč ukládají v aplikaci). |
 | `INTERVALS_CLIENT_ID`, `INTERVALS_CLIENT_SECRET` | Volitelné: aplikace zaregistrovaná u Intervals.icu. S nimi se Intervals.icu připojuje jedním tlačítkem (OAuth, `intervals-oauth.js`), bez nich vložením osobního API klíče. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Asistent trenéra a čtení fotek jídla (volitelně `OPENAI_VISION_MODEL`, jinak `OPENAI_LIGHT_MODEL`). |
