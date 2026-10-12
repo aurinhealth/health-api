@@ -696,6 +696,41 @@ export function snapDumbbells(rows, weights) {
   return rows;
 }
 
+// A saved or shared workout (workout-templates.js) planned for the athlete:
+// its exercises, order, sets and repetitions stay; the loads come from the
+// athlete's own history and today's readiness, as in a generated plan. An
+// exercise outside the catalogue keeps its sets with no load.
+export function templateStrengthPlan(context, template, options = {}) {
+  const policy = trainingStatus(context?.athleteState);
+  if (policy.paused) throw new Error(policy.headline + '. ' + policy.guidance[0]);
+  const factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
+  const firstSession = !history.length, sex = athleteSex(context, options);
+  const rows = [], loadEstimates = [];
+  let warmedUp = false;
+  for (const item of template.exercises || []) {
+    const exercise = EXERCISES[item.name] ? item.name : normalizeExerciseName(item.name);
+    const sets = Math.max(1, Math.min(10, Number(item.sets) || 3)), reps = String(item.reps || '10');
+    if (!EXERCISES[exercise]) {
+      for (let i = 0; i < sets; i++) rows.push(["WORK", item.name, String(i + 1), "", reps, "", "", "", "FALSE", "", i === 0 ? "🎥 Video" : "", "", DEFAULT_EXECUTION]);
+      continue;
+    }
+    const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps);
+    const first = work.rows[0];
+    const own = Array.from({ length: sets }, (_, i) => { const r = first.slice(); r[2] = String(i + 1); r[4] = CORE_PATTERNS.has(EXERCISES[exercise].pattern) ? first[4] : reps; r[10] = i === 0 ? first[10] : ""; return r; });
+    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    if (warmup.length) warmedUp = true;
+    rows.push(...warmup, ...own);
+    loadEstimates.push({ exercise, sets, ...work.estimate });
+  }
+  if (!rows.some(r => r[0] === 'WORK')) throw new Error(L('Trénink nemá žádný cvik.', 'The workout has no exercise.'));
+  configureStrengthCoaching(rows, EXERCISES, { factor, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession });
+  const timing = estimateStrengthTiming(rows, EXERCISES, 600);
+  snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
+  const from = String(options.fromName || '').trim();
+  const rationale = (from ? L('Trénink ti posílá ' + from + '. ', from + ' sent you this workout. ') : '') + L('Cviky, série a opakování zůstaly, váhy jsou podle tvých tréninků a dnešní připravenosti.', 'The exercises, sets and reps stay; the weights follow your own workouts and today\'s readiness.') + (firstSession ? ' ' + L('První trénink v aplikaci: váhy jsou opatrný odhad, uprav je tak, aby ti zbyla 2–3 opakování v rezervě.', 'Your first workout in the app: the weights are a careful estimate; adjust them so you keep 2–3 reps in reserve.') : '');
+  return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true };
+}
+
 export function generateStrengthPlan(context, options = {}) {
   const policy=trainingStatus(context?.athleteState);
   // The gateway explicitly marks its read-only deployment diagnostic; ordinary

@@ -1,5 +1,5 @@
 // /.well-known/apple-app-site-association: the file iOS reads before it lets
-// the iPhone app use the passkeys of petrfitnessdata.eu. The webcredentials
+// the iPhone app use the passkeys of petrfitnessdata.eu and open its links. The webcredentials
 // entry matches the app's associated-domains entitlement
 // (ios-native/project.yml: webcredentials:petrfitnessdata.eu).
 // APPLE_TEAM_ID is the Apple Developer team of the app (App Store Connect →
@@ -11,7 +11,10 @@ const PATH = "/.well-known/apple-app-site-association";
 export function appleAppSiteAssociationBody(env = {}) {
   const team = String(env.APPLE_TEAM_ID || "").trim();
   if (!/^[A-Z0-9]{10}$/.test(team)) return null;
-  return { webcredentials: { apps: [team + "." + APP_BUNDLE_ID] } };
+  const app = team + "." + APP_BUNDLE_ID;
+  // applinks: a shared workout's link (/t/<id>, workout-templates.js) opens
+  // the app when it is installed (applinks:petrfitnessdata.eu in project.yml).
+  return { webcredentials: { apps: [app] }, applinks: { details: [{ appIDs: [app], components: [{ "/": "/t/*", comment: "Shared workouts" }] }] } };
 }
 
 // The answer for the file, null for every other path.

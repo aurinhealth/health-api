@@ -9,7 +9,9 @@ export const CENTRAL_PERSONAL_TABLES = new Set([
   'user_language', 'user_time_zone', 'subscriptions', 'ai_usage',
   'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports',
   // A phone's push token belongs to one account at a time (push.js).
-  'push_tokens'
+  'push_tokens',
+  // A shared workout is read by whoever has its link (workout-templates.js).
+  'workout_shares'
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',

@@ -21,7 +21,8 @@ const OPEN_PATHS = new Set([
   "/auth/google/callback",
   "/auth/app/connect"
 ]);
-const OPEN_PREFIXES = ["/oauth/", "/.well-known/"];
+// /t/<id>: a workout shared with a link (workout-templates.js).
+const OPEN_PREFIXES = ["/oauth/", "/.well-known/", "/t/"];
 
 export function webAppClosed(app) {
   return {

@@ -44,8 +44,10 @@ targets:
         # Passkeys (Data/Passkeys.swift): the server must serve
         # /.well-known/apple-app-site-association with a webcredentials entry
         # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
+        # applinks: a shared workout's link (/t/<id>) opens the app.
         com.apple.developer.associated-domains:
           - webcredentials:petrfitnessdata.eu
+          - applinks:petrfitnessdata.eu
         # Push notifications (App/PushRegistration.swift, src/push.js): the
         # morning readiness. One entitlements file serves every build, and
         # TestFlight and the App Store use APNs production; the App ID needs
