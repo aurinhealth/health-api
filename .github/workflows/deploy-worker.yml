@@ -95,6 +95,19 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/provision-food-catalog.mjs
 
+      # A secret saved in the Cloudflare dashboard marks the Worker as last
+      # deployed from the dashboard. Wrangler then downloads the dashboard
+      # config before every deploy, and that call times out for this Worker.
+      # Saving a harmless secret through Wrangler first clears the mark.
+      - name: Clear the dashboard deploy mark
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'wrangler' | npx --yes wrangler@4 secret put DEPLOY_SOURCE --name health-api
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v4
         with:
