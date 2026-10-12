@@ -310,6 +310,7 @@ struct LibraryWorkoutCard: View {
                 Text(workout.name).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
                 Spacer(minLength: 8)
                 if let d = workout.duration_minutes { Text(Fmt.duration(Int(d))).font(Typo.number(19)).foregroundStyle(Palette.ink) }
+                if workout.ai != nil { AIMark() }
             }
             HStack(spacing: 8) {
                 if let s = workout.primary_system { Pill(text: LibraryWorkout.systemLabel(s), foreground: Palette.amber, background: Palette.amberSoft) }
@@ -320,10 +321,22 @@ struct LibraryWorkoutCard: View {
             if let line = workout.description?.nilIfBlank ?? workout.guide?.how?.dropFirst().first {
                 Text(line).font(Typo.caption).foregroundStyle(Palette.secondary).lineLimit(2).multilineTextAlignment(.leading)
             }
-            if let why = workout.reasons?.first {
+            if let reason = workout.ai?.reason {
+                Text(reason).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(3).multilineTextAlignment(.leading)
+            } else if let why = workout.reasons?.first {
                 Label(Fmt.capitalized(why), systemImage: "checkmark").font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
             }
         }
+    }
+}
+
+/// The small ✦ in the corner of what the AI chose or wrote.
+struct AIMark: View {
+    var body: some View {
+        Image(systemName: "sparkle")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Palette.amber)
+            .accessibilityLabel(Text("Navrženo AI"))
     }
 }
 
@@ -353,6 +366,12 @@ struct LibraryWorkoutSheet: View {
                 }
                 if let s = workout.primary_system {
                     Pill(text: workout.guide?.title ?? LibraryWorkout.systemLabel(s), foreground: Palette.amber, background: Palette.amberSoft)
+                }
+                if let reason = workout.ai?.reason {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        AIMark()
+                        Text(reason).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 if let d = workout.description?.nilIfBlank {
                     Text(d).font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
