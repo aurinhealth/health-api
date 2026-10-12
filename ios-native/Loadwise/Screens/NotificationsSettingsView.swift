@@ -149,6 +149,8 @@ struct NotificationsSettingsView: View {
     @AppStorage(Reminders.weightTimeKey) private var weightTime = 7 * 60
     @AppStorage(Reminders.weekKey) private var week = false
     @AppStorage(Reminders.weekTimeKey) private var weekTime = 19 * 60
+    /// The morning readiness push from the server (PushRegistration.swift).
+    @AppStorage(PushRegistration.morningKey) private var morning = true
     @State private var allowed: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
     /// the meals and days, read straight from UserDefaults, are shown anew).
@@ -171,6 +173,9 @@ struct NotificationsSettingsView: View {
                     if index > 0 { SettingsDivider() }
                     ReminderListRow(line: line, isOn: isOn(line.kind)) { editing = line.kind }
                 }
+            }
+            SettingsGroup(footer: "Jednou ráno po synchronizaci noci, mezi 5:00 a 11:00: připravenost a krátké doporučení na den.") {
+                SettingsToggle(title: "Ranní připravenost", isOn: $morning)
             }
         }
         .sheet(item: $editing) { kind in
@@ -292,11 +297,14 @@ struct NotificationsSettingsView: View {
 
     private func check() async {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if status == .notDetermined, bedtime || workout || water || meals || food || weight || week {
+        if status == .notDetermined, bedtime || workout || water || meals || food || weight || week || morning {
             allowed = await Reminders.requestPermission()
         } else {
             allowed = status == .authorized || status == .provisional
         }
+        // The permission or the Ranní připravenost switch may have changed:
+        // the push token is sent or taken off the server.
+        await PushRegistration.refresh(api: model.api)
     }
 }
 

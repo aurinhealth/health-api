@@ -12,8 +12,9 @@ const table = new RegExp(`\\b(${personal.join("|")})\\b`, "i");
 // Intentionally cross-user: listing users with connections for cron jobs,
 // the cron job that re-encrypts everyone's connection keys with CONNECTION_KEY,
 // and signing in with Apple or a passkey, which finds the account by Apple's
-// user id or by the passkey's id.
-const allowed = [/FROM users u JOIN connection_credentials c ON c\.user_id = u\.id/, /FROM connection_credentials WHERE encrypted NOT LIKE 'v2\.%'/, /FROM user_identities i JOIN users u ON u\.id = i\.user_id WHERE i\.provider = 'apple' AND i\.subject = \?/, /^"SELECT user_id FROM user_identities WHERE provider = 'apple' AND subject = \?"$/,
+// user id or by the passkey's id. A phone's push token moves to the account
+// that registers it (push.js), leaving every other account.
+const allowed = [/^"DELETE FROM push_tokens WHERE token=\? AND user_id<>\?"$/,/FROM users u JOIN connection_credentials c ON c\.user_id = u\.id/, /FROM connection_credentials WHERE encrypted NOT LIKE 'v2\.%'/, /FROM user_identities i JOIN users u ON u\.id = i\.user_id WHERE i\.provider = 'apple' AND i\.subject = \?/, /^"SELECT user_id FROM user_identities WHERE provider = 'apple' AND subject = \?"$/,
   /^"SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = \?"$/];
 
 test("personal tables are known", () => {

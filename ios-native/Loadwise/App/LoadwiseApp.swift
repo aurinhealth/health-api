@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct LoadwiseApp: App {
+    /// The APNs device token for the morning readiness push (PushRegistration.swift).
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     // "-demo" (Xcode scheme or `simctl launch … -demo`) starts with sample data.
     @State private var model = AppModel(demo: ProcessInfo.processInfo.arguments.contains("-demo"))
     /// Settings → Vzhled: "system", "light" or "dark".

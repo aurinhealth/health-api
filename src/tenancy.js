@@ -68,7 +68,10 @@ export const PERSONAL_TABLES = {
   // Pairings made by hand (manual-pairs.js) and the choice of an activity's
   // calories (activity-energy-choices.js).
   manual_activity_pairs: { pk: ["user_id", "planned_id"] },
-  activity_energy_choices: { pk: ["user_id", "activity_id"] }
+  activity_energy_choices: { pk: ["user_id", "activity_id"] },
+  // The app's push device tokens and the once-a-day guard of the pushes (push.js).
+  push_tokens: { pk: ["user_id", "token"] },
+  push_log: { pk: ["user_id", "kind", "local_date"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
