@@ -357,7 +357,6 @@ struct LiveGymView: View {
             }
         }
         day = next
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let rest = set.warmup ? 60 : restSets
         if rest > 0 {
             let following: GymSet? = upcoming.flatMap { row in next.exercises.flatMap { $0.sets }.first { $0.row == row } }

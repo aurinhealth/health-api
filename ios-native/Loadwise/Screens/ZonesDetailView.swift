@@ -29,7 +29,7 @@ struct ZonesDetailContent: View {
             Text("Aktivní minuty v zónách · tento týden").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
             if let week = weeks.last {
                 HStack(alignment: .lastTextBaseline, spacing: 10) {
-                    Text(verbatim: Fmt.int(week.counted)).font(Typo.number(96)).foregroundStyle(Palette.ink)
+                    Text(verbatim: Fmt.int(week.counted)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Text(verbatim: L10n.f("z %@", "150 min")).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 Pill(text: ZoneStyle.status(week), foreground: ZoneStyle.statusColor(week),

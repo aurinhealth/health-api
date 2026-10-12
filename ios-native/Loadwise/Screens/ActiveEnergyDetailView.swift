@@ -47,7 +47,7 @@ struct ActiveEnergyContent: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Aktivní výdej dnes").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text(verbatim: Fmt.int(active.today)).font(Typo.number(96)).foregroundStyle(Palette.ink)
+                Text(verbatim: Fmt.int(active.today)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                 Text(verbatim: "kcal").font(Typo.small).foregroundStyle(Palette.muted)
             }
             if let mean {

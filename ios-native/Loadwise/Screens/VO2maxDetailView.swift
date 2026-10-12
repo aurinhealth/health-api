@@ -72,7 +72,7 @@ struct VO2maxContent: View {
 
             Text(selected.map { Fmt.dayMonth($0.iso) } ?? "Teď").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
             HStack(alignment: .lastTextBaseline, spacing: 10) {
-                Text(Self.text(selected?.value ?? vo2.value)).font(Typo.number(96)).foregroundStyle(Palette.ink)
+                Text(Self.text(selected?.value ?? vo2.value)).font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                 Text("ml/kg/min").font(Typo.small).foregroundStyle(Palette.muted)
             }
             if let change = vo2.change, change != 0 {

@@ -35,7 +35,7 @@ struct FormDetailContent: View {
             if let form = training.form {
                 Text("Forma").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 36)
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(Fmt.signed(form.form)).font(Typo.number(116)).foregroundStyle(Palette.ink)
+                    Text(Fmt.signed(form.form)).font(Typo.number(116)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
                     Pill(text: form.label, foreground: zoneColor(form.zone), background: form.zone == "risk" ? Palette.rust.opacity(0.14) : form.zone == "optimal" || form.zone == "fresh" ? Palette.greenSoft : Palette.amberSoft)
                 }
                 Text(form.text)
