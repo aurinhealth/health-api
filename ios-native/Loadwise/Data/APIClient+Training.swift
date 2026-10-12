@@ -28,6 +28,20 @@ extension APIClient {
         return try await send("/app/api/gym/equipment/detect", method: "POST", body: body, timeout: 180)
     }
 
+    // MARK: Activity type
+
+    /// Every sport a done activity can be (src/activity-type.js).
+    func activityTypes() async throws -> [ActivityTypeOption] {
+        struct Response: Decodable { let types: [ActivityTypeOption]? }
+        let r: Response = try await get("/app/api/activity/types")
+        return r.types ?? []
+    }
+
+    /// Another type for a done activity; Intervals.icu gets it too.
+    func changeActivityType(id: String, type: String) async throws -> ActivityTypeChange {
+        try await send("/app/api/activity/type", method: "POST", body: ["id": JSONValue.string(id), "type": .string(type)])
+    }
+
     // MARK: Exercises and the AI builder
 
     func gymExercises() async throws -> [GymCatalogExercise] {

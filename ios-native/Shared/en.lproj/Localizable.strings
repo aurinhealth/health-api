@@ -1709,3 +1709,12 @@
 "Dnešní cíl" = "Today's target";
 "nic v plánu" = "nothing planned";
 "Navrženo AI" = "Suggested by AI";
+"Typ aktivity" = "Activity type";
+"Hledat sport" = "Search sports";
+"Oblíbené" = "Favourites";
+"Všechny sporty" = "All sports";
+"Změnit typ aktivity" = "Change activity type";
+"Další volby" = "More options";
+"Přidat do oblíbených" = "Add to favourites";
+"Google Health dovolí změnu jen ve své aplikaci." = "Google Health only allows the change in its own app.";
+"Apple Health dovolí změnu jen v aplikaci, která trénink zapsala." = "Apple Health only allows the change in the app that recorded the workout.";

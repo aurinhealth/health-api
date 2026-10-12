@@ -103,6 +103,14 @@ extension AppModel {
 
     /// The day's lifting session that was done (the watch or Intervals.icu):
     /// its length and calories for the gym detail.
+    /// A done activity got another type: the calendar, the week and Today again.
+    func activityTypeChanged() async {
+        let days = calendar.keys.sorted()
+        if let first = days.first, let last = days.last { await loadCalendar(from: first, to: last, force: true) }
+        await refreshTraining()
+        await refresh()
+    }
+
     /// The week's or Today's copy of a done calendar row, which carries the
     /// calorie check (the calendar does not).
     func doneSession(for activity: CalendarActivity) -> WeekSession? {
