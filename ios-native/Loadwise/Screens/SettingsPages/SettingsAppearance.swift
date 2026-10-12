@@ -16,7 +16,7 @@ struct AppearanceSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Vzhled") {
-            SettingsGroup(footer: "Automaticky se vzhled řídí nastavením iPhonu.") {
+            SettingsGroup {
                 ForEach(Array(["system", "light", "dark"].enumerated()), id: \.element) { index, value in
                     if index > 0 { SettingsDivider() }
                     Button { appearance = value } label: {
@@ -78,7 +78,7 @@ struct UnitsSettingsView: View {
                     WidgetBridge.reload()
                 }
             }
-            SettingsGroup(footer: "Server ukládá hodnoty metricky, převádí se jen to, co vidíš a zadáváš.") {
+            SettingsGroup {
                 let imperial = units == "imperial"
                 let rows = [("Vzdálenost", imperial ? "mi" : "km"), ("Výška", imperial ? "in" : "cm"), ("Váha", imperial ? "lb" : "kg"),
                             ("Teplota", imperial ? "°F" : "°C"), ("Energie", "kcal"), ("Pití", imperial ? "fl oz" : "ml")]
@@ -101,7 +101,7 @@ struct LanguageSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Jazyk") {
-            SettingsGroup(footer: "Texty od kouče a ze serveru přijdou v novém jazyce s dalším načtením.") {
+            SettingsGroup {
                 SettingsChoiceList(options: [("cs", "Čeština"), ("en", "English")], selected: language) { value in
                     guard value != language else { return }
                     L10n.setLanguage(value)

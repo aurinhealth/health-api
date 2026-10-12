@@ -56,7 +56,7 @@ function todayFacts(d) {
     facts.sleepMinutes != null && { label: L("Spánek", "Sleep"), value: hm(facts.sleepMinutes) + (facts.sleepNeedMinutes ? L(" z potřebných ", " of the needed ") + hm(facts.sleepNeedMinutes) : "") },
     facts.hrv != null && { label: "HRV", value: Math.round(facts.hrv) + " ms" + (facts.hrvBaseline != null ? L(", obvykle ", ", usually ") + Math.round(facts.hrvBaseline) : "") },
     facts.restingHR != null && { label: L("Klidový tep", "Resting HR"), value: Math.round(facts.restingHR) + (facts.restingHRBaseline != null ? L(", obvykle ", ", usually ") + Math.round(facts.restingHRBaseline) : "") },
-    facts.strainPlanned != null && { label: L("Plánovaná zátěž", "Planned strain"), value: decimal(facts.strainPlanned) },
+    facts.strainPlanned != null && { label: L("Plánovaná námaha", "Planned strain"), value: decimal(facts.strainPlanned) },
     plan.length > 0 && { label: L("Plán dne", "Day plan"), value: plan.map(i => i.title + (i.done ? " ✓" : "")).join(", ") }
   ].filter(Boolean);
   const chips = [
@@ -93,7 +93,7 @@ function trainingFacts(d) {
     ...trendsOf(d)
   };
   const basis = [
-    facts.strainToday != null && { label: L("Zátěž dnes", "Strain today"), value: decimal(facts.strainToday) + (facts.strainTarget != null ? L(", cíl ", ", target ") + decimal(facts.strainTarget) : "") },
+    facts.strainToday != null && { label: L("Námaha dnes", "Strain today"), value: decimal(facts.strainToday) + (facts.strainTarget != null ? L(", cíl ", ", target ") + decimal(facts.strainTarget) : "") },
     week.planned != null && { label: L("Týden", "Week"), value: (week.done ?? 0) + "/" + week.planned + L(" tréninků, ", " workouts, ") + (week.doneLoad ?? 0) + "/" + (week.plannedLoad ?? 0) + " TSS" },
     form && { label: L("Forma", "Form"), value: signed(form.form) + (form.label ? " (" + form.label + ")" : "") },
     done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? " · " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },

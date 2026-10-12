@@ -34,7 +34,6 @@ struct SourcesSettingsView: View {
             if connected.isEmpty && store.loaded {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Zatím není nic propojené.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text("Bez propojení běží Loadwise z toho, co zapíšeš ručně.").font(Typo.small).foregroundStyle(Palette.muted)
                     PrimaryButton(title: "Přidat propojení", systemImage: "plus") { adding = true }
                 }
                 .padding(16)

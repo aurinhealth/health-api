@@ -19,7 +19,7 @@ struct PrivacySettingsView: View {
             SettingsGroup(footer: "Kouč, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
                 SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
             }
-            SettingsGroup(footer: "Soubor JSON se vším, co o tobě Loadwise ukládá.") {
+            SettingsGroup {
                 if let exportURL {
                     ShareLink(item: exportURL) { SettingsRow(title: "Sdílet soubor s daty", chevron: false, titleColor: Palette.blue) }
                 } else {

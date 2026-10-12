@@ -27,7 +27,7 @@ struct ProfileSettingsView: View {
             AvatarEditor().padding(.top, 8)
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
 
-            SettingsGroup(title: "Osobní údaje", footer: "Z pohlaví, věku a výšky (a váhy) se počítá klidový výdej a denní cíl kalorií.") {
+            SettingsGroup(title: "Osobní údaje") {
                 SettingsField(title: "Jméno", text: $name, keyboard: .default, placeholder: accountName.isEmpty ? "tvé jméno" : accountName)
                     .textInputAutocapitalization(.words)
                 SettingsDivider()
@@ -56,7 +56,7 @@ struct ProfileSettingsView: View {
             }
 
             if !email.isEmpty {
-                SettingsGroup(title: "Účet", footer: "Přihlašuješ se přes tento účet. Fotka zůstává jen v tomhle telefonu.") {
+                SettingsGroup(title: "Účet") {
                     Button {
                         UIPasteboard.general.string = email
                         copied = true
