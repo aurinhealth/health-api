@@ -186,7 +186,6 @@ struct ThresholdCheckCard: View {
             WidgetHeader(title: sportTitle(p.sport) + " · " + L10n.tr("Test"), color: Palette.amberBar)
             Text(L10n.f("%@ · %@", p.name ?? L10n.tr("Test"), Fmt.dayHeading(p.testDate)))
                 .font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
-            Text("Dva dny před testem trénuješ lehce.").font(Typo.small).foregroundStyle(Palette.secondary)
             SecondaryButton(title: "Zrušit test") {
                 Task { await act(["action": .string("cancel"), "sport": .string(p.sport)], estimate: nil) }
             }
