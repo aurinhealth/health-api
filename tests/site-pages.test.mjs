@@ -14,20 +14,26 @@ test('the overview keeps what Google verification reads on the homepage',async()
   assert.doesNotMatch(html,/href="\/app"/,'the web app is switched off');
 });
 
-test('public pages follow the Vzhled switch like the app',async()=>{
+test('public pages use the app’s light palette',async()=>{
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
-    const html=await page().text(),head=html.slice(0,html.indexOf('<style>'));
-    assert.match(head,/lw-theme=\(light\|dark\)/);
+    const html=await page().text();
+    assert.match(html,/<html lang="cs" class="site"/);
+    assert.match(html,/:root\.site\{color-scheme:light;[^}]*--bg:#F3EFE8;/);
     assert.equal((html.match(/:root\{[^}]*\}/g)||[]).length,1);
-    for(const choice of ['light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'));
-    assert.doesNotMatch(html,/data-theme-choice="system"/);
+    assert.doesNotMatch(html,/data-theme-choice/,'the site has one look; the Vzhled switch stays in the app');
   }
 });
 
-test('every screenshot the overview shows exists in both themes',async()=>{
-  const html=await overviewPage().text(),names=[...new Set([...html.matchAll(/src="\/site\/([a-z-]+)-dark\.webp"/g)].map(m=>m[1]))];
-  assert.ok(names.length>=5);
-  for(const name of names)for(const theme of ['dark','light'])assert.ok(existsSync(new URL(`../public/site/${name}-${theme}.webp`,import.meta.url)),`${name}-${theme}`);
+test('the overview follows the app section by section and every file it loads exists',async()=>{
+  for(const lang of ['cs','en']){
+    const html=await overviewPage(new Request('https://petrfitnessdata.eu/?lang='+lang)).text();
+    for(const id of ['pripravenost','zatez','trenink','posilovna','vyziva','kouc','propojeni','soukromi'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+    const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
+    assert.ok(files.includes(lang==='en'?'og-en.png':'og.png'),'share image');
+    assert.ok(files.includes('fonts/newsreader.woff2'));
+    for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
+    assert.doesNotMatch(html,/\.webp"/,'the phone is drawn in HTML, not a screenshot');
+  }
 });
 
 const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
@@ -52,16 +58,11 @@ test('every public page has the CZ / EN switch and an English version',async()=>
     assert.notEqual(cs,en);
   }
   const en=await overviewPage(visit('/',{'accept-language':'en'})).text();
-  assert.match(en,/An iPhone app, invite only for now/);
+  assert.match(en,/Coming soon to the App Store/);
+  assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
   assert.match(en,/Google Health data disclosure/);
   assert.match(await privacyPage(visit('/',{'accept-language':'en'})).text(),/Google user data is used only to provide/);
-});
-
-test('the English overview shows English screenshots in both themes',async()=>{
-  const html=await overviewPage(visit('/',{'accept-language':'en'})).text(),names=[...new Set([...html.matchAll(/src="\/site\/([a-z-]+)-dark\.webp"/g)].map(m=>m[1]))];
-  assert.ok(names.length>=5);
-  for(const name of names){assert.match(name,/-en$/);for(const theme of ['dark','light'])assert.ok(existsSync(new URL(`../public/site/${name}-${theme}.webp`,import.meta.url)),`${name}-${theme}`);}
 });
 
 test('the privacy policy and support page cover what Google verification asks for',async()=>{
