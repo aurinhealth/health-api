@@ -278,6 +278,8 @@ final class AppModel {
         }
         await loadAccountInitial()
         await checkSetup()
+        // The morning readiness push for this account (PushRegistration.swift).
+        await PushRegistration.refresh(api: api)
     }
 
     /// Connects a data source; the event says how it went ("intervals",
@@ -863,7 +865,11 @@ final class AppModel {
 
     /// Settings → "Odhlásit se": ends the session on the server as well.
     func logout() async {
-        if !demo { await api.logout() }
+        if !demo {
+            // While the session still works: no more pushes to this phone.
+            await PushRegistration.unregister(api: api)
+            await api.logout()
+        }
         signOut()
     }
 
@@ -889,6 +895,8 @@ final class AppModel {
         todayBase = nil
         foodBase = nil
         Reminders.cancelAll()
+        // The next sign-in sends the push token again for its own account.
+        PushRegistration.forget()
         WidgetBridge.clear()
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)

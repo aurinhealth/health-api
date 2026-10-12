@@ -46,6 +46,11 @@ targets:
         # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
         com.apple.developer.associated-domains:
           - webcredentials:petrfitnessdata.eu
+        # Push notifications (App/PushRegistration.swift, src/push.js): the
+        # morning readiness. One entitlements file serves every build, and
+        # TestFlight and the App Store use APNs production; the App ID needs
+        # the Push Notifications capability or the App Store export fails.
+        aps-environment: production
     settings:
       base:
         # Its own bundle ID (eu.petrfitnessdata.loadwise was the retired Capacitor shell).

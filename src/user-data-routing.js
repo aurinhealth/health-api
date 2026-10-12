@@ -7,7 +7,9 @@ export const FOOD_CATALOG_TABLES = new Set([
 export const CENTRAL_PERSONAL_TABLES = new Set([
   'connection_credentials', 'user_consents', 'user_identities', 'user_passkeys',
   'user_language', 'user_time_zone', 'subscriptions', 'ai_usage',
-  'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports'
+  'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports',
+  // A phone's push token belongs to one account at a time (push.js).
+  'push_tokens'
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
