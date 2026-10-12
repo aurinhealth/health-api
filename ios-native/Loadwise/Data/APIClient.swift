@@ -557,9 +557,11 @@ final class APIClient: @unchecked Sendable {
         var request = URLRequest(url: URL(string: path, relativeTo: baseURL)!.absoluteURL)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        // The server counts days in the user's zone and answers in Czech.
+        // The server counts days in the user's zone and writes its texts in the
+        // app's language and units.
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
+        request.setValue(Units.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
         request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {

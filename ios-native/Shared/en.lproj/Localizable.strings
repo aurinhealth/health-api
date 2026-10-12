@@ -9,17 +9,17 @@
 "%@ hotovo" = "%@ done";
 "%@ je připojené, data se začínají stahovat." = "%@ is connected, data is starting to sync.";
 "%@ let" = "%@ years";
-"%@ na ruku" = "%@ per hand";
-"%@ od normy" = "%@ from normal";
+"%@ na ruku" = "%@ per dumbbell";
+"%@ od normy" = "%@ from usual";
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
 "%@ tě dostane zhruba na %@." = "%1$@ will take you to about %2$@.";
 "%@ z %@ %@ · %@ %@" = "%1$@ of %2$@ %3$@ · %4$@ %5$@";
 "%@ z %@ TSS" = "%1$@ of %2$@ TSS";
 "%@ za 4 týdny" = "%@ in 4 weeks";
-"%@ zápis čeká na signál" = "%@ entry waiting for signal";
-"%@ zápisy čekají na signál" = "%@ entries waiting for signal";
-"%@ zápisů čeká na signál" = "%@ entries waiting for signal";
+"%@ zápis čeká na signál" = "%@ entry waiting for a connection";
+"%@ zápisy čekají na signál" = "%@ entries waiting for a connection";
+"%@ zápisů čeká na signál" = "%@ entries waiting for a connection";
 "%@, %@ %% cíle" = "%@, %@ %% of goal";
 "%@, průměr %@, %@" = "%@, average %@, %@";
 "%@. Dej si něco malého a připrav se." = "%@. Have a small snack and get ready.";
@@ -677,7 +677,7 @@
 "Příští týden" = "Next week";
 "R" = "W";
 "RPE je uložené i v Intervals.icu." = "RPE is saved, in Intervals.icu too.";
-"RPE je uložené, zápis do Intervals.icu selhal: %@" = "RPE is saved; writing to Intervals.icu failed: %@";
+"RPE je uložené, zápis do Intervals.icu selhal: %@" = "RPE is saved; write to Intervals.icu failed: %@";
 "Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích." = "Build a recipe from ingredients, then add it one serving at a time with a tap.";
 "Recepty" = "Recipes";
 "Regenerace" = "Recovery";
@@ -1315,7 +1315,7 @@
 "Aktivita a tréninky" = "Activity and workouts";
 "Zdravotní měření" = "Health measurements";
 "Čtení jídla" = "Reading food";
-"Zápis jídla" = "Writing food";
+"Zápis jídla" = "Food logging";
 "Oprávnění" = "Permissions";
 "Oprávnění se mění na stránce Googlu: zaškrtni, co má Loadwise číst a zapisovat." = "Permissions change on Google's page: tick what Loadwise may read and write.";
 "nepovoleno" = "not allowed";
@@ -1721,12 +1721,12 @@
 "Strava zatím není dostupná pro další uživatele." = "Strava isn't available to more users yet.";
 "Připojení Stravy bylo zrušeno." = "Connecting Strava was cancelled.";
 "Stravu se nepodařilo připojit. Zkus to znovu." = "Strava couldn't be connected. Try again.";
-"Google zatím nepovolil zápis" = "Google hasn't allowed writing yet";
+"Google zatím nepovolil zápis" = "Google hasn't allowed write access yet";
 "Loadwise otevře souhlas Googlu jen pro zápis toho, co tu zapneš. Číst víc nebude." = "Loadwise opens Google's consent only for writing what you switch on here. It won't read anything more.";
 "Rozšířit oprávnění Google" = "Extend Google permissions";
-"zápis tréninků" = "writing workouts";
-"zápis váhy" = "writing weight";
-"zápis jídla" = "writing food";
+"zápis tréninků" = "logging workouts";
+"zápis váhy" = "logging weight";
+"zápis jídla" = "food logging";
 "Oprávnění Google jsou rozšířená." = "Google permissions are extended.";
 "Do Apple Zdraví jde jen to, co v Loadwise sám zapíšeš." = "Only what you enter in Loadwise yourself goes to Apple Health.";
 "Váhu a jídlo zapsané v Loadwise." = "The weight and food entered in Loadwise.";
@@ -1739,7 +1739,7 @@
 "Odeslání" = "Sending";
 "Odesláno" = "Sent";
 "odešle se" = "will be sent";
-"Apple Zdraví nepovolilo zápis tréninků. Povol ho v Nastavení iPhonu → Zdraví → Přístup k datům." = "Apple Health didn't allow writing workouts. Allow it in iPhone Settings → Health → Data Access.";
+"Apple Zdraví nepovolilo zápis tréninků. Povol ho v Nastavení iPhonu → Zdraví → Přístup k datům." = "Apple Health didn't allow logging workouts. Allow it in iPhone Settings → Health → Data Access.";
 "Zapíše se jako odcvičený a pošle do aplikací ze Synchronizace." = "It's saved as done and sent to the apps chosen in Sync.";
 
 /* Morning check-in on Today */

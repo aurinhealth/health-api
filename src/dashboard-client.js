@@ -252,7 +252,7 @@ async function offerPasskey({created=false,email=''}={}){let offer=false;try{off
   card.innerHTML='<img class="login-logo" src="/logo.svg" alt="" width="48" height="48"><h2 id="loginGateTitle">'+(created?'Účet je založený':'Příště rychleji')+'</h2><p class="small">'+(created?'Chceš se příště přihlašovat bez kódu? Přidej si přístupový klíč (passkey) do telefonu, počítače nebo správce hesel. Přihlásíš se pak otiskem prstu, obličejem nebo zámkem obrazovky.':'Přidej si přístupový klíč a příště se přihlásíš otiskem prstu, obličejem nebo zámkem obrazovky, bez čekání na e-mail.')+'</p><div class="sign-in-buttons"><button class="btn primary" type="button" id="offerPasskey">Přidat přístupový klíč</button><button class="btn" type="button" id="skipPasskey">Teď ne</button></div><p class="small">Přidat nebo odebrat ho můžeš kdykoli v Nastavení → Účet.</p><p id="loginStatus" class="small login-status" role="status" aria-live="polite"></p>';
   $('skipPasskey').onclick=()=>{try{localStorage.setItem('lw-passkey-offer','no');}catch{}location.reload();};
   $('offerPasskey').onclick=async()=>{const b=$('offerPasskey');b.disabled=true;try{await addPasskey();location.reload();}catch(error){$('loginStatus').textContent=passkeyError(error,'Přidání přístupového klíče se nedokončilo.');b.disabled=false;newPasskeyOptions.get().catch(()=>{});}};}
-// ---- iPhone app (mobile/, Capacitor) ----
+// ---- iPhone app (the retired Capacitor shell; ios-native/ signs in the same way) ----
 // Google refuses sign-in inside an app's web view, so the app signs in in
 // Safari and comes back through loadwise://auth with a short-lived token. Only
 // this web view knows the verifier that redeems it (see src/google-login.js).

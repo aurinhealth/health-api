@@ -1,0 +1,8 @@
+/* The permission prompts in English; the Czech originals are in project.yml. */
+
+"NSCameraUsageDescription" = "Loadwise reads the barcodes on food packaging so it can log the food in your diary.";
+"NSPhotoLibraryUsageDescription" = "Loadwise loads the photo of a meal or the gym that you pick.";
+"NSLocationWhenInUseUsageDescription" = "Loadwise uses your location only when you ask, to show the weather and let the coach advise training outdoors or indoors.";
+"NSHealthShareUsageDescription" = "Loadwise reads sleep, workouts, heart rate, HRV, steps and weight from Apple Health to work out your recovery, strain and calorie target.";
+"NSHealthUpdateUsageDescription" = "Loadwise writes to Apple Health only what you log in the app yourself and turn on in Sync, such as workouts, weight, food and drinks.";
+"NSAlarmKitUsageDescription" = "Loadwise wakes you at your alarm time, which it uses to work out your bedtime.";
