@@ -130,6 +130,8 @@ struct HealthSnapshot: Decodable, Equatable {
         let value: Double
         let deviation: Double?
         let series: [Point]
+        /// The last 14 nights, each against its own baseline (older servers lack it).
+        var deviations: [Point]? = nil
     }
 
     struct Latest: Decodable, Equatable {

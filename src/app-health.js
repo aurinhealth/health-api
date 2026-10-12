@@ -84,18 +84,24 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   // Series for the widgets.
   const series = (key, n, d = 0, from = rows) => from.filter(r => r.id <= date && r.id > shift(date, -n) && num(r[key]) != null && (key === "skinTempDeviation" || num(r[key]) > 0)).map(r => ({ date: r.id, value: round(num(r[key]), d) }));
   const c = readiness.components || {};
-  const hrvSeries = series("hrv", 30), rhrSeries = series("restingHR", 30);
+  // HRV and resting heart rate for 90 days: Health's detail charts pick 7, 30
+  // or 90 of them (the rows reach 61 days of Apple/Google values and 90 of
+  // Intervals.icu wellness).
+  const hrvSeries = series("hrv", 90), rhrSeries = series("restingHR", 90);
   const lastWeek = hrvSeries.filter(p => p.date > shift(date, -7)).map(p => p.value);
   const today = rows.find(r => r.id === date) || {};
   const respiration = series("respiration", 14, 1);
   const skin = series("skinTempDeviation", 14, 2, google);
   // Oxygen from the watch (Apple Health, Google) first, Intervals.icu filling the rest (mergeWellnessRows).
   const spo2 = series("spO2", 14, 1);
-  const walkingHR = series("walkingHR", 30), hrRecovery = series("hrRecovery", 30);
+  const walkingHR = series("walkingHR", 90), hrRecovery = series("hrRecovery", 90);
   // Apple Watch's wrist temperature in sleep (°C) for the last 30 nights; the
   // deviation is the last night against the median of the 28 nights before
   // it (recovery-model.js wristTempDeviation), null under 7 of them.
+  // `deviations` is each of the last 14 nights against its own 28 nights
+  // before (the Health card's bars), nights without a baseline left out.
   const wrist = series("wristTemp", 30, 2), wristLast = wrist.length ? wristTempDeviation(rows, date) : null;
+  const wristDeviations = wristLast ? wrist.filter(p => p.date > shift(date, -14)).map(p => ({ date: p.date, value: wristTempDeviation(rows, p.date)?.deviation ?? null })).filter(p => p.value != null) : [];
 
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).
@@ -158,7 +164,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
     oxygen: spo2.length ? { value: spo2.at(-1).value, low: Math.min(...spo2.map(p => p.value)), high: Math.max(...spo2.map(p => p.value)), series: spo2 } : null,
     walkingHR: walkingHR.length ? { value: walkingHR.at(-1).value, series: walkingHR } : null,
     hrRecovery: hrRecovery.length ? { value: hrRecovery.at(-1).value, series: hrRecovery } : null,
-    wristTemp: wristLast ? { value: round(wristLast.value, 2), deviation: wristLast.deviation, series: wrist } : null,
+    wristTemp: wristLast ? { value: round(wristLast.value, 2), deviation: wristLast.deviation, series: wrist, deviations: wristDeviations } : null,
     weight: weights.length ? {
       latest: weights.at(-1).value,
       date: weights.at(-1).date,

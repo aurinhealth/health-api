@@ -60,7 +60,8 @@ test("Health: the night, its stages, the week and the coming night", () => {
 test("Health: heart, breathing, temperature, oxygen and weight", () => {
   const h = buildHealth(input);
   assert.equal(h.hrv.value, 66);
-  assert.equal(h.hrv.series.length, 30);
+  assert.equal(h.hrv.series.length, 40, "every day of the 40, up to 90");
+  assert.equal(h.restingHR.series.length, 40);
   assert.ok(h.hrv.low < h.hrv.baseline && h.hrv.baseline < h.hrv.high);
   assert.equal(h.restingHR.value, 47);
   assert.equal(h.respiration.series.length, 14);
@@ -131,4 +132,13 @@ test("Health: walking heart rate and heart rate recovery from Apple Health", () 
   const none = buildHealth(input);
   assert.equal(none.walkingHR, null);
   assert.equal(none.hrRecovery, null);
+});
+
+test("Health: HRV and resting heart rate for the detail charts reach 90 days back", () => {
+  const long = Array.from({ length: 120 }, (_, i) => ({ id: day(i - 119), hrv: 56 + (i % 5), restingHR: 50 + (i % 3) }));
+  const h = buildHealth({ ...input, health: { wellness: long } });
+  assert.equal(h.hrv.series.length, 90);
+  assert.equal(h.hrv.series[0].date, day(-89));
+  assert.equal(h.hrv.series.at(-1).date, DATE);
+  assert.equal(h.restingHR.series.length, 90);
 });

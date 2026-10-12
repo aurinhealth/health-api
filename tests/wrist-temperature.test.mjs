@@ -115,11 +115,16 @@ test("readiness everywhere: the shared function, Health and the coach see the wr
   assert.equal(h.wristTemp.deviation, 1.1);
   assert.equal(h.wristTemp.series.length, 30);
   assert.deepEqual(h.wristTemp.series.at(-1), { date: DATE, value: 37.2 });
+  // The card's bars: each of the last 14 nights against its own baseline.
+  assert.equal(h.wristTemp.deviations.length, 14);
+  assert.deepEqual(h.wristTemp.deviations.at(-1), { date: DATE, value: 1.1 });
+  assert.ok(h.wristTemp.deviations.slice(0, -1).every(p => Math.abs(p.value) <= 0.2), "baseline nights sit near 0");
   assert.ok(h.readiness.parts.some(p => p.key === "wristTemp" && p.points === -10));
   assert.equal(buildHealth({ date: DATE, health: { wellness: rows() } }).wristTemp, null, "no data, no object");
   const young = buildHealth({ date: DATE, health: { wellness: rows(o => (o >= -3 ? 36.3 : null)) } });
   assert.equal(young.wristTemp.value, 36.3);
   assert.equal(young.wristTemp.deviation, null, "under 7 nights of baseline");
+  assert.deepEqual(young.wristTemp.deviations, [], "no bars without a baseline");
 
   const coach = buildCyclingCoachV2({ date: DATE, week: { days: [] }, fitness: { wellness: [] }, health: { wellness: google, sleep: [] }, gym: { history: [] }, availabilityMinutes: 60 });
   assert.equal(coach.readiness.wristTempDeviation, 1.1);

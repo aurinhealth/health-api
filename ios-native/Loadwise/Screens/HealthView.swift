@@ -341,6 +341,44 @@ struct SkinTempWidget: View {
     }
 }
 
+/// Apple Watch's wrist temperature: last night against the athlete's own
+/// nights and a bar for each of the last 14, last night's in rust.
+struct WristTempWidget: View {
+    let wrist: HealthSnapshot.WristTemp
+    var size: WidgetSize = .small
+
+    private var bars: [Point] { Array((wrist.deviations ?? []).suffix(14)) }
+
+    var body: some View {
+        Card {
+            WidgetHeader(title: "Teplota zápěstí", color: Palette.rust, trailing: nights)
+            VStack(alignment: .leading, spacing: 14) {
+                if let deviation = wrist.deviation {
+                    NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
+                               unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti normálu", Units.temperatureUnit))
+                } else {
+                    NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
+                }
+                if bars.count > 1 {
+                    BarChart(values: bars.map { max($0.value, 0) },
+                             styles: bars.indices.map { BarStyle(fill: $0 == bars.count - 1 ? Palette.rust : Palette.rust.opacity(0.28)) },
+                             lo: 0, hi: max(bars.map(\.value).max() ?? 0, 0.5),
+                             spacing: size == .small ? 2 : 4,
+                             height: size == .large ? 80 : size == .medium ? 48 : 34)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "14 nocí" above the bars.
+    private var nights: String? {
+        guard bars.count > 1, size != .small else { return nil }
+        return String(bars.count) + " " + Fmt.plural(bars.count, "noc", "noci", "nocí")
+    }
+}
+
 // MARK: - Heart and body widgets
 
 struct HRVWideWidget: View {

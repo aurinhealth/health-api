@@ -1,9 +1,15 @@
 import Charts
 import SwiftUI
 
-/// A value over days with its dates and numbers on the axes, the personal
-/// normal as a band and a finger to read any day ("8. října · 64 ms").
+/// A value over days: each day a faint dot, the 7-day average as a line, the
+/// personal normal as a band, a finger to read any day ("8. října · 64 ms")
+/// and 7 / 30 / 90 days to pick above it.
 struct TrendChart: View {
+    /// Which side of the band is the bad one: its days get an amber dot.
+    enum Worse {
+        case none, below, above
+    }
+
     let points: [Point]
     let color: Color
     let unit: String
@@ -11,27 +17,76 @@ struct TrendChart: View {
     var bandLabel: String? = nil
     var height: CGFloat = 190
     var digits = 0
+    var worse: Worse = .none
     @State private var picked: Date?
+    @State private var days = 30
+
+    static let ranges = [7, 30, 90]
 
     private struct Sample: Identifiable {
         let date: Date
         let iso: String
         let value: Double
+        /// The mean of this day and the 6 before it that have a value.
+        var average: Double
         var id: String { iso }
     }
 
-    private var samples: [Sample] {
-        points.compactMap { p in ISODay.date(p.date).map { Sample(date: $0, iso: p.date, value: p.value) } }.sorted { $0.date < $1.date }
+    /// Every day with its 7-day average, oldest first.
+    private var allSamples: [Sample] {
+        let sorted = points.compactMap { p in ISODay.date(p.date).map { Sample(date: $0, iso: p.date, value: p.value, average: p.value) } }
+            .sorted { $0.date < $1.date }
+        let window: TimeInterval = 6 * 86400
+        var out = sorted
+        var start = 0
+        var sum = 0.0
+        for i in sorted.indices {
+            sum += sorted[i].value
+            while sorted[start].date < sorted[i].date.addingTimeInterval(-window) {
+                sum -= sorted[start].value
+                start += 1
+            }
+            out[i].average = sum / Double(i - start + 1)
+        }
+        return out
     }
 
+    /// The last `days` days up to the newest value.
+    private func inRange(_ list: [Sample]) -> [Sample] {
+        guard let last = list.last else { return [] }
+        let from = last.date.addingTimeInterval(-Double(days - 1) * 86400)
+        return list.filter { $0.date >= from }
+    }
+
+    private func dotColor(_ value: Double) -> Color {
+        guard let band else { return color.opacity(0.4) }
+        switch worse {
+        case .below where value < band.lowerBound: return Palette.amber.opacity(0.85)
+        case .above where value > band.upperBound: return Palette.amber.opacity(0.85)
+        default: return color.opacity(0.4)
+        }
+    }
+
+    private var dotSize: CGFloat { days <= 7 ? 40 : days <= 30 ? 22 : 12 }
+
     var body: some View {
-        let list = samples
+        let list = inRange(allSamples)
         let values = list.map(\.value) + [band?.lowerBound, band?.upperBound].compactMap { $0 }
         let pad = max(((values.max() ?? 1) - (values.min() ?? 0)) * 0.15, 1)
         let lo = (values.min() ?? 0) - pad, hi = (values.max() ?? 1) + pad
         let selected = picked.flatMap { date in list.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) } }
         let shown = selected ?? list.last
 
+        VStack(alignment: .leading, spacing: 12) {
+            rangePicker
+            chart(list, lo: lo, hi: hi, selected: selected, shown: shown)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Self.summary(list.map { Point(date: $0.iso, value: $0.value) }, unit: unit, digits: digits))
+        }
+        .onChange(of: days) { picked = nil }
+    }
+
+    private func chart(_ list: [Sample], lo: Double, hi: Double, selected: Sample?, shown: Sample?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(shown.map { Fmt.decimal($0.value, digits: digits) } ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
@@ -47,12 +102,14 @@ struct TrendChart: View {
                         .foregroundStyle(color.opacity(0.1))
                 }
                 ForEach(list) { s in
-                    AreaMark(x: .value("Den", s.date), yStart: .value("Min", lo), yEnd: .value("Hodnota", s.value))
-                        .foregroundStyle(LinearGradient(colors: [color.opacity(0.18), color.opacity(0.0)], startPoint: .top, endPoint: .bottom))
-                        .interpolationMethod(.monotone)
-                    LineMark(x: .value("Den", s.date), y: .value("Hodnota", s.value))
+                    PointMark(x: .value("Den", s.date), y: .value("Hodnota", s.value))
+                        .foregroundStyle(dotColor(s.value))
+                        .symbolSize(dotSize)
+                }
+                ForEach(list) { s in
+                    LineMark(x: .value("Den", s.date), y: .value("Průměr", s.average))
                         .foregroundStyle(color)
-                        .lineStyle(StrokeStyle(lineWidth: 2.2, lineCap: .round))
+                        .lineStyle(StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round))
                         .interpolationMethod(.monotone)
                 }
                 if let shown {
@@ -63,7 +120,7 @@ struct TrendChart: View {
             }
             .chartYScale(domain: lo...hi)
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day, count: max(1, list.count / 4))) { _ in
+                AxisMarks(values: .stride(by: .day, count: max(1, days / 3))) { _ in
                     AxisGridLine().foregroundStyle(Palette.hairline)
                     AxisValueLabel(format: .dateTime.day().month(.defaultDigits).locale(Fmt.locale)).foregroundStyle(Palette.faint)
                 }
@@ -77,16 +134,43 @@ struct TrendChart: View {
             .chartXSelection(value: $picked)
             .frame(height: height)
             HStack(spacing: 14) {
-                legend(color, "hodnota za den", dashed: false)
-                if band != nil { legend(color.opacity(0.25), bandLabel ?? "tvoje norma", dashed: false) }
+                legendDot(color.opacity(0.4), "hodnota za den")
+                legend(color, "průměr 7 dní")
+                if band != nil { legend(color.opacity(0.25), bandLabel ?? "tvoje norma") }
                 Spacer()
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Self.summary(points, unit: unit, digits: digits))
     }
 
-    private func legend(_ c: Color, _ text: String, dashed: Bool) -> some View {
+    /// "7 dní · 30 dní · 90 dní", the chosen one filled.
+    private var rangePicker: some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            ForEach(Self.ranges, id: \.self) { n in
+                let on = n == days
+                Button { days = n } label: {
+                    Text(verbatim: L10n.f("%@ dní", String(n)))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(on ? Palette.background : Palette.secondary)
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
+                        .background(on ? Palette.ink : Palette.track, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func legendDot(_ c: Color, _ text: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(c).frame(width: 6, height: 6)
+            Text(text).font(Typo.tiny).foregroundStyle(Palette.muted)
+        }
+    }
+
+    private func legend(_ c: Color, _ text: String) -> some View {
         HStack(spacing: 5) {
             RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 14, height: 6)
             Text(text).font(Typo.tiny).foregroundStyle(Palette.muted)

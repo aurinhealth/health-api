@@ -1608,3 +1608,11 @@
 "Dnešní cíl" = "Today's target";
 "nic v plánu" = "nothing planned";
 "Navrženo AI" = "Suggested by AI";
+"data z %@" = "data from %@";
+"data ze včera %@" = "data from yesterday %@";
+" · obnovit" = " · refresh";
+"%@ proti normálu" = "%@ vs. your normal";
+"Poměr zátěže %@" = "Load ratio %@";
+"jednotvárný týden" = "monotonous week";
+"průměr 7 dní" = "7-day average";
+"90 dní" = "90 days";

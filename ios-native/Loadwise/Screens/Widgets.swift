@@ -280,9 +280,19 @@ struct HRVWidget: View {
 }
 
 extension TodaySnapshot.HRV {
-    /// Health's HRV in the shape the Today widget takes.
+    /// Health's HRV in the shape the Today widget takes (its last 30 days;
+    /// Health sends 90 for the detail chart).
     init(_ h: HealthSnapshot.HRV) {
-        self.init(value: h.value, baseline: h.baseline, low: h.low, high: h.high, trend: h.trend, series: h.series)
+        self.init(value: h.value, baseline: h.baseline, low: h.low, high: h.high, trend: h.trend, series: h.series.lastDays(30))
+    }
+}
+
+extension Array where Element == Point {
+    /// The points of the last `days` days up to the newest one.
+    func lastDays(_ days: Int) -> [Point] {
+        guard let newest = self.last?.date else { return self }
+        let from = ISODay.shift(newest, -(days - 1))
+        return filter { $0.date >= from }
     }
 }
 

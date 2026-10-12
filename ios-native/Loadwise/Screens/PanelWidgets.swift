@@ -302,7 +302,7 @@ struct WidgetData {
 
     /// Health's numbers on Zdraví, Today's elsewhere.
     var restingHR: TodaySnapshot.RestingHR? {
-        let fromHealth = health?.restingHR.map { TodaySnapshot.RestingHR(value: $0.value, baseline: $0.baseline, series: $0.series) }
+        let fromHealth = health?.restingHR.map { TodaySnapshot.RestingHR(value: $0.value, baseline: $0.baseline, series: $0.series.lastDays(30)) }
         return panel == .health ? (fromHealth ?? today?.restingHR) : (today?.restingHR ?? fromHealth)
     }
 
@@ -327,7 +327,8 @@ struct WidgetData {
         case .hrv: return hrv != nil
         case .vo2max: return training?.vo2max != nil
         case .respiration: return health?.respiration != nil
-        case .skinTemp: return health?.skinTemp != nil
+        // Apple Watch's wrist temperature, else Google's skin temperature.
+        case .skinTemp: return health?.wristTemp != nil || health?.skinTemp != nil
         case .oxygen: return health?.oxygen != nil
         // Shown only with data (a scale that measures muscle mass); until then
         // it waits in the widget gallery.
@@ -454,13 +455,19 @@ struct PanelWidget: View {
         case .respiration:
             if let value = data.health?.respiration { RespirationWidget(respiration: value, size: item.size) }
         case .skinTemp:
-            if let value = data.health?.skinTemp { SkinTempWidget(skin: value, size: item.size) }
+            if let value = data.health?.wristTemp {
+                WristTempWidget(wrist: value, size: item.size)
+            } else if let value = data.health?.skinTemp {
+                SkinTempWidget(skin: value, size: item.size)
+            }
         case .oxygen:
             if let value = data.health?.oxygen { OxygenWidget(oxygen: value, size: item.size) }
         case .muscle:
             if let value = data.health?.weight?.muscle { MuscleWidget(muscle: value, size: item.size) }
         case .form:
-            if let value = data.training?.form { FormWidget(form: value, size: item.size) }
+            if let t = data.training, let value = t.form {
+                FormWidget(form: value, loadNote: FormWidget.loadNote(acwr: t.acwr, monotony: t.monotony), size: item.size)
+            }
         case .thisWeek:
             if let t = data.training { ThisWeekWidget(week: t.thisWeek, loads: t.load.weeks, size: item.size) }
         case .sessions:
