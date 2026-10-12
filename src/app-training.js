@@ -147,7 +147,16 @@ export function dayPlanState(sessions = []) {
   return DAY_ORDER.find(s => states.has(s)) || null;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, gym = {} }) {
+// The Training screen's "Nastav si zaměření a cíle" card shows until the
+// athlete has chosen a main sport and a goal (the saved profile, not what the
+// suggestions fill in: effectiveProfile always has a sport).
+export function profileIncomplete(saved) {
+  if (!saved || typeof saved !== "object") return true;
+  const sport = String(saved.mainSport || "").trim(), goal = String(saved.sportGoal || "").trim();
+  return !sport || !goal;
+}
+
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {} }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -284,7 +293,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
     sessions,
-    thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) }
+    thisWeek: { done: doneCount, planned: plannedCount, doneLoad: Math.round(doneTss), plannedLoad: Math.round(Math.max(plannedTss, doneTss)) },
+    profileIncomplete: profileIncomplete(savedProfile === undefined ? profile : savedProfile)
   };
 }
 

@@ -1,8 +1,16 @@
 import { L } from './lang.js';
 import { verifyGitHubActionsToken } from "./github-oidc.js";
+import { bumpSessionEpoch } from "./tenancy.js";
 
 const SESSION_COOKIE = "pfd_session";
 export const SESSION_SECONDS = 30 * 24 * 60 * 60;
+// The cookie carries the user's session epoch (users.session_epoch); a cookie
+// made before the epoch moved on (e-mail changed, a passkey or the Apple ID
+// removed, "sign out everywhere") is no longer a session. Cookies from before
+// the epoch existed count as 0, so nobody was signed out by its arrival.
+// A session in use slides: once it is a day old, an /app/api/* request gets a
+// fresh 30-day cookie, so only 30 days without the app sign the user out.
+export const SESSION_REFRESH_SECONDS = 24 * 60 * 60;
 
 // Routes reachable without a dashboard session or API key. Everything else
 // requires authentication. Routes listed here either serve static/public
@@ -42,7 +50,7 @@ export function isPublicPath(pathname) {
 // anonymous or invalid credentials.
 export async function resolvePrincipal(request, env, verifyOidc = verifyGitHubActionsToken) {
   const session = await verifyDashboardSession(request, sessionSecret(env));
-  if (session) return { kind: "user", userId: session.uid };
+  if (session) return { kind: "user", userId: session.uid, epoch: session.epoch };
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return null;
   const token = authorization.slice(7).trim();
@@ -81,7 +89,14 @@ export function handleDashboardLogout() {
   return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":CLEARED_SESSION_COOKIE,"Cache-Control":"no-store"}});
 }
 
-// Returns the session payload ({uid, exp}) or null.
+// A session cookie is good for the user row it names only while its epoch is the row's.
+export function sessionMatchesUser(principal, user) {
+  if (principal?.kind !== "user") return true;
+  return Number(principal.epoch || 0) === Number(user?.sessionEpoch || 0);
+}
+
+// Returns the session payload ({uid, exp, epoch, iat}) or null. Cookies from
+// before the sliding sessions carry no iat; they count as issued 30 days before exp.
 export async function verifyDashboardSession(request, secret) {
   if (!secret) return null;
   const cookieHeader = request.headers.get("Cookie") || "";
@@ -95,9 +110,10 @@ export async function verifyDashboardSession(request, secret) {
   if (!timingSafeEqualString(sig, expected)) return null;
   try {
     const data = JSON.parse(new TextDecoder().decode(fromBase64url(payload)));
-    const uid = Number(data?.uid);
-    if (!(Number(data?.exp) > Math.floor(Date.now()/1000)) || !Number.isInteger(uid) || uid <= 0) return null;
-    return { uid, exp: Number(data.exp) };
+    const uid = Number(data?.uid), epoch = data?.se === undefined ? 0 : Number(data.se);
+    if (!(Number(data?.exp) > Math.floor(Date.now()/1000)) || !Number.isInteger(uid) || uid <= 0 || !Number.isInteger(epoch) || epoch < 0) return null;
+    const exp = Number(data.exp), iat = Number.isFinite(Number(data.iat)) ? Number(data.iat) : exp - SESSION_SECONDS;
+    return { uid, exp, epoch, iat };
   } catch { return null; }
 }
 
@@ -108,16 +124,64 @@ export function sessionSecret(env) {
   return String(env.SESSION_SECRET || "");
 }
 
-export async function sessionCookie(uid, exp, secret) {
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp})));
+export async function sessionCookie(uid, exp, secret, epoch = 0, iat = Math.floor(Date.now() / 1000)) {
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp,se:Number(epoch)||0,iat})));
   const signature = await dashboardHmac(payload, secret);
   return SESSION_COOKIE+"="+payload+"."+signature+"; Path=/; Max-Age="+SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
 }
 
+// The user's current epoch; a users table from before the column counts as 0.
+export async function sessionEpochOf(db, uid) {
+  const row = await db.prepare("SELECT session_epoch FROM users WHERE id=?").bind(Number(uid)).first().catch(() => null);
+  return Number(row?.session_epoch) || 0;
+}
+
+// A month-long session cookie for the user as they are now (every sign-in, and
+// the caller's own device after the epoch moved on).
+export async function userSessionCookie(db, uid, secret) {
+  return sessionCookie(uid, Math.floor(Date.now() / 1000) + SESSION_SECONDS, secret, await sessionEpochOf(db, uid));
+}
+
 // A JSON answer that also signs the user in (passkey and e-mail code sign-in).
 export async function signedInResponse(userId, env, body = { status: "ok" }) {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
-  return Response.json(body, { headers: { "Cache-Control": "no-store", "Set-Cookie": await sessionCookie(userId, exp, sessionSecret(env)) } });
+  return Response.json(body, { headers: { "Cache-Control": "no-store", "Set-Cookie": await userSessionCookie(env.DB, userId, sessionSecret(env)) } });
+}
+
+// Moves the user's epoch on (every other device is signed out) and keeps the
+// caller signed in: the answer carries a fresh cookie.
+export async function signedOutElsewhere(db, userId, env, response) {
+  await bumpSessionEpoch(db, userId);
+  response.headers.append("Set-Cookie", await userSessionCookie(db, userId, sessionSecret(env)));
+  return response;
+}
+
+// Settings → Účet: POST /app/api/account/sign-out-everywhere.
+export async function handleSignOutEverywhere(request, env, url, session) {
+  if (url.pathname !== "/app/api/account/sign-out-everywhere") return null;
+  if (request.method !== "POST") return Response.json({ message: L("Použij POST.", "Use POST.") }, { status: 405 });
+  if (!session.signedIn || !session.user) return unauthorizedResponse();
+  if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
+  return signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }));
+}
+
+// Whether the session is old enough for a fresh cookie (SESSION_REFRESH_SECONDS since it was issued).
+export function sessionNeedsRefresh(session, now = Math.floor(Date.now() / 1000)) {
+  return Boolean(session) && now - Number(session.iat) >= SESSION_REFRESH_SECONDS;
+}
+
+// The answer to an /app/api/* request with a fresh 30-day cookie when the
+// session in the request is a day old or more: the same user, new times. A
+// response that sets the cookie itself (sign-in, logout) is left alone, and so
+// is a request without a valid session (API key, GitHub).
+export async function slidingSession(request, response, secret, now = Math.floor(Date.now() / 1000)) {
+  if (!response || !secret) return response;
+  const session = await verifyDashboardSession(request, secret);
+  if (!sessionNeedsRefresh(session, now)) return response;
+  const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [response.headers.get("Set-Cookie") || ""];
+  if (setCookies.some(value => String(value).startsWith(SESSION_COOKIE + "="))) return response;
+  const refreshed = new Response(response.body, response);
+  refreshed.headers.append("Set-Cookie", await sessionCookie(session.uid, now + SESSION_SECONDS, secret, session.epoch, now));
+  return refreshed;
 }
 
 // Signs short-lived values with the session secret (the Apple sign-in state, e-mail codes).

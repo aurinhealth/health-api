@@ -9,7 +9,7 @@ import SwiftUI
 /// The answers of this launch, so switching tabs does not ask again.
 @MainActor
 enum CoachTextMemory {
-    static var values: [String: (text: CoachText, at: Date)] = [:]
+    static var values: [String: (text: CoachText, at: Date, revision: Int)] = [:]
 }
 
 struct CoachTextCard: View {
@@ -36,7 +36,7 @@ struct CoachTextCard: View {
                 card
             }
         }
-        .task(id: live ? screen + "|" + AppModel.localDate(Date()) : "") { await load() }
+        .task(id: live ? memoryKey + "|" + String(model.dataRevision) : "") { await load() }
     }
 
     private var card: some View {
@@ -125,17 +125,20 @@ struct CoachTextCard: View {
         return out
     }
 
+    private var memoryKey: String { screen + "|" + AppModel.localDate(Date()) }
+
     private func load() async {
         guard live, !model.demo else { return }
-        let key = screen + "|" + AppModel.localDate(Date())
+        let key = memoryKey
         if let kept = CoachTextMemory.values[key] {
             loaded = kept.text
-            // Kept for ten minutes, then asked again (the server answers from its cache).
-            if Date().timeIntervalSince(kept.at) < 600 { return }
+            // Asked again whenever any data changed; the server writes a new
+            // text when the change matters and answers from its cache otherwise.
+            if kept.revision == model.dataRevision { return }
         }
         do {
             let value = try await model.api.coachText(screen: screen)
-            CoachTextMemory.values[key] = (value, Date())
+            CoachTextMemory.values[key] = (value, Date(), model.dataRevision)
             loaded = value
         } catch {
             // The rule-based text stays.

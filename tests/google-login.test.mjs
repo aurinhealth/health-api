@@ -72,7 +72,7 @@ test("the owner's Google account gets a session bound to their user", async () =
   const request = new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } });
   const principal = await resolvePrincipal(request, e, async () => { throw new Error("no"); });
   const owner = await e.DB.prepare("SELECT id, google_sub FROM users WHERE email='owner@example.com'").first();
-  assert.deepEqual(principal, { kind: "user", userId: owner.id });
+  assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 0 });
   assert.equal(owner.google_sub, "google-owner");
 });
 
@@ -132,7 +132,7 @@ test("the iPhone app signs in through Safari and redeems the token with its veri
   const session = ok.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
   const principal = await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
   const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
-  assert.deepEqual(principal, { kind: "user", userId: owner.id });
+  assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 0 });
   assert.equal(isPublicPath("/auth/app/session"), true);
 });
 
@@ -166,4 +166,22 @@ test("a failed app sign-in returns to the app with an error code", async () => {
   assert.equal(web.status, 403);
   assert.match(web.headers.get("content-type"), /text\/html/);
   assert.equal((await _finishLoginForTest(callback("error=access_denied&state=s1"), e, googleFetch())).status, 400);
+});
+
+test("a token signed with a key Google rotated in fetches the keys again, at most once a minute", async () => {
+  _resetJwksCacheForTest();
+  const rotated = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
+  const newJwk = { ...(await crypto.subtle.exportKey("jwk", rotated.publicKey)), kid: "k2" };
+  const claims = { iss: "https://accounts.google.com", aud: "client-123", sub: "google-owner", exp: Math.floor(Date.now() / 1000) + 300, nonce: "n1", email: "owner@example.com", email_verified: true };
+  const data = b64({ alg: "RS256", kid: "k2" }) + "." + b64(claims);
+  const token = data + "." + Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", rotated.privateKey, new TextEncoder().encode(data))).toString("base64url");
+  const fetches = [];
+  const fetchImpl = async (url, init) => { fetches.push(init); return Response.json({ keys: fetches.length === 1 ? [jwk] : [jwk, newJwk] }); };
+  assert.equal((await verifyGoogleIdToken(await idToken(), "client-123", "n1", fetchImpl)).sub, "google-owner");
+  assert.equal((await verifyGoogleIdToken(token, "client-123", "n1", fetchImpl)).sub, "google-owner");
+  assert.equal(fetches.length, 2);
+  assert.deepEqual(fetches[1], { cache: "no-store" });
+  const unknown = b64({ alg: "RS256", kid: "k3" }) + "." + b64(claims) + "." + b64("x");
+  await assert.rejects(verifyGoogleIdToken(unknown, "client-123", "n1", fetchImpl), /Signing key not found/);
+  assert.equal(fetches.length, 2, "no second forced fetch within a minute");
 });

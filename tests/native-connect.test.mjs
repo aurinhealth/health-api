@@ -7,7 +7,7 @@ import { createD1 } from "./helpers/d1.mjs";
 
 function connectEnv() {
   const DB = createD1();
-  DB.sqlite.exec("CREATE TABLE auth_challenges (challenge TEXT PRIMARY KEY, purpose TEXT NOT NULL, user_id INTEGER, user_handle TEXT, expires_at INTEGER NOT NULL); CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, name TEXT, role TEXT, disabled INTEGER DEFAULT 0); INSERT INTO users (id, email, role) VALUES (3, 'petr@example.com', 'user');");
+  DB.sqlite.exec("CREATE TABLE auth_challenges (challenge TEXT PRIMARY KEY, purpose TEXT NOT NULL, user_id INTEGER, user_handle TEXT, expires_at INTEGER NOT NULL); CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, name TEXT, role TEXT, disabled INTEGER DEFAULT 0, session_epoch INTEGER NOT NULL DEFAULT 0); INSERT INTO users (id, email, role) VALUES (3, 'petr@example.com', 'user');");
   return { ...env, DB, OWNER_EMAIL: "owner@example.com" };
 }
 

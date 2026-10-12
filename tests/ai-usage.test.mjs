@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
+import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 import { aiAllowance, aiDailyLimitUsd, aiMonthlyLimitUsd, usageCost } from "../src/ai-usage.js";
@@ -20,7 +21,7 @@ async function withOpenAI(fn) {
 const envFor = (db, extra = {}) => ({ DB: scopedDb(db, 7), USER_ID: 7, OPENAI_API_KEY: "k", ...extra });
 
 test("every AI answer is recorded with its feature, tokens and cost", async () => {
-  const db = createD1();
+  const db = grantAiConsent(createD1(), 7, 8);
   await withOpenAI(async () => {
     const env = envFor(db);
     await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
@@ -31,7 +32,7 @@ test("every AI answer is recorded with its feature, tokens and cost", async () =
 });
 
 test("web searches are counted on top of the tokens, failed ones are not", async () => {
-  const db = createD1(), realFetch = globalThis.fetch;
+  const db = grantAiConsent(createD1(), 7, 8), realFetch = globalThis.fetch;
   const search = status => ({ type: "web_search_call", status });
   globalThis.fetch = async () => Response.json({ model: "gpt-6-luna", output: [search("completed"), search("completed"), search("failed"), { content: [{ type: "output_text", text: "ok" }] }], usage: { input_tokens: 10000, output_tokens: 1000 } });
   try {
@@ -43,7 +44,7 @@ test("web searches are counted on top of the tokens, failed ones are not", async
 });
 
 test("a daily limit, when set, stops the next call once it is spent; the owner has none", async () => {
-  const db = createD1();
+  const db = grantAiConsent(createD1(), 7, 8);
   await withOpenAI(async calls => {
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "1" });
     await callOpenAI(env, { instructions: "x", input: "y" });
@@ -61,7 +62,7 @@ test("a daily limit, when set, stops the next call once it is spent; the owner h
 });
 
 test("the monthly limit stops AI for the rest of the month and counts only this month", async () => {
-  const db = createD1();
+  const db = grantAiConsent(createD1(), 7, 8);
   await withOpenAI(async calls => {
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "100" });
     await callOpenAI(env, { instructions: "x", input: "y" });
@@ -93,7 +94,7 @@ test("the limit is set per deployment, and 0 turns AI off for everyone but the o
   assert.equal(aiDailyLimitUsd({}), null);
   assert.equal(aiDailyLimitUsd({ AI_DAILY_LIMIT_USD: "nonsense" }), null);
   await withOpenAI(async calls => {
-    const env = envFor(createD1(), { AI_DAILY_LIMIT_USD: "0" });
+    const env = envFor(grantAiConsent(createD1(), 7), { AI_DAILY_LIMIT_USD: "0" });
     await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), /nejsou pro tento účet zapnuté/);
     assert.equal(calls(), 0);
   });

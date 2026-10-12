@@ -71,7 +71,9 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Přihlášení přes Google a připojení Google Health. |
 | `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Volitelně přihlášení přes Apple: Services ID, Team ID, Key ID a obsah souboru `.p8`. Bez nich se tlačítko Apple nezobrazí. Nastavení popisuje [docs/multi-user-setup.md](docs/multi-user-setup.md). |
 | `APPLE_DOMAIN_ASSOCIATION` | Jen když ho Apple při nastavení domény chce: obsah souboru, který aplikace vrátí na `/.well-known/apple-developer-domain-association.txt`. |
+| `APNS_KEY_P8`, `APNS_KEY_ID` | Volitelně ranní push s připraveností do aplikace v iPhonu (`push.js`): obsah souboru `.p8` klíče s *Apple Push Notifications service (APNs)* a jeho Key ID; Team ID bere z `APPLE_TEAM_ID`. App ID `eu.petrfitnessdata.loadwise.native` musí mít zapnutou schopnost *Push Notifications*. Bez nich se nic neposílá. `APNS_SANDBOX=1` posílá na vývojový APNs. |
 | `EMAIL_FROM` | Volitelně přihlášení kódem z e-mailu: adresa odesílatele na doméně přidané v Cloudflare Email Service (např. `noreply@petrfitnessdata.eu`). Bez ní se přihlášení kódem nezobrazí. Postup v [docs/multi-user-setup.md](docs/multi-user-setup.md). |
+| `EMAIL_CODES_PER_DAY` | Volitelný denní rozpočet přihlašovacích kódů poslaných e-mailem všem dohromady (výchozí 500). Jedna adresa dostane nejvýš jeden kód za minutu a 10 za den, jeden klient (hash IP adresy) začne nejvýš 5 přihlášení za minutu a 30 za hodinu (`ip-rate-limit.js`). |
 | `INTERVALS_API_KEY` | Intervals.icu správce (ostatní uživatelé si klíč ukládají v aplikaci). |
 | `INTERVALS_CLIENT_ID`, `INTERVALS_CLIENT_SECRET` | Volitelné: aplikace zaregistrovaná u Intervals.icu. S nimi se Intervals.icu připojuje jedním tlačítkem (OAuth, `intervals-oauth.js`), bez nich vložením osobního API klíče. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Asistent trenéra a čtení fotek jídla (volitelně `OPENAI_VISION_MODEL`, jinak `OPENAI_LIGHT_MODEL`). |
@@ -106,7 +108,7 @@ Na https://staging.petrfitnessdata.eu/app běží kopie aplikace s vlastní data
 
 ## Aplikace pro iPhone
 
-`mobile/` je nativní obal (Capacitor) kolem živé `/app`. GitHub ho sestaví bez Macu a bez placeného účtu Apple (`ios-app.yml`) a do iPhonu se nainstaluje přes Sideloadly. Postup je v `mobile/README.md`. Přihlášení přes Google probíhá v Safari a do aplikace se vrací přes `loadwise://auth` s krátkodobým tokenem, který uplatní jen aplikace, jež přihlášení spustila (`/auth/app/session` v `src/google-login.js`).
+`ios-native/` je nativní aplikace (SwiftUI). GitHub ji sestaví bez Macu (`ios-native.yml`: testy, snímky obrazovek a nepodepsaná `.ipa` pro Sideloadly) a s placeným účtem Apple nahraje na TestFlight (`ios-testflight.yml`). Postup je v `ios-native/README.md`. Přihlášení přes Google probíhá v Safari a do aplikace se vrací přes `loadwise://auth` s krátkodobým tokenem, který uplatní jen aplikace, jež přihlášení spustila (`/auth/app/session` v `src/google-login.js`).
 
 Kontrola verze (`src/app-version.js`): nativní aplikace posílá s každým požadavkem hlavičku `X-Loadwise-Api` s verzí API, pro kterou je postavená (`APIClient.apiLevel`). Když změna serveru rozbije to, co nainstalované aplikace čtou (přejmenované nebo odebrané pole, jiný význam), zvedni ve stejném pull requestu `MIN_APP_API` na serveru i `apiLevel` v aplikaci. Starší aplikace pak dostane 426 a místo obrazovek ukáže „Je potřeba nová verze“. Přidání nového pole nic nerozbije, verze se kvůli němu nezvedá. Požadavky bez hlavičky (web, skripty, GitHub Actions) se nekontrolují. Test `tests/app-version.test.mjs` hlídá, že aplikace není pod minimem serveru.
 

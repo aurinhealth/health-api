@@ -64,7 +64,14 @@ export const PERSONAL_TABLES = {
   morning_checkins: {},
   threshold_checks: {},
   // The athlete's training plans (training-plans.js).
-  training_plans: {}
+  training_plans: {},
+  // Pairings made by hand (manual-pairs.js) and the choice of an activity's
+  // calories (activity-energy-choices.js).
+  manual_activity_pairs: { pk: ["user_id", "planned_id"] },
+  activity_energy_choices: { pk: ["user_id", "activity_id"] },
+  // The app's push device tokens and the once-a-day guard of the pushes (push.js).
+  push_tokens: { pk: ["user_id", "token"] },
+  push_log: { pk: ["user_id", "kind", "local_date"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
@@ -173,7 +180,8 @@ export async function ensureTenancy(db, env, { budgetMs = UPGRADE_BUDGET_MS, chu
         role TEXT NOT NULL DEFAULT 'user',
         disabled INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        last_login_at TEXT
+        last_login_at TEXT,
+        session_epoch INTEGER NOT NULL DEFAULT 0
       )`),
       db.prepare(`CREATE TABLE IF NOT EXISTS user_invites (
         email TEXT PRIMARY KEY,
@@ -287,10 +295,18 @@ export function publicUser(row, env) {
   return { id: row.id, email: row.email, name: row.name || null, role: row.role, isAdmin: row.role === "admin", isOwner: normalizeEmail(row.email) === ownerEmail(env) };
 }
 
+// With sessionEpoch: the epoch a session cookie has to carry (dashboard-auth.js).
 export async function findUser(db, id, env) {
-  const row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE id=?").bind(Number(id)).first();
+  const row = await db.prepare("SELECT id, email, name, role, disabled, session_epoch FROM users WHERE id=?").bind(Number(id)).first();
   if (!row || row.disabled) return null;
-  return publicUser(row, env);
+  return { ...publicUser(row, env), sessionEpoch: Number(row.session_epoch) || 0 };
+}
+
+// Signs the user out of every device: sessions carry the epoch and only the
+// current one counts. Returns the new epoch.
+export async function bumpSessionEpoch(db, id) {
+  const row = await db.prepare("UPDATE users SET session_epoch = session_epoch + 1 WHERE id=? RETURNING session_epoch").bind(Number(id)).first();
+  return Number(row?.session_epoch) || 0;
 }
 
 export async function ownerUser(db, env) {
@@ -368,7 +384,8 @@ export async function signInEmailUser(db, env, email) {
 
 // Moves an account to another e-mail address. Its data stays with it (everything is stored
 // under the account id); the Google account is unlinked, so the next Google sign-in binds the
-// one with the new address. The owner's address comes from OWNER_EMAIL and is not changed here.
+// one with the new address, and every device is signed out (session_epoch). The owner's
+// address comes from OWNER_EMAIL and is not changed here.
 // Returns { email, previous } or { error: "invalid" | "missing" | "same" | "owner" | "taken" }.
 export async function changeUserEmail(db, env, id, email) {
   const address = normalizeEmail(email);
@@ -380,7 +397,7 @@ export async function changeUserEmail(db, env, id, email) {
   if (await db.prepare("SELECT id FROM users WHERE email=? AND id<>?").bind(address, row.id).first()) return { error: "taken" };
   try {
     await db.batch([
-      db.prepare("UPDATE users SET email=?, google_sub=NULL WHERE id=?").bind(address, row.id),
+      db.prepare("UPDATE users SET email=?, google_sub=NULL, session_epoch=session_epoch+1 WHERE id=?").bind(address, row.id),
       db.prepare("DELETE FROM user_invites WHERE email=?").bind(address)
     ]);
   } catch (error) {

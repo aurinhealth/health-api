@@ -51,7 +51,8 @@ struct AddWaterIntent: AppIntent {
     static var title: LocalizedStringResource = "Přidat vodu"
     static var description = IntentDescription("Zapíše sklenici vody do dnešního pití.")
 
-    @Parameter(title: "Množství (ml)", default: 250)
+    /// Millilitres; the title names no unit because an intent's texts are fixed at build time.
+    @Parameter(title: "Množství", default: 250)
     var ml: Int
 
     init() {}

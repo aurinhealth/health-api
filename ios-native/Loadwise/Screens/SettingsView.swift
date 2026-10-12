@@ -203,7 +203,7 @@ struct SettingsMenu: View {
     }
 
     @AppStorage(Units.key) private var units = "metric"
-    @AppStorage(L10n.key) private var language = "cs"
+    @AppStorage(L10n.key) private var language = L10n.defaultLanguage
     @AppStorage(Reminders.bedtimeKey) private var r1 = true
     @AppStorage(Reminders.workoutKey) private var r2 = true
     @AppStorage(Reminders.waterKey) private var r3 = true

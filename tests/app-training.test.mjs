@@ -215,3 +215,21 @@ test("a done session carries its calories and, when implausible, the realistic e
   assert.equal(sessions[1].kcal, 250);
   assert.equal(sessions[1].kcalEstimate, undefined);
 });
+
+test("the Training screen says while the athlete has no focus and goal yet", async () => {
+  const { profileIncomplete } = await import("../src/app-training.js");
+  assert.equal(profileIncomplete(null), true);
+  assert.equal(profileIncomplete({}), true);
+  assert.equal(profileIncomplete({ mainSport: "cycling" }), true, "a sport without a goal");
+  assert.equal(profileIncomplete({ sportGoal: "zhubnout" }), true, "a goal without a sport");
+  assert.equal(profileIncomplete({ mainSport: "auto", sportGoal: "zlepšit kondici" }), false, "'auto' is a choice too");
+  assert.equal(profileIncomplete({ mainSport: "running", sportGoal: "  " }), true);
+  // The saved profile decides, not the effective one (suggestions fill the sport in).
+  const fresh = buildTraining({ ...input, profile: { mainSport: "general", sportGoal: "" }, savedProfile: null });
+  assert.equal(fresh.profileIncomplete, true);
+  const set = buildTraining({ ...input, profile: { mainSport: "cycling", sportGoal: "závod" }, savedProfile: { mainSport: "cycling", sportGoal: "závod" } });
+  assert.equal(set.profileIncomplete, false);
+  // Without a saved profile given, the profile itself is judged.
+  assert.equal(buildTraining({ ...input, profile: { mainSport: "cycling", sportGoal: "závod" } }).profileIncomplete, false);
+  assert.equal(buildTraining(input).profileIncomplete, true);
+});

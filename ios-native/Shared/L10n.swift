@@ -8,9 +8,19 @@ enum L10n {
     static let key = "language"
 
     /// "cs" or "en". Kept in the App Group too, so the widgets speak the same language.
+    /// Until Settings → Jazyk is chosen, the app (and the widgets) follow the phone.
     static var language: String {
         UserDefaults(suiteName: WidgetSnapshot.group)?.string(forKey: key)
-            ?? UserDefaults.standard.string(forKey: key) ?? "cs"
+            ?? UserDefaults.standard.string(forKey: key) ?? defaultLanguage
+    }
+
+    /// The language before anyone chose one: the phone's. Czech and Slovak phones
+    /// get Czech, every other phone English.
+    static var defaultLanguage: String { defaultLanguage(for: Locale.preferredLanguages) }
+
+    static func defaultLanguage(for preferred: [String]) -> String {
+        let first = preferred.first?.lowercased() ?? ""
+        return first.hasPrefix("cs") || first.hasPrefix("sk") ? "cs" : "en"
     }
 
     static var isEnglish: Bool { language == "en" }

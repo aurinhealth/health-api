@@ -18,7 +18,7 @@ const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8'
 function db() {
   const raw = createD1();
   raw.sqlite.exec(read('staging/schema.sql'));
-  for (const name of ['0009_account_workflow.sql','0011_account_deletions.sql','0012_user_time_zone.sql','0013_cookbook_and_consents.sql','0014_passkeys_email_codes.sql','0016_support_reports.sql']) raw.sqlite.exec(read('migrations/' + name));
+  for (const name of ['0009_account_workflow.sql','0011_account_deletions.sql','0012_user_time_zone.sql','0013_cookbook_and_consents.sql','0014_passkeys_email_codes.sql','0016_support_reports.sql','0020_request_limits.sql','0021_session_epoch.sql']) raw.sqlite.exec(read('migrations/' + name));
   const prepare = raw.prepare.bind(raw);
   // D1 returns the database's size in meta.size_after on a query.
   raw.prepare = sql => { const statement = prepare(sql), all = statement.all; statement.all = async () => ({ ...await all(), meta: { size_after: raw.size ?? 100000 } }); return statement; };

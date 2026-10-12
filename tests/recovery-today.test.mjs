@@ -85,3 +85,11 @@ test("sauna and a finished routine are saved as done and join Today's plan", asy
   assert.equal(past.recovery, null);
   assert.equal(past.plan.filter(i => i.kind === "recovery").length, 2);
 });
+
+test("the gym names the muscles of the sets done: goblet squats are quads and glutes, not 'legs'", () => {
+  const gym = { [DATE]: { exercises: ["Goblet squat", "Lat pulldown", "DB Romanian deadlift"], setsBy: { "Goblet squat": 3, "Lat pulldown": 3, "DB Romanian deadlift": 3 }, done: { "Goblet squat": 3 } } };
+  const r = recoveryToday({ date: DATE, today: [{ status: "done", sport: "strength", title: "Silový trénink", date: DATE }], gym, tomorrow: [] });
+  assert.equal(r.text, "Posilovna dala trochu zabrat předním stehnům a hýždím a zítra máš volno.");
+  const upper = recoveryToday({ date: DATE, today: [{ status: "done", sport: "strength", title: "Nohy", date: DATE }], gym: { [DATE]: { ...gym[DATE], done: { "Lat pulldown": 4, "DB bench press": 4 } } }, tomorrow: [] });
+  assert.doesNotMatch(upper.text, /stehn|nohám/, "planned leg exercises that were skipped don't count");
+});
