@@ -46,6 +46,14 @@
       "migrations_dir": "migrations"
     }
   ],
+  // The read-only world food catalogue (src/world-foods.js), uploaded with
+  // scripts/upload-world-foods.mjs; without current.json in it search skips it.
+  "r2_buckets": [
+    {
+      "binding": "FOOD_CATALOG_R2",
+      "bucket_name": "loadwise-food-catalog"
+    }
+  ],
   // Cloudflare Email Service: sign-in codes and notices about new passkeys. Nothing is sent
   // until petrfitnessdata.eu is onboarded in Email Service → Email Sending and the Worker
   // has the EMAIL_FROM secret (the sender address); until then e-mail sign-in stays hidden.
