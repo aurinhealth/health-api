@@ -34,8 +34,13 @@ struct WorkoutTemplate: Codable, Hashable {
     /// The day's plan as a workout: the work sets of each exercise in order,
     /// the repetitions of its first work set.
     static func from(_ p: GymProposal, minutes: Int?) -> WorkoutTemplate {
-        WorkoutTemplate(name: p.planName, minutes: minutes,
-                        exercises: p.exercises.filter { $0.sets > 0 }.map { TemplateExercise(name: $0.name, sets: min($0.sets, 10), reps: cleanReps($0.reps)) })
+        // The repetitions of the first work set: a warm-up set's are fewer.
+        var reps: [String: String] = [:]
+        for row in p.rows where row.count > 4 && (row[0].string ?? "WORK").uppercased() != "WARMUP" {
+            if let name = row[1].string, reps[name] == nil { reps[name] = row[4].string ?? "" }
+        }
+        return WorkoutTemplate(name: p.planName, minutes: minutes,
+                               exercises: p.exercises.filter { $0.sets > 0 }.map { TemplateExercise(name: $0.name, sets: min($0.sets, 10), reps: cleanReps(reps[$0.name] ?? $0.reps)) })
     }
 
     static func from(_ day: GymDay, minutes: Int?) -> WorkoutTemplate {
