@@ -141,7 +141,7 @@ struct StrainDetailContent: View {
     }
 
     private func meta(_ s: WeekSession) -> String {
-        [s.time.map { ClockText.format($0) }, s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
+        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var movementMeta: String {

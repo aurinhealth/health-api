@@ -161,7 +161,7 @@ struct FoodEntryCard: View {
 
     /// "150 g · Madeta".
     static func detail(_ e: FoodSnapshot.Entry) -> String? {
-        let parts = [e.amount, e.brand, e.time.map { ClockText.format($0) }].compactMap { $0?.nilIfBlank }
+        let parts = [e.amount, e.brand, ClockText.format(optional: e.time)].compactMap { $0?.nilIfBlank }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
