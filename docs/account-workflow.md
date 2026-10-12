@@ -113,7 +113,10 @@ tréninkové generátory, katalogy a ruční evidence fungují bez OpenAI.
 ## Vlastní data a smazání účtu
 
 Nastavení → Účet nabízí stažení všech dat účtu (`GET /app/api/account/export`,
-JSON ze všech osobních tabulek bez klíčů připojení) a smazání účtu
+NDJSON ze všech osobních tabulek bez klíčů připojení: první řádek je hlavička
+`{"format":"loadwise-export","version":2,"exportedAt":…}`, pak jeden řádek
+`{"table":…,"row":…}` na záznam; server ho streamuje po stránkách 5000 řádků,
+takže ani milion záznamů nezůstane v paměti najednou) a smazání účtu
 (`POST /app/api/account/delete` s potvrzením `SMAZAT`, `account-data.js`).
 Smazání vrátí Googlu souhlas k Google Health, odstraní řádky účtu ze všech
 osobních tabulek (`PERSONAL_TABLES`) i samotný účet a odhlásí. Znovu se

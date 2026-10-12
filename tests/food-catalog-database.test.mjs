@@ -9,7 +9,8 @@ import {routedUserDb} from '../src/user-data-routing.js';
 import {savePersonalFood,searchFoodCatalog} from '../src/personal-foods.js';
 import {saveRecipe,searchRecipes} from '../src/personal-recipes.js';
 import {reportFood} from '../src/shared-foods.js';
-import {exportAccountData,deleteAccount,finishAccountDeletions} from '../src/account-data.js';
+import {deleteAccount,finishAccountDeletions} from '../src/account-data.js';
+import {exportAccount} from './helpers/account-export.mjs';
 import {sessionCookie} from '../src/dashboard-auth.js';
 import {CATALOG_TABLES,cloudflareD1,foodPlan,bindFoodDatabase,provisionFoodDatabase,migrateFoodCatalog,verifyFoodDatabase} from '../scripts/food-catalog-tools.mjs';
 import {parseConfig} from '../scripts/provision-user-shards.mjs';
@@ -92,7 +93,7 @@ test('new and legacy accounts search one catalogue by barcode; reports and share
 test('account export and resumable deletion cover food metadata without deleting another account or its private foods',async()=>{
   const f=setup();await seed(f);await migrateFoodCatalog({...f,core:'core',foods:'foods'});
   const a=await userDataEnvironment(f.env,user(3));
-  const data=await exportAccountData(a,user(3));assert.equal(data.tables.food_reports.length,1);assert.equal(data.tables.food_contributions.length,1);assert.equal(data.tables.recipe_contributions.length,1);
+  const data=await exportAccount(a,user(3));assert.equal(data.tables.food_reports.length,1);assert.equal(data.tables.food_contributions.length,1);assert.equal(data.tables.recipe_contributions.length,1);
   await deleteAccount(a,user(3),{budgetMs:0,chunkRows:1});
   for(let i=0;i<5&&count(f.core,'account_deletions');i++)await finishAccountDeletions(f.core,{databaseForUser:id=>deletionDatabase(f.env,id),chunkRows:1});
   assert.equal(count(f.foods,'food_reports'),0);assert.equal(count(f.foods,'recipe_contributions'),0);

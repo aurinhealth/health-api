@@ -8,18 +8,27 @@ export class UserDataUnavailable extends Error {
   constructor() { super('User data storage is temporarily unavailable'); this.status = 503; }
 }
 
+// Each user's data database: the route and its shard (also read by
+// scripts/move-personal-rows.mjs).
+export const USER_ROUTES_SQL = `SELECT r.user_id, r.shard_key, s.binding_name, s.state
+    FROM user_data_routes r LEFT JOIN user_data_shards s ON s.shard_key=r.shard_key`;
 async function route(env, userId) {
-  return env.DB.prepare(`SELECT r.shard_key, s.binding_name, s.state
-    FROM user_data_routes r LEFT JOIN user_data_shards s ON s.shard_key=r.shard_key
-    WHERE r.user_id=?`).bind(userId).first();
+  return env.DB.prepare(USER_ROUTES_SQL + ' WHERE r.user_id=?').bind(userId).first();
+}
+// The binding a route row points to; throws when the shard cannot be used.
+export function routeBinding(row) {
+  if (!row || row.state !== 'ready' || !row.binding_name) throw new UserDataUnavailable();
+  if (row.shard_key === LEGACY && row.binding_name !== 'DB') throw new UserDataUnavailable();
+  if (row.shard_key !== LEGACY && !/^USER_DATA_\d{3}$/.test(row.binding_name)) throw new UserDataUnavailable();
+  return row.binding_name;
 }
 function database(env, row) {
   // Never fall back to the legacy DB on a missing binding: a silently empty
   // diary followed by new writes would split a person's history in two.
-  if (!row || row.state !== 'ready' || !row.binding_name || !env[row.binding_name]?.prepare) throw new UserDataUnavailable();
-  if (row.shard_key === LEGACY && row.binding_name !== 'DB') throw new UserDataUnavailable();
-  if (row.shard_key !== LEGACY && (!/^USER_DATA_\d{3}$/.test(row.binding_name) || env[row.binding_name] === env.DB)) throw new UserDataUnavailable();
-  return env[row.binding_name];
+  const binding = routeBinding(row);
+  if (!env[binding]?.prepare) throw new UserDataUnavailable();
+  if (row.shard_key !== LEGACY && env[binding] === env.DB) throw new UserDataUnavailable();
+  return env[binding];
 }
 
 export async function resolveUserData(env, userId, { existingOnly = false } = {}) {

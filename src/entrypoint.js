@@ -67,6 +67,7 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
+import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -105,6 +106,7 @@ import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
+import { ownerOnlyRefusal } from "./owner-only-routes.js";
 
 
 // Requests that read or preview only and so keep the cache.
@@ -133,6 +135,8 @@ const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support']);
 async function forEachUser(env, providers, fn) {
   const results = [];
   for (const user of await usersWithProviders(env.DB, env, providers)) {
+    // The App Review demo account syncs with no third-party service (app-review.js).
+    if (isReviewAccount(env, user)) continue;
     try {
       const scoped = await connectionEnvironment(await userDataEnvironment(env, user));
       // Texts written by a job (workouts sent to Intervals.icu, …) use the user's
@@ -251,6 +255,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Every change made with the session cookie, whatever the route.
     if (foreignOriginChange(request, principal)) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const signedIn = principal?.kind === "user" && Boolean(user);
+    // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
+    const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
+    if (ownerOnly) return ownerOnly;
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }
@@ -266,6 +273,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
+    // The App Review demo account connects no third-party service and sends nothing out (app-review.js).
+    const demoRefusal = reviewRefusal(rawEnv, user, request.method, url.pathname);
+    if (demoRefusal) return demoRefusal;
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
     if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);

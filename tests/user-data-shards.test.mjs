@@ -8,7 +8,8 @@ import { routedUserDb } from '../src/user-data-routing.js';
 import { resolveUserData, userDataEnvironment, deletionDatabase, UserDataUnavailable } from '../src/user-data-shards.js';
 import { saveConnectionSecret, connectionEnvironment } from '../src/connection-secrets.js';
 import { saveConsent } from '../src/consent.js';
-import { exportAccountData, deleteAccount, finishAccountDeletions } from '../src/account-data.js';
+import { deleteAccount, finishAccountDeletions } from '../src/account-data.js';
+import { exportAccount } from './helpers/account-export.mjs';
 import { completeOnboarding } from '../src/onboarding.js';
 import { saveSharedFood, searchSharedFoods } from '../src/shared-foods.js';
 import { cached } from '../src/api-cache.js';
@@ -132,7 +133,7 @@ test('account export and resumable deletion find both central and shard records'
   const { core, env, shards } = setup(2, 1); addUser(core, 3); addUser(core, 4);
   const a = await userDataEnvironment(env, user(3)), b = await userDataEnvironment(env, user(4));
   await point(a.DB, 3, 70); await point(b.DB, 4, 80); await saveConsent(a, { health: true });
-  const data = await exportAccountData(a, user(3));
+  const data = await exportAccount(a, user(3));
   assert.equal(data.tables.health_datapoints[0].value_numeric, 70);
   assert.equal(data.tables.user_consents.length, 1);
   await deleteAccount(a, user(3), { budgetMs: 0, chunkRows: 1 });
