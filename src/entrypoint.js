@@ -67,6 +67,7 @@ import { assistantStreamResponse } from './assistant-stream.js';
 import legacyHealthApi, { googleToken, matchActivities } from "./index.js";
 import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
+import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -133,6 +134,8 @@ const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support']);
 async function forEachUser(env, providers, fn) {
   const results = [];
   for (const user of await usersWithProviders(env.DB, env, providers)) {
+    // The App Review demo account syncs with no third-party service (app-review.js).
+    if (isReviewAccount(env, user)) continue;
     try {
       const scoped = await connectionEnvironment(await userDataEnvironment(env, user));
       // Texts written by a job (workouts sent to Intervals.icu, …) use the user's
@@ -266,6 +269,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
+    // The App Review demo account connects no third-party service and sends nothing out (app-review.js).
+    const demoRefusal = reviewRefusal(rawEnv, user, request.method, url.pathname);
+    if (demoRefusal) return demoRefusal;
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
     if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
