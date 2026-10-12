@@ -132,6 +132,11 @@ struct SettingsMenu: View {
                                 value: GymRestSettingsView.label(restSets) + " / " + GymRestSettingsView.label(restExercises))
                 }
                 SettingsDivider()
+                NavigationLink { HeartRateSensorView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Snímač tepu",
+                                value: HeartRateSensor.shared.savedName)
+                }
+                SettingsDivider()
                 NavigationLink { MealSlotsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
                 }
