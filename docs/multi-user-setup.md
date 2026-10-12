@@ -41,7 +41,7 @@ Fungují hned, nic se nenastavuje (`src/passkeys.js`, ověřování v `src/webau
 Pro pozvané bez účtu Google: zadají e-mail a přijde jim šestimístný kód (platí 10 minut, 5 pokusů, nejvýš 1 kód za minutu a 10 denně na adresu; `src/email-login.js`). Kód dostanou jen aktivní uživatelé, pozvané adresy a správce, ostatním aplikace odpoví stejně, ale nic nepošle. E-maily posílá Cloudflare Email Service přes binding `EMAIL` ve `wrangler.jsonc` (v plánu Workers Paid je 3 000 e-mailů měsíčně v ceně). Zapnutí:
 
 1. **Cloudflare → Compute → Email Service → Email Sending → Onboard Domain**: vyber `petrfitnessdata.eu` a nech Cloudflare přidat DNS záznamy (SPF, DKIM, DMARC a MX `cf-bounce`).
-2. Worker `health-api` → **Settings → Variables and Secrets**: secret `EMAIL_FROM` = adresa odesílatele na té doméně, např. `noreply@petrfitnessdata.eu`. Pro testovací kopii totéž u `health-api-staging`.
+2. Worker `health-api` → **Settings → Variables and Secrets**: secret `EMAIL_FROM` = adresa odesílatele na té doméně, např. `noreply@petrfitnessdata.eu`.
 
 Bez `EMAIL_FROM` se formulář s kódem na přihlašovací obrazovce neukáže. Když je e-mail zapnutý, dostane uživatel e-mail i ve chvíli, kdy si přidá přístupový klíč.
 

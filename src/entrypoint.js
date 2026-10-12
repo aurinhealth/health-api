@@ -70,7 +70,6 @@ import { handleNativeConnect } from "./native-connect.js";
 import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
-import { isStaging, markStaging } from "./staging.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { internalHeaders } from "./internal-auth.js";
@@ -318,9 +317,8 @@ export default {
   async fetch(request, env, ctx) {
     // An installed iPhone app older than the API answers with 426 (app-version.js).
     const outdated = appUpdateRequired(request);
-    if (outdated) return isStaging(env) ? markStaging(outdated) : outdated;
-    const response = await worker.fetch(request, env, ctx);
-    return isStaging(env) ? markStaging(response) : response;
+    if (outdated) return outdated;
+    return worker.fetch(request, env, ctx);
   }
 };
 

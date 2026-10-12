@@ -193,7 +193,7 @@ test('remote canary cleanup is exact and provisioning preserves all 20 user data
   const config=parseConfig(read('wrangler.jsonc'));config.d1_databases.push(...Array.from({length:20},(_,i)=>({binding:'USER_DATA_'+String(i+1).padStart(3,'0'),database_id:'shard-'+i})));
   const plan=foodPlan(config),db={name:plan.name,uuid:'catalog',jurisdiction:'eu'};
   const generated=bindFoodDatabase(config,'',db);assert.equal(generated.d1_databases.length,22);assert.equal(generated.vars.FOOD_CATALOG_DB_ID,'catalog');assert.deepEqual(generated.routes,config.routes);
-  assert.notEqual(foodPlan(config,'staging').name,plan.name);
+  assert.throws(()=>foodPlan(config,'staging'),/Unsupported/);
   assert.throws(()=>bindFoodDatabase(config,'',{...db,uuid:plan.core.database_id}),/Duplicate/);
   let creates=0;
   const api={request:async(path,options)=>{if(path.startsWith('?'))return {result:[{name:plan.core.database_name,uuid:plan.core.database_id}]};if(options?.method==='POST'){creates++;assert.equal(JSON.parse(options.body).jurisdiction,'eu');return {result:db};}throw new Error('Unexpected request');}};
