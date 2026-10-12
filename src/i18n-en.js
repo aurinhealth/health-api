@@ -2076,6 +2076,7 @@ export const EN = {
 "Tento e-mail nemá do aplikace přístup.": "This email has no access to the app.",
 "Použij POST.": "Use POST.",
 "Právě se přihlašuje moc lidí najednou. Zkus to za pár minut.": "Too many people are signing in right now. Try again in a few minutes.",
+"Příliš mnoho pokusů o přihlášení. Zkus to za chvíli.": "Too many sign-in attempts. Try again in a moment.",
 "Přihlášení vypršelo. Zkus to znovu.": "The sign-in expired. Try again.",
 "Tenhle přístupový klíč Loadwise nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.": "Loadwise does not know this passkey. Sign in another way and add a new one in Settings → Account.",
 "Přístupový klíč se nepodařilo ověřit. Zkus to znovu.": "The passkey could not be verified. Try again.",

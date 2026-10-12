@@ -109,7 +109,7 @@ import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { techniqueFor, ownExerciseVideo, saveOwnExerciseVideo, storedTechnique, generateTechnique, exerciseInUse } from "./exercise-technique.js";
-import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange } from "./dashboard-auth.js";
+import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, verifyDashboardSession, sessionSecret, foreignOriginChange, sessionMatchesUser, signedOutElsewhere, handleSignOutEverywhere } from "./dashboard-auth.js";
 import { internalHeaders } from "./internal-auth.js";
 import { aiAllowance } from "./ai-usage.js";
 import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
@@ -126,7 +126,7 @@ import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
-import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth } from "./apple-health.js";
+import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { overviewPage, privacyPage, termsPage, supportPage } from './site-pages.js';
 import { englishScript } from './i18n.js';
 import { dateFormat } from "./date-format.js";
@@ -140,8 +140,8 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dashboard:" + date, () => googleDashboard(env.DB, date), { ttl: 120 });
 
 // Requests that read or preview only and so keep the cache.
-// Unlinking Apple (/app/api/me/apple) and adding or removing passkeys change no training data.
-const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/email\/(start|verify)$|support\/report$|passkeys$|passkeys\/options$)/;
+// Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
+const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/app','/app/dashboard-client.js','/app/i18n-en.js','/manifest.webmanifest','/logo.svg','/','/privacy','/terms','/support']);
 
 // Runs fn once per active user (with that user's env and credentials), for
@@ -215,7 +215,7 @@ const worker = {
     useCookbookDatabase(env.DB);
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
-    const principal = await resolvePrincipal(request, env);
+    let principal = await resolvePrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     if (!isPublic && !principal) {
       const response = unauthorizedResponse();
@@ -226,6 +226,8 @@ const worker = {
     let user = null;
     if (principal?.kind === "user") {
       user = await findUser(env.DB, principal.userId, env);
+      // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
+      if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse();
     } else if (principal?.kind === "owner" || principal?.kind === "system") {
       // The owner API key and GitHub automations act as the owner.
@@ -234,7 +236,7 @@ const worker = {
     if (user) {
       try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user)); }
       catch (error) {
-        if (error instanceof UserDataUnavailable || error instanceof FoodCatalogUnavailable) return Response.json({status:'storage_unavailable',message:error instanceof FoodCatalogUnavailable?error.message:'Úložiště je dočasně nedostupné. Zkus to prosím později.'},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
+        if (error instanceof UserDataUnavailable || error instanceof FoodCatalogUnavailable) return Response.json({status:'storage_unavailable',message:error instanceof FoodCatalogUnavailable?error.message:withLang(request.headers.get('X-Interface-Language')||/(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get('cookie')||'')?.[1],()=>L('Úložiště je dočasně nedostupné. Zkus to prosím později.', 'Storage is temporarily unavailable. Please try again later.'))},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
         throw error;
       }
     }
@@ -842,6 +844,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const emailChange = await handleEmailChange(request, env, url, session, ctx);
     if (emailChange) return emailChange;
   }
+  // Settings → Účet: every other device is signed out; this one gets a fresh cookie.
+  if (url.pathname === "/app/api/account/sign-out-everywhere") return handleSignOutEverywhere(request, env, url, session);
   // Settings → Účet: unlinks the Apple ID (linking goes through /auth/apple?link=1).
   if (url.pathname === "/app/api/me/apple" && request.method === "DELETE") {
     if (!session.signedIn) return Response.json({message:"Přihlas se do dashboardu."},{status:401});
@@ -850,7 +854,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // The app's Apple sign-in is given back too, when the app made one.
     const keys = await connectionEnvironment(env);
     if (keys.APPLE_REFRESH_TOKEN) { await revokeApple(keys); await deleteConnectionSecret(env, "apple"); }
-    return Response.json({status:"ok"},{headers:{"Cache-Control":"no-store"}});
+    // Whoever is signed in through that Apple ID elsewhere is signed out; this device stays.
+    return signedOutElsewhere(env.RAW_DB, session.user.id, env, Response.json({status:"ok"},{headers:{"Cache-Control":"no-store"}}));
   }
   // The user's own data: download everything, or delete the account with it.
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
@@ -1041,7 +1046,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{
       const body=await request.json().catch(()=>({}));
-      if(url.pathname.endsWith('/move')&&String(body.date||'')<localToday())return Response.json({status:'error',message:'Trénink jde přesunout jen na dnešek nebo pozdější den.'},{status:400});
+      if(url.pathname.endsWith('/move')&&String(body.date||'')<localToday())return Response.json({status:'error',message:L('Trénink jde přesunout jen na dnešek nebo pozdější den.', 'A workout can only be moved to today or a later day.')},{status:400});
       if(url.pathname.endsWith('/environment')){const result=await setPlannedEnvironment(env,body);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
@@ -1827,6 +1832,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       if(request.method==='GET')return Response.json({status:'ok',...await appleHealthStatus(env.DB,env.USER_ID)},{headers:{'Cache-Control':'no-store'}});
       if(request.method==='POST'){
+        if(appleBodyTooLarge(request))return Response.json({message:L('Příliš velký požadavek.', 'The request is too large.')},{status:413});
         const body=await request.json().catch(()=>null);
         if(!body||typeof body!=='object')return Response.json({message:L('Neplatná data.', 'Invalid data.')},{status:400});
         const result=await saveAppleHealth(env.DB,env.USER_ID,body);
