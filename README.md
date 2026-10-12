@@ -94,17 +94,6 @@ Rychlost: Worker má zapnuté Smart Placement (`wrangler.jsonc`), takže běží
 
 GitHub Actions potřebují `CLOUDFLARE_API_TOKEN` a `CLOUDFLARE_ACCOUNT_ID`; automatizace se k API přihlašují tokenem GitHub OIDC.
 
-## Testovací kopie (staging)
-
-Na https://staging.petrfitnessdata.eu běží kopie aplikace s vlastní databází `health-data-staging` (`env.staging` ve `wrangler.jsonc`). Workflow `deploy-staging.yml` na ni nasadí každý push do otevřeného pull requestu (nebo ručně vybranou větev), takže se změna dá vyzkoušet před „mergni“. Živá verze se nasazuje dál jen z `main`.
-
-- Prázdná databáze dostane strukturu živé databáze (bez dat) ze `staging/schema.sql`, potom běží migrace jako v produkci.
-- Data: `scripts/copy-owner-data.mjs` jednou zkopíruje data správce (`OWNER_EMAIL`) ze živé databáze, kterou jen čte. Nekopíruje přihlašovací klíče ke Googlu a Intervals.icu, stav synchronizace ani data pozvaných uživatelů. Znovu se kopíruje jen při ručním spuštění workflow s volbou `refresh_data` (přepíše, co v kopii je).
-- Každá stránka má dole štítek „TEST · staging“ a hlavičku `noindex`.
-- Nemá cron, sama nic nesynchronizuje do Google ani Intervals.icu.
-- Secrets se nastavují zvlášť u Workeru `health-api-staging` (v Cloudflare nebo `wrangler secret put NAZEV --env staging`). Pro přihlášení stačí `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (stejné jako v produkci) a `SESSION_SECRET` (u stagingu vlastní, libovolný dlouhý náhodný řetězec; stejně tak `STRENGTH_API_KEY` a `CONNECTION_KEY`, pokud je nastavíš); v Google Cloud musí OAuth klient mít navíc přesměrování `https://staging.petrfitnessdata.eu/auth/google/callback` a `https://staging.petrfitnessdata.eu/oauth/google/callback`. Pro asistenta a fotky jídla volitelně `OPENAI_API_KEY`.
-- `INTERVALS_API_KEY` ani připojení Google Health ve stagingu raději nenastavuj: pracují se skutečnými účty, takže by se zápisy (tréninky, váha) propsaly i tam.
-
 ## Aplikace pro iPhone
 
 `ios-native/` je nativní aplikace (SwiftUI). GitHub ji sestaví bez Macu (`ios-native.yml`: testy, snímky obrazovek a nepodepsaná `.ipa` pro Sideloadly) a s placeným účtem Apple nahraje na TestFlight (`ios-testflight.yml`). Postup je v `ios-native/README.md`. Přihlášení přes Google probíhá v Safari a do aplikace se vrací přes `loadwise://auth` s krátkodobým tokenem, který uplatní jen aplikace, jež přihlášení spustila (`/auth/app/session` v `src/google-login.js`).
@@ -116,7 +105,7 @@ Kontrola verze (`src/app-version.js`): nativní aplikace posílá s každým po�
 - Cloudflare spouští `src/main.js`: aplikaci z `entrypoint.js` za přesměrováním na HTTPS a bezpečnostními hlavičkami (`web-security.js`: HSTS, zákaz vložení do cizí stránky, `nosniff`, `Referrer-Policy`). Hlavičku, kterou si odpověď nastaví sama, nepřepisuje.
 - Repozitář je veřejný, a s ním i logy GitHub Actions. Workflow proto z odpovědí API vypisují jen souhrn ze `scripts/ci-summary.mjs` (stav, zpráva, počty), nikdy celé tělo, a nic necommitují zpět. Hlídá to `tests/ci-summary.test.mjs`.
 - Zápis dat patří do POST (nebo PUT, DELETE), ne do GET: odkaz z cizího webu je GET a cookie přihlášení s sebou nese. Proto se i synchronizace (`/sync/google`, `/sync/intervals`) spouští jen přes POST.
-- Každý zápis s cookie přihlášení (cokoli kromě GET, HEAD a OPTIONS) musí přijít ze stránky téže adresy (hlavička `Origin`), jinak vrací 403 (`foreignOriginChange` v `dashboard-auth.js`, volá se před všemi cestami). SameSite=Lax nestačí: stránky ze staging.petrfitnessdata.eu prohlížeč bere jako stejný web a cookie živé aplikace jim přidá.
+- Každý zápis s cookie přihlášení (cokoli kromě GET, HEAD a OPTIONS) musí přijít ze stránky téže adresy (hlavička `Origin`), jinak vrací 403 (`foreignOriginChange` v `dashboard-auth.js`, volá se před všemi cestami). SameSite=Lax nestačí: stránky z jiných subdomén petrfitnessdata.eu prohlížeč bere jako stejný web a cookie živé aplikace jim přidá.
 - Každý klíč má jednu roli: `SESSION_SECRET` podepisuje přihlášení, `CONNECTION_KEY` šifruje připojení uživatelů (navíc svázaná s uživatelem a službou), `STRENGTH_API_KEY` je klíč správce pro API. Vrstvy aplikace se uvnitř Workeru volají s náhodným tokenem, který z Workeru nikdy neodchází (`internal-auth.js`). Nasazení živé i testovací verze se zastaví dřív, než cokoli změní, když Worker nemá `SESSION_SECRET` (`scripts/require-secrets.mjs`).
 - Aplikace nemá žádný vstup pro cizí AI: připojení ChatGPT (OAuth na `/authorize` a `/token`) i MCP server (`/mcp`) jsou odstraněné.
 

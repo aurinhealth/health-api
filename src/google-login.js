@@ -3,7 +3,6 @@ import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 
 // "Sign in with Google" for the iPhone app. Only identity scopes are requested;
 // health data access stays in the separate /oauth/google connector flow.
-// APP_ORIGIN lets the staging copy send Google back to itself.
 const ORIGIN = "https://petrfitnessdata.eu";
 export function googleLoginRedirectUri(env) {
   return (env?.APP_ORIGIN || ORIGIN) + "/auth/google/callback";

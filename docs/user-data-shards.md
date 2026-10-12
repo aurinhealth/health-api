@@ -3,8 +3,7 @@
 The existing `health-data` database remains the central directory and keeps every
 preexisting account's history. New accounts receive a sticky entry in
 `user_data_routes` pointing to one of 20 EU databases, `health-data-users-001`
-through `health-data-users-020`. Staging uses two independent databases named
-`health-data-staging-users-001` and `002`. No historical samples are copied.
+through `health-data-users-020`. No historical samples are copied.
 
 Each new database initially admits at most 10 accounts: capacity for 200 new
 accounts, in addition to the existing accounts on legacy. An indexed, atomic
