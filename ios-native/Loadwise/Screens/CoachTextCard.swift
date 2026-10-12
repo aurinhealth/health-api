@@ -46,7 +46,7 @@ struct CoachTextCard: View {
                 Text("Kouč").font(Typo.bodyStrong)
                 Spacer(minLength: 8)
                 if let time = ai?.time {
-                    Text(verbatim: L10n.tr("dnes") + " " + time).font(Typo.caption).foregroundStyle(Palette.faint)
+                    Text(verbatim: L10n.tr("dnes") + " " + ClockText.format(time)).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             }
             .foregroundStyle(Palette.indigo)

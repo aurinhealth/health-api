@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildToday, activeMinutes } from "../src/app-today.js";
 import { googleHealthSummary } from "../src/google-dashboard.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const DATE = "2026-10-08";
 const day = offset => new Date(Date.parse(DATE + "T12:00:00Z") + offset * 86400000).toISOString().slice(0, 10);
@@ -199,7 +200,7 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   assert.match(offline.weather.outdoor.reason, /není dostupná/);
   // No place chosen: no weather, the app offers to set it.
   assert.equal(buildToday(input).weather, null);
-  const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const src = serverSource();
   assert.match(src, /location:place\.location,forecast:place\.forecast/);
   assert.match(src, /cached\(env,ctx,'weather:'/);
 });

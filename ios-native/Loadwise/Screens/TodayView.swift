@@ -161,7 +161,7 @@ struct ReadinessHero: View {
             if let score = readiness.score {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(String(score))
-                        .font(Typo.number(132))
+                        .font(Typo.number(132)).lineLimit(1).minimumScaleFactor(0.5)
                         .foregroundStyle(Palette.ink)
                     if let pill = pill {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
@@ -204,6 +204,7 @@ struct MorningCheckinCard: View {
     @State private var chosen: String?
     @State private var saving = false
     @State private var offerSick = false
+    @State private var answers = 0
 
     init(feeling: String?, keepAnswered: Bool = false, top: CGFloat = 0) {
         self.feeling = feeling
@@ -259,6 +260,7 @@ struct MorningCheckinCard: View {
             }
         }
         .onChange(of: feeling) { _, new in chosen = new }
+        .sensoryFeedback(.impact(weight: .light), trigger: answers)
         .alert("Přepnout stav na Nemoc?", isPresented: $offerSick) {
             Button("Přepnout") { Task { try? await model.setAthleteStatus("sick", until: nil, note: nil) } }
             Button("Teď ne", role: .cancel) {}
@@ -271,6 +273,7 @@ struct MorningCheckinCard: View {
         let before = chosen
         chosen = id
         saving = true
+        answers += 1
         defer { saving = false }
         do {
             try await model.setMorningCheckin(id)
@@ -292,7 +295,7 @@ struct KeyNumbers: View {
             RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
             Divider().overlay(Palette.hairline)
             RouteLink(route: .strain) {
-                cell("Zátěž", Fmt.decimal(today.strain.score), strainNote, today.strain.target != nil ? Palette.green : Palette.amber)
+                cell("Námaha", Fmt.decimal(today.strain.score), strainNote, today.strain.target != nil ? Palette.green : Palette.amber)
             }
             Divider().overlay(Palette.hairline)
             RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
@@ -350,11 +353,7 @@ struct BedtimeSetupCard: View {
         Card {
             HStack(spacing: 12) {
                 Image(systemName: "moon.zzz").font(.system(size: 20)).foregroundStyle(Palette.indigo)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text("Nastav si budík a cíl spánku, večerka se pak ukáže v plánu dne.").font(Typo.caption).foregroundStyle(Palette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
             }

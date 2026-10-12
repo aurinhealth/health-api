@@ -52,7 +52,7 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
 
 ## 2. Funkce přepracované podle literatury
 
-### 2.1 Index regenerace (jeden pro dashboard i trenéry)
+### 2.1 Index regenerace (jeden pro aplikaci i trenéry)
 
 - **Výpočet:** `src/recovery-model.js`, `recoveryReadiness`.
   - HRV (50 %) jako lnRMSSD proti průměru a SD předchozích 60 dní.

@@ -5,6 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { exportAccountData, deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "../src/account-data.js";
 import { findUser } from "../src/tenancy.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 function database() {
   const db = createD1();
@@ -57,12 +58,10 @@ test("the owner's account cannot be deleted, and deleting needs the typed confir
   const db = database();
   await assert.rejects(deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, { ...user, isOwner: true }), /správce/);
   await assert.rejects(deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, { ...user, id: 4 }), /ověřit/);
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/account\/delete'&&request\.method==='POST'/);
   assert.match(entry, /toUpperCase\(\)!=='SMAZAT'/);
   assert.match(entry, /'Set-Cookie':handleDashboardLogout\(\)\.headers\.get\('Set-Cookie'\)/);
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  assert.match(client, /user\?\.isOwner\?'':'<button class="btn danger" type="button" id="deleteAccount">Smazat účet<\/button>'/);
   // Disconnecting Google Health gives up the access at Google too; the owner's token can be the shared Worker secret.
   assert.match(entry, /body\.provider==='google'&&!env\.USER_IS_OWNER\) await revokeGoogle\(env\);/);
 });

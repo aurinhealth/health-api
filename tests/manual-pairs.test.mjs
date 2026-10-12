@@ -6,6 +6,7 @@ import { manualPairs, setManualPair } from "../src/manual-pairs.js";
 import { daySessions } from "../src/app-training.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const ride = { id: "planned:1", name: "Endurance", type: "Ride" };
 const gym = { id: "planned:2", name: "Push", type: "WeightTraining" };
@@ -45,7 +46,7 @@ test("a paired activity carries its plan's id so the app can undo the pairing", 
 });
 
 test("the app pairs through POST /app/api/training/pair", () => {
-  const src = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const src = serverSource();
   assert.match(src, /url\.pathname==='\/app\/api\/training\/pair'/);
   assert.match(src, /setManualPair\(env\.DB,env\.USER_ID/);
 });

@@ -1,7 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import vm from 'node:vm';
 import {CYCLING_WORKOUTS, defaultCapabilities, rankWorkoutCandidates, diversifyWorkoutCandidates, searchWorkoutLibrary, scheduleWorkoutInIntervals, stepRows, parseWorkoutSearchFilters} from '../src/workout-library.js';
 import {flattenSteps, totalMinutes, renderForEnvironment, buildWorkout, step, intervalsText} from '../src/workout-model.js';
 import {parseIntervalsDescription, parseStepLine, structureFromWorkoutDoc} from '../src/planned-detail.js';
@@ -133,13 +131,9 @@ test('the actual Intervals schedule request carries outdoor cadence and controll
   }finally{globalThis.fetch=original;}
 });
 
-test('the frontend query and backend parser preserve explicit ordering',()=>{
-  const client=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
-  const fn=client.match(/function librarySearchQuery\(f\)\{[\s\S]*?\n\}/)[0];
-  const query=vm.runInNewContext(fn+'; librarySearchQuery({sport:"ride",sort:"difficulty",duration:90,tolerance:30,difficulty:10});',{URLSearchParams});
-  const parsed=parseWorkoutSearchFilters(new URLSearchParams(query));
+test('the backend parser preserves explicit ordering',()=>{
+  const parsed=parseWorkoutSearchFilters(new URLSearchParams('sport=ride&environment=outdoor&duration=90&durationTolerance=30&maxDifficulty=10&limit=15&sort=difficulty'));
   assert.equal(parsed.sort,'difficulty');
   assert.equal(parsed.maxDifficulty,10);
   assert.equal(parsed.durationTolerance,30);
-  assert.match(client,/sort:\$\("workoutSort"\)/);
 });

@@ -175,11 +175,7 @@ test('earlier turns go to the model as messages with the data first and the ques
   assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Nemoc (znovu Trénink od pá 9. 10.)]');assert.equal(actionsNote([]),'');
 });
 
-test('the panel shows only open proposals from today and this chat; streaming repaints are throttled',()=>{
-  const client=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8');
-  assert.match(client,/renderCoachActionCards\(\(state\.inbox\|\|\[\]\)\.filter\(openCoachDraft\)/);
-  assert.match(client,/day===localToday\(\)&&\(!a\?\.date\|\|a\.date>=localToday\(\)\)&&\(x\.draft\.chatId==null\|\|x\.draft\.chatId===assistantChat\.id\)/);
-  assert.match(client,/pendingAnswer=answer;if\(Date\.now\(\)-paintedAt>=100\)paint\(\);/);
+test('assistant proposals are kept as drafts of this chat',()=>{
   const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
   assert.match(entry,/UPDATE coach_inbox SET status='expired' WHERE user_id=\? AND status='draft' AND created_at<\?/);
 });

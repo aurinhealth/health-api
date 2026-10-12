@@ -4,32 +4,10 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import legacy from "../src/index.js";
 
-const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-const page = readFileSync(new URL("../src/dashboard.js", import.meta.url), "utf8");
 
-test("a data reload does not take the timeline out of the visible Přehled", () => {
-  assert.match(client, /if\(tl&&el\.classList\.contains\('active'\)\)\$\('todayTimelineSlot'\)\.appendChild\(tl\)/);
-});
 
-test("rebuilding Dnes parks the timeline first instead of deleting it", () => {
-  assert.match(client, /const parked=\$\('dayTimeline'\);if\(parked&&el\.contains\(parked\)\)\$\('dailyPulse'\)\?\.after\(parked\);\s*\(\$\('todayTop'\)\|\|el\)\.innerHTML='<div class="today-layout">/);
-});
 
-test("Dnes is the one day screen: no separate Přehled tab, the rest of Přehled moves under it", () => {
-  assert.match(page, /<button class="navbtn active" data-view="today">/);
-  assert.doesNotMatch(page, /data-view="overview"/);
-  assert.match(page, /<section id="today" class="view active"/);
-  assert.doesNotMatch(page, /phone-only/);
-  assert.match(client, /for\(const el of \[\.\.\.overview\.children\]\)if\(!keep\(el\)\)\$\('todayMore'\)\.append\(el\);/);
-  assert.match(client, /activate=function\(id\)\{act\(id==='overview'\?'today':id\);\}/);
-  assert.doesNotMatch(client, /Celý přehled dne/);
-});
 
-test("the timeline shows the day's weigh-ins and logs a weight for the shown day", () => {
-  assert.match(client, /cls:'weight',title:uiText\('Váha · ','Weight · '\)/);
-  assert.match(client, /\$\('timelineWeight'\)\.onclick=\(\)=>openWeightSheet\(date\)/);
-  assert.match(client, /body:JSON\.stringify\(\{kg:v,date\}\)/);
-});
 
 function weightEnv() {
   const db = createD1();
@@ -53,13 +31,6 @@ test("a weight for a future or malformed day is refused", async () => {
   assert.equal((await post(env, { kg: 80, date: "zítra" })).status, 400);
 });
 
-test("one bad record does not empty the timeline: each source is drawn on its own", () => {
-  for (const source of ["sleep", "activities", "other activities", "planned", "food", "weight"]) assert.ok(client.includes("add('" + source + "',()=>{"), source);
-  assert.match(client, /add=\(source,fn\)=>\{try\{fn\(\);\}catch\(error\)\{console\.error\('Timeline: '\+source,error\);\}\}/);
-  // A weight without a valid day (null sample_time) is skipped before dateLabel can throw.
-  assert.match(client, /\.filter\(r=>\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(r\.day\)/);
-  assert.match(client, /items\.sort\(\(a,b\)=>\(clock\(a\.t\)\|\|''\)\.localeCompare\(clock\(b\.t\)\|\|''\)\)/);
-});
 
 test("weights without sample_time use start_time; ones without any time are left out", async () => {
   const env = weightEnv();

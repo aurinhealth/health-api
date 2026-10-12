@@ -93,14 +93,6 @@ Nastavení → Předplatné ukazuje podmínky pilotu a plánovanou tabulku Free/
 Během pilotu jsou všechny dostupné funkce zdarma, bez karty a účtování.
 Cena ani limity nejsou vymyšlené. Platební brána není implementovaná.
 
-Při prvním použití AI funkce během pilotu (asistent, hodnocení, úprava
-posilovny, jídlo z fotky, dohledání potraviny) jednou vyskočí okno s porovnáním
-Free a AI a tlačítkem Předplatit AI, které zatím jen řekne, že platby nejsou
-spuštěné. Že ho uživatel viděl, je uložené u účtu (`dashboard_profile` řádek 4,
-`POST /app/api/subscription/intro`), takže se neukáže znovu ani na jiném
-zařízení. Po zapnutí `AI_PAYWALL_ENABLED` se stejné okno ukáže pokaždé, když
-zamčená funkce vrátí 402.
-
 `AI_PAYWALL_ENABLED` je standardně vypnutý. Oprávnění ke všem voláním OpenAI
 se kontroluje centrálně na serveru. Pro budoucí zapnutí je nutné nejprve doplnit
 platby, webhooky a provozní limity. Po výslovném nastavení na `true` je pro AI

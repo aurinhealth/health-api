@@ -40,8 +40,9 @@ enum WidgetPanel: String {
     var defaults: [PlacedWidget] {
         switch self {
         case .today:
-            return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium),
-                    .init(kind: .restingHR, size: .small), .init(kind: .hrv, size: .small), .init(kind: .weight, size: .medium)]
+            // Today is for deciding; the measurements (HRV, resting heart rate,
+            // weight) are on Health.
+            return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium)]
         case .health:
             return [.init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
                     .init(kind: .respiration, size: .small), .init(kind: .skinTemp, size: .small), .init(kind: .bedtime, size: .medium),
@@ -430,12 +431,16 @@ struct PanelWidget: View {
         }
     }
 
-    @ViewBuilder private var card: some View {
-        if data.hasData(item.kind) {
-            content
-        } else {
-            WidgetPlaceholder(kind: item.kind)
+    private var card: some View {
+        Group {
+            if data.hasData(item.kind) {
+                content
+            } else {
+                WidgetPlaceholder(kind: item.kind)
+            }
         }
+        // A small card is half the screen wide: its number and chart stop growing sooner.
+        .dynamicTypeSize(...(item.size == .small ? DynamicTypeSize.denseCap : DynamicTypeSize.screenCap))
     }
 
     @ViewBuilder private var content: some View {
