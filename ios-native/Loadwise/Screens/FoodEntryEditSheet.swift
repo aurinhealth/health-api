@@ -43,9 +43,9 @@ struct FoodEntryEditSheet: View {
         return kcal * typed / logged.value
     }
 
-    /// Today at most: the Food screen does not go past today, so an entry
-    /// moved or copied into the future could not be found again.
-    private var lastDay: Date { Date() }
+    /// As far ahead as the Food screen goes, so a meal moved or copied into
+    /// the coming days can be found there again.
+    private var lastDay: Date { Calendar.current.date(byAdding: .day, value: AppModel.foodDaysAhead, to: Date()) ?? Date() }
     private var changed: Bool { amountChanged || meal != entry.meal || AppModel.localDate(day) != date }
 
     var body: some View {
