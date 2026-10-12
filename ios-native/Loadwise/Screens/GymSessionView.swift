@@ -137,6 +137,10 @@ struct GymSessionView: View {
                 }
                 .disabled(finishing)
                 .padding(.top, 24)
+                // The day's workout without weights: kept in Moje tréninky or sent to a friend.
+                let kept = WorkoutTemplate.from(day, minutes: nil)
+                SaveWorkoutButton(template: kept).padding(.top, 10)
+                ShareWorkoutButton(template: kept, date: date, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)

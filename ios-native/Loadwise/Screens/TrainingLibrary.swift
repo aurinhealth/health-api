@@ -7,7 +7,10 @@ import SwiftUI
 /// filters (where, the length with its ± tolerance and own presets, the type,
 /// the difficulty), for the gym the AI builder and the exercises.
 struct TrainingLibraryView: View {
+    @Environment(AppModel.self) private var model
     let sport: LibrarySport?
+    /// Workouts from friends not opened yet (the badge on Od přátel).
+    @State private var unseen = 0
 
     init(sport: String? = nil) {
         self.sport = sport.flatMap { LibrarySport.find($0) }
@@ -26,9 +29,55 @@ struct TrainingLibraryView: View {
                         ForEach(LibrarySport.all) { LibrarySportPanel(sport: $0) }
                     }
                     .padding(.top, 20)
+                    HStack(spacing: 10) {
+                        LibraryTile(route: .myWorkouts, title: "Moje tréninky", symbol: "bookmark.fill", color: Palette.green)
+                        LibraryTile(route: .friendWorkouts, title: "Od přátel", symbol: "person.2.fill", color: Palette.blue, badge: unseen)
+                    }
+                    .padding(.top, 10)
                 }
             }
         }
+        .onAppear {
+            guard sport == nil, !model.demo else { return }
+            Task { unseen = (try? await model.api.myWorkouts().unseen) ?? unseen }
+        }
+    }
+}
+
+/// Knihovna → Moje tréninky, Od přátel: a wide tile, with the count of new ones.
+struct LibraryTile: View {
+    let route: AppRoute
+    let title: String
+    let symbol: String
+    let color: Color
+    var badge = 0
+
+    var body: some View {
+        RouteLink(route: route) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .top) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Palette.onAccent)
+                        .frame(width: 32, height: 32)
+                        .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Spacer()
+                    if badge > 0 {
+                        Text("\(badge)").font(.caption.weight(.bold)).foregroundStyle(Palette.onAccent)
+                            .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22)
+                            .background(Palette.amberBar, in: Capsule())
+                    }
+                }
+                .padding(.bottom, 4)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(badge > 0 ? L10n.f("%@, nové: %@", L10n.tr(title), String(badge)) : L10n.tr(title))
     }
 }
 
