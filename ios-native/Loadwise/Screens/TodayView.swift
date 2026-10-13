@@ -21,7 +21,7 @@ struct TodayView: View {
                     TodayContent(today: today, openSettings: openSettings, openCoach: openCoach)
                         .padding(.bottom, 100)
                 }
-                .refreshable { await model.refresh() }
+                .refreshable { await model.refresh(announce: true) }
             } else if let message = model.errorMessage {
                 VStack(spacing: 16) {
                     Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)

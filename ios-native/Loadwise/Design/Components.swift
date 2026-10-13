@@ -186,6 +186,8 @@ private struct PinnedTopBar: ViewModifier {
     var trailing: ChromeAction?
     var back: () -> Void
     @Environment(\.scrollReport) private var parent
+    /// While the sync pill shows (RootView), it takes the title's place.
+    @Environment(AppModel.self) private var model: AppModel?
     @State private var scrolled = false
 
     func body(content: Content) -> some View {
@@ -205,7 +207,7 @@ private struct PinnedTopBar: ViewModifier {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Palette.ink)
                             .lineLimit(1)
-                            .opacity(scrolled ? 1 : 0)
+                            .opacity(scrolled && model?.syncStatus == nil ? 1 : 0)
                     }
                     Spacer(minLength: 0)
                     if let trailing {

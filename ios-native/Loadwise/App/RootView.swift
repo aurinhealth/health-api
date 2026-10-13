@@ -45,8 +45,15 @@ struct RootView: View {
                     let compact = offset > 60
                     if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
                 })
-                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil {
+                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
+                        if let status = model.syncStatus, !model.offline {
+                            SyncPill(status: status) {
+                                model.dismissSyncFailure()
+                                Task { await model.refresh(announce: true) }
+                            }
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
                         if model.offline || !model.outbox.isEmpty {
                             OfflineBanner(offline: model.offline, waiting: model.outbox.count)
                         }
@@ -58,7 +65,8 @@ struct RootView: View {
                         }
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 4)
+                    .padding(.top, 8)
+                    .animation(.snappy, value: model.syncStatus)
                 }
                 // A done activity sent to the apps from Synchronizace (SyncViews.swift).
                 if let report = model.syncReport, !showSyncStatus {
@@ -108,7 +116,7 @@ struct RootView: View {
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 Task {
-                    if model.today != nil || !model.outbox.isEmpty { await model.refresh() }
+                    if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
                     // The open tab too, so Health or Food are not a day behind Today.
                     if model.tab != .today { await model.refreshIfStale(model.tab) }
                 }
@@ -169,6 +177,41 @@ struct OfflineBanner: View {
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
             .allowsHitTesting(false)
+    }
+}
+
+/// The sync after opening the app: "Synchronizuji…" with a spinner,
+/// "Synchronizováno" for a moment, or a failure a tap tries again. It sits
+/// where a detail's pinned bar has its title (PinnedTopBar hides the title).
+struct SyncPill: View {
+    let status: AppModel.SyncStatus
+    let retry: () -> Void
+
+    var body: some View {
+        Button(action: retry) {
+            HStack(spacing: 8) {
+                switch status {
+                case .syncing:
+                    ProgressView().controlSize(.small)
+                    Text("Synchronizuji…")
+                case .done:
+                    Image(systemName: "checkmark").foregroundStyle(Palette.green)
+                    Text("Synchronizováno")
+                case .failed:
+                    Image(systemName: "exclamationmark.circle")
+                    Text("Nepodařilo se · Zkusit znovu")
+                }
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(status == .failed ? Palette.rust : Palette.ink)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .chromeGlass(in: Capsule())
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+        .allowsHitTesting(status == .failed)
     }
 }
 
