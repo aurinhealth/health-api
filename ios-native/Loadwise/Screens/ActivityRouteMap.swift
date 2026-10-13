@@ -178,7 +178,7 @@ struct ActivityRouteMap: View {
     }
 
     /// Five steps between the 5th and 95th percentile; the legend shows the ends and the middle.
-    private static func scaled(_ values: [Double?], unit: String, shown: (Double) -> Double) -> ([Int?], [(String, Color)]) {
+    private static func scaled(_ values: [Double?], unit: String, shown: @escaping (Double) -> Double) -> ([Int?], [(String, Color)]) {
         let sorted = values.compactMap { $0 }.filter { $0 > 0 }.sorted()
         guard sorted.count >= 2 else { return (values.map { _ in nil }, []) }
         let lo = sorted[sorted.count / 20], hi = sorted[sorted.count * 19 / 20]
@@ -187,7 +187,7 @@ struct ActivityRouteMap: View {
             guard let v, v > 0 else { return nil }
             return Int(((v - lo) / span * 5).rounded(.down)).clamped(0, 4)
         }
-        let label = { (v: Double) in Fmt.int(shown(v)) + " " + unit }
+        func label(_ v: Double) -> String { Fmt.int(shown(v)) + " " + unit }
         return (bins, [(label(lo), scale[0]), (label((lo + hi) / 2), scale[2]), (label(hi), scale[4])])
     }
 
