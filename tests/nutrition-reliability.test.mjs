@@ -109,7 +109,8 @@ test('async deletion clears the remote mapping and a concurrent restore exports 
 });
 
 test('known old unexported food is backfilled once, waits when disconnected and resumes after connection',async()=>{
-  const {owner}=db();assert.equal(await backfillFoodGoogle(owner),1);assert.equal(await backfillFoodGoogle(owner),0);
+  // Backfill looks 14 days back, so the entry is from two days ago, not a fixed date.
+  const {raw,owner}=db();raw.sqlite.prepare("UPDATE food_logs SET consumed_date=date('now','-2 days') WHERE id=1").run();assert.equal(await backfillFoodGoogle(owner),1);assert.equal(await backfillFoodGoogle(owner),0);
   await processFoodGoogle({DB:owner,CONNECTED_PROVIDERS:[]},{token,...mockGoogle()});assert.equal((await foodGoogleStatus(owner))[0].status,'disconnected');
   await processFoodGoogle({DB:owner,CONNECTED_PROVIDERS:['google']},{token,...mockGoogle()});assert.equal((await foodGoogleStatus(owner))[0].status,'synced');
 });
