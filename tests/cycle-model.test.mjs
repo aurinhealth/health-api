@@ -125,3 +125,15 @@ test("the luteal offset is the athlete's own once there are enough days, within 
   assert.equal(lutealOffset(rows.slice(0, 12), "2026-09-25", "restingHR", 1, 3), 1);
   assert.equal(lutealOffset(rows.map(r => ({ ...r, restingHR: r.cyclePhase === "luteal" ? 70 : 50 })), "2026-09-25", "restingHR", 1, 3), 3);
 });
+
+test("cycleForCoach shares today's cycle only when the athlete turns it on", async () => {
+  const { cycleForCoach } = await import("../src/cycle-model.js");
+  const days = [{ date: "2026-10-11", flow: 3, symptoms: ["cramps"] }, { date: "2026-10-12", flow: 3, symptoms: ["cramps"] }];
+  const settings = { enabled: true, lastPeriod: "2026-10-11", cycleLength: 28 };
+  assert.equal(cycleForCoach({ settings, days, date: "2026-10-12" }), null);
+  const out = cycleForCoach({ settings: { ...settings, shareWithCoach: true }, days, date: "2026-10-12" });
+  assert.deepEqual(out, { hormonal: false, flow: "heavy", symptoms: ["cramps"], cycleDay: 2, phase: "menstrual", cycleLength: 28, daysToNextPeriod: 27, easeToday: true });
+  assert.ok(!JSON.stringify(out).includes("2026-"));
+  const pill = cycleForCoach({ settings: { ...settings, contraception: "pill", shareWithCoach: true }, days: [], date: "2026-10-12" });
+  assert.deepEqual(pill, { hormonal: true, flow: "none", symptoms: [] });
+});

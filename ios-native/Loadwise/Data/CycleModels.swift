@@ -30,6 +30,8 @@ struct CycleSettings: Codable, Equatable {
     /// "HH:MM"
     var pillReminderTime: String
     var pillReminderInPause: Bool
+    /// The AI coach sees today's cycle (src/cycle-model.js cycleForCoach).
+    var shareWithCoach: Bool?
 
     var hormonal: Bool { Self.hormonal.contains(contraception) }
     static let hormonal: Set<String> = ["pill", "patch", "ring", "hormonal_iud", "implant", "injection"]

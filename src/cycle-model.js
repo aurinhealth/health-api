@@ -51,6 +51,9 @@ export function normalizeCycleSettings(raw) {
     pillReminder: s.pillReminder === true,
     pillReminderTime: time,
     pillReminderInPause: s.pillReminderInPause === true,
+    // The AI coach sees today's cycle (cycleForCoach) only when the athlete
+    // turns this on: cycle data is special-category health data (GDPR art. 9).
+    shareWithCoach: s.shareWithCoach === true,
   };
 }
 
@@ -162,6 +165,25 @@ export function cycleTrainingCaution(state) {
   if (t.flow >= 3) reasons.push("heavy");
   for (const s of ["cramps", "fatigue"]) if (t.symptoms.includes(s)) reasons.push(s);
   return reasons.length ? { reasons, cycleDay: state.cycleDay ?? null } : null;
+}
+
+// What the AI coach may know about today's cycle, with shareWithCoach on:
+// today only, no dates or history. Null otherwise.
+export function cycleForCoach(input) {
+  const settings = normalizeCycleSettings(input && input.settings);
+  if (!settings.enabled || !settings.shareWithCoach) return null;
+  const state = cycleState(input);
+  if (!state) return null;
+  const t = state.today;
+  const out = { hormonal: state.hormonal, flow: ["none", "light", "medium", "heavy"][t ? t.flow : 0], symptoms: t ? t.symptoms : [] };
+  if (state.hormonal) {
+    if (state.pill && state.pill.pause) out.pillPause = true;
+    return out;
+  }
+  if (state.cycleDay) Object.assign(out, { cycleDay: state.cycleDay, phase: state.phase, cycleLength: state.length, daysToNextPeriod: state.daysToNext });
+  const caution = cycleTrainingCaution(state);
+  if (caution) out.easeToday = true;
+  return out;
 }
 
 // The rows the readiness reads, marked with the phase each day was in (only

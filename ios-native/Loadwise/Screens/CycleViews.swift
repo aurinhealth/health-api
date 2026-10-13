@@ -544,6 +544,9 @@ struct CycleSettingsView: View {
                     }
                     SettingsToggle(title: "Upravit trénink podle cyklu",
                                    isOn: Binding(get: { settings.adaptTraining }, set: { save(["adaptTraining": .bool($0)]) }), disabled: saving)
+                    SettingsDivider()
+                    SettingsToggle(title: "Kouč ví o cyklu",
+                                   isOn: Binding(get: { settings.shareWithCoach == true }, set: { save(["shareWithCoach": .bool($0)]) }), disabled: saving)
                 }
             }
         }
