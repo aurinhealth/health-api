@@ -79,6 +79,25 @@ final class AppModel {
     /// A done activity just sent to the apps chosen in Synchronizace: the
     /// toast "Odesláno do 2 aplikací" and its sheet (SyncViews.swift).
     var syncReport: SyncReport?
+    /// A deleted workout waiting a few seconds for "Zpět" (RootView): the
+    /// deletion reaches the server and Apple Health only after that.
+    var undoToast: PlanToast?
+
+    /// hide: the planned event that leaves the week and the calendar at once;
+    /// "Zpět" brings it back with the next load.
+    func deleteLater(_ title: String, hide eventId: String? = nil, commit: @escaping () async -> Void) {
+        if let eventId {
+            training?.sessions?.removeAll { $0.eventId == eventId }
+            for (day, value) in calendar where value.activities.contains(where: { $0.eventId == eventId }) {
+                calendar[day]?.activities.removeAll { $0.eventId == eventId }
+            }
+        }
+        let undo: () async -> Void = eventId == nil ? {} : { [weak self] in
+            await self?.refreshTraining()
+            await self?.refresh()
+        }
+        undoToast = PlanToast(title: title, note: nil, cancelled: true, undo: undo, commit: commit)
+    }
     /// The Today and Food answers as they came, under the waiting writes.
     @ObservationIgnored private var todayBase: Data?
     @ObservationIgnored private var foodBase: Data?
@@ -152,6 +171,11 @@ final class AppModel {
 
     func path(_ tab: AppTab) -> Binding<[AppRoute]> {
         Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
+    }
+
+    /// A detail on top of the current tab's screens.
+    func push(_ route: AppRoute) {
+        paths[tab, default: []].append(route)
     }
 
     /// Opens a detail on its own tab (widgets, notifications, links).

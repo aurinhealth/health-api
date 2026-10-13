@@ -15,7 +15,7 @@ export function cleanGymRows(rows, allowed) {
   if (!Array.isArray(rows)) throw new Error(L('Chybí cviky plánu.', 'The plan\'s exercises are missing.'));
   const out = rows.slice(0, MAX_ROWS).map(row => Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => String(row?.[i] ?? '').trim().slice(0, i === 9 ? 300 : 120)))
     .filter(r => /^(WARMUP|WORK)$/i.test(r[0]) && allowed.has(r[1]))
-    .map(r => { r[0] = r[0].toUpperCase(); r[3] = kgText(r[3]); r[5] = r[6] = r[7] = ''; r[8] = 'FALSE'; r[11] = /^(true|1)$/i.test(r[11]) ? 'TRUE' : 'FALSE'; r[12] = /^[A-F]$/.test(r[12]) ? r[12] : ''; return r; });
+    .map(r => { r[0] = r[0].toUpperCase(); r[3] = kgText(r[3]); r[5] = r[6] = r[7] = ''; r[8] = 'FALSE'; r[11] = /^(true|1)$/i.test(r[11]) ? 'TRUE' : 'FALSE'; r[12] = /^[A-F]$/.test(r[12]) ? r[12] : ''; r[13] = /^[LP]$/.test(r[13]) ? r[13] : ''; return r; });
   if (!out.length) throw new Error(L('Plán musí mít aspoň jeden cvik.', 'The plan must have at least one exercise.'));
   return out;
 }

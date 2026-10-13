@@ -18,6 +18,7 @@ import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan } from "./gym-p
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { saveOwnExerciseVideo, techniqueFor, ownExerciseVideo, storedTechnique, exerciseInUse, generateTechnique } from "./exercise-technique.js";
 import { L } from "./lang.js";
+import { sideBalance, lastSideChoice } from "./gym-sides.js";
 import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
 import { ensureCoachInboxTable } from "./coach-inbox.js";
@@ -64,6 +65,12 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/history'&&request.method==='GET'){
     const exercises=await strengthSessions(env.DB,{days:url.searchParams.get('days')||180,today:localToday()}).catch(error=>{console.error('Gym history read failed',error);return [];});
     return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});
+  }
+  // Levá a pravá strana: one-sided exercises, the last session's sides.
+  if(url.pathname==='/app/api/gym/sides'&&request.method==='GET'){
+    const history=await getStrengthHistory(env.DB,500).catch(()=>[]);
+    // choices: how each exercise was done last time ('sides' | 'both').
+    return Response.json({status:'ok',sides:sideBalance(history),choices:lastSideChoice(history)},{headers:{'Cache-Control':'no-store'}});
   }
   // Loads for exercises added by hand, or a plan's sets left without a weight.
   // Muscles of exercises added to a proposal (its body figure).

@@ -101,6 +101,9 @@ struct TodayContent: View {
         KeyNumbers(today: today)
             .padding(.top, model.selectedDate == nil ? 12 : 28)
 
+        // Doporučení trenéra: the day's activity from anything (CoachPick.swift).
+        if model.selectedDate == nil { CoachPickCard().padding(.top, 16) }
+
         if model.selectedDate == nil {
             if let plan = today.trainingPlan {
                 Label(([plan.name, plan.paused == true ? L10n.tr("pozastaveno") : L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + (plan.paused == true ? [] : plan.phaseLabel.map { [$0] } ?? [])).joined(separator: " · "), systemImage: "flag")

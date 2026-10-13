@@ -511,18 +511,32 @@ extension GymDay {
     }
 
     /// An exercise's suggested sets after the others: warm-ups ("R") first.
-    mutating func appendExercise(_ name: String, suggestion: GymSuggestion) {
+    /// sides: the work sets go L and P (GymSides).
+    mutating func appendExercise(_ name: String, suggestion: GymSuggestion, sides: Bool = false) {
         while values.count > Self.firstSetRow, let last = values.last, last.allSatisfy({ $0.string == nil }) { values.removeLast() }
         while values.count < Self.firstSetRow { values.append([]) }
-        func row(_ type: String, _ number: String, _ planned: GymSuggestion.Planned) -> [JSONValue] {
+        func row(_ type: String, _ number: String, _ planned: GymSuggestion.Planned, _ side: String = "") -> [JSONValue] {
             let kg = planned.kg.map { GymCoach.kgText($0) } ?? ""
-            return [type, name, number, kg, String(planned.reps), "", "", "", "FALSE", "", "", "FALSE", ""].map { JSONValue.string($0) }
+            return [type, name, number, kg, String(planned.reps), "", "", "", "FALSE", "", "", "FALSE", "", side].map { JSONValue.string($0) }
         }
         for planned in suggestion.warmups { values.append(row("WARMUP", "", planned)) }
-        for (i, planned) in suggestion.work.enumerated() { values.append(row("WORK", String(i + 1), planned)) }
+        for (i, planned) in suggestion.work.enumerated() {
+            for side in sides ? ["L", "P"] : [""] { values.append(row("WORK", String(i + 1), planned, side)) }
+        }
     }
 
     /// Only what was done stays: the sets not ticked go.
+    /// Sets with their reps typed in but not ticked count as done.
+    mutating func completeTyped() {
+        for index in values.indices where index >= Self.firstSetRow {
+            let row = values[index]
+            guard row.count > 1, row[1].string != nil, !(row.count > 8 && Self.isDone(row[8].string)) else { continue }
+            let reps = row.count > 6 ? (row[6].string ?? "") : ""
+            guard !reps.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            set(row: index, column: 8, "TRUE")
+        }
+    }
+
     mutating func dropUndone() {
         var kept = Array(values.prefix(Self.firstSetRow))
         for index in values.indices where index >= Self.firstSetRow {
