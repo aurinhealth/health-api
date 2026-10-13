@@ -2,7 +2,7 @@
 // answer is checked before the app shows it.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeWeekDays, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem } from "../src/week-ai.js";
+import { sanitizeWeekDays, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
 
 const start = "2026-10-12", today = "2026-10-13";
 const prefs = { availability: [60, 90, 60, 90, 0, 240, 60].map(minutes => ({ minutes, window: "", preferredSports: [] })) };
@@ -79,4 +79,32 @@ test("the AI's change of one session stays in the week and off hard neighbours",
   const weekDays = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
   const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 70, environment: "outdoor", kind: "vo2max" }, request: "Prší", weekDays, otherSessions: [{ date: "2026-10-18", kind: "sweet_spot" }], prefs, today }, { ask });
   assert.deepEqual([r.date, r.minutes, r.environment, r.kind, r.note], ["2026-10-17", 60, "indoor", "endurance", "Na trenažéru."]);
+});
+
+test("days the athlete named hold exactly the sports asked for, even when the AI kept another", async () => {
+  // Petr, 2026-10-13: "Dej mi posilovnu na pátek, sobotu a neděli" and the AI still left a run on Saturday.
+  const ask = async () => ({ text: JSON.stringify({ summary: "Posilovna pá–ne.", requested: [
+    { date: "2026-10-16", sports: ["gym"] }, { date: "2026-10-17", sports: ["gym"] }, { date: "2026-10-18", sports: ["gym"] }
+  ], days: [
+    { date: "2026-10-14", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance", reason: "" },
+    { date: "2026-10-16", sport: "gym", minutes: 60, environment: "indoor", kind: "gym", reason: "" },
+    { date: "2026-10-17", sport: "run", minutes: 45, environment: "outdoor", kind: "endurance", reason: "" },
+    { date: "2026-10-18", sport: "gym", minutes: 60, environment: "indoor", kind: "gym", reason: "" }
+  ] }) });
+  const r = await proposeWeekAI({}, { start, today, readiness: { zone: "green" } }, { prefs, ask });
+  // Friday has no time set, but the athlete asked for it.
+  assert.deepEqual(r.items.map(i => i.date + " " + i.sport), ["2026-10-14 ride", "2026-10-16 gym", "2026-10-17 gym", "2026-10-18 gym"]);
+});
+
+test("a named rest day is emptied and requests outside the week are ignored", () => {
+  const out = applyRequests([{ date: "2026-10-15", sport: "run", minutes: 45 }, { date: "2026-10-14", sport: "ride", minutes: 60 }],
+    [{ date: "2026-10-15", sports: [] }, { date: "2026-10-25", sports: ["gym"] }, { date: "2026-10-14", sports: ["ride", "swim"] }], { start });
+  assert.deepEqual(out.map(d => d.date + " " + d.sport), ["2026-10-14 ride"]);
+});
+
+test("the AI can change one session's sport; gym is always indoor gym", async () => {
+  const ask = async () => ({ text: JSON.stringify({ date: "2026-10-17", sport: "gym", minutes: 60, environment: "outdoor", kind: "endurance", note: "Běh jsem změnil na posilovnu." }) });
+  const weekDays = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
+  const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "run", minutes: 45, environment: "outdoor", kind: "endurance" }, request: "Chci posilovnu", weekDays, prefs, today }, { ask });
+  assert.deepEqual([r.sport, r.environment, r.kind, r.minutes], ["gym", "indoor", "gym", 60]);
 });

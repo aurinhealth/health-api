@@ -1889,6 +1889,13 @@
 "Tempa se ti spočítají podle tvého prahového tempa." = "Paces are worked out from your threshold pace.";
 "Watty se ti spočítají podle tvého FTP." = "Watts are worked out from your FTP.";
 "Odkazy, kterými jsi ho poslal, přestanou fungovat." = "Links you sent it with will stop working.";
+"Části aplikace" = "Parts of the app";
+"Měření" = "Measurements";
+"Pomoc" = "Help";
+"spánek" = "sleep";
+"Z tréninků: max %@" = "From workouts: max %@";
+"Použít" = "Use";
+"Maximální tep na kole" = "Max heart rate on the bike";
 "Smazat jen v Aurinu" = "Delete in Aurin only";
 "AI odhad" = "AI estimate";
 "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." = "The AI couldn't find or estimate it. Enter it by hand.";
@@ -1903,3 +1910,7 @@
 "Přesunout %@" = "Move %@";
 "Jídlo z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě." = "Food from another app can only be copied or deleted, so it stayed where it was.";
 "Pití z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě." = "Drinks from another app can only be copied or deleted, so they stayed where they were.";
+/* Plán týdne: Opravit návrh */
+"Opravit návrh" = "Fix the proposal";
+"Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
+"Opravuji…" = "Fixing…";
