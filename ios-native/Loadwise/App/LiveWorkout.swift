@@ -212,7 +212,7 @@ final class LiveWorkout: NSObject {
             await add([sample], to: builder)
         }
         await add(beatSamples(), to: builder)
-        builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Loadwise"]) { _, _ in }
+        builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Aurin"]) { _, _ in }
         let ended: Bool = await withCheckedContinuation { continuation in
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
         }
@@ -254,7 +254,7 @@ final class LiveWorkout: NSObject {
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
         }
         guard ended else { builder.discardWorkout(); return false }
-        builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Loadwise"]) { _, _ in }
+        builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Aurin"]) { _, _ in }
         let workout: HKWorkout? = await withCheckedContinuation { continuation in
             builder.finishWorkout { workout, _ in continuation.resume(returning: workout) }
         }

@@ -153,7 +153,7 @@ const COPY_CHUNK_ROWS = 5000;
 
 // Workers Builds preview versions share the production database, so only the
 // production hostnames (and cron runs, which previews never get) may upgrade it.
-const PRODUCTION_HOSTS = new Set(["petrfitnessdata.eu", "health-api.chelseafc-czsk.workers.dev"]);
+const PRODUCTION_HOSTS = new Set(["petrfitnessdata.eu", "aurin.health", "health-api.chelseafc-czsk.workers.dev"]);
 export function mayUpgradeFrom(request) {
   if (!request) return true;
   const host = new URL(request.url).hostname;

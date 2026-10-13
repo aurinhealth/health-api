@@ -126,8 +126,8 @@ struct SetupFlowView: View {
     private static let consentPoints: [(String, String)] = [
         ("Co", "Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly."),
         ("Odkud", "Ze služeb, které připojíš (Apple Zdraví, Google Health, Intervals.icu), a z toho, co zadáš sám."),
-        ("K čemu", "Jen k přehledům, výpočtům a plánům v Loadwise. Data neprodáváme a nepoužíváme k reklamě."),
-        ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Loadwise potřebné údaje, včetně údajů o zdraví a fotek jídla, společnosti OpenAI v USA."),
+        ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
+        ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek jídla, společnosti OpenAI v USA."),
         ("Odvolání", "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
@@ -142,12 +142,12 @@ struct SetupFlowView: View {
                 }
             }
         }
-        Toggle("Souhlasím, aby Loadwise zpracovával moje údaje o zdraví, jak je popsáno výše, včetně AI funkcí.", isOn: $agree)
+        Toggle("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše, včetně AI funkcí.", isOn: $agree)
             .font(Typo.small).tint(Palette.green)
         Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
     }
 
-    private static let privacyURL = URL(string: "https://petrfitnessdata.eu/privacy")!
+    private static let privacyURL = URL(string: "https://aurin.health/privacy")!
 
     // MARK: - Odkud brát data
 
