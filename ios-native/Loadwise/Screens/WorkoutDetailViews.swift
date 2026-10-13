@@ -162,6 +162,9 @@ struct WeekSessionsList: View {
     static func destination(_ s: WeekSession) -> AppRoute? {
         // A done lifting session opens the day's gym sheet too, wherever it was
         // recorded (Google Health has no detail of its own): the sets and weights.
+        // A gym session typed in by hand (Zapsat trénink) has no sheet yet:
+        // its detail is the planned one, where it can move or be deleted.
+        if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
         if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
@@ -603,6 +606,17 @@ struct PlannedWorkoutView: View {
                     if let workout = plan?.workout, session.sport == "ride" || session.sport == "run", !model.demo {
                         WatchWorkoutButton(workout: workout, title: session.title).padding(.top, 18)
                     }
+                }
+
+                if session.sport == "strength", session.date == AppModel.localDate(Date()), !model.demo {
+                    NavigationLink(value: AppRoute.liveGym(session.date, false)) {
+                        Label("Začít posilovnu", systemImage: "play.fill")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 28)
                 }
 
                 if ratable {

@@ -523,6 +523,17 @@ extension GymDay {
     }
 
     /// Only what was done stays: the sets not ticked go.
+    /// Sets with their reps typed in but not ticked count as done.
+    mutating func completeTyped() {
+        for index in values.indices where index >= Self.firstSetRow {
+            let row = values[index]
+            guard row.count > 1, row[1].string != nil, !(row.count > 8 && Self.isDone(row[8].string)) else { continue }
+            let reps = row.count > 6 ? (row[6].string ?? "") : ""
+            guard !reps.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+            set(row: index, column: 8, "TRUE")
+        }
+    }
+
     mutating func dropUndone() {
         var kept = Array(values.prefix(Self.firstSetRow))
         for index in values.indices where index >= Self.firstSetRow {
