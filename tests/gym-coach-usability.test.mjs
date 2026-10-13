@@ -10,7 +10,7 @@ test('45 minute strength proposals fit including equipment time, both sides, res
   for(const focus of [undefined,'upper','lower']){
     const plan=generateStrengthPlan({date:'2026-10-04',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},recovery:{}},{durationMinutes:45,focus});
     assert.ok(plan.timing.totalSeconds<=2700);assert.ok(plan.timing.bufferSeconds>=180);
-    assert.deepEqual(estimateStrengthTiming(plan.rows,EXERCISES,45,(plan.stretching?.seconds||0)+(plan.warmup?.seconds||0)),plan.timing);assert.ok(plan.stretching.items.length>=2);
+    assert.deepEqual({...estimateStrengthTiming(plan.rows,EXERCISES,45),routineSeconds:(plan.stretching?.seconds||0)+(plan.warmup?.seconds||0)},plan.timing);assert.ok(plan.timing.routineSeconds>0);assert.ok(plan.stretching.items.length>=2);
     assert.equal(planValues(plan)[4][1],45);
   }
   const def={'Left':{unilateral:true},'Both':{unilateral:false}};

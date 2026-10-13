@@ -2,8 +2,7 @@ import { L } from './lang.js';
 // Include both sides of unilateral work, equipment setup, rests and gym delays.
 // Rests are counted between sets of an exercise; moving to the next exercise
 // is a changeover (setting up the station) instead of a full rest.
-// routineSeconds: the warm-up before and the stretching after (stretching.js), 0 without them.
-export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60, routineSeconds = 0) {
+export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   let workSeconds = 0, warmupSeconds = 0, restSeconds = 0;
   const exercises = [...new Set(rows.map(r => r[1]))], groups = new Map();
   rows.forEach((r, i) => {
@@ -20,8 +19,8 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60, rou
   restSeconds += [...groups.values()].reduce((a, b) => a + b, 0);
   const setupSeconds = 240 + exercises.length * 90;
   const bufferSeconds = Math.max(180, Math.round(requestedMinutes * 60 * .05));
-  const totalSeconds = Math.round(workSeconds + warmupSeconds + restSeconds + setupSeconds + bufferSeconds + routineSeconds);
-  return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds, routineSeconds };
+  const totalSeconds = Math.round(workSeconds + warmupSeconds + restSeconds + setupSeconds + bufferSeconds);
+  return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
 }
 
 // Rests by the gym goal: heavy strength sets need the longest, fitness the shortest.
