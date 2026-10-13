@@ -72,6 +72,10 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
                 }
                 SettingsDivider()
+                NavigationLink { AppIconSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "app.badge", color: Palette.amber), title: "Ikona aplikace")
+                }
+                SettingsDivider()
                 NavigationLink { CustomizeSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "slider.horizontal.3", color: Palette.indigo), title: "Přizpůsobení")
                 }

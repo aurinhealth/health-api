@@ -1895,3 +1895,34 @@
 "Co to je? Třeba „tyčinka Margot“" = "What is it? E.g. \"Snickers bar\"";
 "Odhadnout AI" = "Estimate with AI";
 "AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";
+
+/* Settings → Ikona aplikace */
+"Ikona aplikace" = "App icon";
+"Výchozí" = "Default";
+"Roční období" = "Seasons";
+"Odměna" = "Reward";
+"Speciální · Aurin Pro" = "Special · Aurin Pro";
+"Odznak" = "Badge";
+"Zlatý odznak" = "Gold badge";
+"Dráha" = "Track";
+"Zlatá dráha" = "Gold track";
+"Jaro" = "Spring";
+"Léto" = "Summer";
+"Podzim" = "Autumn";
+"Zima" = "Winter";
+"Polární záře" = "Aurora";
+"Půlnoc" = "Midnight";
+"Zatmění" = "Eclipse";
+"Porcelán" = "Porcelain";
+"Nebe" = "Sky";
+"jen na jaře" = "spring only";
+"jen v létě" = "summer only";
+"jen na podzim" = "autumn only";
+"jen v zimě" = "winter only";
+"zbývá %@" = "%@ to go";
+"Ikonu se nepodařilo změnit. Zkus to znovu." = "The icon couldn't be changed. Try again.";
+"Odemkneš ji, až naběháš celkem %@." = "Unlocks once you've run %@ in total.";
+"Odemkneš ji, až najezdíš na kole celkem %@." = "Unlocks once you've ridden %@ in total.";
+"Odemkneš ji po %@ trénincích v posilovně." = "Unlocks after %@ gym workouts.";
+"Odemkneš ji, když budeš trénovat %@ dní v řadě." = "Unlocks when you train %@ days in a row.";
+"Dá se vybrat jen v tomto ročním období." = "Can only be picked during its season.";

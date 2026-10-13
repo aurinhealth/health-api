@@ -24,6 +24,7 @@ import {buildToday} from './app-today.js';
 import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
 import {buildCalendar} from './app-calendar.js';
+import {buildMilestones} from './app-milestones.js';
 import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
 import {normalizeProfile} from './energy-profile.js';
@@ -1252,6 +1253,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           activities:rows.filter(r=>r.data_type==='activity'),
           google:rows.filter(r=>r.data_type==='exercise')});
       },{ttl:120});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
+
+  // Settings → Ikona aplikace: lifetime km, gym sessions and days in a row (app-milestones.js).
+  if(url.pathname==='/app/api/milestones'&&request.method==='GET'){
+    try{
+      const today=localToday();
+      const result=await cached(env,ctx,'milestones:'+today,async()=>{
+        const rows=(await env.DB.prepare("SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID).all().catch(()=>({results:[]}))).results||[];
+        const gym=await trainingGymPlans(env,'2000-01-01',today).catch(()=>({}));
+        return buildMilestones({rows,today,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0)});
+      },{ttl:300});
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
