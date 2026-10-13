@@ -12,6 +12,7 @@ final class SettingsStore {
     private(set) var suggestions: JSONObject = [:]
     private(set) var training: TrainingProfileResponse?
     private(set) var connections: [ConnectionsResponse.Provider] = []
+    private(set) var priority: SourcePriority = .auto
     private(set) var sync: SyncStatus?
     private(set) var loaded = false
     /// The profile really came from the server. The server replaces the whole
@@ -50,7 +51,9 @@ final class SettingsStore {
                 UserDefaults.standard.set(shown, forKey: AppModel.displayNameKey)
                 UserDefaults.standard.set(String(shown.first!).uppercased(), forKey: AppModel.accountInitialKey)
             }
-            self.connections = (try? await connections)?.providers ?? []
+            let status = try? await connections
+            self.connections = status?.providers ?? []
+            priority = status?.priority ?? .auto
             self.training = try? await training
             self.sync = try? await sync
             errorMessage = nil
@@ -117,8 +120,22 @@ final class SettingsStore {
     /// After a reconnect: only the data sources and the sync state.
     func reloadConnections() async {
         guard !demo else { return }
-        if let response = try? await api.connections() { connections = response.providers }
+        if let response = try? await api.connections() { connections = response.providers; priority = response.priority ?? .auto }
         if let status = try? await api.syncStatus() { sync = status }
+    }
+
+    /// Saves where the night and the day come from; the server re-picks the stored days.
+    func savePriority(_ next: SourcePriority) async {
+        let previous = priority
+        priority = next
+        guard !demo else { return }
+        do {
+            try await api.saveSourcePriority(next)
+            errorMessage = nil
+        } catch {
+            priority = previous
+            errorMessage = error.localizedDescription
+        }
     }
 
     var connectedCount: Int { connections.filter { $0.connected == true }.count }

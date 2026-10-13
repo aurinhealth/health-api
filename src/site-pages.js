@@ -433,7 +433,7 @@ ${today}
 </div></section>
 
 <section id="propojeni"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">${t('Propojení', 'Connections')}</div><h2>${t('Data odtud, tréninky tam.', 'Data in, workouts out.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">${t('Propojení', 'Connections')}</div><h2>${t('Data odtud, tréninky tam.', 'Data in, workouts out.')}</h2><p>${t('Nosíš víc zařízení? Noc i den bere Aurin z toho, které nosíš nejvíc, nebo si zdroj vybereš sám.', 'Wear more than one device? Aurin takes the night and the day from the one you wear most, or you pick the source yourself.')}</p></div>
 <div class="visual sources reveal">${sources}</div>
 </div></section>
 

@@ -11,6 +11,7 @@ import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { connectionStatus } from "./connections.js";
+import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
@@ -1097,6 +1098,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if (url.pathname === "/app/api/push/token") return handlePushToken(request, env, { signedIn: session.signedIn, origin: url.origin });
   if (url.pathname === "/app/api/connections" && request.method === "GET") {
     return Response.json(await connectionStatus(env), {headers:{"Cache-Control":"no-store"}});
+  }
+  // Which device the night and the day come from (source-priority.js); GET is connections' priority.
+  if (url.pathname === '/app/api/sources/priority' && request.method === 'POST') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    const result=await saveSourcePriority(env.DB,env.USER_ID,{night:body.night,day:body.day});
+    return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
   }
   if (url.pathname === '/app/api/connections' && (request.method === 'POST' || request.method === 'DELETE')) {
     if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});

@@ -473,6 +473,7 @@ final class HealthReader: @unchecked Sendable {
             rest += await daily(.walkingHeartRateAverage, unit: .count().unitDivided(by: .minute()), type: "daily-walking-heart-rate", prefix: "whr", from: start, to: now)
             rest += await daily(.heartRateRecoveryOneMinute, unit: .count().unitDivided(by: .minute()), type: "daily-heart-rate-recovery", prefix: "hrr", from: start, to: now)
             rest += await zones(from: from(30), to: now)
+            rest += await wearHours(from: from(30), to: now)
         }
         if categories.contains(.breathing) {
             let start = from(90)
@@ -598,9 +599,11 @@ final class HealthReader: @unchecked Sendable {
         }
     }
 
-    private func statistics(_ type: HKQuantityType, options: HKStatisticsOptions, from: Date, to: Date, step: DateComponents) async -> [HKStatistics] {
-        await withCheckedContinuation { continuation in
-            let query = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: HKQuery.predicateForSamples(withStart: from, end: to, options: []),
+    private func statistics(_ type: HKQuantityType, options: HKStatisticsOptions, from: Date, to: Date, step: DateComponents, predicate extra: NSPredicate? = nil) async -> [HKStatistics] {
+        let range = HKQuery.predicateForSamples(withStart: from, end: to, options: [])
+        let predicate = extra.map { NSCompoundPredicate(andPredicateWithSubpredicates: [range, $0]) } ?? range
+        return await withCheckedContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(quantityType: type, quantitySamplePredicate: predicate,
                                                     options: options, anchorDate: calendar.startOfDay(for: from), intervalComponents: step)
             query.initialResultsHandler = { [closed] _, results, error in
                 closed.note(error)
@@ -617,6 +620,17 @@ final class HealthReader: @unchecked Sendable {
         await statistics(HKQuantityType(id), options: .cumulativeSum, from: from, to: to, step: DateComponents(hour: 1)).compactMap { s -> AppleRecord? in
             guard let value = s.sumQuantity()?.doubleValue(for: unit), value > 0 else { return nil }
             return AppleRecord(type: type, id: prefix + ":" + stamp(s.startDate), start: stamp(s.startDate), end: stamp(s.endDate), value: (value * 10).rounded() / 10)
+        }
+    }
+
+    /// The hours a day the Apple Watch measured heart rate: how long it was worn. The server
+    /// takes the night and the day from the device worn most (src/source-priority.js).
+    private func wearHours(from: Date, to: Date) async -> [AppleRecord] {
+        let watch = HKQuery.predicateForObjects(withDeviceProperty: HKDevicePropertyKeyModel, allowedValues: ["Watch"])
+        let hours = await statistics(HKQuantityType(.heartRate), options: .discreteAverage, from: from, to: to, step: DateComponents(hour: 1), predicate: watch)
+            .filter { $0.averageQuantity() != nil }
+        return Dictionary(grouping: hours) { day($0.startDate) }.map { date, worn in
+            AppleRecord(type: "daily-wear-hours", id: "wear:" + date, date: date, value: Double(worn.count))
         }
     }
 

@@ -1912,3 +1912,8 @@
 "Opravit návrh" = "Fix the proposal";
 "Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
 "Opravuji…" = "Fixing…";
+/* Zdroje dat: Odkud brát data */
+"Spánek a noc" = "Sleep and night";
+"Pohyb přes den" = "Movement during the day";
+"Automaticky" = "Automatic";
+"Automaticky bere zdroj s nejúplnějšími a nejstabilnějšími daty." = "Automatic takes the source with the most complete and steady data.";

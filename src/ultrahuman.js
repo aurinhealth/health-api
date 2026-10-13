@@ -24,6 +24,7 @@ import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from '.
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from './user-time.js';
 import { L } from './lang.js';
+import { resolveSources } from './source-priority.js';
 
 export const SOURCE = 'ultrahuman';
 const STATE_COOKIE = 'pfd_ultrahuman_oauth_state';
@@ -34,10 +35,8 @@ const API = 'https://partner.ultrahuman.com/api/partners/v1';
 export const ULTRAHUMAN_SCOPES = ['ring_data', 'profile'];
 // The first import reaches back as far as readiness compares (its 60-day baseline).
 export const FIRST_IMPORT_DAYS = 61;
-// Data types the ring sends; on its days the other wearables' rows of these types step aside.
+// Data types the ring sends; which device's night counts is source-priority.js's call.
 export const RING_TYPES = ['daily-resting-heart-rate', 'daily-heart-rate-variability', 'daily-vo2-max', 'daily-skin-temperature-deviation', 'sleep'];
-const OTHERS = "('apple-health','google-wearables')";
-const DAY_OF = "substr(COALESCE(sample_time,end_time,start_time),1,10)";
 
 export function ultrahumanConfigured(env) {
   return Boolean(String(env.ULTRAHUMAN_CLIENT_ID || '').trim() && String(env.ULTRAHUMAN_CLIENT_SECRET || '').trim());
@@ -172,22 +171,6 @@ const upsert = (db, userId, r) => db.prepare(
    WHERE health_datapoints.payload_json IS NOT excluded.payload_json OR health_datapoints.start_time IS NOT excluded.start_time OR health_datapoints.end_time IS NOT excluded.end_time`
 ).bind(userId, SOURCE, r.data_type, r.external_id, r.sample_time, r.start_time, r.end_time, r.value_numeric, r.value_unit, healthPointJson(r.payload));
 
-// Apple and Google rows of the types and days the ring has become duplicates.
-// Also run after an Apple Health upload or a Google sync (their new rows of a ring day).
-export async function preferUltrahuman(db, userId, types = RING_TYPES, since = '2000-01-01') {
-  let changed = 0;
-  for (const type of types.filter(t => RING_TYPES.includes(t))) {
-    const result = await db.prepare(
-      `UPDATE health_datapoints SET record_role = 'duplicate', matched_activity_id = '${SOURCE}', match_confidence = 0, updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = ? AND source_family IN ${OTHERS} AND data_type = ? AND COALESCE(sample_time,end_time,start_time) >= ?
-         AND COALESCE(record_role,'primary') != 'duplicate'
-         AND ${DAY_OF} IN (SELECT DISTINCT ${DAY_OF} FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? AND COALESCE(sample_time,end_time,start_time) >= ?)`
-    ).bind(userId, type, since, userId, type, since).run();
-    changed += Number(result?.meta?.changes || 0);
-  }
-  return changed;
-}
-
 // Imports the last `days` days (today included) into the user's data.
 export async function syncUltrahuman(env, { days = 3, fetchImpl = fetch, today = localDate(new Date()) } = {}) {
   if (!readUltrahumanTokens(env)) return { status: 'skipped' };
@@ -210,14 +193,14 @@ export async function syncUltrahuman(env, { days = 3, fetchImpl = fetch, today =
   }
   // A night ends on the morning of its day, a day earlier in UTC west of Greenwich.
   const since = new Date(Date.parse(oldest + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
-  const replaced = saved ? await preferUltrahuman(env.DB, userId, RING_TYPES, since) : 0;
+  const replaced = saved ? await resolveSources(env.DB, userId, { part: 'night', since }) : 0;
   await markConnectionOk(env, SOURCE);
   return { status: failed && !saved ? 'error' : 'ok', saved, failed, replaced };
 }
 
 // Disconnecting: Ultrahuman gets its access back and the ring's data is deleted
-// (as the application to Ultrahuman says); the days it covered go back to the
-// Apple and Google rows it had replaced.
+// (as the application to Ultrahuman says); the nights it covered go back to the
+// Apple and Google rows set aside for it.
 export async function disconnectUltrahuman(env, { fetchImpl = fetch } = {}) {
   const tokens = readUltrahumanTokens(env);
   if (tokens && ultrahumanConfigured(env)) {
@@ -228,11 +211,8 @@ export async function disconnectUltrahuman(env, { fetchImpl = fetch } = {}) {
     }).catch(() => null);
   }
   const userId = env.USER_ID ?? env.DB.userId;
-  await env.DB.batch([
-    env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}'`).bind(userId),
-    env.DB.prepare(`UPDATE health_datapoints SET record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
-      WHERE user_id = ? AND source_family IN ${OTHERS} AND record_role = 'duplicate' AND matched_activity_id = '${SOURCE}'`).bind(userId)
-  ]);
+  await env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}'`).bind(userId).run();
+  await resolveSources(env.DB, userId, { part: 'night', since: new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10) });
   await deleteConnectionSecret(env, SOURCE);
   await clearConnectionHealth(env, SOURCE);
   delete env.ULTRAHUMAN_TOKEN;

@@ -17,7 +17,7 @@
 import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
 import { saveAppleFood } from "./apple-food.js";
-import { preferUltrahuman } from "./ultrahuman.js";
+import { resolveSources, MANAGED_TYPES } from "./source-priority.js";
 
 export const SOURCE = "apple-health";
 export const WEARABLE_FAMILIES = "('google-wearables','apple-health')";
@@ -41,7 +41,9 @@ const DAILY = {
   "daily-walking-heart-rate": ["dailyWalkingHeartRate", "beatsPerMinute", "bpm", 40, 200],
   "daily-heart-rate-recovery": ["dailyHeartRateRecovery", "beatsPerMinute", "bpm", 1, 120],
   // Apple Watch's wrist temperature in sleep, one value a night on the day of waking up.
-  "daily-wrist-temperature": ["dailyWristTemperature", "temperatureCelsius", "°C", 30, 42]
+  "daily-wrist-temperature": ["dailyWristTemperature", "temperatureCelsius", "°C", 30, 42],
+  // Hours of the day Apple Watch measured heart rate in, i.e. was worn (source-priority.js).
+  "daily-wear-hours": ["dailyWearHours", "hours", "h", 0, 24]
 };
 const INTERVAL = {
   steps: ["steps", "count", "count", 0, 100000],
@@ -191,14 +193,17 @@ export async function replaceGoogleWithApple(db, userId, types, since) {
   return changed;
 }
 
-// After a Google Health sync: new Google rows on days Apple Health covers.
+// After a Google Health sync: which copy of the new rows counts. Measurements
+// several devices take follow source-priority.js; the rest (workouts, weight)
+// keep Apple Health's on the days it has them.
 const appleUsers = new WeakMap();
 export async function afterGoogleSync(env, type, points) {
   if (!points?.length || !env?.DB) return 0;
   try {
+    const since = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10);
+    if (MANAGED_TYPES.includes(type)) return await resolveSources(env.DB, env.USER_ID, { types: [type], since });
     let on = appleUsers.get(env);
     if (on === undefined) { on = Boolean(await env.DB.prepare("SELECT 1 FROM sync_status WHERE user_id = ? AND sync_name = ? AND status != 'disconnected'").bind(env.USER_ID, STATUS).first()); appleUsers.set(env, on); }
-    await preferUltrahuman(env.DB, env.USER_ID, [type], new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10));
     if (!on) return 0;
     return await replaceGoogleWithApple(env.DB, env.USER_ID, [type], new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10));
   } catch (error) { console.error("Apple Health dedupe failed", error.message); return 0; }
@@ -250,9 +255,14 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // Only the rows accepted above set how far back Google's copies are replaced.
   const types = [...new Set(rows.map(r => r.data_type))];
   const oldest = rows.map(r => String(r.sample_time || r.end_time || r.start_time || "").slice(0, 10)).filter(Boolean).sort()[0];
-  const replaced = types.length && oldest ? await replaceGoogleWithApple(db, userId, types, oldest) : 0;
-  // The Ultrahuman ring's nights stay ahead of the copies it writes to Apple Health.
-  if (types.length && oldest) await preferUltrahuman(db, userId, types, oldest);
+  const other = types.filter(t => !MANAGED_TYPES.includes(t));
+  let replaced = other.length && oldest ? await replaceGoogleWithApple(db, userId, other, oldest) : 0;
+  // Nights, steps and energy several devices measure (and the hours worn that
+  // decide between them) go by source-priority.js; a night ends a day later in UTC.
+  if (oldest && types.some(t => MANAGED_TYPES.includes(t) || t === "daily-wear-hours")) {
+    const since = new Date(Date.parse(oldest + "T12:00:00Z") - 86400000).toISOString().slice(0, 10);
+    replaced += await resolveSources(db, userId, { types: types.includes("daily-wear-hours") ? [...types, "steps", "active-energy-burned", "distance", "time-in-heart-rate-zone"] : types, since });
+  }
   // Food and drinks other apps logged (apple-food.js), with their own window.
   const food = body.food && typeof body.food === "object" ? await saveAppleFood(db, userId, body.food) : { saved: 0, removed: 0 };
   const categories = (Array.isArray(body.categories) ? body.categories : []).map(String).filter(c => /^[a-z]{2,20}$/.test(c)).slice(0, 12);

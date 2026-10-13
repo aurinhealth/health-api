@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { handleUltrahumanOAuth, ultrahumanRows, syncUltrahuman, disconnectUltrahuman, ultrahumanAccessToken, preferUltrahuman } from "../src/ultrahuman.js";
+import { handleUltrahumanOAuth, ultrahumanRows, syncUltrahuman, disconnectUltrahuman, ultrahumanAccessToken } from "../src/ultrahuman.js";
+import { resolveSources } from "../src/source-priority.js";
 import { saveAppleHealth } from "../src/apple-health.js";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { connectionStatus } from "../src/connections.js";
@@ -128,7 +129,7 @@ test("the ring's nights replace the Apple copies of those days, readiness reads 
   await saveAppleHealth(db, 1, { records: [{ type: "daily-heart-rate-variability", id: "hrv:2026-10-11", date: "2026-10-11", value: 39, metric: "sdnn" }] }, { now: Date.parse("2026-10-12T12:00:00Z") });
   assert.equal(rows(raw, "source_family='apple-health' AND sample_time='2026-10-11'")[0].record_role, "duplicate");
   // Running it again changes nothing.
-  assert.equal(await preferUltrahuman(db, 1), 0);
+  assert.equal(await resolveSources(db, 1, { since: "2026-09-01" }), 0);
 });
 
 test("a refused token marks the connection for reconnecting", async () => {

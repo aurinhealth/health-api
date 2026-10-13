@@ -532,6 +532,10 @@ final class APIClient: @unchecked Sendable {
         let _: JSONValue = try await send("/app/api/connections", method: "POST", body: ["provider": JSONValue.string("intervals"), "key": .string(key)])
     }
 
+    func saveSourcePriority(_ priority: SourcePriority) async throws {
+        let _: JSONValue = try await send("/app/api/sources/priority", method: "POST", body: priority)
+    }
+
     func disconnect(provider: String) async throws {
         let _: JSONValue = try await send("/app/api/connections", method: "DELETE", body: ["provider": JSONValue.string(provider)])
     }
