@@ -78,6 +78,7 @@ struct TodayContent: View {
         }
 
         if model.selectedDate == nil && !model.demo {
+            DataAgePill()
             ConnectionProblemCard()
         }
 
@@ -90,6 +91,10 @@ struct TodayContent: View {
 
         if model.selectedDate == nil {
             MorningCheckinCard(feeling: today.checkin, top: 20)
+            // Cycle tracking: the morning question, or the day's log.
+            if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
+                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+            }
         }
 
         // Today's weather at the week plan's place (or the offer to set
@@ -122,6 +127,53 @@ struct TodayContent: View {
 
         CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil).padding(.top, 32)
         RecoveryTodayCard(today: today).padding(.top, 12)
+    }
+}
+
+/// "data ze včera 21:10 · obnovit" under the day when Apple Health last
+/// reached the server more than 3 hours ago; nothing while it is fresh.
+/// A tap syncs and reloads Today.
+struct DataAgePill: View {
+    @Environment(AppModel.self) private var model
+    private var health: AppleHealth { AppleHealth.shared }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 300)) { context in
+            if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: context.date) {
+                Button { Task { await model.refresh() } } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock").font(.system(size: 11, weight: .semibold))
+                        Text(verbatim: text + L10n.tr(" · obnovit"))
+                    }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Palette.amber)
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .background(Palette.amberSoft, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(model.loading || health.syncing)
+                // Under the day's name, past its back arrow.
+                .padding(.leading, 34)
+                .padding(.top, 2)
+            }
+        }
+    }
+
+    /// "data z 6:42", "data ze včera 21:10" or "data z 9. 10. 21:10" once the
+    /// last sync is over 3 hours old; nil before.
+    static func text(last: Date, now: Date, calendar: Calendar = .current) -> String? {
+        guard now.timeIntervalSince(last) > 3 * 3600 else { return nil }
+        let time = ClockText.format(last)
+        if calendar.isDate(last, inSameDayAs: now) { return L10n.f("data z %@", time) }
+        if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(last, inSameDayAs: yesterday) {
+            return L10n.f("data ze včera %@", time)
+        }
+        let day = DateFormatter()
+        day.locale = Fmt.locale
+        day.timeZone = calendar.timeZone
+        day.dateFormat = L10n.isEnglish ? "MMM d" : "d. M."
+        return L10n.f("data z %@", day.string(from: last) + " " + time)
     }
 }
 
