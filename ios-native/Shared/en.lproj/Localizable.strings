@@ -1660,3 +1660,14 @@
 "Spárovat se záznamem z hodinek" = "Pair with the watch's record";
 "Trénink smazán" = "Workout deleted";
 "Trénink zahozen" = "Workout discarded";
+"Levá strana dala o %@ opakování míň. Pravou dělej jen tolik co levou, ať se rozdíl nezvětšuje." = "Your left side did %@ fewer reps. Do only as many with the right, so the gap doesn't grow.";
+"Pravá strana dala o %@ opakování míň. Levou dělej jen tolik co pravou, ať se rozdíl nezvětšuje." = "Your right side did %@ fewer reps. Do only as many with the left, so the gap doesn't grow.";
+"%@: pravou stranu dorovnáváme, dokud zaostává, dostane jednu sérii navíc." = "%@: we're evening out your right side; while it lags it gets one extra set.";
+"%@: levou stranu dorovnáváme, dokud zaostává, dostane jednu sérii navíc." = "%@: we're evening out your left side; while it lags it gets one extra set.";
+"L o %@ %% slabší" = "L %@ %% weaker";
+"P o %@ %% slabší" = "R %@ %% weaker";
+"vyrovnané" = "balanced";
+"Posilovna · historie" = "Gym · history";
+"Levá a pravá strana" = "Left and right side";
+"Obě strany najednou" = "Both sides at once";
+"Každá strana zvlášť" = "Each side separately";

@@ -28,6 +28,8 @@ struct TrainingModeView: View {
     @State private var editing = false
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var history: GymHistory = .empty
+    /// How each exercise was done last time: "sides" or "both".
+    @State private var sideChoices: [String: String] = [:]
     /// The heart rate zones' lower bounds (Nastavení → Tréninkové zóny).
     @State private var zoneLows: [Double] = []
     @State private var technique: String?
@@ -171,7 +173,11 @@ struct TrainingModeView: View {
 
             chips(day, exercise, set)
 
+            sidesPicker(exercise)
+
             setTable(exercise, set, last)
+
+            if let note = GymSides.note(exercise) { CoachNote(text: note).padding(.top, 12) }
 
             if let set {
                 effort.padding(.top, 14)
@@ -188,6 +194,34 @@ struct TrainingModeView: View {
         .onChange(of: set?.row) { _, _ in prefill(set) }
         .onAppear { prefill(set) }
         .task(id: exercise.name) { await loadMuscles(day) }
+    }
+
+    /// "Obě strany najednou | Každá strana zvlášť": the next time the exercise
+    /// comes, it comes the way it was done last (src/gym-sides.js).
+    private func sidesPicker(_ exercise: GymExercise) -> some View {
+        Picker("", selection: Binding(get: { exercise.bySides }, set: { on in Task { await setSides(exercise, on) } })) {
+            Text("Obě strany najednou").tag(false)
+            Text("Každá strana zvlášť").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .disabled(saving || !exercise.sets.contains { !$0.done && !$0.warmup })
+        .padding(.top, 12)
+    }
+
+    private func setSides(_ exercise: GymExercise, _ on: Bool) async {
+        guard var next = day, let offset = next.exercises.firstIndex(where: { $0.id == exercise.id }) else { return }
+        next.setSides(at: offset, on)
+        day = next
+        sideChoices[exercise.name] = on ? "sides" : "both"
+        guard !model.demo else { return }
+        saving = true
+        defer { saving = false }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
     }
 
     private func setTable(_ exercise: GymExercise, _ set: GymSet?, _ last: GymHistory.Session?) -> some View {
@@ -217,7 +251,8 @@ struct TrainingModeView: View {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? ""
         let shownReps: String = (s.done ? s.reps : s.plannedReps) ?? ""
-        return GymSetRow(label: s.warmup ? "W" : s.number,
+        // By sides the number shows on the L row only.
+        return GymSetRow(label: s.warmup ? "W" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
                          kgText: $kg, repsText: $reps) {
@@ -290,8 +325,10 @@ struct TrainingModeView: View {
 
     @ViewBuilder
     private func nextExercise(_ day: GymDay) -> some View {
-        if let next = day.exercises[safe: index + 1] {
-            Button { move(1) } label: {
+        // In a superset the partner comes next (A1, B1, A2…).
+        let partner = Self.supersetPartner(day.exercises, of: index)
+        if let target = partner ?? (day.exercises.indices.contains(index + 1) ? index + 1 : nil), let next = day.exercises[safe: target] {
+            Button { move(target - index) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
                         .frame(width: 34, height: 34).background(Palette.track, in: Circle())
@@ -624,6 +661,33 @@ struct TrainingModeView: View {
         return list[min(index, list.count - 1)]
     }
 
+    enum SupersetRest { case none, round, exercise }
+
+    /// The next exercise of the superset with sets left, other than this one.
+    static func supersetPartner(_ list: [GymExercise], of index: Int) -> Int? {
+        guard let letter = ExerciseOrder.letter(list[safe: index]?.superset) else { return nil }
+        let group = list.indices.filter { ExerciseOrder.letter(list[$0].superset) == letter }
+        guard let pos = group.firstIndex(of: index) else { return nil }
+        return (1..<max(group.count, 1)).map { group[(pos + $0) % group.count] }.first { list[$0].sets.contains { !$0.done } }
+    }
+
+    /// After a set of an exercise in a superset: its partner with sets left
+    /// (no rest between them), back to the first one after a round (a rest),
+    /// or past the superset when all of it is done. Nil outside a superset.
+    static func supersetTurn(_ list: [GymExercise], from index: Int) -> (index: Int, rest: SupersetRest)? {
+        guard let letter = ExerciseOrder.letter(list[safe: index]?.superset) else { return nil }
+        let group = list.indices.filter { ExerciseOrder.letter(list[$0].superset) == letter }
+        guard group.count > 1, let pos = group.firstIndex(of: index) else { return nil }
+        let open = Set(group.filter { list[$0].sets.contains { !$0.done } })
+        if open.isEmpty {
+            let after = list.indices.first { $0 > group.max()! && list[$0].sets.contains { !$0.done } }
+                ?? list.indices.first { list[$0].sets.contains { !$0.done } }
+            return (after ?? index, .exercise)
+        }
+        let target = (1...group.count).map { group[(pos + $0) % group.count] }.first { open.contains($0) }!
+        return (target, target > index ? .none : .round)
+    }
+
     private func nextSet(_ exercise: GymExercise) -> GymSet? {
         exercise.sets.first { !$0.done }
     }
@@ -659,6 +723,7 @@ struct TrainingModeView: View {
             original = day
             startAtFirstOpen()
             history = await model.gymHistory()
+            sideChoices = (try? await model.api.gymSides())?.choices ?? [:]
             if let profile = try? await model.api.trainingProfile() {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
             }
@@ -671,6 +736,12 @@ struct TrainingModeView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// By sides as last time, else by the exercise's name (GymSides).
+    private func sidesFor(_ name: String) -> Bool {
+        if let choice = sideChoices[name] { return choice == "sides" }
+        return GymSides.oneSided(name)
     }
 
     /// Opens on the first exercise with a set left.
@@ -714,7 +785,7 @@ struct TrainingModeView: View {
         if next.startedAt == nil { next.markStarted(Date()) }
         let suggestion = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name })
         let allDone = next.exercises.allSatisfy { $0.sets.allSatisfy(\.done) }
-        next.appendExercise(name, suggestion: suggestion)
+        next.appendExercise(name, suggestion: suggestion, sides: sidesFor(name))
         day = next
         restEnd = nil
         // Straight to the new exercise when nothing else is left.
@@ -824,7 +895,15 @@ struct TrainingModeView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
-        if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {
+        let otherSide = set.side == "L" && next.exercises[safe: index]?.sets.contains { $0.number == set.number && $0.side == "P" && !$0.done } == true
+        if otherSide {
+            // Left done: the right side straight after, no rest.
+            rest = 0
+        } else if !set.warmup, let turn = Self.supersetTurn(next.exercises, from: index) {
+            // A superset: A1, B1, A2, B2…, the rest only after each round.
+            index = turn.index
+            rest = turn.rest == .none ? 0 : turn.rest == .round ? restSets : restExercises
+        } else if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {
             index += 1
             rest = restExercises
         }

@@ -63,7 +63,7 @@ struct PlanEditorSheet: View {
             }
             .sheet(isPresented: $adding) {
                 ExercisePicker(catalog: catalog, used: Set(day.exercises.map(\.name))) { ex in
-                    day.insertExercise(ex.name, sets: Self.count(ex.sets) ?? 3, reps: ex.reps?.string ?? "10", catalog: catalog)
+                    day.insertExercise(ex.name, sets: Self.count(ex.sets) ?? 3, reps: ex.reps?.string ?? "10", catalog: catalog, sides: GymSides.oneSided(ex.name))
                 }
             }
         }

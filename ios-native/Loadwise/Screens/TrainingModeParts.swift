@@ -104,6 +104,8 @@ struct GymSetRow: View {
     enum Phase { case done, current, next }
 
     let label: String
+    /// "L" or "P" of a one-sided exercise done by sides.
+    var side: String? = nil
     let lastTime: String?
     let kg: String
     let reps: String
@@ -114,9 +116,14 @@ struct GymSetRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(label).font(.subheadline.weight(.semibold))
-                .foregroundStyle(state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
-                .frame(width: 26, alignment: .leading)
+            HStack(spacing: 6) {
+                Text(label).font(.subheadline.weight(.semibold))
+                    .foregroundStyle(state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
+                    .frame(width: side == nil ? 26 : 16, alignment: .leading)
+                if let side {
+                    Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
+                }
+            }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             field(kg, kgText, keyboard: .decimalPad)
