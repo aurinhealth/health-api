@@ -68,3 +68,15 @@ test("the store keeps the app's log over Apple Health's and merges partial write
   assert.deepEqual([kept.pill, kept.keepPlan], ["21:04", true]);
   assert.equal((await cycleInputs(db, "2026-10-12")).days.length, 4);
 });
+
+test("turning on 'Coach knows my cycle' records when, and turning it off clears it", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { saveCycleSettings } = await import("../src/cycle-store.js");
+  const db = scopedDb(createD1(), 1);
+  assert.equal((await saveCycleSettings(db, { enabled: true })).shareWithCoachAt, null);
+  const on = await saveCycleSettings(db, { shareWithCoach: true, shareWithCoachAt: "2000-01-01T00:00:00Z" });
+  assert.ok(on.shareWithCoachAt > "2026-");
+  assert.equal((await saveCycleSettings(db, { adaptTraining: false })).shareWithCoachAt, on.shareWithCoachAt);
+  assert.equal((await saveCycleSettings(db, { shareWithCoach: false })).shareWithCoachAt, null);
+});

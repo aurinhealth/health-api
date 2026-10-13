@@ -25,7 +25,11 @@ export async function getCycleSettings(db) {
 
 // Merges `changes` into the saved settings.
 export async function saveCycleSettings(db, changes) {
-  const next = normalizeCycleSettings({ ...(await getCycleSettings(db)), ...(changes && typeof changes === "object" ? changes : {}) });
+  const prev = await getCycleSettings(db);
+  const next = normalizeCycleSettings({ ...prev, ...(changes && typeof changes === "object" ? changes : {}) });
+  // When the athlete agreed to share the cycle with the AI coach (the consent
+  // sheet in Settings → Cycle), so the consent can be shown later.
+  next.shareWithCoachAt = next.shareWithCoach ? (prev.shareWithCoach && prev.shareWithCoachAt) || new Date().toISOString() : null;
   await db.prepare("INSERT INTO cycle_settings(user_id,settings_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET settings_json=excluded.settings_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(next)).run();
   return next;
 }

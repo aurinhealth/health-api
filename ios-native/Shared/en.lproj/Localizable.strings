@@ -1690,3 +1690,13 @@
 "vrátit" = "undo";
 "nastavit" = "set";
 "Kouč ví o cyklu" = "Coach knows my cycle";
+"Co to znamená" = "What this means";
+"Kouč pak plánuje a vysvětluje trénink i podle toho, kde v cyklu jsi." = "The coach then plans and explains your training with your cycle in mind.";
+"Co tím získáš" = "What you get";
+"Trénink, který sedí na to, jak se zrovna cítíš" = "Training that fits how you feel right now";
+"Srozumitelnější vysvětlení, proč ti kouč co radí" = "Clearer reasons behind the coach's advice";
+"Ohled na menstruaci při plánování dalších dní" = "Your period taken into account when planning the next days";
+"Co kouč uvidí" = "What the coach sees";
+"Kde v cyklu dnes jsi a co sis zapsala" = "Where you are in your cycle today and what you logged";
+"Starší záznamy ani přesná data" = "No older entries or exact dates";
+"Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči. Kdykoli ho vypneš a kouč je přestane dostávat." = "This is health data (GDPR Art. 9). By turning this on you explicitly consent to sharing it with the AI coach. Turn it off any time and the coach stops receiving it.";

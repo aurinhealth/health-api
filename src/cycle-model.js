@@ -54,6 +54,7 @@ export function normalizeCycleSettings(raw) {
     // The AI coach sees today's cycle (cycleForCoach) only when the athlete
     // turns this on: cycle data is special-category health data (GDPR art. 9).
     shareWithCoach: s.shareWithCoach === true,
+    shareWithCoachAt: s.shareWithCoach === true && typeof s.shareWithCoachAt === "string" ? s.shareWithCoachAt : null,
   };
 }
 
