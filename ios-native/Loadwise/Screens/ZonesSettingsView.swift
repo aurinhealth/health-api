@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// Tréninkové zóny: run and bike separately, thresholds, the zone preset (the
-/// same presets as Intervals.icu) and the resulting zones.
+/// Zóny: the maximum and resting heart rate first, then run and bike
+/// separately, thresholds, the zone preset (the same presets as Intervals.icu)
+/// and the resulting zones, the heart-rate ones also as a coloured bar.
 struct ZonesSettingsView: View {
     let store: SettingsStore
+    @State private var hrmax = ""
+    @State private var rhr = ""
+    @State private var heartOriginal: JSONObject = [:]
     @State private var sport = "run"
     @State private var ftp = ""
     @State private var lthr = ""
@@ -19,6 +23,16 @@ struct ZonesSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Zóny") {
+            if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            SettingsGroup(title: "Tep") {
+                SettingsField(title: "Maximální tep", text: $hrmax, unit: "bpm", keyboard: .numberPad, placeholder: suggested("hrmax"))
+                SettingsDivider()
+                SettingsField(title: "Klidový tep", text: $rhr, unit: "bpm", keyboard: .numberPad, placeholder: suggested("rhr"))
+            }
+            if let seen = seenMax {
+                MaxHeartSuggestion(bpm: seen) { hrmax = Fmt.int(seen) }
+            }
+
             Picker("Sport", selection: $sport) {
                 Text("Běh").tag("run")
                 Text("Kolo").tag("bike")
@@ -42,8 +56,8 @@ struct ZonesSettingsView: View {
         }
         // Also without a change while Intervals.icu has not taken the zones yet
         // (after connecting it again, one tap sends them).
-        .toolbar { SaveButton(enabled: changes != original || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true), saving: store.saving) { Task { await save() } } }
-        .onAppear(perform: fill)
+        .toolbar { SaveButton(enabled: changes != original || heart != heartOriginal || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true), saving: store.saving) { Task { await save() } } }
+        .onAppear { fill(); fillHeart() }
         .onChange(of: store.training) { fill() }
         .sheet(isPresented: $askKey) { IntervalsKeySheet { await store.load() } }
     }
@@ -67,9 +81,10 @@ struct ZonesSettingsView: View {
         }
         if let zones = t.runHrZones, !zones.isEmpty {
             SettingsGroup(title: "Tepové zóny pro běh") {
+                HeartZoneStrip(zones: zones)
                 ForEach(Array(zones.enumerated()), id: \.element.id) { i, z in
-                    if i > 0 { SettingsDivider() }
-                    ZoneRow(name: z.name, percent: nil, range: bpmRange(z))
+                    SettingsDivider()
+                    ZoneRow(name: z.name, percent: nil, range: bpmRange(z), color: HeartZoneStrip.color(i))
                 }
             }
         }
@@ -84,7 +99,7 @@ struct ZonesSettingsView: View {
             SettingsDivider()
             SettingsField(title: "Prahový tep", text: $lthr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.lthr.map { Fmt.int($0) } ?? "–")
             SettingsDivider()
-            SettingsField(title: "Maximální tep", text: $maxHr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.maxHr.map { Fmt.int($0) } ?? "–")
+            SettingsField(title: "Maximální tep na kole", text: $maxHr, unit: "bpm", keyboard: .numberPad, placeholder: t.resolved.maxHr.map { Fmt.int($0) } ?? "–")
         }
         SettingsGroup(title: "Výkonové zóny") {
             OptionListRow(title: "Předvolba", selection: $powerModel, options: t.powerZoneModels.map { ($0.id, $0.label) })
@@ -94,10 +109,12 @@ struct ZonesSettingsView: View {
             }
         }
         SettingsGroup(title: "Tepové zóny pro kolo") {
+            HeartZoneStrip(zones: t.hrZones)
+            SettingsDivider()
             OptionListRow(title: "Předvolba", selection: $hrModel, options: t.hrZoneModels.map { ($0.id, $0.label) })
-            ForEach(t.hrZones) { z in
+            ForEach(Array(t.hrZones.enumerated()), id: \.element.id) { i, z in
                 SettingsDivider()
-                ZoneRow(name: z.name, percent: nil, range: bpmRange(z))
+                ZoneRow(name: z.name, percent: nil, range: bpmRange(z), color: HeartZoneStrip.color(i))
             }
         }
     }
@@ -199,8 +216,92 @@ struct ZonesSettingsView: View {
         ]
     }
 
+    // MARK: Heart rate (the profile)
+
+    /// The worked-out value shown in an empty field.
+    private func suggested(_ key: String) -> String {
+        (store.suggestions[key]?.number).map { Fmt.int($0) } ?? "–"
+    }
+
+    /// The highest heart rate of the last months' workouts, when it is above
+    /// the typed maximum (an empty field already uses it).
+    private var seenMax: Double? {
+        guard case .object(let sources)? = store.suggestions["sources"], sources["hrmax"]?.string == "activities-6m",
+              let seen = store.suggestions["hrmax"]?.number, let typed = Double(hrmax.trimmingCharacters(in: .whitespaces)),
+              seen >= typed + 2 else { return nil }
+        return seen
+    }
+
+    private var heart: JSONObject { ["hrmax": .field(hrmax), "rhr": .field(rhr)] }
+
+    private func fillHeart() {
+        hrmax = store.profile["hrmax"]?.string ?? ""
+        rhr = store.profile["rhr"]?.string ?? ""
+        heartOriginal = heart
+    }
+
     private func save() async {
-        if await store.saveTraining(changes, writeIntervals: writeIntervals) { fill() }
+        if heart != heartOriginal {
+            guard await store.saveProfile(heart) else { return }
+            fillHeart()
+        }
+        if changes != original || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true) {
+            if await store.saveTraining(changes, writeIntervals: writeIntervals) { fill() }
+        }
+    }
+}
+
+/// "Z tréninků: max 196 · Použít": puts the seen maximum into the field.
+struct MaxHeartSuggestion: View {
+    let bpm: Double
+    let use: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "bolt.fill").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.amber)
+            Text(L10n.f("Z tréninků: max %@", Fmt.int(bpm))).font(.subheadline).foregroundStyle(Palette.ink)
+            Spacer(minLength: 8)
+            Button(action: use) {
+                Text("Použít").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                    .padding(.horizontal, 14).frame(height: 34)
+                    .background(Palette.button, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(Palette.amber.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.28), lineWidth: 1))
+    }
+}
+
+/// The heart-rate zones as one bar, each part as wide as its range of beats.
+struct HeartZoneStrip: View {
+    let zones: [TrainingProfileResponse.HRZone]
+
+    static let colors: [Color] = [Palette.faint, Palette.blue, Palette.green, Palette.amberBar, Palette.rust, Palette.indigo, Palette.indigo]
+    static func color(_ index: Int) -> Color { colors[min(index, colors.count - 1)] }
+
+    /// Each zone's width in beats; an open end gets a tenth of the whole span.
+    private var widths: [Double] {
+        let lows = zones.compactMap(\.bpmLow), highs = zones.compactMap(\.bpmHigh)
+        guard let bottom = (lows + highs).min(), let top = (lows + highs).max(), top > bottom else { return zones.map { _ in 1 } }
+        let open = (top - bottom) / 10
+        return zones.map { z in max(1, (z.bpmHigh ?? (z.bpmLow ?? top) + open) - (z.bpmLow ?? (z.bpmHigh ?? bottom) - open)) }
+    }
+
+    var body: some View {
+        let widths = widths, total = max(widths.reduce(0, +), 1)
+        GeometryReader { geo in
+            HStack(spacing: 3) {
+                ForEach(widths.indices, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Self.color(i))
+                        .frame(width: max(4, (geo.size.width - CGFloat(widths.count - 1) * 3) * widths[i] / total))
+                }
+            }
+        }
+        .frame(height: 12)
+        .padding(.horizontal, 16).padding(.vertical, 16)
+        .accessibilityHidden(true)
     }
 }
 
@@ -209,9 +310,11 @@ struct ZoneRow: View {
     let name: String
     let percent: String?
     let range: String
+    var color: Color? = nil
 
     var body: some View {
         HStack(spacing: 10) {
+            if let color { Circle().fill(color).frame(width: 9, height: 9).accessibilityHidden(true) }
             Text(name).font(.subheadline).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
             Spacer(minLength: 6)
             if let percent { Text(percent).font(.caption).foregroundStyle(Palette.faint) }
