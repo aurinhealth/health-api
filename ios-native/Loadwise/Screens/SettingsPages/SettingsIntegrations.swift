@@ -175,7 +175,7 @@ struct IntegrationDetailView: View {
 
             if current.id == "google" {
                 let missing = Set((current.missingPermissions ?? []).compactMap(\.string))
-                SettingsGroup(title: "Oprávnění", footer: "Oprávnění se mění na stránce Googlu: zaškrtni, co má Loadwise číst a zapisovat.") {
+                SettingsGroup(title: "Oprávnění", footer: "Oprávnění se mění na stránce Googlu: zaškrtni, co má Aurin číst a zapisovat.") {
                     ForEach(Array(Self.googlePermissions.enumerated()), id: \.offset) { index, permission in
                         if index > 0 { SettingsDivider() }
                         HStack {
@@ -261,7 +261,7 @@ struct AddIntegrationSheet: View {
                         }
                     }
                 }
-                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Loadwise jejich data dostane odtamtud.") {
+                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Aurin jejich data dostane odtamtud.") {
                     Link(destination: URL(string: "https://intervals.icu/settings")!) {
                         SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.indigo), title: "Přes Intervals.icu",
                                     subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura, Strava")

@@ -86,7 +86,7 @@ final class AppleHealthExport {
         configuration.activityType = Self.activityType(activity.sport)
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: HKDevice.local())
         var meta = metadata("workout:" + activity.key)
-        meta[HKMetadataKeyWorkoutBrandName] = "Loadwise"
+        meta[HKMetadataKeyWorkoutBrandName] = "Aurin"
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 builder.beginCollection(withStart: start) { _, error in

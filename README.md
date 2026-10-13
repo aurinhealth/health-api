@@ -1,6 +1,6 @@
 # health-api
 
-Cloudflare Worker za aplikací **Loadwise** pro iPhone (`ios-native/`, API na `https://petrfitnessdata.eu/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
+Cloudflare Worker za aplikací **Aurin** (dříve Loadwise) pro iPhone (`ios-native/`, API na `https://aurin.health/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
 
 ## Lokálně
 
@@ -30,7 +30,7 @@ Vzhled veřejného webu: barvy a velikosti písma jsou tokeny v `src/design-syst
 
 Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`, ve světlé paletě aplikace (`ios-native/Shared/Palette.swift`). Telefon na úvodní stránce je nakreslený v HTML podle obrazovky Dnes, takže web nepotřebuje snímky obrazovky; v `public/site/` je jen písmo Newsreader a obrázky pro sdílení `og.png` a `og-en.png`. Úvodní stránka se mění spolu s aplikací (pravidlo v `CLAUDE.md`). Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
 
-Domény: domov webu je `aurin.health` (`www.aurin.health` na ni přesměruje). Server odpovídá stejně i na `petrfitnessdata.eu`, kam míří starší verze aplikace a odkazy. Přesměrování OAuth (Google, Intervals.icu, Strava) a přístupové klíče zůstávají na adrese, na kterou požadavek přišel (`src/app-origin.js`), proto mají Google i Intervals.icu zapsané callbacky obou domén.
+Domény: domov webu je `aurin.health` (`www.aurin.health` na ni přesměruje). Aplikace mluví se serverem na `aurin.health` (`APIClient.server`) a cookie přihlášení ze staré adresy si při prvním spuštění přenese, takže se nikdo nemusí znovu přihlašovat. Server odpovídá stejně i na `petrfitnessdata.eu`, kam míří starší verze aplikace a odkazy. Přesměrování OAuth (Google, Intervals.icu, Strava) a přístupové klíče zůstávají na adrese, na kterou požadavek přišel (`src/app-origin.js`), proto mají Google i Intervals.icu zapsané callbacky obou domén.
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `strength-gateway.js`.
 

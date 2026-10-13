@@ -60,12 +60,12 @@ function reportEmail(env, { id, message, diagnostics, screenshot }) {
   let pretty = "";
   try { pretty = diagnostics ? JSON.stringify(JSON.parse(diagnostics), null, 2) : ""; } catch { pretty = diagnostics || ""; }
   const who = `${env.USER_EMAIL || "?"} (user ${env.USER_ID ?? env.DB?.userId})`;
-  const text = [`Loadwise problem report #${id}`, `From: ${who}`, "", message, "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
+  const text = [`Aurin problem report #${id}`, `From: ${who}`, "", message, "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Loadwise problem report #${id}</strong><br>From: ${escape(who)}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
+  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin problem report #${id}</strong><br>From: ${escape(who)}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
     + (screenshot ? `<p><img alt="Screenshot" style="max-width:360px;border:1px solid #ddd" src="data:image/jpeg;base64,${screenshot}"></p>` : "")
     + `<pre style="font-size:12px;background:#f4f4f5;padding:12px;white-space:pre-wrap">${escape(pretty || "none")}</pre></body></html>`;
-  return { subject: `Loadwise: problem report #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}`, text, html };
+  return { subject: `Aurin: problem report #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}`, text, html };
 }
 
 export function supportAddress(env) {

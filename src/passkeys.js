@@ -114,7 +114,7 @@ export async function handlePasskeyLogin(request, env, pathname) {
     ? await db.prepare("SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = ?").bind(credential.id).first()
     : null;
   // unknownCredential lets the browser drop a passkey that no longer exists here.
-  if (!stored) return json({ message: "Tenhle přístupový klíč Loadwise nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.", unknownCredential: true, rpId }, 401);
+  if (!stored) return json({ message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.", unknownCredential: true, rpId }, 401);
   // The passkey names the account it belongs to; it has to be the account it is stored with.
   if (credential.response?.userHandle !== stored.user_handle) return json({ message: NOT_VERIFIED }, 401);
   let result;
@@ -151,7 +151,7 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
     if (!challenge) return json({ message: "Zkus to za pár minut." }, 429);
     return json({
       challenge,
-      rp: { id: rpId, name: "Loadwise" },
+      rp: { id: rpId, name: "Aurin" },
       user: { id: userHandle, name: user.email, displayName: user.name || user.email },
       pubKeyCredParams: SUPPORTED_ALGORITHMS.map(alg => ({ type: "public-key", alg })),
       timeout: CHALLENGE_SECONDS * 1000,
@@ -175,7 +175,7 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
     const inserted = await db.prepare(`INSERT INTO user_passkeys(id, user_id, user_handle, public_key, alg, sign_count, transports, name, backed_up)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM user_passkeys WHERE user_id = ?) < ? ON CONFLICT(id) DO NOTHING`)
       .bind(result.credentialId, user.id, issued.user_handle, JSON.stringify(result.publicKey), result.alg, result.signCount, JSON.stringify(result.transports), name, result.backedUp ? 1 : 0, user.id, MAX_PASSKEYS).run();
-    if (!(Number(inserted.meta?.changes) > 0)) return json({ message: "Tenhle přístupový klíč už v Loadwise je." }, 409);
+    if (!(Number(inserted.meta?.changes) > 0)) return json({ message: "Tenhle přístupový klíč už v Aurinu je." }, 409);
     // Someone who got into the account cannot add a way back in unnoticed.
     if (emailConfigured(env)) {
       const notice = sendEmail(env, { to: user.email, ...passkeyAddedEmail(requestLanguage(request), name) }).catch(error => console.error("Passkey notice e-mail failed", error?.code || error?.message));
