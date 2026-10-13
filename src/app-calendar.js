@@ -197,7 +197,7 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
     const gymSession = byId.get("gym:" + date);
     if (gymSession && gymPlan) {
       items.push({
-        id: gymSession.id, sport: "strength", status: gymSession.status, title: gymSession.title, date, time: null, minutes: null, km: null, kcal: null, activityId: null, eventId: null, exercises: gymPlan.exercises.length,
+        id: gymSession.id, sport: gymSession.sport || "strength", ...(gymPlan.type ? { type: gymPlan.type, source: "gym" } : {}), status: gymSession.status, title: gymSession.title, date, time: null, minutes: null, km: null, kcal: null, activityId: null, eventId: null, exercises: gymPlan.exercises.length,
         ...(gymSession.adherence ? { adherence: gymSession.adherence } : {}), ...(gymSession.adherenceReason ? { adherenceReason: gymSession.adherenceReason } : {})
       });
     }

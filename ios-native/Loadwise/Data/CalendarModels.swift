@@ -179,4 +179,6 @@ struct ActivityTypeChange: Decodable {
     /// Where the change went ("intervals") and where it stays as it was.
     let sent: [String]?
     let kept: [String]?
+    /// Made in the app (gym:<date>, manual:<id>): its Apple Health copy is replaced here.
+    var key: String? = nil
 }

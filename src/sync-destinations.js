@@ -180,7 +180,9 @@ export function normalizeActivity(input = {}) {
   const startLocal = timed ? start.slice(0, 16) + ':00' : date + 'T12:00:00';
   const startUtc = timed && /(Z|[+-]\d{2}:?\d{2})$/.test(raw) && Number.isFinite(Date.parse(raw)) ? new Date(raw).toISOString() : null;
   const rpe = Number(input.rpe);
-  return { key, sport, name, date, startLocal, startUtc, minutes: Math.round(minutes), notes: String(input.notes || '').slice(0, 2000), rpe: Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null };
+  // type: the Intervals.icu type the user chose (Změnit typ aktivity).
+  const type = /^[A-Za-z]{2,40}$/.test(String(input.type || '')) ? String(input.type) : null;
+  return { key, sport, ...(type ? { type } : {}), name, date, startLocal, startUtc, minutes: Math.round(minutes), notes: String(input.notes || '').slice(0, 2000), rpe: Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null };
 }
 
 const intervalsType = sport => ({ gym: 'WeightTraining', strength: 'WeightTraining', run: 'Run', ride: 'Ride', walk: 'Walk', swim: 'Swim', yoga: 'Yoga' }[sport] || 'Workout');
@@ -190,7 +192,7 @@ const intervalsType = sport => ({ gym: 'WeightTraining', strength: 'WeightTraini
 export function intervalsActivity(userId, activity) {
   const body = {
     start_date_local: activity.startLocal,
-    type: intervalsType(activity.sport),
+    type: activity.type || intervalsType(activity.sport),
     name: activity.name,
     moving_time: activity.minutes * 60,
     elapsed_time: activity.minutes * 60,
@@ -238,10 +240,11 @@ async function pushIntervals(env, row, { fetchImpl }) {
 // record (its resource name) is patched instead of made again.
 const GOOGLE_EXERCISE = /^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[^/?#]+$/;
 const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'EXERCISE');
+const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL_RUNNING', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'INDOOR_BIKING', MountainBikeRide: 'MOUNTAIN_BIKING', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
 export function googleExercise(activity) {
   const start = new Date(activity.startUtc ? Date.parse(activity.startUtc) : Date.parse(activity.startLocal + 'Z'));
   const end = new Date(+start + activity.minutes * 60000);
-  const exercise = { interval: { startTime: start.toISOString(), endTime: end.toISOString() }, exerciseType: googleExerciseType(activity.sport), displayName: activity.name.slice(0, 80), activeDuration: activity.minutes * 60 + 's' };
+  const exercise = { interval: { startTime: start.toISOString(), endTime: end.toISOString() }, exerciseType: GOOGLE_OUT[activity.type] || googleExerciseType(activity.sport), displayName: activity.name.slice(0, 80), activeDuration: activity.minutes * 60 + 's' };
   if (activity.notes) exercise.notes = activity.notes.slice(0, 1000);
   return { exercise };
 }

@@ -69,6 +69,7 @@ export const PERSONAL_TABLES = {
   // calories (activity-energy-choices.js).
   manual_activity_pairs: { pk: ["user_id", "planned_id"] },
   coach_picks: { pk: ["user_id", "date"] },
+  activity_type_overrides: { pk: ["user_id", "activity_key"] },
   activity_energy_choices: { pk: ["user_id", "activity_id"] },
   // The app's push device tokens and the once-a-day guard of the pushes (push.js).
   push_tokens: { pk: ["user_id", "token"] },
