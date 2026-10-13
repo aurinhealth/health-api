@@ -236,6 +236,14 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       return json({ status: "ok", workout: await viewFor(env, await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, one[1]).first()) });
     }
     if (one && request.method === "DELETE") {
+      // An own workout takes the links it was shared by with it (the same
+      // workout, word for word); friends keep the copies they saved.
+      const own = await env.DB.prepare("SELECT template_json FROM saved_workouts WHERE user_id=? AND id=? AND source='own'").bind(env.USER_ID, one[1]).first();
+      if (own) {
+        const db = env.RAW_DB || env.DB;
+        await ensureShareTable(db);
+        await db.prepare("DELETE FROM workout_shares WHERE user_id=? AND template_json=?").bind(env.USER_ID, own.template_json).run();
+      }
       await env.DB.prepare("DELETE FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, one[1]).run();
       return json({ status: "ok" });
     }

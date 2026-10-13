@@ -213,3 +213,16 @@ test("a planned ride, or the plan a done one fulfilled, turns into an own workou
   assert.equal((await call(raw, 2, "GET", "/app/api/my-workouts/from-planned?id=planned:77")).status, 404);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM saved_workouts").get().n, 0, "nothing is saved");
 });
+
+test("deleting an own workout ends the links it was shared by, not a friend's saved copy", async () => {
+  const raw = createD1();
+  const saved = await call(raw, 1, "POST", "/app/api/my-workouts", legs);
+  const shared = await call(raw, 1, "POST", "/app/api/shares", legs);
+  const other = await call(raw, 1, "POST", "/app/api/shares", { ...legs, name: "Jiné nohy" });
+  const friend = await call(raw, 2, "POST", "/app/api/my-workouts", { fromShare: shared.body.id });
+  assert.equal(friend.status, 200);
+  await call(raw, 1, "DELETE", "/app/api/my-workouts/" + saved.body.workout.id);
+  assert.equal((await call(raw, 2, "GET", "/app/api/shares/" + shared.body.id)).status, 404);
+  assert.equal((await call(raw, 2, "GET", "/app/api/shares/" + other.body.id)).status, 200, "another workout's link stays");
+  assert.equal((await call(raw, 2, "GET", "/app/api/my-workouts")).body.workouts.length, 1, "the friend keeps the copy");
+});

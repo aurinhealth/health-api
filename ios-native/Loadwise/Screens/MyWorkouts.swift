@@ -101,7 +101,7 @@ struct MyWorkoutsView: View {
         .confirmationDialog("Smazat trénink?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { if let w = deleting { Task { await delete(w) } } }
         } message: {
-            Text(deleting?.name ?? "")
+            Text(deleting.map { $0.fromFriend ? $0.name : $0.name + "\n" + L10n.tr("Odkazy, kterými jsi ho poslal, přestanou fungovat.") } ?? "")
         }
     }
 
