@@ -1907,3 +1907,20 @@
 "Opravit návrh" = "Fix the proposal";
 "Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
 "Opravuji…" = "Fixing…";
+
+/* A done activity: Upravit kalorie, Smazat aktivitu (ActivityEditing.swift) */
+"Upravit kalorie" = "Edit calories";
+"Smazat aktivitu" = "Delete activity";
+"Smazat i v Intervals.icu" = "Delete in Intervals.icu too";
+"Vrátit hodnotu zařízení" = "Back to the device's number";
+"Změní se jen v Aurinu, zdroj aktivity zůstane beze změny." = "Changes in Aurin only; the activity's source stays as it is.";
+"Nepovedlo se" = "That didn't work";
+"Zadej kalorie mezi 1 a 6000." = "Enter calories between 1 and 6000.";
+"Trénink zapsaný v Aurinu zmizí i z Intervals.icu, kam ho Aurin poslal." = "The workout logged in Aurin also goes from Intervals.icu, where Aurin sent it.";
+"Jen v Aurinu: Intervals.icu ho dál má, Aurin ho nepočítá." = "In Aurin only: Intervals.icu keeps it, Aurin stops counting it.";
+"Apple Health dovolí smazat trénink jen aplikaci, která ho zapsala. Aurin ho přestane počítat." = "Apple Health lets only the app that recorded a workout delete it. Aurin stops counting it.";
+"Google Health dovolí smazat trénink jen ve své aplikaci. Aurin ho přestane počítat." = "Google Health lets you delete a workout only in its own app. Aurin stops counting it.";
+"upraveno, zařízení %@" = "edited, device %@";
+"upraveno" = "edited";
+"odhad, hodinky %@" = "estimate, watch %@";
+"Kalorie %@ (%@): %@ kcal" = "Calories of %@ (%@): %@ kcal";

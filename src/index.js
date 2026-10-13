@@ -1334,6 +1334,8 @@ export async function matchActivities(env, { days = null } = {}) {
      AND ((source_family IN ('intervals','local') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
      -- Google copies of Apple Health workouts stay out (apple-health.js).
      AND NOT (source_family = 'google-wearables' AND COALESCE(matched_activity_id,'') = 'apple-health')
+     -- Deleted in Aurin (activity-edits.js): stays hidden, pairs with nothing.
+     AND COALESCE(matched_activity_id,'') != 'deleted'
      AND start_time IS NOT NULL AND start_time >= ?
      ORDER BY start_time`
   ).bind(env.USER_ID, since).all()).results || [];
@@ -1841,7 +1843,9 @@ async function energyForDate(env, date) {
       return (name && name!=="unknown") || (type && type!=="unknown") || Number(a.durationHours||0)>0 || Number(a.calories||0)>0;
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
-  const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||''));
+  // Calories the user set in Aurin (activity-edits.js) are not checked again.
+  const edited=a=>a.payload?.loadwiseKcal!=null;
+  const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
     const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
     for(const activity of walking){
@@ -1855,7 +1859,7 @@ async function energyForDate(env, date) {
   // A lifting session's device calories are checked the same way; the energy
   // budget then plans with the estimate instead of an inflated number.
   for(const activity of completed){
-    if(activity.energyCheck)continue;
+    if(activity.energyCheck||edited(activity))continue;
     const check=strengthEnergyCheck(activity,weight?.value_numeric);
     if(check?.status==='review'||check?.status==='consistent'){activity.energyCheck=check;activity.caloriesForPlanning=check.status==='review'?check.estimated:activity.calories;}
   }
