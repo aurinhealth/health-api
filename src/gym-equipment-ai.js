@@ -134,7 +134,7 @@ function publicUrl(link) {
 
 async function fetchPage(link, fetchImpl) {
   try {
-    const r = await fetchImpl(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; LoadwiseBot/1.0; +https://petrfitnessdata.eu)" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    const r = await fetchImpl(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; AurinBot/1.0; +https://aurin.health)" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
     if (!r.ok || !/html/i.test(r.headers.get("content-type") || "")) return "";
     return (await r.text()).slice(0, 1_500_000);
   } catch { return ""; }

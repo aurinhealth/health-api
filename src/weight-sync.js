@@ -81,7 +81,7 @@ export async function writeGoogleWeight(token, date, value, fetchImpl = fetch) {
   const response = await fetchImpl("https://health.googleapis.com/v4/users/me/dataTypes/weight/dataPoints", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ weight: { sampleTime: { physicalTime: at, utcOffset: offsetSeconds + "s" }, weightGrams: Math.round(value * 1000), notes: "Loadwise" } })
+    body: JSON.stringify({ weight: { sampleTime: { physicalTime: at, utcOffset: offsetSeconds + "s" }, weightGrams: Math.round(value * 1000), notes: "Aurin" } })
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw Object.assign(new Error("Google Health weight write failed"), { status: response.status, body });

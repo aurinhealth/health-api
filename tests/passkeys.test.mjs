@@ -109,7 +109,7 @@ test("sign-in refuses other sites, unknown passkeys, a wrong account and blocked
   const stranger = (await createPasskey({ challenge: "x" })).passkey;
   const unknown = await signIn(env, stranger);
   assert.equal(unknown.status, 401);
-  assert.deepEqual(await unknown.json(), { message: "Tenhle přístupový klíč Loadwise nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.", unknownCredential: true, rpId: "petrfitnessdata.eu" });
+  assert.deepEqual(await unknown.json(), { message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.", unknownCredential: true, rpId: "petrfitnessdata.eu" });
 
   assert.equal((await signIn(env, passkey, { userHandle: "c29tZW9uZS1lbHNl" })).status, 401);
   assert.equal((await signIn(env, passkey, { userHandle: null })).status, 401);
@@ -193,7 +193,7 @@ test("adding a passkey e-mails the account owner when e-mail is set up", async (
   await Promise.all(pending);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, "friend@example.com");
-  assert.deepEqual(sent[0].from, { email: "noreply@petrfitnessdata.eu", name: "Loadwise" });
+  assert.deepEqual(sent[0].from, { email: "noreply@petrfitnessdata.eu", name: "Aurin" });
   assert.match(sent[0].subject, /přístupový klíč/);
   assert.match(sent[0].text, /„iPhone“/);
 });

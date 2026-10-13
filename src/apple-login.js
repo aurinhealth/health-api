@@ -37,7 +37,7 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   const user = await signInAppleUser(env.DB, env, { sub: String(claims.sub), email: verified ? claims.email : null, name: cleanName(body?.name) });
   if (!user) {
     console.warn("Apple app login denied for an account without an invitation");
-    return appJson({ error: "not_invited", message: "Tento Apple účet nemá do Loadwise pozvánku. Pokud u Apple používáš Skrýt můj e-mail, přihlas se přes Google nebo e-mailem a Apple si připoj na webu v Nastavení, nebo požádej správce o pozvánku." }, 403);
+    return appJson({ error: "not_invited", message: "Tento Apple účet nemá do Aurinu pozvánku. Pokud u Apple používáš Skrýt můj e-mail, přihlas se přes Google nebo e-mailem a Apple si připoj na webu v Nastavení, nebo požádej správce o pozvánku." }, 403);
   }
   const code = String(body?.authorizationCode || "");
   if (saveRefreshToken && canRevoke(env) && code && code.length < 2000) {

@@ -47,7 +47,7 @@ test("an invited address gets a code and signs in with it once", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, "friend@example.com");
-  assert.deepEqual(sent[0].from, { email: "noreply@petrfitnessdata.eu", name: "Loadwise" });
+  assert.deepEqual(sent[0].from, { email: "noreply@petrfitnessdata.eu", name: "Aurin" });
   const code = codeIn(sent[0]);
   assert.match(sent[0].subject, new RegExp("^" + code + " je tvůj kód"));
   assert.match(sent[0].html, new RegExp(code));
@@ -88,7 +88,7 @@ test("addresses without access get the same answer and no e-mail", async () => {
 test("the owner signs in by code as the admin, in the language of the app", async () => {
   const { env, sent } = await setup();
   await start(env, "owner@example.com", { lang: "en" });
-  assert.match(sent[0].subject, /^\d{6} is your Loadwise sign-in code$/);
+  assert.match(sent[0].subject, /^\d{6} is your Aurin sign-in code$/);
   assert.match(sent[0].html, /<html lang="en">/);
   const response = await verify(env, "owner@example.com", codeIn(sent[0]));
   assert.equal(response.status, 200);
@@ -138,11 +138,11 @@ test("a failed e-mail never shows in the answer", async () => {
 
 test("e-mail texts in Czech and English", () => {
   const cs = signInCodeEmail("cs", "042137"), en = signInCodeEmail("en", "042137");
-  assert.equal(cs.subject, "042137 je tvůj kód pro přihlášení do Loadwise");
+  assert.equal(cs.subject, "042137 je tvůj kód pro přihlášení do Aurinu");
   assert.match(cs.text, /Platí 10 minut/);
-  assert.equal(en.subject, "042137 is your Loadwise sign-in code");
+  assert.equal(en.subject, "042137 is your Aurin sign-in code");
   const notice = passkeyAddedEmail("en", "Apple Passwords (iPhone)", new Date("2026-10-07T08:00:00Z"));
-  assert.match(notice.text, /“Apple Passwords \(iPhone\)” was added to your Loadwise account on 7 October 2026 at 10:00/);
+  assert.match(notice.text, /“Apple Passwords \(iPhone\)” was added to your Aurin account on 7 October 2026 at 10:00/);
   assert.match(passkeyAddedEmail("cs", "<b>x</b>").html, /&lt;b&gt;x&lt;\/b&gt;/);
 });
 
