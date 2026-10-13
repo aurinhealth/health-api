@@ -385,7 +385,8 @@ struct ConnectionProblemCard: View {
     @State private var intervalsKey = false
 
     var body: some View {
-        Group {
+        // A stack, not a Group: on an empty Group the task never runs.
+        VStack(spacing: 0) {
             if !problems.isEmpty {
                 Card {
                     WidgetHeader(title: "Propojení", color: Palette.rust)

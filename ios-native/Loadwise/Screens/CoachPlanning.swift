@@ -427,7 +427,8 @@ struct CoachCheckInCard: View {
     @State private var advice: CoachCheckIn.Advice?
 
     var body: some View {
-        Group {
+        // A stack, not a Group: on an empty Group the task never runs.
+        VStack(spacing: 0) {
             if let advice {
                 Card {
                     WidgetHeader(title: "Kouč", color: Palette.amberBar)
