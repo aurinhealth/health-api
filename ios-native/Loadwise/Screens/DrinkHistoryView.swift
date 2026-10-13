@@ -1,12 +1,15 @@
 import SwiftUI
 
 /// Jídlo → Pití → a tap on the number: the day's drinks by kind (how much of
-/// each and what it counts for) or through the day. A swipe edits or deletes.
+/// each and what it counts for, a tap shows the single drinks) or through the
+/// day. A swipe or a long press on a drink edits or deletes it.
 struct DrinkHistoryView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var byTime = false
     @State private var editing: FoodSnapshot.Drink?
+    /// Kinds opened to their single drinks, which can be edited or deleted.
+    @State private var open: Set<String> = []
 
     private var water: FoodSnapshot.Water? { model.food?.water }
     private var drinks: [FoodSnapshot.Drink] { water?.drinks ?? [] }
@@ -117,9 +120,23 @@ struct DrinkHistoryView: View {
                         }
                         Spacer(minLength: 8)
                         Text(Units.volumeText(g.hydrationMl)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                            .rotationEffect(.degrees(open.contains(g.kind) ? 180 : 0))
                     }
                     .padding(.vertical, 10)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            if open.contains(g.kind) { open.remove(g.kind) } else { open.insert(g.kind) }
+                        }
+                    }
                     .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    if open.contains(g.kind) {
+                        ForEach(drinks.filter { $0.kind == g.kind }.sorted { ($0.time ?? "99") < ($1.time ?? "99") }) { d in
+                            row(d).padding(.leading, 46)
+                        }
+                    }
                 }
             }
         }
@@ -130,19 +147,30 @@ struct DrinkHistoryView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(DrinkHistory.byPart(drinks), id: \.title) { part in
                     SectionLabel(text: part.title).padding(.top, 12).padding(.bottom, 2)
-                    ForEach(part.drinks) { d in
-                        if d.app != nil {
-                            // Another app's drink: deleted from Aurin only.
-                            SwipeRow(delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
-                                DrinkLine(drink: d)
-                            }
-                        } else {
-                            SwipeRow(edit: { editing = d }, delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
-                                DrinkLine(drink: d)
-                            }
-                        }
-                    }
+                    ForEach(part.drinks) { row($0) }
                 }
+            }
+        }
+    }
+
+    /// One drink; a swipe or a long press edits or deletes it. Another app's
+    /// drink is only deleted, from Aurin alone.
+    @ViewBuilder
+    private func row(_ d: FoodSnapshot.Drink) -> some View {
+        let delete = { Task { _ = await model.deleteDrink(id: d.id) } }
+        Group {
+            if d.app != nil {
+                SwipeRow(delete: { _ = delete() }) { DrinkLine(drink: d) }
+            } else {
+                SwipeRow(edit: { editing = d }, delete: { _ = delete() }) { DrinkLine(drink: d) }
+            }
+        }
+        .contextMenu {
+            if d.app == nil {
+                Button { editing = d } label: { Label("Upravit", systemImage: "pencil") }
+            }
+            Button(role: .destructive) { _ = delete() } label: {
+                Label(L10n.tr(d.app == nil ? "Smazat" : "Smazat jen v Aurinu"), systemImage: "trash")
             }
         }
     }
