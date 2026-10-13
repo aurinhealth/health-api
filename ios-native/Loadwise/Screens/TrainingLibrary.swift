@@ -399,6 +399,8 @@ struct LibraryWorkoutSheet: View {
     @State private var saving = false
     @State private var done = false
     @State private var error: String?
+    @State private var keeping = false
+    @State private var kept = false
 
     var body: some View {
         PageScroll {
@@ -449,11 +451,34 @@ struct LibraryWorkoutSheet: View {
                     }
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 }
+                if !workout.id.hasPrefix("own-") {
+                    if kept {
+                        Label("Uloženo v Mých trénincích", systemImage: "checkmark.circle.fill")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.green)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                    } else {
+                        SecondaryButton(title: keeping ? "Ukládám…" : "Uložit do Mých tréninků", systemImage: "bookmark") { Task { await keep() } }
+                            .disabled(keeping || model.demo)
+                    }
+                }
             }
             .padding(24)
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
+    }
+
+    /// The workout among the athlete's own, to change its sections or share it.
+    private func keep() async {
+        keeping = true
+        defer { keeping = false }
+        do {
+            _ = try await model.api.saveLibraryWorkout(id: workout.id)
+            kept = true
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 
     @ViewBuilder

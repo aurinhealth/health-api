@@ -17,10 +17,13 @@ struct MyWorkoutsView: View {
     @State private var deleting: SavedWorkout?
     @State private var busy: String?
     @State private var note: String?
+    @State private var athlete = AthleteThresholds()
+    @State private var planning: SavedWorkout?
 
     struct EditorTarget: Identifiable {
         let workout: SavedWorkout?
-        var id: String { workout?.id ?? "new" }
+        var sport = "gym"
+        var id: String { workout?.id ?? "new-" + sport }
     }
 
     private var mine: [SavedWorkout] { workouts.filter { $0.fromFriend == friends } }
@@ -34,7 +37,11 @@ struct MyWorkoutsView: View {
                     Text(friends ? "Od přátel" : "Moje tréninky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     Spacer()
                     if !friends {
-                        Button { editing = EditorTarget(workout: nil) } label: {
+                        Menu {
+                            ForEach(LibrarySport.all) { s in
+                                Button { editing = EditorTarget(workout: nil, sport: s.id) } label: { Label(L10n.tr(s.label), systemImage: s.symbol) }
+                            }
+                        } label: {
                             Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.ink)
                                 .frame(width: 40, height: 40).background(Palette.card, in: Circle())
                         }
@@ -84,10 +91,13 @@ struct MyWorkoutsView: View {
         }
         .task { await load() }
         .sheet(item: $editing) { target in
-            WorkoutEditorSheet(workout: target.workout) { saved in
-                if let i = workouts.firstIndex(where: { $0.id == saved.id }) { workouts[i] = saved } else { workouts.insert(saved, at: 0) }
+            if (target.workout?.sport ?? target.sport) == "gym" {
+                WorkoutEditorSheet(workout: target.workout) { stored($0) }
+            } else {
+                EnduranceEditorSheet(workout: target.workout, sport: target.sport, athlete: athlete) { stored($0) }
             }
         }
+        .sheet(item: $planning) { w in SavedEnduranceSheet(workout: w) }
         .confirmationDialog("Smazat trénink?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { if let w = deleting { Task { await delete(w) } } }
         } message: {
@@ -97,7 +107,7 @@ struct MyWorkoutsView: View {
 
     private func row(_ w: SavedWorkout, sport: LibrarySport) -> some View {
         HStack(spacing: 12) {
-            NavigationLink(value: AppRoute.planTemplate(TemplatePlanRequest(template: w.template, date: nil, fromName: w.fromName))) {
+            Button { plan(w) } label: {
                 HStack(spacing: 12) {
                     Image(systemName: sport.symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(sport.color)
                         .frame(width: 32, height: 32).background(Palette.track, in: Circle())
@@ -115,7 +125,7 @@ struct MyWorkoutsView: View {
             }
             .buttonStyle(.plain)
             Menu {
-                Button { model.path(model.tab).wrappedValue.append(.planTemplate(TemplatePlanRequest(template: w.template, date: nil, fromName: w.fromName))) } label: {
+                Button { plan(w) } label: {
                     Label("Naplánovat", systemImage: "calendar.badge.plus")
                 }
                 if w.fromFriend {
@@ -136,11 +146,22 @@ struct MyWorkoutsView: View {
         .padding(.vertical, 12)
     }
 
+    /// A gym workout is planned in the gym builder, a ride or run in its sheet.
+    private func plan(_ w: SavedWorkout) {
+        if w.template.isEndurance { planning = w; return }
+        model.path(model.tab).wrappedValue.append(.planTemplate(TemplatePlanRequest(template: w.template, date: nil, fromName: w.fromName)))
+    }
+
+    private func stored(_ saved: SavedWorkout) {
+        if let i = workouts.firstIndex(where: { $0.id == saved.id }) { workouts[i] = saved } else { workouts.insert(saved, at: 0) }
+    }
+
     private func load() async {
         guard !model.demo else { loaded = true; return }
         do {
             let r = try await model.api.myWorkouts()
             workouts = r.workouts
+            athlete = r.athlete
             error = nil
             // The dots stay for this visit; the badge in Knihovna goes.
             if friends, r.unseen > 0 { try? await model.api.markFriendWorkoutsSeen() }
@@ -298,6 +319,8 @@ struct SharedWorkoutView: View {
     @Environment(AppModel.self) private var model
     let id: String
     @State private var share: SharedWorkout?
+    @State private var received: SavedWorkout?
+    @State private var planning: SavedWorkout?
     @State private var error: String?
 
     var body: some View {
@@ -307,33 +330,13 @@ struct SharedWorkoutView: View {
                     Text(share.own ? L10n.tr("Tvůj sdílený trénink") : share.fromName.map { L10n.f("%@ ti posílá trénink", $0) } ?? L10n.tr("Trénink od přítele"))
                         .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 24)
                     Text(share.name).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 8)
-                    Text(([L10n.tr("Posilovna")] + [share.template.summary]).joined(separator: " · "))
+                    Text(([L10n.tr(LibrarySport.find(share.sport)?.label ?? "Posilovna")] + [share.template.summary]).joined(separator: " · "))
                         .font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 4)
-                    if let groups = share.groups, !groups.isEmpty {
-                        Text(groups.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 4)
+                    if share.template.isEndurance {
+                        endurance(share)
+                    } else {
+                        gym(share)
                     }
-                    VStack(spacing: 0) {
-                        ForEach(Array(share.exercises.enumerated()), id: \.offset) { i, e in
-                            HStack {
-                                Text(e.name).font(.body).foregroundStyle(Palette.ink)
-                                Spacer()
-                                Text("\(e.sets) × \(e.reps)").font(Typo.small).foregroundStyle(Palette.secondary)
-                            }
-                            .padding(.vertical, 12)
-                            if i < share.exercises.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .padding(.top, 18)
-                    Text("Váhy se ti spočítají podle tvých tréninků a toho, jak jsi odpočatý.")
-                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
-                    NavigationLink(value: AppRoute.planTemplate(TemplatePlanRequest(template: share.template, date: plannedDay(share), fromName: share.own ? nil : share.fromName))) {
-                        Label("Naplánovat", systemImage: "calendar.badge.plus").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 22)
                     if !share.own {
                         SaveWorkoutButton(template: share.template).padding(.top, 10)
                     }
@@ -345,6 +348,55 @@ struct SharedWorkoutView: View {
             }
         }
         .task { await load() }
+        .sheet(item: $planning) { w in SavedEnduranceSheet(workout: w, preset: share.flatMap(plannedDay)) }
+    }
+
+    /// The chart and sections with the athlete's own watts or paces; planned
+    /// from the copy in Od přátel (the sender's own link is planned from Moje tréninky).
+    @ViewBuilder
+    private func endurance(_ share: SharedWorkout) -> some View {
+        if let blocks = share.steps, !blocks.isEmpty {
+            Card { WorkoutProfile(blocks: blocks, sport: share.sport) }.padding(.top, 18)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in StepBlockRow(block: block) }
+            }
+            .padding(.top, 14)
+        }
+        Text(share.sport == "run" ? "Tempa se ti spočítají podle tvého prahového tempa." : "Watty se ti spočítají podle tvého FTP.")
+            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+        if let received {
+            PrimaryButton(title: L10n.tr("Naplánovat"), systemImage: "calendar.badge.plus") { planning = received }
+                .padding(.top, 22)
+        }
+    }
+
+    @ViewBuilder
+    private func gym(_ share: SharedWorkout) -> some View {
+                if let groups = share.groups, !groups.isEmpty {
+                    Text(groups.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 4)
+                }
+                VStack(spacing: 0) {
+                    ForEach(Array(share.exercises.enumerated()), id: \.offset) { i, e in
+                        HStack {
+                            Text(e.name).font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Text("\(e.sets) × \(e.reps)").font(Typo.small).foregroundStyle(Palette.secondary)
+                        }
+                        .padding(.vertical, 12)
+                        if i < share.exercises.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.top, 18)
+                Text("Váhy se ti spočítají podle tvých tréninků a toho, jak jsi odpočatý.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+                NavigationLink(value: AppRoute.planTemplate(TemplatePlanRequest(template: share.template, date: plannedDay(share), fromName: share.own ? nil : share.fromName))) {
+                    Label("Naplánovat", systemImage: "calendar.badge.plus").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 22)
     }
 
     /// The sender's day when it is still ahead, else today.
@@ -358,7 +410,7 @@ struct SharedWorkoutView: View {
         do {
             let found = try await model.api.sharedWorkout(id: id)
             share = found
-            if !found.own { try? await model.api.receiveShare(id: id) }
+            if !found.own { received = try? await model.api.receiveShare(id: id) }
         } catch {
             self.error = error.localizedDescription
         }

@@ -15,20 +15,82 @@ struct TemplateExercise: Codable, Hashable {
     }
 }
 
-/// A workout without weights, as it is saved and shared.
+/// A section of a ride or run: a length in time (or distance when running)
+/// and the intensity as % of FTP or of threshold pace, low to high.
+struct EnduranceStep: Codable, Hashable {
+    var label: String
+    var seconds: Int?
+    var km: Double?
+    var low: Int
+    var high: Int
+    var cadence: Int?
+
+    var json: JSONValue {
+        var out: JSONObject = ["label": .string(label), "low": .number(Double(low)), "high": .number(Double(high))]
+        if let km { out["km"] = .number(km) } else { out["seconds"] = .number(Double(seconds ?? 60)) }
+        if let cadence { out["cadence"] = .number(Double(cadence)) }
+        return .object(out)
+    }
+
+    /// Minutes, a distance at 5:00 /km at threshold (as the server counts without the athlete's pace).
+    func minutes(thresholdPace: Double? = nil) -> Double {
+        if let km { return km * (thresholdPace ?? 300) * 100 / Double(low + high) * 2 / 60 }
+        return Double(seconds ?? 0) / 60
+    }
+}
+
+/// One section (repeats 1) or sections done in turn several times.
+struct EnduranceBlock: Codable, Hashable {
+    var repeats: Int
+    var steps: [EnduranceStep]
+}
+
+/// A workout without weights, as it is saved and shared: exercises with sets
+/// and repetitions for the gym, sections and repeats for a ride or run.
 struct WorkoutTemplate: Codable, Hashable {
     var sport = "gym"
     var name: String
     var minutes: Int?
     var exercises: [TemplateExercise]
+    var blocks: [EnduranceBlock]? = nil
+
+    var isEndurance: Bool { sport == "ride" || sport == "run" }
+    /// Nothing to save or share yet.
+    var isEmpty: Bool { isEndurance ? (blocks ?? []).isEmpty : exercises.isEmpty }
 
     var json: JSONObject {
-        var out: JSONObject = [
-            "sport": .string(sport), "name": .string(name),
-            "exercises": .array(exercises.map { .object(["name": .string($0.name), "sets": .number(Double($0.sets)), "reps": .string($0.reps)]) })
-        ]
-        if let minutes { out["minutes"] = .number(Double(minutes)) }
+        var out: JSONObject = ["sport": .string(sport), "name": .string(name)]
+        if isEndurance {
+            out["blocks"] = .array((blocks ?? []).map { .object(["repeats": .number(Double($0.repeats)), "steps": .array($0.steps.map(\.json))]) })
+        } else {
+            out["exercises"] = .array(exercises.map { .object(["name": .string($0.name), "sets": .number(Double($0.sets)), "reps": .string($0.reps)]) })
+            if let minutes { out["minutes"] = .number(Double(minutes)) }
+        }
         return out
+    }
+
+    /// The length of a ride or run in minutes.
+    func enduranceMinutes(thresholdPace: Double? = nil) -> Double {
+        (blocks ?? []).reduce(0) { sum, b in sum + Double(b.repeats) * b.steps.reduce(0) { $0 + $1.minutes(thresholdPace: thresholdPace) } }
+    }
+
+    /// The sections as the library's step rows, for its chart and rows
+    /// (WorkoutProfile, StepBlockRow); watts and paces when they are known.
+    func profile(ftp: Double? = nil, thresholdPace: Double? = nil) -> [PlannedWorkout.Block] {
+        let run = sport == "run"
+        let blocks: [JSONValue] = (self.blocks ?? []).map { b in
+            .object(["repeats": .number(Double(b.repeats)), "steps": .array(b.steps.map { s in
+                var row: JSONObject = ["durationSeconds": .number((s.minutes(thresholdPace: thresholdPace) * 60).rounded()),
+                                       "percentLow": .number(Double(s.low)), "percentHigh": .number(Double(s.high))]
+                if !s.label.isEmpty { row["note"] = .string(s.label) }
+                if let cadence = s.cadence, !run { row["cadence"] = .number(Double(cadence)) }
+                if !run, let ftp { row["wattsLow"] = .number((ftp * Double(s.low) / 100).rounded()); row["wattsHigh"] = .number((ftp * Double(s.high) / 100).rounded()) }
+                if run, let pace = thresholdPace { row["paceSlow"] = .number((pace * 100 / Double(s.low)).rounded()); row["paceFast"] = .number((pace * 100 / Double(s.high)).rounded()) }
+                return .object(row)
+            })])
+        }
+        guard let data = try? JSONEncoder().encode(blocks) else { return [] }
+        return (try? JSONDecoder().decode([PlannedWorkout.Block].self, from: data)) ?? []
     }
 
     /// The day's plan as a workout: the work sets of each exercise in order,
@@ -56,6 +118,7 @@ struct WorkoutTemplate: Codable, Hashable {
     }
 
     var summary: String {
+        if isEndurance { return Fmt.duration(minutes ?? Int(enduranceMinutes().rounded())) }
         var parts = [L10n.f("%@ %@", String(exercises.count), Fmt.plural(exercises.count, "cvik", "cviky", "cviků"))]
         if let minutes { parts.append(Fmt.duration(minutes)) }
         return parts.joined(separator: " · ")
@@ -64,6 +127,9 @@ struct WorkoutTemplate: Codable, Hashable {
 
 /// A workout in Moje tréninky (source "own") or Od přátel ("friend").
 struct SavedWorkout: Decodable, Identifiable, Hashable {
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.name == b.name && a.seen == b.seen }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
     let id: String
     let sport: String
     let name: String
@@ -74,14 +140,20 @@ struct SavedWorkout: Decodable, Identifiable, Hashable {
     let seen: Bool
     let minutes: Int?
     let exercises: [TemplateExercise]
+    var blocks: [EnduranceBlock]? = nil
+    /// A ride's or run's rows with the athlete's watts or paces.
+    var steps: [PlannedWorkout.Block]? = nil
     let groups: [String]?
 
     var fromFriend: Bool { source == "friend" }
-    var template: WorkoutTemplate { WorkoutTemplate(sport: sport, name: name, minutes: minutes, exercises: exercises) }
+    var template: WorkoutTemplate { WorkoutTemplate(sport: sport, name: name, minutes: minutes, exercises: exercises, blocks: blocks) }
 }
 
 /// A shared link as the app opens it.
 struct SharedWorkout: Decodable, Hashable {
+    static func == (a: Self, b: Self) -> Bool { a.id == b.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+
     let id: String
     let sport: String
     let name: String
@@ -90,9 +162,11 @@ struct SharedWorkout: Decodable, Hashable {
     let own: Bool
     let minutes: Int?
     let exercises: [TemplateExercise]
+    var blocks: [EnduranceBlock]? = nil
+    var steps: [PlannedWorkout.Block]? = nil
     let groups: [String]?
 
-    var template: WorkoutTemplate { WorkoutTemplate(sport: sport, name: name, minutes: minutes, exercises: exercises) }
+    var template: WorkoutTemplate { WorkoutTemplate(sport: sport, name: name, minutes: minutes, exercises: exercises, blocks: blocks) }
 }
 
 /// A saved or received workout to plan for a day (GymBuilderView).
@@ -105,6 +179,17 @@ struct TemplatePlanRequest: Hashable {
 private struct SavedWorkoutsResponse: Decodable {
     let workouts: [SavedWorkout]?
     let unseen: Int?
+    let athlete: AthleteThresholds?
+}
+
+/// FTP and threshold pace (s/km) for watts and paces in the ride and run editor.
+struct AthleteThresholds: Decodable, Hashable {
+    var ftp: Double?
+    var runThresholdPace: Double?
+}
+
+private struct DescribeResponse: Decodable {
+    let template: WorkoutTemplate
 }
 
 private struct SavedWorkoutResponse: Decodable {
@@ -122,9 +207,28 @@ private struct SharedWorkoutResponse: Decodable {
 }
 
 extension APIClient {
-    func myWorkouts() async throws -> (workouts: [SavedWorkout], unseen: Int) {
+    func myWorkouts() async throws -> (workouts: [SavedWorkout], unseen: Int, athlete: AthleteThresholds) {
         let r: SavedWorkoutsResponse = try await get("/app/api/my-workouts")
-        return (r.workouts ?? [], r.unseen ?? 0)
+        return (r.workouts ?? [], r.unseen ?? 0, r.athlete ?? AthleteThresholds())
+    }
+
+    /// A library ride or run kept in Moje tréninky.
+    func saveLibraryWorkout(id: String) async throws -> SavedWorkout? {
+        let r: SavedWorkoutResponse = try await send("/app/api/my-workouts", method: "POST", body: ["fromLibrary": JSONValue.string(id)])
+        return r.workout
+    }
+
+    /// A saved ride or run in the calendar and Intervals.icu.
+    func scheduleSavedWorkout(id: String, date: String, indoor: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/my-workouts/" + id + "/schedule", method: "POST",
+                                          body: ["date": JSONValue.string(date), "environment": .string(indoor ? "indoor" : "outdoor")])
+    }
+
+    /// A ride or run put together by AI from the athlete's words; not saved yet.
+    func describeWorkout(sport: String, text: String) async throws -> WorkoutTemplate {
+        let r: DescribeResponse = try await send("/app/api/my-workouts/describe", method: "POST",
+                                                 body: ["sport": JSONValue.string(sport), "text": .string(text)], timeout: 60)
+        return r.template
     }
 
     func saveWorkout(_ template: WorkoutTemplate) async throws -> SavedWorkout? {
@@ -180,5 +284,17 @@ extension APIClient {
         let r: GymPreviewResponse = try await send("/app/api/gym/template", method: "POST", body: body)
         guard let plan = r.plan else { throw APIError.message(r.message ?? L10n.tr("Trénink se nepodařilo sestavit.")) }
         return GymProposal(draftId: r.draftId, planName: plan.planName ?? request.template.name, rationale: plan.rationale, rows: plan.rows, muscles: r.muscles ?? [:])
+    }
+}
+
+extension WorkoutTemplate {
+    /// A ride or run comes without exercises, a gym workout without blocks.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sport = try c.decodeIfPresent(String.self, forKey: .sport) ?? "gym"
+        name = try c.decode(String.self, forKey: .name)
+        minutes = try c.decodeIfPresent(Int.self, forKey: .minutes)
+        exercises = try c.decodeIfPresent([TemplateExercise].self, forKey: .exercises) ?? []
+        blocks = try c.decodeIfPresent([EnduranceBlock].self, forKey: .blocks)
     }
 }

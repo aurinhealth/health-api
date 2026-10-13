@@ -17,8 +17,14 @@ import { ensureCoachInboxTable } from "./coach-inbox.js";
 import { assertTrainingAllowed, getAthleteState } from "./athlete-state.js";
 import { localToday } from "./user-time.js";
 import { siteLang } from "./site-pages.js";
+import { ENDURANCE_SPORTS, cleanEnduranceTemplate, enduranceStructure, templateFromStructure, blockLines, zwoFile, ZONES } from "./endurance-templates.js";
+import { totalMinutes } from "./workout-model.js";
+import { stepRows } from "./workout-explanation.js";
+import { getWorkout, scheduleWorkoutInIntervals } from "./workout-library.js";
+import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
+import { callOpenAI, lightModel } from "./coach-assistant.js";
 
-export const SPORTS = ["gym"];
+export const SPORTS = ["gym", ...ENDURANCE_SPORTS];
 const MAX_EXERCISES = 30;
 const MAX_SAVED = 300;
 const MAX_SHARES_PER_DAY = 100;
@@ -37,7 +43,8 @@ const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, ma
 // The workout as sent by the app, checked: a known sport, a name, 1–30
 // exercises with 1–10 sets and repetitions such as "8", "8–12" or "30 s".
 export function cleanTemplate(input = {}) {
-  const sport = SPORTS.includes(input.sport) ? input.sport : "gym";
+  if (ENDURANCE_SPORTS.includes(input.sport)) return cleanEnduranceTemplate(input);
+  const sport = "gym";
   const name = text(input.name, 80);
   if (!name) throw new Error(L("Pojmenuj trénink.", "Name the workout."));
   const exercises = (Array.isArray(input.exercises) ? input.exercises : []).slice(0, MAX_EXERCISES + 1).map(e => ({
@@ -74,26 +81,53 @@ const GROUP_OF = { chest: "chest", upper_back: "back", lats: "back", lower_back:
 const GROUP_LABEL = { chest: ["Hrudník", "Chest"], back: ["Záda", "Back"], shoulders: ["Ramena", "Shoulders"], arms: ["Paže", "Arms"], core: ["Střed těla", "Core"], glutes: ["Hýždě", "Glutes"], quads: ["Stehna", "Quads"], hamstrings: ["Zadní stehna", "Hamstrings"], calves: ["Lýtka", "Calves"] };
 // Up to four groups the workout trains most (the preview's bar), in words.
 export function mainMuscles(template, en = false) {
+  if (template.sport && template.sport !== "gym") return [];
   const total = {};
   for (const e of template.exercises || []) for (const [muscle, share] of Object.entries(exerciseMuscles(e.name) || {})) { const g = GROUP_OF[muscle]; if (g) total[g] = (total[g] || 0) + share * (Number(e.sets) || 1); }
   return Object.entries(total).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([g]) => GROUP_LABEL[g][en ? 1 : 0]);
 }
 
 async function ensureTables(db) {
-  await db.prepare("CREATE TABLE IF NOT EXISTS saved_workouts (user_id INTEGER NOT NULL, id TEXT NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'own', from_name TEXT, share_id TEXT, plan_date TEXT, template_json TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, id))").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS saved_workouts (user_id INTEGER NOT NULL, id TEXT NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'own', from_name TEXT, share_id TEXT, plan_date TEXT, template_json TEXT NOT NULL, structure_json TEXT, seen INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, id))").run();
 }
 export async function ensureShareTable(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS workout_shares (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, from_name TEXT, plan_date TEXT, template_json TEXT NOT NULL, image_png TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
 }
 
-function view(row) {
+// The workout's own part for the app: the exercises and their muscles for the
+// gym; for a ride or run its sections, their rows with the athlete's watts or
+// paces (the library's step rows) and the length at the athlete's pace.
+function workoutFields(template, thresholds = null) {
+  if (ENDURANCE_SPORTS.includes(template.sport)) {
+    const pace = thresholds?.runThresholdPace || null, structure = enduranceStructure(template, { thresholdPace: pace });
+    const steps = template.sport === "run" ? stepRows(structure, { sport: "run", thresholdPace: pace }) : stepRows(structure, { ftp: thresholds ? rideFtpFor(thresholds, "outdoor").ftp : null });
+    return { minutes: Math.round(totalMinutes(structure)), exercises: [], blocks: template.blocks || [], steps, muscles: {}, groups: [] };
+  }
+  return {
+    minutes: template.minutes ?? null, exercises: template.exercises || [], blocks: null, steps: null,
+    muscles: Object.fromEntries((template.exercises || []).map(e => [e.name, exerciseMuscles(e.name)])), groups: mainMuscles(template, lang() === "en")
+  };
+}
+
+function view(row, thresholds = null) {
   let template = {};
   try { template = JSON.parse(row.template_json); } catch { /* broken row */ }
   return {
     id: row.id, sport: row.sport, name: row.name, source: row.source, fromName: row.from_name || null, shareId: row.share_id || null,
-    date: row.plan_date || null, seen: row.seen !== 0, minutes: template.minutes ?? null, exercises: template.exercises || [],
-    muscles: Object.fromEntries((template.exercises || []).map(e => [e.name, exerciseMuscles(e.name)])), groups: mainMuscles(template, lang() === "en"), createdAt: row.created_at
+    date: row.plan_date || null, seen: row.seen !== 0, ...workoutFields({ ...template, sport: row.sport }, thresholds), createdAt: row.created_at
   };
+}
+
+// One saved workout for the app, a ride's or run's rows with the athlete's
+// watts and paces.
+async function viewFor(env, row) {
+  return view(row, row && ENDURANCE_SPORTS.includes(row.sport) ? await thresholdsOf(env) : null);
+}
+
+// FTP and threshold pace for watts and paces; none when Intervals.icu or the
+// profile can't be read (the rows then show % only).
+async function thresholdsOf(env) {
+  try { return await athleteThresholds(env); } catch (error) { console.error("Thresholds for saved workouts failed", error.message); return null; }
 }
 
 // The sender's first name, as the friend sees it: the name typed in Profil,
@@ -103,6 +137,8 @@ async function senderName(env, user) {
   try { profile = JSON.parse((await env.DB.prepare("SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1").bind(env.USER_ID).first())?.profile_json || "null"); } catch { /* none */ }
   return text(String(profile?.displayName || user?.name || "").split(" ")[0], 40) || null;
 }
+
+const athleteView = t => ({ ftp: t?.ftp || null, runThresholdPace: t?.runThresholdPace || null });
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -118,8 +154,9 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
 
     if (path === "/app/api/my-workouts" && request.method === "GET") {
       const rows = (await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? ORDER BY updated_at DESC LIMIT ?").bind(env.USER_ID, MAX_SAVED).all()).results || [];
-      const workouts = rows.map(view);
-      return json({ status: "ok", workouts, unseen: workouts.filter(w => w.source === "friend" && !w.seen).length });
+      const thresholds = rows.some(r => ENDURANCE_SPORTS.includes(r.sport)) ? await thresholdsOf(env) : null;
+      const workouts = rows.map(r => view(r, thresholds));
+      return json({ status: "ok", workouts, unseen: workouts.filter(w => w.source === "friend" && !w.seen).length, athlete: athleteView(thresholds), zones: ZONES });
     }
     if (path === "/app/api/my-workouts" && request.method === "POST") {
       const count = (await env.DB.prepare("SELECT COUNT(*) AS n FROM saved_workouts WHERE user_id=?").bind(env.USER_ID).first())?.n || 0;
@@ -130,33 +167,62 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
         if (!share) return json({ message: L("Odkaz už neplatí.", "The link is no longer valid.") }, 404);
         if (Number(share.user_id) === Number(env.USER_ID)) return json({ status: "own" });
         const had = await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND source='friend' AND share_id=?").bind(env.USER_ID, share.id).first();
-        if (had) return json({ status: "ok", workout: view(had) });
+        if (had) return json({ status: "ok", workout: await viewFor(env, had) });
         const id = newId();
         // Opened from the link it is seen already; only a later visit marks it otherwise.
         await env.DB.prepare("INSERT INTO saved_workouts(user_id,id,sport,name,source,from_name,share_id,plan_date,template_json,seen) VALUES(?,?,?,?,'friend',?,?,?,?,?)").bind(env.USER_ID, id, share.sport, share.name, share.from_name, share.id, share.plan_date, share.template_json, body.seen === true ? 1 : 0).run();
-        return json({ status: "ok", workout: view(await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, id).first()) });
+        return json({ status: "ok", workout: await viewFor(env, await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, id).first()) });
       }
-      // A received one kept among the athlete's own, or a new own workout.
+      // A received one kept among the athlete's own, a library ride or run,
+      // or a new own workout.
       let template;
-      if (body.copyOf != null) {
+      if (body.fromLibrary != null) {
+        const w = await getWorkout(env.DB, String(body.fromLibrary).slice(0, 120));
+        if (!w || !ENDURANCE_SPORTS.includes(w.sport || "ride")) return json({ message: L("Trénink nebyl nalezen.", "Workout not found.") }, 404);
+        let structure = [];
+        try { structure = JSON.parse(w.structure_json || "[]"); } catch { /* none */ }
+        template = templateFromStructure(w.sport || "ride", w.name, structure);
+      } else if (body.copyOf != null) {
         const from = await env.DB.prepare("SELECT template_json FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, String(body.copyOf)).first();
         if (!from) return json({ message: L("Trénink nebyl nalezen.", "Workout not found.") }, 404);
         template = cleanTemplate(JSON.parse(from.template_json));
       } else template = cleanTemplate(body);
       const id = newId();
       await env.DB.prepare("INSERT INTO saved_workouts(user_id,id,sport,name,source,template_json) VALUES(?,?,?,?,'own',?)").bind(env.USER_ID, id, template.sport, template.name, JSON.stringify(template)).run();
-      return json({ status: "ok", workout: view(await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, id).first()) });
+      return json({ status: "ok", workout: await viewFor(env, await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, id).first()) });
     }
     if (path === "/app/api/my-workouts/seen" && request.method === "POST") {
       await env.DB.prepare("UPDATE saved_workouts SET seen=1 WHERE user_id=? AND source='friend' AND seen=0").bind(env.USER_ID).run();
       return json({ status: "ok" });
+    }
+    // A saved ride or run in the calendar and Intervals.icu, with the athlete's
+    // own pace for the distances (gym workouts go through /app/api/gym/template).
+    const plan = /^\/app\/api\/my-workouts\/([A-Za-z0-9]{10})\/schedule$/.exec(path);
+    if (plan && request.method === "POST") {
+      const row = await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, plan[1]).first();
+      if (!row) return json({ message: L("Trénink nebyl nalezen.", "Workout not found.") }, 404);
+      if (!ENDURANCE_SPORTS.includes(row.sport)) throw new Error(L("Posilovna se plánuje přes návrh s váhami.", "Gym workouts are planned through the proposal with weights."));
+      const date = String(body.date || "");
+      if (!DATE.test(date) || date < localToday()) throw new Error(L("Vyber dnešní nebo budoucí datum.", "Choose today or a future date."));
+      const template = cleanEnduranceTemplate(JSON.parse(row.template_json)), thresholds = await thresholdsOf(env);
+      const structure = enduranceStructure(template, { thresholdPace: thresholds?.runThresholdPace });
+      await env.DB.prepare("UPDATE saved_workouts SET structure_json=? WHERE user_id=? AND id=?").bind(JSON.stringify(structure), env.USER_ID, row.id).run();
+      const result = await scheduleWorkoutInIntervals(env, env.DB, { workoutId: "own-" + row.id, date, confirm: true, environment: body.environment === "outdoor" ? "outdoor" : "indoor" });
+      return json(result);
+    }
+    // A ride or run put together from the athlete's words; nothing is saved.
+    if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
+      const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);
+      if (!words) throw new Error(L("Popiš, jaký trénink chceš.", "Describe the workout you want."));
+      if (!env.OPENAI_API_KEY) return json({ message: L("AI není připojena (chybí OPENAI_API_KEY).", "AI is not connected (OPENAI_API_KEY is missing).") }, 503);
+      return json({ status: "ok", template: await describeWorkout(env, sport, words) });
     }
     const one = /^\/app\/api\/my-workouts\/([A-Za-z0-9]{10})$/.exec(path);
     if (one && request.method === "PUT") {
       const template = cleanTemplate(body);
       const r = await env.DB.prepare("UPDATE saved_workouts SET name=?,sport=?,template_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND source='own'").bind(template.name, template.sport, JSON.stringify(template), env.USER_ID, one[1]).run();
       if (!r.meta?.changes) return json({ message: L("Trénink nebyl nalezen.", "Workout not found.") }, 404);
-      return json({ status: "ok", workout: view(await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, one[1]).first()) });
+      return json({ status: "ok", workout: await viewFor(env, await env.DB.prepare("SELECT * FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, one[1]).first()) });
     }
     if (one && request.method === "DELETE") {
       await env.DB.prepare("DELETE FROM saved_workouts WHERE user_id=? AND id=?").bind(env.USER_ID, one[1]).run();
@@ -180,13 +246,15 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       const share = await readShare(env.RAW_DB || env.DB, shared[1]);
       if (!share) return json({ message: L("Odkaz už neplatí.", "The link is no longer valid.") }, 404);
       const template = JSON.parse(share.template_json);
-      return json({ status: "ok", share: { id: share.id, sport: share.sport, name: share.name, fromName: share.from_name || null, date: share.plan_date || null, own: Number(share.user_id) === Number(env.USER_ID), minutes: template.minutes ?? null, exercises: template.exercises, muscles: Object.fromEntries(template.exercises.map(e => [e.name, exerciseMuscles(e.name)])), groups: mainMuscles(template, lang() === "en") } });
+      const thresholds = ENDURANCE_SPORTS.includes(share.sport) ? await thresholdsOf(env) : null;
+      return json({ status: "ok", share: { id: share.id, sport: share.sport, name: share.name, fromName: share.from_name || null, date: share.plan_date || null, own: Number(share.user_id) === Number(env.USER_ID), ...workoutFields({ ...template, sport: share.sport }, thresholds) } });
     }
 
     // A saved or received gym workout planned for a day: a proposal with the
     // athlete's own loads, confirmed like a generated one (/app/api/gym/confirm).
     if (path === "/app/api/gym/template" && request.method === "POST") {
       const template = cleanTemplate(body.template || body);
+      if (template.sport !== "gym") throw new Error(L("Kolo a běh se plánují z Mých tréninků.", "Rides and runs are planned from My workouts."));
       const date = DATE.test(String(body.date || "")) ? body.date : localToday();
       if (date < localToday()) throw new Error(L("Trénink jde naplánovat jen na dnešek nebo později.", "A workout can only be planned for today or later."));
       assertTrainingAllowed(await getAthleteState(env.DB));
@@ -206,6 +274,38 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
   }
 }
 
+// ----- "Popiš slovy": a ride or run from the athlete's words -----
+
+const STEP_SCHEMA = { type: "object", additionalProperties: false, required: ["label", "seconds", "km", "low", "high", "cadence"], properties: {
+  label: { type: "string" }, seconds: { type: ["integer", "null"] }, km: { type: ["number", "null"] },
+  low: { type: "integer" }, high: { type: "integer" }, cadence: { type: ["integer", "null"] }
+} };
+const DESCRIBE_SCHEMA = { type: "json_schema", name: "endurance_workout", strict: true, schema: { type: "object", additionalProperties: false, required: ["name", "blocks"], properties: {
+  name: { type: "string" },
+  blocks: { type: "array", items: { type: "object", additionalProperties: false, required: ["repeats", "steps"], properties: { repeats: { type: "integer" }, steps: { type: "array", items: STEP_SCHEMA } } } }
+} } };
+
+function describeInstructions(sport) {
+  const zones = Object.entries(ZONES[sport]).map(([z, [lo, hi]]) => z + " " + lo + "–" + hi + " %").join(", ");
+  return [
+    sport === "run" ? "You build a structured running workout from the athlete's description." : "You build a structured cycling workout from the athlete's description.",
+    "Return blocks in order. A block is a section (repeats 1, one step) or a repeat (repeats 2–30, 1–6 steps done in turn).",
+    "Each step has a short label in the athlete's language (warm-up, the effort, recovery, cool-down), a length in seconds" + (sport === "run" ? " or in km (then seconds is null)" : " (km is null)") + ", and an intensity range low–high as % of " + (sport === "run" ? "threshold pace speed" : "FTP") + ".",
+    "Zones: " + zones + ". Use the zone's range unless the athlete gives other numbers. Recoveries between efforts sit in Z1.",
+    "Add a warm-up and a cool-down when the athlete doesn't exclude them. Keep the total length the athlete asked for; at most 6 hours.",
+    sport === "ride" ? "Cadence in rpm only when the athlete asks for it, else null." : "Cadence is always null.",
+    "The name is short, like a workout title (\"Sweet spot 3×15\", \"Kilometrovky\"), in the athlete's language."
+  ].join("\n");
+}
+
+async function describeWorkout(env, sport, words) {
+  const r = await callOpenAI(env, { feature: "workout-describe", instructions: describeInstructions(sport), input: JSON.stringify({ sport, language: lang(), description: words }), format: DESCRIBE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
+  let data;
+  try { data = JSON.parse(r.text); } catch { throw new Error(L("Trénink se nepodařilo sestavit, zkus ho popsat jinak.", "The workout couldn't be built; try describing it differently.")); }
+  const blocks = (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(st => ({ label: st.label, low: st.low, high: st.high, cadence: st.cadence, ...(sport === "run" && st.km ? { km: st.km } : { seconds: st.seconds }) })) }));
+  return cleanEnduranceTemplate({ sport, name: data.name, blocks });
+}
+
 async function readShare(db, id) {
   if (!ID.test(String(id || ""))) return null;
   await ensureShareTable(db);
@@ -217,14 +317,21 @@ export function shareUrl(url, id) { return new URL("/t/" + id, url.origin).toStr
 // ----- The public page of a link (anyone, no sign-in) -----
 
 const escapeHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const SPORT_LABEL = { gym: ["Posilovna", "Gym"] };
+const SPORT_LABEL = { gym: ["Posilovna", "Gym"], ride: ["Kolo", "Ride"], run: ["Běh", "Run"] };
 
 // /t/<id> and /t/<id>/og.png; null for any other path.
 export async function publicSharePage(request, db, url) {
-  const m = /^\/t\/([A-Za-z0-9]{10})(\/og\.png)?$/.exec(url.pathname);
+  const m = /^\/t\/([A-Za-z0-9]{10})(\/og\.png|\/workout\.zwo)?$/.exec(url.pathname);
   if (!m || !db) return null;
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   await ensureShareTable(db);
+  // A ride for Zwift (.zwo), with the sections at the middle of their ranges.
+  if (m[2] === "/workout.zwo") {
+    const row = await db.prepare("SELECT sport,name,template_json FROM workout_shares WHERE id=?").bind(m[1]).first();
+    if (row?.sport !== "ride") return new Response("Not found", { status: 404 });
+    const file = (row.name.normalize("NFD").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "workout") + ".zwo";
+    return new Response(zwoFile(JSON.parse(row.template_json)), { headers: { "content-type": "application/xml; charset=utf-8", "content-disposition": `attachment; filename="${file}"`, "cache-control": "public, max-age=300" } });
+  }
   if (m[2]) {
     const row = await db.prepare("SELECT image_png FROM workout_shares WHERE id=?").bind(m[1]).first();
     if (!row?.image_png) return new Response("Not found", { status: 404 });
@@ -237,11 +344,14 @@ export async function publicSharePage(request, db, url) {
   let template = {};
   try { template = JSON.parse(share.template_json); } catch { /* broken row */ }
   const exercises = template.exercises || [];
+  const endurance = ENDURANCE_SPORTS.includes(share.sport);
   const sport = (SPORT_LABEL[share.sport] || SPORT_LABEL.gym)[en ? 1 : 0];
   const from = share.from_name ? t(share.from_name + " ti posílá trénink", share.from_name + " sent you a workout") : t("Sdílený trénink", "Shared workout");
-  const meta = [sport, template.minutes ? template.minutes + " min" : null, exercises.length + " " + t(exercises.length === 1 ? "cvik" : exercises.length < 5 ? "cviky" : "cviků", exercises.length === 1 ? "exercise" : "exercises")].filter(Boolean).join(" · ");
-  const muscles = mainMuscles(template, en);
-  const list = exercises.map(e => `<li><span>${escapeHtml(e.name)}</span><span class="sr">${escapeHtml(e.sets + " × " + e.reps)}</span></li>`).join("");
+  const minutes = endurance ? Math.round(totalMinutes(enduranceStructure(template))) : template.minutes;
+  const length = minutes ? (minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + (minutes % 60) + " min" : "") : minutes + " min") : null;
+  const meta = [sport, length, endurance ? null : exercises.length + " " + t(exercises.length === 1 ? "cvik" : exercises.length < 5 ? "cviky" : "cviků", exercises.length === 1 ? "exercise" : "exercises")].filter(Boolean).join(" · ");
+  const muscles = endurance ? [] : mainMuscles(template, en);
+  const list = endurance ? sectionList(template) : exercises.map(e => `<li><span>${escapeHtml(e.name)}</span><span class="sr">${escapeHtml(e.sets + " × " + e.reps)}</span></li>`).join("");
   const description = from + " · " + meta;
   const og = share.has_image ? new URL("/t/" + share.id + "/og.png", url.origin).toString() : null;
   const head = `<meta property="og:type" content="website"><meta property="og:site_name" content="Loadwise"><meta property="og:title" content="${escapeHtml(share.name)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(url.origin + url.pathname)}">` + (og ? `<meta property="og:image" content="${og}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">` : "");
@@ -249,16 +359,39 @@ export async function publicSharePage(request, db, url) {
 <h1>${escapeHtml(share.name)}</h1>
 <p class="sub">${escapeHtml(meta)}</p>
 ${muscles.length ? `<div class="bars">${muscles.map((name, i) => `<div><i class="c${i}"></i><span>${escapeHtml(name)}</span></div>`).join("")}</div>` : ""}
+${endurance ? intervalGraph(template) : ""}
 <ol class="card">${list}</ol>
-<p class="note">${t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
-<a class="button" href="loadwise://open/share/${share.id}">${t("Otevřít v aplikaci", "Open in the app")}</a>`;
+<p class="note">${endurance ? t(share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
+<a class="button" href="loadwise://open/share/${share.id}">${t("Otevřít v aplikaci", "Open in the app")}</a>${share.sport === "ride" ? `
+<a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
   return new Response(page({ en, title: share.name, description, head, body }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+}
+
+// The sections as bars over time, coloured by zone, like the app's chart.
+function intervalGraph(template) {
+  const structure = enduranceStructure(template), total = totalMinutes(structure) || 1, bars = [];
+  let x = 0;
+  for (const b of structure) for (let i = 0; i < (b.steps ? b.repeats : 1); i++) for (const st of b.steps || [b]) {
+    const w = st.durationMinutes / total * 100, h = Math.min(100, st.power / 1.5);
+    bars.push(`<rect x="${x.toFixed(2)}" y="${(100 - h).toFixed(2)}" width="${Math.max(0.3, w - 0.4).toFixed(2)}" height="${h.toFixed(2)}" rx="1" class="z${zoneClass(st.power)}"/>`);
+    x += w;
+  }
+  return `<svg class="graph" viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="">${bars.join("")}</svg>`;
+}
+const zoneClass = p => p < 56 ? 1 : p < 76 ? 2 : p < 88 ? 3 : p < 106 ? 4 : 5;
+
+function sectionList(template) {
+  return blockLines(template).map(b => {
+    const steps = b.steps.map(st => `${escapeHtml(st.length)} · ${escapeHtml(st.target)}`).join(" / ");
+    const title = (b.repeats > 1 ? b.repeats + "× " : "") + b.steps.map(st => st.label).join(" / ");
+    return `<li class="sec"><i class="z${zoneClass(Math.max(...b.steps.map(st => st.percent)))}"></i><span><b>${escapeHtml(title)}</b><span class="sr">${steps}</span></span></li>`;
+  }).join("");
 }
 
 function page({ en, title, description = "", head = "", body }) {
   return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Loadwise</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
-:root{--bg:#F3EFE8;--card:#FBFAF7;--ink:#1B1A17;--muted:#6D6A63;--line:rgba(27,26,23,.09);--button:#15140F;--onbutton:#fff;--avatar:#1F6B52;--c0:#A35A12;--c1:#1F6B52;--c2:#4F46C8;--c3:#1D6FA3}
-@media (prefers-color-scheme:dark){:root{--bg:#0A0B0C;--card:#1C1E1F;--ink:#ECEAE6;--muted:#9AA39F;--line:rgba(236,234,230,.08);--button:#F4F2EE;--onbutton:#0A0B0C;--avatar:#2E9E78;--c0:#F2B46B;--c1:#8FE6C4;--c2:#A5A1FF;--c3:#7CC3F0}}
+:root{--bg:#F3EFE8;--card:#FBFAF7;--ink:#1B1A17;--muted:#6D6A63;--line:rgba(27,26,23,.09);--button:#15140F;--onbutton:#fff;--avatar:#1F6B52;--c0:#A35A12;--c1:#1F6B52;--c2:#4F46C8;--c3:#1D6FA3;--z1:#9C978D;--z2:#1D6FA3;--z3:#1F6B52;--z4:#C4782A;--z5:#B4532F}
+@media (prefers-color-scheme:dark){:root{--bg:#0A0B0C;--card:#1C1E1F;--ink:#ECEAE6;--muted:#9AA39F;--line:rgba(236,234,230,.08);--button:#F4F2EE;--onbutton:#0A0B0C;--avatar:#2E9E78;--c0:#F2B46B;--c1:#8FE6C4;--c2:#A5A1FF;--c3:#7CC3F0;--z1:#5C6266;--z2:#7CC3F0;--z3:#8FE6C4;--z4:#F0B36E;--z5:#F0907A}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
 main{max-width:520px;margin:0 auto;padding:40px 20px 56px}
 .eyebrow{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px;margin:0}
@@ -272,6 +405,10 @@ h1{font-family:"New York","Iowan Old Style",Georgia,serif;font-weight:400;font-s
 .sr{color:var(--muted);white-space:nowrap}
 .note{color:var(--muted);font-size:14px;margin:14px 2px 0}
 .button{display:flex;align-items:center;justify-content:center;height:52px;margin-top:22px;border-radius:999px;background:var(--button);color:var(--onbutton);font-weight:600;text-decoration:none}
+.button.ghost{background:none;color:var(--ink);border:1px solid var(--line);margin-top:12px}
+.graph{display:block;width:100%;height:96px;margin-top:20px}
+.z1{fill:var(--z1);background:var(--z1)}.z2{fill:var(--z2);background:var(--z2)}.z3{fill:var(--z3);background:var(--z3)}.z4{fill:var(--z4);background:var(--z4)}.z5{fill:var(--z5);background:var(--z5)}
+.card li.sec{justify-content:flex-start;align-items:stretch}.sec i{flex:none;width:4px;border-radius:2px}.sec>span{display:flex;flex-direction:column}.sec b{font-weight:500}
 </style></head><body><main>${body}</main></body></html>`;
 }
 

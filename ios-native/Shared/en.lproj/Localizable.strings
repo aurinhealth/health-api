@@ -1664,3 +1664,29 @@
 "V ukázce se trénink neplánuje." = "Workouts aren't planned in the demo.";
 "Změnit den" = "Change day";
 "%@, nové: %@" = "%@, new: %@";
+
+/* Own rides and runs (Moje tréninky) */
+"Název, třeba Kilometrovky" = "Name, e.g. 1 km repeats";
+"Název, třeba Sweet spot 3×15" = "Name, e.g. Sweet spot 3×15";
+"Třeba „rozběh 2 km, 6× 1 km rychle s 2 min klusem, vyklusání“" = "E.g. “2 km warm-up, 6× 1 km fast with 2 min jog, cool-down”";
+"Třeba „hodina, rozjetí, 5× 4 min VO2max se 4 min volně, vyjetí“" = "E.g. “one hour, warm-up, 5× 4 min VO2max with 4 min easy, cool-down”";
+"Sestavit" = "Build";
+"Popsat slovy" = "Describe in words";
+"AI trénink poskládá z úseků, pak ho upravíš jako ručně." = "AI builds the workout from sections; then you edit it as if you'd made it by hand.";
+"Intenzita je v procentech prahového tempa, kamarádovi se přepočte na jeho tempo." = "Intensity is a percentage of threshold pace; a friend gets it in their own paces.";
+"Intenzita je v procentech FTP, kamarádovi se přepočte na jeho watty." = "Intensity is a percentage of FTP; a friend gets it in their own watts.";
+"%@× opakovat" = "Repeat %@×";
+"Přidat úsek do opakování" = "Add a section to the repeat";
+" tempa" = " pace";
+"Název úseku" = "Section name";
+"o 0,1 %@" = "by 0.1 %@";
+"o 1 %@" = "by 1 %@";
+"Minuty" = "Minutes";
+"Sekundy" = "Seconds";
+"Intenzita" = "Intensity";
+"Kadence" = "Cadence";
+"%@ ot/min" = "%@ rpm";
+"Smazat úsek" = "Delete section";
+"Od: %@" = "From: %@";
+"Tempa se ti spočítají podle tvého prahového tempa." = "Paces are worked out from your threshold pace.";
+"Watty se ti spočítají podle tvého FTP." = "Watts are worked out from your FTP.";

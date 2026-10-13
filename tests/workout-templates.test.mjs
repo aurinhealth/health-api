@@ -4,6 +4,8 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows } from "../src/workout-templates.js";
 import { templateStrengthPlan } from "../src/strength-generator.js";
+import { enduranceStructure, enduranceSystem, zwoFile } from "../src/endurance-templates.js";
+import { getWorkout, catalog } from "../src/workout-library.js";
 
 const ORIGIN = "https://petrfitnessdata.eu";
 const env = (raw, id) => ({ DB: scopedDb(raw, id), RAW_DB: raw, USER_ID: id });
@@ -112,4 +114,74 @@ test("planned for the athlete, a shared workout keeps its exercises and sets but
   assert.deepEqual(work.filter(r => r[1] === "Můj vlastní cvik").map(r => r[3]), ["", ""]);
   assert.equal(plan.planName, "Nohy");
   assert.match(plan.rationale, /Petr/);
+});
+
+const ride = { sport: "ride", name: "Sweet spot 3×15", blocks: [
+  { repeats: 1, steps: [{ label: "Rozjetí", seconds: 900, low: 56, high: 75 }] },
+  { repeats: 3, steps: [{ label: "Sweet spot", seconds: 900, low: 88, high: 93, cadence: 90 }, { label: "Volně", seconds: 300, low: 45, high: 55 }] },
+  { repeats: 1, steps: [{ label: "Vyjetí", seconds: 600, low: 45, high: 55 }] }
+] };
+const run = { sport: "run", name: "Kilometrovky", blocks: [
+  { repeats: 1, steps: [{ label: "Rozběh", km: 2, low: 78, high: 88 }] },
+  { repeats: 6, steps: [{ label: "Rychle", km: 1, low: 102, high: 106 }, { label: "Klus", seconds: 120, low: 70, high: 77 }] }
+] };
+
+test("a ride or run keeps its sections, repeats and % ranges", () => {
+  const t = cleanTemplate(ride);
+  assert.equal(t.blocks.length, 3);
+  assert.deepEqual(t.blocks[1].steps[0], { label: "Sweet spot", low: 88, high: 93, seconds: 900, cadence: 90 });
+  assert.equal(cleanTemplate(run).blocks[0].steps[0].km, 2);
+  assert.throws(() => cleanTemplate({ ...ride, blocks: [] }), /úsek/);
+  assert.throws(() => cleanTemplate({ ...ride, blocks: [{ repeats: 40, steps: [{ seconds: 60, low: 90, high: 95 }] }] }), /opakování/);
+  assert.throws(() => cleanTemplate({ ...ride, blocks: [{ repeats: 1, steps: [{ seconds: 60, low: 10, high: 20 }] }] }), /Intenzita/);
+  // A distance only when running.
+  assert.equal(cleanTemplate({ ...ride, blocks: [{ repeats: 1, steps: [{ km: 3, seconds: 600, low: 60, high: 70 }] }] }).blocks[0].steps[0].km, undefined);
+  // Distances become minutes at the athlete's own threshold pace.
+  const slow = enduranceStructure(cleanTemplate(run), { thresholdPace: 300 }), fast = enduranceStructure(cleanTemplate(run), { thresholdPace: 240 });
+  assert.ok(slow[0].durationMinutes > fast[0].durationMinutes);
+  assert.equal(enduranceSystem(enduranceStructure(cleanTemplate(ride)), "ride"), "sweet_spot");
+  assert.match(zwoFile(cleanTemplate(ride)), /<SteadyState Duration="900" Power="0.905" Cadence="90"\/>/);
+});
+
+test("a saved ride is listed with the athlete's rows, planned and shared with its graph", async () => {
+  const raw = createD1();
+  const saved = await call(raw, 1, "POST", "/app/api/my-workouts", ride);
+  assert.equal(saved.status, 200);
+  const w = saved.body.workout;
+  assert.equal(w.sport, "ride");
+  assert.equal(w.minutes, 85);
+  assert.equal(w.steps[1].repeats, 3);
+  assert.deepEqual([w.steps[1].steps[0].percentLow, w.steps[1].steps[0].percentHigh], [88, 93]);
+  // Planned: a library workout "own-<id>" in the calendar.
+  raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))");
+  const planned = await call(raw, 1, "POST", "/app/api/my-workouts/" + w.id + "/schedule", { date: "2099-02-01", environment: "indoor" });
+  assert.equal(planned.status, 200, JSON.stringify(planned.body));
+  assert.equal(planned.body.workout.id, "own-" + w.id);
+  const lib = await getWorkout(scopedDb(raw, 1), "own-" + w.id);
+  assert.equal(lib.duration_minutes, 85);
+  assert.match(lib.intervals_description, /88-93%/);
+  assert.equal(await getWorkout(scopedDb(raw, 2), "own-" + w.id), null);
+  // The link's page draws the sections and offers the Zwift file.
+  const shared = await call(raw, 1, "POST", "/app/api/shares", ride);
+  const url = new URL(ORIGIN + "/t/" + shared.body.id);
+  const html = await (await publicSharePage(new Request(url), raw, url)).text();
+  assert.match(html, /class="graph"/);
+  assert.match(html, /3× Sweet spot \/ Volně/);
+  assert.match(html, /workout\.zwo/);
+  const zwoUrl = new URL(url + "/workout.zwo");
+  const zwo = await publicSharePage(new Request(zwoUrl), raw, zwoUrl);
+  assert.match(await zwo.text(), /<sportType>bike<\/sportType>/);
+  // A friend's copy plans with the friend's pace; gym planning refuses it.
+  const got = await call(raw, 2, "POST", "/app/api/my-workouts", { fromShare: shared.body.id });
+  assert.equal(got.body.workout.sport, "ride");
+  assert.equal((await call(raw, 2, "POST", "/app/api/gym/template", { template: ride })).status, 400);
+});
+
+test("a library ride becomes an own workout with its ranges", async () => {
+  const raw = createD1();
+  const lib = (await catalog(scopedDb(raw, 1), "ride")).find(w => /sweet/i.test(w.primary_system || ""));
+  const saved = await call(raw, 1, "POST", "/app/api/my-workouts", { fromLibrary: lib.id });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.workout.name, lib.name);
+  assert.ok(Math.abs(saved.body.workout.minutes - lib.duration_minutes) <= 1);
 });

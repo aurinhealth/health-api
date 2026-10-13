@@ -117,6 +117,9 @@ struct SharePreviewCard: View {
     }
 
     private var line: String {
+        if template.isEndurance {
+            return [L10n.tr(template.sport == "run" ? "Běh" : "Kolo"), template.summary].joined(separator: " · ")
+        }
         var parts = [L10n.tr("Posilovna")]
         if let minutes = template.minutes { parts.append(Fmt.duration(minutes)) }
         parts.append(L10n.f("%@ %@", String(template.exercises.count), Fmt.plural(template.exercises.count, "cvik", "cviky", "cviků")))
@@ -138,7 +141,9 @@ struct SharePreviewCard: View {
                 .padding(.top, 18)
             Text(line).font(.system(size: 22)).foregroundStyle(muted).padding(.top, 4)
             Spacer(minLength: 16)
-            if !groups.isEmpty {
+            if template.isEndurance {
+                intervals.frame(height: 92)
+            } else if !groups.isEmpty {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(Array(groups.enumerated()), id: \.offset) { i, group in
                         VStack(alignment: .leading, spacing: 10) {
@@ -155,6 +160,32 @@ struct SharePreviewCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(background)
         .environment(\.colorScheme, dark ? .dark : .light)
+    }
+
+    /// A ride's or run's sections as bars: the width is the time, the height
+    /// and colour the intensity, like the link page's graph.
+    private var intervals: some View {
+        let segments = WorkoutProfile.segments(template.profile())
+        let total = max(1, segments.last?.end ?? 1)
+        return GeometryReader { geo in
+            ZStack(alignment: .bottomLeading) {
+                ForEach(segments) { s in
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(zoneColor(s.percent))
+                        .frame(width: max(2, geo.size.width * (s.end - s.start) / total - 2),
+                               height: geo.size.height * min(1, max(0.18, s.percent / 125)))
+                        .offset(x: geo.size.width * s.start / total)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height, alignment: .bottomLeading)
+        }
+    }
+
+    private func zoneColor(_ percent: Double) -> Color {
+        let colors: [UInt32] = dark ? [0x5C6662, 0x7CC3F0, 0x8FE6C4, 0xF0B36E, 0xF0907A, 0xA5A1FF]
+                                    : [0xB9B4AA, 0x1D6FA3, 0x1F6B52, 0xA35A12, 0xB4532F, 0x4F46C8]
+        let index = percent < 56 ? 0 : percent < 76 ? 1 : percent < 91 ? 2 : percent < 106 ? 3 : percent < 121 ? 4 : 5
+        return Color(hex: colors[index])
     }
 }
 
@@ -181,7 +212,7 @@ struct ShareWorkoutButton: View {
             SecondaryButton(title: busy ? "Připravuji odkaz…" : "Sdílet", systemImage: "square.and.arrow.up") {
                 Task { await share() }
             }
-            .disabled(busy || model.demo || template.exercises.isEmpty)
+            .disabled(busy || model.demo || template.isEmpty)
             if let error { Text(error).font(Typo.caption).foregroundStyle(Palette.rust) }
         }
     }
@@ -216,7 +247,7 @@ struct SaveWorkoutButton: View {
                 SecondaryButton(title: busy ? "Ukládám…" : "Uložit do Mých tréninků", systemImage: "bookmark") {
                     Task { await save() }
                 }
-                .disabled(busy || model.demo || template.exercises.isEmpty)
+                .disabled(busy || model.demo || template.isEmpty)
             }
             if let error { Text(error).font(Typo.caption).foregroundStyle(Palette.rust) }
         }
