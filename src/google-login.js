@@ -42,7 +42,7 @@ function googleClientEnv(env) {
 function configured(env) {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.SESSION_SECRET && env.OWNER_EMAIL && env.DB);
 }
-const APP_ONLY = ["Přihlášení selhalo", "Přihlášení přes Google je jen v aplikaci Loadwise pro iPhone.", 400];
+const APP_ONLY = ["Přihlášení selhalo", "Přihlášení přes Google je jen v aplikaci Aurin pro iPhone.", 400];
 
 async function startLogin(env, request) {
   const app = new URL(request.url).searchParams.get("app") || "";
@@ -118,7 +118,7 @@ function appReturnPage(token) {
   const link = APP_RETURN_URL + "?token=" + encodeURIComponent(token);
   const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" });
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
-  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>Přihlášení hotovo</h1><p>Vrať se do aplikace Loadwise.</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">Otevřít aplikaci</a></p><script>location.href=document.getElementById(\"open\").href</script></body></html>", { status: 200, headers });
+  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>Přihlášení hotovo</h1><p>Vrať se do aplikace Aurin.</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">Otevřít aplikaci</a></p><script>location.href=document.getElementById(\"open\").href</script></body></html>", { status: 200, headers });
 }
 
 // The app's web view trades the handoff token and its verifier for a session.
@@ -182,7 +182,7 @@ async function googleJwks(fetchImpl, kid) {
 export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 function page(title, message, status) {
-  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">Zpět na přihlášení</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });
+  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">Zpět na přihlášení</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });
 }
 function esc(value) { return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])); }
 function randomToken() { return base64url(crypto.getRandomValues(new Uint8Array(24))); }
