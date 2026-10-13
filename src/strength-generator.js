@@ -651,14 +651,24 @@ const TEST_SET_NOTE = () => L("zkušební série: začni lehčí vahou, se ktero
 const CORE_PATTERNS = new Set(["core", "anti_rotation", "rotation", "trunk_flexion", "trunk_extension", "slam"]);
 // The athlete's gym goal (onboarding.js trainingSetup.goal): strength is few
 // heavy reps on the main lifts, muscle the middle range, fitness many light
-// reps. "auto" keeps each exercise's own range. A beginner's main lifts stay
-// at 6–8 even for strength, while the technique settles.
-export const STRENGTH_GOALS = ['auto', 'strength', 'muscle', 'fitness'];
+// reps, and two steps in between. "auto" follows the main sport
+// (recommendedGoal). A beginner's main lifts stay at 6–8 even for strength,
+// while the technique settles.
+export const STRENGTH_GOALS = ['auto', 'strength', 'strength_muscle', 'muscle', 'muscle_fitness', 'fitness'];
+// A cyclist needs strong legs without much weight (strength and muscle), a
+// runner light, durable legs (muscle and fitness), a lifter muscle. Without a
+// known sport each exercise keeps its own range ("auto").
+export function recommendedGoal(mainSport, experience) {
+  const goal = { cycling: 'strength_muscle', running: 'muscle_fitness', triathlon: 'muscle_fitness', strength: 'muscle' }[mainSport] || 'auto';
+  return experience === 'beginner' && goal === 'strength_muscle' ? 'muscle' : goal;
+}
 export function goalReps(def, goal, experience) {
   if (!def || !goal || goal === 'auto' || CORE_PATTERNS.has(def.pattern) || !def.baseKg) return def?.reps;
-  const main = def.warmup === true;
-  if (goal === 'strength') return main ? (experience === 'beginner' ? '6–8' : '3–6') : def.fatigue >= .7 ? '6–8' : def.reps;
+  const main = def.warmup === true, heavy = def.fatigue >= .7, beginner = experience === 'beginner';
+  if (goal === 'strength') return main ? (beginner ? '6–8' : '3–6') : heavy ? '6–8' : def.reps;
+  if (goal === 'strength_muscle') return main ? (beginner ? '6–8' : '5–8') : heavy ? '6–10' : '8–12';
   if (goal === 'muscle') return main ? '6–10' : '8–12';
+  if (goal === 'muscle_fitness') return main ? '8–12' : '12–15';
   if (goal === 'fitness') return '12–15';
   return def.reps;
 }
@@ -669,7 +679,7 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : ownReps;
   // Strength for an experienced athlete: one more set of the main lifts.
-  const extra = !planReps && goal === 'strength' && experience === 'experienced' && def.warmup ? 1 : 0;
+  const extra = !planReps && (goal === 'strength' || goal === 'strength_muscle') && experience === 'experienced' && def.warmup ? 1 : 0;
   const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier) + extra, maxSets + extra);
   const progression = progressionNote(estimate);
   const note = (estimate.source === "cross-exercise-estimate" ? def.note + L("; odhad z ", "; estimated from ") + estimate.referenceExercise + L(", ověř RPE", ", check the RPE") : def.note) + (progression ? "; " + progression : "") + (firstSession ? "; " + FIRST_SESSION_NOTE() : "");
@@ -833,7 +843,9 @@ export function generateStrengthPlan(context, options = {}) {
   const nearRide = legProtection(context);
   const durationVolume = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? .75 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? .9 : 1;
   const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume, deload ? 0.6 : 1);
-  const experience = context.trainingSetup?.experience || '', goal = planPhase ? 'auto' : STRENGTH_GOALS.includes(context.trainingSetup?.goal) ? context.trainingSetup.goal : 'auto';
+  const experience = context.trainingSetup?.experience || '', chosenGoal = STRENGTH_GOALS.includes(context.trainingSetup?.goal) ? context.trainingSetup.goal : 'auto';
+  const sport = context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '';
+  const goal = planPhase ? 'auto' : chosenGoal === 'auto' ? recommendedGoal(sport, experience) : chosenGoal;
   const maxSets = Math.min(experience==='beginner'?2:Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4, goal === 'fitness' ? 3 : 4);
   let warmedUp = false;
   for (const exercise of exercises) {
@@ -888,7 +900,14 @@ export function generateStrengthPlan(context, options = {}) {
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString(L('cs-CZ', 'en-GB'), { weekday: 'short', day: 'numeric', month: L('numeric', 'short'), timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);
-  const goalText = goal === 'strength' ? L('Cíl síla: hlavní cviky v nižším počtu opakování s delší pauzou. ', 'Goal strength: the main lifts in fewer reps with longer rests. ') : goal === 'muscle' ? L('Cíl svaly: střední rozsah opakování. ', 'Goal muscle: the middle rep range. ') : goal === 'fitness' ? L('Cíl kondice: víc opakování a krátké pauzy. ', 'Goal fitness: more reps and short rests. ') : '';
+  const goalLine = {
+    strength: L('síla: hlavní cviky v nižším počtu opakování s delší pauzou', 'strength: the main lifts in fewer reps with longer rests'),
+    strength_muscle: L('síla a svaly: těžší hlavní cviky, doplňky ve středním rozsahu', 'strength and muscle: heavier main lifts, accessories in the middle range'),
+    muscle: L('svaly: střední rozsah opakování', 'muscle: the middle rep range'),
+    muscle_fitness: L('svaly a kondice: víc opakování a kratší pauzy', 'muscle and fitness: more reps and shorter rests'),
+    fitness: L('kondice: hodně opakování a krátké pauzy', 'fitness: many reps and short rests')
+  }[goal];
+  const goalText = goalLine ? (chosenGoal === 'auto' ? L('Cíl podle tvého sportu – ', 'Goal from your sport – ') : L('Cíl ', 'Goal ')) + goalLine + '. ' : '';
   const rationale = goalText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '');
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));

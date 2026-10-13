@@ -42,7 +42,7 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
   const description = [
     plan.rationale ? L(`Proč tenhle trénink: ${plan.rationale}`, `Why this workout: ${plan.rationale}`) : "",
     formatRows(plan.rows || []),
-    plan.stretching?.items?.length ? L("Protažení na konci", "Stretching at the end") + ` (${plan.stretching.minutes} min): ` + plan.stretching.items.map(x => x.name + " " + (x.sides ? "2 × " : "") + x.seconds + " s").join(", ") : "",
+    plan.stretching?.items?.length ? L("Protažení na konci", "Stretching at the end") + ` (${plan.stretching.minutes} min): ` + plan.stretching.items.map(x => x.name + " " + ((x.rounds || 1) > 1 ? x.rounds + " × " : "") + x.seconds + " s" + (x.sides ? L(" na stranu", " per side") : "")).join(", ") : "",
     L("Vygenerováno v Aurinu", "Generated in Aurin")
   ].filter(Boolean).join("\n\n");
 

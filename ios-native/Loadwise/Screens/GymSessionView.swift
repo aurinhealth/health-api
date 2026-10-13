@@ -756,6 +756,8 @@ struct YouTubePlayer: UIViewRepresentable {
 /// The start and end position of an exercise, one photo per page.
 struct ExercisePhotos: View {
     let urls: [URL]
+    /// Začátek and Konec on the photos (a stretch's two photos are one position).
+    var labeled = true
     @State private var page = 0
 
     var body: some View {
@@ -770,12 +772,14 @@ struct ExercisePhotos: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .overlay(alignment: .bottomLeading) {
+                        if labeled {
                         Text(index == 0 ? L10n.tr("Začátek") : L10n.tr("Konec"))
                             .font(Typo.caption)
                             .foregroundStyle(Palette.ink)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Palette.background.opacity(0.65), in: Capsule())
                             .padding(10)
+                        }
                     }
                     .tag(index)
                 }

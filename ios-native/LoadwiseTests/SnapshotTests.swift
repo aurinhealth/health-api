@@ -162,11 +162,15 @@ final class SnapshotTests: XCTestCase {
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
         try render("gym-stretching", height: 520) {
             StretchingCard(stretching: GymStretching(minutes: 5, items: [
-                .init(id: "hip_flexor", name: "Kyčelní flexory u zdi", seconds: 30, sides: true),
-                .init(id: "hamstring", name: "Zadní strana stehen", seconds: 30, sides: true),
-                .init(id: "doorway", name: "Hrudník ve dveřích", seconds: 30, sides: false),
+                .init(id: "hip_flexor", name: "Kyčelní flexory v kleku", seconds: 30, sides: true, rounds: 2, steps: ["Klekni si na jedno koleno."]),
+                .init(id: "hamstring", name: "Zadní strana stehen v sedu", seconds: 30, sides: true, rounds: 2, steps: ["Sedni si."]),
+                .init(id: "chest", name: "Hrudník: lokty dozadu", seconds: 30, sides: false, steps: ["Postav se rovně."]),
                 .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false)
             ]), date: "2026-10-14").padding(20)
+        }
+        try render("gym-stretch-info", height: 700) {
+            StretchInfoSheet(item: .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false,
+                                         steps: ["Z pozice na všech čtyřech si sedni hýžděmi na paty.", "Paže nech natažené před sebou na zemi a čelo polož na podložku.", "Zhluboka dýchej a s každým výdechem povol záda."]))
         }
     }
 

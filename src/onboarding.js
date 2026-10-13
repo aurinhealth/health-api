@@ -82,7 +82,7 @@ export function normalizeTraining(input={}){
   const places=normalizePlaces(input.places);
   const activePlace=input.activePlace==='bodyweight'||places.some(p=>p.id===input.activePlace)?String(input.activePlace):places[0]?.id||'bodyweight';
   // The gym goal (strength-generator.js goalReps) and stretching at the end (on unless turned off).
-  const goal=['strength','muscle','fitness'].includes(input.goal)?input.goal:'auto';
+  const goal=['strength','strength_muscle','muscle','muscle_fitness','fitness'].includes(input.goal)?input.goal:'auto';
   const stretching=input.stretching!==false;
   return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,stretching};
 }

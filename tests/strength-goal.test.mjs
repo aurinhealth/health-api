@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { generateStrengthPlan, goalReps, EXERCISES } from '../src/strength-generator.js';
+import { generateStrengthPlan, goalReps, recommendedGoal, EXERCISES } from '../src/strength-generator.js';
 import { stretchingFor, stretchingRow, readStretching } from '../src/stretching.js';
 import { planValues } from '../src/gym-plan-store.js';
 import { normalizeTraining } from '../src/onboarding.js';
@@ -61,6 +61,33 @@ test('stretching is stored in the plan header and sent to Intervals.icu', () => 
 test('the training setup keeps the goal and the stretching switch', () => {
   assert.equal(normalizeTraining({ goal: 'strength' }).goal, 'strength');
   assert.equal(normalizeTraining({ goal: 'bulk' }).goal, 'auto');
+  assert.equal(normalizeTraining({ goal: 'muscle_fitness' }).goal, 'muscle_fitness');
   assert.equal(normalizeTraining({}).stretching, true);
   assert.equal(normalizeTraining({ stretching: false }).stretching, false);
+});
+
+test('the goal follows the main sport while it is automatic', () => {
+  assert.equal(recommendedGoal('cycling', 'regular'), 'strength_muscle');
+  assert.equal(recommendedGoal('cycling', 'beginner'), 'muscle');
+  assert.equal(recommendedGoal('running', 'experienced'), 'muscle_fitness');
+  assert.equal(recommendedGoal('general', 'regular'), 'auto');
+  const rider = generateStrengthPlan({ ...context({ experience: 'regular' }), profile: { mainSport: 'cycling' } }, { durationMinutes: 75 });
+  const runner = generateStrengthPlan({ ...context({ experience: 'regular' }), profile: { mainSport: 'running' } }, { durationMinutes: 75 });
+  assert.equal(rider.goal, 'strength_muscle');
+  assert.equal(mainLift(rider)[4], '5–8');
+  assert.equal(mainLift(runner)[4], '8–12');
+  assert.match(rider.rationale, /podle tvého sportu|from your sport/);
+  const chosen = generateStrengthPlan({ ...context({ goal: 'fitness' }), profile: { mainSport: 'cycling' } }, { durationMinutes: 75 });
+  assert.equal(chosen.goal, 'fitness');
+});
+
+test('each stretch has steps, two photos and two rounds for the muscles worked most', () => {
+  const plan = generateStrengthPlan(context(), { durationMinutes: 75, focus: 'lower' });
+  for (const item of plan.stretching.items) {
+    assert.ok(item.steps.length >= 2);
+    assert.equal(item.photos.length, 2);
+    assert.match(item.photos[0], /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/\w/);
+  }
+  assert.deepEqual(plan.stretching.items.map(x => x.rounds), [2, 2, 1, 1, 1]);
+  assert.ok(plan.stretching.minutes >= 5 && plan.stretching.minutes <= 9);
 });

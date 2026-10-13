@@ -25,7 +25,7 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60, str
 }
 
 // Rests by the gym goal: heavy strength sets need the longest, fitness the shortest.
-const GOAL_RESTS = { strength: [180, 180, 120], muscle: [120, 105, 75], fitness: [75, 60, 45] };
+const GOAL_RESTS = { strength: [180, 180, 120], strength_muscle: [150, 150, 90], muscle: [120, 105, 75], muscle_fitness: [90, 75, 60], fitness: [75, 60, 45] };
 export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false, goal = 'auto' } = {}) {
   const [heavy, main, other] = GOAL_RESTS[goal] || [150, 120, 75];
   for (const r of rows) {
