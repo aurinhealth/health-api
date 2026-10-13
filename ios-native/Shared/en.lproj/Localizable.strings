@@ -1902,3 +1902,8 @@
 "Co to je? Třeba „tyčinka Margot“" = "What is it? E.g. \"Snickers bar\"";
 "Odhadnout AI" = "Estimate with AI";
 "AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";
+
+/* Plán týdne: Opravit návrh */
+"Opravit návrh" = "Fix the proposal";
+"Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
+"Opravuji…" = "Fixing…";

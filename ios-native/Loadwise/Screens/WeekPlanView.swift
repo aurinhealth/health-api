@@ -87,6 +87,8 @@ struct WeekPlanView: View {
     @State private var days: [[String]] = Array(repeating: [], count: 7)
     @State private var picked: String?
     @State private var note = ""
+    /// "Opravit návrh": what the AI should fix in its proposal.
+    @State private var correction = ""
     @State private var summary: String?
     @State private var notice: String?
     @State private var warnings: [WeekProposalResponse.Warning] = []
@@ -341,25 +343,60 @@ struct WeekPlanView: View {
         }
     }
 
-    private func proposeAI() async {
+    /// With a correction the AI fixes its last proposal; a session it keeps
+    /// as it was keeps its built workout.
+    private func proposeAI(correction: String? = nil) async {
         working = true
         defer { working = false }
         error = nil
         do {
-            let r = try await model.api.weekAI(start: weekStart, note: note)
+            let previous = sessions
+            let r = try await model.api.weekAI(start: weekStart, note: note, correction: correction, previous: previous)
             summary = r.summary
             notice = r.ai == false ? r.message : nil
             warnings = r.warnings ?? []
             sessions = (r.items ?? []).map { item in
                 let sport = item.sport == "strength" ? "gym" : item.sport
-                return WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? 60,
-                                        environment: sport == "gym" ? nil : item.environment ?? "outdoor",
-                                        kind: item.kind, focus: item.focus, label: item.label, reason: item.reason, role: item.role)
+                let next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? 60,
+                                            environment: sport == "gym" ? nil : item.environment ?? "outdoor",
+                                            kind: item.kind, focus: item.focus, label: item.label, reason: item.reason, role: item.role)
+                if var same = previous.first(where: { $0.built && $0.date == next.date && $0.sport == next.sport && $0.minutes == next.minutes
+                                                     && $0.environment == next.environment && $0.kind == next.kind }) {
+                    same.reason = next.reason
+                    same.note = nil
+                    return same
+                }
+                return next
             }
             if sessions.isEmpty { error = L10n.tr("Na tento týden není co navrhnout.") }
+            if correction != nil { self.correction = "" }
             await buildAll()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// "Opravit návrh": the athlete tells the AI what it got wrong.
+    private var correctionCard: some View {
+        Card(padding: 14) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Opravit návrh").font(Typo.caption).foregroundStyle(Palette.muted)
+                TextField(L10n.tr("Třeba: v sobotu chci posilovnu, ne běh"), text: $correction, axis: .vertical)
+                    .font(Typo.body).lineLimit(1...4)
+            }
+            HStack {
+                Spacer()
+                Button {
+                    Task { await proposeAI(correction: correction.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                } label: {
+                    Label(L10n.tr(working ? "Opravuji…" : "Opravit"), systemImage: "sparkles")
+                        .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 14).frame(height: 34)
+                        .background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(working || saving || correction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.demo)
+            }
         }
     }
 
@@ -395,6 +432,10 @@ struct WeekPlanView: View {
                 }
             }
             .padding(.top, 18)
+
+            if mode == "ai" && !sessions.contains(where: { $0.status == .saved }) {
+                correctionCard.padding(.top, 14)
+            }
 
             let open = sessions.filter { $0.status == .ready }
             let finished = !sessions.isEmpty && sessions.allSatisfy { $0.status == .saved }
@@ -627,6 +668,15 @@ struct WeekSessionDetailView: View {
     private func apply(_ changed: AdjustedSession) {
         session.date = changed.date
         session.minutes = changed.minutes
+        if let sport = changed.sport, sport != session.sport {
+            // Another sport: the old workout goes and a new one is built.
+            session.sport = sport
+            session.workout = nil
+            session.gym = nil
+            session.role = nil
+            session.environment = sport == "gym" ? nil : changed.environment ?? "outdoor"
+            if sport == "gym" { session.kind = "gym"; session.focus = nil; session.label = kindLabel("gym") }
+        }
         if session.sport != "gym" { session.environment = changed.environment ?? session.environment }
         if let kind = changed.kind {
             session.kind = kind
