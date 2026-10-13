@@ -76,6 +76,7 @@ struct AppleHealthCategoryList: View {
         case .activity: return Palette.rust
         case .breathing: return Palette.blue
         case .body: return Palette.green
+        case .food: return Palette.amber
         }
     }
 }

@@ -444,6 +444,7 @@ struct DrinkLine: View {
             Image(systemName: kind?.symbol ?? "drop.fill").font(.system(size: 13)).foregroundStyle(Palette.blue).frame(width: 20)
             Text(kind?.label ?? drink.kind).font(Typo.small).foregroundStyle(Palette.secondary)
             if let t = drink.time { Text(ClockText.format(t)).font(Typo.tiny).foregroundStyle(Palette.faint) }
+            if let app = drink.app { AppTag(name: app) }
             Spacer()
             Text(Units.volumeText(drink.ml)).font(Typo.number(16)).foregroundStyle(Palette.ink)
             if let h = drink.hydrationMl, let ml = drink.ml, abs(h - ml) >= 1 {

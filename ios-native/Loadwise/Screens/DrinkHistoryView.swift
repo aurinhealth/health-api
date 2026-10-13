@@ -131,8 +131,12 @@ struct DrinkHistoryView: View {
                 ForEach(DrinkHistory.byPart(drinks), id: \.title) { part in
                     SectionLabel(text: part.title).padding(.top, 12).padding(.bottom, 2)
                     ForEach(part.drinks) { d in
-                        SwipeRow(edit: { editing = d }, delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
+                        if d.app != nil {
                             DrinkLine(drink: d)
+                        } else {
+                            SwipeRow(edit: { editing = d }, delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
+                                DrinkLine(drink: d)
+                            }
                         }
                     }
                 }

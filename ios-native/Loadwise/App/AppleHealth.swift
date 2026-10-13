@@ -6,7 +6,7 @@ import UIKit
 /// What Loadwise may read from Apple Health, chosen in Zdroje dat. iOS then
 /// asks once more for each type (and the user can untick any there too).
 enum HealthCategory: String, CaseIterable, Identifiable {
-    case sleep, workouts, heart, activity, breathing, body
+    case sleep, workouts, heart, activity, breathing, body, food
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .activity: return "Pohyb"
         case .breathing: return "Dech a kyslík"
         case .body: return "Tělo"
+        case .food: return "Jídlo a pití"
         }
     }
 
@@ -29,6 +30,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .activity: return "kroky a aktivní energie"
         case .breathing: return "dechová frekvence a okysličení krve"
         case .body: return "hmotnost a tělesný tuk"
+        case .food: return "jídlo a voda z jiných aplikací"
         }
     }
 
@@ -40,6 +42,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .activity: return "flame.fill"
         case .breathing: return "lungs.fill"
         case .body: return "scalemass.fill"
+        case .food: return "fork.knife"
         }
     }
 
@@ -61,6 +64,8 @@ enum HealthCategory: String, CaseIterable, Identifiable {
             return [HKQuantityType(.respiratoryRate), HKQuantityType(.oxygenSaturation)]
         case .body:
             return [HKQuantityType(.bodyMass), HKQuantityType(.bodyFatPercentage), HKQuantityType(.leanBodyMass)]
+        case .food:
+            return Set(HealthReader.foodTypes.map { HKQuantityType($0) as HKObjectType }).union([HKQuantityType(.dietaryWater) as HKObjectType])
         }
     }
 
@@ -73,6 +78,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .activity: return [HKQuantityType(.stepCount)]
         case .breathing: return [HKQuantityType(.respiratoryRate)]
         case .body: return [HKQuantityType(.bodyMass)]
+        case .food: return [HKQuantityType(.dietaryEnergyConsumed), HKQuantityType(.dietaryWater)]
         }
     }
 }
@@ -223,6 +229,38 @@ struct AppleHealthUpload: Encodable {
     var records: [AppleRecord]
     var windows: [String: Window]? = nil
     var categories: [String]
+    /// Food and water other apps logged, every one from these days (src/apple-food.js).
+    var food: Food? = nil
+
+    struct Food: Encodable {
+        let from: String
+        let to: String
+        var meals: [Meal]
+        var drinks: [Drink]
+    }
+
+    struct Meal: Encodable {
+        let id: String
+        let date: String
+        let time: String
+        var name: String?
+        let app: String
+        let kcal: Double
+        var protein: Double?
+        var carbs: Double?
+        var fat: Double?
+        var fiber: Double?
+        var sugar: Double?
+        var salt: Double?
+    }
+
+    struct Drink: Encodable {
+        let id: String
+        let date: String
+        let time: String
+        let ml: Double
+        let app: String
+    }
 
     struct Window: Encodable {
         let from: String
@@ -379,12 +417,95 @@ final class HealthReader: @unchecked Sendable {
             rest += await measurements(.leanBodyMass, unit: .gramUnit(with: .kilo), type: "lean-body-mass", from: start, to: now)
         }
 
+        var food: AppleHealthUpload.Food?
+        if categories.contains(.food) {
+            food = await foodUpload(from: from(30), to: now)
+        }
+
         if closed.get() { return nil }
-        var uploads = [AppleHealthUpload(records: first, windows: windows.isEmpty ? nil : windows, categories: names)]
+        var uploads = [AppleHealthUpload(records: first, windows: windows.isEmpty ? nil : windows, categories: names, food: food)]
         for i in stride(from: 0, to: rest.count, by: 1500) {
             uploads.append(AppleHealthUpload(records: Array(rest[i..<min(i + 1500, rest.count)]), categories: names))
         }
         return uploads
+    }
+
+    // MARK: Food and water from other apps
+
+    /// What food apps write: energy, macros, fibre, sugar and sodium (salt is sodium × 2.5).
+    static let foodTypes: [HKQuantityTypeIdentifier] = [.dietaryEnergyConsumed, .dietaryProtein, .dietaryCarbohydrates,
+                                                       .dietaryFatTotal, .dietaryFiber, .dietarySugar, .dietarySodium]
+
+    private static func foodUnit(_ id: HKQuantityTypeIdentifier) -> HKUnit {
+        id == .dietaryEnergyConsumed ? .kilocalorie() : .gram()
+    }
+
+    private let clockFormat: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+
+    private func clock(_ date: Date) -> String {
+        clockFormat.timeZone = calendar.timeZone
+        return clockFormat.string(from: date)
+    }
+
+    /// Every food and water other apps (Yazio, MyFitnessPal…) logged from the
+    /// day of `from` on; never what Aurin wrote (notOurs). A food is either a
+    /// food correlation with its parts, or an energy sample with the macros the
+    /// same app saved at the same moment.
+    func foodUpload(from: Date, to: Date) async -> AppleHealthUpload.Food {
+        var meals: [AppleHealthUpload.Meal] = []
+        var inside = Set<UUID>()
+        func meal(_ id: UUID, _ start: Date, _ name: String?, _ app: String, _ values: [HKQuantityTypeIdentifier: Double]) -> AppleHealthUpload.Meal? {
+            guard let kcal = values[.dietaryEnergyConsumed] else { return nil }
+            return AppleHealthUpload.Meal(id: id.uuidString, date: day(start), time: clock(start), name: name?.nilIfBlank, app: app, kcal: kcal,
+                                          protein: values[.dietaryProtein], carbs: values[.dietaryCarbohydrates], fat: values[.dietaryFatTotal],
+                                          fiber: values[.dietaryFiber], sugar: values[.dietarySugar], salt: values[.dietarySodium].map { $0 * 2.5 })
+        }
+        for c in await foodCorrelations(from: from, to: to) {
+            var values: [HKQuantityTypeIdentifier: Double] = [:]
+            for case let q as HKQuantitySample in c.objects {
+                inside.insert(q.uuid)
+                let id = HKQuantityTypeIdentifier(rawValue: q.quantityType.identifier)
+                guard Self.foodTypes.contains(id) else { continue }
+                values[id, default: 0] += q.quantity.doubleValue(for: Self.foodUnit(id))
+            }
+            if let m = meal(c.uuid, c.startDate, c.metadata?[HKMetadataKeyFoodType] as? String, c.sourceRevision.source.name, values) { meals.append(m) }
+        }
+        // Loose samples: the macros an app saved with an energy sample share its start.
+        func key(_ q: HKSample) -> String { q.sourceRevision.source.bundleIdentifier + "|" + String(q.startDate.timeIntervalSince1970) }
+        var loose: [String: [HKQuantityTypeIdentifier: Double]] = [:]
+        for id in Self.foodTypes where id != .dietaryEnergyConsumed {
+            for case let q as HKQuantitySample in await samples(HKQuantityType(id), from: from, to: to, predicate: notOurs) where !inside.contains(q.uuid) {
+                loose[key(q), default: [:]][id, default: 0] += q.quantity.doubleValue(for: Self.foodUnit(id))
+            }
+        }
+        for case let e as HKQuantitySample in await samples(HKQuantityType(.dietaryEnergyConsumed), from: from, to: to, predicate: notOurs) where !inside.contains(e.uuid) {
+            var values = loose[key(e)] ?? [:]
+            loose[key(e)] = nil
+            values[.dietaryEnergyConsumed] = e.quantity.doubleValue(for: .kilocalorie())
+            if let m = meal(e.uuid, e.startDate, e.metadata?[HKMetadataKeyFoodType] as? String, e.sourceRevision.source.name, values) { meals.append(m) }
+        }
+        var drinks: [AppleHealthUpload.Drink] = []
+        for case let w as HKQuantitySample in await samples(HKQuantityType(.dietaryWater), from: from, to: to, predicate: notOurs) where !inside.contains(w.uuid) {
+            drinks.append(.init(id: w.uuid.uuidString, date: day(w.startDate), time: clock(w.startDate),
+                                ml: w.quantity.doubleValue(for: .literUnit(with: .milli)), app: w.sourceRevision.source.name))
+        }
+        return .init(from: day(from), to: day(to), meals: meals, drinks: drinks)
+    }
+
+    private func foodCorrelations(from: Date, to: Date) async -> [HKCorrelation] {
+        await withCheckedContinuation { continuation in
+            let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [HKQuery.predicateForSamples(withStart: from, end: to, options: []), notOurs])
+            let query = HKCorrelationQuery(type: HKCorrelationType(.food), predicate: predicate, samplePredicates: nil) { [closed] _, correlations, error in
+                closed.note(error)
+                continuation.resume(returning: correlations ?? [])
+            }
+            store.execute(query)
+        }
     }
 
     // MARK: Queries

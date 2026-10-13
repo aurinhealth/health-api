@@ -1,0 +1,99 @@
+// Food and drinks other apps (Yazio, MyFitnessPal, Lifesum…) logged in Apple
+// Health. The iPhone app reads them (not what Aurin wrote there itself) and
+// sends every one in a window of days; they go into the same diary as food
+// logged in Aurin (food_logs, source 'apple-health') and the drinks into
+// fluid_log, so totals, meals and Pití count them. They are the other app's:
+// they are not edited here, and they are never sent on to Apple Health or
+// Google Health again (food-google-sync.js, AppleHealthExport.swift).
+import { ensureFoodLogTable } from "./food-log.js";
+import { ensure as ensureFluidLog } from "./fluids.js";
+
+export const FOOD_SOURCE = "apple-health";
+const MAX_ITEMS = 2000;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+const num = (v, lo, hi) => { const n = Number(v); return v !== null && v !== "" && v !== undefined && Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+const round = (v, d = 1) => v == null ? null : Math.round(v * 10 ** d) / 10 ** d;
+const cleanId = v => { const s = String(v ?? "").trim(); return s && s.length <= 120 && /^[A-Za-z0-9:._+-]+$/.test(s) ? s : null; };
+const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+
+// A meal name some apps use for the whole meal ("Breakfast", "Oběd").
+const MEAL_NAMES = [["breakfast", /^(breakfast|snídaně|snidane|frühstück)$/i], ["lunch", /^(lunch|oběd|obed|mittagessen)$/i],
+  ["dinner", /^(dinner|supper|večeře|vecere|abendessen)$/i], ["snack", /^(snack|snacks|svačina|svacina|zwischenmahlzeit)$/i]];
+export function mealTypeOfName(name) {
+  for (const [type, re] of MEAL_NAMES) if (re.test(String(name || "").trim())) return type;
+  return null;
+}
+
+// One food from the app: { id, date, time, name, app, kcal, protein, carbs, fat, fiber, sugar, salt }.
+export function appleFood(r) {
+  const id = cleanId(r?.id), date = DAY.test(String(r?.date || "")) ? r.date : null;
+  const kcal = num(r?.kcal, 0, 10000);
+  if (!id || !date || kcal == null) return null;
+  const app = text(r.app, 60) || "Apple Health";
+  const name = text(r.name, 120) || app;
+  const time = CLOCK.test(String(r.time || "")) ? r.time : null;
+  const note = { external_id: id, app, sugar_g: round(num(r.sugar, 0, 1000)), salt_g: round(num(r.salt, 0, 200), 2) };
+  const meal = mealTypeOfName(r.name);
+  if (meal) note.mealType = meal;
+  return {
+    id, date, consumed_at: date + "T" + (time || "12:00") + ":00", name,
+    kcal: round(kcal, 0), protein_g: round(num(r.protein, 0, 1000)) ?? 0, carbs_g: round(num(r.carbs, 0, 2000)) ?? 0,
+    fat_g: round(num(r.fat, 0, 1000)) ?? 0, fiber_g: round(num(r.fiber, 0, 500)) ?? 0,
+    note: JSON.stringify(Object.fromEntries(Object.entries(note).filter(([, v]) => v != null)))
+  };
+}
+
+// One drink: { id, date, time, ml, app }. Water only: other apps write
+// coffee or juice as water too, and Aurin cannot tell them apart.
+export function appleDrink(r) {
+  const id = cleanId(r?.id), date = DAY.test(String(r?.date || "")) ? r.date : null;
+  const ml = num(r?.ml, 10, 3000);
+  if (!id || !date || ml == null) return null;
+  const time = CLOCK.test(String(r.time || "")) ? r.time : "12:00";
+  return { id, date, consumed_at: date + "T" + time, ml: Math.round(ml), app: text(r.app, 60) || "Apple Health" };
+}
+
+// POST body part: { food: { from, to, meals: [...], drinks: [...] } }. The
+// window says the app sent everything from those days: what it did not send
+// was deleted in the other app and goes here too.
+export async function saveAppleFood(db, userId, input = {}) {
+  const from = DAY.test(String(input?.from || "")) ? input.from : null, to = DAY.test(String(input?.to || "")) ? input.to : null;
+  if (!from || !to || to < from) return { saved: 0, removed: 0 };
+  const inWindow = item => item && item.date >= from && item.date <= to;
+  const meals = (Array.isArray(input.meals) ? input.meals : []).slice(0, MAX_ITEMS).map(appleFood).filter(inWindow);
+  const drinks = (Array.isArray(input.drinks) ? input.drinks : []).slice(0, MAX_ITEMS).map(appleDrink).filter(inWindow);
+  await ensureFoodLogTable(db);
+  await ensureFluidLog(db);
+
+  const statements = [];
+  const known = new Map(((await db.prepare(`SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs
+    WHERE user_id=? AND source=? AND consumed_date>=? AND consumed_date<=?`).bind(userId, FOOD_SOURCE, from, to).all()).results || []).map(r => [r.ext, r.id]));
+  for (const m of meals) {
+    const id = known.get(m.id);
+    known.delete(m.id);
+    statements.push(id
+      ? db.prepare("UPDATE food_logs SET consumed_date=?,consumed_at=?,recipe_title=?,kcal=?,protein_g=?,carbs_g=?,fat_g=?,fiber_g=?,note=? WHERE user_id=? AND id=?")
+        .bind(m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, m.note, userId, id)
+      : db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,1,?,?,?,?,?,?,?)")
+        .bind(userId, m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, FOOD_SOURCE, m.note));
+  }
+  const removedMeals = [...known.values()];
+  if (removedMeals.length) statements.push(db.prepare("DELETE FROM food_logs WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, FOOD_SOURCE, JSON.stringify(removedMeals)));
+
+  const knownDrinks = new Map(((await db.prepare("SELECT id, external_id FROM fluid_log WHERE user_id=? AND source=? AND date>=? AND date<=?")
+    .bind(userId, FOOD_SOURCE, from, to).all()).results || []).map(r => [r.external_id, r.id]));
+  for (const d of drinks) {
+    const id = knownDrinks.get(d.id);
+    knownDrinks.delete(d.id);
+    statements.push(id
+      ? db.prepare("UPDATE fluid_log SET date=?,consumed_at=?,ml=?,app=? WHERE user_id=? AND id=?").bind(d.date, d.consumed_at, d.ml, d.app, userId, id)
+      : db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind,source,external_id,app) VALUES(?,?,?,?,'water',?,?,?)")
+        .bind(userId, d.date, d.consumed_at, d.ml, FOOD_SOURCE, d.id, d.app));
+  }
+  const removedDrinks = [...knownDrinks.values()];
+  if (removedDrinks.length) statements.push(db.prepare("DELETE FROM fluid_log WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, FOOD_SOURCE, JSON.stringify(removedDrinks)));
+
+  for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
+  return { saved: meals.length + drinks.length, removed: removedMeals.length + removedDrinks.length };
+}
