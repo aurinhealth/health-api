@@ -312,6 +312,8 @@ final class AppModel {
             calendar = [:]
         }
         await loadAccountInitial()
+        // Back in the account that read Apple Health before signing out.
+        await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
         await checkSetup()
         // The morning readiness push for this account (PushRegistration.swift).
         await PushRegistration.refresh(api: api)
@@ -938,7 +940,7 @@ final class AppModel {
             outbox = []
             OutboxStore.save([])
             // Apple Health was allowed for this account, not the next one.
-            AppleHealth.shared.disconnect()
+            AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }

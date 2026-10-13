@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import HealthKit
 import Observation
@@ -161,7 +162,38 @@ final class AppleHealth {
     func disconnect() {
         enabled = false
         UserDefaults.standard.set(false, forKey: Self.enabledKey)
+        UserDefaults.standard.removeObject(forKey: Self.resumeKey)
         stopObservers()
+    }
+
+    /// Signing out: the next account must not read this iPhone, but signing
+    /// back in to this one reads it again (resume).
+    func pause(account email: String?) {
+        let wasOn = enabled
+        disconnect()
+        if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
+    }
+
+    /// After a sign-in to the account that read Apple Health before signing
+    /// out: on again with the permissions iOS kept, and the days in between.
+    func resume(account email: String?, api: APIClient) async {
+        let defaults = UserDefaults.standard
+        guard let saved = defaults.string(forKey: Self.resumeKey), let email else { return }
+        guard saved == Self.fingerprint(email), !enabled else { defaults.removeObject(forKey: Self.resumeKey); return }
+        // Switched off for this account elsewhere in the meantime: stays off.
+        guard let status: AppleHealthServerStatus = try? await api.get("/app/api/health/apple") else { return }
+        defaults.removeObject(forKey: Self.resumeKey)
+        guard status.connected == true else { return }
+        enabled = true
+        defaults.set(true, forKey: Self.enabledKey)
+        start(api: api)
+        await sync(api: api)
+    }
+
+    private static let resumeKey = "appleHealth.resumeFor"
+
+    private static func fingerprint(_ email: String) -> String {
+        SHA256.hash(data: Data(email.lowercased().utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     /// Zdroje dat → Apple Health → Oprávnění: fewer categories only stop
@@ -239,6 +271,11 @@ final class AppleHealth {
             return false
         }
     }
+}
+
+/// GET /app/api/health/apple: whether the account reads Apple Health.
+private struct AppleHealthServerStatus: Decodable {
+    let connected: Bool?
 }
 
 // MARK: - The upload
