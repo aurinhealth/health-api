@@ -123,24 +123,40 @@ extension View {
     }
 }
 
-/// A round glass button of the bars (back, the page's own action).
+/// A round glass button of the bars (back, the page's own action), or a
+/// glass capsule with a word ("Vybrat", "Zrušit") when it has text.
 struct ChromeButton: View {
     var systemImage: String
     var label: String
+    var text: String? = nil
     var action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Palette.ink)
-                .frame(width: 40, height: 40)
-                .contentShape(Circle())
+        if let text {
+            Button(action: action) {
+                Text(L10n.tr(text))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 14)
+                    .frame(height: 40)
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .chromeGlass(in: Capsule())
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        } else {
+            Button(action: action) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Palette.ink)
+                    .frame(width: 40, height: 40)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .chromeGlass(in: Circle())
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            .accessibilityLabel(L10n.tr(label))
         }
-        .buttonStyle(.plain)
-        .chromeGlass(in: Circle())
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-        .accessibilityLabel(L10n.tr(label))
     }
 }
 
@@ -171,10 +187,12 @@ extension EnvironmentValues {
     }
 }
 
-/// The page's own button in the pinned bar (the "+" of a meal).
+/// The page's own button in the pinned bar (the "+" of a meal), or a word
+/// ("Vybrat") when it has text.
 struct ChromeAction {
     var systemImage: String
     var label: String
+    var text: String? = nil
     var action: () -> Void
 }
 
@@ -184,6 +202,10 @@ struct ChromeAction {
 private struct PinnedTopBar: ViewModifier {
     var title: String?
     var trailing: ChromeAction?
+    /// Selecting (Vybrat): "Zrušit" instead of back, the title always shown.
+    var leading: ChromeAction?
+    var extra: ChromeAction?
+    var pinTitle = false
     var back: () -> Void
     @Environment(\.scrollReport) private var parent
     /// While the sync pill shows (RootView), it takes the title's place.
@@ -200,18 +222,25 @@ private struct PinnedTopBar: ViewModifier {
             })
             .overlay(alignment: .top) {
                 HStack(spacing: 12) {
-                    FloatingBackButton(action: back)
+                    if let leading {
+                        ChromeButton(systemImage: leading.systemImage, label: leading.label, text: leading.text, action: leading.action)
+                    } else {
+                        FloatingBackButton(action: back)
+                    }
                     Spacer(minLength: 0)
                     if let title {
                         Text(L10n.tr(title))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(Palette.ink)
                             .lineLimit(1)
-                            .opacity(scrolled && model?.syncStatus == nil ? 1 : 0)
+                            .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
                     }
                     Spacer(minLength: 0)
+                    if let extra {
+                        ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
+                    }
                     if let trailing {
-                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, action: trailing.action)
+                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, action: trailing.action)
                     } else {
                         Color.clear.frame(width: 40, height: 40)
                     }
@@ -231,8 +260,9 @@ private struct PinnedTopBar: ViewModifier {
 
 extension View {
     /// Pins the back button (and the page's action) in a bar over the page.
-    func floatingBack(title: String? = nil, trailing: ChromeAction? = nil, _ action: @escaping () -> Void) -> some View {
-        modifier(PinnedTopBar(title: title, trailing: trailing, back: action))
+    func floatingBack(title: String? = nil, trailing: ChromeAction? = nil, extra: ChromeAction? = nil,
+                      leading: ChromeAction? = nil, pinTitle: Bool = false, _ action: @escaping () -> Void) -> some View {
+        modifier(PinnedTopBar(title: title, trailing: trailing, leading: leading, extra: extra, pinTitle: pinTitle, back: action))
     }
 }
 
