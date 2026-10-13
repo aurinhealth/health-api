@@ -21,7 +21,7 @@ struct LoginView: View {
                 .animation(.easeInOut(duration: 0.4), value: page)
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    SectionLabel(text: "Loadwise")
+                    SectionLabel(text: "Aurin")
                     Spacer()
                     Button("Přeskočit") { withAnimation { page = pages.count - 1 } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
@@ -171,7 +171,7 @@ struct PasskeyOfferSheet: View {
             VStack(alignment: .leading, spacing: 14) {
                 Image(systemName: "faceid").font(.system(size: 40, weight: .light)).foregroundStyle(Palette.green)
                 Text("Příště přes Face ID").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-                Text("Loadwise si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu.")
+                Text("Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 PrimaryButton(title: busy ? "Moment…" : "Zapnout", systemImage: "faceid", busy: busy) { Task { await register() } }

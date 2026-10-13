@@ -1,6 +1,6 @@
 # health-api
 
-Cloudflare Worker za aplikací **Loadwise** pro iPhone (`ios-native/`, API na `https://aurin.health/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
+Cloudflare Worker za aplikací **Aurin** (dříve Loadwise) pro iPhone (`ios-native/`, API na `https://aurin.health/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
 
 ## Lokálně
 

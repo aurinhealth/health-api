@@ -42,7 +42,7 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
   const description = [
     plan.rationale ? L(`Proč tenhle trénink: ${plan.rationale}`, `Why this workout: ${plan.rationale}`) : "",
     formatRows(plan.rows || []),
-    L("Vygenerováno v Loadwise", "Generated in Loadwise")
+    L("Vygenerováno v Aurinu", "Generated in Aurin")
   ].filter(Boolean).join("\n\n");
 
   return {

@@ -107,7 +107,7 @@ struct ZonesSettingsView: View {
     @ViewBuilder
     private func intervals(_ t: TrainingProfileResponse) -> some View {
         PillToggle(title: "Zapisovat do Intervals.icu",
-                   subtitle: t.intervalsConnected == false ? "Intervals.icu není připojené" : writeIntervals ? "Prahy a zóny se po uložení pošlou do Intervals.icu" : "Zóny zůstanou jen v Loadwise",
+                   subtitle: t.intervalsConnected == false ? "Intervals.icu není připojené" : writeIntervals ? "Prahy a zóny se po uložení pošlou do Intervals.icu" : "Zóny zůstanou jen v Aurinu",
                    systemImage: "arrow.triangle.2.circlepath", isOn: $writeIntervals, disabled: t.intervalsConnected == false)
         if let result = t.intervals {
             switch result.status {

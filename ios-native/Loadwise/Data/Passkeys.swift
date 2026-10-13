@@ -105,7 +105,7 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
             throw APIError.message(L10n.tr("Přístupový klíč se nepodařilo vytvořit."))
         }
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: options.rp.id)
-        let request = provider.createCredentialRegistrationRequest(challenge: challenge, name: options.user.name ?? "Loadwise", userID: userID)
+        let request = provider.createCredentialRegistrationRequest(challenge: challenge, name: options.user.name ?? "Aurin", userID: userID)
         request.userVerificationPreference = .required
         let authorization = try await perform(request)
         guard let registration = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration,
