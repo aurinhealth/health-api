@@ -6,8 +6,8 @@
 import { saveConnectionSecret } from "./connection-secrets.js";
 import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { connectReturn, connectReturnUrl } from "./connect-return.js";
+import { appOrigin } from "./app-origin.js";
 
-const ORIGIN = "https://petrfitnessdata.eu";
 const STATE_COOKIE = "pfd_intervals_oauth_state";
 // What the app reads and writes: activities (RPE on a ride), wellness (weight,
 // sleep, HRV), the calendar (planned workouts, gym, nutrition notes) and the
@@ -19,7 +19,7 @@ export function intervalsOAuthConfigured(env) {
   return Boolean(String(env.INTERVALS_CLIENT_ID || "").trim() && String(env.INTERVALS_CLIENT_SECRET || "").trim());
 }
 
-const redirectUri = env => (env.APP_ORIGIN || ORIGIN) + "/oauth/intervals/callback";
+const redirectUri = (env, request) => appOrigin(env, request) + "/oauth/intervals/callback";
 const clearState = STATE_COOKIE + "=; Path=/oauth/intervals; Max-Age=0; Secure; HttpOnly; SameSite=Lax";
 const back = (location, cookie = clearState) => new Response(null, { status: 302, headers: { Location: location, "Set-Cookie": cookie, "Cache-Control": "no-store" } });
 
@@ -29,7 +29,7 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
     const state = crypto.randomUUID();
     const u = new URL("https://intervals.icu/oauth/authorize");
     u.searchParams.set("client_id", String(env.INTERVALS_CLIENT_ID).trim());
-    u.searchParams.set("redirect_uri", redirectUri(env));
+    u.searchParams.set("redirect_uri", redirectUri(env, request));
     u.searchParams.set("scope", INTERVALS_SCOPES.join(","));
     u.searchParams.set("state", state);
     return back(u.toString(), STATE_COOKIE + "=" + encodeURIComponent(state + "." + connectReturn(request)) + "; Max-Age=600; Path=/oauth/intervals; Secure; HttpOnly; SameSite=Lax");
@@ -44,7 +44,7 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
   const response = await fetchImpl("https://intervals.icu/api/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({ client_id: String(env.INTERVALS_CLIENT_ID).trim(), client_secret: String(env.INTERVALS_CLIENT_SECRET).trim(), code, redirect_uri: redirectUri(env) })
+    body: new URLSearchParams({ client_id: String(env.INTERVALS_CLIENT_ID).trim(), client_secret: String(env.INTERVALS_CLIENT_SECRET).trim(), code, redirect_uri: redirectUri(env, request) })
   }).catch(() => null);
   const data = response ? await response.json().catch(() => ({})) : {};
   if (!response?.ok || !data.access_token) {

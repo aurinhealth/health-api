@@ -1,7 +1,7 @@
 import { saveConnectionSecret } from './connection-secrets.js';
 import { HEALTH_SCOPES, EXTRA_SCOPES } from './google-scopes.js';
 import { connectReturn, connectReturnUrl } from './connect-return.js';
-const GOOGLE_OAUTH_ORIGIN = "https://petrfitnessdata.eu";
+import { appOrigin } from './app-origin.js';
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
     // ?extra=1 adds the optional scopes on top of what was already granted.
@@ -9,7 +9,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
     // Google Health data policy: the app's own disclosure and consent come right before Google's
     // consent screen. A visit without it (a bookmark, an old link) opens the disclosure first.
     if (params.get("consent") !== "1") return html("Google Health","Google Health se připojuje v aplikaci Loadwise pro iPhone (Nastavení → Zdroje dat).",400);
-    const origin = env.APP_ORIGIN || GOOGLE_OAUTH_ORIGIN; const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
+    const origin = appOrigin(env, request); const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
     u.searchParams.set("scope", [...HEALTH_SCOPES, ...(extra ? Object.values(EXTRA_SCOPES) : [])].join(" ")); if (extra) u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
@@ -21,7 +21,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
   const [expected, back] = decodeURIComponent(m?.[1] || "").split(".");
   if (url.searchParams.get("error") && state && state === expected) return new Response(null,{status:302,headers:{Location:connectReturnUrl(back,"google-cancelled"),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
   if (!code || !state || !m || expected !== state) return html("Google OAuth failed","Invalid or missing OAuth state. Start again from /oauth/google.",400);
-  const redirectUri=(env.APP_ORIGIN||GOOGLE_OAUTH_ORIGIN)+"/oauth/google/callback";
+  const redirectUri=appOrigin(env, request)+"/oauth/google/callback";
   const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:redirectUri,grant_type:"authorization_code"})});
   const data=await response.json();
   if (!response.ok || !data.refresh_token) return html("Google OAuth token exchange failed","Google nevrátil oprávnění pro automatickou synchronizaci. Zkus obnovit souhlas v Nastavení.",502);
