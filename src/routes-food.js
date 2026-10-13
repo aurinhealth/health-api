@@ -10,9 +10,9 @@ import { productFromLabel } from "./food-sources.js";
 import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
-import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, FluidInputError } from "./fluids.js";
+import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, bulkFluids, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
-import { updateFoodEntry, copyFoodEntry, deleteFoodEntry } from "./food-entry-management.js";
+import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
 import legacyHealthApi, { googleToken } from "./index.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
@@ -37,13 +37,22 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
       const body=await request.json(),id=body.id;
-      const result=request.method==='PATCH'?await updateFoodEntry(env.DB,id,body):request.method==='POST'?await copyFoodEntry(env.DB,id,body.targetDate):await deleteFoodEntry(env.DB,id);
+      const result=request.method==='PATCH'?await updateFoodEntry(env.DB,id,body):request.method==='POST'?await copyFoodEntry(env.DB,id,body.targetDate,body.mealType??null):await deleteFoodEntry(env.DB,id);
       const google=await queueFoodGoogleSafely(env,ctx,result.id,{deleted:request.method==='DELETE'});
       result.google=google;
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
 
+  // Several foods at once: { action: delete|move|copy, ids, date, mealType }.
+  if(url.pathname==='/app/api/food/entries'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{
+      const body=await request.json(),result=await bulkFoodEntries(env.DB,body);
+      for(const r of result.done)await queueFoodGoogleSafely(env,ctx,r.id,{deleted:body.action==='delete'});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
 
   if(url.pathname==='/app/api/food/search'&&request.method==='POST'){
     // Private saved foods first, then the common food-label catalogue, then
@@ -94,6 +103,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
         return Response.json({status:'ok',date,entries,totalMl:entries.reduce((s,e)=>s+e.ml,0),hydrationMl:entries.reduce((s,e)=>s+e.hydrationMl,0),target},{headers:{'Cache-Control':'no-store'}});
       }
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      if(request.method==='POST'&&url.searchParams.get('bulk')==='1'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',...await bulkFluids(env.DB,body)},{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='POST'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await addFluid(env.DB,{date:validDay(body.date)?body.date:localToday(),ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='PATCH'){const body=await request.json().catch(()=>({}));return Response.json({status:'ok',entry:await updateFluid(env.DB,{id:body.id,ml:body.ml,kind:body.kind,at:body.at})},{headers:{'Cache-Control':'no-store'}});}
       if(request.method==='DELETE'){await deleteFluid(env.DB,url.searchParams.get('id'));return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
