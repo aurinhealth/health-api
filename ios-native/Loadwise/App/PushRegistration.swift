@@ -17,6 +17,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Every launch asks for the token again; it is sent only when it changed.
         let client = self.api
         Task { @MainActor in await PushRegistration.refresh(api: client) }
+        // Syncing without the app being opened (BackgroundRefresh.swift); not
+        // with the sample data of "-demo".
+        if !ProcessInfo.processInfo.arguments.contains("-demo") {
+            MainActor.assumeIsolated {
+                AppleHealth.shared.start(api: client)
+                BackgroundRefresh.register(api: client)
+                BackgroundRefresh.schedule()
+            }
+        }
         let center = UNUserNotificationCenter.current()
         center.setNotificationCategories([Reminders.pillNotificationCategory])
         center.delegate = self

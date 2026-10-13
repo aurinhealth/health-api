@@ -1,0 +1,52 @@
+import BackgroundTasks
+import UIKit
+
+/// Aurin without being opened. Two ways iOS wakes the app on its own:
+/// new Apple Health data (HKObserverQuery, AppleHealth.start) and this
+/// refresh task, which iOS runs a few times a day when it chooses. Either
+/// way what is new in Apple Health goes to the server and the widgets get
+/// the server's Today, with Google Health and Intervals.icu data too.
+/// A locked iPhone keeps Apple Health closed, so that part waits for the
+/// next wake after unlocking.
+@MainActor
+enum BackgroundRefresh {
+    /// Also in project.yml (BGTaskSchedulerPermittedIdentifiers).
+    static let identifier = "eu.petrfitnessdata.loadwise.native.refresh"
+
+    /// At launch (AppDelegate), before the launch ends, as iOS requires.
+    static func register(api: APIClient) {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: .main) { task in
+            guard let task = task as? BGAppRefreshTask else { task.setTaskCompleted(success: false); return }
+            MainActor.assumeIsolated { run(task, api: api) }
+        }
+    }
+
+    /// Leaving the app and after each run: the next one in an hour at the
+    /// earliest; iOS picks the moment (usually a few times a day).
+    static func schedule() {
+        let request = BGAppRefreshTaskRequest(identifier: identifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60)
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    private static func run(_ task: BGAppRefreshTask, api: APIClient) {
+        schedule()
+        let work = Task { @MainActor in
+            task.setTaskCompleted(success: await refresh(api: api, widgets: true))
+        }
+        task.expirationHandler = { work.cancel() }
+    }
+
+    /// Apple Health out, then Today for the widgets: always from the refresh
+    /// task, from a HealthKit wake only when something was sent.
+    @discardableResult
+    static func refresh(api: APIClient, widgets always: Bool) async -> Bool {
+        guard api.hasSession else { return false }
+        let before = AppleHealth.shared.lastSync
+        let synced = await AppleHealth.shared.sync(api: api)
+        guard always || AppleHealth.shared.lastSync != before else { return synced }
+        guard !Task.isCancelled, let today = try? await api.today() else { return false }
+        WidgetBridge.update(today)
+        return synced || !AppleHealth.shared.enabled
+    }
+}
