@@ -8,7 +8,7 @@ struct SleepDetailView: View {
     @State private var detail: NightDetail?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.health) {
+        DetailScreen(glow: Palette.Glow.health, title: "Spánek") {
             SleepDetailContent(health: health, detail: detail)
         }
         .task {
@@ -369,7 +369,7 @@ struct WeightDetailView: View {
     @State private var adding = false
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.health) {
+        DetailScreen(glow: Palette.Glow.health, title: "Váha") {
             WeightDetailContent(health: health, add: { adding = true })
         }
         .sheet(isPresented: $adding) { WeightEntrySheet() }

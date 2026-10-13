@@ -31,7 +31,7 @@ struct MyWorkoutsView: View {
     private var shown: [SavedWorkout] { mine.filter { sport == nil || $0.sport == sport } }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: friends ? "Od přátel" : "Moje tréninky") {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
                     Text(friends ? "Od přátel" : "Moje tréninky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
@@ -324,7 +324,7 @@ struct SharedWorkoutView: View {
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: share?.name) {
             VStack(alignment: .leading, spacing: 0) {
                 if let share {
                     Text(share.own ? L10n.tr("Tvůj sdílený trénink") : share.fromName.map { L10n.f("%@ ti posílá trénink", $0) } ?? L10n.tr("Trénink od přítele"))

@@ -24,13 +24,15 @@ struct MealDetailView: View {
                 }
             }
         }
-        .floatingBack { dismiss() }
+        .floatingBack(title: model.food?.meals.first(where: { $0.type == type })?.label,
+                      trailing: ChromeAction(systemImage: "plus", label: MealSlot.addText(type)) { adding = true }) { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $adding) { AddFoodSheet(meal: type) }
     }
 }
 
 struct MealDetailContent: View {
+    @Environment(\.floatingBack) private var floating
     let meal: FoodSnapshot.Meal
     var back: () -> Void = {}
     var add: () -> Void = {}
@@ -48,7 +50,12 @@ struct MealDetailContent: View {
                 Spacer()
                 SectionLabel(text: L10n.f("Jídlo · %@", ClockText.format(meal.time)))
                 Spacer()
-                CircleButton(systemImage: "plus", label: MealSlot.addText(meal.type), action: add)
+                // The pinned bar carries the "+" when the page has one.
+                if floating {
+                    Color.clear.frame(width: 36, height: 36)
+                } else {
+                    CircleButton(systemImage: "plus", label: MealSlot.addText(meal.type), action: add)
+                }
             }
 
             Text(meal.label).font(Typo.sentence(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 28)

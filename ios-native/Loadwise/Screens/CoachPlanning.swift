@@ -94,7 +94,7 @@ struct WeekPlanView: View {
     private var nextWeek: String { ISODay.shift(Self.monday(), 7) }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: weekStart == nextWeek ? "Plán na příští týden" : "Plán na zbytek týdne") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · týden").padding(.top, 24)
                 Text(weekStart == nextWeek ? "Plán na příští týden" : "Plán na zbytek týdne")
@@ -475,7 +475,7 @@ struct DayReviewView: View {
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.today) {
+        DetailScreen(glow: Palette.Glow.today, title: "Kouč") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: L10n.tr("Kouč") + " · " + Fmt.dayHeading(date)).padding(.top, 24)
                 if loading {
@@ -555,7 +555,7 @@ struct InsightsView: View {
     ]
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Rekordy a zaměření") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · rekordy").padding(.top, 24)
                 Text("Rekordy a zaměření").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

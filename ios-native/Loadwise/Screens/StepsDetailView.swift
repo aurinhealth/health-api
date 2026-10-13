@@ -7,7 +7,7 @@ struct StepsDetailView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Pohyb") {
             if let today = model.today {
                 StepsDetailContent(steps: today.steps, date: today.date)
             } else {

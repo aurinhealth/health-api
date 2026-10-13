@@ -237,7 +237,7 @@ struct ActivityDetailView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: detail?.activity.name ?? session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
@@ -598,7 +598,7 @@ struct PlannedWorkoutView: View {
     private var ratable: Bool { session.date <= AppModel.localDate(Date()) && !model.demo }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (session.time.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
                 Text(session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

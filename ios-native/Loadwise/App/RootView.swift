@@ -10,6 +10,8 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showCoach = false
     @State private var showSyncStatus = false
+    /// Scrolled down: the tab bar is only the open section's icon and "+".
+    @State private var compactBar = false
     @State private var tabTaps = 0
     @Environment(\.scenePhase) private var scenePhase
 
@@ -39,8 +41,19 @@ struct RootView: View {
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
-                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil {
+                .environment(\.scrollReport, { (offset: CGFloat) in
+                    let compact = offset > 60
+                    if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
+                })
+                if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
+                        if let status = model.syncStatus, !model.offline {
+                            SyncPill(status: status) {
+                                model.dismissSyncFailure()
+                                Task { await model.refresh(announce: true) }
+                            }
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
                         if model.offline || !model.outbox.isEmpty {
                             OfflineBanner(offline: model.offline, waiting: model.outbox.count)
                         }
@@ -52,7 +65,8 @@ struct RootView: View {
                         }
                     }
                     .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 4)
+                    .padding(.top, 8)
+                    .animation(.snappy, value: model.syncStatus)
                 }
                 // A done activity sent to the apps from Synchronizace (SyncViews.swift).
                 if let report = model.syncReport, !showSyncStatus {
@@ -74,7 +88,8 @@ struct RootView: View {
                     .zIndex(2)
                 }
                 if !model.immersive {
-                    TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), onAdd: { showAdd = true })
+                    TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
+                           onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
                         .padding(.horizontal, 20)
                         .padding(.bottom, 8)
                         .dynamicTypeSize(Self.textSizes)
@@ -121,7 +136,7 @@ struct RootView: View {
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 Task {
-                    if model.today != nil || !model.outbox.isEmpty { await model.refresh() }
+                    if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
                     // The open tab too, so Health or Food are not a day behind Today.
                     if model.tab != .today { await model.refreshIfStale(model.tab) }
                 }
@@ -131,6 +146,7 @@ struct RootView: View {
 
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
+        withAnimation(.snappy) { compactBar = false }
         if model.tab == tab { model.paths[tab] = [] } else { tabTaps += 1 }
         model.tab = tab
     }
@@ -184,6 +200,41 @@ struct OfflineBanner: View {
     }
 }
 
+/// The sync after opening the app: "Synchronizuji…" with a spinner,
+/// "Synchronizováno" for a moment, or a failure a tap tries again. It sits
+/// where a detail's pinned bar has its title (PinnedTopBar hides the title).
+struct SyncPill: View {
+    let status: AppModel.SyncStatus
+    let retry: () -> Void
+
+    var body: some View {
+        Button(action: retry) {
+            HStack(spacing: 8) {
+                switch status {
+                case .syncing:
+                    ProgressView().controlSize(.small)
+                    Text("Synchronizuji…")
+                case .done:
+                    Image(systemName: "checkmark").foregroundStyle(Palette.green)
+                    Text("Synchronizováno")
+                case .failed:
+                    Image(systemName: "exclamationmark.circle")
+                    Text("Nepodařilo se · Zkusit znovu")
+                }
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(status == .failed ? Palette.rust : Palette.ink)
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .chromeGlass(in: Capsule())
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+        .allowsHitTesting(status == .failed)
+    }
+}
+
 /// A waiting write the server turned down; a tap puts it away.
 struct OutboxNote: View {
     let text: String
@@ -204,37 +255,72 @@ struct OutboxNote: View {
     }
 }
 
-/// The floating pill at the bottom with the "+" in the middle.
+/// The floating pill at the bottom with the "+" in the middle. Scrolled down
+/// it shrinks to the open section's icon on the left and "+" on the right;
+/// a tap on the icon brings the whole bar back.
 struct TabBar: View {
     @Binding var tab: AppTab
+    var compact: Bool = false
+    var onExpand: () -> Void = {}
     var onAdd: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
-            item(.today, "sun.max", "Dnes")
-            item(.training, "waveform.path.ecg", "Trénink")
-            Button(action: onAdd) {
-                Image(systemName: "plus")
-                    .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(Palette.onButton)
-                    .frame(width: 44, height: 44)
-                    .background(Palette.button, in: Circle())
+        if compact {
+            HStack {
+                Button(action: onExpand) {
+                    Image(systemName: Self.symbol(tab))
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(Palette.ink)
+                        .frame(width: 52, height: 52)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .chromeGlass(in: Circle())
+                .shadow(color: .black.opacity(0.1), radius: 12, y: 6)
+                .accessibilityLabel(L10n.tr("Rozbalit menu"))
+                Spacer()
+                plus(size: 52)
+                    .shadow(color: .black.opacity(0.12), radius: 12, y: 6)
             }
-            .frame(maxWidth: .infinity)
-            .accessibilityLabel("Přidat záznam")
-            item(.food, "fork.knife", "Jídlo")
-            item(.health, "heart", "Zdraví")
+            .transition(.opacity)
+        } else {
+            HStack(spacing: 0) {
+                item(.today, "Dnes")
+                item(.training, "Trénink")
+                plus(size: 44).frame(maxWidth: .infinity)
+                item(.food, "Jídlo")
+                item(.health, "Zdraví")
+            }
+            .frame(height: 60)
+            .chromeGlass(in: Capsule())
+            .shadow(color: .black.opacity(0.1), radius: 15, y: 10)
+            .transition(.opacity)
         }
-        .frame(height: 60)
-        .background(.ultraThinMaterial, in: Capsule())
-        .background(Palette.card.opacity(0.6), in: Capsule())
-        .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.1), radius: 15, y: 10)
     }
 
-    private func item(_ value: AppTab, _ symbol: String, _ label: String) -> some View {
+    static func symbol(_ tab: AppTab) -> String {
+        switch tab {
+        case .today: return "sun.max"
+        case .training: return "waveform.path.ecg"
+        case .food: return "fork.knife"
+        case .health: return "heart"
+        }
+    }
+
+    private func plus(size: CGFloat) -> some View {
+        Button(action: onAdd) {
+            Image(systemName: "plus")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Palette.onButton)
+                .frame(width: size, height: size)
+                .background(Palette.button, in: Circle())
+        }
+        .accessibilityLabel("Přidat záznam")
+    }
+
+    private func item(_ value: AppTab, _ label: String) -> some View {
         Button { tab = value } label: {
-            Image(systemName: symbol)
+            Image(systemName: Self.symbol(value))
                 .font(.system(size: 20, weight: .regular))
                 .foregroundStyle(tab == value ? Palette.ink : Palette.faint)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

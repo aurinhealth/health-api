@@ -561,7 +561,7 @@ struct PlanWeekView: View {
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: Fmt.capitalized(week.phaseLabel)) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { " · " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
                 Text(Fmt.capitalized(week.phaseLabel)).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
@@ -615,7 +615,7 @@ struct PlanSessionView: View {
     let sport: String
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: session.workout?.name ?? session.label) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: Fmt.capitalized(Fmt.weekdayShort(session.date)) + " " + Fmt.dayMonth(session.date)).padding(.top, 24)
                 Text(session.workout?.name ?? session.label ?? "").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
