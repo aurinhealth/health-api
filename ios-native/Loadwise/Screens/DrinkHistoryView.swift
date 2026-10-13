@@ -10,6 +10,11 @@ struct DrinkHistoryView: View {
     @State private var editing: FoodSnapshot.Drink?
     /// Kinds opened to their single drinks, which can be edited or deleted.
     @State private var open: Set<String> = []
+    /// Vybrat: the ticked drinks, to copy, move or delete at once.
+    @State private var selecting = false
+    @State private var selected: Set<Int> = []
+    @State private var moving: String?
+    @State private var confirmDelete = false
 
     private var water: FoodSnapshot.Water? { model.food?.water }
     private var drinks: [FoodSnapshot.Drink] { water?.drinks ?? [] }
@@ -41,10 +46,25 @@ struct DrinkHistoryView: View {
                     }
                 }
                 .padding(24)
-                .padding(.bottom, 100)
+                .padding(.bottom, selecting ? 190 : 100)
             }
         }
-        .floatingBack(title: "Pití dnes") { dismiss() }
+        .modifier(SelectionBar(selecting: $selecting, selected: $selected, allIds: drinks.map(\.id), title: "Pití dnes", back: { dismiss() }))
+        .overlay(alignment: .bottom) {
+            if selecting {
+                BulkActionBar(count: selected.count, copy: { moving = "Kopírovat" }, move: { moving = "Přesunout" }, delete: { confirmDelete = true })
+                    .padding(.horizontal, 24).padding(.bottom, 92)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .sheet(item: Binding(get: { moving.map { BulkVerb(verb: $0) } }, set: { moving = $0?.verb })) { v in
+            BulkMoveSheet(verb: v.verb, count: selected.count, from: model.food?.date ?? AppModel.localDate(Date())) { date, _ in
+                await run(v.verb == "Kopírovat" ? "copy" : "move", date: date)
+            }
+        }
+        .confirmationDialog(L10n.f("Smazat %@?", BulkMoveSheet.items(selected.count)), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Smazat", role: .destructive) { Task { _ = await run("delete") } }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editing) { d in
             DrinkSheet(kind: d.kind, ml: Int(d.ml ?? 250), editing: true) { ml, kind in _ = await model.updateDrink(id: d.id, ml: ml, kind: kind) }
@@ -153,16 +173,48 @@ struct DrinkHistoryView: View {
         }
     }
 
-    /// One drink; a swipe or a long press edits or deletes it. Another app's
-    /// drink is only deleted, from Aurin alone.
+    /// Sends the change for the ticked drinks; nil when it worked, else the message.
+    private func run(_ action: String, date: String? = nil) async -> String? {
+        let ids = selected.filter { $0 > 0 }
+        if action == "delete" { for id in selected where id < 0 { await model.deleteDrink(id: id) } }
+        if !model.demo, !ids.isEmpty {
+            do {
+                let skipped = try await model.api.bulkFluids(action, ids: Array(ids), date: date)
+                if !skipped.isEmpty { model.notice = L10n.tr("Pití z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě.") }
+            } catch {
+                return error.localizedDescription
+            }
+            await model.refreshFood()
+            await model.refresh()
+        }
+        withAnimation(.easeOut(duration: 0.2)) { selecting = false }
+        selected = []
+        return nil
+    }
+
+    /// One drink; a swipe or a long press edits or deletes it, a swipe right
+    /// starts Vybrat. Another app's drink is only deleted, from Aurin alone.
+    /// While selecting, a tap ticks it.
     @ViewBuilder
     private func row(_ d: FoodSnapshot.Drink) -> some View {
+        if selecting {
+            SelectableRow(on: selected.contains(d.id), toggle: {
+                if selected.contains(d.id) { selected.remove(d.id) } else { selected.insert(d.id) }
+            }) { DrinkLine(drink: d) }
+        } else {
+            editableRow(d)
+        }
+    }
+
+    @ViewBuilder
+    private func editableRow(_ d: FoodSnapshot.Drink) -> some View {
         let delete = { Task { _ = await model.deleteDrink(id: d.id) } }
+        let select = { selected = [d.id]; withAnimation(.easeOut(duration: 0.2)) { selecting = true } }
         Group {
             if d.app != nil {
-                SwipeRow(delete: { _ = delete() }) { DrinkLine(drink: d) }
+                SwipeRow(select: select, delete: { _ = delete() }) { DrinkLine(drink: d) }
             } else {
-                SwipeRow(edit: { editing = d }, delete: { _ = delete() }) { DrinkLine(drink: d) }
+                SwipeRow(edit: { editing = d }, select: select, delete: { _ = delete() }) { DrinkLine(drink: d) }
             }
         }
         .contextMenu {

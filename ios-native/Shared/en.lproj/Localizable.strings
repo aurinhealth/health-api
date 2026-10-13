@@ -1903,6 +1903,13 @@
 "Odhadnout AI" = "Estimate with AI";
 "AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";
 
+/* Vybrat: several foods or drinks at once */
+"Vybrat" = "Select";
+"Vybráno %@" = "%@ selected";
+"Kopírovat %@" = "Copy %@";
+"Přesunout %@" = "Move %@";
+"Jídlo z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě." = "Food from another app can only be copied or deleted, so it stayed where it was.";
+"Pití z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě." = "Drinks from another app can only be copied or deleted, so they stayed where they were.";
 /* Plán týdne: Opravit návrh */
 "Opravit návrh" = "Fix the proposal";
 "Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";

@@ -22,6 +22,28 @@ extension APIClient {
                                           body: ["id": JSONValue.number(Double(id)), "targetDate": .string(date)])
     }
 
+    /// Several foods at once: "delete", "move" or "copy" to a day and meal.
+    /// Returns the ids another app owns that could not be moved.
+    @discardableResult
+    func bulkFood(_ action: String, ids: [Int], date: String? = nil, mealType: String? = nil) async throws -> [Int] {
+        struct Response: Decodable { let skipped: [Int]? }
+        var body: JSONObject = ["action": .string(action), "ids": .array(ids.map { .number(Double($0)) })]
+        if let date { body["date"] = .string(date) }
+        if let mealType { body["mealType"] = .string(mealType) }
+        let r: Response = try await send("/app/api/food/entries", method: "POST", body: body)
+        return r.skipped ?? []
+    }
+
+    /// Several drinks at once: "delete", "move" or "copy" to a day.
+    @discardableResult
+    func bulkFluids(_ action: String, ids: [Int], date: String? = nil) async throws -> [Int] {
+        struct Response: Decodable { let skipped: [Int]? }
+        var body: JSONObject = ["action": .string(action), "ids": .array(ids.map { .number(Double($0)) })]
+        if let date { body["date"] = .string(date) }
+        let r: Response = try await send("/app/api/fluids?bulk=1", method: "POST", body: body)
+        return r.skipped ?? []
+    }
+
     // MARK: Workout ratings
 
     /// Library workouts put in the calendar, with their rating when there is one.
