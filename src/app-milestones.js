@@ -1,5 +1,6 @@
-// Settings → Ikona aplikace: what unlocks the sport icons. Lifetime run and
-// ride kilometres, gym sessions and the current run of active days, counted
+// Settings → Ikona aplikace: what unlocks the sport icons. Run and ride
+// kilometres, gym sessions and the current run of active days since the
+// account was made in Aurin (history synced from before does not count),
 // from the activities the app holds (every source, duplicates once) and the
 // gym plans with sets logged.
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
@@ -19,13 +20,15 @@ export function activityMeters(row) {
 }
 
 // rows: health_datapoints activities; gymDays: dates with a gym plan whose
-// sets were logged; today: the user's local date.
-export function buildMilestones({ rows = [], gymDays = [], today }) {
+// sets were logged; today: the user's local date; since: the day the account
+// was made (YYYY-MM-DD), nothing before it counts.
+export function buildMilestones({ rows = [], gymDays = [], today, since = "" }) {
   const activities = dedupeActivities(rows.map(row => {
     const a = activityFromRow(row);
     if (a) a.meters = activityMeters(row);
     return a;
-  }));
+  })).filter(a => a.date >= since);
+  gymDays = gymDays.filter(d => d >= since);
   const km = kind => Math.round(activities.filter(a => a.kind === kind).reduce((s, a) => s + (a.meters || 0), 0) / 1000);
   const gym = new Set([...activities.filter(a => a.kind === "strength").map(a => a.date), ...gymDays]);
   // Walks alone do not keep the run going (as the coach's streak).

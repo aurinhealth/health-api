@@ -1264,7 +1264,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const result=await cached(env,ctx,'milestones:'+today,async()=>{
         const rows=(await env.DB.prepare("SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID).all().catch(()=>({results:[]}))).results||[];
         const gym=await trainingGymPlans(env,'2000-01-01',today).catch(()=>({}));
-        return buildMilestones({rows,today,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0)});
+        // Only what was done since joining Aurin counts, not the history synced from before.
+        const joined=await (env.RAW_DB||env.DB).prepare('SELECT created_at FROM users WHERE id=?').bind(env.USER_ID).first().catch(()=>null);
+        const since=/^\d{4}-\d{2}-\d{2}/.test(String(joined?.created_at||''))?localDate(String(joined.created_at).replace(' ','T')+(String(joined.created_at).includes('Z')?'':'Z')):'';
+        return buildMilestones({rows,today,since,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0)});
       },{ttl:300});
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}

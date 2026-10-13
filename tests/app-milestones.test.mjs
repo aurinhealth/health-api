@@ -28,3 +28,9 @@ test("streak may end yesterday, walks do not count", () => {
   assert.equal(buildMilestones({ rows, today: "2026-10-13" }).streakDays, 2);
   assert.equal(buildMilestones({ rows: [], today: "2026-10-13" }).streakDays, 0);
 });
+
+test("only what was done since joining Aurin counts", () => {
+  const rows = [intervals("old", "2026-09-30", "Run", 50000), intervals("new", "2026-10-02", "Run", 7000)];
+  const m = buildMilestones({ rows, gymDays: ["2026-09-01", "2026-10-03"], today: "2026-10-03", since: "2026-10-01" });
+  assert.deepEqual(m, { runKm: 7, rideKm: 0, gymSessions: 1, streakDays: 2 });
+});
