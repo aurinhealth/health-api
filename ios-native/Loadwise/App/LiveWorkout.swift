@@ -41,6 +41,8 @@ final class LiveWorkout: NSObject {
     @ObservationIgnored private var session: AnyObject?
     @ObservationIgnored private var builder: AnyObject?
     @ObservationIgnored private var liveKcal = false
+    /// The workout last saved to Apple Health, for Zahodit trénink after Dokončit.
+    @ObservationIgnored private var savedWorkout: HKWorkout?
     /// Beats from the Bluetooth sensor, one per 5 s, saved with the workout.
     @ObservationIgnored private var sensorBeats: [(Date, Double)] = []
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
@@ -54,6 +56,7 @@ final class LiveWorkout: NSObject {
         start = begun
         if let weightKg, weightKg > 30 { self.weightKg = weightKg }
         savedToHealth = false
+        savedWorkout = nil
         kcal = nil; heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
         trail = []
@@ -82,6 +85,19 @@ final class LiveWorkout: NSObject {
     }
 
     /// Clears everything after the summary was shown (or the screen left early).
+    /// Zahodit trénink after Dokončit: the workout saved to Apple Health goes
+    /// too, with the calories and heart rate saved with it.
+    func deleteSaved() async {
+        guard let workout = savedWorkout else { return }
+        savedWorkout = nil
+        savedToHealth = false
+        let linked = HKQuery.predicateForObjects(from: workout)
+        for type in [HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)] {
+            _ = try? await store.deleteObjects(of: type, predicate: linked)
+        }
+        try? await store.delete(workout)
+    }
+
     func reset() {
         poll?.cancel(); poll = nil
         stopSensor()
@@ -201,6 +217,7 @@ final class LiveWorkout: NSObject {
         let workout: HKWorkout? = await withCheckedContinuation { continuation in
             builder.finishWorkout { workout, _ in continuation.resume(returning: workout) }
         }
+        savedWorkout = workout
         return workout != nil
     }
 
@@ -240,6 +257,7 @@ final class LiveWorkout: NSObject {
         }
         self.session = nil
         self.builder = nil
+        savedWorkout = workout
         return workout != nil
     }
 

@@ -328,7 +328,8 @@ function sessionOf(w, date, status) {
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
     eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
     // A workout from the watch opens its own detail (watch-detail.js).
-    ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } } : {}),
+    ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
+      : done && /^(google-wearables|apple-health):./.test(String(w.payload?.pairedWith || "")) ? { watch: { source: w.payload.pairedWith.slice(0, w.payload.pairedWith.indexOf(":")), id: w.payload.pairedWith.slice(w.payload.pairedWith.indexOf(":") + 1) } } : {}),
     ...(done ? energyOf(w) : {})
   };
 }

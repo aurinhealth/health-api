@@ -15,10 +15,10 @@ struct TrainingTools: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Posilovna")
-            // Posilovna naživo (GymLive.swift): an empty session with a clock,
-            // or the last workout's exercises with the next loads.
-            NavigationLink(value: AppRoute.liveGym(today, false)) {
-                Label("Začít posilovnu", systemImage: "dumbbell.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+            // Today's plan in the workout mode, or an empty workout there; the
+            // last workout's exercises with the next loads (GymLive.swift).
+            NavigationLink(value: AppRoute.trainingMode(today)) {
+                Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
@@ -29,14 +29,11 @@ struct TrainingTools: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            LazyVGrid(columns: columns, spacing: 10) {
-                tile(.trainingMode(today), "play.fill", "Režim tréninku", Palette.amberBar)
-                tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
-            }
             LibraryWidget()
             LazyVGrid(columns: columns, spacing: 10) {
                 tile(.weekPlan, "calendar.badge.plus", "Plán týdne", Palette.green)
                 tile(.insights, "trophy.fill", "Rekordy", Palette.gold)
+                tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
             }
             Button(action: addWorkout) {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")

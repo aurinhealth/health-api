@@ -1339,7 +1339,21 @@ export async function matchActivities(env, { days = null } = {}) {
   ).bind(env.USER_ID, since).all()).results || [];
   const key = row => row.source_family + ":" + row.external_id;
   const wanted = new Map();
-  const pairs = pairSessions(rows);
+  // Paired by hand in Zapsat trénink (local-workouts.js): kept as they are,
+  // whatever the times or sports say.
+  const byKey = new Map(rows.map(row => [key(row), row]));
+  const held = new Set();
+  for (const row of rows) {
+    if (row.source_family !== "local") continue;
+    let watch = null;
+    try { watch = JSON.parse(row.payload_json || "{}").pairedWith || null; } catch {}
+    const copy = watch && byKey.get(watch);
+    if (!copy || held.has(copy)) continue;
+    held.add(row); held.add(copy);
+    wanted.set(copy, { role: "duplicate", matched: key(row) });
+    wanted.set(row, { role: "primary", matched: watch });
+  }
+  const pairs = pairSessions(rows.filter(row => !held.has(row)));
   for (const { keep, drop, inside } of pairs) {
     wanted.set(drop, { role: "duplicate", matched: key(keep) });
     if (!inside) wanted.set(keep, { role: "primary", matched: key(drop) });

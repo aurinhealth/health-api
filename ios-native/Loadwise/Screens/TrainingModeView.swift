@@ -40,6 +40,8 @@ struct TrainingModeView: View {
     /// The day as it was before this screen, for Zahodit trénink.
     @State private var original: GymDay?
     @State private var confirmClose = false
+    /// Zahodit trénink in the summary, after Dokončit.
+    @State private var confirmDiscard = false
     @State private var picking = false
     private var live: LiveWorkout { LiveWorkout.shared }
 
@@ -95,8 +97,14 @@ struct TrainingModeView: View {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
-            Button("Pokračovat později") { dismiss() }
+            // Later: the clock and heart rate stop now and start again on return.
+            Button("Pokračovat později") { live.reset(); dismiss() }
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
+        }
+        .confirmationDialog("Zahodit trénink?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
+        } message: {
+            Text("Smažou se zapsané série i trénink uložený do Apple Zdraví.")
         }
         .sheet(isPresented: $picking) {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in
@@ -391,6 +399,12 @@ struct TrainingModeView: View {
             if !finishedSession { addExerciseButton }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
+                Button(role: .destructive) { confirmDiscard = true } label: {
+                    Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                }
+                .buttonStyle(.plain)
+                .disabled(saving)
             } else {
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
                     .disabled(saving)
@@ -726,9 +740,12 @@ struct TrainingModeView: View {
     }
 
     /// Zahodit trénink: the day goes back to how it was before this screen,
-    /// the clock stops without a workout in Apple Health.
+    /// the clock stops without a workout in Apple Health (one saved by
+    /// Dokončit is deleted again).
     private func discard() async {
         restEnd = nil
+        saving = true
+        defer { saving = false }
         if !model.demo {
             do {
                 try await model.saveGym(original ?? GymDay(date: date, values: [], cancelled: nil), date: date)
@@ -739,6 +756,7 @@ struct TrainingModeView: View {
             await model.refreshTraining()
         }
         live.reset()
+        await live.deleteSaved()
         dismiss()
     }
 
@@ -763,13 +781,13 @@ struct TrainingModeView: View {
     /// then the rating.
     private func finish() async {
         restEnd = nil
-        let hadLive = live.running
         if live.running {
             let saved = await live.finish()
             totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
-            finishedSession = true
             live.reset()
         }
+        // The summary comes first, with Ohodnotit and Zahodit trénink.
+        finishedSession = true
         if !model.demo, let day {
             saving = true
             defer { saving = false }
@@ -782,8 +800,6 @@ struct TrainingModeView: View {
             }
             await model.refreshTraining()
         }
-        // With the live totals the summary stays first; "Ohodnotit" follows.
-        if !hadLive { rating = true }
     }
 
     /// A ticked set back to not done (tapped by mistake).

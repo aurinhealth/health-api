@@ -5,7 +5,7 @@ import SwiftUI
 /// speed or the power at each point (the switch above the map).
 struct ActivityRouteMap: View {
     let detail: ActivityDetail
-    /// The route read on the iPhone (Apple Health), when the detail has none.
+    /// The route read on the iPhone (Apple Health): drawn instead of the detail's.
     var localRoute: [ActivityDetail.StreamPoint] = []
     @State private var mode: Mode = .heart
 
@@ -31,7 +31,7 @@ struct ActivityRouteMap: View {
 
     private var points: [Point] {
         let stream = detail.streams?.first { $0.type == "latlng" }?.points ?? []
-        let source = stream.contains { $0.ll != nil } ? stream : localRoute
+        let source = localRoute.count >= 2 ? localRoute : stream
         return source.compactMap { p in
             guard let ll = p.ll, ll.count == 2, abs(ll[0]) <= 90, abs(ll[1]) <= 180, ll[0] != 0 || ll[1] != 0 else { return nil }
             return Point(t: p.t, coordinate: CLLocationCoordinate2D(latitude: ll[0], longitude: ll[1]))

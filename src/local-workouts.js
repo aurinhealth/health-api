@@ -100,7 +100,7 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   }
   const sync=await syncLocalWorkout(env,row.id,fetchImpl);return {status:'ok',eventId:row.id,sync};
 }
-export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,kcal}={}){
+export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,kcal,pairedWith}={}){
   const row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const event=JSON.parse(row.event_json),duration=Number(minutes??event.moving_time/60);
   if(!Number.isFinite(duration)||duration<=0||duration>1440)throw new Error(L('Zadej skutečnou délku tréninku.', 'Enter the actual duration of the workout.'));
@@ -110,10 +110,18 @@ export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,
   if(positive(avgHr))payload.average_heartrate=positive(avgHr);
   if(positive(maxHr))payload.max_heartrate=positive(maxHr);
   if(positive(kcal))payload.calories=positive(kcal);
+  // Paired with the watch's record (Zapsat trénink): one workout, the watch's
+  // copy stays as its detail and the activity matching keeps the pair.
+  const watch=/^(google-wearables|apple-health):.{1,200}$/.test(String(pairedWith||''))?String(pairedWith):null;
+  if(watch)payload.pairedWith=watch;
   await db.batch([
     db.prepare("UPDATE local_workouts SET status='completed' WHERE user_id=? AND id=?").bind(db.userId,row.id),
     db.prepare("UPDATE workout_exports SET status='not_exported',revision=? WHERE user_id=? AND local_id=? AND remote_id IS NULL").bind(row.revision,db.userId,row.id),
     db.prepare("UPDATE workout_schedule_links SET status='completed' WHERE user_id=? AND intervals_event_id=?").bind(db.userId,row.id),
-    db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,payload_json) VALUES(?,'local','activity',?,?,?,?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId,'activity:'+row.id,event.start_date_local,event.start_date_local,JSON.stringify(payload)),await projection(db,row.id,event,true)
+    db.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,start_time,payload_json) VALUES(?,'local','activity',?,?,?,?) ON CONFLICT(user_id,source_family,data_type,external_id) DO UPDATE SET payload_json=excluded.payload_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId,'activity:'+row.id,event.start_date_local,event.start_date_local,JSON.stringify(payload)),await projection(db,row.id,event,true),
+    ...(watch?[
+      db.prepare("UPDATE health_datapoints SET record_role='duplicate',matched_activity_id=?,match_confidence=1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND source_family=? AND data_type='exercise' AND external_id=?").bind('local:activity:'+row.id,db.userId,watch.slice(0,watch.indexOf(':')),watch.slice(watch.indexOf(':')+1)),
+      db.prepare("UPDATE health_datapoints SET record_role='primary',matched_activity_id=?,match_confidence=1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND source_family='local' AND data_type='activity' AND external_id=?").bind(watch,db.userId,'activity:'+row.id)
+    ]:[])
   ]);
 }

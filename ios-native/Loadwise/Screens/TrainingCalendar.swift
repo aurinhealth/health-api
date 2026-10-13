@@ -369,6 +369,8 @@ struct CalendarDayList: View {
     }
 
     static func route(_ a: CalendarActivity) -> AppRoute? {
+        // A gym session typed in by hand opens its plan, where it can be deleted (as in Trénink).
+        if a.status != "done", let id = a.eventId, id.hasPrefix("planned:local-"), a.sport == "strength" { return .planned(a.session) }
         if a.sport == "strength" && a.status != "missed" { return .gym(a.date) }
         if a.status == "done" { return a.activityId != nil || a.session.watch != nil ? .activity(a.session) : nil }
         return a.eventId != nil ? .planned(a.session) : nil

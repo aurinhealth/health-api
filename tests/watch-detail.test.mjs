@@ -66,6 +66,18 @@ test("an Apple workout uses its own heart-rate series; unknown sources are refus
   assert.equal(await watchDetail(env, { source: "intervals", id: "x" }), null);
 });
 
+test("the watch's copy is the source of heart rate and calories; Intervals.icu keeps power", async () => {
+  const { env, row } = database();
+  row("intervals", "activity", "activity:i8", "2026-10-13T06:00:00Z", "2026-10-13T07:00:00Z", { id: "i8" });
+  row("google-wearables", "exercise", GOOGLE_ID, "2026-10-13T06:00:00Z", "2026-10-13T07:00:00Z", { exercise: { exerciseType: "BIKING", metricsSummary: { caloriesKcal: 640, averageHeartRateBeatsPerMinute: 138 } } }, "intervals:activity:i8");
+  const intervals = { status: "ok", activity: { calories: 900, average_heartrate: 150, icu_training_load: 70 }, streams: [{ type: "heartrate", points: [{ t: 0, v: 150 }] }, { type: "watts", points: [{ t: 0, v: 200 }] }] };
+  const merged = await withWatch(env, intervals, "i8", { hrZones: ZONES });
+  assert.equal(merged.activity.calories, 640);
+  assert.equal(merged.activity.average_heartrate, 138);
+  assert.equal(merged.activity.icu_training_load, 70, "TSS stays from Intervals.icu");
+  assert.deepEqual(merged.streams.map(s => s.type), ["heartrate", "watts"], "no watch samples: Intervals.icu's heart rate stays");
+});
+
 test("an Intervals.icu ride without heart rate or route takes them from the watch's copy", async () => {
   const { env, row } = database();
   row("intervals", "activity", "activity:i9", "2026-10-13T06:00:00Z", "2026-10-13T07:00:00Z", { id: "i9" });

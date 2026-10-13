@@ -162,15 +162,24 @@ export async function watchCopyOf(env, activityId) {
   return { source: ref.slice(0, at), id: ref.slice(at + 1) };
 }
 
-// An Intervals.icu detail completed from the watch: its heart rate and route
-// when Intervals.icu has none (a Strava upload, a ride without a GPS).
+// An Intervals.icu activity with a copy from the watch: Apple Health and
+// Google Health are the source of the heart rate, zones, calories, distance
+// and route; Intervals.icu keeps what only it has (power, TSS, intervals) and
+// fills in what the watch did not record.
+const WATCH_FIELDS = ['average_heartrate', 'max_heartrate', 'calories', 'distance', 'total_elevation_gain'];
 export async function withWatch(env, detail, activityId, options = {}) {
   const ref = await watchCopyOf(env, activityId).catch(() => null);
   if (!ref) return detail;
-  const has = type => (detail.streams || []).some(s => s.type === type && s.points?.length);
   const watch = await watchDetail(env, { ...ref, ...options }).catch(() => null);
   if (!watch) return { ...detail, watch: { ...ref } };
-  const streams = [...(detail.streams || [])];
-  for (const type of ['heartrate', 'latlng', 'altitude']) if (!has(type)) streams.push(...watch.streams.filter(s => s.type === type));
-  return { ...detail, streams, hrZones: detail.hrZones?.length ? detail.hrZones : watch.hrZones, watch: watch.watch };
+  const fromWatch = new Set(watch.streams.filter(s => s.points?.length).map(s => s.type));
+  const streams = [...(detail.streams || []).filter(s => !fromWatch.has(s.type)), ...watch.streams.filter(s => s.points?.length)];
+  const activity = { ...detail.activity };
+  for (const key of WATCH_FIELDS) if (watch.activity?.[key] != null) activity[key] = watch.activity[key];
+  return {
+    ...detail, activity, streams,
+    hrZones: watch.hrZones?.length ? watch.hrZones : detail.hrZones,
+    hrr: watch.hrr || detail.hrr,
+    watch: watch.watch
+  };
 }

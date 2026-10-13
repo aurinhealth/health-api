@@ -293,8 +293,8 @@ struct ActivityDetailView: View {
             self.error = error.localizedDescription
             return
         }
-        let hasRoute = detail?.streams?.contains { $0.type == "latlng" && !$0.points.isEmpty } == true
-        if !hasRoute, let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
+        // Apple Health is the route's source when it has one (it stays on the iPhone).
+        if let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
     }
 }
 
@@ -944,6 +944,8 @@ struct ManualWorkoutSheet: View {
     @State private var endMoved = false
     @State private var pickingEnd = false
     @State private var heart: WindowHeartRate?
+    @State private var watch: WatchMatch?
+    @State private var pair = true
     @State private var rpe = 6.0
     @State private var saving = false
     @State private var error: String?
@@ -973,6 +975,7 @@ struct ManualWorkoutSheet: View {
                     SettingsDivider()
                     endRow
                 }
+                watchCard
                 heartCard
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             }
@@ -1057,6 +1060,29 @@ struct ManualWorkoutSheet: View {
         }
     }
 
+    /// The watch already recorded this workout: pair with it, not twice.
+    @ViewBuilder private var watchCard: some View {
+        if let watch {
+            SettingsGroup {
+                Toggle(isOn: $pair) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Spárovat se záznamem z hodinek").foregroundStyle(Palette.ink)
+                        Text(verbatim: watchText(watch)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                .tint(Palette.green)
+                .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
+            }
+        }
+    }
+
+    private func watchText(_ watch: WatchMatch) -> String {
+        let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
+        let f = ISO8601DateFormatter()
+        guard let a = watch.start.flatMap({ f.date(from: $0) }), let b = watch.end.flatMap({ f.date(from: $0) }) else { return watch.name ?? "" }
+        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: " · ")
+    }
+
     @ViewBuilder private var heartCard: some View {
         if let heart, heart.avgHr != nil {
             VStack(alignment: .leading, spacing: 10) {
@@ -1100,7 +1126,10 @@ struct ManualWorkoutSheet: View {
         try? await Task.sleep(for: .milliseconds(250))
         if Task.isCancelled { return }
         let found = await WorkoutHeartRate.window(start: startAt, end: endAt, api: model.api, appleHealth: AppleHealth.shared.enabled)
-        if !Task.isCancelled { heart = found }
+        if Task.isCancelled { return }
+        heart = found.heart
+        if found.watch?.key != watch?.key { pair = true }
+        watch = found.watch
     }
 
     private func save() async {
@@ -1111,9 +1140,16 @@ struct ManualWorkoutSheet: View {
         let start = startAt, date = AppModel.localDate(start)
         let measured = heart?.avgHr != nil ? heart : nil
         let effort = measured == nil ? Int(rpe) : nil
+        let pairWith = pair ? watch?.key : nil
         do {
             let result = try await model.api.manualWorkout(name: title, date: date, sport: sport, minutes: minutes, completed: true, rpe: effort, notes: "",
-                                                           start: start, heart: measured)
+                                                           start: start, heart: measured, pairWith: pairWith)
+            // Paired: the watch put it in Apple or Google Health already.
+            if pairWith != nil {
+                await model.refreshTraining()
+                dismiss()
+                return
+            }
             // Done: to the apps chosen in Synchronizace (the server sent its part already).
             let activity = ActivityToSync(key: result.activityKey ?? "manual:" + UUID().uuidString, sport: sport, name: title, date: date,
                                           start: start, minutes: minutes, notes: "", rpe: effort)

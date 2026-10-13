@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { heartRateWindow, heartRateKcal } from "../src/manual-heart-rate.js";
+import { heartRateWindow, heartRateKcal, watchWorkoutIn } from "../src/manual-heart-rate.js";
 
 function database() {
   const db = createD1();
@@ -60,4 +60,18 @@ test("calories from heart rate are net of rest and need a real exercise heart ra
   assert.ok(heartRateKcal({ avgHr: 120, minutes: 60, weightKg: 60, age: 35, sex: "female" }) < hour);
   assert.equal(heartRateKcal({ avgHr: 65, minutes: 60, weightKg: 88 }), null);
   assert.equal(heartRateKcal({ avgHr: 120, minutes: 60, weightKg: null }), null);
+});
+
+test("the watch's record of the typed-in window is offered for pairing; a short overlap or a paired one is not", async () => {
+  const { db } = database();
+  db.sqlite.exec("ALTER TABLE health_datapoints ADD COLUMN matched_activity_id TEXT");
+  const exercise = (family, id, start, end, matched = null, role = "primary") => db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, end_time, payload_json, record_role, matched_activity_id) VALUES (1, ?, 'exercise', ?, ?, ?, ?, ?, ?)")
+    .run(family, id, start, end, JSON.stringify({ exercise: { displayName: "Posilování" } }), role, matched);
+  exercise("google-wearables", "g1", "2026-10-13T05:30:00Z", "2026-10-13T06:05:00Z");
+  exercise("google-wearables", "g2", "2026-10-13T06:02:00Z", "2026-10-13T07:05:00Z");
+  const window = { start: "2026-10-13T06:00:00Z", end: "2026-10-13T07:00:00Z" };
+  const watch = await watchWorkoutIn(db, 1, window);
+  assert.deepEqual(watch, { source: "google-wearables", id: "g2", start: "2026-10-13T06:02:00Z", end: "2026-10-13T07:05:00Z", minutes: 63, name: "Posilování" });
+  db.sqlite.prepare("UPDATE health_datapoints SET record_role='duplicate', matched_activity_id='local:activity:x' WHERE external_id='g2'").run();
+  assert.equal(await watchWorkoutIn(db, 1, window), null, "already paired with an entry");
 });

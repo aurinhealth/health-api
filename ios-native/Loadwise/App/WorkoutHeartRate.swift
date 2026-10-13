@@ -9,16 +9,29 @@ struct WindowHeartRate: Decodable, Equatable {
     let kcal: Int?
 }
 
+/// The watch's own record of that window (Apple or Google Health), which the
+/// typed-in workout can be paired with instead of being there twice.
+struct WatchMatch: Decodable, Equatable {
+    let source: String
+    let id: String
+    let start: String?
+    let end: String?
+    let minutes: Int?
+    let name: String?
+
+    var key: String { source + ":" + id }
+}
+
 enum WorkoutHeartRate {
     private static let store = HKHealthStore()
 
-    static func window(start: Date, end: Date, api: APIClient, appleHealth: Bool) async -> WindowHeartRate? {
-        if appleHealth, HKHealthStore.isHealthDataAvailable(), let found = await apple(start: start, end: end) { return found }
-        struct Response: Decodable { let heartRate: WindowHeartRate? }
+    static func window(start: Date, end: Date, api: APIClient, appleHealth: Bool) async -> (heart: WindowHeartRate?, watch: WatchMatch?) {
+        struct Response: Decodable { let heartRate: WindowHeartRate?; let watch: WatchMatch? }
         let f = ISO8601DateFormatter()
         let query = "start=\(f.string(from: start))&end=\(f.string(from: end))".replacingOccurrences(of: "+", with: "%2B")
         let response: Response? = try? await api.get("/app/api/workouts/manual/heart-rate?" + query)
-        return response?.heartRate
+        if appleHealth, HKHealthStore.isHealthDataAvailable(), let found = await apple(start: start, end: end) { return (found, response?.watch) }
+        return (response?.heartRate, response?.watch)
     }
 
     private static func apple(start: Date, end: Date) async -> WindowHeartRate? {

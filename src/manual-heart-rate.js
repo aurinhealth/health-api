@@ -38,3 +38,36 @@ export function heartRateKcal({ avgHr, minutes, weightKg, age, sex }) {
   const perMinute = sex === 'female' ? (-20.4022 + 0.4472 * hr - 0.1263 * w + 0.074 * a) / 4.184 : (-55.0969 + 0.6309 * hr + 0.1988 * w + 0.2017 * a) / 4.184;
   return Math.max(0, Math.round((perMinute - w / 60) * m));
 }
+
+// The watch's own record of the typed-in workout (Apple or Google Health):
+// one that overlaps at least half of the shorter of the two. Zapsat trénink
+// offers to pair with it, so the same workout is not there twice.
+export async function watchWorkoutIn(db, userId, { start, end }) {
+  const from = Date.parse(start), to = Date.parse(end);
+  if (!(to > from && to - from <= 12 * 3600000)) return null;
+  const rows = (await db.prepare(`SELECT source_family, external_id, start_time, end_time, payload_json FROM health_datapoints
+    WHERE user_id=? AND data_type='exercise' AND source_family IN ('google-wearables','apple-health')
+    AND COALESCE(matched_activity_id,'') != 'apple-health' AND start_time<? AND end_time>?
+    AND NOT (COALESCE(record_role,'')='duplicate' AND COALESCE(matched_activity_id,'') LIKE 'local:%')
+    ORDER BY source_family='apple-health' DESC, start_time`).bind(userId, iso(to), iso(from)).all().catch(() => ({ results: [] }))).results || [];
+  let best = null;
+  for (const row of rows) {
+    const a = Date.parse(row.start_time), b = Date.parse(row.end_time);
+    const overlap = Math.min(b, to) - Math.max(a, from);
+    if (!(b > a) || overlap < Math.min(b - a, to - from) / 2) continue;
+    if (best && overlap <= best.overlap) continue;
+    let p = {}; try { p = JSON.parse(row.payload_json || '{}'); } catch {}
+    const ex = p.exercise || {};
+    best = { overlap, source: row.source_family, id: row.external_id, start: row.start_time, end: row.end_time,
+      minutes: Math.round((b - a) / 60000), name: ex.displayName || null };
+  }
+  if (!best) return null;
+  const { overlap, ...watch } = best;
+  return watch;
+}
+
+// "google-wearables:<id>" or "apple-health:<id>" of a watch record, or null.
+export function watchKeyRef(key) {
+  const m = /^(google-wearables|apple-health):(.{1,200})$/.exec(String(key || ''));
+  return m ? { source: m[1], id: m[2] } : null;
+}

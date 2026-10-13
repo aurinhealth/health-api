@@ -289,7 +289,7 @@ final class APIClient: @unchecked Sendable {
     /// A done one comes back with where it was sent (Synchronizace).
     @discardableResult
     func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String,
-                       start: Date? = nil, heart: WindowHeartRate? = nil) async throws -> ManualWorkoutResult {
+                       start: Date? = nil, heart: WindowHeartRate? = nil, pairWith: String? = nil) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
         if let rpe { body["rpe"] = .number(Double(rpe)) }
@@ -304,6 +304,8 @@ final class APIClient: @unchecked Sendable {
         if let v = heart?.avgHr { body["avgHr"] = .number(Double(v)) }
         if let v = heart?.maxHr { body["maxHr"] = .number(Double(v)) }
         if let v = heart?.kcal { body["kcal"] = .number(Double(v)) }
+        // The watch's record it is paired with: nothing is sent anywhere then.
+        if let pairWith { body["pairWith"] = .string(pairWith) }
         return try await send("/app/api/workouts/manual", method: "POST", body: body)
     }
 

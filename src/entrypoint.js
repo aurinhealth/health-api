@@ -5,7 +5,7 @@ import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
-import {heartRateWindow,heartRateKcal} from './manual-heart-rate.js';
+import {heartRateWindow,heartRateKcal,watchWorkoutIn} from './manual-heart-rate.js';
 import {latestStoredWeight} from './athlete-weight.js';
 import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
@@ -557,8 +557,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/workouts/manual/heart-rate'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     const [weight,profile]=await Promise.all([latestStoredWeight(env.DB,env.USER_ID).catch(()=>null),dashboardProfile(env).catch(()=>({}))]);
-    const found=await heartRateWindow(env.DB,env.USER_ID,{start:url.searchParams.get('start'),end:url.searchParams.get('end'),weightKg:weight?.value_numeric,profile}).catch(()=>null);
-    return Response.json({status:'ok',heartRate:found&&found.avgHr!=null?found:null,weightKg:weight?.value_numeric??null,age:profile?.age??null,sex:profile?.sex||null},{headers:{'Cache-Control':'no-store'}});
+    const window={start:url.searchParams.get('start'),end:url.searchParams.get('end')};
+    const [found,watch]=await Promise.all([heartRateWindow(env.DB,env.USER_ID,{...window,weightKg:weight?.value_numeric,profile}).catch(()=>null),watchWorkoutIn(env.DB,env.USER_ID,window).catch(()=>null)]);
+    // The watch's record of that window: the app offers to pair with it.
+    return Response.json({status:'ok',heartRate:found&&found.avgHr!=null?found:null,watch,weightKg:weight?.value_numeric??null,age:profile?.age??null,sex:profile?.sex||null},{headers:{'Cache-Control':'no-store'}});
   }
   if(url.pathname==='/app/api/workouts/manual'&&request.method==='POST'){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -579,8 +581,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(!heart||heart.kcal==null){const [weight,profile]=await Promise.all([latestStoredWeight(env.DB,env.USER_ID).catch(()=>null),dashboardProfile(env).catch(()=>({}))]);const found=await heartRateWindow(env.DB,env.USER_ID,{start:body.start,end:body.end,weightKg:weight?.value_numeric,profile}).catch(()=>null);heart=heart?{...heart,kcal:heart.kcal??(found?.kcalSource==='energy'?found.kcal:heartRateKcal({avgHr:heart.avgHr,minutes,weightKg:weight?.value_numeric,age:profile?.age,sex:profile?.sex}))}:found?.avgHr!=null?found:null;}
       }
       const event={external_id:'manual:'+requestId,category:'WORKOUT',name,type,start_date_local:date+'T'+time+':00',moving_time:minutes*60,description:String(body.notes||'').slice(0,1000)};
-      const saved=await storeLocalEvent(env.DB,event);if(completed)await completeLocalWorkout(env.DB,saved.id,{minutes,rpe:body.rpe,notes:body.notes,avgHr:heart?.avgHr,maxHr:heart?.maxHr,kcal:heart?.kcal});
+      // Paired with the watch's record: the watch already put it in Apple or
+      // Google Health (and on from there), so nothing more is sent.
+      let pairedWith=null;
+      if(completed&&body.pairWith&&body.start&&body.end){const watch=await watchWorkoutIn(env.DB,env.USER_ID,{start:body.start,end:body.end}).catch(()=>null);pairedWith=watch&&watch.source+':'+watch.id===String(body.pairWith)?String(body.pairWith):null;if(!pairedWith)throw new Error(L('Záznam z hodinek se nenašel.', 'The watch\'s record wasn\'t found.'));}
+      const saved=await storeLocalEvent(env.DB,event);if(completed)await completeLocalWorkout(env.DB,saved.id,{minutes,rpe:body.rpe,notes:body.notes,avgHr:heart?.avgHr,maxHr:heart?.maxHr,kcal:heart?.kcal,pairedWith});
       if(!completed)return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:await syncLocalWorkout(env,saved.id)});
+      if(pairedWith)return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:{status:'not_exported'},pairedWith,sends:[]});
       // Done: to every destination the user sends activities to (Synchronizace).
       const sent=await sendActivity(env,{key:'manual:'+saved.id,sport:body.sport,name,date,minutes,notes:body.notes,rpe:body.rpe,start:body.start},{googleToken}).catch(error=>{console.error('Activity send failed',error.message);return {key:'manual:'+saved.id,sends:[]};});
       return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:{status:'not_exported'},activityKey:sent.key,sends:sent.sends});

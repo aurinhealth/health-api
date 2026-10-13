@@ -34,6 +34,8 @@ const NAMES = bilingual(
 const seconds = v => { const n = Number(String(v ?? "").replace(/s$/i, "")); return Number.isFinite(n) && n > 0 ? n : null; };
 const minutesBetween = (a, b) => { const m = (Date.parse(b) - Date.parse(a)) / 60000; return Number.isFinite(m) && m > 0 && m < 24 * 60 ? m : null; };
 
+const watchRef = key => { const m = /^(google-wearables|apple-health):(.{1,200})$/.exec(String(key || "")); return m ? { source: m[1], id: m[2] } : null; };
+
 // A done activity from Intervals.icu (or one made in the app).
 function intervalsActivity(row) {
   const p = parse(row.payload_json);
@@ -51,6 +53,8 @@ function intervalsActivity(row) {
     kcal: round(num(p.calories_kcal ?? p.calories ?? p.icu_calories ?? row.value_numeric)) || null,
     activityId: /^[a-zA-Z0-9_-]{1,80}$/.test(id) && row.source_family === "intervals" ? id : null,
     eventId: null,
+    // Typed in and paired with the watch's record: that record is its detail.
+    ...(watchRef(p.pairedWith) ? { watch: watchRef(p.pairedWith) } : {}),
     // What the pairing with the plan reads (as index.js's daily activities).
     pair: {
       id: String(row.external_id || id), source: "intervals", type, name: p.name || "", start: row.start_time, payload: p,
