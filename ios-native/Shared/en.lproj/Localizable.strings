@@ -1932,3 +1932,8 @@
 "+ %@ min rozcvička" = "+ %@ min warm-up";
 "+ %@ min protažení" = "+ %@ min stretching";
 "Posilování" = "Lifting";
+
+/* Plán týdne: Opravit návrh */
+"Opravit návrh" = "Fix the proposal";
+"Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
+"Opravuji…" = "Fixing…";
