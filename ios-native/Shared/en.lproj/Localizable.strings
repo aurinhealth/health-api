@@ -1917,7 +1917,11 @@
 "levá" = "left";
 "pravá" = "right";
 "Spustit" = "Start";
-"Drž v klidu, nehoupej. Protažení má táhnout, ne bolet." = "Hold still, don't bounce. A stretch should pull, not hurt.";
 "Protažení hotovo" = "Stretching done";
 "Připrav se" = "Get ready";
 "Drž" = "Hold";
+"Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet." = "Move calmly and without pain; it should pull, not hurt.";
+"Rozcvička hotová" = "Warm-up done";
+"Rozcvička na začátku" = "Warm-up at the start";
+"Cvič" = "Go";
+"Rozcvička" = "Warm-up";

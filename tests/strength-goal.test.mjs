@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateStrengthPlan, goalReps, recommendedGoal, EXERCISES } from '../src/strength-generator.js';
-import { stretchingFor, stretchingRow, readStretching } from '../src/stretching.js';
+import { stretchingFor, warmupFor, routinesRow, readRoutines } from '../src/stretching.js';
 import { planValues } from '../src/gym-plan-store.js';
 import { normalizeTraining } from '../src/onboarding.js';
 import { strengthPlanToIntervalsEvent } from '../src/intervals-strength.js';
 
+const L_WARM = () => 'Rozcvička';
 const context = (trainingSetup = {}) => ({ date: '2026-10-14', strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {}, trainingSetup: { equipment: 'gym', ...trainingSetup } });
 const work = plan => plan.rows.filter(r => r[0] === 'WORK');
 const rest = row => Number(String(row[9]).match(/\[Pauza (\d+) s\]/)?.[1]);
@@ -41,21 +42,26 @@ test('stretching follows the muscles worked, fits the time and can be turned off
   assert.ok(plan.stretching.items.length >= 3 && plan.stretching.items.length <= 5);
   assert.equal(plan.stretching.items.at(-1).id, 'child');
   assert.ok(plan.stretching.items.some(x => ['hip_flexor', 'hamstring', 'quad', 'figure_four'].includes(x.id)));
-  assert.ok(plan.timing.totalSeconds <= 3600 && plan.timing.stretchSeconds === plan.stretching.seconds);
-  const off = generateStrengthPlan(context({ stretching: false }), { durationMinutes: 60 });
+  assert.ok(plan.timing.totalSeconds <= 3600 && plan.timing.routineSeconds === plan.stretching.seconds + plan.warmup.seconds);
+  const off = generateStrengthPlan(context({ stretching: false, warmup: false }), { durationMinutes: 60 });
   assert.equal(off.stretching, null);
-  assert.equal(off.timing.stretchSeconds, 0);
+  assert.equal(off.warmup, null);
+  assert.equal(off.timing.routineSeconds, 0);
   assert.equal(stretchingFor([['WARMUP', 'DB bench press']], name => EXERCISES[name]?.muscle), null);
 });
 
 test('stretching is stored in the plan header and sent to Intervals.icu', () => {
   const plan = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'upper' });
   const values = planValues(plan);
-  assert.equal(values[5][0], 'Protažení');
-  assert.deepEqual(readStretching(values).items, plan.stretching.items);
+  assert.equal(values[5][0], 'Rozcvička a protažení');
+  assert.deepEqual(readRoutines(values).stretching.items, plan.stretching.items);
+  assert.deepEqual(readRoutines(values).warmup.items, plan.warmup.items);
   assert.equal(values[6][0], 'Typ');
-  assert.deepEqual(stretchingRow(null), []);
-  assert.match(strengthPlanToIntervalsEvent(plan).description, /Protažení na konci|Stretching at the end/);
+  assert.deepEqual(routinesRow({}), []);
+  assert.deepEqual(readRoutines([[], [], [], [], [], []]), { warmup: null, stretching: null });
+  const description = strengthPlanToIntervalsEvent(plan).description;
+  assert.match(description, /Protažení na konci|Stretching at the end/);
+  assert.ok(description.indexOf(L_WARM()) < description.indexOf('1. '));
 });
 
 test('the training setup keeps the goal and the stretching switch', () => {
@@ -82,7 +88,7 @@ test('the goal follows the main sport while it is automatic', () => {
 });
 
 test('each stretch has steps, two photos and two rounds for the muscles worked most', () => {
-  const plan = generateStrengthPlan(context(), { durationMinutes: 75, focus: 'lower' });
+  const plan = generateStrengthPlan(context(), { durationMinutes: 90, focus: 'lower' });
   for (const item of plan.stretching.items) {
     assert.ok(item.steps.length >= 2);
     assert.equal(item.photos.length, 2);
@@ -90,4 +96,17 @@ test('each stretch has steps, two photos and two rounds for the muscles worked m
   }
   assert.deepEqual(plan.stretching.items.map(x => x.rounds), [2, 2, 1, 1, 1]);
   assert.ok(plan.stretching.minutes >= 5 && plan.stretching.minutes <= 9);
+});
+
+test('the warm-up starts with easy cardio and moves for the muscles of the session', () => {
+  const upper = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'upper' });
+  const lower = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'lower' });
+  assert.equal(upper.warmup.items[0].id, 'cardio');
+  assert.equal(upper.warmup.items.length, 4);
+  const short = generateStrengthPlan(context(), { durationMinutes: 30 });
+  assert.ok(short.warmup.minutes + short.stretching.minutes <= 8);
+  assert.ok(upper.warmup.items.some(x => ['arm_circles', 'chest_openers', 'band_pull_apart'].includes(x.id)));
+  assert.ok(lower.warmup.items.some(x => ['worlds_greatest', 'squat', 'leg_swings', 'hip_circles', 'bridge'].includes(x.id)));
+  assert.ok(upper.warmup.minutes >= 4 && upper.warmup.minutes <= 8);
+  assert.equal(warmupFor([], () => null), null);
 });

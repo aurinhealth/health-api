@@ -1,5 +1,9 @@
 import { L } from './lang.js';
 
+// The warm-up before a gym session and the stretching after it. Both are
+// chosen for the muscles the session works; each move has two photos and
+// steps, and the app's timer leads through them.
+
 // Stretching at the end of a gym session: a few static stretches for the
 // muscles the session worked hardest, then the child's pose to finish.
 // About five to seven minutes; held, not bounced. A stretch with `sides` is
@@ -64,30 +68,76 @@ const FINISH = { id: 'child', photo: 'Childs_Pose', muscles: ['back', 'lower_bac
   cs: 'Dětská pozice', en: "Child's pose",
   stepsCs: ['Z pozice na všech čtyřech si sedni hýžděmi na paty.', 'Paže nech natažené před sebou na zemi a čelo polož na podložku.', 'Zhluboka dýchej a s každým výdechem povol záda.'],
   stepsEn: ['From all fours, sit your hips back onto your heels.', 'Leave your arms stretched out in front and rest your forehead down.', 'Breathe deeply and let your back relax on every breath out.'] };
-// Moving into the next stretch, and between the sides.
-const TRANSITION_SECONDS = 10;
+// Warm-up: a few minutes of easy cardio, then dynamic moves for the muscles
+// the session works (moved through, not held).
+const CARDIO = { id: 'cardio', photo: 'Bicycling_Stationary', muscles: [], seconds: 240, sides: false,
+  cs: 'Lehké kardio', en: 'Easy cardio',
+  stepsCs: ['Rotoped, veslař nebo rychlá chůze do kopce.', 'Tempo, při kterém ještě zvládneš mluvit.', 'Poslední minutu trochu přidej, ať se zahřeješ.'],
+  stepsEn: ['Bike, rower or a brisk uphill walk.', 'A pace at which you can still talk.', 'Pick it up a little in the last minute to get warm.'] };
+const WARMUPS = [
+  { id: 'worlds_greatest', photo: 'Worlds_Greatest_Stretch', muscles: ['quads', 'glutes', 'hamstrings', 'back'], seconds: 30, sides: true,
+    cs: 'Výpad s rotací', en: "World's greatest stretch",
+    stepsCs: ['Udělej hluboký výpad a ruce opři vedle přední nohy.', 'Loket stejné strany přibliž k chodidlu, pak paži vytoč ke stropu.', 'Vrať se a pomalu opakuj, pohyb má být plynulý.'],
+    stepsEn: ['Step into a deep lunge with your hands beside the front foot.', 'Bring the same-side elbow towards the foot, then rotate that arm to the ceiling.', 'Come back and repeat slowly in one smooth movement.'] },
+  { id: 'squat', photo: 'Bodyweight_Squat', muscles: ['quads', 'glutes', 'adductors'], seconds: 40, sides: false,
+    cs: 'Dřep s vlastní vahou', en: 'Bodyweight squat',
+    stepsCs: ['Nohy na šířku ramen, špičky lehce ven.', 'Pomalu do dřepu tak hluboko, jak ti to jde s rovnými zády.', 'Asi 10–12 opakování v klidném tempu.'],
+    stepsEn: ['Feet shoulder-width apart, toes slightly out.', 'Squat down slowly as deep as you can with a straight back.', 'About 10–12 reps at an easy pace.'] },
+  { id: 'leg_swings', photo: 'Front_Leg_Raises', muscles: ['hamstrings', 'glutes', 'quads'], seconds: 20, sides: true,
+    cs: 'Kmihy nohou', en: 'Leg swings',
+    stepsCs: ['Postav se bokem k opoře a chyť se jí.', 'Volnou nohu švihej dopředu a dozadu, rozsah zvětšuj postupně.', 'Trup drž rovně, pohyb vychází z kyčle.'],
+    stepsEn: ['Stand side-on to a support and hold it.', 'Swing the free leg forward and back, increasing the range bit by bit.', 'Keep the torso still; the movement comes from the hip.'] },
+  { id: 'hip_circles', photo: 'Standing_Hip_Circles', muscles: ['glutes', 'abductors', 'adductors'], seconds: 20, sides: true,
+    cs: 'Kroužení kyčlí', en: 'Standing hip circles',
+    stepsCs: ['Stoupni si na jednu nohu a chyť se opory.', 'Zvedni koleno do pravého úhlu a opisuj s ním velký kruh do strany a zpět.', 'Po polovině času změň směr.'],
+    stepsEn: ['Stand on one leg holding a support.', 'Lift the knee to 90 degrees and draw a big circle out to the side and back.', 'Change direction halfway.'] },
+  { id: 'bridge', photo: 'Butt_Lift_Bridge', muscles: ['glutes', 'hamstrings', 'lower_back'], seconds: 30, sides: false,
+    cs: 'Most', en: 'Glute bridge',
+    stepsCs: ['Lehni si na záda, pokrč kolena, chodidla na šířku pánve.', 'Zatni hýždě a zvedni pánev, až tělo tvoří rovnou linii.', 'Nahoře krátce podrž a pomalu spusť, asi 12×.'],
+    stepsEn: ['Lie on your back, knees bent, feet hip-width apart.', 'Squeeze your glutes and lift the hips into a straight line.', 'Pause at the top and lower slowly, about 12 times.'] },
+  { id: 'inchworm', photo: 'Inchworm', muscles: ['hamstrings', 'core', 'shoulders', 'chest'], seconds: 40, sides: false,
+    cs: 'Housenka', en: 'Inchworm',
+    stepsCs: ['Ze stoje se předkloň a dej ruce na zem.', 'Ručkuj dopředu do polohy kliku, pak nohama krátkými kroky za rukama.', 'Zvedni se a opakuj, asi 5×.'],
+    stepsEn: ['From standing, bend forward and put your hands on the floor.', 'Walk the hands out to a push-up position, then walk the feet in after them.', 'Stand up and repeat, about 5 times.'] },
+  { id: 'arm_circles', photo: 'Arm_Circles', muscles: ['shoulders', 'side_delts', 'rear_delts', 'chest', 'triceps', 'biceps'], seconds: 30, sides: false,
+    cs: 'Kroužení pažemi', en: 'Arm circles',
+    stepsCs: ['Upaž do stran ve výšce ramen.', 'Začni malými kruhy a postupně je zvětšuj.', 'Po polovině času toč na druhou stranu.'],
+    stepsEn: ['Raise your arms out to the sides at shoulder height.', 'Start with small circles and make them bigger.', 'Reverse halfway.'] },
+  { id: 'chest_openers', photo: 'Dynamic_Chest_Stretch', muscles: ['chest', 'shoulders', 'biceps'], seconds: 30, sides: false,
+    cs: 'Rozpažování', en: 'Chest openers',
+    stepsCs: ['Ruce natáhni před sebe, dlaně k sobě.', 'Švihem je rozpaž dozadu, až ucítíš otevření hrudníku.', 'Vrať je zpátky a plynule opakuj.'],
+    stepsEn: ['Hold your arms straight out in front, palms together.', 'Swing them open and back until the chest opens.', 'Bring them back and repeat smoothly.'] },
+  { id: 'band_pull_apart', photo: 'Band_Pull_Apart', muscles: ['back', 'rear_delts', 'traps'], seconds: 30, sides: false,
+    cs: 'Roztahování gumy', en: 'Band pull-apart',
+    stepsCs: ['Chyť gumu na šířku ramen, paže před sebou.', 'Roztáhni ji k hrudníku stažením lopatek.', 'Pomalu povol, asi 15×.'],
+    stepsEn: ['Hold a band shoulder-width apart, arms in front of you.', 'Pull it apart to your chest by squeezing the shoulder blades.', 'Return slowly, about 15 times.'] },
+  { id: 'cat_cow', photo: 'Cat_Stretch', muscles: ['core', 'lower_back', 'back'], seconds: 30, sides: false,
+    cs: 'Kočka a kráva', en: 'Cat-cow',
+    stepsCs: ['Postav se na všechny čtyři.', 'S výdechem vyhrb záda, s nádechem je prohni a hlavu zvedni.', 'Plynule střídej v rytmu dechu.'],
+    stepsEn: ['Get on all fours.', 'Round your back as you breathe out, arch it and lift your head as you breathe in.', 'Alternate smoothly with your breath.'] }
+];
+// Moving into the next move, and between the sides.
+const TRANSITION_SECONDS = 5;
 
 const holdSeconds = s => s.seconds * (s.sides ? 2 : 1) * s.rounds;
 const itemSeconds = s => holdSeconds(s) + TRANSITION_SECONDS * (s.sides ? 2 : 1) * s.rounds;
 
-/**
- * The stretches for a session's work sets (`muscleOf` maps an exercise to its
- * main muscle): the muscles with the most sets first, `count` stretches and
- * the child's pose. Null without any work set.
- */
-export function stretchingFor(rows, muscleOf, { count = 4 } = {}) {
+function workedMuscles(rows, muscleOf) {
   const sets = new Map();
   for (const r of rows || []) {
     if (r?.[0] !== 'WORK') continue;
     const muscle = muscleOf(r[1]);
     if (muscle) sets.set(muscle, (sets.get(muscle) || 0) + 1);
   }
-  if (!sets.size) return null;
+  return sets;
+}
+// The catalog's moves that fit the worked muscles best (a move's first muscle counts fully).
+function bestFor(catalog, sets, count) {
   const score = s => s.muscles.reduce((sum, m, i) => sum + (sets.get(m) || 0) * (i ? 0.5 : 1), 0);
-  const picked = STRETCHES.map((s, order) => ({ s, score: score(s), order })).filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score || a.order - b.order).slice(0, count)
-    .map((x, i) => ({ ...x.s, rounds: i < 2 ? 2 : 1 }));
-  const items = [...picked, { ...FINISH, rounds: 1 }];
+  return catalog.map((s, order) => ({ s, score: score(s), order })).filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.order - b.order).slice(0, count).map(x => x.s);
+}
+function routine(items) {
   const seconds = items.reduce((sum, s) => sum + itemSeconds(s), 0);
   return {
     minutes: Math.ceil(seconds / 60),
@@ -99,17 +149,48 @@ export function stretchingFor(rows, muscleOf, { count = 4 } = {}) {
   };
 }
 
-// The stretching lives in the stored plan's sixth row (values[5]), which the
-// older layout left empty: ["Protažení", "<json>"].
-export const STRETCHING_ROW = 5;
-export function stretchingRow(stretching) {
-  return stretching?.items?.length ? ['Protažení', JSON.stringify({ minutes: stretching.minutes, items: stretching.items })] : [];
+/** Shorter routines for a shorter session, so most of the time stays for the lifting. */
+export function routineSize(minutes) {
+  if (minutes <= 30) return { warmup: { count: 2, cardioSeconds: 60 }, stretching: { count: 2, doubled: 0 } };
+  if (minutes <= 45) return { warmup: { count: 2, cardioSeconds: 120 }, stretching: { count: 2, doubled: 0 } };
+  if (minutes <= 75) return { warmup: { count: 3, cardioSeconds: 180 }, stretching: { count: 3, doubled: 1 } };
+  return { warmup: {}, stretching: {} };
 }
-export function readStretching(values) {
-  const row = Array.isArray(values) ? values[STRETCHING_ROW] : null;
-  if (!Array.isArray(row) || row[0] !== 'Protažení') return null;
+
+/** The warm-up for a session's work sets: easy cardio and `count` dynamic moves. Null without work sets. */
+export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds } = {}) {
+  const sets = workedMuscles(rows, muscleOf);
+  if (!sets.size) return null;
+  return routine([{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }, ...bestFor(WARMUPS, sets, count).map(s => ({ ...s, rounds: 1 }))]);
+}
+
+/**
+ * The stretches for a session's work sets (`muscleOf` maps an exercise to its
+ * main muscle): the muscles with the most sets first, `count` stretches and
+ * the child's pose. Null without any work set.
+ */
+export function stretchingFor(rows, muscleOf, { count = 4, doubled = 2 } = {}) {
+  const sets = workedMuscles(rows, muscleOf);
+  if (!sets.size) return null;
+  const picked = bestFor(STRETCHES, sets, count).map((s, i) => ({ ...s, rounds: i < doubled ? 2 : 1 }));
+  return routine([...picked, { ...FINISH, rounds: 1 }]);
+}
+
+// The warm-up and the stretching live in the stored plan's sixth row
+// (values[5]), which the older layout left empty:
+// ["Rozcvička a protažení", "{warmup:{minutes,items}, stretching:{minutes,items}}"].
+export const ROUTINES_ROW = 5;
+export const ROUTINES_LABEL = 'Rozcvička a protažení';
+const stored = r => r?.items?.length ? { minutes: r.minutes, items: r.items } : null;
+export function routinesRow({ warmup = null, stretching = null } = {}) {
+  const value = { warmup: stored(warmup), stretching: stored(stretching) };
+  return value.warmup || value.stretching ? [ROUTINES_LABEL, JSON.stringify(value)] : [];
+}
+export function readRoutines(values) {
+  const row = Array.isArray(values) ? values[ROUTINES_ROW] : null;
+  if (!Array.isArray(row) || row[0] !== ROUTINES_LABEL) return { warmup: null, stretching: null };
   try {
     const parsed = JSON.parse(row[1]);
-    return Array.isArray(parsed?.items) ? parsed : null;
-  } catch { return null; }
+    return { warmup: parsed?.warmup?.items ? parsed.warmup : null, stretching: parsed?.stretching?.items ? parsed.stretching : null };
+  } catch { return { warmup: null, stretching: null }; }
 }

@@ -65,6 +65,10 @@ struct TrainingModeView: View {
                                 if live.running {
                                     LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                                 }
+                                // The warm-up until the first set is done.
+                                if let warmup = day.warmup, restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                                    StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
                                 } else {

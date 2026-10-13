@@ -161,6 +161,9 @@ struct GymSessionView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 16)
+                if let warmup = day.warmup {
+                    StretchingCard(stretching: warmup, date: date, kind: .warmup).padding(.top, 20)
+                }
                 exerciseCards(day)
                     .padding(.top, 20)
                 if let stretching = day.stretching {

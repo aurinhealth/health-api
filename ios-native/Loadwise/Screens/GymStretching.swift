@@ -1,11 +1,11 @@
 import SwiftUI
 
-// Trénink na míru (the gym goal, the experience, stretching at the end) and
-// the stretching at the end of a gym session (src/stretching.js): a card to
-// tick, each stretch's photos and steps behind "i", and a timer that leads
+// Trénink na míru (the gym goal, the experience, the warm-up and stretching)
+// and the warm-up and stretching of a gym session (src/stretching.js): a card
+// to tick, each move's photos and steps behind "i", and a timer that leads
 // through every hold.
 
-/// The stretching the plan keeps in its sixth row: ["Protažení", "<json>"].
+/// The warm-up or the stretching: its moves in order.
 struct GymStretching: Decodable, Equatable {
     let minutes: Int
     let items: [Item]
@@ -37,21 +37,27 @@ struct GymStretching: Decodable, Equatable {
             photos = try c.decodeIfPresent([String].self, forKey: .photos) ?? []
         }
 
-        /// "2 × 30 s na stranu", "45 s".
+        /// "2 × 30 s na stranu", "45 s", "3 min".
         var duration: String {
-            (rounds > 1 ? "\(rounds) × " : "") + "\(seconds) s" + (sides ? " " + L10n.tr("na stranu") : "")
+            let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
+            return (rounds > 1 ? "\(rounds) × " : "") + time + (sides ? " " + L10n.tr("na stranu") : "")
         }
 
         var photoURLs: [URL] { photos.compactMap(URL.init(string:)) }
     }
 
+    /// The plan's sixth row: ["Rozcvička a protažení", "{warmup, stretching}"].
     static let row = 5
 
-    init?(values: [[JSONValue]]) {
-        guard values.count > Self.row, values[Self.row].count > 1, values[Self.row][0].string == "Protažení",
-              let data = values[Self.row][1].string?.data(using: .utf8),
-              let parsed = try? JSONDecoder().decode(GymStretching.self, from: data), !parsed.items.isEmpty else { return nil }
-        self = parsed
+    struct Routines: Decodable {
+        let warmup: GymStretching?
+        let stretching: GymStretching?
+    }
+
+    static func routines(_ values: [[JSONValue]]) -> Routines? {
+        guard values.count > row, values[row].count > 1, values[row][0].string == "Rozcvička a protažení",
+              let data = values[row][1].string?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(Routines.self, from: data)
     }
 
     init(minutes: Int, items: [Item]) {
@@ -77,25 +83,40 @@ struct GymStretching: Decodable, Equatable {
     }
 }
 
-/// Protažení: the stretches in order, each ticked when done, with Spustit.
+enum GymRoutineKind {
+    case warmup, stretching
+
+    var title: String { self == .warmup ? "Rozcvička" : "Protažení" }
+    var symbol: String { self == .warmup ? "figure.run" : "figure.flexibility" }
+    var color: Color { self == .warmup ? Palette.amber : Palette.indigo }
+    var doneTitle: String { self == .warmup ? "Rozcvička hotová" : "Protažení hotovo" }
+    /// Ticks kept apart: the warm-up and the stretching can share a move.
+    var key: String { self == .warmup ? "w-" : "" }
+}
+
+/// Rozcvička or Protažení: the moves in order, each ticked when done, with
+/// Spustit. `compact` shows only the title row (the top of Režim tréninku).
 struct StretchingCard: View {
     let stretching: GymStretching
     let date: String
+    var kind: GymRoutineKind = .stretching
+    var compact = false
     @AppStorage("gym.stretching.done") private var stored = ""
     @State private var info: GymStretching.Item?
     @State private var timer = false
 
     private var done: Set<String> { Self.done(stored, date: date) }
+    private func isDone(_ item: GymStretching.Item) -> Bool { done.contains(kind.key + item.id) }
 
     var body: some View {
         Card {
             HStack(spacing: 10) {
-                Image(systemName: "figure.flexibility").font(.system(size: 17, weight: .medium)).foregroundStyle(Palette.indigo)
+                Image(systemName: kind.symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(kind.color)
                     .frame(width: 36, height: 36)
-                    .background(Palette.indigo.opacity(0.14), in: Circle())
+                    .background(kind.color.opacity(0.14), in: Circle())
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Protažení").font(.headline).foregroundStyle(Palette.ink)
+                    Text(kind.title).font(.headline).foregroundStyle(Palette.ink)
                     Text(verbatim: "\(stretching.minutes) min").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 Spacer()
@@ -107,17 +128,18 @@ struct StretchingCard: View {
                 }
                 .buttonStyle(.plain)
             }
+            if !compact {
             VStack(spacing: 0) {
                 ForEach(Array(stretching.items.enumerated()), id: \.element.id) { index, item in
                     if index > 0 { Divider().overlay(Palette.hairline) }
                     HStack(spacing: 12) {
-                        Button { stored = Self.toggled(stored, date: date, id: item.id) } label: {
+                        Button { stored = Self.toggled(stored, date: date, id: kind.key + item.id) } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: done.contains(item.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 21)).foregroundStyle(done.contains(item.id) ? Palette.green : Palette.faint)
+                                Image(systemName: isDone(item) ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 21)).foregroundStyle(isDone(item) ? Palette.green : Palette.faint)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink)
-                                        .strikethrough(done.contains(item.id), color: Palette.muted)
+                                        .strikethrough(isDone(item), color: Palette.muted)
                                     Text(verbatim: item.duration).font(Typo.caption).foregroundStyle(Palette.muted)
                                 }
                                 Spacer(minLength: 8)
@@ -125,7 +147,7 @@ struct StretchingCard: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityAddTraits(done.contains(item.id) ? .isSelected : [])
+                        .accessibilityAddTraits(isDone(item) ? .isSelected : [])
                         if !item.steps.isEmpty || !item.photos.isEmpty {
                             ExerciseInfoButton(name: item.name) { info = item }
                         }
@@ -133,11 +155,13 @@ struct StretchingCard: View {
                     .frame(minHeight: 52)
                 }
             }
+            }
         }
         .sheet(item: $info) { item in StretchInfoSheet(item: item) }
         .fullScreenCover(isPresented: $timer) {
-            StretchTimerView(stretching: stretching) { id in
-                if !Self.done(stored, date: date).contains(id) { stored = Self.toggled(stored, date: date, id: id) }
+            StretchTimerView(stretching: stretching, kind: kind) { id in
+                let key = kind.key + id
+                if !Self.done(stored, date: date).contains(key) { stored = Self.toggled(stored, date: date, id: key) }
             }
         }
     }
@@ -183,8 +207,10 @@ struct StretchInfoSheet: View {
                             }
                         }
                     }
-                    Text("Drž v klidu, nehoupej. Protažení má táhnout, ne bolet.")
-                        .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    if item.id != "cardio" {
+                        Text("Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet.")
+                            .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 .padding(20)
             }
@@ -200,6 +226,7 @@ struct StretchInfoSheet: View {
 /// Spustit: every hold in turn with a countdown, 5 s to move between them.
 struct StretchTimerView: View {
     let stretching: GymStretching
+    var kind: GymRoutineKind = .stretching
     var onItemDone: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
@@ -228,7 +255,7 @@ struct StretchTimerView: View {
             if finished {
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundStyle(Palette.green)
-                Text("Protažení hotovo").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(kind.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
                 PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
             } else if let hold {
@@ -239,12 +266,12 @@ struct StretchTimerView: View {
                 ZStack {
                     Circle().stroke(Palette.track, lineWidth: 10)
                     Circle().trim(from: 0, to: progress(hold))
-                        .stroke(moving ? Palette.faint : Palette.indigo, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .stroke(moving ? Palette.faint : kind.color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .animation(.linear(duration: 1), value: left)
                     VStack(spacing: 2) {
                         Text(verbatim: "\(left)").font(Typo.number(54)).foregroundStyle(Palette.ink).monospacedDigit()
-                        Text(moving ? "Připrav se" : "Drž").font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(moving ? "Připrav se" : kind == .warmup ? "Cvič" : "Drž").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 .frame(width: 170, height: 170)
@@ -316,6 +343,7 @@ struct GymPreferences: Decodable, Equatable {
     var experience: String
     /// What the training history says while the experience is "auto".
     var autoExperience: String?
+    var warmup: Bool?
     var stretching: Bool
 }
 
@@ -335,6 +363,7 @@ struct GymPreferencesGroup: View {
     @State private var prefs: GymPreferences?
     @State private var goal = "auto"
     @State private var experience = "auto"
+    @State private var warmup = true
     @State private var stretching = true
     @State private var error: String?
 
@@ -347,12 +376,15 @@ struct GymPreferencesGroup: View {
             SettingsDivider()
             SettingsPicker(title: "Zkušenost", selection: $experience, options: experienceOptions)
             SettingsDivider()
+            SettingsToggle(title: "Rozcvička na začátku", isOn: $warmup)
+            SettingsDivider()
             SettingsToggle(title: "Protažení na konci", isOn: $stretching)
         }
         .disabled(prefs == nil && !model.demo)
         .task { await load() }
         .onChange(of: goal) { _, value in save(["goal": .string(value)], unchanged: prefs?.goal == value) }
         .onChange(of: experience) { _, value in save(["experience": .string(value)], unchanged: prefs?.experience == value) }
+        .onChange(of: warmup) { _, value in save(["warmup": .bool(value)], unchanged: prefs?.warmup == value) }
         .onChange(of: stretching) { _, value in save(["stretching": .bool(value)], unchanged: prefs?.stretching == value) }
         if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
     }
@@ -380,6 +412,7 @@ struct GymPreferencesGroup: View {
         prefs = value
         goal = value.goal
         experience = value.experience
+        warmup = value.warmup ?? true
         stretching = value.stretching
     }
 

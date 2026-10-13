@@ -16,7 +16,7 @@ const availableAt = hasKnownStations;
 import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
-import { stretchingFor } from './stretching.js';
+import { stretchingFor, warmupFor, routineSize } from './stretching.js';
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -872,11 +872,15 @@ export function generateStrengthPlan(context, options = {}) {
   const requestedMinutes = Number(options.durationMinutes) > 0 ? Number(options.durationMinutes) : Math.max(60, (Number(options.maxExercises) || 5) * 12);
   const configure = () => configureStrengthCoaching(rows, EXERCISES, { factor, muscleLoad, protectedLegs: chosen.protectedLegs, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession: firstSession || experience === 'beginner', goal });
   configure();
-  // Stretching at the end (on unless turned off in Posilovna) fits in the session's time.
-  const withStretching = context.trainingSetup?.stretching !== false;
-  const stretchingNow = () => withStretching ? stretchingFor(rows, name => EXERCISES[name]?.muscle) : null;
-  let stretching = stretchingNow();
-  const measure = () => estimateStrengthTiming(rows, EXERCISES, requestedMinutes, stretching?.seconds || 0);
+  // The warm-up before and the stretching after (each on unless turned off in
+  // Posilovna) fit in the session's time.
+  const withWarmup = context.trainingSetup?.warmup !== false, withStretching = context.trainingSetup?.stretching !== false;
+  const muscleOf = name => EXERCISES[name]?.muscle;
+  let warmup = null, stretching = null;
+  const size = routineSize(requestedMinutes);
+  const routinesNow = () => { warmup = withWarmup ? warmupFor(rows, muscleOf, size.warmup) : null; stretching = withStretching ? stretchingFor(rows, muscleOf, size.stretching) : null; };
+  routinesNow();
+  const measure = () => estimateStrengthTiming(rows, EXERCISES, requestedMinutes, (warmup?.seconds || 0) + (stretching?.seconds || 0));
   let timing = measure();
   while (timing.totalSeconds > requestedMinutes * 60) {
     // Take a set from the exercise with the most sets (the later one on a tie),
@@ -887,7 +891,7 @@ export function generateStrengthPlan(context, options = {}) {
     if (removable) rows.splice(rows.findLastIndex(r => r[0] === 'WORK' && r[1] === removable), 1);
     else if (!focusMuscles && names.length > 1) { const last = names.at(-1); for (let i = rows.length - 1; i >= 0; i--) if (rows[i][1] === last) rows.splice(i, 1); }
     else throw new Error(L('Zvolené partie se s rozcvičením a pauzami nevejdou do ' + requestedMinutes + ' minut. Vyber méně partií nebo delší čas.', 'The chosen muscle groups with warm-up and rests don\'t fit into ' + requestedMinutes + ' minutes. Choose fewer groups or more time.'));
-    configure(); stretching = stretchingNow(); timing = measure();
+    configure(); routinesNow(); timing = measure();
   }
   for (let i = loadEstimates.length - 1; i >= 0; i--) {
     loadEstimates[i].sets = rows.filter(r => r[0] === 'WORK' && r[1] === loadEstimates[i].exercise).length;
@@ -911,7 +915,7 @@ export function generateStrengthPlan(context, options = {}) {
   const rationale = goalText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '');
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));
-  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.'), timing, stretching, goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
+  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.'), timing, warmup, stretching, goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };

@@ -85,8 +85,9 @@ struct GymDay: Decodable, Equatable {
         return values[3][1].string
     }
 
-    /// Stretching at the end of the session (src/stretching.js), nil without it.
-    var stretching: GymStretching? { GymStretching(values: values) }
+    /// The warm-up before and the stretching after the session (src/stretching.js), nil without them.
+    var warmup: GymStretching? { GymStretching.routines(values)?.warmup }
+    var stretching: GymStretching? { GymStretching.routines(values)?.stretching }
 
     /// The sets grouped by exercise, in the plan's order.
     var exercises: [GymExercise] {

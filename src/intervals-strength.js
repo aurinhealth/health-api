@@ -34,6 +34,12 @@ function formatRows(rows) {
   return sections.join("\n\n");
 }
 
+// "Rozcvička (7 min): Lehké kardio 240 s, Most 30 s, …".
+function routineText(title, routine) {
+  if (!routine?.items?.length) return "";
+  return title + ` (${routine.minutes} min): ` + routine.items.map(x => x.name + " " + ((x.rounds || 1) > 1 ? x.rounds + " × " : "") + (x.seconds >= 120 && x.seconds % 60 === 0 ? x.seconds / 60 + " min" : x.seconds + " s") + (x.sides ? L(" na stranu", " per side") : "")).join(", ");
+}
+
 export function strengthPlanToIntervalsEvent(plan, options = {}) {
   if (!plan?.date) throw new Error("Strength plan date is required");
   const startTime = String(options.startTime || "00:00").slice(0, 5);
@@ -41,8 +47,9 @@ export function strengthPlanToIntervalsEvent(plan, options = {}) {
   const durationMinutes = Number(options.durationMinutes || 60);
   const description = [
     plan.rationale ? L(`Proč tenhle trénink: ${plan.rationale}`, `Why this workout: ${plan.rationale}`) : "",
+    routineText(L("Rozcvička", "Warm-up"), plan.warmup),
     formatRows(plan.rows || []),
-    plan.stretching?.items?.length ? L("Protažení na konci", "Stretching at the end") + ` (${plan.stretching.minutes} min): ` + plan.stretching.items.map(x => x.name + " " + ((x.rounds || 1) > 1 ? x.rounds + " × " : "") + x.seconds + " s" + (x.sides ? L(" na stranu", " per side") : "")).join(", ") : "",
+    routineText(L("Protažení na konci", "Stretching at the end"), plan.stretching),
     L("Vygenerováno v Aurinu", "Generated in Aurin")
   ].filter(Boolean).join("\n\n");
 
