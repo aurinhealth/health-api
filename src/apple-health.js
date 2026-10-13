@@ -14,6 +14,7 @@
 // Google Health rows of that type and day become record_role 'duplicate'
 // (marked matched_activity_id 'apple-health', which keeps them out of the
 // activity matching).
+import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
 
 export const SOURCE = "apple-health";
@@ -34,7 +35,9 @@ const DAILY = {
   "daily-heart-rate-variability": ["dailyHeartRateVariability", "averageHeartRateVariabilityMilliseconds", "ms", 1, 400],
   "daily-respiratory-rate": ["dailyRespiratoryRate", "breathsPerMinute", "breaths/min", 4, 60],
   "daily-vo2-max": ["dailyVo2Max", "vo2Max", "ml/kg/min", 10, 95],
-  "daily-oxygen-saturation": ["dailyOxygenSaturation", "percentage", "%", 50, 100]
+  "daily-oxygen-saturation": ["dailyOxygenSaturation", "percentage", "%", 50, 100],
+  "daily-walking-heart-rate": ["dailyWalkingHeartRate", "beatsPerMinute", "bpm", 40, 200],
+  "daily-heart-rate-recovery": ["dailyHeartRateRecovery", "beatsPerMinute", "bpm", 1, 120]
 };
 const INTERVAL = {
   steps: ["steps", "count", "count", 0, 100000],
@@ -154,7 +157,7 @@ const upsert = (db, userId, row) => db.prepare(
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'primary')
    ON CONFLICT (user_id, source_family, data_type, external_id) DO UPDATE SET
      sample_time = excluded.sample_time, start_time = excluded.start_time, end_time = excluded.end_time,
-     value_numeric = excluded.value_numeric, value_unit = excluded.value_unit, payload_json = excluded.payload_json, updated_at = CURRENT_TIMESTAMP
+     value_numeric = excluded.value_numeric, value_unit = excluded.value_unit, ${KEEP_TYPE_SQL}, updated_at = CURRENT_TIMESTAMP
    WHERE health_datapoints.sample_time IS NOT excluded.sample_time
      OR health_datapoints.start_time IS NOT excluded.start_time
      OR health_datapoints.end_time IS NOT excluded.end_time

@@ -42,13 +42,15 @@ struct SnapshotProvider: TimelineProvider {
     }
 }
 
+/// The app's colours (Shared/Palette.swift), each with its dark-mode variant.
 enum W {
-    static let ink = Color.primary
-    static let muted = Color.secondary
-    static let green = Color(red: 0.12, green: 0.42, blue: 0.32)
-    static let amber = Color(red: 0.77, green: 0.47, blue: 0.16)
-    static let indigo = Color(red: 0.31, green: 0.27, blue: 0.78)
-    static let rust = Color(red: 0.71, green: 0.33, blue: 0.18)
+    static let ink = Palette.ink
+    static let muted = Palette.muted
+    static let green = Palette.green
+    static let amber = Palette.amber
+    static let indigo = Palette.indigo
+    static let rust = Palette.rust
+    static let blue = Palette.blue
 
     static func number(_ size: CGFloat) -> Font { .system(size: size, weight: .regular, design: .serif) }
 
@@ -105,7 +107,7 @@ struct EmptyWidgetView: View {
 extension View {
     /// iOS 17 widgets need a container background.
     func widgetCard() -> some View {
-        containerBackground(for: .widget) { Color(uiColor: .systemBackground) }
+        containerBackground(for: .widget) { Palette.card }
     }
 }
 
@@ -119,7 +121,7 @@ struct ReadinessWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Připravenost")))
-        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a zátěž.")))
+        .description(Text(verbatim: L10n.tr("Dnešní připravenost, spánek a námaha.")))
         .supportedFamilies([.systemSmall, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -141,8 +143,8 @@ struct ReadinessWidgetView: View {
             case .accessoryRectangular:
                 VStack(alignment: .leading, spacing: 1) {
                     Text(L10n.f("Připravenost %@", s.readiness.map(String.init) ?? "–")).font(.headline)
-                    Text(L10n.f("Spánek %@ · zátěž %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
-                    if let bed = s.bedtime { Text(L10n.f("Do postele %@", bed)).font(.caption) }
+                    Text(L10n.f("Spánek %@ · námaha %@", W.hm(s.sleepMinutes), W.decimal(s.strain))).font(.caption)
+                    if let bed = s.bedtime { Text(L10n.f("Do postele %@", ClockText.format(bed))).font(.caption) }
                 }
             default:
                 VStack(alignment: .leading, spacing: 2) {
@@ -189,7 +191,7 @@ struct SleepWidgetView: View {
     var body: some View {
         if let s = entry.snapshot {
             if family == .accessoryInline {
-                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { " · " + L10n.f("postel %@", $0) } ?? ""))
+                Text(L10n.f("Spánek %@", W.hm(s.sleepMinutes)) + (s.bedtime.map { " · " + L10n.f("postel %@", ClockText.format($0)) } ?? ""))
             } else {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
@@ -200,7 +202,7 @@ struct SleepWidgetView: View {
                     if let index = s.sleepIndex { Text(L10n.f("index %@", String(index))).font(.caption2).foregroundStyle(W.indigo) }
                     Spacer(minLength: 0)
                     if let bed = s.bedtime {
-                        Label(L10n.f("postel %@", bed), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
+                        Label(L10n.f("postel %@", ClockText.format(bed)), systemImage: "alarm").font(.caption2.weight(.semibold)).foregroundStyle(W.muted)
                     }
                 }
             }
@@ -220,7 +222,7 @@ struct DayWidget: Widget {
                 .widgetCard()
         }
         .configurationDisplayName(Text(verbatim: L10n.tr("Můj den")))
-        .description(Text(verbatim: L10n.tr("Připravenost, spánek, zátěž, jídlo, pití a další trénink.")))
+        .description(Text(verbatim: L10n.tr("Připravenost, spánek, námaha, jídlo, pití a další trénink.")))
         .supportedFamilies([.systemMedium])
     }
 }
@@ -238,17 +240,17 @@ struct DayWidgetView: View {
                         Circle().fill(W.zoneColor(s.zone)).frame(width: 8, height: 8)
                         Spacer(minLength: 0)
                         if let title = s.nextTitle {
-                            Text((s.nextTime.map { $0 + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber).lineLimit(2)
+                            Text((s.nextTime.map { ClockText.format($0) + " " } ?? "") + title).font(.caption2.weight(.semibold)).foregroundStyle(W.amber).lineLimit(2)
                         }
                     }
                 }
                 VStack(alignment: .leading, spacing: 7) {
                     Link(destination: URL(string: "loadwise://open/sleep")!) { row("moon.fill", W.indigo, "Spánek", W.hm(s.sleepMinutes)) }
-                    Link(destination: URL(string: "loadwise://open/training")!) { row("flame.fill", W.amber, "Zátěž", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
+                    Link(destination: URL(string: "loadwise://open/training")!) { row("flame.fill", W.amber, "Námaha", W.decimal(s.strain) + (s.strainPlanned.map { " / " + W.decimal($0) } ?? "")) }
                     Link(destination: URL(string: "loadwise://open/food")!) { row("fork.knife", W.rust, "Jídlo", W.int(s.kcal) + (s.kcalTarget.map { " / " + W.int($0) } ?? "") + " kcal") }
-                    Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", .blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
+                    Link(destination: URL(string: "loadwise://open/food")!) { row("drop.fill", W.blue, "Pití", W.water(s.waterMl, s.waterTarget)) }
                     if let bed = s.bedtime {
-                        Link(destination: URL(string: "loadwise://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", bed) }
+                        Link(destination: URL(string: "loadwise://open/sleep-settings")!) { row("alarm", W.indigo, "Do postele", ClockText.format(bed)) }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -287,9 +289,9 @@ struct FoodWaterWidgetView: View {
     @Environment(\.widgetFamily) private var family
     let entry: SnapshotEntry
 
-    static let protein = Color(red: 0.18, green: 0.5, blue: 0.85)
-    static let carbs = Color(red: 0.85, green: 0.54, blue: 0.02)
-    static let fat = Color(red: 0.49, green: 0.36, blue: 0.88)
+    static let protein = Palette.protein
+    static let carbs = Palette.carbs
+    static let fat = Palette.fat
 
     var body: some View {
         if let s = entry.snapshot {
@@ -336,11 +338,11 @@ struct FoodWaterWidgetView: View {
     private func water(_ s: WidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
-                Image(systemName: "drop.fill").font(.caption2).foregroundStyle(.blue)
+                Image(systemName: "drop.fill").font(.caption2).foregroundStyle(W.blue)
                 Text(W.water(s.waterMl, s.waterTarget))
                     .font(.caption.weight(.semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
-            bar(s.waterMl, s.waterTarget, .blue)
+            bar(s.waterMl, s.waterTarget, W.blue)
         }
     }
 
@@ -371,6 +373,6 @@ struct FoodWaterWidgetView: View {
                 .font(.caption.weight(.semibold))
                 .frame(maxWidth: .infinity)
         }
-        .tint(.blue)
+        .tint(W.blue)
     }
 }

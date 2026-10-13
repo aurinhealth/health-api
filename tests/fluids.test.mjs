@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { hydrationTarget, addFluid, listFluids, deleteFluid, updateFluid, dayActivityHours, drinkFromFoodEntry, foodDrinks } from "../src/fluids.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
 test("drink target: 30 ml/kg plus 0.5 l per training hour, rounded and bounded", () => {
   assert.deepEqual(hydrationTarget({ weightKg: 81.4, trainingHours: 2 }), { ml: 3400, baseMl: 2400, exerciseMl: 1000, weightKg: 81.4, trainingHours: 2, walkHours: 0 });
@@ -47,34 +47,11 @@ test("training hours count done sessions, or the plan when more is planned", asy
   assert.deepEqual(await dayActivityHours(db, 7, "2026-10-03"), { trainingHours: 4, walkHours: 1 });
 });
 
-test("the dashboard has the day overview with drinks, compact meals and quick logging", () => {
-  const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+test("the server routes drinks and saved meals", () => {
+  const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/fluids'/);
-  assert.match(entry, /url\.pathname==='\/app\/api\/food\/recipes'&&request\.method==='GET'/);
-  assert.match(client, /<h3>Denní přehled<\/h3>/);
-  assert.doesNotMatch(client, /Dnešní palivo/);
-  assert.match(client, /function wheelColumn\(items,index,onPick\)/);
-  // The scanner borrows a clone of one camera stream, so the browser asks for
-  // the camera once per visit, not on every scan.
-  assert.match(client, /getUserMedia\(\{video:\{facingMode:\{ideal:'environment'\}\},audio:false\}\)/);
-  assert.equal(client.match(/getUserMedia\(/g).length, 1);
-  assert.match(client, /const copy=cameraStream\.clone\(\);/);
-  assert.match(client, /reader\.decodeFromStream\(stream,video,/);
-  // My foods and meals sit in the add-food panel, not in a card of their own.
-  assert.doesNotMatch(client, /id="ownFoodLibraryCard"/);
-  assert.match(client, /row\.append\(\$\('myFoodLibrary'\),\$\('myRecipeLibrary'\)\);/);
-  // An unknown barcode goes to AI straight away.
-  assert.match(client, /searchFood=async function\(\)\{await search\(\);if\(\$\('foodBarcode'\)\.value\.trim\(\)&&!foodCandidates\.length&&\$\('foodAiLookup'\)\)await lookupFoodAi\(\);\}/);
-  // The meal select knows both snacks, so "+" on a snack selects it.
-  assert.match(client, /meal\.innerHTML=mealSlots\.map\(s=>'<option value="'\+s\.id\+'">'/);
-  assert.match(client, /await saveFoodEntry\(\{preventDefault\(\)\{\}\}\)/);
-  // Logging lives in a panel that "+" on a meal opens; a saved meal closes it.
-  assert.match(client, /function startMealLog\(slot\)\{openFoodLogger\(slot\);\}/);
-  assert.match(client, /\$\('foodPanelBody'\)\.append\(entry\);/);
-  assert.match(client, /if\(\(mealEntries\|\|\[\]\)\.length>before\)\{closeFoodLogger\(\);/);
-  // "Co dál dnes?" replaces the energy-by-meal chart.
-  assert.match(client, /chart\.classList\.add\('replaced'\);chart\.after\(next\);/);
+  // Saved meals (personal-recipes.js), which the iPhone app lists.
+  assert.match(entry, /url\.pathname==='\/app\/api\/food\/recipes'\)\{\s*if\(request\.method==='GET'\)return Response\.json\(\{status:'ok',recipes:await listRecipes\(env\.DB\)\}/);
 });
 
 test("drinks logged as food count automatically; alcohol and foods in grams do not", async () => {

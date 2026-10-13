@@ -153,15 +153,6 @@ struct BackSlot: View {
     }
 }
 
-/// Two-column grid for widgets: wide widgets span both columns.
-struct WidgetGrid<Content: View>: View {
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(spacing: 12) { content }
-    }
-}
-
 /// Two small widgets side by side.
 struct WidgetRow<Left: View, Right: View>: View {
     @ViewBuilder var left: Left

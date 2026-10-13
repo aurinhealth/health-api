@@ -260,7 +260,7 @@ struct NotificationsSettingsView: View {
 
     /// 600 → "10", 630 → "10:30".
     private func hourText(_ minute: Int) -> String {
-        minute % 60 == 0 ? String(minute / 60) : Reminders.clock(minute)
+        minute % 60 == 0 && !ClockText.isTwelveHour ? String(minute / 60) : Reminders.clock(minute)
     }
 
     /// Drinking on the upper lane, the rest below; the ones off first, so the

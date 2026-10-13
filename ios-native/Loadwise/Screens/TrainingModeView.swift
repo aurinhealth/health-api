@@ -28,6 +28,10 @@ struct TrainingModeView: View {
     @State private var technique: String?
     @State private var saving = false
     @State private var rating = false
+    /// Dokončit trénink was tapped: the summary shows the totals.
+    @State private var finishedSession = false
+    @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool)?
+    private var live: LiveWorkout { LiveWorkout.shared }
 
     var body: some View {
         ZStack {
@@ -36,6 +40,9 @@ struct TrainingModeView: View {
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if live.running && !finishedSession {
+                    LiveWorkoutStrip(live: live).padding(.top, 16)
+                }
                 if loading && day == nil {
                     Spacer()
                     ProgressView().frame(maxWidth: .infinity)
@@ -179,7 +186,7 @@ struct TrainingModeView: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let left = max(0, Int(end.timeIntervalSince(context.date).rounded()))
                 Text(String(format: "%d:%02d", left / 60, left % 60))
-                    .font(Typo.number(96)).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
+                    .font(Typo.number(96)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(left == 0 ? Palette.green : Palette.ink)
                     .monospacedDigit()
             }
             HStack(spacing: 10) {
@@ -206,11 +213,41 @@ struct TrainingModeView: View {
             Text(L10n.f("%@ %@ v %@ %@. Série jsou uložené i pro příští plán.", String(sets), Fmt.plural(sets, "série", "série", "sérií"),
                         String(day.exercises.count), Fmt.plural(day.exercises.count, "cviku", "cvicích", "cvicích")))
                 .font(Typo.sentence(20)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 220, legend: true)
+            if let totals {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) {
+                    total(L10n.tr("Čas"), Fmt.duration(totals.minutes))
+                    if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
+                    if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
+                    if let hr = totals.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
+                }
+                if totals.saved {
+                    HStack(spacing: 12) {
+                        Image(systemName: "heart.fill").foregroundStyle(Palette.rust)
+                        Text("Uloženo do Apple Health").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Spacer()
+                        Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+                    }
+                    .padding(16)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            } else {
+                BodyMap(load: muscles.values.reduce(into: [String: Double]()) { out, map in for (k, v) in map { out[k] = max(out[k] ?? 0, v) } }, height: 220, legend: true)
+            }
             Spacer()
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
-                .disabled(saving)
+            if finishedSession {
+                PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
+            } else {
+                PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
+                    .disabled(saving)
+            }
+        }
+    }
+
+    private func total(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(Typo.small).foregroundStyle(Palette.muted)
+            Text(value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
         }
     }
 
@@ -361,6 +398,10 @@ struct TrainingModeView: View {
         do {
             day = try await model.gymDay(date: date)
             startAtFirstOpen()
+            // The clock, calories and heart rate while sets are left.
+            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }) {
+                await live.begin(since: nil, weightKg: model.today?.weight?.latest)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -420,6 +461,13 @@ struct TrainingModeView: View {
     /// then the rating.
     private func finish() async {
         restEnd = nil
+        let hadLive = live.running
+        if live.running {
+            let saved = await live.finish()
+            totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved)
+            finishedSession = true
+            live.reset()
+        }
         if !model.demo, let day {
             saving = true
             defer { saving = false }
@@ -432,7 +480,8 @@ struct TrainingModeView: View {
             }
             await model.refreshTraining()
         }
-        rating = true
+        // With the live totals the summary stays first; "Ohodnotit" follows.
+        if !hadLive { rating = true }
     }
 
     private func complete(_ set: GymSet) async {
@@ -441,7 +490,7 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {

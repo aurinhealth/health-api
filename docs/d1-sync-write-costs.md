@@ -26,18 +26,12 @@ so use D1's metrics to measure billed writes, rather than those counters.
   not measurements of the live account's billed D1 usage.
 - Weight, wellness and Intervals import regression suites remain applicable.
 
-## Staging and production rollout
+## Production rollout
 
-1. Deploy through the existing staging PR workflow. Do not refresh/copy the
-   production data into staging just to test this fix; that creates extra writes.
-2. Run the same small sync window twice. Compare the health sample INSERTs in
-   staging Query Insights. On an unchanged repeat, sample updates should stop;
-   new/changed provider records and sync status/ledger changes may still write.
-3. After staging succeeds, merge the PR to deploy through the existing main
-   workflow. No manual SQL in the Cloudflare console is required.
-4. Compare production rows written for equivalent windows before/after deployment
-   and after one full daily sync cycle. Check both health-data and staging, because
-   included D1 usage is shared across the account. Historical charges will remain.
+1. Merge the PR to deploy through the main workflow. No manual SQL in the
+   Cloudflare console is required.
+2. Compare production rows written for equivalent windows before/after deployment
+   and after one full daily sync cycle. Historical charges will remain.
 
 ## Remaining cost boundaries
 

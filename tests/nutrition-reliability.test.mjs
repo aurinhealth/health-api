@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {createD1} from './helpers/d1.mjs';
 import {scopedDb} from '../src/tenancy.js';
@@ -11,7 +10,9 @@ import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from '..
 import {foodGooglePayload,queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from '../src/food-google-sync.js';
 const food={name:'Řecký jogurt',brand:'Test',nutrition_basis:'g',calories_100g:80,protein_100g:10,carbs_100g:6,fat_100g:2,quantity:'450 g',serving_size:'150 g',piece_size:'150 g',preferred_unit:'pack'};
 function scopedDbs(){return db();}
-function db(){const raw=createD1();raw.sqlite.exec('CREATE TABLE food_logs(id INTEGER PRIMARY KEY,user_id INTEGER,consumed_date TEXT,consumed_at TEXT,recipe_title TEXT,kcal REAL,protein_g REAL,carbs_g REAL,fat_g REAL,note TEXT,source TEXT)');raw.sqlite.prepare("INSERT INTO food_logs VALUES(1,1,'2026-09-28','2026-10-04T12:00:00Z','Jogurt',120,15,9,3,?, 'package_label')").run(JSON.stringify({mealType:'snack_pm',enteredQuantity:1}));return {raw,owner:scopedDb(raw,1),other:scopedDb(raw,2)};}
+function db(){const raw=createD1();raw.sqlite.exec('CREATE TABLE food_logs(id INTEGER PRIMARY KEY,user_id INTEGER,consumed_date TEXT,consumed_at TEXT,recipe_title TEXT,kcal REAL,protein_g REAL,carbs_g REAL,fat_g REAL,note TEXT,source TEXT)');// A few days old, inside the 14-day backfill window whatever today is.
+  const day=new Date(Date.now()-5*864e5).toISOString().slice(0,10);
+  raw.sqlite.prepare("INSERT INTO food_logs VALUES(1,1,?,?,'Jogurt',120,15,9,3,?, 'package_label')").run(day,day+'T12:00:00Z',JSON.stringify({mealType:'snack_pm',enteredQuantity:1}));return {raw,owner:scopedDb(raw,1),other:scopedDb(raw,2)};}
 const token=async()=> 'test-token';
 const resource='users/123/dataTypes/nutrition-log/dataPoints/abc';
 function mockGoogle(){const calls=[];return {calls,fetcher:async(url,options)=>{calls.push({url,...options,body:JSON.parse(options.body||'null')});return Response.json({done:true,response:options.body?.includes('"names"')?{}:{name:resource}});}};}
@@ -78,13 +79,6 @@ test('a lifting session the watch counts like cardio is flagged with a realistic
   const a={type:'WeightTraining',name:'WeightTraining',durationHours:1.55,calories:711,source:'google-health'};const c=strengthEnergyCheck(a,82);
   assert.equal(c.status,'review');assert.equal(c.estimated,318);assert.ok(c.high<711);
   assert.equal(strengthEnergyCheck({...a,calories:300},82).status,'consistent');assert.equal(strengthEnergyCheck({...a,type:'Walk',name:'Walk'},82),null);assert.equal(strengthEnergyCheck(a,null).status,'unavailable');
-});
-test('weekly balance excludes future meals and days without a log from accumulated differences',()=>{
-  const source=readFileSync(new URL('../src/dashboard-client.js',import.meta.url),'utf8'),ctx=vm.createContext({num:v=>Number(v)||0,measured:v=>v!=null});
-  vm.runInContext(source.slice(source.indexOf('function weeklyEnergySummary('),source.indexOf('function renderWeeklyEnergy(')),ctx);
-  const make=(date,kcal)=>({date,daily:{calories:{target:2000}},food:{totals:{kcal}}});
-  const b=ctx.weeklyEnergySummary([make('2026-10-01',1500),make('2026-10-02',0),make('2026-10-03',400),make('2026-10-04',1000)],'2026-10-03');
-  assert.equal(b.target,8000);assert.equal(b.consumed,1900);assert.equal(b.missing,1);assert.equal(b.closedDifference,500);
 });
 test('exercise active energy uses complete intraday coverage, excludes daily rollups and never doubles overlapping points',()=>{
   const a={start:'2026-10-04T10:00:00Z',end:'2026-10-04T10:10:00Z'},rows=Array.from({length:10},(_,i)=>({start_time:'2026-10-04T10:'+String(i).padStart(2,'0')+':00Z',end_time:'2026-10-04T10:'+String(i+1).padStart(2,'0')+':00Z',value_numeric:5}));

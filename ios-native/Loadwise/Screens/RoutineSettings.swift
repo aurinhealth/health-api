@@ -10,13 +10,11 @@ struct GymRestSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Pauzy v posilovně") {
-            SettingsGroup(title: "Délka pauzy", footer: "Pauza se po sérii spustí sama. V režimu tréninku ji můžeš o 15 s zkrátit, prodloužit nebo přeskočit, výchozí délka se tím nemění.") {
+            SettingsGroup(title: "Délka pauzy") {
                 row("Mezi sériemi", $restSets)
                 SettingsDivider()
                 row("Před dalším cvikem", $restExercises)
             }
-            Text("Těžké vícekloubové cviky (dřep, mrtvý tah, tlaky) snesou 2 až 3 minuty, menší cviky na stroji stačí 60 až 90 s.")
-                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -52,7 +50,7 @@ struct MealSlotsSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Jídla dne") {
-            SettingsGroup(title: "Jím obvykle", footer: "Denní cíl se rozdělí jen mezi vybraná jídla: snídaně a večeře po čtvrtině, oběd 30 %, svačiny po 10 %, druhá večeře 8 %. Jídlo zapsané jinam se v přehledu ukáže i tak.") {
+            SettingsGroup(title: "Jím obvykle") {
                 ForEach(Array(MealSlot.all.enumerated()), id: \.element.id) { index, slot in
                     if index > 0 { SettingsDivider() }
                     SettingsToggle(title: slot.label, subtitle: Self.hint(slot.id), isOn: Binding(
@@ -103,5 +101,59 @@ struct MealSlotsSettingsView: View {
         original = chosen
         saved = true
         await model.refreshFood()
+    }
+}
+
+/// Nastavení → Snímač tepu: a chest strap or a band broadcasting its heart
+/// rate, for Režim tréninku without an Apple Watch.
+struct HeartRateSensorView: View {
+    private var sensor: HeartRateSensor { HeartRateSensor.shared }
+
+    var body: some View {
+        SettingsPage(title: "Snímač tepu") {
+            if let name = sensor.savedName {
+                SettingsGroup(title: "Spárováno") {
+                    HStack(spacing: 12) {
+                        SettingsIcon(systemImage: "heart.fill", color: Palette.rust)
+                        Text(name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                        Spacer(minLength: 8)
+                        if let bpm = sensor.liveBpm {
+                            Text("\(Fmt.int(bpm)) bpm").font(.subheadline).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    .padding(.horizontal, 16).frame(minHeight: 50)
+                    SettingsDivider()
+                    Button { sensor.forget() } label: {
+                        SettingsRow(title: "Zapomenout snímač", chevron: false, titleColor: Palette.rust)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            SettingsGroup(title: "V okolí", footer: L10n.tr("Hrudní pás nebo náramek, který vysílá tep, například Whoop, Polar nebo Garmin.")) {
+                if sensor.unavailable {
+                    SettingsRow(title: "Bluetooth je vypnutý nebo nepovolený", chevron: false, titleColor: Palette.muted)
+                } else if sensor.found.isEmpty {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Hledám…").font(.body).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.horizontal, 16).frame(minHeight: 50)
+                } else {
+                    ForEach(Array(sensor.found.enumerated()), id: \.element.id) { index, device in
+                        if index > 0 { SettingsDivider() }
+                        Button { sensor.pair(device) } label: {
+                            SettingsRow(title: device.name, value: device.name == sensor.savedName ? L10n.tr("spárováno") : nil, chevron: false)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .onAppear { sensor.startScan(); sensor.connectSaved() }
+        .onDisappear {
+            sensor.stopScan()
+            // Outside a workout the sensor needn't stay connected.
+            if !LiveWorkout.shared.running { sensor.disconnect() }
+        }
     }
 }

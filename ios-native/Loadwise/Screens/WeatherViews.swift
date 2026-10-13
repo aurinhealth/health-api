@@ -76,45 +76,6 @@ enum WeatherText {
     static func indoor(_ advice: TodaySnapshot.Advice?) -> Bool { advice?.environment == "indoor" }
 }
 
-/// On Today, next to the athlete's status: the forecast at the week plan's
-/// place. A tap opens the wind, rain and where to train; without a place it
-/// offers to set one.
-struct WeatherPill: View {
-    let weather: TodaySnapshot.Weather?
-    @State private var open = false
-
-    var body: some View {
-        Button { open = true } label: {
-            HStack(spacing: 10) {
-                Image(systemName: weather == nil ? "location.fill" : WeatherText.symbol(weather?.code))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(weather == nil ? Palette.muted : Palette.blue)
-                    .frame(width: 30, height: 30)
-                    .background((weather == nil ? Palette.muted : Palette.blue).opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                if let weather {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(verbatim: WeatherText.range(weather)).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        Text(verbatim: weather.place ?? L10n.tr("Počasí")).font(.caption2).foregroundStyle(Palette.muted).lineLimit(1)
-                    }
-                } else {
-                    Text("Nastavit polohu pro počasí").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                }
-            }
-            .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
-            .background(Palette.card, in: Capsule())
-            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityText)
-        .sheet(isPresented: $open) { WeatherSheet(weather: weather) }
-    }
-
-    private var accessibilityText: String {
-        guard let weather else { return L10n.tr("Nastavit polohu pro počasí") }
-        return L10n.f("Počasí: %@, %@", WeatherText.range(weather), weather.place ?? "")
-    }
-}
-
 /// Today's card above the key numbers: the place with the location arrow and
 /// the day's temperatures, the athlete's status in the corner and a few
 /// hours of the forecast.
@@ -225,8 +186,7 @@ struct WeatherDetails: View {
                 }
             }
 
-            SettingsGroup(title: "Kde dnes trénovat",
-                          footer: "Stejné pravidlo používá kouč při plánu týdne: dovnitř při teplotě pod 8 °C na kole (pod 0 °C při běhu), větru od 35 km/h (při běhu od 50 km/h), od 3 mm srážek, pravděpodobnosti deště od 70 % nebo bouřce. Od listopadu do února plánuje kolo raději na trenažéru.") {
+            SettingsGroup(title: "Kde dnes trénovat") {
                 advice("bicycle", "Kolo", weather.outdoor)
                 SettingsDivider()
                 advice("figure.run", "Běh", weather.outdoorRun)
@@ -387,10 +347,6 @@ struct WeatherPlaceView: View {
 
     var body: some View {
         SettingsPage(title: "Poloha pro počasí") {
-            Text("Podle předpovědi pro toto místo kouč doporučí trénink venku nebo uvnitř a Dnes ukáže počasí.")
-                .font(Typo.small).foregroundStyle(Palette.muted)
-                .fixedSize(horizontal: false, vertical: true)
-
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                 TextField("Město nebo obec", text: $query)
@@ -447,7 +403,7 @@ struct WeatherPlaceView: View {
             }
 
             if let current {
-                SettingsGroup(title: "Teď", footer: "Poloha platí pro obvyklý týden v plánu. Kouč ji použije i pro další týdny.") {
+                SettingsGroup(title: "Teď") {
                     SettingsRow(icon: SettingsIcon(systemImage: "location.fill", color: Palette.blue), title: current, chevron: false)
                     SettingsDivider()
                     Button { Task { await save(nil) } } label: {

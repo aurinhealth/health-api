@@ -118,13 +118,13 @@ struct FoodContent: View {
 
     @ViewBuilder private var content: some View {
         HStack {
-            DayNavigator(date: food.date)
+            DayNavigator(date: food.date, ahead: true)
             Spacer()
             CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
         }
 
         HStack(alignment: .lastTextBaseline, spacing: 12) {
-            Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).foregroundStyle(Palette.ink)
+            Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
                 Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
             }
@@ -397,7 +397,7 @@ struct DrinkLine: View {
         HStack(spacing: 10) {
             Image(systemName: kind?.symbol ?? "drop.fill").font(.system(size: 13)).foregroundStyle(Palette.blue).frame(width: 20)
             Text(kind?.label ?? drink.kind).font(Typo.small).foregroundStyle(Palette.secondary)
-            if let t = drink.time { Text(t).font(Typo.tiny).foregroundStyle(Palette.faint) }
+            if let t = drink.time { Text(ClockText.format(t)).font(Typo.tiny).foregroundStyle(Palette.faint) }
             Spacer()
             Text(Units.volumeText(drink.ml)).font(Typo.number(16)).foregroundStyle(Palette.ink)
             if let h = drink.hydrationMl, let ml = drink.ml, abs(h - ml) >= 1 {
@@ -432,7 +432,7 @@ struct MealRow: View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(meal.label).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(meal.time).font(Typo.caption).foregroundStyle(Palette.faint)
+                Text(ClockText.format(meal.time)).font(Typo.caption).foregroundStyle(Palette.faint)
                 Spacer(minLength: 6)
                 Text(Fmt.int(meal.kcal ?? 0)).font(Typo.number(20)).foregroundStyle(empty ? Palette.faint : Palette.ink)
                 if let goal { Text("/ " + Fmt.int(goal.kcal) + " kcal").font(Typo.number(14)).foregroundStyle(Palette.faint) }
@@ -504,44 +504,3 @@ struct MacroBar: View {
         .accessibilityLabel(L10n.tr(title) + " " + FiberRow.text(eaten: eaten, target: target, limit: false))
     }
 }
-
-struct EntryRow: View {
-    @Environment(AppModel.self) private var model
-    let entry: FoodSnapshot.Entry
-    @State private var editing = false
-    @State private var confirmDelete = false
-
-    var body: some View {
-        SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
-            line.onTapGesture { editing = true }
-        }
-        .sheet(isPresented: $editing) {
-            FoodEntryEditSheet(entry: entry, date: model.food?.date ?? AppModel.localDate(Date()))
-        }
-        .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Smazat", role: .destructive) { Task { await model.deleteFood(id: entry.id) } }
-        }
-    }
-
-    private var line: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(entry.name).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(2)
-                if let detail {
-                    Text(detail).font(Typo.tiny).foregroundStyle(Palette.faint)
-                }
-            }
-            Spacer()
-            Text(Fmt.int(entry.kcal)).font(Typo.number(17)).foregroundStyle(Palette.muted)
-        }
-        .padding(.leading, 66)
-        .padding(.bottom, 10)
-        .contentShape(Rectangle())
-    }
-
-    private var detail: String? {
-        let parts = [entry.amount, entry.brand].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-}
-

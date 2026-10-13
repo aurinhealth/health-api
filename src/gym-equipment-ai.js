@@ -152,7 +152,7 @@ export async function websitePhotos(link, fetchImpl = fetch) {
 }
 
 export async function detectGymEquipment(env, { images = [], url = "" } = {}, fetchImpl = fetch) {
-  const pictures = (Array.isArray(images) ? images : [images]).filter(Boolean).slice(0, 4);
+  const pictures = (Array.isArray(images) ? images : [images]).filter(Boolean).slice(0, 8);
   const link = String(url || "").trim();
   if (!pictures.length && !/^https?:\/\/\S+$/i.test(link)) throw new Error(L("Pošli fotku posilovny nebo odkaz na její web.", "Send a photo of the gym or a link to its website."));
   if (pictures.some(p => !validFoodImage(p))) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));

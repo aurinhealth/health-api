@@ -58,12 +58,8 @@ struct StepsDetailContent: View {
             }
 
             if let active = steps.activeMinutes {
-                HStack(alignment: .firstTextBaseline) {
-                    SectionLabel(text: "Aktivní minuty")
-                    Spacer()
-                    Text("střední a vyšší tep").font(Typo.caption).foregroundStyle(Palette.faint)
-                }
-                .padding(.top, 30)
+                SectionLabel(text: "Aktivní minuty")
+                    .padding(.top, 30)
                 Card {
                     HStack(alignment: .bottom) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -102,12 +98,8 @@ struct StepsDetailContent: View {
         .padding(.top, 18)
 
         if let hourly = steps.hourly, hourly.count == 24 {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Během dne")
-                Spacer()
-                if steps.usual != nil { Text("obvykle světleji").font(Typo.caption).foregroundStyle(Palette.faint) }
-            }
-            .padding(.top, 30)
+            SectionLabel(text: "Během dne")
+                .padding(.top, 30)
             Card { dayChart(hourly) }.padding(.top, 12)
         }
     }

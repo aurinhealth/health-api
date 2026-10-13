@@ -14,3 +14,6 @@ test('Apple Health days carry the HRV measure and the resting-HR source, and oxy
     {data_type:'daily-heart-rate-variability',source_family:'google-wearables',sample_time:'2026-10-09',payload_json:JSON.stringify({dailyHeartRateVariability:{averageHeartRateVariabilityMilliseconds:70}})}],'2026-10-11');
   assert.equal(r.wellness.find(x=>x.id==='2026-10-10').hrvSource,'apple-health:sdnn');assert.equal(r.today.hrvSource,'apple-health:rmssd');assert.equal(r.wellness[0].hrvSource,'google-wearables');
   assert.equal(r.today.restingHRSource,'apple-health');assert.equal(r.today.restingHR,49);assert.equal(r.today.spO2,96.5);assert.equal(r.coverage['daily-oxygen-saturation'],'2026-10-11');});
+test('Apple Health walking heart rate and heart rate recovery reach the day',async()=>{const {appleRow}=await import('../src/apple-health.js');const row=r=>({...appleRow(r),source_family:'apple-health',payload_json:JSON.stringify(appleRow(r).payload)});
+  const r=googleHealthSummary([row({type:'daily-walking-heart-rate',id:'w1',date:'2026-10-11',value:101}),row({type:'daily-heart-rate-recovery',id:'c1',date:'2026-10-11',value:27})],'2026-10-11');
+  assert.equal(r.today.walkingHR,101);assert.equal(r.today.hrRecovery,27);});

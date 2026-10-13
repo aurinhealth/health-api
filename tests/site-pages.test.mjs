@@ -18,7 +18,7 @@ test('public pages use the app’s light palette',async()=>{
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
     assert.match(html,/<html lang="cs" class="site"/);
-    assert.match(html,/:root\.site\{color-scheme:light;[^}]*--bg:#F3EFE8;/);
+    assert.match(html,/:root\{color-scheme:light;[^}]*--bg:#F3EFE8;/);
     assert.equal((html.match(/:root\{[^}]*\}/g)||[]).length,1);
     assert.doesNotMatch(html,/data-theme-choice/,'the site has one look; the Vzhled switch stays in the app');
   }

@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
@@ -530,7 +531,7 @@ function pointStatement(env, source, type, payload, value = null, unit = null, s
         end_time = excluded.end_time,
         value_numeric = excluded.value_numeric,
         value_unit = excluded.value_unit,
-        payload_json = excluded.payload_json,
+        ${KEEP_TYPE_SQL},
         updated_at = CURRENT_TIMESTAMP
       WHERE health_datapoints.sample_time IS NOT excluded.sample_time
         OR health_datapoints.start_time IS NOT excluded.start_time
@@ -894,7 +895,7 @@ async function saveGooglePointsBatch(env, family, type, points) {
         end_time = excluded.end_time,
         value_numeric = excluded.value_numeric,
         value_unit = excluded.value_unit,
-        payload_json = excluded.payload_json,
+        ${KEEP_TYPE_SQL},
         updated_at = CURRENT_TIMESTAMP
       WHERE health_datapoints.sample_time IS NOT excluded.sample_time
         OR health_datapoints.start_time IS NOT excluded.start_time

@@ -319,6 +319,7 @@ struct MonthGrid: View {
 // MARK: - The chosen day
 
 struct CalendarDayList: View {
+    @Environment(AppModel.self) private var model
     let date: String
     let today: String
     let day: CalendarDay?
@@ -331,7 +332,7 @@ struct CalendarDayList: View {
                 Text(heading).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer()
                 if let day, day.count > 0 {
-                    Text(Fmt.hoursMinutesLong(day.minutes) + " · " + Fmt.int(day.kcal) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(Fmt.hoursMinutesLong(day.minutes) + " · " + Fmt.int(dayKcal(day)) + " kcal").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
             .padding(.bottom, 4)
@@ -355,6 +356,11 @@ struct CalendarDayList: View {
         .sheet(item: $watch) { WatchActivityDetail(activity: $0) }
     }
 
+    /// The day's calories with the user's choices for flagged sessions.
+    private func dayKcal(_ day: CalendarDay) -> Double {
+        day.activities.filter { $0.status == "done" }.reduce(0) { $0 + (model.countedKcal($1) ?? 0) }
+    }
+
     private var heading: String {
         if date == today { return L10n.tr("Dnes") }
         if date == ISODay.shift(today, -1) { return L10n.tr("Včera") }
@@ -370,8 +376,15 @@ struct CalendarDayList: View {
 }
 
 struct CalendarActivityRow: View {
+    @Environment(AppModel.self) private var model
     let activity: CalendarActivity
     let chevron: Bool
+
+    /// The device's calories still wait for a check (Kalorie k ověření).
+    private var kcalToCheck: Bool {
+        guard let session = model.doneSession(for: activity), session.kcalEstimate?.value != nil, session.kcal != nil else { return false }
+        return KcalChoiceStore.shared.choice(for: session) == nil
+    }
 
     var body: some View {
         let state = PlanState(activity.session)
@@ -388,11 +401,19 @@ struct CalendarActivityRow: View {
                 }
             }
             Spacer(minLength: 6)
-            if let kcal = activity.kcal, kcal > 0 {
+            if let kcal = model.countedKcal(activity), kcal > 0 {
+                let check = kcalToCheck
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(Fmt.int(kcal)).font(Typo.number(17)).foregroundStyle(Palette.ink)
+                    HStack(spacing: 4) {
+                        if check {
+                            Image(systemName: "exclamationmark.triangle").font(.system(size: 11, weight: .semibold))
+                        }
+                        Text(Fmt.int(kcal)).font(Typo.number(17))
+                    }
+                    .foregroundStyle(check ? Palette.amber : Palette.ink)
                     Text("kcal").font(.system(size: 10)).foregroundStyle(Palette.faint)
                 }
+                .accessibilityLabel(check ? L10n.f("%@ kcal, k ověření", Fmt.int(kcal)) : Fmt.int(kcal) + " kcal")
             }
             if chevron { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint) }
         }
@@ -410,7 +431,7 @@ struct CalendarActivityRow: View {
         default: head = L10n.tr("V plánu")
         }
         var parts: [String] = [head]
-        if let t = a.time { parts.append(t) }
+        if let t = a.time { parts.append(ClockText.format(t)) }
         if let m = a.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
         if let km = a.km, km > 0 { parts.append(Units.distanceText(km)) }
         return parts.joined(separator: " · ")
@@ -421,7 +442,9 @@ struct CalendarActivityRow: View {
 /// no heart-rate curve, no track), so this is what there is to show.
 struct WatchActivityDetail: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     let activity: CalendarActivity
+    @State private var changingType = false
 
     var body: some View {
         NavigationStack {
@@ -440,10 +463,6 @@ struct WatchActivityDetail: View {
                     }
                     .padding(.bottom, 18)
                     ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
-                    Text("Google Health posílá jen souhrn aktivity, ne průběh výkonu ani trasu.")
-                        .font(Typo.caption).foregroundStyle(Palette.faint)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 16)
                 }
                 .padding(24)
             }
@@ -453,16 +472,29 @@ struct WatchActivityDetail: View {
                     Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
                         .accessibilityLabel("Zavřít")
                 }
+                if !model.demo, ["intervals", "google-wearables", "apple-health"].contains(activity.source ?? "") {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu {
+                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                        } label: {
+                            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
+                        }
+                        .accessibilityLabel("Další volby")
+                    }
+                }
             }
         }
         .tint(Palette.ink)
         .presentationDetents([.medium, .large])
+        .sheet(isPresented: $changingType) {
+            ActivityTypeSheet(activityId: activity.id, current: activity.type, source: activity.source) { dismiss() }
+        }
     }
 
     /// "Chůze · st 8. 10. · 10:00–11:10".
     private var when: String {
         let s = activity.summary
-        let time = [s?.start ?? activity.time, s?.end].compactMap { $0 }.joined(separator: "–")
+        let time = [s?.start ?? activity.time, s?.end].compactMap { $0 }.map { ClockText.format($0) }.joined(separator: "–")
         return [Fmt.capitalized(L10n.tr(SportStyle.name(activity.sport))), Fmt.weekdayShort(activity.date) + " " + Fmt.dayMonth(activity.date), time.isEmpty ? nil : time]
             .compactMap { $0 }.joined(separator: " · ")
     }
