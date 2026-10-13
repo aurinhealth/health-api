@@ -10,6 +10,7 @@ import { L, lang } from "./lang.js";
 import { localToday, localDateTime } from "./user-time.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
+import { acwrZoneLabel } from "./workload-ratio.js";
 
 export const SCREENS = ["today", "training", "food"];
 export const MAX_PER_DAY = 12;
@@ -98,7 +99,9 @@ function trainingFacts(d) {
     form && { label: L("Forma", "Form"), value: signed(form.form) + (form.label ? " (" + form.label + ")" : "") },
     done.length > 0 && { label: L("Poslední trénink", "Last workout"), value: done.at(-1).title + (num(done.at(-1).tss) ? " · " + Math.round(num(done.at(-1).tss)) + " TSS" : "") },
     next && { label: L("Další trénink", "Next workout"), value: String(next.title || "") + (next.date ? " · " + next.date : "") },
-    facts.event && { label: L("Závod", "Event"), value: (facts.event.name || "") + (facts.event.daysLeft != null ? L(" za ", " in ") + facts.event.daysLeft + L(" dní", " days") : "") }
+    facts.event && { label: L("Závod", "Event"), value: (facts.event.name || "") + (facts.event.daysLeft != null ? L(" za ", " in ") + facts.event.daysLeft + L(" dní", " days") : "") },
+    num(d.acwr?.value) != null && { label: L("Akutní/chronická zátěž", "Acute:chronic load"), value: decimal(d.acwr.value, 2) + (acwrZoneLabel(d.acwr.zone) ? " (" + acwrZoneLabel(d.acwr.zone) + ")" : "") },
+    num(d.monotony?.value) != null && { label: L("Monotónnost", "Monotony"), value: decimal(d.monotony.value, 2) + (num(d.monotony.strain) != null ? ", strain " + Math.round(num(d.monotony.strain)) : "") }
   ].filter(Boolean);
   const chips = [
     week.planned != null && L("Týden ", "Week ") + (week.done ?? 0) + "/" + week.planned,
@@ -157,8 +160,8 @@ const READINESS_RULE = () => L(
   "readiness je připravenost podle modelu regenerace aplikace (score 0–100, zone red/yellow/green, parts, flags). Text ani rada nesmí být agresivnější, než zóna dovoluje: red = jen volno nebo lehký trénink, yellow = žádná nová intenzita.",
   "readiness is the app's recovery model verdict (score 0–100, zone red/yellow/green, parts, flags). Neither the text nor the advice may push harder than the zone allows: red = rest or an easy session only, yellow = no new intensity.");
 const TRENDS_RULE = () => L(
-  "trends jsou dlouhodobá fakta spočítaná aplikací (HRV a klidový tep za 6 týdnů, spánkový dluh za 7 nocí, noci po sobě pod potřebou spánku, CTL za 6 týdnů). Použij nejvýš jedno, a jen když k dnešku patří.",
-  "trends are long-term facts the app computed (HRV and resting heart rate over 6 weeks, sleep debt over 7 nights, nights in a row under the sleep need, CTL over 6 weeks). Use at most one, and only when it matters for today.");
+  "trends jsou dlouhodobá fakta spočítaná aplikací (HRV a klidový tep za 6 týdnů, spánkový dluh za 7 nocí, noci po sobě pod potřebou spánku, CTL za 6 týdnů, poměr akutní a chronické zátěže acwr se zónou, monotónnost tréninku za 7 dní se strainem). Použij nejvýš jedno, a jen když k dnešku patří. acwr nad 1,5 nebo monotónnost nad 2,0 je důvod k opatrnosti, ne k přidávání zátěže.",
+  "trends are long-term facts the app computed (HRV and resting heart rate over 6 weeks, sleep debt over 7 nights, nights in a row under the sleep need, CTL over 6 weeks, the acute:chronic workload ratio acwr with its zone, training monotony over 7 days with its strain). Use at most one, and only when it matters for today. An acwr above 1.5 or monotony above 2.0 calls for caution, not more load.");
 const instructions = screen => [L(`Jsi trenér v aplikaci Aurin. Napiš krátké shrnutí na obrazovku ${SCREEN_NAMES.cs[screen]} z dat, která dostaneš.
 - text: 1–2 věty (nejvýš 220 znaků), konkrétně a s čísly z dat: co dnešní data znamenají. Porovnávej se sportovcovým obvyklým stavem, je-li v datech.
 - advice: jedna konkrétní rada na dnešek (nejvýš 90 znaků), např. tep, délka, jídlo, spánek.

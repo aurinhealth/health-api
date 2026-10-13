@@ -186,6 +186,57 @@ export function sleepIndexScore(night, need) {
   return Math.round(durationPoints + efficiencyPoints + stagePoints);
 }
 
+// Apple Watch's sleeping wrist temperature (°C, one value a night, on the
+// day of waking up; apple-health.js "daily-wrist-temperature"): the night
+// against the athlete's own baseline, the median of the 28 nights with a
+// value before it (within the 60 days before, so an old baseline does not
+// linger). Needs 7 nights of baseline, else the deviation is null. The median keeps
+// one feverish night out of the baseline. `date` is the night to judge; the
+// latest night up to it is taken (Health shows the last one), `night` says
+// which it was.
+export const WRIST_TEMP_BASELINE_NIGHTS = 28, WRIST_TEMP_MIN_NIGHTS = 7, WRIST_TEMP_WINDOW_DAYS = 60;
+export function wristTempDeviation(rows, date) {
+  const shiftDay = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
+  const nights = (rows || []).filter(r => r && r.id && r.id <= date && r.wristTemp != null && r.wristTemp !== "" && Number.isFinite(Number(r.wristTemp)))
+    .map(r => ({ date: String(r.id), value: Number(r.wristTemp) })).sort((a, b) => a.date.localeCompare(b.date));
+  const last = nights.at(-1);
+  if (!last) return null;
+  const from = shiftDay(last.date, -WRIST_TEMP_WINDOW_DAYS);
+  const prior = nights.filter(n => n.date < last.date && n.date >= from).slice(-WRIST_TEMP_BASELINE_NIGHTS).map(n => n.value).sort((a, b) => a - b);
+  const mid = prior.length >> 1;
+  const baseline = prior.length >= WRIST_TEMP_MIN_NIGHTS ? (prior.length % 2 ? prior[mid] : (prior[mid - 1] + prior[mid]) / 2) : null;
+  return { night: last.date, value: last.value, baseline, deviation: baseline == null ? null : Math.round((last.value - baseline) * 100) / 100, nights: prior.length };
+}
+
+// What a raised wrist temperature costs readiness: nothing below +0.5 °C, 5
+// points from +0.5 °C, 10 from +1.0 °C. Never a bonus: a cool night says
+// nothing about recovery.
+export function wristTempPenalty(deviation) {
+  const d = Number(deviation);
+  if (deviation == null || !Number.isFinite(d)) return 0;
+  return d >= 1 ? 10 : d >= 0.5 ? 5 : 0;
+}
+
+// How much higher a value runs in the luteal phase than over all days: rows
+// carry `cyclePhase` (cycle-model.js markCyclePhases, natural cycle only).
+// Resting heart rate rises 1–3 bpm and temperature 0.2–0.5 °C after
+// ovulation (Shilaih 2017; Maijala 2019). The athlete's own difference over
+// the last 60 days once there are 5 luteal and 5 other days with the value,
+// else `fallback`; kept between 0 and `max`.
+export function lutealOffset(rows, date, key, fallback, max) {
+  const end = Date.parse(date + "T12:00:00Z"), luteal = [], other = [];
+  for (const r of rows || []) {
+    if (!r || !(r.id < date) || !r.cyclePhase) continue;
+    const v = Number(r[key]);
+    if ((end - Date.parse(r.id + "T12:00:00Z")) / 86400000 > 60 || !Number.isFinite(v) || r[key] == null || r[key] === "") continue;
+    (r.cyclePhase === "luteal" ? luteal : other).push(v);
+  }
+  if (luteal.length < 5 || other.length < 5) return fallback;
+  const mean = xs => xs.reduce((s, v) => s + v, 0) / xs.length;
+  const diff = mean(luteal) - mean([...luteal, ...other]);
+  return Math.round(Math.max(0, Math.min(max, diff)) * 100) / 100;
+}
+
 // A component score from a z-score: the personal average is 70 (normal), one
 // SD on the bad side 50 and two 30. The personal normal range is the mean ±
 // 1 SD; HRV-guided training eases off when a value leaves it (Kiviniemi 2007,
@@ -202,7 +253,8 @@ export function recoveryComponentScore(z) {
 // Javaloyes 2019) shows the trend. A breathing
 // rate clearly above the baseline (≥ 1 breath/min and 2 SD) is an early sign of
 // illness and costs 10 points; WHOOP counts respiratory rate the same way, only
-// when it changes markedly. A raised skin temperature in sleep costs 10 too.
+// when it changes markedly. A raised skin temperature in sleep costs 10 too,
+// Apple Watch's wrist temperature 5 or 10 (wristTempPenalty).
 // Needs 14 days of baseline and at least HRV or resting HR today.
 export function recoveryReadiness(input) {
   const rows = (input && input.rows) || [], date = input && input.date, night = input && input.night, need = (input && input.sleepNeed) || 480;
@@ -239,8 +291,12 @@ export function recoveryReadiness(input) {
   let rb = sourceBaseline(rows, date, "restingHR", today.restingHRSource || null), mixed = false;
   if (rb.mean == null) { const all = personalBaseline(rows, date, "restingHR"); if (all.mean != null) { rb = all; mixed = true; } }
   if (Number(today.restingHR) > 0 && rb.mean != null) {
-    const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean) / sd;
-    components.restingHR = { value: Number(today.restingHR), baseline: rb.mean, z, score: recoveryComponentScore(-z), days: rb.count };
+    // In the luteal phase the normal is the athlete's luteal normal: the
+    // baseline over all days plus the luteal rise (lutealOffset).
+    const cycle = today.cyclePhase === "luteal" ? lutealOffset(rows, date, "restingHR", 1, 3) : 0;
+    const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean - cycle) / sd;
+    components.restingHR = { value: Number(today.restingHR), baseline: rb.mean + cycle, z, score: recoveryComponentScore(-z), days: rb.count };
+    if (cycle) components.restingHR.cycle = cycle;
     if (mixed) flags.push("restingHRMixed");
   }
   const bb = personalBaseline(rows, date, "respiration");
@@ -260,6 +316,20 @@ export function recoveryReadiness(input) {
     components.skinTemp = { deviation: dev, sd: sd > 0 ? sd : null, elevated };
     if (elevated) flags.push("skin_temp_elevated");
   }
+  // Apple Watch wrist temperature in sleep against its own 28-night median
+  // (wristTempDeviation), only last night's: +0.5 °C costs 5 points, +1.0 °C
+  // 10 and is flagged as a possible oncoming illness. One temperature signal
+  // counts once: with Google's skin temperature flagged too, the larger cost
+  // applies, not both.
+  const wrist = wristTempDeviation(rows, date);
+  // In the luteal phase the deviation is counted above the luteal rise.
+  if (wrist && wrist.night === date && wrist.deviation != null) {
+    const cycle = today.cyclePhase === "luteal" ? lutealOffset(rows, date, "wristTemp", 0.2, 0.5) : 0;
+    const deviation = Math.round((wrist.deviation - cycle) * 100) / 100;
+    components.wristTemp = { value: wrist.value, baseline: wrist.baseline, deviation, nights: wrist.nights, raised: deviation >= 0.5, elevated: deviation >= 1, points: 0 };
+    if (cycle) components.wristTemp.cycle = cycle;
+    if (components.wristTemp.elevated) flags.push("wrist_temp_elevated");
+  }
   const nightDate = night && (night.date || String(night.endTime || "").slice(0, 10));
   if (night && nightDate === date && Number(night.durationMin) > 0) {
     const performance = Math.min(105, Number(night.durationMin) / need * 100);
@@ -275,7 +345,13 @@ export function recoveryReadiness(input) {
   if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional };
   let score = used.reduce((s, k) => s + weights[k] * components[k].score, 0) / used.reduce((s, k) => s + weights[k], 0);
   if (components.respiration && components.respiration.elevated) score -= 10;
-  if (components.skinTemp && components.skinTemp.elevated) score -= 10;
+  const skinCost = components.skinTemp && components.skinTemp.elevated ? 10 : 0;
+  if (skinCost) score -= skinCost;
+  if (components.wristTemp) {
+    const extra = Math.max(0, wristTempPenalty(components.wristTemp.deviation) - skinCost);
+    components.wristTemp.points = extra ? -extra : 0;
+    score -= extra;
+  }
   score = Math.round(Math.max(0, Math.min(100, score)));
   return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional };
 }
@@ -341,4 +417,4 @@ export function hrvMetric(row) {
 }
 
 // The self-contained model functions (tests/helpers/recovery-model.mjs runs them on their own).
-export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];
+export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, lutealOffset, recoveryReadiness, heartRateLoad, strainScore];

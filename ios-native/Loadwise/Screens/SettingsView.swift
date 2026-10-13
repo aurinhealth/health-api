@@ -166,6 +166,13 @@ struct CustomizeSettingsView: View {
                 NavigationLink { SleepSettingsView(given: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "moon", color: Palette.indigo), title: "Spánek a budík")
                 }
+                // Cycle tracking: only with the profile's sex set to female.
+                if store.profile["sex"]?.string == "female" {
+                    SettingsDivider()
+                    NavigationLink { CycleSettingsView() } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.pink), title: "Cyklus")
+                    }
+                }
                 SettingsDivider()
                 NavigationLink { UnitsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Palette.blue), title: "Jednotky")

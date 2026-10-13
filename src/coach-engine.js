@@ -6,6 +6,7 @@ import { L, plural } from './lang.js';
 import { buildRideReview } from './ride-review.js';
 import { buildGymReview } from './gym-review.js';
 import { buildRunReview } from './run-review.js';
+import { workloadCaution } from './workload-ratio.js';
 const n=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const txt=v=>String(v||'');
 const isBike=x=>/ride|cycling|bike|kolo/i.test(txt(x?.name)+' '+txt(x?.type));
@@ -56,7 +57,9 @@ function morningAdvice({plan,low,heavy,sleepLow}){
   if(plan.empty)return L('Dnes nemáš nic v plánu: prostor pro regeneraci. Další aktivitu přizpůsob chuti a času, který máš.','Nothing is planned today: room to recover. Fit any activity to your mood and the time you have.');
   return L('Dnešní plán (','You can stick to today\'s plan (')+plan.names.join(', ')+L(') můžeš dodržet; při rozcvičení ověř, že se cítíš dobře.','); check during the warm-up that you feel good.');
 }
-function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym}){
+// caution: the workload line (workload-ratio.js workloadCaution) when the
+// acute:chronic ratio is above 1.5 or the week's monotony above 2.0.
+function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym,caution}){
   const facts=[],previous=yesterday?.training?.completed||[],plan=planToday(planned,todayGym);
   if(sleep.last!=null){
     const delta=sleep.avg==null?null:Math.round(sleep.last-sleep.avg);
@@ -65,6 +68,7 @@ function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym}){
   const load=previous.map(a=>n(a.tss)).filter(v=>v!=null),minutes=previous.reduce((sum,a)=>sum+(n(a.durationHours)||0)*60,0);
   if(previous.length)facts.push(L('Včera ','Yesterday ')+previous.length+' '+plural(previous.length,'aktivita','aktivity','aktivit','activity','activities')+(minutes>0?' · '+Math.round(minutes)+' min':'')+(load.length?' · '+Math.round(load.reduce((a,b)=>a+b,0))+' TSS':'')+'.');
   if(n(fitness.tsb)!=null)facts.push(L('Aktuální forma ','Current form ')+Math.round(n(fitness.tsb))+'.');
+  if(caution)facts.push(caution);
   if(!facts.length&&!policy.paused)return null;
   facts.push(plan.empty?L('Dnes nemáš nic v plánu.','Nothing planned today.'):L('Dnes v plánu: ','Planned today: ')+plan.names.join(', ')+'.');
   const sleepLow=sleep.last!=null&&sleep.last<360,low=sleepLow||n(fitness.tsb)!=null&&n(fitness.tsb)<-25,heavy=load.reduce((a,b)=>a+b,0)>150||minutes>=180;
@@ -185,5 +189,5 @@ export function buildCoachCouncil(input){
   if(input.gymReview&&!reviews.some(r=>r.sets))reviews.push(gymReviewCard(input.gymReview,input.gym.values?.[2]?.[3]||null,'gym-'+date));
   const fuel=nutritionCoach(c,completed.filter(a=>isBike(a)||isGym(a)),policy.paused);
   if(fuel)coaches.push(fuel);
-  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:input.ahead?null:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy,todayGym:c.todayGym}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
+  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:input.ahead?null:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy,todayGym:c.todayGym,caution:workloadCaution(input.workload)}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
 }

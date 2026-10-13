@@ -24,6 +24,8 @@ struct TodaySnapshot: Decodable, Equatable {
     let checkin: String?
     /// The active training plan in one line (GET /app/api/plans has the rest).
     let trainingPlan: PlanLine?
+    /// Cycle tracking, nil when off (Data/CycleModels.swift).
+    var cycle: TodayCycle? = nil
 
     struct PlanLine: Decodable, Equatable {
         let name: String
@@ -141,6 +143,13 @@ struct TodaySnapshot: Decodable, Equatable {
         var status: String? = nil
         /// Workouts: the session as Training lists it, to open its detail.
         var session: WeekSession? = nil
+        /// A hard session shown as an easy one on a hard cycle day; `title`
+        /// is the original, back with "vrátit".
+        var eased: Eased? = nil
+
+        struct Eased: Decodable, Equatable {
+            let title: String
+        }
 
         var id: String { session.map { "session|" + $0.id } ?? kind + "|" + (time ?? "") + "|" + title }
     }

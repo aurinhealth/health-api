@@ -3,7 +3,7 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric } from "./recovery-model.js";
+import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric, wristTempDeviation } from "./recovery-model.js";
 import { clockOf, minutesOf, dayStrain } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings } from "./energy-profile.js";
@@ -22,17 +22,19 @@ const clock = minutes => {
 const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
 // Readiness = 70 (the personal normal) + each signal's weighted distance from
-// its normal; a raised breathing rate or skin temperature costs 10 each
-// (recoveryReadiness). These are the "+12 HRV, −5 …" parts of the number.
+// its normal; a raised breathing rate or skin temperature costs 10 each, a
+// raised Apple Watch wrist temperature 5 or 10 (recoveryReadiness). These are the "+12 HRV, −5 …" parts of the number.
 const WEIGHTS = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
 export function readinessParts(readiness) {
   const c = readiness?.components || {};
   const used = Object.keys(WEIGHTS).filter(k => c[k]);
   const total = used.reduce((s, k) => s + WEIGHTS[k], 0);
   if (readiness?.score == null || !total) return [];
-  const parts = used.map(k => ({ key: k, points: Math.round(WEIGHTS[k] * (c[k].score - 70) / total) }));
+  // cycle: compared with the athlete's luteal normal (cycle tracking).
+  const parts = used.map(k => ({ key: k, points: Math.round(WEIGHTS[k] * (c[k].score - 70) / total), ...(c[k].cycle ? { cycle: true } : {}) }));
   if (c.respiration?.elevated) parts.push({ key: "respiration", points: -10 });
   if (c.skinTemp?.elevated) parts.push({ key: "skinTemp", points: -10 });
+  if (c.wristTemp?.points < 0) parts.push({ key: "wristTemp", points: c.wristTemp.points });
   return parts;
 }
 
@@ -83,14 +85,23 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   // Series for the widgets.
   const series = (key, n, d = 0, from = rows) => from.filter(r => r.id <= date && r.id > shift(date, -n) && num(r[key]) != null && (key === "skinTempDeviation" || num(r[key]) > 0)).map(r => ({ date: r.id, value: round(num(r[key]), d) }));
   const c = readiness.components || {};
-  const hrvSeries = series("hrv", 30), rhrSeries = series("restingHR", 30);
+  // HRV and resting heart rate for 90 days: Health's detail charts pick 7, 30
+  // or 90 of them.
+  const hrvSeries = series("hrv", 90), rhrSeries = series("restingHR", 90);
   const lastWeek = hrvSeries.filter(p => p.date > shift(date, -7)).map(p => p.value);
   const today = rows.find(r => r.id === date) || {};
   const respiration = series("respiration", 14, 1);
   const skin = series("skinTempDeviation", 14, 2, google);
   // Oxygen from the watch (Apple Health, Google) first, Intervals.icu filling the rest (mergeWellnessRows).
   const spo2 = series("spO2", 14, 1);
-  const walkingHR = series("walkingHR", 30), hrRecovery = series("hrRecovery", 30);
+  const walkingHR = series("walkingHR", 90), hrRecovery = series("hrRecovery", 90);
+  // Apple Watch's wrist temperature in sleep (°C) for the last 30 nights; the
+  // deviation is the last night against the median of the 28 nights before
+  // it (recovery-model.js wristTempDeviation), null under 7 of them.
+  // `deviations` is each of the last 14 nights against its own 28 nights
+  // before (the Health card's bars), nights without a baseline left out.
+  const wrist = series("wristTemp", 30, 2), wristLast = wrist.length ? wristTempDeviation(rows, date) : null;
+  const wristDeviations = wristLast ? wrist.filter(p => p.date > shift(date, -14)).map(p => ({ date: p.date, value: wristTempDeviation(rows, p.date)?.deviation ?? null })).filter(p => p.value != null) : [];
 
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).
@@ -153,6 +164,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
     oxygen: spo2.length ? { value: spo2.at(-1).value, low: Math.min(...spo2.map(p => p.value)), high: Math.max(...spo2.map(p => p.value)), series: spo2 } : null,
     walkingHR: walkingHR.length ? { value: walkingHR.at(-1).value, series: walkingHR } : null,
     hrRecovery: hrRecovery.length ? { value: hrRecovery.at(-1).value, series: hrRecovery } : null,
+    wristTemp: wristLast ? { value: round(wristLast.value, 2), deviation: wristLast.deviation, series: wrist, deviations: wristDeviations } : null,
     weight: weights.length ? {
       latest: weights.at(-1).value,
       date: weights.at(-1).date,

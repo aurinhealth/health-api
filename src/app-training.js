@@ -1,12 +1,14 @@
 // The Training screen of the native iPhone app (ios-native/) in one response:
 // today's strain and the week's, the next session, the main event and the
 // phase of the preparation, form (fitness, fatigue), VO2max, time in heart-rate
-// zones and the weeks' load. Pure: GET /app/api/training loads the inputs.
+// zones, the weeks' load, the acute:chronic workload ratio and monotony.
+// Pure: GET /app/api/training loads the inputs.
 import { groupOfType } from "./activity-type.js";
 import { mergeWellnessRows, heartRateLoad, strainScore } from "./recovery-model.js";
 import { athleteFocus } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
+import { workloadMetrics } from "./workload-ratio.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -235,6 +237,11 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const tsb = lastPmc ? round(lastPmc.fitness - lastPmc.fatigue) : null;
   const zone = formZone(tsb);
 
+  // The acute:chronic workload ratio and the week's monotony and strain from
+  // the same daily loads as fitness and fatigue (workload-ratio.js); null
+  // without any load on record.
+  const workload = workloadMetrics(intervals, date);
+
   // Load per week (Monday to Sunday) for the last 8 weeks, from Intervals.icu,
   // split by intensity where the activities have heart-rate or power zones.
   const split = Array.isArray(insights.cardioFocus?.weeks) ? insights.cardioFocus.weeks : [];
@@ -293,6 +300,8 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     event: eventPlan(athleteFocus(profile, date).event, date),
     form: lastPmc ? { fitness: round(lastPmc.fitness), fatigue: round(lastPmc.fatigue), form: tsb, zone: zone.key, label: zone.label, text: zone.text, series: pmc } : null,
     load: { weeks, intensity },
+    acwr: workload.historyDays > 0 ? workload.acwr : null,
+    monotony: workload.historyDays > 0 ? workload.monotony : null,
     zones: zoneTotal > 0 || zoneWeeksTotal > 0 ? { ...Object.fromEntries(Object.entries(zones).map(([k, v]) => [k, Math.round(v)])), minutes: Math.round(zoneTotal), weeks: zoneWeeks } : null,
     vo2max: vo2Latest ? { value: vo2Latest.value, change: vo2Before ? round(vo2Latest.value - vo2Before.value, 1) : null, series: vo2Source.filter(p => p.date > shift(date, -182)) } : null,
     activeCalories: activeDays.length ? { today: active.find(p => p.date === date)?.value ?? null, excluded: extraOn(date) || null, usual: usualActive.length ? Math.round(usualActive.reduce((a, b) => a + b, 0) / usualActive.length) : null, week: active, days: activeDays } : null,
