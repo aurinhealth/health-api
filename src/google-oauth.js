@@ -8,7 +8,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
     const params = new URL(request.url).searchParams, extra = params.get("extra") === "1";
     // Google Health data policy: the app's own disclosure and consent come right before Google's
     // consent screen. A visit without it (a bookmark, an old link) opens the disclosure first.
-    if (params.get("consent") !== "1") return html("Google Health","Google Health se připojuje v aplikaci Loadwise pro iPhone (Nastavení → Zdroje dat).",400);
+    if (params.get("consent") !== "1") return html("Google Health","Google Health se připojuje v aplikaci Aurin pro iPhone (Nastavení → Zdroje dat).",400);
     const origin = appOrigin(env, request); const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
@@ -30,5 +30,5 @@ export async function handleGoogleOAuth(request, env, pathname) {
   await saveConnectionSecret(env,'google_scopes',String(data.scope||HEALTH_SCOPES.join(' ')));
   return new Response(null,{status:302,headers:{Location:connectReturnUrl(back,"google"),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
 }
-function html(title,body,status){return new Response("<!doctype html><html><head><meta charset=\"utf-8\"><title>Loadwise</title></head><body style=\"font-family:system-ui;max-width:760px;margin:50px auto;padding:24px;line-height:1.5\"><h1>"+esc(title)+"</h1>"+body+"</body></html>",{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","Referrer-Policy":"no-referrer"}});}
+function html(title,body,status){return new Response("<!doctype html><html><head><meta charset=\"utf-8\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:760px;margin:50px auto;padding:24px;line-height:1.5\"><h1>"+esc(title)+"</h1>"+body+"</body></html>",{status:status||200,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","Referrer-Policy":"no-referrer"}});}
 function esc(value){return String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll("\"","&quot;");}

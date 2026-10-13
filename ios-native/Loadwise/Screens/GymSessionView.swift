@@ -717,7 +717,7 @@ struct YouTubePlayer: UIViewRepresentable {
         <style>html,body{margin:0;height:100%;background:#000}iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head>
         <body><iframe src="https://www.youtube-nocookie.com/embed/\(id)?playsinline=1&rel=0&modestbranding=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></body></html>
         """
-        view.loadHTMLString(html, baseURL: URL(string: "https://petrfitnessdata.eu"))
+        view.loadHTMLString(html, baseURL: APIClient.server)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

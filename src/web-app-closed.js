@@ -50,7 +50,7 @@ export async function closedToBrowser(request, env) {
 function closed(request) {
   if (request.method === "GET" || request.method === "HEAD") return new Response(null, { status: 302, headers: { Location: "/", "Cache-Control": "no-store" } });
   const message = siteLang(request) === "en"
-    ? "Loadwise runs only in the iPhone app."
-    : "Loadwise běží jen v aplikaci pro iPhone.";
+    ? "Aurin runs only in the iPhone app."
+    : "Aurin běží jen v aplikaci pro iPhone.";
   return Response.json({ status: "web_app_closed", message }, { status: 410, headers: { "Cache-Control": "no-store" } });
 }

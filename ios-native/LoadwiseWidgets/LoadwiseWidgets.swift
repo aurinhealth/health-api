@@ -96,7 +96,7 @@ enum W {
 struct EmptyWidgetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(verbatim: "Loadwise").font(.caption.weight(.semibold)).foregroundStyle(W.muted)
+            Text(verbatim: "Aurin").font(.caption.weight(.semibold)).foregroundStyle(W.muted)
             Spacer()
             Text(L10n.tr("Otevři aplikaci, ať se data načtou.")).font(.caption).foregroundStyle(W.ink)
         }

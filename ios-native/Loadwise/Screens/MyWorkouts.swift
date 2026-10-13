@@ -312,7 +312,7 @@ struct WorkoutEditorSheet: View {
 
 // MARK: - A link opened in the app
 
-/// A friend's link (petrfitnessdata.eu/t/<id>): who sends it, the exercises
+/// A friend's link (aurin.health/t/<id>): who sends it, the exercises
 /// with their sets, Naplánovat on the sender's day (changeable) and keeping it
 /// in Moje tréninky. Opening it puts it in Od přátel.
 struct SharedWorkoutView: View {

@@ -1,7 +1,7 @@
 // /.well-known/apple-app-site-association: the file iOS reads before it lets
-// the iPhone app use the passkeys of petrfitnessdata.eu and open its links. The webcredentials
-// entry matches the app's associated-domains entitlement
-// (ios-native/project.yml: webcredentials:petrfitnessdata.eu).
+// the iPhone app use the passkeys of the server's host (aurin.health, and
+// petrfitnessdata.eu for older builds). The webcredentials entry matches the
+// app's associated-domains entitlement (ios-native/project.yml).
 // APPLE_TEAM_ID is the Apple Developer team of the app (App Store Connect →
 // Membership, ten characters); without it the file is not served and the
 // app's passkey buttons fall back to the e-mail sign-in.
