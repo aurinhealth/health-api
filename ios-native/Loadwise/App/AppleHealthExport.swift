@@ -131,7 +131,7 @@ final class AppleHealthExport {
         configuration.activityType = Self.workoutType(type)
         let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: HKDevice.local())
         var meta = metadata("workout:" + key)
-        meta[HKMetadataKeyWorkoutBrandName] = old.metadata?[HKMetadataKeyWorkoutBrandName] ?? "Aurin"
+        meta[HKMetadataKeyWorkoutBrandName] = "Aurin"
         do {
             try await builder.beginCollection(at: old.startDate)
             try await builder.addMetadata(meta)
