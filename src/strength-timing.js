@@ -2,7 +2,8 @@ import { L } from './lang.js';
 // Include both sides of unilateral work, equipment setup, rests and gym delays.
 // Rests are counted between sets of an exercise; moving to the next exercise
 // is a changeover (setting up the station) instead of a full rest.
-export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
+// stretchSeconds: the stretching at the end (stretching.js), 0 without it.
+export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60, stretchSeconds = 0) {
   let workSeconds = 0, warmupSeconds = 0, restSeconds = 0;
   const exercises = [...new Set(rows.map(r => r[1]))], groups = new Map();
   rows.forEach((r, i) => {
@@ -19,15 +20,18 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   restSeconds += [...groups.values()].reduce((a, b) => a + b, 0);
   const setupSeconds = 240 + exercises.length * 90;
   const bufferSeconds = Math.max(180, Math.round(requestedMinutes * 60 * .05));
-  const totalSeconds = Math.round(workSeconds + warmupSeconds + restSeconds + setupSeconds + bufferSeconds);
-  return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
+  const totalSeconds = Math.round(workSeconds + warmupSeconds + restSeconds + setupSeconds + bufferSeconds + stretchSeconds);
+  return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds, stretchSeconds };
 }
 
-export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false } = {}) {
+// Rests by the gym goal: heavy strength sets need the longest, fitness the shortest.
+const GOAL_RESTS = { strength: [180, 180, 120], muscle: [120, 105, 75], fitness: [75, 60, 45] };
+export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false, goal = 'auto' } = {}) {
+  const [heavy, main, other] = GOAL_RESTS[goal] || [150, 120, 75];
   for (const r of rows) {
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     r[11] = 'FALSE'; r[12] = '';
-    const rest = warm ? 60 : def.fatigue >= 1.2 ? 150 : def.warmup ? 120 : 75;
+    const rest = warm ? 60 : def.fatigue >= 1.2 ? heavy : def.warmup ? main : other;
     r[9] = String(r[9] || '').replace(/\s*\[Pauza \d+ s\]/g, '').replace(/; (?:poslední série do technického selhání, jen při čistém provedení|last set to technical failure, only with clean technique)/g, '') + ' [Pauza ' + rest + ' s]';
   }
   const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];

@@ -163,6 +163,9 @@ struct GymSessionView: View {
                 .padding(.top, 16)
                 exerciseCards(day)
                     .padding(.top, 20)
+                if let stretching = day.stretching {
+                    StretchingCard(stretching: stretching, date: date).padding(.top, 16)
+                }
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
                     Task { await finish() }
                 }

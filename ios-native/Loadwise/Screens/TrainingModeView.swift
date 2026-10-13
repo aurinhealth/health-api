@@ -434,6 +434,8 @@ struct TrainingModeView: View {
             if totals?.saved == true { healthCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if !finishedSession { addExerciseButton }
+            // Stretching before the session is closed (src/stretching.js).
+            if !finishedSession, let stretching = day.stretching { StretchingCard(stretching: stretching, date: date) }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
                 Button(role: .destructive) { confirmDiscard = true } label: {

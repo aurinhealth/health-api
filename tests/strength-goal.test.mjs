@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { generateStrengthPlan, goalReps, EXERCISES } from '../src/strength-generator.js';
+import { stretchingFor, stretchingRow, readStretching } from '../src/stretching.js';
+import { planValues } from '../src/gym-plan-store.js';
+import { normalizeTraining } from '../src/onboarding.js';
+import { strengthPlanToIntervalsEvent } from '../src/intervals-strength.js';
+
+const context = (trainingSetup = {}) => ({ date: '2026-10-14', strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {}, trainingSetup: { equipment: 'gym', ...trainingSetup } });
+const work = plan => plan.rows.filter(r => r[0] === 'WORK');
+const rest = row => Number(String(row[9]).match(/\[Pauza (\d+) s\]/)?.[1]);
+const mainLift = plan => work(plan).find(r => EXERCISES[r[1]].warmup);
+
+test('the gym goal sets the reps and rests of the main lifts', () => {
+  const strength = generateStrengthPlan(context({ goal: 'strength', experience: 'regular' }), { durationMinutes: 75 });
+  const fitness = generateStrengthPlan(context({ goal: 'fitness', experience: 'regular' }), { durationMinutes: 75 });
+  assert.equal(mainLift(strength)[4], '3–6');
+  assert.equal(mainLift(fitness)[4], '12–15');
+  assert.ok(rest(mainLift(strength)) > rest(mainLift(fitness)));
+  assert.ok(work(fitness).every(r => rest(r) <= 75));
+  assert.match(strength.rationale, /Cíl síla|Goal strength/);
+  assert.equal(strength.goal, 'strength');
+});
+
+test('a beginner lifts 6–8 for strength and an experienced athlete gets one more main set', () => {
+  const press = EXERCISES['DB bench press'];
+  assert.equal(goalReps(press, 'strength', 'beginner'), '6–8');
+  assert.equal(goalReps(press, 'strength', 'experienced'), '3–6');
+  assert.equal(goalReps(press, 'auto', 'regular'), press.reps);
+  assert.equal(goalReps(EXERCISES['Dead bug'], 'fitness', 'regular'), EXERCISES['Dead bug'].reps);
+  const sets = plan => work(plan).filter(r => r[1] === mainLift(plan)[1]).length;
+  const regular = generateStrengthPlan(context({ goal: 'strength', experience: 'regular' }), { durationMinutes: 120 });
+  const experienced = generateStrengthPlan(context({ goal: 'strength', experience: 'experienced' }), { durationMinutes: 120 });
+  assert.ok(sets(experienced) >= sets(regular));
+  const beginner = generateStrengthPlan(context({ goal: 'strength', experience: 'beginner' }), { durationMinutes: 60 });
+  assert.ok(work(beginner).every(r => r[11] !== 'TRUE'));
+});
+
+test('stretching follows the muscles worked, fits the time and can be turned off', () => {
+  const plan = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'lower' });
+  assert.ok(plan.stretching.items.length >= 3 && plan.stretching.items.length <= 5);
+  assert.equal(plan.stretching.items.at(-1).id, 'child');
+  assert.ok(plan.stretching.items.some(x => ['hip_flexor', 'hamstring', 'quad', 'figure_four'].includes(x.id)));
+  assert.ok(plan.timing.totalSeconds <= 3600 && plan.timing.stretchSeconds === plan.stretching.seconds);
+  const off = generateStrengthPlan(context({ stretching: false }), { durationMinutes: 60 });
+  assert.equal(off.stretching, null);
+  assert.equal(off.timing.stretchSeconds, 0);
+  assert.equal(stretchingFor([['WARMUP', 'DB bench press']], name => EXERCISES[name]?.muscle), null);
+});
+
+test('stretching is stored in the plan header and sent to Intervals.icu', () => {
+  const plan = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'upper' });
+  const values = planValues(plan);
+  assert.equal(values[5][0], 'Protažení');
+  assert.deepEqual(readStretching(values).items, plan.stretching.items);
+  assert.equal(values[6][0], 'Typ');
+  assert.deepEqual(stretchingRow(null), []);
+  assert.match(strengthPlanToIntervalsEvent(plan).description, /Protažení na konci|Stretching at the end/);
+});
+
+test('the training setup keeps the goal and the stretching switch', () => {
+  assert.equal(normalizeTraining({ goal: 'strength' }).goal, 'strength');
+  assert.equal(normalizeTraining({ goal: 'bulk' }).goal, 'auto');
+  assert.equal(normalizeTraining({}).stretching, true);
+  assert.equal(normalizeTraining({ stretching: false }).stretching, false);
+});

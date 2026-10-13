@@ -81,7 +81,10 @@ export function normalizeTraining(input={}){
   const kind=equipment==='custom'&&!stations.length?'gym':equipment==='home'&&!stations.length?'dumbbells':equipment;
   const places=normalizePlaces(input.places);
   const activePlace=input.activePlace==='bodyweight'||places.some(p=>p.id===input.activePlace)?String(input.activePlace):places[0]?.id||'bodyweight';
-  return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace};
+  // The gym goal (strength-generator.js goalReps) and stretching at the end (on unless turned off).
+  const goal=['strength','muscle','fitness'].includes(input.goal)?input.goal:'auto';
+  const stretching=input.stretching!==false;
+  return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,stretching};
 }
 export async function updateTrainingSetup(db,input={}){
   await ensureOnboarding(db);

@@ -1,7 +1,8 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment } from "./strength-generator.js";
+import { fitsEquipment, EXERCISES } from "./strength-generator.js";
+import { stretchingFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences } from "./exercise-feedback.js";
@@ -34,6 +35,21 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       // Places (several gyms, home) with the active one; or the flat fields of older clients.
       try{const body=await request.json().catch(()=>({}));const input=Array.isArray(body.places)?{places:body.places,activePlace:body.activePlace}:{equipment:body.equipment,stations:body.stations,gymName:body.gymName,gymUrl:body.gymUrl,...(Array.isArray(body.dumbbellWeights)?{dumbbellWeights:body.dumbbellWeights}:{})};const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);return Response.json({status:'ok',equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'});}
       catch(error){return Response.json({message:error.message},{status:400});}
+    }
+  }
+  // Trénink na míru (Nastavení → Posilovna): the goal, the experience (auto
+  // from the training history unless chosen) and stretching at the end.
+  if(url.pathname==='/app/api/gym/preferences'){
+    const reply=training=>Response.json({status:'ok',goal:training.goal||'auto',experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',stretching:training.stretching!==false},{headers:{'Cache-Control':'no-store'}});
+    if(request.method==='GET')return reply(await trainingSetup(env.DB));
+    if(request.method==='POST'){
+      if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      const body=await request.json().catch(()=>({})),input={};
+      if(body.goal!=null)input.goal=String(body.goal);
+      if(body.experience!=null)input.experience=String(body.experience);
+      if(typeof body.stretching==='boolean')input.stretching=body.stretching;
+      const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);
+      return reply(training);
     }
   }
   if(url.pathname==='/app/api/gym/equipment/detect'&&request.method==='POST'){
@@ -199,6 +215,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       if(draft.kind!=='gym_preview'||!plan||plan.date<localToday())throw new Error(L('Neplatný nebo starý návrh.', 'Invalid or outdated proposal.'));
       // The proposal as changed in its preview (exercises from the catalog or the proposal itself).
       if(Array.isArray(body.rows))plan.rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(plan.rows||[]).map(r=>r?.[1]).filter(Boolean)]));
+      // Stretching follows the exercises as changed in the preview.
+      if(Array.isArray(body.rows)&&plan.stretching)plan.stretching=stretchingFor(plan.rows,name=>EXERCISES[name]?.muscle)||plan.stretching;
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
       const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
       if(!r.ok)throw new Error(L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));

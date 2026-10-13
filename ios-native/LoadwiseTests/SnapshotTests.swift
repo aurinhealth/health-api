@@ -159,7 +159,15 @@ final class SnapshotTests: XCTestCase {
         try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
-        try render("settings-gym", height: 500) { NavigationStack { GymSettingsView() } }
+        try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
+        try render("gym-stretching", height: 520) {
+            StretchingCard(stretching: GymStretching(minutes: 5, items: [
+                .init(id: "hip_flexor", name: "Kyčelní flexory u zdi", seconds: 30, sides: true),
+                .init(id: "hamstring", name: "Zadní strana stehen", seconds: 30, sides: true),
+                .init(id: "doorway", name: "Hrudník ve dveřích", seconds: 30, sides: false),
+                .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false)
+            ]), date: "2026-10-14").padding(20)
+        }
     }
 
     func testJSONValueKeepsUnknownKeys() throws {
