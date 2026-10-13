@@ -878,7 +878,7 @@ export function generateStrengthPlan(context, options = {}) {
   const muscleOf = name => EXERCISES[name]?.muscle;
   let warmup = null, stretching = null;
   const size = routineSize(requestedMinutes);
-  const routinesNow = () => { warmup = withWarmup ? warmupFor(rows, muscleOf, size.warmup) : null; stretching = withStretching ? stretchingFor(rows, muscleOf, size.stretching) : null; };
+  const routinesNow = () => { warmup = withWarmup ? warmupFor(rows, muscleOf, { ...size.warmup, cardio: context.trainingSetup?.warmupCardio !== false }) : null; stretching = withStretching ? stretchingFor(rows, muscleOf, size.stretching) : null; };
   routinesNow();
   const measure = () => estimateStrengthTiming(rows, EXERCISES, requestedMinutes, (warmup?.seconds || 0) + (stretching?.seconds || 0));
   let timing = measure();

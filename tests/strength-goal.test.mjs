@@ -109,4 +109,7 @@ test('the warm-up starts with easy cardio and moves for the muscles of the sessi
   assert.ok(lower.warmup.items.some(x => ['worlds_greatest', 'squat', 'leg_swings', 'hip_circles', 'bridge'].includes(x.id)));
   assert.ok(upper.warmup.minutes >= 4 && upper.warmup.minutes <= 8);
   assert.equal(warmupFor([], () => null), null);
+  const noCardio = generateStrengthPlan(context({ warmupCardio: false }), { durationMinutes: 60, focus: 'upper' });
+  assert.ok(noCardio.warmup.items.every(x => x.id !== 'cardio') && noCardio.warmup.items.length === 3);
+  assert.equal(normalizeTraining({ warmupCardio: false }).warmupCardio, false);
 });

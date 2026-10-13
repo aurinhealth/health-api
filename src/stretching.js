@@ -157,11 +157,11 @@ export function routineSize(minutes) {
   return { warmup: {}, stretching: {} };
 }
 
-/** The warm-up for a session's work sets: easy cardio and `count` dynamic moves. Null without work sets. */
-export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds } = {}) {
+/** The warm-up for a session's work sets: easy cardio (unless `cardio` is false) and `count` dynamic moves. Null without work sets. */
+export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds, cardio = true } = {}) {
   const sets = workedMuscles(rows, muscleOf);
   if (!sets.size) return null;
-  return routine([{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }, ...bestFor(WARMUPS, sets, count).map(s => ({ ...s, rounds: 1 }))]);
+  return routine([...(cardio ? [{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }] : []), ...bestFor(WARMUPS, sets, count).map(s => ({ ...s, rounds: 1 }))]);
 }
 
 /**

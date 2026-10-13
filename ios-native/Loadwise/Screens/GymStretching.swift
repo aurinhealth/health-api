@@ -344,6 +344,7 @@ struct GymPreferences: Decodable, Equatable {
     /// What the training history says while the experience is "auto".
     var autoExperience: String?
     var warmup: Bool?
+    var warmupCardio: Bool?
     var stretching: Bool
 }
 
@@ -363,11 +364,15 @@ struct GymPreferencesGroup: View {
     @State private var prefs: GymPreferences?
     @State private var goal = "auto"
     @State private var experience = "auto"
-    @State private var warmup = true
+    @State private var warmupMode = "cardio"
     @State private var stretching = true
     @State private var error: String?
 
     static let goals = [("strength", "Síla"), ("strength_muscle", "Síla a svaly"), ("muscle", "Svaly"), ("muscle_fitness", "Svaly a kondice"), ("fitness", "Kondice")]
+    static let warmupModes = [("cardio", "s kardiem"), ("moves", "bez kardia"), ("off", "vypnutá")]
+    static func warmupMode(_ prefs: GymPreferences) -> String {
+        prefs.warmup == false ? "off" : prefs.warmupCardio == false ? "moves" : "cardio"
+    }
     static let levels = [("beginner", "začátečník"), ("regular", "pravidelně"), ("experienced", "zkušený")]
 
     var body: some View {
@@ -376,7 +381,7 @@ struct GymPreferencesGroup: View {
             SettingsDivider()
             SettingsPicker(title: "Zkušenost", selection: $experience, options: experienceOptions)
             SettingsDivider()
-            SettingsToggle(title: "Rozcvička na začátku", isOn: $warmup)
+            SettingsPicker(title: "Rozcvička", selection: $warmupMode, options: Self.warmupModes)
             SettingsDivider()
             SettingsToggle(title: "Protažení na konci", isOn: $stretching)
         }
@@ -384,7 +389,9 @@ struct GymPreferencesGroup: View {
         .task { await load() }
         .onChange(of: goal) { _, value in save(["goal": .string(value)], unchanged: prefs?.goal == value) }
         .onChange(of: experience) { _, value in save(["experience": .string(value)], unchanged: prefs?.experience == value) }
-        .onChange(of: warmup) { _, value in save(["warmup": .bool(value)], unchanged: prefs?.warmup == value) }
+        .onChange(of: warmupMode) { _, value in
+            save(["warmup": .bool(value != "off"), "warmupCardio": .bool(value == "cardio")], unchanged: prefs.map(Self.warmupMode) == value)
+        }
         .onChange(of: stretching) { _, value in save(["stretching": .bool(value)], unchanged: prefs?.stretching == value) }
         if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
     }
@@ -412,7 +419,7 @@ struct GymPreferencesGroup: View {
         prefs = value
         goal = value.goal
         experience = value.experience
-        warmup = value.warmup ?? true
+        warmupMode = Self.warmupMode(value)
         stretching = value.stretching
     }
 

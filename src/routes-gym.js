@@ -42,7 +42,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,stretching:training.stretching!==false},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -51,6 +51,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       if(body.experience!=null)input.experience=String(body.experience);
       if(typeof body.stretching==='boolean')input.stretching=body.stretching;
       if(typeof body.warmup==='boolean')input.warmup=body.warmup;
+      if(typeof body.warmupCardio==='boolean')input.warmupCardio=body.warmupCardio;
       const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);
       return reply(training);
     }
