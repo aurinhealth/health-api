@@ -52,3 +52,35 @@ test("the type list has a group for each type; Workout leaves the guess to the n
   assert.equal(groupOfType("TrailRun"), "run");
   assert.equal(groupOfType("Workout"), null);
 });
+
+test("a workout typed in the app changes in the app and goes again to where it was sent", async () => {
+  const DB = createD1(); schema(DB);
+  DB.sqlite.exec("CREATE TABLE local_workouts (id TEXT, user_id INTEGER, event_json TEXT)");
+  DB.sqlite.exec("CREATE TABLE sync_sends (user_id INTEGER, activity_key TEXT, destination TEXT, status TEXT, remote_id TEXT, message TEXT, attempts INTEGER DEFAULT 0, payload_json TEXT, updated_at TEXT, PRIMARY KEY (user_id, activity_key, destination))");
+  DB.sqlite.prepare("INSERT INTO local_workouts VALUES ('l1', 3, ?)").run(JSON.stringify({ type: "Run", name: "Běh" }));
+  DB.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, payload_json) VALUES (3, 'local', 'activity', 'activity:l1', '2026-10-12T10:00:00', ?)").run(JSON.stringify({ type: "Run", name: "Běh", moving_time: 1800 }));
+  const result = await changeActivityType({ DB, USER_ID: 3 }, { id: "activity:l1", type: "Hike" });
+  assert.equal(result.key, "manual:l1", "the app replaces its Apple Health copy");
+  assert.deepEqual(result.sent, [], "nothing was sent before, nothing now");
+  const row = DB.sqlite.prepare("SELECT * FROM health_datapoints").get();
+  assert.equal(JSON.parse(row.payload_json).type, "Hike");
+  assert.equal(JSON.parse(DB.sqlite.prepare("SELECT event_json FROM local_workouts").get().event_json).type, "Hike");
+  const cal = buildCalendar({ start: "2026-10-12", end: "2026-10-12", today: "2026-10-12", activities: [row] });
+  assert.equal(cal.days[0].activities[0].sport, "walk");
+});
+
+test("a gym session gets the chosen type in the calendar", async () => {
+  const DB = createD1();
+  DB.sqlite.exec("CREATE TABLE gym_plans (user_id INTEGER, workout_date TEXT, values_json TEXT)");
+  DB.sqlite.prepare("INSERT INTO gym_plans VALUES (3, '2026-10-12', '[]')").run();
+  const result = await changeActivityType({ DB, USER_ID: 3 }, { id: "gym:2026-10-12", type: "Crossfit" });
+  assert.equal(result.key, "gym:2026-10-12");
+  await assert.rejects(changeActivityType({ DB, USER_ID: 3 }, { id: "gym:2026-10-13", type: "Crossfit" }), e => e.status === 404);
+  const { gymTypes } = await import("../src/activity-type.js");
+  assert.deepEqual(await gymTypes(DB, 3, "2026-10-01", "2026-10-31"), { "2026-10-12": "Crossfit" });
+  assert.deepEqual(await gymTypes(DB, 4, "2026-10-01", "2026-10-31"), {});
+  const cal = buildCalendar({ start: "2026-10-12", end: "2026-10-12", today: "2026-10-12", gym: { "2026-10-12": { name: "Nohy", exercises: ["Dřep"], sets: 3, logged: 3, setsBy: { "Dřep": 3 }, done: { "Dřep": 3 }, type: "Run" } } });
+  const a = cal.days[0].activities[0];
+  assert.equal(a.sport, "run");
+  assert.equal(a.type, "Run");
+});

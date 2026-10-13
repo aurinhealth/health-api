@@ -8,11 +8,12 @@ const env = { APPLE_TEAM_ID: "ABCDE12345" };
 const get = (path, method = "GET") => new Request("https://petrfitnessdata.eu" + path, { method });
 
 test("the file names the app for passkeys (webcredentials) with the team id", async () => {
-  assert.deepEqual(appleAppSiteAssociationBody(env), { webcredentials: { apps: ["ABCDE12345.eu.petrfitnessdata.loadwise.native"] } });
+  assert.deepEqual(appleAppSiteAssociationBody(env).webcredentials, { apps: ["ABCDE12345.eu.petrfitnessdata.loadwise.native"] });
+  assert.deepEqual(appleAppSiteAssociationBody(env).applinks.details[0], { appIDs: ["ABCDE12345.eu.petrfitnessdata.loadwise.native"], components: [{ "/": "/t/*", comment: "Shared workouts" }] });
   const response = appleAppSiteAssociation(get("/.well-known/apple-app-site-association"), env);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "application/json");
-  assert.deepEqual(await response.json(), { webcredentials: { apps: ["ABCDE12345." + APP_BUNDLE_ID] } });
+  assert.deepEqual((await response.json()).webcredentials, { apps: ["ABCDE12345." + APP_BUNDLE_ID] });
   assert.equal(appleAppSiteAssociation(get("/.well-known/apple-app-site-association.json"), env).status, 200);
 });
 
@@ -33,6 +34,7 @@ test("iOS reads it anonymously, and the app's entitlement names the server it ta
   assert.equal(server, "aurin.health");
   const domains = project.match(/com\.apple\.developer\.associated-domains:\s*\n((?:\s*- .+\n)+)/)[1];
   assert.match(domains, new RegExp("- webcredentials:" + server.replace(/\./g, "\\.") + "\n"));
+  assert.match(domains, /- applinks:aurin\.health\n/);
   assert.match(project, new RegExp("PRODUCT_BUNDLE_IDENTIFIER: " + APP_BUNDLE_ID.replace(/\./g, "\\.") + "\\b"));
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.ok(source.includes("appleAppSiteAssociation(request, rawEnv, url.pathname)"));

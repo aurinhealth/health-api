@@ -32,6 +32,10 @@ struct LiveGymView: View {
     @State private var loaded = false
     @State private var error: String?
     @State private var saveTask: Task<Void, Never>?
+    /// The day as it was before this screen (Zahodit trénink puts it back).
+    @State private var original: GymDay?
+    @State private var confirmClose = false
+    @State private var discarded = false
     @AppStorage("restSets") private var restSets = 90
 
     var body: some View {
@@ -61,6 +65,10 @@ struct LiveGymView: View {
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
+        .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
+            Button("Pokračovat později") { dismiss() }
+            Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
+        }
         .sheet(isPresented: $picking) {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in add(name) }
         }
@@ -80,10 +88,11 @@ struct LiveGymView: View {
         let current = list.first { $0.sets.contains { !$0.done } }
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                CircleButton(systemImage: "xmark", label: L10n.tr("Zavřít")) { dismiss() }
+                CircleButton(systemImage: "xmark", label: L10n.tr("Zavřít")) { close(day) }
                 Spacer()
                 Button {
                     restEnd = nil
+                    self.day?.completeTyped()
                     summary = true
                 } label: {
                     Text("Dokončit").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
@@ -145,6 +154,7 @@ struct LiveGymView: View {
                              onToggle: { set, kg, reps in toggle(set, kg: kg, reps: reps) },
                              onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
                              onAddSet: { addSet(exercise) },
+                             onRemove: { set in remove(set) },
                              onHistory: { historyFor = exercise.name })
         } else {
             Button { expanded.insert(exercise.id) } label: { collapsed(exercise) }
@@ -288,6 +298,11 @@ struct LiveGymView: View {
                 .padding(.top, 22)
             SecondaryButton(title: "Zpět k tréninku") { summary = false }
                 .padding(.top, 10)
+            Button(role: .destructive) { confirmClose = true } label: {
+                Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust).frame(maxWidth: .infinity).frame(height: 46)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
         }
     }
 
@@ -298,6 +313,7 @@ struct LiveGymView: View {
         loaded = true
         var sheet = GymDay(date: date, values: [], cancelled: nil)
         if !model.demo, let stored = try? await model.gymDay(date: date) { sheet = stored }
+        original = sheet
         sheet.ensureHeader(date: date)
         let fresh = sheet.startedAt == nil
         if fresh { sheet.markStarted(Date()) }
@@ -387,6 +403,45 @@ struct LiveGymView: View {
         }
     }
 
+    /// A set out of the sheet; the notes of the rows below move up with them.
+    private func remove(_ set: GymSet) {
+        guard var next = day else { return }
+        next.removeRow(set.row)
+        var moved: [Int: String] = [:]
+        for (row, note) in notes where row != set.row { moved[row > set.row ? row - 1 : row] = note }
+        notes = moved
+        day = next
+        persist()
+    }
+
+    /// X: an empty start is dropped at once; with exercises it asks.
+    private func close(_ day: GymDay) {
+        if day.exercises.isEmpty {
+            Task { await discard() }
+        } else {
+            confirmClose = true
+        }
+    }
+
+    /// Zahodit trénink: the day goes back to how it was before this screen
+    /// (a day without a plan is left empty), the sets of today are not kept.
+    private func discard() async {
+        discarded = true
+        saveTask?.cancel()
+        restEnd = nil
+        if !model.demo {
+            do {
+                try await model.saveGym(original ?? GymDay(date: date, values: [], cancelled: nil), date: date)
+            } catch {
+                discarded = false
+                self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
+                return
+            }
+            await model.refreshTraining()
+        }
+        dismiss()
+    }
+
     private func addSet(_ exercise: GymExercise) {
         guard var next = day, let last = exercise.sets.last else { return }
         next.addSet(after: last.row)
@@ -400,7 +455,7 @@ struct LiveGymView: View {
 
     /// Saves the sheet as it is now (waits for signal when there is none).
     private func persist() {
-        guard let sheet = day, !model.demo else { return }
+        guard let sheet = day, !model.demo, !discarded else { return }
         Task {
             do {
                 try await model.saveGym(sheet, date: date)
@@ -418,6 +473,7 @@ struct LiveGymView: View {
         saving = true
         defer { saving = false }
         saveTask?.cancel()
+        next.completeTyped()
         let names = next.exercises.filter { $0.doneCount > 0 }.map(\.name)
         next.dropUndone()
         next.markFinished(Date())

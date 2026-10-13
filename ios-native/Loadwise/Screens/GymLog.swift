@@ -105,11 +105,16 @@ struct GymDoneDetail: View {
         saveNow()
     }
 
+    /// A past workout: a set with its reps typed in was done, ticked or not.
     private func edit(_ set: GymSet, kg: String, reps: String) {
         let k = LiftWeight.kgText(kg)
         let r = reps.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
         if (set.kg ?? "") == k && (set.reps ?? "") == r { return }
-        day.edit(row: set.row, kg: k, reps: r)
+        if !set.done && !r.isEmpty {
+            day.complete(row: set.row, kg: k, reps: r, rpe: set.rpe ?? "")
+        } else {
+            day.edit(row: set.row, kg: k, reps: r)
+        }
         saveLater()
     }
 
@@ -388,6 +393,11 @@ struct GymExerciseTable: View {
                                        editable: onEdit != nil,
                                        onToggle: { kg, reps in onToggle(set, kg, reps) },
                                        onEdit: { kg, reps in onEdit?(set, kg, reps) })
+                            .contextMenu {
+                                if let onRemove {
+                                    Button(role: .destructive) { onRemove(set) } label: { Label("Smazat sérii", systemImage: "trash") }
+                                }
+                            }
                         if let note = notes[set.row] {
                             Text(note).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.amber).padding(.leading, 32)
                         } else if set.warmup && set.row == highlight {
@@ -407,11 +417,19 @@ struct GymExerciseTable: View {
                     }
                 }
             }
-            if let onAddSet {
-                Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
-                    .font(Typo.caption.weight(.semibold))
-                    .foregroundStyle(Palette.muted)
-                    .buttonStyle(.borderless)
+            if onAddSet != nil || onRemove != nil {
+                HStack(spacing: 16) {
+                    if let onAddSet {
+                        Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
+                    }
+                    Spacer()
+                    if let onRemove, exercise.sets.count > 1, let last = exercise.sets.last {
+                        Button { onRemove(last) } label: { Label("Odebrat sérii", systemImage: "minus") }
+                    }
+                }
+                .font(Typo.caption.weight(.semibold))
+                .foregroundStyle(Palette.muted)
+                .buttonStyle(.borderless)
             }
         }
     }
@@ -450,13 +468,17 @@ struct GymSetTableRow: View {
         }
         .onAppear { fill(set) }
         .onChange(of: set) { _, next in fill(next) }
-        .onChange(of: kg) { _, _ in if set.done && editable { onEdit(kg, reps) } }
-        .onChange(of: reps) { _, _ in if set.done && editable { onEdit(kg, reps) } }
+        // Typed numbers are kept also before the tick (Uložit no longer loses them).
+        .onChange(of: kg) { _, _ in if editable { onEdit(kg, reps) } }
+        .onChange(of: reps) { _, _ in if editable { onEdit(kg, reps) } }
     }
 
+    /// The saved numbers, unless the field already says the same ("82," while typing 82,5).
     private func fill(_ set: GymSet) {
-        kg = LiftWeight.shown(set.kg) ?? ""
-        reps = set.reps ?? ""
+        let savedKg = LiftWeight.shown(set.kg) ?? ""
+        if LiftWeight.number(kg) != LiftWeight.number(savedKg) || (kg.isEmpty != savedKg.isEmpty) { kg = savedKg }
+        let savedReps = set.reps ?? ""
+        if LiftWeight.number(reps) != LiftWeight.number(savedReps) || (reps.isEmpty != savedReps.isEmpty) { reps = savedReps }
     }
 
     private func field(_ text: Binding<String>, placeholder: String, width: CGFloat, keyboard: UIKeyboardType) -> some View {

@@ -100,26 +100,61 @@ struct CircleButton: View {
     }
 }
 
-/// The back button of a drill-down page, pinned in the top-left corner so it
-/// stays reachable while the page scrolls under it.
-struct FloatingBackButton: View {
+/// The glass of the app's own bars and their buttons: Liquid Glass on iOS 26
+/// (it follows Nastavení → Displej a jas → Liquid Glass and Omezit
+/// průhlednost), a blurred light material before it.
+extension View {
+    @ViewBuilder func chromeGlass<S: Shape>(in shape: S) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            glassEffect(.regular.interactive(), in: shape)
+        } else {
+            materialChrome(in: shape)
+        }
+        #else
+        materialChrome(in: shape)
+        #endif
+    }
+
+    private func materialChrome<S: Shape>(in shape: S) -> some View {
+        background(.ultraThinMaterial, in: shape)
+            .background(Palette.card.opacity(0.6), in: shape)
+            .overlay(shape.stroke(Palette.hairline, lineWidth: 1))
+    }
+}
+
+/// A round glass button of the bars (back, the page's own action).
+struct ChromeButton: View {
+    var systemImage: String
+    var label: String
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "chevron.left")
+            Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Palette.ink)
                 .frame(width: 40, height: 40)
-                .background(.regularMaterial, in: Circle())
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 3)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr("Zpět"))
+        .chromeGlass(in: Circle())
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        .accessibilityLabel(L10n.tr(label))
+    }
+}
+
+/// The back button of a drill-down page.
+struct FloatingBackButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        ChromeButton(systemImage: "chevron.left", label: "Zpět", action: action)
     }
 }
 
 private struct FloatingBackKey: EnvironmentKey { static let defaultValue = false }
+private struct ScrollReportKey: EnvironmentKey { static let defaultValue: ((CGFloat) -> Void)? = nil }
 
 extension EnvironmentValues {
     /// The page pins its back button (FloatingBackButton); the inline one keeps only its place.
@@ -127,15 +162,77 @@ extension EnvironmentValues {
         get { self[FloatingBackKey.self] }
         set { self[FloatingBackKey.self] = newValue }
     }
+
+    /// How far the page is scrolled (PageScroll): the pinned top bar shows
+    /// the title and the tab bar shrinks to one icon (RootView).
+    var scrollReport: ((CGFloat) -> Void)? {
+        get { self[ScrollReportKey.self] }
+        set { self[ScrollReportKey.self] = newValue }
+    }
+}
+
+/// The page's own button in the pinned bar (the "+" of a meal).
+struct ChromeAction {
+    var systemImage: String
+    var label: String
+    var action: () -> Void
+}
+
+/// The pinned bar of a drill-down page: back on the left, the page's action
+/// on the right, both glass. Scrolled down, a light blur goes behind it and
+/// the title shows in the middle.
+private struct PinnedTopBar: ViewModifier {
+    var title: String?
+    var trailing: ChromeAction?
+    var back: () -> Void
+    @Environment(\.scrollReport) private var parent
+    /// While the sync pill shows (RootView), it takes the title's place.
+    @Environment(AppModel.self) private var model: AppModel?
+    @State private var scrolled = false
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.floatingBack, true)
+            .environment(\.scrollReport, { (offset: CGFloat) in
+                parent?(offset)
+                let now = offset > 24
+                if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
+            })
+            .overlay(alignment: .top) {
+                HStack(spacing: 12) {
+                    FloatingBackButton(action: back)
+                    Spacer(minLength: 0)
+                    if let title {
+                        Text(L10n.tr(title))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Palette.ink)
+                            .lineLimit(1)
+                            .opacity(scrolled && model?.syncStatus == nil ? 1 : 0)
+                    }
+                    Spacer(minLength: 0)
+                    if let trailing {
+                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, action: trailing.action)
+                    } else {
+                        Color.clear.frame(width: 40, height: 40)
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 6)
+                .padding(.bottom, 10)
+                .background {
+                    Rectangle().fill(.ultraThinMaterial)
+                        .mask(LinearGradient(colors: [.black, .black, .black.opacity(0)], startPoint: .top, endPoint: .bottom))
+                        .ignoresSafeArea(edges: .top)
+                        .opacity(scrolled ? 1 : 0)
+                }
+            }
+    }
 }
 
 extension View {
-    /// Pins the back button over the page (top-left, above the scroll).
-    func floatingBack(_ action: @escaping () -> Void) -> some View {
-        environment(\.floatingBack, true)
-            .overlay(alignment: .topLeading) {
-                FloatingBackButton(action: action).padding(.leading, 22).padding(.top, 14)
-            }
+    /// Pins the back button (and the page's action) in a bar over the page.
+    func floatingBack(title: String? = nil, trailing: ChromeAction? = nil, _ action: @escaping () -> Void) -> some View {
+        modifier(PinnedTopBar(title: title, trailing: trailing, back: action))
     }
 }
 
@@ -172,11 +269,14 @@ struct WidgetRow<Left: View, Right: View>: View {
 /// whole page be dragged sideways.
 struct PageScroll<Content: View>: View {
     @ViewBuilder var content: Content
+    @Environment(\.scrollReport) private var report
 
     var body: some View {
         ScrollView(.vertical) {
             content.containerRelativeFrame(.horizontal)
+                .onGeometryChange(for: CGFloat.self) { -$0.frame(in: .named("pageScroll")).minY } action: { report?($0) }
         }
+        .coordinateSpace(.named("pageScroll"))
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .scrollDismissesKeyboard(.interactively)
     }

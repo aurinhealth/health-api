@@ -24,13 +24,15 @@ struct MealDetailView: View {
                 }
             }
         }
-        .floatingBack { dismiss() }
+        .floatingBack(title: model.food?.meals.first(where: { $0.type == type })?.label,
+                      trailing: ChromeAction(systemImage: "plus", label: MealSlot.addText(type)) { adding = true }) { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $adding) { AddFoodSheet(meal: type) }
     }
 }
 
 struct MealDetailContent: View {
+    @Environment(\.floatingBack) private var floating
     let meal: FoodSnapshot.Meal
     var back: () -> Void = {}
     var add: () -> Void = {}
@@ -48,7 +50,12 @@ struct MealDetailContent: View {
                 Spacer()
                 SectionLabel(text: L10n.f("Jídlo · %@", ClockText.format(meal.time)))
                 Spacer()
-                CircleButton(systemImage: "plus", label: MealSlot.addText(meal.type), action: add)
+                // The pinned bar carries the "+" when the page has one.
+                if floating {
+                    Color.clear.frame(width: 36, height: 36)
+                } else {
+                    CircleButton(systemImage: "plus", label: MealSlot.addText(meal.type), action: add)
+                }
             }
 
             Text(meal.label).font(Typo.sentence(34, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 28)
@@ -108,8 +115,15 @@ struct FoodEntryCard: View {
     @State private var confirmDelete = false
 
     var body: some View {
-        SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
-            card.onTapGesture { editing = true }
+        Group {
+            // Food from another app (Yazio…) through Apple Health changes there, not here.
+            if entry.app != nil {
+                card
+            } else {
+                SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
+                    card.onTapGesture { editing = true }
+                }
+            }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .sheet(isPresented: $editing) {
@@ -124,7 +138,10 @@ struct FoodEntryCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text(entry.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
+                        if let app = entry.app { AppTag(name: app) }
+                    }
                     if let detail = Self.detail(entry) {
                         Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
                     }
@@ -146,7 +163,7 @@ struct FoodEntryCard: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(entry.app == nil ? .isButton : [])
     }
 
     private func value(_ letter: String, _ grams: Double?, _ color: Color) -> some View {
@@ -174,5 +191,16 @@ struct FoodEntryCard: View {
         let sugar = L10n.f("cukry %@", sugarGrams)
         let salt = L10n.f("sůl %@", saltGrams)
         return [fiber, sugar, salt].joined(separator: " · ")
+    }
+}
+
+/// The app a food or drink was logged in, when it came through Apple Health: "Yazio".
+struct AppTag: View {
+    let name: String
+
+    var body: some View {
+        Text(verbatim: name).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted).lineLimit(1)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .background(Palette.track, in: Capsule())
     }
 }

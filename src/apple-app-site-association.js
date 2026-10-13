@@ -11,7 +11,10 @@ const PATH = "/.well-known/apple-app-site-association";
 export function appleAppSiteAssociationBody(env = {}) {
   const team = String(env.APPLE_TEAM_ID || "").trim();
   if (!/^[A-Z0-9]{10}$/.test(team)) return null;
-  return { webcredentials: { apps: [team + "." + APP_BUNDLE_ID] } };
+  const app = team + "." + APP_BUNDLE_ID;
+  // applinks: a shared workout's link (/t/<id>, workout-templates.js) opens
+  // the app when it is installed (applinks:aurin.health and petrfitnessdata.eu in project.yml).
+  return { webcredentials: { apps: [app] }, applinks: { details: [{ appIDs: [app], components: [{ "/": "/t/*", comment: "Shared workouts" }] }] } };
 }
 
 // The answer for the file, null for every other path.
