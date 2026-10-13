@@ -256,15 +256,19 @@ struct FiberRow: View {
 }
 
 /// Pití: how much the drinks hydrate (coffee, beer… count less than water),
-/// the day's drinks, water at one tap and any other drink.
+/// water at one tap and any other drink. A tap on the glass adds the first
+/// favourite drink (with a way back), a tap on the number opens Pití dnes.
 struct DrinksCard: View {
     @Environment(AppModel.self) private var model
     let water: FoodSnapshot.Water
     var size: WidgetSize = .medium
     @State private var other = false
-    @State private var editing: FoodSnapshot.Drink?
     @State private var choosing = false
     @State private var pop = false
+    /// The drink the glass just added, for "Vrátit".
+    @State private var added: (id: Int?, text: String)?
+    @State private var adds = 0
+    @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
     @AppStorage(DrinkFigureKind.storageKey) private var figureRaw = DrinkFigureKind.fallback.rawValue
     @AppStorage(DrinkFigureKind.animateKey) private var animate = true
 
@@ -332,38 +336,62 @@ struct DrinksCard: View {
                 .accessibilityLabel("Přidat pití")
             }
             if figure == .line {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    amount(34)
-                    Spacer()
-                    drunkNote
+                NavigationLink { DrinkHistoryView() } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        amount(34)
+                        Spacer()
+                        drunkNote
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint("Otevře dnešní pití")
                 ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
             } else {
                 HStack(spacing: 16) {
                     DrinkFigure(kind: figure, fraction: fraction, size: 96, animate: animate)
                         .scaleEffect(pop ? 1.12 : 1)
+                        .contentShape(Rectangle())
+                        .onTapGesture { Task { await quickAdd() } }
                         .onLongPressGesture { choosing = true }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel(quickLabel)
+                        .accessibilityAction { Task { await quickAdd() } }
                         .accessibilityAction(named: "Vybrat postavičku") { choosing = true }
-                    VStack(alignment: .leading, spacing: 2) {
-                        amount(40)
-                        Text(Fmt.int(fraction * 100) + " %").font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
-                        Text(Self.remaining(ml: water.ml ?? 0, target: target)).font(Typo.caption).foregroundStyle(Palette.muted)
-                        drunkNote
+                    NavigationLink { DrinkHistoryView() } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            amount(40)
+                            Text(Fmt.int(fraction * 100) + " %").font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
+                            Text(Self.remaining(ml: water.ml ?? 0, target: target)).font(Typo.caption).foregroundStyle(Palette.muted)
+                            drunkNote
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    Spacer(minLength: 0)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Otevře dnešní pití")
                 }
             }
-            if let drinks = water.drinks, !drinks.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(drinks) { d in
-                        SwipeRow(edit: { editing = d }, delete: { Task { await model.deleteDrink(id: d.id) } }) {
-                            DrinkLine(drink: d)
+            if let added {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.blue)
+                    Text(added.text).font(Typo.small).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 6)
+                    if let id = added.id {
+                        Button("Vrátit") {
+                            withAnimation(.easeOut(duration: 0.2)) { self.added = nil }
+                            Task { _ = await model.deleteDrink(id: id) }
                         }
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.blue)
                     }
                 }
+                .padding(.horizontal, 14).padding(.vertical, 11)
+                .background(Palette.blue.opacity(0.14), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
             DrinkPresetRow(add: { ml, kind in await model.addDrink(ml: ml, kind: kind) })
         }
+        .sensoryFeedback(.impact(weight: .light), trigger: adds)
         .animation(.easeInOut(duration: 0.6), value: water.ml)
         .onChange(of: reached) { _, now in
             guard now, animate else { return }
@@ -382,9 +410,27 @@ struct DrinksCard: View {
             .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $other) { DrinkSheet { ml, kind in _ = await model.addDrink(ml: ml, kind: kind) } }
-        .sheet(item: $editing) { d in
-            DrinkSheet(kind: d.kind, ml: Int(d.ml ?? 250), editing: true) { ml, kind in _ = await model.updateDrink(id: d.id, ml: ml, kind: kind) }
-        }
+    }
+
+    /// What the glass adds: the first favourite drink in its usual glass.
+    private var quick: DrinkPreset? { DrinkPrefs.presets(favorites: DrinkPrefs.list(favorites)).first }
+
+    private var quickLabel: String {
+        guard let q = quick else { return L10n.tr("Přidat pití") }
+        return L10n.f("Přidat %@ %@", L10n.tr(DrinkKind.find(q.kind)?.label ?? q.kind).lowercased(with: L10n.locale), Units.volumeText(Double(q.ml)))
+    }
+
+    private func quickAdd() async {
+        guard let q = quick else { other = true; return }
+        let before = Set((model.food?.water.drinks ?? []).map(\.id))
+        guard await model.addDrink(ml: q.ml, kind: q.kind) else { return }
+        adds += 1
+        let id = (model.food?.water.drinks ?? []).first { !before.contains($0.id) && $0.kind == q.kind }?.id
+        let text = L10n.f("Přidáno: %@ %@", L10n.tr(DrinkKind.find(q.kind)?.label ?? q.kind).lowercased(with: L10n.locale), Units.volumeText(Double(q.ml)))
+        withAnimation(.easeOut(duration: 0.2)) { added = (id, text) }
+        let shown = adds
+        try? await Task.sleep(nanoseconds: 4_000_000_000)
+        if adds == shown { withAnimation(.easeOut(duration: 0.2)) { added = nil } }
     }
 }
 

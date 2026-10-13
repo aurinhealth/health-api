@@ -1626,3 +1626,11 @@
 "V okolí" = "Nearby";
 "Bluetooth je vypnutý nebo nepovolený" = "Bluetooth is off or not allowed";
 "Hrudní pás nebo náramek, který vysílá tep, například Whoop, Polar nebo Garmin." = "A chest strap or a band that broadcasts heart rate, such as Whoop, Polar or Garmin.";
+"Pití dnes" = "Drinks today";
+"Podle druhu" = "By kind";
+"Dopoledne" = "Late morning";
+"Bez času" = "No time";
+"%@× · vypito %@" = "%1$@× · drank %2$@";
+"Vrátit" = "Undo";
+"Dnes zatím nic." = "Nothing yet today.";
+"Otevře dnešní pití" = "Opens today's drinks";
