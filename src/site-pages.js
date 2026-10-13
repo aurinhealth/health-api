@@ -309,7 +309,7 @@ function pageLang(request) {
 // wellness-sync.js, the download and deletion in account-data.js.
 const UPDATED = {cs: '13. října 2026', en: '13 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
-const CONTACT_EMAIL = 'petrbouma1994@icloud.com';
+const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
 const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
