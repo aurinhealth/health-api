@@ -44,7 +44,10 @@ targets:
         # Passkeys (Data/Passkeys.swift): the server must serve
         # /.well-known/apple-app-site-association with a webcredentials entry
         # for this app (src/apple-app-site-association.js, APPLE_TEAM_ID).
+        # aurin.health is the server the app talks to (APIClient.server);
+        # petrfitnessdata.eu is the old address, kept while older builds run.
         com.apple.developer.associated-domains:
+          - webcredentials:aurin.health
           - webcredentials:petrfitnessdata.eu
         # Push notifications (App/PushRegistration.swift, src/push.js): the
         # morning readiness. One entitlements file serves every build, and

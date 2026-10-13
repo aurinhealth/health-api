@@ -147,7 +147,7 @@ struct SetupFlowView: View {
         Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
     }
 
-    private static let privacyURL = URL(string: "https://petrfitnessdata.eu/privacy")!
+    private static let privacyURL = URL(string: "https://aurin.health/privacy")!
 
     // MARK: - Odkud brát data
 

@@ -180,8 +180,8 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "ladybug.fill", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
-                Link(destination: URL(string: "https://petrfitnessdata.eu/support")!) {
-                    SettingsRow(icon: SettingsIcon(systemImage: "questionmark", color: Color(light: 0x8A5AA6, dark: 0xC79BE0)), title: "Nápověda a kontakt", subtitle: "petrfitnessdata.eu/support")
+                Link(destination: URL(string: "https://aurin.health/support")!) {
+                    SettingsRow(icon: SettingsIcon(systemImage: "questionmark", color: Color(light: 0x8A5AA6, dark: 0xC79BE0)), title: "Nápověda a kontakt", subtitle: "aurin.health/support")
                 }
             }
             .buttonStyle(.plain)

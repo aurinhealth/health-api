@@ -190,7 +190,7 @@
 "Intenzivní" = "Vigorous";
 "Intervals.icu je připojené." = "Intervals.icu is connected.";
 "Intervals.icu není připojené" = "Intervals.icu isn't connected";
-"Intervals.icu zápis odmítlo: připojení je starší a smí nastavení jen číst. Připoj Intervals.icu znovu a povol úpravu nastavení, pak ulož zóny ještě jednou." = "Intervals.icu refused the write: the connection is older and can only read settings. Reconnect Intervals.icu, allow editing settings, then save the zones again.";
+"Intervals.icu zápis odmítlo: připojení smí nastavení jen číst. Vlož nový API klíč, pak ulož zóny ještě jednou." = "Intervals.icu refused the write: the connection can only read settings. Paste a new API key, then save the zones again.";
 "Ionťák" = "Sports drink";
 "Jak ho běžet" = "How to run it";
 "Jak ho jet" = "How to ride it";
@@ -500,7 +500,6 @@
 "Připojení se nedokončilo." = "The connection wasn't completed.";
 "Připojit" = "Connect";
 "Připojit znovu" = "Reconnect";
-"Připojit znovu na webu" = "Reconnect on the web";
 "Připravenost" = "Readiness";
 "Připravenost %@" = "Readiness %@";
 "Připravenost potřebuje aspoň 14 dní HRV nebo klidového tepu." = "Readiness needs at least 14 days of HRV or resting heart rate.";

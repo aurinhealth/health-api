@@ -125,7 +125,7 @@ struct SubscriptionView: View {
                     }
                     .buttonStyle(.plain)
                     Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 16)
-                    Link(destination: URL(string: "https://petrfitnessdata.eu/terms")!) {
+                    Link(destination: URL(string: "https://aurin.health/terms")!) {
                         Text("Otázky k předplatnému? Přečti si podmínky a ceny.").font(Typo.caption).foregroundStyle(Palette.muted).underline()
                     }
                     .padding(16)

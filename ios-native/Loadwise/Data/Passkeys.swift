@@ -6,7 +6,7 @@ import UIKit
 // the server's WebAuthn routes (src/passkeys.js):
 //   sign-in:  POST /auth/passkey/options → the assertion → POST /auth/passkey/verify
 //   adding:   POST /app/api/passkeys/options → the registration → POST /app/api/passkeys
-// The relying party is the server's host (petrfitnessdata.eu), which iOS
+// The relying party is the server's host (aurin.health), which iOS
 // checks against the app's associated-domains entitlement (project.yml) and
 // the server's /.well-known/apple-app-site-association. The JSON sent back is
 // the same as the web app's credentialJson (src/dashboard-client.js): every
