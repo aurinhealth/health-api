@@ -35,20 +35,38 @@ enum AppRoute: Hashable {
     case weekPlan
     case dayReview
     case insights
+    /// Doporučení trenéra: every option for today (Today's card, + Trénink dne).
+    case coachPick
+    /// Knihovna → Moje tréninky and Od přátel (MyWorkouts.swift).
+    case myWorkouts
+    case friendWorkouts
+    /// A friend's link opened in the app (aurin.health/t/<id>).
+    case sharedWorkout(String)
+    /// A saved or received workout planned for a day with the athlete's own weights.
+    case planTemplate(TemplatePlanRequest)
 
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .heart, .weight: return .health
-        case .sleepSettings, .dayReview, .steps, .strain: return .today
+        case .sleepSettings, .dayReview, .steps, .strain, .coachPick: return .today
         default: return .training
         }
     }
 
-    /// loadwise://open/<name>: the home-screen widgets link here.
+    /// Hosts of shared workout links: aurin.health, older links on petrfitnessdata.eu.
+    static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health", "petrfitnessdata.eu", "www.petrfitnessdata.eu"]
+
+    /// loadwise://open/<name>: the home-screen widgets link here. A shared
+    /// workout's link opens here too, as a universal link or from its web page.
     init?(url: URL) {
-        guard url.scheme == "loadwise", url.host() == "open" else { return nil }
         let parts = url.pathComponents.filter { $0 != "/" }
+        if url.scheme == "https", Self.linkHosts.contains(url.host() ?? "") {
+            guard parts.count == 2, parts[0] == "t", Self.isShareId(parts[1]) else { return nil }
+            self = .sharedWorkout(parts[1])
+            return
+        }
+        guard url.scheme == "loadwise", url.host() == "open" else { return nil }
         switch parts.first {
         case "readiness": self = .readiness
         case "sleep": self = .sleep
@@ -68,8 +86,16 @@ enum AppRoute: Hashable {
         case "week-plan": self = .weekPlan
         case "day-review": self = .dayReview
         case "records": self = .insights
+        case "my-workouts": self = .myWorkouts
+        case "friend-workouts": self = .friendWorkouts
+        case "share" where parts.count > 1 && Self.isShareId(parts[1]): self = .sharedWorkout(parts[1])
         default: return nil
         }
+    }
+
+    /// A link's id: ten letters and digits (src/workout-templates.js).
+    static func isShareId(_ id: String) -> Bool {
+        id.count == 10 && id.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
 }
 
@@ -126,6 +152,11 @@ struct RouteScreen: View {
         case .weekPlan: WeekPlanView()
         case .dayReview: DayReviewView()
         case .insights: InsightsView()
+        case .coachPick: CoachPickView()
+        case .myWorkouts: MyWorkoutsView(friends: false)
+        case .friendWorkouts: MyWorkoutsView(friends: true)
+        case .sharedWorkout(let id): SharedWorkoutView(id: id)
+        case .planTemplate(let request): GymBuilderView(date: request.date ?? AppModel.localDate(Date()), template: request)
         }
     }
 }

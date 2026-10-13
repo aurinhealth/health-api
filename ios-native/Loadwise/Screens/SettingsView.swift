@@ -45,6 +45,7 @@ struct SettingsMenu: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
     var signOut: () -> Void = {}
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -118,8 +119,12 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "ladybug", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
-                Link(destination: URL(string: "https://aurin.health/support")!) {
-                    SettingsRow(icon: SettingsIcon(systemImage: "questionmark.circle", color: Palette.indigo), title: "Nápověda a kontakt")
+                Button(action: contact) {
+                    SettingsRow(icon: SettingsIcon(systemImage: "envelope", color: Palette.indigo), title: "Kontaktovat nás", chevron: false)
+                        .overlay(alignment: .trailing) {
+                            Image(systemName: "arrow.up.right.square").font(.system(size: 14)).foregroundStyle(Palette.faint)
+                                .padding(.trailing, 18).accessibilityHidden(true)
+                        }
                 }
             }
             .buttonStyle(.plain)
@@ -127,6 +132,18 @@ struct SettingsMenu: View {
             Text(verbatim: "Aurin \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Kontaktovat nás: a new e-mail to support in the phone's mail app, with
+    /// the app and iOS version at the end; the support page without one.
+    private func contact() {
+        let info = Bundle.main.infoDictionary
+        let version = "Aurin \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? "")) · iOS \(UIDevice.current.systemVersion)"
+        var mail = URLComponents(string: "mailto:support@aurin.health")!
+        mail.queryItems = [URLQueryItem(name: "subject", value: "Aurin"), URLQueryItem(name: "body", value: "\n\n\n" + version)]
+        openURL(mail.url!) { opened in
+            if !opened { openURL(URL(string: "https://aurin.health/support")!) }
         }
     }
 }

@@ -110,7 +110,7 @@ test('the privacy policy names the controller and the contact',async()=>{
   const en=await page(privacyPage,'/privacy','en'),cs=await page(privacyPage,'/privacy','cs');
   assert.match(en,/The controller of your personal data is Petr Bouma/);
   assert.match(cs,/Správcem tvých osobních údajů je Petr Bouma/);
-  for(const html of [en,cs,await page(supportPage,'/support','en'),await page(supportPage,'/support','cs')])assert.match(html,/<a href="mailto:petrbouma1994@icloud\.com">petrbouma1994@icloud\.com<\/a>/);
+  for(const html of [en,cs,await page(supportPage,'/support','en'),await page(supportPage,'/support','cs')])assert.match(html,/<a href="mailto:support@aurin\.health">support@aurin\.health<\/a>/);
   // The consent step (consent.js) and the two-year deletion (inactiveAccounts) are described.
   assert.match(en,/deleted automatically with all its data/);
   assert.match(cs,/dva roky nepřihlásil, automaticky smažeme/);

@@ -272,13 +272,13 @@ extension GymDay {
 
     /// Adds an exercise where it belongs (ExerciseOrder), after the exercises
     /// already started.
-    mutating func insertExercise(_ name: String, sets: Int, reps: String, catalog: [GymCatalogExercise]) {
+    mutating func insertExercise(_ name: String, sets: Int, reps: String, catalog: [GymCatalogExercise], sides: Bool = false) {
         let list = exercises
         let ranks: [Double] = list.map { ExerciseOrder.rank($0.name, catalog: catalog) }
         let earliest = (list.lastIndex { $0.sets.contains { $0.done } } ?? -1) + 1
         let at = ExerciseOrder.insertionIndex(rank: ExerciseOrder.rank(name, catalog: catalog), ranks: ranks,
                                               supersets: list.map { $0.superset }, earliest: earliest)
-        addExercise(name, sets: sets, reps: reps)
+        addExercise(name, sets: sets, reps: reps, sides: sides)
         // An exercise already last in the plan just gets the sets.
         guard exercises.count == list.count + 1 else { return }
         moveExercise(from: list.count, to: at)

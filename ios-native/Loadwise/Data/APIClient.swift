@@ -270,6 +270,11 @@ final class APIClient: @unchecked Sendable {
         try await get("/app/api/activity-detail?id=" + Self.query(id))
     }
 
+    /// A workout from the watch (Apple Health, Google Health).
+    func watchDetail(_ ref: WatchRef) async throws -> ActivityDetail {
+        try await get("/app/api/activity-detail/watch?source=" + Self.query(ref.source) + "&id=" + Self.query(ref.id))
+    }
+
     func plannedWorkout(eventId: String) async throws -> PlannedWorkout {
         try await get("/app/api/workouts/planned?id=" + Self.query(eventId))
     }
@@ -305,10 +310,24 @@ final class APIClient: @unchecked Sendable {
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
     /// A done one comes back with where it was sent (Synchronizace).
     @discardableResult
-    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String) async throws -> ManualWorkoutResult {
+    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String,
+                       start: Date? = nil, heart: WindowHeartRate? = nil, pairWith: String? = nil) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
         if let rpe { body["rpe"] = .number(Double(rpe)) }
+        if let start {
+            // The window the heart rate was read for; the start's clock time in the phone's zone.
+            let iso = ISO8601DateFormatter()
+            body["start"] = .string(iso.string(from: start))
+            body["end"] = .string(iso.string(from: start.addingTimeInterval(Double(minutes) * 60)))
+            let clock = Calendar.current.dateComponents([.hour, .minute], from: start)
+            body["time"] = .string(String(format: "%02d:%02d", clock.hour ?? 12, clock.minute ?? 0))
+        }
+        if let v = heart?.avgHr { body["avgHr"] = .number(Double(v)) }
+        if let v = heart?.maxHr { body["maxHr"] = .number(Double(v)) }
+        if let v = heart?.kcal { body["kcal"] = .number(Double(v)) }
+        // The watch's record it is paired with: nothing is sent anywhere then.
+        if let pairWith { body["pairWith"] = .string(pairWith) }
         return try await send("/app/api/workouts/manual", method: "POST", body: body)
     }
 

@@ -58,7 +58,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .sleep:
             return [HKCategoryType(.sleepAnalysis)]
         case .workouts:
-            return [HKObjectType.workoutType(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
+            return [HKObjectType.workoutType(), HKSeriesType.workoutRoute(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
                     HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling), HKQuantityType(.distanceSwimming),
                     HKQuantityType(.cyclingPower), HKQuantityType(.runningPower), HKQuantityType(.cyclingCadence)]
         case .heart:
