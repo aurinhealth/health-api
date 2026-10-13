@@ -160,7 +160,7 @@ struct NotificationsSettingsView: View {
     var body: some View {
         SettingsPage(title: "Oznámení") {
             if allowed == false {
-                SettingsGroup(footer: "Oznámení pro Loadwise jsou v iPhonu vypnutá.") {
+                SettingsGroup(footer: "Oznámení pro Aurin jsou v iPhonu vypnutá.") {
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                     } label: { SettingsRow(title: "Otevřít nastavení iPhonu", titleColor: Palette.blue) }
