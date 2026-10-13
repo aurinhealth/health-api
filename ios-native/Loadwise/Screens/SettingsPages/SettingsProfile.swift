@@ -127,7 +127,7 @@ struct ProfileSettingsView: View {
     private var changes: JSONObject {
         var c: JSONObject = [
             "displayName": .string(name.trimmingCharacters(in: .whitespaces)), "sex": .string(sex),
-            "height": HeartActivitySettingsView.metric(height, Units.cm, scale: 1),
+            "height": GoalsSettingsView.metric(height, Units.cm, scale: 1),
             "birthDate": .string(hasBirth ? Self.dayFormat.string(from: birth) : "")
         ]
         if !hasBirth { c["age"] = .field(age) }

@@ -134,6 +134,7 @@ struct RootView: View {
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
             .onChange(of: scenePhase) { _, phase in
+                if phase == .background, !model.demo { BackgroundRefresh.schedule() }
                 guard phase == .active else { return }
                 Task {
                     if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
