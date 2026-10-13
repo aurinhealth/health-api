@@ -19,7 +19,7 @@ test('the AI answer becomes plan rows only from the catalog, keeping each exerci
 
 test('a confirmed proposal keeps only planning columns of known exercises', () => {
   const rows = cleanGymRows([row('WORK', 'Bench', 1, '40.3', '8', '45', '8', 'TRUE'), row('WORK', 'Mystery', 1, '1', '1'), ['STRETCH', 'Bench']], new Set(['Bench']));
-  assert.deepEqual(rows, [['WORK', 'Bench', '1', '40,5', '8', '', '', '', 'FALSE', '', '', 'FALSE', '']]);
+  assert.deepEqual(rows, [['WORK', 'Bench', '1', '40,5', '8', '', '', '', 'FALSE', '', '', 'FALSE', '', '']]);
   assert.throws(() => cleanGymRows([row('WORK', 'Mystery', 1, '1', '1')], new Set(['Bench'])), /aspoň jeden cvik/);
 });
 

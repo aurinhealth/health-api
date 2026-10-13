@@ -23,9 +23,19 @@ struct GymSessionView: View {
     @State private var finishing = false
     /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
     @State private var doneMode = false
+    @State private var changingType = false
 
     /// The lifting session from the watch or Intervals.icu that day.
     private var doneSession: WeekSession? { model.doneStrengthSession(on: date) }
+
+    /// What Změnit typ aktivity changes: the plan saved in the app, else the watch's or Intervals.icu's session.
+    private var typeTarget: (id: String, type: String?, source: String?)? {
+        if !(day?.exercises.isEmpty ?? true) { return ("gym:" + date, "WeightTraining", "app") }
+        guard let s = doneSession else { return nil }
+        if s.activityId != nil { return (s.id, nil, "intervals") }
+        if let watch = s.watch { return (watch.id, nil, watch.source) }
+        return nil
+    }
 
     private var showsDone: Bool {
         if day?.cancelled == true { return false }
@@ -91,6 +101,19 @@ struct GymSessionView: View {
                     }
                     .accessibilityLabel("Změnit trénink")
                 }
+                // Done: the gym session was another sport (Crossfit, HIIT…).
+                if !model.demo && showsDone, let typeTarget {
+                    Menu {
+                        Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                            .frame(width: 36, height: 32).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Další volby")
+                    .sheet(isPresented: $changingType) {
+                        ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
+                    }
+                }
             }
             .padding(.top, 24)
             if loading && day == nil {
@@ -133,7 +156,7 @@ struct GymSessionView: View {
                     Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 }
                 NavigationLink(value: AppRoute.trainingMode(date)) {
-                    Label("Režim tréninku", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)

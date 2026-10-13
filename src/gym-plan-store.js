@@ -2,10 +2,11 @@
 // day, stored in the layout the dashboard uses (title rows 1–7, the column
 // header on row 7, sets from row 8). Completed sets go to strength_sets.
 import { L } from './lang.js';
-import { parseStrengthPlan, importStrengthHistory } from "./strength-history.js";
+import { parseStrengthPlan, importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { strengthSetOptions } from './gym-set-options.js';
+import { splitSides, sideBalance, lastSideChoice } from './gym-sides.js';
 
-export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie"];
+export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana"];
 const MAX_ROWS = 100;
 const DONE = new Set(["TRUE", "true", "1", "ANO", "ano", "✓", "☑"]);
 
@@ -89,8 +90,8 @@ export function planValues(body = {}) {
   ];
   const sets = rows.map(row => {
     const r = Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => row?.[i] == null ? "" : row[i]);
-    const options=strengthSetOptions({toFailure:r[11],superset:r[12]});
-    r[11]=options.toFailure?'TRUE':'FALSE';r[12]=options.superset;
+    const options=strengthSetOptions({toFailure:r[11],superset:r[12],side:r[13]});
+    r[11]=options.toFailure?'TRUE':'FALSE';r[12]=options.superset;r[13]=options.side;
     // Sheet-era hyperlink formulas and placeholders become a plain link; only
     // http(s), so a javascript: link never reaches the Video button.
     if (!/^https?:\/\//i.test(String(r[10])) && r[1]) {
@@ -103,7 +104,11 @@ export function planValues(body = {}) {
 }
 
 export async function writeStrengthPlanToDb(db, body) {
-  const values = planValues(body);
+  // One-sided exercises go L and P, the lagging side one set more (gym-sides.js).
+  const history = await getStrengthHistory(db, 500).catch(() => []);
+  const weaker = Object.fromEntries(sideBalance(history).filter(b => b.weaker).map(b => [b.exercise, b.weaker]));
+  const rows = Array.isArray(body.rows) ? splitSides(body.rows, { columns: GYM_PLAN_COLUMNS.length, weaker, choice: lastSideChoice(history) }).slice(0, MAX_ROWS) : body.rows;
+  const values = planValues({ ...body, rows });
   await saveGymPlan(db, body.date, values);
   await restoreGymPlan(db, body.date);
   return { status: "ok", storage: "d1", workoutDate: body.date, rowsWritten: values.length - 7, previousWorkoutSynced: false };
@@ -114,7 +119,7 @@ export async function writeStrengthPlanToDb(db, body) {
 export async function syncGymPlanHistory(db, values) {
   const parsed = parseStrengthPlan(values);
   if (!parsed.date) return { status: "ok", completedRows: 0, parsed };
-  const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset }));
+  const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset,side:r.side }));
   if (sets.length) await importStrengthHistory(db, { date: parsed.date, sets });
   return { status: "ok", completedRows: sets.length, parsed };
 }
