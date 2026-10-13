@@ -42,7 +42,7 @@ struct BarcodeScanSheet: View {
                 .ignoresSafeArea()
             } else {
                 VStack(spacing: 16) {
-                    Text(DataScannerViewController.isSupported ? "Skener potřebuje kameru. Povol Loadwise přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
+                    Text(DataScannerViewController.isSupported ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
                         .font(Typo.sentence(20)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
                     if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
                         Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)

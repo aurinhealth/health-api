@@ -78,7 +78,7 @@ test('recovery signals compare the day with the athlete\'s own previous week', (
 
 test('the AI coach is scoped to the app\'s sports and keeps what it learns per athlete', async () => {
   const { coachInstructions } = await import('../src/coach-assistant.js');
-  assert.match(coachInstructions, /^Jsi trenér v aplikaci Loadwise pro cyklistiku \(venku i na trenažeru\), běh a posilovnu/);
+  assert.match(coachInstructions, /^Jsi trenér v aplikaci Aurin pro cyklistiku \(venku i na trenažeru\), běh a posilovnu/);
   assert.match(coachInstructions, /platí jen pro něj/);
   assert.match(coachInstructions, /completedRideReviews/);
   assert.doesNotMatch(coachInstructions, /WorldTour|UAE/);

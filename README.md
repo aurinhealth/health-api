@@ -1,6 +1,6 @@
 # health-api
 
-Cloudflare Worker za aplikací **Loadwise** pro iPhone (`ios-native/`, API na `https://petrfitnessdata.eu/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
+Cloudflare Worker za aplikací **Aurin** (dříve Loadwise) pro iPhone (`ios-native/`, API na `https://aurin.health/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
 
 ## Lokálně
 
@@ -26,9 +26,11 @@ entrypoint.js → strength-gateway.js → index.js
 - `strength-gateway.js`: tvorba a uložení plánu posilovny (`/strength/generate-plan`, `/strength/write-plan`) a `/food/recommend` (návrhy jídel k osobnímu cíli z `food-recommend.js`).
 - `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, `/analysis/energy`, deník jídla, cron.
 
-Vzhled veřejného webu: barvy jsou tokeny v `src/design-system.js`, ikony SVG v `src/icons.js`. Světlý vzhled jen předefinuje tokeny (`:root[data-theme="light"]` a stejná sada pro systémové nastavení). Bez volby se vzhled řídí nastavením zařízení. Přepínač Světlý / Tmavý ho přepíše přes cookie `lw-theme`, kterou stránka čte ještě před vykreslením; volba stejného vzhledu, jaký má zařízení, cookie smaže.
+Vzhled veřejného webu: barvy a velikosti písma jsou tokeny v `src/design-system.js` (světlá paleta aplikace, web nemá přepínač vzhledu), ikony SVG v `src/icons.js`.
 
-Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`. Berou tokeny a přepínač vzhledu z `src/design-system.js`. Snímky obrazovek jsou v `public/site/` (statické soubory Workeru, každý ve světlé i tmavé verzi) (`phone-*` z mobilu 390×844 @2x, `today-*` z počítače) Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
+Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`, ve světlé paletě aplikace (`ios-native/Shared/Palette.swift`). Telefon na úvodní stránce je nakreslený v HTML podle obrazovky Dnes, takže web nepotřebuje snímky obrazovky; v `public/site/` je jen písmo Newsreader a obrázky pro sdílení `og.png` a `og-en.png`. Úvodní stránka se mění spolu s aplikací (pravidlo v `CLAUDE.md`). Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
+
+Domény: domov webu je `aurin.health` (`www.aurin.health` na ni přesměruje). Aplikace mluví se serverem na `aurin.health` (`APIClient.server`) a cookie přihlášení ze staré adresy si při prvním spuštění přenese, takže se nikdo nemusí znovu přihlašovat. Server odpovídá stejně i na `petrfitnessdata.eu`, kam míří starší verze aplikace a odkazy. Přesměrování OAuth (Google, Intervals.icu, Strava) a přístupové klíče zůstávají na adrese, na kterou požadavek přišel (`src/app-origin.js`), proto mají Google i Intervals.icu zapsané callbacky obou domén.
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `strength-gateway.js`.
 
@@ -85,7 +87,7 @@ Přihlášení: Google (`google-login.js`), přístupové klíče (passkeys, `pa
 
 Google OAuth: přihlášení žádá jen `openid email` (`google-login.js`), připojení jen scopes Google Health (`google-scopes.js`). Před stránkou souhlasu Google aplikace sama ukáže, jaká data čte a zapisuje, k čemu a kdo je dostane, a chce zaškrtnutý souhlas (vyžadují to zásady Google Health API); přímá návštěva `/oauth/google` vrátí uživatele na tento dialog. Tlačítko „Rozšířit oprávnění Google“ v Nastavení si zvlášť vyžádá zápis váhy (`googlehealth.health_metrics_and_measurements.writeonly`) a datum narození (`user.birthday.read`, People API); obojí musí být povolené na OAuth consent screen a People API zapnuté v Google Cloud. Udělená oprávnění se ukládají k připojení uživatele. Na souhlasové obrazovce Googlu jde jednotlivá oprávnění odškrtnout: token se pak žádá jen pro udělená (`healthScopes`), data bez oprávnění zůstanou prázdná a Nastavení → Propojení ukáže, co chybí, s tlačítkem „Povolit chybějící“.
 
-Intervals.icu tlačítkem (OAuth): aplikaci zaregistruj e-mailem u podpory Intervals.icu (název, popis, web, logo, odkaz na zásady soukromí, Intervals ID a přesměrování `https://petrfitnessdata.eu/oauth/intervals/callback`), pak nastav `INTERVALS_CLIENT_ID` a `INTERVALS_CLIENT_SECRET`. Žádá `ACTIVITY:WRITE`, `WELLNESS:WRITE`, `CALENDAR:WRITE` a `SETTINGS:READ`. Token nevyprší; uloží se šifrovaně jako připojení `intervals` (s předponou `Bearer `) a všechny požadavky na Intervals berou hlavičku z `intervals-auth.js`.
+Intervals.icu tlačítkem (OAuth): aplikaci zaregistruj e-mailem u podpory Intervals.icu (název, popis, web, logo, odkaz na zásady soukromí, Intervals ID a přesměrování `https://aurin.health/oauth/intervals/callback` i `https://petrfitnessdata.eu/oauth/intervals/callback`), pak nastav `INTERVALS_CLIENT_ID` a `INTERVALS_CLIENT_SECRET`. Žádá `ACTIVITY:WRITE`, `WELLNESS:WRITE`, `CALENDAR:WRITE` a `SETTINGS:READ`. Token nevyprší; uloží se šifrovaně jako připojení `intervals` (s předponou `Bearer `) a všechny požadavky na Intervals berou hlavičku z `intervals-auth.js`.
 
 Průvodce nastavením je popsaný v `docs/account-workflow.md`. Krok se službami používá stejné karty jako Nastavení → Propojení a stránky Googlu i Intervals.icu vracejí zpět do průvodce; poslední obrazovka ukáže denní kalorický cíl. Co aplikace drží v zařízení (poslední den, profil, chat), patří jednomu účtu: stránka nese id přihlášeného (`<meta name="lw-account">`) a po přihlášení jiného účtu v tomtéž prohlížeči se to smaže.
 

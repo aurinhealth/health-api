@@ -267,7 +267,7 @@ const NAMES = { google: 'Google Health', intervals: 'Intervals.icu', strava: 'St
 const PUSH = { google: pushGoogle, intervals: pushIntervals, strava: pushStrava };
 
 function failure(destination, error) {
-  if (error.scope) return L('Povol Loadwise zápis tréninků do Google Health (Rozšířit oprávnění Google).', 'Allow Loadwise to write workouts to Google Health (Extend Google permissions).');
+  if (error.scope) return L('Povol Aurinu zápis tréninků do Google Health (Rozšířit oprávnění Google).', 'Allow Aurin to write workouts to Google Health (Extend Google permissions).');
   if (/HTTP 40[13]/.test(error.message)) return L(NAMES[destination] + ' odmítlo přístup. Připoj ho znovu.', NAMES[destination] + ' refused access. Connect it again.');
   return L('Odeslání se nepodařilo. Zkus to znovu.', 'Sending failed. Try again.');
 }

@@ -10,9 +10,9 @@
 // refreshed with the refresh token when it runs out.
 import { saveConnectionSecret, deleteConnectionSecret } from './connection-secrets.js';
 import { connectReturn, connectReturnUrl } from './connect-return.js';
+import { appOrigin } from './app-origin.js';
 import { L } from './lang.js';
 
-const ORIGIN = 'https://petrfitnessdata.eu';
 const STATE_COOKIE = 'pfd_strava_oauth_state';
 const API = 'https://www.strava.com/api/v3';
 export const STRAVA_SCOPES = ['activity:write', 'profile:write'];
@@ -21,7 +21,7 @@ export function stravaConfigured(env) {
   return Boolean(String(env.STRAVA_CLIENT_ID || '').trim() && String(env.STRAVA_CLIENT_SECRET || '').trim());
 }
 
-const redirectUri = env => (env.APP_ORIGIN || ORIGIN) + '/oauth/strava/callback';
+const redirectUri = (env, request) => appOrigin(env, request) + '/oauth/strava/callback';
 const clearState = STATE_COOKIE + '=; Path=/oauth/strava; Max-Age=0; Secure; HttpOnly; SameSite=Lax';
 const back = (location, cookie = clearState) => new Response(null, { status: 302, headers: { Location: location, 'Set-Cookie': cookie, 'Cache-Control': 'no-store' } });
 
@@ -54,7 +54,7 @@ export async function handleStravaOAuth(request, env, pathname, fetchImpl = fetc
     const state = crypto.randomUUID();
     const u = new URL('https://www.strava.com/oauth/authorize');
     u.searchParams.set('client_id', String(env.STRAVA_CLIENT_ID).trim());
-    u.searchParams.set('redirect_uri', redirectUri(env));
+    u.searchParams.set('redirect_uri', redirectUri(env, request));
     u.searchParams.set('response_type', 'code');
     u.searchParams.set('approval_prompt', 'auto');
     u.searchParams.set('scope', STRAVA_SCOPES.join(','));
