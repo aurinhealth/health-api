@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
-import {registerHooks} from 'node:module';
 import {createD1} from './helpers/d1.mjs';
 import {userDataEnvironment,deletionDatabase} from '../src/user-data-shards.js';
 import {foodCatalogEnvironment,FoodCatalogUnavailable} from '../src/food-catalog-storage.js';
@@ -10,7 +9,8 @@ import {routedUserDb} from '../src/user-data-routing.js';
 import {savePersonalFood,searchFoodCatalog} from '../src/personal-foods.js';
 import {saveRecipe,searchRecipes} from '../src/personal-recipes.js';
 import {reportFood} from '../src/shared-foods.js';
-import {exportAccountData,deleteAccount,finishAccountDeletions} from '../src/account-data.js';
+import {deleteAccount,finishAccountDeletions} from '../src/account-data.js';
+import {exportAccount} from './helpers/account-export.mjs';
 import {sessionCookie} from '../src/dashboard-auth.js';
 import {CATALOG_TABLES,cloudflareD1,foodPlan,bindFoodDatabase,provisionFoodDatabase,migrateFoodCatalog,verifyFoodDatabase} from '../scripts/food-catalog-tools.mjs';
 import {parseConfig} from '../scripts/provision-user-shards.mjs';
@@ -93,7 +93,7 @@ test('new and legacy accounts search one catalogue by barcode; reports and share
 test('account export and resumable deletion cover food metadata without deleting another account or its private foods',async()=>{
   const f=setup();await seed(f);await migrateFoodCatalog({...f,core:'core',foods:'foods'});
   const a=await userDataEnvironment(f.env,user(3));
-  const data=await exportAccountData(a,user(3));assert.equal(data.tables.food_reports.length,1);assert.equal(data.tables.food_contributions.length,1);assert.equal(data.tables.recipe_contributions.length,1);
+  const data=await exportAccount(a,user(3));assert.equal(data.tables.food_reports.length,1);assert.equal(data.tables.food_contributions.length,1);assert.equal(data.tables.recipe_contributions.length,1);
   await deleteAccount(a,user(3),{budgetMs:0,chunkRows:1});
   for(let i=0;i<5&&count(f.core,'account_deletions');i++)await finishAccountDeletions(f.core,{databaseForUser:id=>deletionDatabase(f.env,id),chunkRows:1});
   assert.equal(count(f.foods,'food_reports'),0);assert.equal(count(f.foods,'recipe_contributions'),0);
@@ -175,8 +175,7 @@ test('ready routing fails closed on missing/aliased bindings or unknown state; c
 
 test('migration-aware authenticated API pauses food operations only, then serves the real shared catalogue after activation',async()=>{
   const f=setup();await seed(f);
-  const hooks=registerHooks({load(url,context,nextLoad){if(url.endsWith('/dashboard-client.js'))return {format:'module',source:'export default '+JSON.stringify(readFileSync(new URL(url),'utf8')),shortCircuit:true};return nextLoad(url,context);}});
-  let entrypoint;try{entrypoint=(await import('../src/entrypoint.js')).default;}finally{hooks.deregister();}
+  const entrypoint=(await import('../src/entrypoint.js')).default;
   _resetTenancyForTest();f.env.SESSION_SECRET='test-session-key';f.env.OWNER_EMAIL='owner@example.test';
   const cookie=(await sessionCookie(4,Math.floor(Date.now()/1000)+60,f.env.SESSION_SECRET)).split(';')[0];
   const request=(path,body)=>new Request('https://petrfitnessdata.eu'+path,{method:'POST',headers:{Cookie:cookie,Origin:'https://petrfitnessdata.eu','Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -195,7 +194,7 @@ test('remote canary cleanup is exact and provisioning preserves all 20 user data
   const config=parseConfig(read('wrangler.jsonc'));config.d1_databases.push(...Array.from({length:20},(_,i)=>({binding:'USER_DATA_'+String(i+1).padStart(3,'0'),database_id:'shard-'+i})));
   const plan=foodPlan(config),db={name:plan.name,uuid:'catalog',jurisdiction:'eu'};
   const generated=bindFoodDatabase(config,'',db);assert.equal(generated.d1_databases.length,22);assert.equal(generated.vars.FOOD_CATALOG_DB_ID,'catalog');assert.deepEqual(generated.routes,config.routes);
-  assert.notEqual(foodPlan(config,'staging').name,plan.name);
+  assert.throws(()=>foodPlan(config,'staging'),/Unsupported/);
   assert.throws(()=>bindFoodDatabase(config,'',{...db,uuid:plan.core.database_id}),/Duplicate/);
   let creates=0;
   const api={request:async(path,options)=>{if(path.startsWith('?'))return {result:[{name:plan.core.database_name,uuid:plan.core.database_id}]};if(options?.method==='POST'){creates++;assert.equal(JSON.parse(options.body).jurisdiction,'eu');return {result:db};}throw new Error('Unexpected request');}};

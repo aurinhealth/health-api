@@ -4,6 +4,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { getCookbook, getCookbookRecipeByPage, useCookbookDatabase, saveCookbook, _resetCookbookForTest } from "../src/cookbook.js";
 import { cookbookSql } from "../scripts/import-cookbook.mjs";
+import { serverSource } from "./helpers/server-source.mjs";
 
 const migration = readFileSync(new URL("../migrations/0013_cookbook_and_consents.sql", import.meta.url), "utf8");
 const sample = {
@@ -61,7 +62,7 @@ test("the owner's upload is stored and used at once; anything else is refused", 
   assert.equal((await getCookbookRecipeByPage(14)).title, "Kuře s rýží");
   await assert.rejects(saveCookbook(db, { recipes: [{ page: "x" }] }), /Expected/);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM cookbook").get().n, 1);
-  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const entry = serverSource();
   assert.match(entry, /\/app\/api\/admin\/cookbook"[\s\S]{0,120}if \(!user\.isOwner\)/);
 });
 

@@ -93,14 +93,6 @@ Nastavení → Předplatné ukazuje podmínky pilotu a plánovanou tabulku Free/
 Během pilotu jsou všechny dostupné funkce zdarma, bez karty a účtování.
 Cena ani limity nejsou vymyšlené. Platební brána není implementovaná.
 
-Při prvním použití AI funkce během pilotu (asistent, hodnocení, úprava
-posilovny, jídlo z fotky, dohledání potraviny) jednou vyskočí okno s porovnáním
-Free a AI a tlačítkem Předplatit AI, které zatím jen řekne, že platby nejsou
-spuštěné. Že ho uživatel viděl, je uložené u účtu (`dashboard_profile` řádek 4,
-`POST /app/api/subscription/intro`), takže se neukáže znovu ani na jiném
-zařízení. Po zapnutí `AI_PAYWALL_ENABLED` se stejné okno ukáže pokaždé, když
-zamčená funkce vrátí 402.
-
 `AI_PAYWALL_ENABLED` je standardně vypnutý. Oprávnění ke všem voláním OpenAI
 se kontroluje centrálně na serveru. Pro budoucí zapnutí je nutné nejprve doplnit
 platby, webhooky a provozní limity. Po výslovném nastavení na `true` je pro AI
@@ -121,7 +113,10 @@ tréninkové generátory, katalogy a ruční evidence fungují bez OpenAI.
 ## Vlastní data a smazání účtu
 
 Nastavení → Účet nabízí stažení všech dat účtu (`GET /app/api/account/export`,
-JSON ze všech osobních tabulek bez klíčů připojení) a smazání účtu
+NDJSON ze všech osobních tabulek bez klíčů připojení: první řádek je hlavička
+`{"format":"loadwise-export","version":2,"exportedAt":…}`, pak jeden řádek
+`{"table":…,"row":…}` na záznam; server ho streamuje po stránkách 5000 řádků,
+takže ani milion záznamů nezůstane v paměti najednou) a smazání účtu
 (`POST /app/api/account/delete` s potvrzením `SMAZAT`, `account-data.js`).
 Smazání vrátí Googlu souhlas k Google Health, odstraní řádky účtu ze všech
 osobních tabulek (`PERSONAL_TABLES`) i samotný účet a odhlásí. Znovu se

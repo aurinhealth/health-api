@@ -4,9 +4,11 @@
 // user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
 // (default 5 USD a month). How it is spread over the month is up to the user;
 // a daily limit applies only when AI_DAILY_LIMIT_USD is set. 0 in either turns
-// AI off for everyone but the owner. The owner is never limited.
+// AI off for everyone but the owner. The owner is never limited. The App Review
+// account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
+import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -30,8 +32,9 @@ export function aiDailyLimitUsd(env) {
 export const DEFAULT_AI_MONTHLY_LIMIT_USD = 5;
 export function aiMonthlyLimitUsd(env) {
   if (env.USER_IS_OWNER === true) return null;
-  const limit = n(env.AI_MONTHLY_LIMIT_USD);
-  return limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
+  const limit = n(env.AI_MONTHLY_LIMIT_USD), base = limit != null && limit >= 0 ? limit : DEFAULT_AI_MONTHLY_LIMIT_USD;
+  // The App Review demo account gets a small fixed budget (app-review.js).
+  return isReviewAccount(env) ? Math.min(base, REVIEW_AI_MONTHLY_LIMIT_USD) : base;
 }
 
 const tracked = env => Boolean(env?.DB && Number(env.USER_ID) > 0);
@@ -81,15 +84,25 @@ export async function assertAiAllowance(env) {
 // user therefore has at most AI_PARALLEL_CALLS calls running at once: a running
 // call is a 'pending' row in ai_usage, claimed in one statement (D1 runs them
 // one at a time) and removed when the call ends. A row left by a Worker that
-// died counts for AI_PENDING_MINUTES at most.
+// died counts for AI_PENDING_MINUTES at most. A call over the limit waits in
+// line for a free slot (five food photos in a row, the coach's texts beside
+// them) and is refused only after AI_SLOT_WAIT_MS.
 export const AI_PARALLEL_CALLS = 3;
+export const AI_SLOT_WAIT_MS = 90000;
 const AI_PENDING_MINUTES = 5;
-export async function claimAiSlot(env) {
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800 } = {}) {
   if (!tracked(env) || (aiMonthlyLimitUsd(env) == null && aiDailyLimitUsd(env) == null)) return async () => {};
   await ensureAiUsage(env.DB);
-  const claimed = await env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, 'pending', 'pending', 0
+  const claim = () => env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, 'pending', 'pending', 0
     WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
     .bind(env.USER_ID, localToday(), env.USER_ID, AI_PARALLEL_CALLS).first();
+  const deadline = Date.now() + Math.max(0, waitMs);
+  let claimed = await claim();
+  while (!claimed && Date.now() < deadline) {
+    await pause(Math.min(pollMs, Math.max(0, deadline - Date.now())));
+    claimed = await claim();
+  }
   if (!claimed) throw limitError(L("Ještě běží jiné dotazy na AI. Zkus to za chvíli.", "Other AI requests are still running. Try again in a moment."));
   return () => env.DB.prepare("DELETE FROM ai_usage WHERE id = ? AND user_id = ? AND model = 'pending'").bind(claimed.id, env.USER_ID).run().catch(error => console.error("AI slot not released", error?.message || error));
 }

@@ -1,6 +1,6 @@
 # health-api
 
-Cloudflare Worker za aplikací **Loadwise** (`https://petrfitnessdata.eu`): dashboard (`/app`), trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
+Cloudflare Worker za aplikací **Loadwise** pro iPhone (`ios-native/`, API na `https://petrfitnessdata.eu/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
 
 ## Lokálně
 
@@ -17,7 +17,7 @@ Na produkci se nasazuje jen přes GitHub Actions (`.github/workflows/deploy-work
 
 ## Jak teče požadavek
 
-`src/entrypoint.js` je vstupní bod Workeru. Řeší přihlášení (`dashboard-auth.js`), uživatele (`tenancy.js`), dashboard API (`/app/api/*`) a noční plán posilovny z GitHub Actions (`/automation/strength`). Co nezpracuje sám, posílá dál:
+`src/entrypoint.js` je vstupní bod Workeru. Řeší přihlášení (`dashboard-auth.js`), uživatele (`tenancy.js`), API aplikace (`/app/api/*`) a noční plán posilovny z GitHub Actions (`/automation/strength`). Co nezpracuje sám, posílá dál:
 
 ```
 entrypoint.js → strength-gateway.js → index.js
@@ -26,7 +26,7 @@ entrypoint.js → strength-gateway.js → index.js
 - `strength-gateway.js`: tvorba a uložení plánu posilovny (`/strength/generate-plan`, `/strength/write-plan`) a `/food/recommend` (návrhy jídel k osobnímu cíli z `food-recommend.js`).
 - `index.js`: původní API: synchronizace Google Health a Intervals.icu, `/analysis/daily`, `/analysis/energy`, deník jídla, cron.
 
-Vzhled dashboardu: barvy rozhraní jsou tokeny v `src/design-system.js` (načítá se jako poslední vrstva CSS), ikony jsou jedna SVG sada v `src/icons.js`. Ostatní odstíny se z tokenů míchají, např. `color-mix(in srgb,var(--text) 12%,var(--bg))`; barvu natvrdo pro plochy, čáry a šedé texty test `tests/design-tokens.test.mjs` nepustí. Světlý vzhled jen předefinuje tokeny (`:root[data-theme="light"]` a stejná sada pro systémové nastavení). Bez volby se vzhled řídí nastavením zařízení. Přepínač Světlý / Tmavý v horní liště nebo Nastavení ho přepíše přes cookie `lw-theme`, kterou stránka čte ještě před vykreslením; volba stejného vzhledu, jaký má zařízení, cookie smaže. Barvy dat v grafech (makra, fáze spánku, zóny) zůstávají u grafů.
+Vzhled veřejného webu: barvy a velikosti písma jsou tokeny v `src/design-system.js` (světlá paleta aplikace, web nemá přepínač vzhledu), ikony SVG v `src/icons.js`.
 
 Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`, ve světlé paletě aplikace (`ios-native/Loadwise/Design/Palette.swift`). Telefon na úvodní stránce je nakreslený v HTML podle obrazovky Dnes, takže web nepotřebuje snímky obrazovky; v `public/site/` je jen písmo Newsreader a obrázky pro sdílení `og.png` a `og-en.png`. Úvodní stránka se mění spolu s aplikací (pravidlo v `CLAUDE.md`). Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
 
@@ -44,7 +44,7 @@ Hlavní sport, sportovní cíl a závod jsou volitelné. Výchozí zaměření j
 
 První import Intervals.icu načítá samostatně aktivity, kalendář a váhu z wellness za poslední rok. Obnovit načte i váhu za posledních 30 dní při propojení samotného Intervals.icu. Váha se ukládá přímo v aplikaci, i pokud zápis do Google Health není dostupný. Jedna neúspěšná část importu neblokuje ostatní; stav importu uvede neúspěšnou část a dostupná data se zobrazí i po částečném importu. Roční historie aktivit se ukládá dávkově; nahrazení kalendáře je atomické.
 
-**Regenerace, spánek a zátěž** počítá jeden model v `src/recovery-model.js` pro dashboard i trenéry (HRV jako lnRMSSD, klidový tep a spánek proti osobní 60denní baseline; potřeba spánku podle NSF; celodenní zátěž z tepových zón Google Health jako TRIMP). Klient nese jeho přesnou kopii: po změně modulu spusť `node scripts/sync-recovery-model.mjs`, test `tests/recovery-model.test.mjs` hlídá shodu. Metody a zdroje ke každé funkci jsou v `docs/methodology.md`. Jestli index regenerace u konkrétního sportovce sedí na průběh tréninků, ukáže `GET /app/api/recovery-validation` (přes více sportovců `scripts/recovery-validation-rmcorr.mjs`).
+**Regenerace, spánek a zátěž** počítá jeden model v `src/recovery-model.js` pro aplikaci i trenéry (HRV jako lnRMSSD, klidový tep a spánek proti osobní 60denní baseline; potřeba spánku podle NSF; celodenní zátěž z tepových zón Google Health jako TRIMP). Metody a zdroje ke každé funkci jsou v `docs/methodology.md`. Jestli index regenerace u konkrétního sportovce sedí na průběh tréninků, ukáže `GET /app/api/recovery-validation` (přes více sportovců `scripts/recovery-validation-rmcorr.mjs`).
 
 **Apple Health** nemá webové API. Nativní aplikace (`ios-native/`) čte HealthKit v iPhonu (`App/AppleHealth.swift`): uživatel v Nastavení → Zdroje dat vybere oblasti (spánek, tréninky, srdce, pohyb, dech, tělo), telefon data sečte (kroky a energie po hodinách, jedna hodnota denně, minuty v tepových zónách, noci s fázemi, tréninky s tepem) a pošle je na `POST /app/api/health/apple` (`src/apple-health.js`). Řádky mají `source_family='apple-health'` a stejný tvar jako Google Health, takže je čte regenerace, spánek, zátěž, aktivity i návrhy profilu. Kde Apple Health poslal daný typ dat za daný den, řádky Google Health téhož typu a dne jsou `record_role='duplicate'` (Google Health v iPhonu importuje Apple Health, data by se počítala dvakrát). Odpojení zastaví čtení, uložená data zůstanou. Bez nativní aplikace přicházejí data z iPhonu a Apple Watch přes Intervals.icu (aplikace IntervalsWellnessSync, Intervals Companion nebo Health Sync zapisují wellness do Intervals) nebo přes aplikaci Google Health na iPhonu (import z Apple Health). Noci, které Google Health nemá, doplní `/app/api/sleep` a trenér z wellness Intervals.icu (`intervals-sleep.js`: délka a skóre spánku, bez fází). Návod je v Nastavení u připojení.
 
@@ -66,14 +66,14 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 | Název | K čemu |
 | --- | --- |
 | `STRENGTH_API_KEY` | API klíč správce pro vlastní klienty API (hlavička `Authorization: Bearer`). Přihlášení, vnitřní volání ani šifrování na něm nezávisí. Jen připojení uložená před `CONNECTION_KEY` se dešifrují klíčem z něj odvozeným, dokud je cron nepřešifruje. |
-| `SESSION_SECRET` | Podpis přihlášení do dashboardu. Povinný: bez něj se nikdo nepřihlásí. Změna jednou odhlásí všechny uživatele. |
+| `SESSION_SECRET` | Podpis přihlášení do aplikace. Povinný: bez něj se nikdo nepřihlásí. Změna jednou odhlásí všechny uživatele. |
 | `CONNECTION_KEY` | Šifrovací klíč uložených připojení uživatelů (Google, Intervals.icu), náhodný řetězec o délce aspoň 32 znaků. Připojení uložená dřív cron do 5 minut přešifruje (`connection-secrets.js`). Neměň ho ani nemaž: všichni by se museli připojit znovu. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Přihlášení přes Google a připojení Google Health. |
-| `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Volitelně přihlášení přes Apple: Services ID, Team ID, Key ID a obsah souboru `.p8`. Bez nich se tlačítko Apple nezobrazí. Nastavení popisuje [docs/multi-user-setup.md](docs/multi-user-setup.md). |
-| `APPLE_DOMAIN_ASSOCIATION` | Jen když ho Apple při nastavení domény chce: obsah souboru, který aplikace vrátí na `/.well-known/apple-developer-domain-association.txt`. |
+| `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` | Volitelně: Team ID, Key ID a obsah souboru `.p8`. Přihlášení přes Apple v aplikaci funguje i bez nich; s nimi server při smazání účtu odvolá přístup u Apple. |
 | `APNS_KEY_P8`, `APNS_KEY_ID` | Volitelně ranní push s připraveností do aplikace v iPhonu (`push.js`): obsah souboru `.p8` klíče s *Apple Push Notifications service (APNs)* a jeho Key ID; Team ID bere z `APPLE_TEAM_ID`. App ID `eu.petrfitnessdata.loadwise.native` musí mít zapnutou schopnost *Push Notifications*. Bez nich se nic neposílá. `APNS_SANDBOX=1` posílá na vývojový APNs. |
 | `EMAIL_FROM` | Volitelně přihlášení kódem z e-mailu: adresa odesílatele na doméně přidané v Cloudflare Email Service (např. `noreply@petrfitnessdata.eu`). Bez ní se přihlášení kódem nezobrazí. Postup v [docs/multi-user-setup.md](docs/multi-user-setup.md). |
 | `EMAIL_CODES_PER_DAY` | Volitelný denní rozpočet přihlašovacích kódů poslaných e-mailem všem dohromady (výchozí 500). Jedna adresa dostane nejvýš jeden kód za minutu a 10 za den, jeden klient (hash IP adresy) začne nejvýš 5 přihlášení za minutu a 30 za hodinu (`ip-rate-limit.js`). |
+| `APP_REVIEW_EMAIL`, `APP_REVIEW_CODE`, `APP_REVIEW_UNTIL` | Volitelně účet pro Apple App Review (`app-review.js`): adresa `APP_REVIEW_EMAIL` dostane po „Poslat kód“ místo náhodného pevný kód `APP_REVIEW_CODE` (šest číslic, secret), ale jen do konce dne `APP_REVIEW_UNTIL` (datum `RRRR-MM-DD`, UTC, např. `2026-11-30`). Bez `APP_REVIEW_UNTIL` (nebo po něm) pevný kód neplatí a adresa dostane náhodný kód jako kdokoli jiný. Účet je vždy ukázkový: server mu odmítne připojení Google, Intervals.icu a Strava i posílání dat do nich (403 `demo_account`), AI má měsíčně nejvýš 0,50 USD; Apple Health a zbytek aplikace fungují. Adresa musí mít do aplikace přístup (pozvánka). |
 | `INTERVALS_API_KEY` | Intervals.icu správce (ostatní uživatelé si klíč ukládají v aplikaci). |
 | `INTERVALS_CLIENT_ID`, `INTERVALS_CLIENT_SECRET` | Volitelné: aplikace zaregistrovaná u Intervals.icu. S nimi se Intervals.icu připojuje jedním tlačítkem (OAuth, `intervals-oauth.js`), bez nich vložením osobního API klíče. |
 | `OPENAI_API_KEY`, `OPENAI_MODEL` | Asistent trenéra a čtení fotek jídla (volitelně `OPENAI_VISION_MODEL`, jinak `OPENAI_LIGHT_MODEL`). |
@@ -81,7 +81,7 @@ Nastavují se v Cloudflare (`wrangler secret put NAZEV`), ne v repozitáři.
 | `AI_DAILY_LIMIT_USD` | Volitelný denní limit útraty za AI na jednoho uživatele v USD (výchozí žádný, platí jen měsíční limit; `0` vypne AI všem kromě správce). Správce limit nemá. |
 | `OWNER_EMAIL` | Správce aplikace (ve `wrangler.jsonc`). |
 
-Přihlášení: Google (`google-login.js`), přístupové klíče (passkeys, `passkeys.js` a `webauthn.js`, bez knihovny), volitelně jednorázový kód z e-mailu (`email-login.js`, Cloudflare Email Service) a Apple (`apple-login.js`). Všechny končí stejnou podepsanou cookie (`dashboard-auth.js`) a pustí dovnitř jen existující uživatele, pozvané adresy a správce.
+Přihlášení: Google (`google-login.js`), přístupové klíče (passkeys, `passkeys.js` a `webauthn.js`, bez knihovny), volitelně jednorázový kód z e-mailu (`email-login.js`, Cloudflare Email Service) a Apple v aplikaci (`apple-login.js`). Všechny končí stejnou podepsanou cookie (`dashboard-auth.js`) a pustí dovnitř jen existující uživatele, pozvané adresy a správce.
 
 Google OAuth: přihlášení žádá jen `openid email` (`google-login.js`), připojení jen scopes Google Health (`google-scopes.js`). Před stránkou souhlasu Google aplikace sama ukáže, jaká data čte a zapisuje, k čemu a kdo je dostane, a chce zaškrtnutý souhlas (vyžadují to zásady Google Health API); přímá návštěva `/oauth/google` vrátí uživatele na tento dialog. Tlačítko „Rozšířit oprávnění Google“ v Nastavení si zvlášť vyžádá zápis váhy (`googlehealth.health_metrics_and_measurements.writeonly`) a datum narození (`user.birthday.read`, People API); obojí musí být povolené na OAuth consent screen a People API zapnuté v Google Cloud. Udělená oprávnění se ukládají k připojení uživatele. Na souhlasové obrazovce Googlu jde jednotlivá oprávnění odškrtnout: token se pak žádá jen pro udělená (`healthScopes`), data bez oprávnění zůstanou prázdná a Nastavení → Propojení ukáže, co chybí, s tlačítkem „Povolit chybějící“.
 
@@ -95,17 +95,6 @@ Rychlost: Worker má zapnuté Smart Placement (`wrangler.jsonc`), takže běží
 
 GitHub Actions potřebují `CLOUDFLARE_API_TOKEN` a `CLOUDFLARE_ACCOUNT_ID`; automatizace se k API přihlašují tokenem GitHub OIDC.
 
-## Testovací kopie (staging)
-
-Na https://staging.petrfitnessdata.eu/app běží kopie aplikace s vlastní databází `health-data-staging` (`env.staging` ve `wrangler.jsonc`). Workflow `deploy-staging.yml` na ni nasadí každý push do otevřeného pull requestu (nebo ručně vybranou větev), takže se změna dá vyzkoušet před „mergni“. Živá verze se nasazuje dál jen z `main`.
-
-- Prázdná databáze dostane strukturu živé databáze (bez dat) ze `staging/schema.sql`, potom běží migrace jako v produkci.
-- Data: `scripts/copy-owner-data.mjs` jednou zkopíruje data správce (`OWNER_EMAIL`) ze živé databáze, kterou jen čte. Nekopíruje přihlašovací klíče ke Googlu a Intervals.icu, stav synchronizace ani data pozvaných uživatelů. Znovu se kopíruje jen při ručním spuštění workflow s volbou `refresh_data` (přepíše, co v kopii je).
-- Každá stránka má dole štítek „TEST · staging“ a hlavičku `noindex`.
-- Nemá cron, sama nic nesynchronizuje do Google ani Intervals.icu.
-- Secrets se nastavují zvlášť u Workeru `health-api-staging` (v Cloudflare nebo `wrangler secret put NAZEV --env staging`). Pro přihlášení stačí `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (stejné jako v produkci) a `SESSION_SECRET` (u stagingu vlastní, libovolný dlouhý náhodný řetězec; stejně tak `STRENGTH_API_KEY` a `CONNECTION_KEY`, pokud je nastavíš); v Google Cloud musí OAuth klient mít navíc přesměrování `https://staging.petrfitnessdata.eu/auth/google/callback` a `https://staging.petrfitnessdata.eu/oauth/google/callback`. Pro asistenta a fotky jídla volitelně `OPENAI_API_KEY`.
-- `INTERVALS_API_KEY` ani připojení Google Health ve stagingu raději nenastavuj: pracují se skutečnými účty, takže by se zápisy (tréninky, váha) propsaly i tam.
-
 ## Aplikace pro iPhone
 
 `ios-native/` je nativní aplikace (SwiftUI). GitHub ji sestaví bez Macu (`ios-native.yml`: testy, snímky obrazovek a nepodepsaná `.ipa` pro Sideloadly) a s placeným účtem Apple nahraje na TestFlight (`ios-testflight.yml`). Postup je v `ios-native/README.md`. Přihlášení přes Google probíhá v Safari a do aplikace se vrací přes `loadwise://auth` s krátkodobým tokenem, který uplatní jen aplikace, jež přihlášení spustila (`/auth/app/session` v `src/google-login.js`).
@@ -117,7 +106,7 @@ Kontrola verze (`src/app-version.js`): nativní aplikace posílá s každým po�
 - Cloudflare spouští `src/main.js`: aplikaci z `entrypoint.js` za přesměrováním na HTTPS a bezpečnostními hlavičkami (`web-security.js`: HSTS, zákaz vložení do cizí stránky, `nosniff`, `Referrer-Policy`). Hlavičku, kterou si odpověď nastaví sama, nepřepisuje.
 - Repozitář je veřejný, a s ním i logy GitHub Actions. Workflow proto z odpovědí API vypisují jen souhrn ze `scripts/ci-summary.mjs` (stav, zpráva, počty), nikdy celé tělo, a nic necommitují zpět. Hlídá to `tests/ci-summary.test.mjs`.
 - Zápis dat patří do POST (nebo PUT, DELETE), ne do GET: odkaz z cizího webu je GET a cookie přihlášení s sebou nese. Proto se i synchronizace (`/sync/google`, `/sync/intervals`) spouští jen přes POST.
-- Každý zápis s cookie přihlášení (cokoli kromě GET, HEAD a OPTIONS) musí přijít ze stránky téže adresy (hlavička `Origin`), jinak vrací 403 (`foreignOriginChange` v `dashboard-auth.js`, volá se před všemi cestami). SameSite=Lax nestačí: stránky ze staging.petrfitnessdata.eu prohlížeč bere jako stejný web a cookie živé aplikace jim přidá.
+- Každý zápis s cookie přihlášení (cokoli kromě GET, HEAD a OPTIONS) musí přijít ze stránky téže adresy (hlavička `Origin`), jinak vrací 403 (`foreignOriginChange` v `dashboard-auth.js`, volá se před všemi cestami). SameSite=Lax nestačí: stránky z jiných subdomén petrfitnessdata.eu prohlížeč bere jako stejný web a cookie živé aplikace jim přidá.
 - Každý klíč má jednu roli: `SESSION_SECRET` podepisuje přihlášení, `CONNECTION_KEY` šifruje připojení uživatelů (navíc svázaná s uživatelem a službou), `STRENGTH_API_KEY` je klíč správce pro API. Vrstvy aplikace se uvnitř Workeru volají s náhodným tokenem, který z Workeru nikdy neodchází (`internal-auth.js`). Nasazení živé i testovací verze se zastaví dřív, než cokoli změní, když Worker nemá `SESSION_SECRET` (`scripts/require-secrets.mjs`).
 - Aplikace nemá žádný vstup pro cizí AI: připojení ChatGPT (OAuth na `/authorize` a `/token`) i MCP server (`/mcp`) jsou odstraněné.
 

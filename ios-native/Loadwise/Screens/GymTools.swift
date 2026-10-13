@@ -290,7 +290,7 @@ struct GymBuilderView: View {
 
             if focus == "muscles" {
                 Card {
-                    Text(muscles.isEmpty ? L10n.tr("Klepni na partie, které chceš procvičit (1 až 5).") : L10n.f("Vybráno %@ z 5", String(muscles.count)))
+                    Text(L10n.f("Vybráno %@ z 5", String(muscles.count)))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     BodyMap(selected: muscles, onTap: toggle, height: 280)
                     ChipFlow(items: BodyFigure.muscles.map { $0.id }, label: BodyFigure.label, isOn: { muscles.contains($0) }, toggle: toggle)
@@ -347,8 +347,6 @@ struct GymBuilderView: View {
                 }
                 .disabled(catalog.isEmpty || busy != nil)
                 .padding(.top, 4)
-                Text("Cvik posuneš, nahradíš nebo odebereš přes ⋯, nový zařadím podle náročnosti. Nabídnu jen to, co máš ve vybavení.")
-                    .font(Typo.caption).foregroundStyle(Palette.faint).fixedSize(horizontal: false, vertical: true)
             }
             if let rationale = p.rationale {
                 Text(rationale).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 12)
@@ -597,8 +595,6 @@ struct EquipmentView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Posilovna · vybavení").padding(.top, 24)
                 Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                Text("Ulož si víc míst, každé má vlastní vybavení. Plán počítá s tím, které je vybrané.")
-                    .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 6)
 
                 VStack(spacing: 10) {
                     ForEach(places) { place in
@@ -660,7 +656,7 @@ struct EquipmentView: View {
         VStack(alignment: .leading, spacing: 0) {
             SectionLabel(text: "Poznat z fotky nebo webu").padding(.top, 26)
             Card {
-                PhotosPicker(selection: $photos, maxSelectionCount: 4, matching: .images) {
+                PhotosPicker(selection: $photos, maxSelectionCount: 8, matching: .images) {
                     Label(L10n.tr(busy == "photo" ? "Čtu fotky…" : "Vybrat fotky posilovny"), systemImage: "photo.on.rectangle.angled")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 44)

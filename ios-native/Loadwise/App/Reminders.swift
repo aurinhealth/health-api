@@ -57,8 +57,7 @@ enum Reminders {
 
     /// 450 → "7:30".
     static func clock(_ minute: Int) -> String {
-        let m = ((minute % 1440) + 1440) % 1440
-        return String(format: "%d:%02d", m / 60, m % 60)
+        ClockText.format(minutes: minute)
     }
 
     /// The meals of the day, each with its own reminder (off until chosen,
@@ -110,7 +109,7 @@ enum Reminders {
                 let remind = (at - offset + 1440) % 1440
                 // A bedtime after midnight (00:40) reminds at 00:10 tonight, which is "earlier" than now.
                 add(center, "bedtime", at: remind, title: offset >= 60 ? L10n.tr("Za hodinu do postele") : L10n.f("Za %@ min do postele", String(offset)),
-                    body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), bed), afterMidnight: remind < 6 * 60)
+                    body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
             }
         }
         // Today's workouts not done yet (on the chosen days): an hour before

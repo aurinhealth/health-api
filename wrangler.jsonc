@@ -2,13 +2,6 @@
   "name": "health-api",
   // main.js is entrypoint.js behind HTTPS and security headers (web-security.js).
   "main": "src/main.js",
-  "rules": [
-    {
-      "type": "Text",
-      "globs": ["**/dashboard-client.js"],
-      "fallthrough": false
-    }
-  ],
   "compatibility_date": "2026-09-15",
   // AsyncLocalStorage (node:async_hooks) holds the user's language during a
   // request, see src/lang.js.
@@ -19,9 +12,8 @@
   "placement": {
     "mode": "smart"
   },
-  // Local development of an environment with a route (wrangler dev --env staging)
-  // shows the Worker the route's address; https, as in production, so the
-  // HTTPS redirect in web-security.js does not send the page back to itself.
+  // Local development uses https, as in production, so the HTTPS redirect in
+  // web-security.js does not send the page back to itself.
   "dev": {
     "upstream_protocol": "https"
   },
@@ -54,6 +46,14 @@
       "migrations_dir": "migrations"
     }
   ],
+  // The read-only world food catalogue (src/world-foods.js), uploaded with
+  // scripts/upload-world-foods.mjs; without current.json in it search skips it.
+  "r2_buckets": [
+    {
+      "binding": "FOOD_CATALOG_R2",
+      "bucket_name": "loadwise-food-catalog"
+    }
+  ],
   // Cloudflare Email Service: sign-in codes and notices about new passkeys. Nothing is sent
   // until petrfitnessdata.eu is onboarded in Email Service → Email Sending and the Worker
   // has the EMAIL_FROM secret (the sender address); until then e-mail sign-in stays hidden.
@@ -70,51 +70,8 @@
     "USER_DATA_SHARD_COUNT": "20",
     "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
     // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
-    "STRAVA_CLIENT_ID": "183664"
-  },
-  "env": {
-    // Test copy for trying changes before they go live: its own Worker
-    // (health-api-staging) and its own database, so nothing done there can
-    // touch live data. No cron jobs, so it never syncs to Google or Intervals
-    // on its own. Deployed by .github/workflows/deploy-staging.yml.
-    "staging": {
-      "name": "health-api-staging",
-      // Under petrfitnessdata.eu, so Google sign-in needs only two more
-      // redirect URIs on the existing OAuth client, no new authorized domain.
-      "routes": [
-        {
-          "pattern": "staging.petrfitnessdata.eu",
-          "custom_domain": true
-        }
-      ],
-      "workers_dev": false,
-      "placement": {
-        "mode": "smart"
-      },
-      "triggers": {
-        "crons": []
-      },
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "health-data-staging",
-          "database_id": "6fbc690b-c776-42c9-b052-8f4ee44669fd",
-          "migrations_dir": "migrations"
-        }
-      ],
-      // Bindings are not inherited: the test copy sends its own sign-in codes.
-      "send_email": [
-        { "name": "EMAIL" }
-      ],
-      "vars": {
-        "USER_DATA_ROUTING": "true",
-        "FOOD_CATALOG_ROUTING": "true",
-        "USER_DATA_SHARD_COUNT": "2",
-        "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
-        "ENVIRONMENT": "staging",
-        "APP_ORIGIN": "https://staging.petrfitnessdata.eu",
-        "STRAVA_CLIENT_ID": "183664"
-      }
-    }
+    "STRAVA_CLIENT_ID": "183664",
+    // Last day (UTC) the fixed App Review sign-in code works; move it before each review.
+    "APP_REVIEW_UNTIL": "2026-11-30"
   }
 }

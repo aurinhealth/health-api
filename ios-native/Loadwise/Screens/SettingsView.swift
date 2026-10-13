@@ -132,6 +132,11 @@ struct SettingsMenu: View {
                                 value: GymRestSettingsView.label(restSets) + " / " + GymRestSettingsView.label(restExercises))
                 }
                 SettingsDivider()
+                NavigationLink { HeartRateSensorView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Snímač tepu",
+                                value: HeartRateSensor.shared.savedName)
+                }
+                SettingsDivider()
                 NavigationLink { MealSlotsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
                 }
@@ -215,7 +220,7 @@ struct SettingsMenu: View {
     }
 
     private var sleepValue: String? {
-        if let wake = store.profile["wakeTime"]?.string { return L10n.f("budík %@", wake) }
+        if let wake = store.profile["wakeTime"]?.string { return L10n.f("budík %@", ClockText.format(wake)) }
         return store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" }
     }
 

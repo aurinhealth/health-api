@@ -53,7 +53,8 @@ enum HealthCategory: String, CaseIterable, Identifiable {
                     HKQuantityType(.cyclingPower), HKQuantityType(.runningPower), HKQuantityType(.cyclingCadence)]
         case .heart:
             return [HKQuantityType(.heartRate), HKQuantityType(.restingHeartRate), HKQuantityType(.heartRateVariabilitySDNN),
-                    HKSeriesType.heartbeat(), HKQuantityType(.vo2Max)]
+                    HKSeriesType.heartbeat(), HKQuantityType(.vo2Max), HKQuantityType(.walkingHeartRateAverage),
+                    HKQuantityType(.heartRateRecoveryOneMinute)]
         case .activity:
             return [HKQuantityType(.stepCount), HKQuantityType(.activeEnergyBurned)]
         case .breathing:
@@ -310,9 +311,15 @@ final class HealthReader: @unchecked Sendable {
         return (try? await store.requestAuthorization(toShare: [], read: read)) != nil
     }
 
-    /// Not what Loadwise wrote itself (AppleHealthExport): the server has it already.
+    /// Not what Loadwise wrote itself from its own records (AppleHealthExport,
+    /// marked with a loadwise: sync identifier): the server has it already.
+    /// A workout recorded live in Režim tréninku (LiveWorkout) has no such
+    /// mark and is read like a watch's, so its calories and heart rate count.
     private var notOurs: NSPredicate {
-        NSCompoundPredicate(notPredicateWithSubpredicate: HKQuery.predicateForObjects(from: HKSource.default()))
+        NSCompoundPredicate(notPredicateWithSubpredicate: NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(from: HKSource.default()),
+            HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier)
+        ]))
     }
 
     private func stamp(_ date: Date) -> String { iso.string(from: date) }
@@ -355,6 +362,8 @@ final class HealthReader: @unchecked Sendable {
             let start = from(90)
             rest += await daily(.restingHeartRate, unit: .count().unitDivided(by: .minute()), type: "daily-resting-heart-rate", prefix: "rhr", from: start, to: now)
             rest += await daily(.vo2Max, unit: HKUnit(from: "ml/kg*min"), type: "daily-vo2-max", prefix: "vo2", from: start, to: now)
+            rest += await daily(.walkingHeartRateAverage, unit: .count().unitDivided(by: .minute()), type: "daily-walking-heart-rate", prefix: "whr", from: start, to: now)
+            rest += await daily(.heartRateRecoveryOneMinute, unit: .count().unitDivided(by: .minute()), type: "daily-heart-rate-recovery", prefix: "hrr", from: start, to: now)
             rest += await dailyHRV(from: start, to: now)
             rest += await zones(from: from(30), to: now)
         }

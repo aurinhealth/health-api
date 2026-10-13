@@ -7,9 +7,9 @@ import { mealConsumedAt } from "../src/food-log.js";
 import { buildCoachCouncil } from "../src/coach-engine.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
+import { serverSource } from "./helpers/server-source.mjs";
 
-const client = readFileSync(new URL("../src/dashboard-client.js", import.meta.url), "utf8");
-const entrypoint = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+const entrypoint = serverSource();
 
 async function setup(type = "VirtualRide") {
   const raw = createD1();
@@ -60,9 +60,8 @@ test("a meal sent later from the phone keeps the time it was logged", () => {
   assert.equal(mealConsumedAt("2099-01-01", "dinner", "7pm"), "2099-01-01T19:00:00");
 });
 
-test("a day ahead has no coach notes and its timeline uses only notes of that day", () => {
+test("a day ahead has no coach notes", () => {
   assert.match(entrypoint, /if\(date&&!validDay\(date\)\)return Response\.json\(\{status:'ok',reflections:\[\]\}/);
-  assert.match(client, /\(state\.reflections\?\.\[selectedHistoryDate\]\|\|\[\]\)\.filter\(r=>!r\.date\|\|r\.date===selectedHistoryDate\)/);
 });
 
 test("the endurance coach names the purpose, the steady watts, the cadence work and the heart-rate cap", () => {
@@ -85,8 +84,3 @@ test("intervals are a main set in watts of the indoor FTP; a day ahead has no mo
   assert.equal(council.morningSummary, null);
 });
 
-test("picking a day in the training card or moving the week selects that day for the whole screen", () => {
-  assert.match(client, /if\(s\)\{pickTodayDay\(s\.dataset\.strip\);return\}/);
-  assert.match(client, /if\(state\.todayPick<=lastSelectableDay\(\)&&state\.todayPick!==selectedHistoryDate\)await selectDay\(state\.todayPick\)/);
-  assert.match(client, /const STATUS_LABELS=\{active:'Trénink',/);
-});

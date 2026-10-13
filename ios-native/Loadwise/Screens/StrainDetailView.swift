@@ -1,7 +1,7 @@
 import Charts
 import SwiftUI
 
-/// Zátěž from Today: the day's strain on a dial with the plan, what it is
+/// Námaha from Today: the day's strain on a dial with the plan, what it is
 /// made of, and fitness and fatigue with the forecast to the end of the week.
 struct StrainDetailView: View {
     @Environment(AppModel.self) private var model
@@ -54,7 +54,7 @@ struct StrainDetailContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Zátěž").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+            Text("Námaha").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             dial
             if let target = today.strain.target {
                 SectionLabel(text: "Dnešní cíl").padding(.top, 30)
@@ -141,7 +141,7 @@ struct StrainDetailContent: View {
     }
 
     private func meta(_ s: WeekSession) -> String {
-        [s.time, s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
+        [ClockText.format(optional: s.time), s.minutes.map { Fmt.duration($0) }, s.tss.map { Fmt.int($0) + " TSS" }].compactMap { $0 }.joined(separator: " · ")
     }
 
     private var movementMeta: String {
@@ -204,8 +204,9 @@ struct StrainDial: View {
             .frame(width: 150)
             .offset(y: 4)
         }
+        .dynamicTypeSize(...DynamicTypeSize.denseCap)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.tr("Zátěž") + " " + Fmt.decimal(score) + ", " + subtitle))
+        .accessibilityLabel(Text(verbatim: L10n.tr("Námaha") + " " + Fmt.decimal(score) + ", " + subtitle))
     }
 
     private var subtitle: String {

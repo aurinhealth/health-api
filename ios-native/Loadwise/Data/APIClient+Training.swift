@@ -25,7 +25,21 @@ extension APIClient {
     func detectGymEquipment(photos: [Data], url: String) async throws -> GymDetectResult {
         var body: JSONObject = ["images": .array(photos.map { .string("data:image/jpeg;base64," + $0.base64EncodedString()) })]
         if !url.isEmpty { body["url"] = .string(url) }
-        return try await send("/app/api/gym/equipment/detect", method: "POST", body: body)
+        return try await send("/app/api/gym/equipment/detect", method: "POST", body: body, timeout: 180)
+    }
+
+    // MARK: Activity type
+
+    /// Every sport a done activity can be (src/activity-type.js).
+    func activityTypes() async throws -> [ActivityTypeOption] {
+        struct Response: Decodable { let types: [ActivityTypeOption]? }
+        let r: Response = try await get("/app/api/activity/types")
+        return r.types ?? []
+    }
+
+    /// Another type for a done activity; Intervals.icu gets it too.
+    func changeActivityType(id: String, type: String) async throws -> ActivityTypeChange {
+        try await send("/app/api/activity/type", method: "POST", body: ["id": JSONValue.string(id), "type": .string(type)])
     }
 
     // MARK: Exercises and the AI builder

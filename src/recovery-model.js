@@ -1,8 +1,7 @@
 // One recovery, sleep and strain model for the dashboard and the coaches.
 // Every rule here is tied to a published method; docs/methodology.md lists the
-// sources. The functions are self-contained (no imports, no module constants)
-// because the dashboard client carries an exact copy of them (see
-// RECOVERY_MODEL_FUNCTIONS and tests/recovery-model.test.mjs).
+// sources. The functions are self-contained (no imports, no module constants),
+// so tests can run them on their own (RECOVERY_MODEL_FUNCTIONS).
 
 // Mean and standard deviation of a wellness field over the `days` before
 // `date` (not the day itself). `log` uses ln values, as for HRV (lnRMSSD).
@@ -341,5 +340,5 @@ export function hrvMetric(row) {
   return metric === "rmssd" || metric === "sdnn" ? metric : null;
 }
 
-// The functions the dashboard client copies verbatim.
+// The self-contained model functions (tests/helpers/recovery-model.mjs runs them on their own).
 export const RECOVERY_MODEL_FUNCTIONS = [personalBaseline, sourceBaseline, sleepNeedMinutes, sleepDebtMinutes, hrvStatusLow, sleepNeedFor, bedtimePlan, sleepIndexScore, recoveryComponentScore, recoveryReadiness, heartRateLoad, strainScore];

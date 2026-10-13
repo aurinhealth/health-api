@@ -43,6 +43,10 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     let kcal: Double?
     let activityId: String?
     let eventId: String?
+    /// On a done session: Intervals.icu's type ("Run", "Walk"…) and where it
+    /// came from ("intervals", "google-wearables", "apple-health").
+    var type: String? = nil
+    var source: String? = nil
     /// A session from the watch (Google Health): its summary for the detail.
     var summary: Summary? = nil
     /// On a done session: "good", "off" or "offplan", as WeekSession.adherence.
@@ -152,4 +156,21 @@ enum ISODay {
     static func day(_ iso: String) -> String {
         String(Int(iso.suffix(2)) ?? 0)
     }
+}
+
+/// A sport a done activity can be: Intervals.icu's type, its name and the
+/// app's group (ride, run, strength, swim, walk, other) for its icon.
+struct ActivityTypeOption: Decodable, Hashable, Identifiable {
+    let type: String
+    let name: String
+    let group: String
+    var id: String { type }
+}
+
+struct ActivityTypeChange: Decodable {
+    let status: String?
+    let type: String?
+    /// Where the change went ("intervals") and where it stays as it was.
+    let sent: [String]?
+    let kept: [String]?
 }

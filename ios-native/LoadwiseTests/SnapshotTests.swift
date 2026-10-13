@@ -371,7 +371,7 @@ final class SnapshotTests: XCTestCase {
         let ride = try XCTUnwrap(calendar.days.first?.activities.first)
         XCTAssertEqual(ride.session.kind, "activity")
         XCTAssertEqual(CalendarDayList.route(ride), .activity(ride.session))
-        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo · 07:00 · 1 h 30 min · 42,3 km")
+        XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo · " + ClockText.format("07:00") + " · 1 h 30 min · 42,3 km")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .count), "2")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .time), "2:05")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .kcal), Fmt.int(1250))
@@ -416,7 +416,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(StageTotals.note(share: nil, wakeups: 3), "3×")
         let entry = FoodSnapshot.Entry(id: 1, name: "Jogurt", time: "08:00", meal: "breakfast", kcal: 133, protein: 14, carbs: 6, fat: 5,
                                        amount: "140 g", brand: "Madeta", fiber: nil, sugar: 6, salt: 0.15)
-        XCTAssertEqual(FoodEntryCard.detail(entry), "140 g · Madeta · 08:00")
+        XCTAssertEqual(FoodEntryCard.detail(entry), "140 g · Madeta · " + ClockText.format("08:00"))
         XCTAssertEqual(FoodEntryCard.extras(entry), "vláknina – · cukry 6,0 g · sůl 0,15 g")
     }
 
@@ -515,13 +515,6 @@ final class SnapshotTests: XCTestCase {
         try render("training-active-energy", glow: Palette.Glow.training) {
             ActiveEnergyContent(active: active, today: DemoData.training.date, calendar: DemoData.calendarByDate)
                 .padding(.horizontal, 24).padding(.bottom, 40).environment(model)
-        }
-        try render("weather-pill", height: 120) {
-            HStack(spacing: 8) {
-                WeatherPill(weather: weather)
-                WeatherPill(weather: nil)
-            }
-            .padding(24)
         }
         try render("weather-details", height: 900) {
             NavigationStack { WeatherDetails(weather: weather) }.environment(model)

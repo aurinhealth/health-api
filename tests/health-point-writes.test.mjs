@@ -6,6 +6,7 @@ import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
 import { healthPointJson } from '../src/health-point-json.js';
 import { importIntervalsWeights } from '../src/weight-sync.js';
+import { KEEP_TYPE_SQL } from '../src/activity-type.js';
 
 const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 const schema = readFileSync(new URL('../staging/schema.sql', import.meta.url), 'utf8');
@@ -15,7 +16,7 @@ function setup() {
   const raw = createD1();
   raw.sqlite.exec(schema);
   const env = { DB: scopedDb(raw, 1), USER_ID: 1 };
-  const context = vm.createContext({ healthPointJson, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async () => 0 });
+  const context = vm.createContext({ healthPointJson, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async () => 0 });
   for (const [start, end] of [
     ['function pointStatement(', '// GOOGLE NUTRITION API'],
     ['async function saveGooglePointsBatch(', 'async function syncGoogleRecent(']
