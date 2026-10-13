@@ -1,8 +1,8 @@
-# Loadwise
+# Aurin (formerly Loadwise)
 
 ## The website follows the app
 
-The public overview on petrfitnessdata.eu (`overviewPage` in `src/site-pages.js`) describes what the
+The public overview on aurin.health (`overviewPage` in `src/site-pages.js`) describes what the
 iPhone app (`ios-native/`) does today. A pull request that adds, removes or renames something a user
 sees in the app (a screen or section, a number on Today, a connection, sign-in, the coach, pricing or
 availability) updates the overview in the same pull request, in Czech and English:

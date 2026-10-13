@@ -10,6 +10,8 @@ export const themeTokens = `
   --indigo:#4F46C8;--lilac:#D9D6F3;--rust:#B4532F;--blue:#1D6FA3;--protein:#2F7FD8;--carbs:#D98A06;--fat:#7C5CE0;
   --primary:#1F6B52;--primary-text:#1F6B52;--primary-ink:#FFFFFF;--primary-surface:#D3EADF;
   --button:#15140F;--on-button:#F3EFE8;--frame:#DCD5CA;--health-red:#FF2D55;--google-blue:#4285F4;
+  /* The Aurin mark (Rovnováha): the load half over the recovery half. */
+  --logo-load:#F2B46B;--logo-recovery:#3FA383;
   /* Soft glow behind each section's card, in the tint of the app tab it shows. */
   --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;
   /* Type scale: caption for short uppercase labels, meta for chips, small for secondary text. */
