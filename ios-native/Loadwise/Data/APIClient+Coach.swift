@@ -58,6 +58,108 @@ struct WeekProposalResponse: Decodable {
     }
 }
 
+/// POST /app/api/coach/week-ai (src/week-ai.js): the AI's week with its
+/// summary; `ai` is false when the rules made it.
+struct WeekAIResponse: Decodable {
+    let start: String?
+    let ai: Bool?
+    let summary: String?
+    let items: [WeekAIItem]?
+    let warnings: [WeekProposalResponse.Warning]?
+    let message: String?
+}
+
+struct WeekAIItem: Decodable {
+    let date: String
+    let sport: String
+    let minutes: Int?
+    let environment: String?
+    let kind: String?
+    let focus: String?
+    let label: String?
+    let reason: String?
+    let role: String?
+
+    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, label, reason, role }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(String.self, forKey: .date)
+        sport = try c.decode(String.self, forKey: .sport)
+        minutes = (try? c.decodeIfPresent(Double.self, forKey: .minutes)).flatMap { $0 }.map { Int($0.rounded()) }
+        environment = try? c.decodeIfPresent(String.self, forKey: .environment)
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        focus = try? c.decodeIfPresent(String.self, forKey: .focus)
+        label = try? c.decodeIfPresent(String.self, forKey: .label)
+        reason = try? c.decodeIfPresent(String.self, forKey: .reason)
+        role = try? c.decodeIfPresent(String.self, forKey: .role)
+    }
+}
+
+/// GET/POST /app/api/coach/revision (src/week-revision.js).
+struct WeekRevisionResponse: Decodable {
+    let revision: WeekRevision?
+}
+
+struct WeekRevision: Decodable, Equatable {
+    let date: String
+    /// "pending", "applied" (or "kept", which the server does not show again).
+    let status: String?
+    let summary: String?
+    let changes: [Change]?
+
+    struct Change: Decodable, Equatable, Identifiable {
+        let eventId: String
+        let date: String
+        let sport: String
+        let from: Side?
+        let to: Side?
+        let reason: String?
+        let applied: Bool?
+        var id: String { eventId }
+    }
+
+    struct Side: Decodable, Equatable {
+        let name: String?
+        let minutes: Int?
+
+        enum CodingKeys: String, CodingKey { case name, minutes }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try? c.decodeIfPresent(String.self, forKey: .name)
+            minutes = (try? c.decodeIfPresent(Double.self, forKey: .minutes)).flatMap { $0 }.map { Int($0.rounded()) }
+        }
+    }
+}
+
+/// POST /app/api/workouts/adjust: the session's new day, length, place and kind.
+struct AdjustResponse: Decodable {
+    let session: AdjustedSession?
+    let message: String?
+}
+
+struct AdjustedSession: Decodable {
+    let date: String
+    let minutes: Int
+    let environment: String?
+    let kind: String?
+    let focus: String?
+    let note: String?
+
+    enum CodingKeys: String, CodingKey { case date, minutes, environment, kind, focus, note }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        date = try c.decode(String.self, forKey: .date)
+        minutes = Int(((try? c.decode(Double.self, forKey: .minutes)) ?? 60).rounded())
+        environment = try? c.decodeIfPresent(String.self, forKey: .environment)
+        kind = try? c.decodeIfPresent(String.self, forKey: .kind)
+        focus = try? c.decodeIfPresent(String.self, forKey: .focus)
+        note = try? c.decodeIfPresent(String.self, forKey: .note)
+    }
+}
+
 /// GET /app/api/week-plan (src/week-planner.js): the week's plan with the
 /// time per weekday, and the load the week aims for.
 struct WeekPlanResponse: Decodable {
@@ -183,6 +285,57 @@ extension APIClient {
         var body: JSONObject = ["date": .string(date), "sport": .string(sport), "environment": .string(environment ?? "auto")]
         if let minutes { body["availabilityMinutes"] = .number(Double(minutes)) }
         return try await send("/app/api/workouts/generate", method: "POST", body: body)
+    }
+
+    /// One session of the week plan: its kind (`focus`, src/week-ai.js FOCUS_OF)
+    /// and length as the athlete or the AI chose them, or an existing workout
+    /// made `resizeTo` minutes long.
+    func generateWeekSession(date: String, sport: String, minutes: Int, environment: String?, focus: String?,
+                             resize workoutId: String? = nil) async throws -> GeneratedWorkout {
+        var body: JSONObject = ["date": .string(date), "sport": .string(sport), "environment": .string(environment ?? "auto"),
+                                "availabilityMinutes": .number(Double(minutes)), "userInitiated": .bool(true)]
+        if let focus { body["focus"] = .string(focus) }
+        if let workoutId { body["workoutId"] = .string(workoutId); body["resizeTo"] = .number(Double(minutes)) }
+        return try await send("/app/api/workouts/generate", method: "POST", body: body)
+    }
+
+    /// "Revize po tréninku": the coach's changes to the next sessions after
+    /// today's (or a waiting yesterday's) ride or run; nil when there is none.
+    func weekRevision() async throws -> WeekRevision? {
+        let r: WeekRevisionResponse = try await get("/app/api/coach/revision")
+        return r.revision
+    }
+
+    /// "Upravit" (apply) or "Nechat" (keep).
+    func decideRevision(date: String, apply: Bool) async throws -> WeekRevision? {
+        let r: WeekRevisionResponse = try await send("/app/api/coach/revision", method: "POST",
+                                                     body: ["date": JSONValue.string(date), "decision": .string(apply ? "apply" : "keep")])
+        return r.revision
+    }
+
+    /// "Navrhne AI": the whole week from the AI, or the rules' proposal without it.
+    func weekAI(start: String, note: String) async throws -> WeekAIResponse {
+        try await send("/app/api/coach/week-ai", method: "POST", body: ["start": JSONValue.string(start), "note": .string(note)])
+    }
+
+    /// "Upravit s AI": a quick chip ("shorter", "easier", "harder", "indoor") or
+    /// the athlete's own words change one session of the week.
+    func adjustSession(_ session: WeekSessionDraft, chip: String?, text: String?, others: [WeekSessionDraft]) async throws -> AdjustedSession {
+        var body: JSONObject = ["date": .string(session.date), "sport": .string(session.sport), "minutes": .number(Double(session.minutes)),
+                                "environment": .string(session.environment ?? "outdoor")]
+        if let kind = session.kind { body["kind"] = .string(kind) }
+        if let system = session.workout?.primary_system { body["system"] = .string(system) }
+        if let chip { body["chip"] = .string(chip) }
+        if let text { body["text"] = .string(text) }
+        body["others"] = .array(others.map { o in
+            var x: JSONObject = ["date": .string(o.date), "sport": .string(o.sport)]
+            if let kind = o.kind { x["kind"] = .string(kind) }
+            if let system = o.workout?.primary_system { x["system"] = .string(system) }
+            return .object(x)
+        })
+        let r: AdjustResponse = try await send("/app/api/workouts/adjust", method: "POST", body: body)
+        guard let changed = r.session else { throw APIError.message(r.message ?? L10n.tr("Úpravu se nepodařilo udělat.")) }
+        return changed
     }
 
     /// The AI's review of a day: what to keep, what to change and why.

@@ -1625,6 +1625,48 @@
 "V okolí" = "Nearby";
 "Bluetooth je vypnutý nebo nepovolený" = "Bluetooth is off or not allowed";
 "Hrudní pás nebo náramek, který vysílá tep, například Whoop, Polar nebo Garmin." = "A chest strap or a band that broadcasts heart rate, such as Whoop, Polar or Garmin.";
+
+/* Plán týdne (WeekPlanView.swift) */
+"Rozvrhnu sám" = "I'll plan it";
+"Navrhne AI" = "AI proposes";
+"Způsob" = "Mode";
+"Čas tento týden" = "Time this week";
+"Čas příští týden" = "Time next week";
+"upraveno jen pro tento týden" = "changed for this week only";
+"podle tvého běžného týdne" = "from your usual week";
+"Vyber sport a klepni na den." = "Pick a sport and tap a day.";
+"Klepni na den, kam dát: %@" = "Tap the day to put it on: %@";
+"Bez tréninku" = "No workout";
+"Přidat sem" = "Add here";
+"Vytvořit tréninky" = "Create workouts";
+"Na zvolené dny není čas. Uprav čas tento týden." = "There's no time on the chosen days. Change this week's time.";
+"Poznámka pro AI" = "Note for the AI";
+"Třeba: v sobotu jedu s kamarády, ve čtvrtek nemůžu" = "E.g. riding with friends on Saturday, can't train on Thursday";
+"AI vychází ze tvého času, zátěže, spánku, počasí a cíle." = "The AI works from your time, load, sleep, weather and goal.";
+"Navrhnout týden" = "Propose the week";
+"Navrhuji…" = "Proposing…";
+"Na tento týden není co navrhnout." = "There's nothing to propose for this week.";
+"Uložit do kalendáře" = "Save to calendar";
+"Upravit sám" = "Edit myself";
+"Změnit rozvržení" = "Change the layout";
+"Naplánovat znovu" = "Plan again";
+"Lehce / regenerace" = "Easy / recovery";
+"Dlouhý trénink" = "Long workout";
+"Upravit s AI" = "Edit with AI";
+"Kratší" = "Shorter";
+"Lehčí" = "Easier";
+"Těžší" = "Harder";
+"Jiný den" = "Another day";
+"Přesuň trénink na jiný vhodný den tohoto týdne." = "Move the workout to another suitable day this week.";
+"Třeba: bude pršet, chci kratší a uvnitř" = "E.g. it will rain, I want it shorter and indoors";
+"Upravuji…" = "Changing…";
+"Úpravu se nepodařilo udělat." = "The change couldn't be made.";
+
+/* Revize po tréninku (CoachPlanning.swift WeekRevisionCard) */
+"Revize po tréninku" = "Review after the workout";
+"Upraveno i v kalendáři" = "Changed in the calendar too";
+"Tento trénink se nepodařilo změnit." = "This workout couldn't be changed.";
+"Některý trénink se mezitím změnil, ten zůstal beze změny." = "A workout changed in the meantime, so it was left as it is.";
 "Rozbalit menu" = "Show menu";
 "Synchronizováno" = "Synced";
 "Nepodařilo se · Zkusit znovu" = "Didn’t work · Try again";
