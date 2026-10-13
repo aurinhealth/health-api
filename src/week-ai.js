@@ -138,7 +138,7 @@ export async function proposeWeekAI(env, facts, { prefs = null, focus = null, us
 // ---- One session: "Upravit s AI" ----
 
 const HARDER = { recovery: "endurance", endurance: "tempo", long: "long", tempo: "sweet_spot", sweet_spot: "threshold", threshold: "vo2max", vo2max: "vo2max" };
-const EASIER = { vo2max: "threshold", threshold: "sweet_spot", sweet_spot: "endurance", tempo: "endurance", long: "endurance", endurance: "recovery", recovery: "recovery" };
+export const EASIER = { vo2max: "threshold", threshold: "sweet_spot", sweet_spot: "endurance", tempo: "endurance", long: "endurance", endurance: "recovery", recovery: "recovery" };
 
 // The kind a generated workout is (its library system), for "Těžší"/"Lehčí".
 export function kindOfSystem(system, fallback = "endurance") {

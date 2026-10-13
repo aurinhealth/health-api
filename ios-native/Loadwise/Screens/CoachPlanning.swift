@@ -1,7 +1,7 @@
 import SwiftUI
 
-// The coach beyond the chat: the morning
-// check-in, the review of a day and the records.
+// The coach beyond the chat: the morning check-in, the review after a
+// workout, the review of a day and the records.
 
 // MARK: - Check-in
 
@@ -44,6 +44,95 @@ struct CoachCheckInCard: View {
     private func dismiss(_ advice: CoachCheckIn.Advice) async {
         withAnimation { self.advice = nil }
         if let id = advice.id { try? await model.api.dismissAdvice(id: id) }
+    }
+}
+
+// MARK: - Revize po tréninku
+
+/// After a finished ride or run the coach says how it went and proposes
+/// changes to the next sessions; they change only with "Upravit".
+struct WeekRevisionCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var revision: WeekRevision?
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        Group {
+            if let revision, let summary = revision.summary {
+                let changes = revision.changes ?? []
+                let applied = revision.status == "applied"
+                Card {
+                    HStack(spacing: 7) {
+                        Image(systemName: changes.isEmpty || applied ? "checkmark.circle.fill" : "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(changes.isEmpty || applied ? Palette.green : Palette.amber)
+                        Text("Revize po tréninku").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
+                    }
+                    Text(summary).font(Typo.sentence(19)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    ForEach(changes) { change in row(change, applied: applied) }
+                    if let error {
+                        Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if applied {
+                        if changes.contains(where: { $0.applied == true }) {
+                            Label("Upraveno i v kalendáři", systemImage: "calendar.badge.checkmark").font(Typo.small).foregroundStyle(Palette.green)
+                        }
+                    } else if !changes.isEmpty {
+                        HStack(spacing: 10) {
+                            SecondaryButton(title: "Nechat") { Task { await decide(revision, apply: false) } }
+                            PrimaryButton(title: busy ? "Upravuji…" : "Upravit", busy: busy) { Task { await decide(revision, apply: true) } }
+                        }
+                        .disabled(busy || model.demo)
+                    }
+                }
+            }
+        }
+        .task {
+            guard !model.demo else { return }
+            revision = try? await model.api.weekRevision()
+        }
+    }
+
+    private func row(_ c: WeekRevision.Change, applied: Bool) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(Fmt.capitalized(Fmt.weekdayShort(c.date))).font(Typo.small.weight(.medium)).foregroundStyle(Palette.muted).frame(width: 30, alignment: .leading)
+            Image(systemName: c.sport == "run" ? "figure.run" : "bicycle").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.amber)
+                .frame(width: 30, height: 30).background(Palette.amberSoft, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Self.line(c.from)).font(Typo.small).foregroundStyle(Palette.faint).strikethrough()
+                Text(Self.line(c.to)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            }
+            Spacer(minLength: 0)
+            if applied && c.applied == false {
+                Image(systemName: "exclamationmark.circle").foregroundStyle(Palette.rust)
+                    .accessibilityLabel(L10n.tr("Tento trénink se nepodařilo změnit."))
+            }
+        }
+        .padding(.top, 8)
+        .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+    }
+
+    private static func line(_ side: WeekRevision.Side?) -> String {
+        [side?.name, side?.minutes.map { Fmt.duration($0) }].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    private func decide(_ r: WeekRevision, apply: Bool) async {
+        busy = true
+        defer { busy = false }
+        error = nil
+        do {
+            let next = try await model.api.decideRevision(date: r.date, apply: apply)
+            withAnimation { revision = apply ? next : nil }
+            if apply {
+                await model.refreshTraining()
+                if next?.changes?.contains(where: { $0.applied == false }) == true {
+                    error = L10n.tr("Některý trénink se mezitím změnil, ten zůstal beze změny.")
+                }
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
     }
 }
 

@@ -1662,3 +1662,9 @@
 "Třeba: bude pršet, chci kratší a uvnitř" = "E.g. it will rain, I want it shorter and indoors";
 "Upravuji…" = "Changing…";
 "Úpravu se nepodařilo udělat." = "The change couldn't be made.";
+
+/* Revize po tréninku (CoachPlanning.swift WeekRevisionCard) */
+"Revize po tréninku" = "Review after the workout";
+"Upraveno i v kalendáři" = "Changed in the calendar too";
+"Tento trénink se nepodařilo změnit." = "This workout couldn't be changed.";
+"Některý trénink se mezitím změnil, ten zůstal beze změny." = "A workout changed in the meantime, so it was left as it is.";

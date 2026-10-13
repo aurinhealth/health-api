@@ -56,6 +56,7 @@ import { getAthleteState, updateAthleteState, explicitPreference, assertTraining
 import { savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
@@ -596,6 +597,76 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         catch(error){return Response.json({status:'unavailable',message:error?.ai?error.message:L('AI teď není dostupná. Použij rychlé volby.', 'AI isn\'t available right now. Use the quick options.')},{status:503});}
       }
       return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // "Revize po tréninku" (week-revision.js): after a finished ride or run the
+  // coach proposes changes to the next sessions; GET builds it once per new
+  // session or rating, POST applies it ("Upravit") or keeps the plan ("Nechat").
+  if(url.pathname==='/app/api/coach/revision'&&['GET','POST'].includes(request.method)){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method==='POST'&&request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const today=localToday();
+      if(request.method==='POST'){
+        const body=await request.json().catch(()=>({})),date=[today,shiftDate(today,-1)].includes(body.date)?body.date:null;
+        if(!date||!['apply','keep'].includes(body.decision))throw new Error(L('Neplatná revize.', 'Invalid review.'));
+        const stored=await readRevision(env.DB,date);
+        if(!stored||stored.status!=='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});
+        if(body.decision==='keep'){await decideRevision(env.DB,date,'kept');return Response.json({status:'ok',revision:{...stored,status:'kept'}},{headers:{'Cache-Control':'no-store'}});}
+        assertTrainingAllowed(await getAthleteState(env.DB));
+        const changes=[];
+        for(const c of stored.changes||[]){
+          if(c.date<today||!c.to?.workoutId){changes.push({...c,applied:false});continue;}
+          const id=String(c.eventId).replace(/^planned:/,''),event=await env.DB.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
+          if(!event||String(event.start_time).slice(0,10)!==c.date){changes.push({...c,applied:false});continue;}
+          try{
+            const scheduled=await scheduleWorkoutInIntervals(env,env.DB,{workoutId:c.to.workoutId,date:c.date,confirm:true,environment:c.environment});
+            // The same workout already on that day is that event itself: it stays.
+            if(String(scheduled.intervalsEventId||'')!==id)await deletePlannedEvent(env,{eventId:id});
+            changes.push({...c,applied:true,newEventId:scheduled.eventId||null});
+          }catch(error){console.error('Revision change failed',error.message);changes.push({...c,applied:false});}
+        }
+        const revision={...stored,changes,status:'applied'};
+        await decideRevision(env.DB,date,'applied',{summary:stored.summary,changes,source:stored.source});
+        return Response.json({status:'ok',revision},{headers:{'Cache-Control':'no-store'}});
+      }
+      const inputs=await loadCoachInputs(env,ctx,internalAuth,today),days=inputs.week?.days||[];
+      const doneOn=d=>(days.find(x=>x.date===d)?.daily?.training?.completed||[]).filter(a=>['ride','run'].includes(sportOf(a)));
+      // Today's sessions, else yesterday's when its revision still waits.
+      let date=today,done=doneOn(today);
+      if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
+      const feedback=(await recentWorkoutFeedback(env.DB,date).catch(()=>[])).filter(f=>f.date===date);
+      const signature=revisionSignature(done,feedback),stored=await readRevision(env.DB,date);
+      // A decided revision stays decided; a waiting one is redone when a new session or rating came.
+      if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:stored.status==='kept'?null:stored},{headers:{'Cache-Control':'no-store'}});
+      const links=new Map();
+      const upcoming=[];
+      for(const d of days.filter(x=>x.date>date&&x.date>=today&&x.date<=shiftDate(date,6)).sort((a,b)=>a.date.localeCompare(b.date))){
+        for(const a of (d.daily?.training?.planned||[])){
+          const sport=sportOf(a);if(!['ride','run'].includes(sport)||!String(a.id||'').startsWith('planned:'))continue;
+          const id=String(a.id).replace(/^planned:/,'');
+          const link=links.get(id)??await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);links.set(id,link);
+          const workout=link?.workout_id?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
+          upcoming.push({eventId:'planned:'+id,date:d.date,sport,name:a.name||workout?.name||null,minutes:Math.round((Number(a.durationHours)||Number(workout?.duration_minutes)/60||1)*60),kind:kindOfSystem(workout?.primary_system||a.name,'endurance'),environment:link?.environment||(/virtual/i.test(String(a.type||''))?'indoor':'outdoor')});
+        }
+      }
+      const doneFacts=done.map(a=>{const f=feedback.find(x=>sportOf({type:x.sport})===sportOf(a))||feedback[0];return {date,sport:sportOf(a),name:a.name||null,minutes:Math.round((Number(a.durationHours)||0)*60)||null,tss:Number(a.tss)||null,kind:f?.system?kindOfSystem(f.system):null};});
+      const readiness=await todayReadiness(env,ctx,today).catch(()=>null);
+      const reviews=await rideReviewsForCoach(env,ctx,days.find(x=>x.date===date)?.daily?.training,date,inputs.fitness?.wellness).catch(()=>[]);
+      const plans=new Map();const availabilityByDate={};
+      for(const u of upcoming){const w=mondayOfDate(u.date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);availabilityByDate[u.date]=p?availabilityOn(p,u.date).minutes??null:null;}
+      const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate};
+      const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
+      // Each change gets its workout now, so the card shows what replaces what.
+      const changes=[];
+      for(const c of r.changes||[]){
+        const generateUrl=new URL('https://internal/app/api/workouts/generate');
+        const response=await handleDashboardApi(new Request(generateUrl,{method:'POST',headers:{Origin:generateUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:c.date,sport:c.sport,environment:c.environment,availabilityMinutes:c.minutes,focus:FOCUS_OF[c.kind]||null,userInitiated:true})}),env,ctx,generateUrl,{signedIn:true}).catch(()=>null);
+        const g=response?await response.json().catch(()=>null):null;
+        if(g?.status==='ok'&&g.workout?.id)changes.push({...c,to:{workoutId:g.workout.id,name:g.workout.name,minutes:Math.round(Number(g.workout.duration_minutes)||c.minutes),kind:c.kind}});
+      }
+      const revision=await saveRevision(env.DB,{date,signature,revision:{summary:r.summary,changes,source:r.source}});
+      return Response.json({status:'ok',revision},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   {const r=await handleAccountApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}

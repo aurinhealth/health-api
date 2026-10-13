@@ -96,6 +96,43 @@ struct WeekAIItem: Decodable {
     }
 }
 
+/// GET/POST /app/api/coach/revision (src/week-revision.js).
+struct WeekRevisionResponse: Decodable {
+    let revision: WeekRevision?
+}
+
+struct WeekRevision: Decodable, Equatable {
+    let date: String
+    /// "pending", "applied" (or "kept", which the server does not show again).
+    let status: String?
+    let summary: String?
+    let changes: [Change]?
+
+    struct Change: Decodable, Equatable, Identifiable {
+        let eventId: String
+        let date: String
+        let sport: String
+        let from: Side?
+        let to: Side?
+        let reason: String?
+        let applied: Bool?
+        var id: String { eventId }
+    }
+
+    struct Side: Decodable, Equatable {
+        let name: String?
+        let minutes: Int?
+
+        enum CodingKeys: String, CodingKey { case name, minutes }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            name = try? c.decodeIfPresent(String.self, forKey: .name)
+            minutes = (try? c.decodeIfPresent(Double.self, forKey: .minutes)).flatMap { $0 }.map { Int($0.rounded()) }
+        }
+    }
+}
+
 /// POST /app/api/workouts/adjust: the session's new day, length, place and kind.
 struct AdjustResponse: Decodable {
     let session: AdjustedSession?
@@ -260,6 +297,20 @@ extension APIClient {
         if let focus { body["focus"] = .string(focus) }
         if let workoutId { body["workoutId"] = .string(workoutId); body["resizeTo"] = .number(Double(minutes)) }
         return try await send("/app/api/workouts/generate", method: "POST", body: body)
+    }
+
+    /// "Revize po tréninku": the coach's changes to the next sessions after
+    /// today's (or a waiting yesterday's) ride or run; nil when there is none.
+    func weekRevision() async throws -> WeekRevision? {
+        let r: WeekRevisionResponse = try await get("/app/api/coach/revision")
+        return r.revision
+    }
+
+    /// "Upravit" (apply) or "Nechat" (keep).
+    func decideRevision(date: String, apply: Bool) async throws -> WeekRevision? {
+        let r: WeekRevisionResponse = try await send("/app/api/coach/revision", method: "POST",
+                                                     body: ["date": JSONValue.string(date), "decision": .string(apply ? "apply" : "keep")])
+        return r.revision
     }
 
     /// "Navrhne AI": the whole week from the AI, or the rules' proposal without it.
