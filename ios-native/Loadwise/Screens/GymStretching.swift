@@ -376,6 +376,18 @@ struct GymPreferencesGroup: View {
     static let levels = [("beginner", "začátečník"), ("regular", "pravidelně"), ("experienced", "zkušený")]
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            group
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+        .task { await load() }
+        .onChange(of: goal) { _, value in goalChanged(value) }
+        .onChange(of: experience) { _, value in experienceChanged(value) }
+        .onChange(of: warmupMode) { _, value in warmupChanged(value) }
+        .onChange(of: stretching) { _, value in stretchingChanged(value) }
+    }
+
+    private var group: some View {
         SettingsGroup(title: "Trénink na míru") {
             SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
             SettingsDivider()
@@ -386,14 +398,25 @@ struct GymPreferencesGroup: View {
             SettingsToggle(title: "Protažení na konci", isOn: $stretching)
         }
         .disabled(prefs == nil && !model.demo)
-        .task { await load() }
-        .onChange(of: goal) { _, value in save(["goal": .string(value)], unchanged: prefs?.goal == value) }
-        .onChange(of: experience) { _, value in save(["experience": .string(value)], unchanged: prefs?.experience == value) }
-        .onChange(of: warmupMode) { _, value in
-            save(["warmup": .bool(value != "off"), "warmupCardio": .bool(value == "cardio")], unchanged: prefs.map(Self.warmupMode) == value)
-        }
-        .onChange(of: stretching) { _, value in save(["stretching": .bool(value)], unchanged: prefs?.stretching == value) }
-        if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+    }
+
+    private func goalChanged(_ value: String) {
+        save(["goal": .string(value)], unchanged: prefs?.goal == value)
+    }
+
+    private func experienceChanged(_ value: String) {
+        save(["experience": .string(value)], unchanged: prefs?.experience == value)
+    }
+
+    private func warmupChanged(_ value: String) {
+        var current: String?
+        if let prefs { current = Self.warmupMode(prefs) }
+        let change: JSONObject = ["warmup": .bool(value != "off"), "warmupCardio": .bool(value == "cardio")]
+        save(change, unchanged: current == value)
+    }
+
+    private func stretchingChanged(_ value: Bool) {
+        save(["stretching": .bool(value)], unchanged: prefs?.stretching == value)
     }
 
     /// "podle sportu · síla a svaly": what the main sport recommends.
