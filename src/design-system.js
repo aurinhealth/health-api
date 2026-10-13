@@ -1,5 +1,5 @@
 // Colour tokens and type scale of the public pages (site-pages.js). They are the iPhone app's light
-// palette (ios-native/Loadwise/Design/Palette.swift); the site has one look and no theme switch.
+// palette (ios-native/Shared/Palette.swift); the site has one look and no theme switch.
 export const themeTokens = `
 :root{color-scheme:light;
   /* Surfaces and text. */

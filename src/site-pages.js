@@ -1,5 +1,5 @@
 // Public pages: the Loadwise overview on / and the policy pages. They use the iPhone app's light
-// palette (ios-native/Loadwise/Design/Palette.swift): warm paper, white cards, Newsreader headings.
+// palette (ios-native/Shared/Palette.swift): warm paper, white cards, Newsreader headings.
 // The phone on the overview is drawn in HTML from the app's Today screen, so it needs no screenshots
 // and speaks both languages. When the app changes what a section shows, change the section here too.
 import {themeTokens} from './design-system.js';
@@ -314,13 +314,13 @@ export function overviewPage(request) {
   const {lang, device} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
   const days = t(['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const short = t(['P', 'Ú', 'S', 'Č', 'P', 'S', 'N'], ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
-  const today = `<div class="phone" role="img" aria-label="${t('Loadwise v telefonu: obrazovka Dnes s připraveností, spánkem, zátěží, HRV a dnešním tréninkem', 'Loadwise on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
+  const today = `<div class="phone" role="img" aria-label="${t('Loadwise v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Loadwise on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
 <div class="top"><span>${t('Pondělí 12. 10.', 'Monday, Oct 12')}</span><span class="me">P</span></div>
 <div class="lbl">${t('Připravenost', 'Readiness')}</div>
 <div class="ready"><b>78</b><span class="pill good">${t('vysoká', 'high')}</span></div>
 <div class="pc cells">
 <div><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
-<div><div class="k">${t('Zátěž', 'Strain')}</div><div class="v">${t('11,4', '11.4')}</div><div class="d warm">${t('plán ~14', 'plan ~14')}</div></div>
+<div><div class="k">${t('Námaha', 'Strain')}</div><div class="v">${t('11,4', '11.4')}</div><div class="d warm">${t('plán ~14', 'plan ~14')}</div></div>
 <div><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div></div>
 <div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">${t('1 h 25 min · dnes v 17:30', '1h 25m · today at 5:30 pm')}</div></div></div>
 <div class="pc"><div class="s" style="color:var(--muted);font-size:12px">${t('Kouč', 'Coach')}</div><div style="margin-top:3px">${t('Spal jsi dobře a HRV je nad normálem. Dnešní intervaly dej naplno.', 'You slept well and your HRV is above normal. Go all in on today’s intervals.')}</div></div>
@@ -366,7 +366,7 @@ ${today}
 </div></section>
 
 <section id="zatez"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">${t('Zátěž', 'Strain')}</div><h2>${t('Víš, kdy přidat a kdy ubrat.', 'Know when to push and when to back off.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">${t('Námaha', 'Strain')}</div><h2>${t('Víš, kdy přidat a kdy ubrat.', 'Know when to push and when to back off.')}</h2></div>
 <div class="visual reveal"><div class="card">
 <div class="gauge-head"><span>${t('Dnes', 'Today')}</span><span class="warm">${t('cíl 12–15', 'target 12–15')}</span></div>
 <div class="num">${t('11,4', '11.4')}</div>

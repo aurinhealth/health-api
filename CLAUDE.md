@@ -9,7 +9,7 @@ availability) updates the overview in the same pull request, in Czech and Englis
 
 - Each section of the overview matches a part of the app; the phone in the hero is drawn in HTML from
   the Today screen, so its labels and layout follow `TodayView.swift`.
-- Colours come from the light palette in `ios-native/Loadwise/Design/Palette.swift`.
+- Colours come from the light palette in `ios-native/Shared/Palette.swift`.
 - After changing the hero, render the share images `public/site/og.png` and `og-en.png` (1200×630) again.
 - The privacy, terms and support pages are legal texts that Google verification reads: change them only
   when the way data is handled changes, and keep the Google Health disclosure on the overview word for word
