@@ -73,7 +73,10 @@ export const PERSONAL_TABLES = {
   activity_energy_choices: { pk: ["user_id", "activity_id"] },
   // The app's push device tokens and the once-a-day guard of the pushes (push.js).
   push_tokens: { pk: ["user_id", "token"] },
-  push_log: { pk: ["user_id", "kind", "local_date"] }
+  push_log: { pk: ["user_id", "kind", "local_date"] },
+  // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
+  saved_workouts: { pk: ["user_id", "id"] },
+  workout_shares: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

@@ -1,4 +1,5 @@
 import { trainingSetup } from './onboarding.js';
+import { ownLibraryWorkout } from "./endurance-templates.js";
 import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-workouts.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
@@ -57,6 +58,14 @@ export async function getWorkout(db, id) {
   if (/^test-/.test(String(id))) return getTestWorkout(id);
   // Race day of a running plan (training-plans.js): "race-run-<km>-<minutes>".
   if (/^race-run-/.test(String(id))) return raceWorkout(id);
+  // "own-<id>": a ride or run from the athlete's Moje tréninky, as planned last
+  // (workout-templates.js keeps its minutes at the athlete's pace).
+  const own = String(id).match(/^own-([A-Za-z0-9]{10})$/);
+  if (own) {
+    if (!db.userId) return null;
+    const row = await db.prepare("SELECT id,sport,name,structure_json FROM saved_workouts WHERE user_id=? AND id=?").bind(db.userId, own[1]).first().catch(() => null);
+    return row ? ownLibraryWorkout(row) : null;
+  }
   // "<id>~<minutes>": a workout resized to another length (see resizeWorkout).
   const resized = String(id).match(/^(.+)~(\d{2,3})$/);
   if (resized) { const base = await getWorkout(db, resized[1]); return base ? resizeWorkout(base, Number(resized[2])) : null; }

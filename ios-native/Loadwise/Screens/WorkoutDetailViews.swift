@@ -269,6 +269,10 @@ struct ActivityDetailView: View {
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 }
                 .padding(.top, 28)
+                // A ride or run done to a plan: its sections kept or sent on.
+                if let planned = session.plannedId, session.sport == "ride" || session.sport == "run" {
+                    PlannedTemplateButtons(eventId: planned).padding(.top, 10)
+                }
             }
         }
         .sheet(isPresented: $feedback) { FeedbackSheet(session: session) }
@@ -620,6 +624,9 @@ struct PlannedWorkoutView: View {
                     .padding(.top, 10)
                     if let workout = plan?.workout, session.sport == "ride" || session.sport == "run", !model.demo {
                         WatchWorkoutButton(workout: workout, title: session.title).padding(.top, 18)
+                    }
+                    if let id = session.eventId, session.sport == "ride" || session.sport == "run" {
+                        PlannedTemplateButtons(eventId: id, date: session.date).padding(.top, 10)
                     }
                 }
 

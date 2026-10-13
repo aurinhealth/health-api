@@ -34,7 +34,7 @@ const PUBLIC_PATHS = new Set([
   "/auth/email/verify",
   "/automation/strength"
 ]);
-const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/"];
+const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/"];
 
 export function isPublicPath(pathname) {
   return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some(prefix => pathname.startsWith(prefix));

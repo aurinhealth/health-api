@@ -120,6 +120,8 @@ function stepTarget(s, { sport, environment }) {
   const unit = sport === "run" ? "% Pace" : "%";
   const width = environment === "outdoor" ? outdoorWidth(s.power, sport) : 0;
   if (s.ramp && n(s.powerStart) != null && n(s.powerEnd) != null) return "ramp " + Math.round(s.powerStart) + "-" + Math.round(s.powerEnd) + unit;
+  // A range of the athlete's own workout (Moje tréninky) stays a range.
+  if (n(s.powerLow) != null && n(s.powerHigh) != null && s.powerHigh > s.powerLow) return Math.round(s.powerLow) + "-" + Math.round(s.powerHigh) + unit;
   const p = Math.round(n(s.power, 55));
   return width ? (p - width) + "-" + (p + width) + unit : p + unit;
 }
