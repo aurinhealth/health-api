@@ -121,20 +121,8 @@ struct SyncAppIcon: View {
         let shape = RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
         ZStack {
             switch id {
-            case "apple":
-                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
-                Image(systemName: "heart.fill").font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(Color(light: 0xFF2D55, dark: 0xFF2D55))
-            case "google":
-                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
-                Image(systemName: "heart.fill").font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(AngularGradient(colors: [Color(light: 0x4285F4, dark: 0x4285F4), Color(light: 0x34A853, dark: 0x34A853),
-                                                              Color(light: 0xFBBC04, dark: 0xFBBC04), Color(light: 0xEA4335, dark: 0xEA4335),
-                                                              Color(light: 0x4285F4, dark: 0x4285F4)], center: .center))
-            case "intervals":
-                shape.fill(Color(light: 0x1B1F2A, dark: 0x1B1F2A))
-                Text(verbatim: "i.icu").font(.system(size: size * 0.3, weight: .heavy)).foregroundStyle(.white)
-                    .minimumScaleFactor(0.5).lineLimit(1).padding(.horizontal, size * 0.08)
+            case "apple", "google", "intervals":
+                IntegrationIcon(id: id, size: size)
             case "strava":
                 shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
                 Image(systemName: "chevron.up").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
