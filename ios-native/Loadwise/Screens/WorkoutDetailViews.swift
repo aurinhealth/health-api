@@ -162,8 +162,11 @@ struct WeekSessionsList: View {
     static func destination(_ s: WeekSession) -> AppRoute? {
         // A done lifting session opens the day's gym sheet too, wherever it was
         // recorded (Google Health has no detail of its own): the sets and weights.
+        // A gym session typed in by hand (Zapsat trénink) has no sheet yet:
+        // its detail is the planned one, where it can move or be deleted.
+        if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
-        if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
+        if s.kind == "activity" { return s.activityId != nil || s.watch != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
         return nil
     }
@@ -229,6 +232,8 @@ struct ActivityDetailView: View {
     @State private var error: String?
     @State private var feedback = false
     @State private var changingType = false
+    /// An Apple Health workout's route, read on the iPhone.
+    @State private var localRoute: [ActivityDetail.StreamPoint] = []
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -237,7 +242,7 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
-                    if !model.demo {
+                    if !model.demo, session.activityId != nil {
                         Menu {
                             Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
                         } label: {
@@ -250,12 +255,12 @@ struct ActivityDetailView: View {
                 .padding(.top, 24)
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
+                    ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail)
                 } else if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 50)
-                    Text("Detail se načítá z Intervals.icu.").font(Typo.caption).foregroundStyle(Palette.faint).frame(maxWidth: .infinity)
                 }
                 Button { feedback = true } label: {
                     Label("Jak to šlo?", systemImage: "text.bubble")
@@ -264,19 +269,36 @@ struct ActivityDetailView: View {
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 }
                 .padding(.top, 28)
+                // A ride or run done to a plan: its sections kept or sent on.
+                if let planned = session.plannedId, session.sport == "ride" || session.sport == "run" {
+                    PlannedTemplateButtons(eventId: planned).padding(.top, 10)
+                }
             }
         }
         .sheet(isPresented: $feedback) { FeedbackSheet(session: session) }
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
         }
-        .task {
-            guard detail == nil, let id = session.activityId, !model.demo else {
-                if model.demo { error = "V ukázce se detail nenačítá." }
-                return
+        .task { await load() }
+    }
+
+    /// Intervals.icu's detail (with the watch's heart rate and route where it
+    /// has none) or the watch workout's own; an Apple route from the iPhone.
+    private func load() async {
+        guard detail == nil else { return }
+        if model.demo { error = L10n.tr("V ukázce se detail nenačítá."); return }
+        do {
+            if let id = session.activityId {
+                detail = try await model.api.activityDetail(id: id)
+            } else if let watch = session.watch {
+                detail = try await model.api.watchDetail(watch)
             }
-            do { detail = try await model.api.activityDetail(id: id) } catch { self.error = error.localizedDescription }
+        } catch {
+            self.error = error.localizedDescription
+            return
         }
+        // Apple Health is the route's source when it has one (it stays on the iPhone).
+        if let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
     }
 }
 
@@ -369,7 +391,7 @@ struct ActivityDetailContent: View {
 
     private func stat(_ title: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(LocalizedStringKey(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(verbatim: value).font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
         }
     }
@@ -443,7 +465,7 @@ struct StreamChart: View {
 
         Card {
             HStack(alignment: .firstTextBaseline) {
-                Text(LocalizedStringKey(title)).font(Typo.bodyStrong).foregroundStyle(color)
+                Text(title).font(Typo.bodyStrong).foregroundStyle(color)
                 Spacer()
                 if let picked {
                     Text(verbatim: Self.clock(picked.minute) + "   " + Fmt.int(picked.value) + " " + unit)
@@ -603,6 +625,20 @@ struct PlannedWorkoutView: View {
                     if let workout = plan?.workout, session.sport == "ride" || session.sport == "run", !model.demo {
                         WatchWorkoutButton(workout: workout, title: session.title).padding(.top, 18)
                     }
+                    if let id = session.eventId, session.sport == "ride" || session.sport == "run" {
+                        PlannedTemplateButtons(eventId: id, date: session.date).padding(.top, 10)
+                    }
+                }
+
+                if session.sport == "strength", session.date == AppModel.localDate(Date()), !model.demo {
+                    NavigationLink(value: AppRoute.trainingMode(session.date)) {
+                        Label("Začít trénink", systemImage: "play.fill")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 28)
                 }
 
                 if ratable {
@@ -684,9 +720,16 @@ struct PlannedWorkoutView: View {
         await run { try await model.api.movePlanned(eventId: id, to: AppModel.localDate(moveDate)) }
     }
 
+    /// Gone from the screen now, from the server after "Zpět" had its 6 s.
     private func delete() async {
         guard let id = session.eventId else { return }
-        await run { try await model.api.deletePlanned(eventId: id) }
+        let model = model
+        model.deleteLater(L10n.tr("Trénink smazán"), hide: id) {
+            do { try await model.api.deletePlanned(eventId: id) } catch { model.notice = error.localizedDescription }
+            await model.refreshTraining()
+            await model.refresh()
+        }
+        dismiss()
     }
 
     private func environment(indoor: Bool) async {
@@ -902,79 +945,229 @@ struct FeedbackSheet: View {
 }
 
 /// A session typed in by hand: done today or before, or planned ahead.
+/// Zapsat trénink: a workout already done. The length from the sport's
+/// presets, the day and when it ended (now unless moved); the heart rate and
+/// calories of that window come from Apple or Google Health.
 struct ManualWorkoutSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var sport = "ride"
-    @State private var minutes = "60"
-    @State private var date = Date()
+    @State private var sport = "gym"
+    @State private var minutes = 60
+    @State private var day = Date()
+    @State private var end = Date()
+    @State private var endMoved = false
+    @State private var pickingEnd = false
+    @State private var heart: WindowHeartRate?
+    @State private var watch: WatchMatch?
+    @State private var pair = true
     @State private var rpe = 6.0
-    @State private var notes = ""
     @State private var saving = false
     @State private var error: String?
 
-    private var completed: Bool { AppModel.localDate(date) <= AppModel.localDate(Date()) }
+    static let presets: [String: [Int]] = ["gym": [30, 45, 60, 75, 90], "ride": [60, 90, 120, 180, 240], "run": [20, 30, 45, 60, 90]]
+    private static let defaults: [String: Int] = ["gym": 60, "ride": 90, "run": 45]
+
+    /// The day's date with the end's clock time; today and not moved means now.
+    private var endAt: Date {
+        let calendar = Calendar.current
+        let clock = calendar.dateComponents([.hour, .minute], from: endMoved ? end : Date())
+        let at = calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0, second: 0, of: day) ?? day
+        return min(at, Date())
+    }
+    private var startAt: Date { endAt.addingTimeInterval(-Double(minutes) * 60) }
+    private var windowKey: String { "\(sport)|\(minutes)|\(Int(endAt.timeIntervalSince1970 / 60))" }
 
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Zapsat trénink") {
-                Picker("Sport", selection: $sport) {
-                    Text("Kolo").tag("ride")
-                    Text("Běh").tag("run")
-                    Text("Posilovna").tag("gym")
-                }
-                .pickerStyle(.segmented)
+                sportTiles
+                lengthChips
                 SettingsGroup {
-                    SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna"))
-                    SettingsDivider()
-                    SettingsField(title: "Délka", text: $minutes, unit: "min", keyboard: .numberPad)
-                    SettingsDivider()
-                    DatePicker("Den", selection: $date, displayedComponents: .date)
+                    DatePicker("Den", selection: $day, in: ...Date(), displayedComponents: .date)
                         .environment(\.locale, Fmt.locale)
                         .padding(.horizontal, 16).frame(minHeight: 50)
+                    SettingsDivider()
+                    endRow
                 }
-                if completed {
-                    SettingsGroup(title: "Náročnost") {
-                        HStack {
-                            Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar)
-                            Text("\(Int(rpe))").font(Typo.number(22)).frame(width: 30)
-                        }
-                        .padding(.horizontal, 16).frame(minHeight: 50)
-                    }
-                }
-                TextField("Poznámka", text: $notes, axis: .vertical)
-                    .lineLimit(2...5).padding(12)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                watchCard
+                heartCard
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                Button { Task { await save() } } label: {
-                    Text(saving ? "Ukládám…" : "Uložit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-                }
-                .disabled(saving || Int(minutes) == nil)
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Zavřít") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { Task { await save() } } label: { Text(saving ? "Ukládám…" : "Uložit").bold() }.disabled(saving)
+                }
             }
+            .task(id: windowKey) { await loadHeart() }
         }
         .tint(Palette.ink)
     }
 
+    private var sportTiles: some View {
+        HStack(spacing: 8) {
+            sportTile("ride", "Kolo", "figure.outdoor.cycle")
+            sportTile("run", "Běh", "figure.run")
+            sportTile("gym", "Posilovna", "dumbbell.fill")
+        }
+    }
+
+    private func sportTile(_ id: String, _ title: String, _ symbol: String) -> some View {
+        let on = sport == id
+        return Button {
+            sport = id
+            minutes = Self.defaults[id] ?? 60
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: symbol).font(.system(size: 17, weight: .semibold))
+                Text(title).font(Typo.small).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+            .frame(maxWidth: .infinity).frame(height: 64)
+            .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private var lengthChips: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Délka").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.secondary).padding(.horizontal, 4)
+            HStack(spacing: 6) {
+                ForEach(Self.presets[sport] ?? [], id: \.self) { value in lengthChip(value) }
+            }
+        }
+    }
+
+    private func lengthChip(_ value: Int) -> some View {
+        let on = minutes == value
+        return Button { minutes = value } label: {
+            Text("\(value)").font(Typo.bodyStrong).monospacedDigit()
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(on ? Palette.button : Palette.card, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("\(value) min"))
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    @ViewBuilder private var endRow: some View {
+        Button {
+            if !endMoved { end = endAt }
+            withAnimation(.snappy) { pickingEnd.toggle() }
+        } label: {
+            HStack {
+                Text("Skončil").foregroundStyle(Palette.ink)
+                Spacer()
+                Text(endMoved ? endAt.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)) : L10n.tr("Právě teď"))
+                    .foregroundStyle(pickingEnd ? Palette.amber : Palette.muted)
+            }
+            .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        if pickingEnd {
+            DatePicker("Skončil", selection: Binding(get: { end }, set: { end = $0; endMoved = true }), displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel).labelsHidden()
+                .environment(\.locale, Fmt.locale)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// The watch already recorded this workout: pair with it, not twice.
+    @ViewBuilder private var watchCard: some View {
+        if let watch {
+            SettingsGroup {
+                Toggle(isOn: $pair) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Spárovat se záznamem z hodinek").foregroundStyle(Palette.ink)
+                        Text(verbatim: watchText(watch)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                .tint(Palette.green)
+                .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 50)
+            }
+        }
+    }
+
+    private func watchText(_ watch: WatchMatch) -> String {
+        let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
+        let f = ISO8601DateFormatter()
+        guard let a = watch.start.flatMap({ f.date(from: $0) }), let b = watch.end.flatMap({ f.date(from: $0) }) else { return watch.name ?? "" }
+        return [watch.name, a.formatted(style) + "–" + b.formatted(style)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    @ViewBuilder private var heartCard: some View {
+        if let heart, heart.avgHr != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Tep během tréninku", systemImage: "heart").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .symbolRenderingMode(.monochrome)
+                HStack(alignment: .firstTextBaseline, spacing: 24) {
+                    heartValue("Prům. tep", heart.avgHr)
+                    heartValue("Max.", heart.maxHr)
+                    heartValue("Kalorie", heart.kcal)
+                }
+                Text(windowText).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else {
+            // No watch on: how hard it felt stands in for the heart rate.
+            SettingsGroup(title: "Náročnost") {
+                HStack {
+                    Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar)
+                    Text("\(Int(rpe))").font(Typo.number(22)).frame(width: 30)
+                }
+                .padding(.horizontal, 16).frame(minHeight: 50)
+            }
+        }
+    }
+
+    private func heartValue(_ title: String, _ value: Int?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(value.map(String.init) ?? "–").font(Typo.number(24)).foregroundStyle(Palette.ink)
+        }
+    }
+
+    private var windowText: String {
+        let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
+        return L10n.f("Tep z %@", startAt.formatted(style) + "–" + endAt.formatted(style))
+    }
+
+    private func loadHeart() async {
+        if model.demo { heart = WindowHeartRate(avgHr: 118, maxHr: 156, kcal: 410); return }
+        try? await Task.sleep(for: .milliseconds(250))
+        if Task.isCancelled { return }
+        let found = await WorkoutHeartRate.window(start: startAt, end: endAt, api: model.api, appleHealth: AppleHealth.shared.enabled)
+        if Task.isCancelled { return }
+        heart = found.heart
+        if found.watch?.key != watch?.key { pair = true }
+        watch = found.watch
+    }
+
     private func save() async {
-        guard let m = Int(minutes), m > 0 else { return }
         if model.demo { dismiss(); return }
         saving = true
         defer { saving = false }
-        let title = name.trimmingCharacters(in: .whitespaces).isEmpty ? L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna") : name
+        let title = L10n.tr(sport == "ride" ? "Jízda" : sport == "run" ? "Běh" : "Posilovna")
+        let start = startAt, date = AppModel.localDate(start)
+        let measured = heart?.avgHr != nil ? heart : nil
+        let effort = measured == nil ? Int(rpe) : nil
+        let pairWith = pair ? watch?.key : nil
         do {
-            let day = AppModel.localDate(date)
-            let result = try await model.api.manualWorkout(name: title, date: day, sport: sport, minutes: m, completed: completed, rpe: completed ? Int(rpe) : nil, notes: notes)
-            if completed {
-                // Done: to the apps chosen in Synchronizace (the server sent its part already).
-                let activity = ActivityToSync(key: result.activityKey ?? "manual:" + UUID().uuidString, sport: sport, name: title, date: day,
-                                              start: nil, minutes: m, notes: notes, rpe: Int(rpe))
-                await model.shareActivity(activity, sends: result.sends ?? [])
+            let result = try await model.api.manualWorkout(name: title, date: date, sport: sport, minutes: minutes, completed: true, rpe: effort, notes: "",
+                                                           start: start, heart: measured, pairWith: pairWith)
+            // Paired: the watch put it in Apple or Google Health already.
+            if pairWith != nil {
+                await model.refreshTraining()
+                dismiss()
+                return
             }
+            // Done: to the apps chosen in Synchronizace (the server sent its part already).
+            let activity = ActivityToSync(key: result.activityKey ?? "manual:" + UUID().uuidString, sport: sport, name: title, date: date,
+                                          start: start, minutes: minutes, notes: "", rpe: effort)
+            await model.shareActivity(activity, sends: result.sends ?? [])
             await model.refreshTraining()
             dismiss()
         } catch {

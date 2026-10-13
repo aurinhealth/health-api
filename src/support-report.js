@@ -1,14 +1,16 @@
 // "Nahlásit problém" in the app's Settings: the user's description, an
 // optional screenshot and the app's diagnostics (versions, connections, last
-// errors). Stored per user (migrations/0016_support_reports.sql) and e-mailed
-// to the operator (CONTACT_EMAIL, else OWNER_EMAIL) when e-mail is set up.
+// errors, the week's failed requests), with what the server knows went wrong
+// for the user (serverSnapshot). Stored per user (migrations/0016_support_reports.sql)
+// and e-mailed to the operator (CONTACT_EMAIL, else OWNER_EMAIL) when e-mail
+// is set up, led by the findings worth a look (reportFindings).
 import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 
 export const MAX_MESSAGE = 4000;
 // Base64 of the JPEG; under D1's 2 MB value limit with room for the rest.
 export const MAX_SCREENSHOT_BASE64 = 1_400_000;
-export const MAX_DIAGNOSTICS = 16_000;
+export const MAX_DIAGNOSTICS = 32_000;
 export const DAILY_REPORTS = 5;
 const MIN_GAP_SECONDS = 20;
 
@@ -56,13 +58,63 @@ async function assertAllowed(db) {
   if (Number(row?.recent || 0) > 0) throw fail(L("Hlášení už odešlo. Chvíli počkej.", "The report has already been sent. Wait a moment."), 429);
 }
 
+const cut = (value, length = 300) => value == null ? null : String(value).slice(0, length);
+
+// What the server knows went wrong for this user: every sync's state with its
+// last error and failed steps, and sends to other apps that failed in the last
+// two weeks. Times are UTC.
+export async function serverSnapshot(db) {
+  const all = async (sql, ...args) => (await db.prepare(sql).bind(...args).all().catch(() => null))?.results || [];
+  const syncs = (await all("SELECT sync_name, status, finished_at, updated_at, details_json FROM sync_status WHERE user_id=? ORDER BY sync_name", db.userId)).map(row => {
+    let details = {};
+    try { details = JSON.parse(row.details_json || "{}") || {}; } catch {}
+    const problems = (Array.isArray(details.results) ? details.results : []).filter(r => r?.status && !/^(ok|done|completed|skipped)$/.test(r.status)).slice(0, 5)
+      .map(r => ({ source: cut(r.source, 40), status: cut(r.status, 40), message: cut(r.message) }));
+    const lastError = details.lastError || details.error;
+    return { name: row.sync_name, status: row.status, finishedAt: row.finished_at, updatedAt: row.updated_at, ...(lastError ? { lastError: cut(lastError) } : {}), ...(details.lastErrorAt ? { lastErrorAt: details.lastErrorAt } : {}), ...(problems.length ? { problems } : {}) };
+  });
+  const failedSends = (await all("SELECT destination, activity_key, status, message, attempts, updated_at FROM sync_sends WHERE user_id=? AND status IN ('error','unknown') AND updated_at>=datetime('now','-14 days') ORDER BY updated_at DESC LIMIT 10", db.userId))
+    .map(r => ({ destination: r.destination, activity: cut(r.activity_key, 80), status: r.status, message: cut(r.message), attempts: r.attempts, updatedAt: r.updated_at }));
+  return { syncs, failedSends };
+}
+
+// One line for each thing worth a look, from the app's diagnostics and the
+// server's snapshot; empty when nothing stands out.
+export function reportFindings(diagnostics, server, now = Date.now()) {
+  const d = diagnostics && typeof diagnostics === "object" ? diagnostics : {};
+  const out = [];
+  const connections = Array.isArray(d.connections) ? d.connections.filter(c => c?.connected) : [];
+  for (const c of connections) {
+    if (c.needsReconnect) out.push(`${c.id}: needs reconnecting${c.lastError ? ` (${c.lastError})` : ""}`);
+    else if (c.lastError) out.push(`${c.id}: last error ${c.lastErrorAt || ""} ${c.lastError}`);
+    const hours = Math.floor((now - Date.parse(c.lastSuccessAt)) / 3_600_000);
+    if (hours >= 24) out.push(`${c.id}: nothing new for ${hours} h (last ${c.lastSuccessAt})`);
+    if (Array.isArray(c.missingPermissions) && c.missingPermissions.length) out.push(`${c.id}: missing permissions ${c.missingPermissions.join(", ")}`);
+  }
+  const apple = d.appleHealth;
+  if (apple?.on === false && connections.some(c => c.id === "apple")) out.push("apple: switched off on the iPhone, while the account still has it connected");
+  if (apple?.lastError) out.push(`apple: ${apple.lastError}`);
+  for (const [screen, message] of Object.entries(d.lastErrors && typeof d.lastErrors === "object" ? d.lastErrors : {})) out.push(`on screen (${screen}): ${message}`);
+  const recent = Array.isArray(d.recentErrors) ? d.recentErrors : [];
+  if (recent.length) out.push(`${recent.length} failed request(s) in the app this week, latest ${[recent[0].at, recent[0].path, recent[0].status, recent[0].message].filter(v => v != null && v !== "").join(" ")}`);
+  for (const s of server?.syncs || []) {
+    if (/^(error|broken|partial)$/.test(s.status) || s.problems?.length) out.push(`server sync ${s.name}: ${s.status}${s.lastError ? ` (${s.lastError})` : ""}${(s.problems || []).map(p => `; ${p.source} ${p.status}${p.message ? ` ${p.message}` : ""}`).join("")}`);
+  }
+  if (server?.failedSends?.length) out.push(`${server.failedSends.length} send(s) to other apps failed in the last two weeks`);
+  if (d.offline === true) out.push("the phone was offline");
+  return out.map(line => cut(line, 400));
+}
+
 function reportEmail(env, { id, message, diagnostics, screenshot }) {
-  let pretty = "";
-  try { pretty = diagnostics ? JSON.stringify(JSON.parse(diagnostics), null, 2) : ""; } catch { pretty = diagnostics || ""; }
+  let parsed = null;
+  try { parsed = diagnostics ? JSON.parse(diagnostics) : null; } catch {}
+  const pretty = parsed ? JSON.stringify(parsed, null, 2) : diagnostics || "";
+  const findings = reportFindings(parsed, parsed?.server);
   const who = `${env.USER_EMAIL || "?"} (user ${env.USER_ID ?? env.DB?.userId})`;
-  const text = [`Aurin problem report #${id}`, `From: ${who}`, "", message, "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
+  const text = [`Aurin problem report #${id}`, `From: ${who}`, "", message, "", findings.length ? ["Worth a look:", ...findings.map(f => `- ${f}`)].join("\n") : "Nothing stands out in the diagnostics.", "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
   const escape = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin problem report #${id}</strong><br>From: ${escape(who)}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
+    + (findings.length ? `<p><strong>Worth a look:</strong></p><ul>${findings.map(f => `<li>${escape(f)}</li>`).join("")}</ul>` : "<p>Nothing stands out in the diagnostics.</p>")
     + (screenshot ? `<p><img alt="Screenshot" style="max-width:360px;border:1px solid #ddd" src="data:image/jpeg;base64,${screenshot}"></p>` : "")
     + `<pre style="font-size:12px;background:#f4f4f5;padding:12px;white-space:pre-wrap">${escape(pretty || "none")}</pre></body></html>`;
   return { subject: `Aurin: problem report #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}`, text, html };
@@ -78,6 +130,9 @@ export async function saveSupportReport(env, body) {
   const report = validateReport(body);
   await ensure(env.DB);
   await assertAllowed(env.DB);
+  // The server's side goes with the app's, so the stored report is whole.
+  const server = await serverSnapshot(env.DB).catch(() => null);
+  if (server) report.diagnostics = JSON.stringify({ ...(report.diagnostics ? JSON.parse(report.diagnostics) : {}), server });
   const result = await env.DB.prepare("INSERT INTO support_reports(user_id,message,screenshot_base64,diagnostics_json) VALUES(?,?,?,?)").bind(env.DB.userId, report.message, report.screenshot, report.diagnostics).run();
   const id = Number(result?.meta?.last_row_id) || null;
   let emailed = false;

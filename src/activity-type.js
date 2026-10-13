@@ -6,11 +6,15 @@
 //
 // Where the change goes:
 // - Intervals.icu: the activity is updated there (PUT /activity/{id}).
+// - Made in the app (a gym session, a workout typed in): kept here and sent
+//   again to where it went (Intervals.icu, Google Health); the app replaces
+//   its own Apple Health copy (the same sync identifier).
 // - Google Health and Apple Health: only the app that recorded a workout may
 //   change it, so the change stays in Loadwise. The stored row is rewritten
 //   and marked (loadwiseType), and the syncs keep the mark (KEEP_TYPE_SQL).
 import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
+import { sendActivity } from './sync-destinations.js';
 
 // [Intervals.icu type, Czech, English, group]
 export const ACTIVITY_TYPES = [
@@ -86,19 +90,69 @@ export const KEEP_TYPE_SQL = `payload_json = CASE
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
+// A type chosen for a gym session saved in the app (gym:<date>).
+const OVERRIDES = 'CREATE TABLE IF NOT EXISTS activity_type_overrides (user_id INTEGER NOT NULL, activity_key TEXT NOT NULL, type TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, activity_key))';
+const GYM_KEY = /^gym:\d{4}-\d{2}-\d{2}$/;
+
+/** Types chosen for gym sessions, date → type. */
+export async function gymTypes(db, userId, from, to) {
+  try {
+    const rows = (await db.prepare('SELECT activity_key, type FROM activity_type_overrides WHERE user_id = ? AND activity_key >= ? AND activity_key <= ?').bind(userId, 'gym:' + from, 'gym:' + to).all()).results || [];
+    return Object.fromEntries(rows.filter(r => BY_TYPE.has(r.type)).map(r => [r.activity_key.slice(4), r.type]));
+  } catch (error) {
+    if (/no such table/i.test(error.message)) return {};
+    throw error;
+  }
+}
+
+// An activity made in the app goes again to where it was sent, with its new type.
+async function sendAgain(env, key, type, options) {
+  let row = null;
+  try { row = await env.DB.prepare('SELECT payload_json FROM sync_sends WHERE user_id = ? AND activity_key = ? ORDER BY updated_at DESC LIMIT 1').bind(env.USER_ID, key).first(); }
+  catch (error) { if (!/no such table/i.test(error.message)) throw error; }
+  if (!row) return [];
+  let p = {};
+  try { p = JSON.parse(row.payload_json || '{}') || {}; } catch { return []; }
+  const result = await sendActivity(env, { ...p, start: p.startUtc || '', type }, options).catch(() => ({ sends: [] }));
+  return (result.sends || []).filter(s => s.status === 'sent' || s.status === 'ok').map(s => s.destination);
+}
+
 // POST /app/api/activity/type { id, type }: id is the row's external_id (the
-// calendar's activity id). Returns where the change went.
-export async function changeActivityType(env, { id, type } = {}, { fetchImpl = fetch } = {}) {
+// calendar's activity id), or gym:<date> for a gym session. Returns where the
+// change went, and `key` when the app replaces its Apple Health copy.
+export async function changeActivityType(env, { id, type } = {}, { fetchImpl = fetch, googleToken = null } = {}) {
   const entry = BY_TYPE.get(String(type || ''));
   if (!entry) throw fail(L('Neznámý typ aktivity.', 'Unknown activity type.'));
   const key = String(id || '').slice(0, 300);
   if (!key) throw fail(L('Aktivita nebyla nalezena.', 'The activity wasn\'t found.'), 404);
+
+  if (GYM_KEY.test(key)) {
+    const plan = await env.DB.prepare('SELECT 1 FROM gym_plans WHERE user_id = ? AND workout_date = ?').bind(env.USER_ID, key.slice(4)).first().catch(() => null);
+    if (!plan) throw fail(L('Aktivita nebyla nalezena.', 'The activity wasn\'t found.'), 404);
+    await env.DB.prepare(OVERRIDES).run();
+    await env.DB.prepare('INSERT INTO activity_type_overrides (user_id, activity_key, type) VALUES (?, ?, ?) ON CONFLICT(user_id, activity_key) DO UPDATE SET type = excluded.type, updated_at = CURRENT_TIMESTAMP').bind(env.USER_ID, key, entry[0]).run();
+    return { status: 'ok', type: entry[0], sent: await sendAgain(env, key, entry[0], { fetchImpl, googleToken }), kept: [], key };
+  }
+
   const row = await env.DB.prepare(`SELECT id, source_family, data_type, external_id, payload_json FROM health_datapoints
-    WHERE user_id = ? AND external_id = ? AND ((source_family = 'intervals' AND data_type = 'activity')
+    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local') AND data_type = 'activity')
       OR (source_family IN ('google-wearables', 'apple-health') AND data_type = 'exercise')) LIMIT 1`).bind(env.USER_ID, key).first();
   if (!row) throw fail(L('Aktivita nebyla nalezena.', 'The activity wasn\'t found.'), 404);
   let payload = {};
   try { payload = JSON.parse(row.payload_json || '{}') || {}; } catch { /* rewritten below */ }
+
+  // Typed in (Zapsat trénink): the app's own record and its copies.
+  if (row.source_family === 'local') {
+    const local = String(row.external_id).replace(/^activity:/, '');
+    payload.type = entry[0];
+    await env.DB.batch([
+      env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID),
+      env.DB.prepare("UPDATE local_workouts SET event_json = json_set(event_json, '$.type', ?) WHERE user_id = ? AND id = ? AND json_valid(event_json)").bind(entry[0], env.USER_ID, local)
+    ]);
+    // Paired with the watch's record: the watch's apps have it, nothing was sent.
+    const sent = payload.pairedWith ? [] : await sendAgain(env, 'manual:' + local, entry[0], { fetchImpl, googleToken });
+    return { status: 'ok', type: entry[0], sent, kept: [], ...(payload.pairedWith ? {} : { key: 'manual:' + local }) };
+  }
 
   if (row.source_family === 'intervals') {
     const remote = String(payload.id || String(row.external_id).replace(/^activity:/, ''));

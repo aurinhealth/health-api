@@ -55,8 +55,8 @@
     }
   ],
   // Cloudflare Email Service: sign-in codes and notices about new passkeys. Nothing is sent
-  // until petrfitnessdata.eu is onboarded in Email Service → Email Sending and the Worker
-  // has the EMAIL_FROM secret (the sender address); until then e-mail sign-in stays hidden.
+  // until aurin.health is onboarded in Email Service → Email Sending and the Worker has the
+  // EMAIL_FROM secret (noreply@aurin.health); until then e-mail sign-in stays hidden.
   "send_email": [
     { "name": "EMAIL" }
   ],

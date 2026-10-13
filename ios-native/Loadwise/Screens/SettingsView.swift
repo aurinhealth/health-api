@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings: a closed menu like Bevel's, each row opens its own page.
+/// Settings: a closed menu of names only, each row opens its own page.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -45,10 +45,7 @@ struct SettingsMenu: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
     var signOut: () -> Void = {}
-    @AppStorage("appearance") private var appearance = "system"
-    @AppStorage("restSets") private var restSets = 90
-    @AppStorage("restExercises") private var restExercises = 120
-    @AppStorage(DrinkFigureKind.storageKey) private var drinkFigure = DrinkFigureKind.fallback.rawValue
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -62,136 +59,75 @@ struct SettingsMenu: View {
 
             ProSettingsRow()
 
-            NavigationLink { ProfileSettingsView(store: store, signOut: signOut) } label: {
-                HStack(spacing: 14) {
-                    AvatarView(size: 56)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(verbatim: profileName ?? L10n.tr("Profil")).font(.headline).foregroundStyle(Palette.ink).lineLimit(1)
-                        Text(verbatim: email.isEmpty ? L10n.tr("fotka, jméno, věk a výška") : email)
-                            .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            SettingsGroup(title: "Obecné") {
+                NavigationLink { ProfileSettingsView(store: store, signOut: signOut) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "person", color: Palette.green), title: "Účet")
                 }
-                .padding(16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+                SettingsDivider()
+                NavigationLink { NotificationsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "bell", color: Palette.amber), title: "Oznámení")
+                }
+                SettingsDivider()
+                NavigationLink { AppearanceSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
+                }
+                SettingsDivider()
+                NavigationLink { CustomizeSettingsView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "slider.horizontal.3", color: Palette.indigo), title: "Přizpůsobení")
+                }
+                SettingsDivider()
+                NavigationLink { LanguageSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk")
+                }
             }
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Data") {
                 NavigationLink { GoalsSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "scope", color: Palette.green), title: "Cíle", value: goalsValue)
+                    SettingsRow(icon: SettingsIcon(systemImage: "scope", color: Palette.green), title: "Cíle")
                 }
                 SettingsDivider()
                 NavigationLink { SourcesSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "arrow.triangle.2.circlepath", color: Palette.indigo), title: "Zdroje dat",
-                                value: !store.problems.isEmpty ? L10n.tr("připojit znovu")
-                                    : store.loaded ? "\(store.connectedCount) " + Fmt.plural(store.connectedCount, "připojený", "připojené", "připojených") : nil)
+                    SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.indigo), title: "Zdroje dat")
                         // A source to connect again: a red dot on the icon.
                         .overlay(alignment: .topLeading) {
                             if !store.problems.isEmpty {
-                                Circle().fill(Palette.rust).frame(width: 10, height: 10)
+                                Circle().fill(Palette.rust).frame(width: 9, height: 9)
                                     .overlay(Circle().stroke(Palette.card, lineWidth: 2))
-                                    .offset(x: 40, y: 8)
+                                    .offset(x: 36, y: 10)
                                     .accessibilityLabel("Připojit znovu")
                             }
                         }
                 }
                 SettingsDivider()
                 NavigationLink { SyncSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "arrow.up.forward.app.fill", color: Palette.green), title: "Synchronizace")
-                }
-                SettingsDivider()
-                NavigationLink { HeartActivitySettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Tep a aktivita",
-                                value: HeartActivitySettingsView.summary(store.profile, suggestions: store.suggestions))
-                }
-                SettingsDivider()
-                NavigationLink { SleepSettingsView(given: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "moon.zzz.fill", color: Palette.indigo), title: "Spánek a budík", value: sleepValue)
-                }
-                SettingsDivider()
-                NavigationLink { ZonesSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "heart.text.square", color: Palette.rust), title: "Tréninkové zóny", value: "běh, kolo")
+                    SettingsRow(icon: SettingsIcon(systemImage: "arrow.triangle.2.circlepath", color: Palette.green), title: "Synchronizace")
                 }
                 SettingsDivider()
                 NavigationLink { WeatherPlaceView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "cloud.sun.fill", color: Palette.blue), title: "Poloha pro počasí", value: model.today?.weather?.place)
-                }
-            }
-            .buttonStyle(.plain)
-
-            SettingsGroup(title: "Posilovna, jídlo a pití") {
-                NavigationLink { EquipmentView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "dumbbell.fill", color: Palette.brown), title: "Vybavení na posilování")
+                    SettingsRow(icon: SettingsIcon(systemImage: "mappin.and.ellipse", color: Palette.blue), title: "Poloha pro počasí")
                 }
                 SettingsDivider()
-                NavigationLink { GymRestSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "timer", color: Palette.amberBar), title: "Pauzy v posilovně",
-                                value: GymRestSettingsView.label(restSets) + " / " + GymRestSettingsView.label(restExercises))
-                }
-                SettingsDivider()
-                NavigationLink { HeartRateSensorView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "heart.fill", color: Palette.rust), title: "Snímač tepu",
-                                value: HeartRateSensor.shared.savedName)
-                }
-                SettingsDivider()
-                NavigationLink { MealSlotsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
-                }
-                SettingsDivider()
-                NavigationLink { DrinkSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "cup.and.saucer.fill", color: Palette.blue), title: "Oblíbené nápoje")
-                }
-                SettingsDivider()
-                NavigationLink { DrinkFigureSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "drop.fill", color: Palette.blue), title: "Postavička pití",
-                                value: DrinkFigureKind.from(drinkFigure).label)
-                }
-            }
-            .buttonStyle(.plain)
-
-            SettingsGroup(title: "Aplikace") {
-                NavigationLink { NotificationsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "bell.fill", color: Palette.amberBar), title: "Oznámení", value: remindersValue)
-                }
-                SettingsDivider()
-                NavigationLink { AppearanceSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.button), title: "Vzhled", value: AppearanceSettingsView.label(appearance))
-                }
-                SettingsDivider()
-                NavigationLink { UnitsSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Color(light: 0x5B7FA6, dark: 0x8FB1D6)), title: "Jednotky", value: UnitsSettingsView.label(units))
-                }
-                SettingsDivider()
-                NavigationLink { LanguageSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk", value: LanguageSettingsView.label(language))
+                NavigationLink { PrivacySettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "lock", color: Palette.muted), title: "Soukromí a data")
                 }
             }
             .buttonStyle(.plain)
 
             SettingsGroup(title: "Ostatní") {
-                NavigationLink { PrivacySettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "lock.fill", color: Palette.faint), title: "Soukromí a data")
-                }
-                SettingsDivider()
                 NavigationLink { ReportProblemView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "ladybug.fill", color: Palette.rust), title: "Nahlásit problém")
+                    SettingsRow(icon: SettingsIcon(systemImage: "ladybug", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
-                Link(destination: URL(string: "https://aurin.health/support")!) {
-                    SettingsRow(icon: SettingsIcon(systemImage: "questionmark", color: Color(light: 0x8A5AA6, dark: 0xC79BE0)), title: "Nápověda a kontakt", subtitle: "aurin.health/support")
+                Button(action: contact) {
+                    SettingsRow(icon: SettingsIcon(systemImage: "envelope", color: Palette.indigo), title: "Kontaktovat nás", chevron: false)
+                        .overlay(alignment: .trailing) {
+                            Image(systemName: "arrow.up.right.square").font(.system(size: 14)).foregroundStyle(Palette.faint)
+                                .padding(.trailing, 18).accessibilityHidden(true)
+                        }
                 }
             }
             .buttonStyle(.plain)
-
-            SettingsGroup {
-                Button(action: signOut) {
-                    SettingsRow(title: model.demo ? "Ukončit ukázku" : "Odhlásit se", chevron: false, titleColor: Palette.rust)
-                }
-                .buttonStyle(.plain)
-            }
 
             Text(verbatim: "Aurin \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
@@ -199,34 +135,73 @@ struct SettingsMenu: View {
         }
     }
 
-    @AppStorage(AvatarStore.nameKey) private var accountName = ""
-    @AppStorage(AvatarStore.emailKey) private var email = ""
-
-    /// The name typed in Profil, else the account's.
-    private var profileName: String? {
-        store.profile["displayName"]?.string ?? accountName.nilIfBlank
+    /// Kontaktovat nás: a new e-mail to support in the phone's mail app, with
+    /// the app and iOS version at the end; the support page without one.
+    private func contact() {
+        let info = Bundle.main.infoDictionary
+        let version = "Aurin \(info?["CFBundleShortVersionString"] as? String ?? "") (\(info?["CFBundleVersion"] as? String ?? "")) · iOS \(UIDevice.current.systemVersion)"
+        var mail = URLComponents(string: "mailto:support@aurin.health")!
+        mail.queryItems = [URLQueryItem(name: "subject", value: "Aurin"), URLQueryItem(name: "body", value: "\n\n\n" + version)]
+        openURL(mail.url!) { opened in
+            if !opened { openURL(URL(string: "https://aurin.health/support")!) }
+        }
     }
+}
 
-    @AppStorage(Units.key) private var units = "metric"
-    @AppStorage(L10n.key) private var language = L10n.defaultLanguage
-    @AppStorage(Reminders.bedtimeKey) private var r1 = true
-    @AppStorage(Reminders.workoutKey) private var r2 = true
-    @AppStorage(Reminders.waterKey) private var r3 = true
-    @AppStorage(Reminders.foodKey) private var r4 = true
+/// Přizpůsobení: how Aurin fits the body, the gym and the food diary.
+struct CustomizeSettingsView: View {
+    let store: SettingsStore
 
-    private var remindersValue: String {
-        let on = [r1, r2, r3, r4].filter { $0 }.count
-        return on == 0 ? "vypnutá" : "\(on) " + Fmt.plural(on, "zapnuté", "zapnutá", "zapnutých")
-    }
+    var body: some View {
+        SettingsPage(title: "Přizpůsobení") {
+            SettingsGroup(title: "Tělo") {
+                NavigationLink { HeartActivitySettingsView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "heart", color: Palette.rust), title: "Tep a aktivita")
+                }
+                SettingsDivider()
+                NavigationLink { ZonesSettingsView(store: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "chart.bar", color: Palette.rust), title: "Tréninkové zóny")
+                }
+                SettingsDivider()
+                NavigationLink { SleepSettingsView(given: store) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "moon", color: Palette.indigo), title: "Spánek a budík")
+                }
+                SettingsDivider()
+                NavigationLink { UnitsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Palette.blue), title: "Jednotky")
+                }
+            }
+            .buttonStyle(.plain)
 
-    private var sleepValue: String? {
-        if let wake = store.profile["wakeTime"]?.string { return L10n.f("budík %@", ClockText.format(wake)) }
-        return store.profile["sleepGoal"]?.number.map { Fmt.hoursMinutes($0) + " h" }
-    }
+            SettingsGroup(title: "Posilovna") {
+                NavigationLink { EquipmentView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "dumbbell", color: Palette.brown), title: "Vybavení")
+                }
+                SettingsDivider()
+                NavigationLink { GymRestSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "timer", color: Palette.amber), title: "Pauzy")
+                }
+                SettingsDivider()
+                NavigationLink { HeartRateSensorView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "sensor.tag.radiowaves.forward", color: Palette.rust), title: "Snímač tepu")
+                }
+            }
+            .buttonStyle(.plain)
 
-    private var goalsValue: String? {
-        if let name = store.profile["eventName"]?.string { return name }
-        if store.profile["mainSport"]?.string == "auto" { return "automaticky" }
-        return GoalsSettingsView.sports.first { $0.0 == store.profile["mainSport"]?.string }?.1
+            SettingsGroup(title: "Jídlo a pití") {
+                NavigationLink { MealSlotsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
+                }
+                SettingsDivider()
+                NavigationLink { DrinkSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "cup.and.saucer", color: Palette.blue), title: "Oblíbené nápoje")
+                }
+                SettingsDivider()
+                NavigationLink { DrinkFigureSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "face.smiling", color: Palette.blue), title: "Postavička pití")
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 }

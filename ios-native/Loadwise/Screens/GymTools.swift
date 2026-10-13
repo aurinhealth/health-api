@@ -15,10 +15,10 @@ struct TrainingTools: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionLabel(text: "Posilovna")
-            // Posilovna naživo (GymLive.swift): an empty session with a clock,
-            // or the last workout's exercises with the next loads.
-            NavigationLink(value: AppRoute.liveGym(today, false)) {
-                Label("Začít posilovnu", systemImage: "dumbbell.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+            // Today's plan in the workout mode, or an empty workout there; the
+            // last workout's exercises with the next loads (GymLive.swift).
+            NavigationLink(value: AppRoute.trainingMode(today)) {
+                Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
@@ -29,14 +29,11 @@ struct TrainingTools: View {
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
-            LazyVGrid(columns: columns, spacing: 10) {
-                tile(.trainingMode(today), "play.fill", "Režim tréninku", Palette.amberBar)
-                tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
-            }
             LibraryWidget()
             LazyVGrid(columns: columns, spacing: 10) {
                 tile(.weekPlan, "calendar.badge.plus", "Plán týdne", Palette.green)
                 tile(.insights, "trophy.fill", "Rekordy", Palette.gold)
+                tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
             }
             Button(action: addWorkout) {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")
@@ -213,6 +210,9 @@ struct TitleAndOptionalIcon: LabelStyle {
 struct GymBuilderView: View {
     @Environment(AppModel.self) private var model
     let date: String
+    /// A saved or received workout to plan (Moje tréninky, a friend's link)
+    /// instead of one the AI puts together.
+    var template: TemplatePlanRequest? = nil
     @State private var day: Date = Date()
     @State private var minutes = 60
     @State private var focus = "auto"
@@ -234,17 +234,18 @@ struct GymBuilderView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink") {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Posilovna · sestavit trénink").padding(.top, 24)
-                Text(proposal == nil ? "Jaký trénink chceš?" : proposal!.planName)
+                SectionLabel(text: template == nil ? "Posilovna · sestavit trénink" : "Posilovna · naplánovat trénink").padding(.top, 24)
+                Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
                     .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)
-                if let proposal { result(proposal) } else { form }
+                if let proposal { result(proposal) } else if let template { templateForm(template) } else { form }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
             }
         }
         .task {
-            if let d = Self.isoFormatter.date(from: date) { day = d }
+            if let d = Self.isoFormatter.date(from: date), d >= Calendar.current.startOfDay(for: Date()) { day = d }
+            if let minutes = template?.template.minutes { self.minutes = minutes }
             if !model.demo, equipment == nil { equipment = try? await model.api.gymEquipment() }
             if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
         }
@@ -322,6 +323,42 @@ struct GymBuilderView: View {
         }
     }
 
+    /// A saved workout: the day (the sender's when a friend sent it), its
+    /// exercises, then the proposal with the athlete's own weights.
+    private func templateForm(_ t: TemplatePlanRequest) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let from = t.fromName {
+                Text(L10n.f("Trénink ti posílá %@", from)).font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 6)
+            }
+            SectionLabel(text: "Kdy").padding(.top, 26)
+            Card {
+                DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                    .environment(\.locale, Fmt.locale)
+            }
+            .padding(.top, 10)
+            SectionLabel(text: "Cviky").padding(.top, 26)
+            VStack(spacing: 0) {
+                ForEach(Array(t.template.exercises.enumerated()), id: \.offset) { _, e in
+                    HStack {
+                        Text(e.name).font(.body).foregroundStyle(Palette.ink)
+                        Spacer()
+                        Text("\(e.sets) × \(e.reps)").font(Typo.small).foregroundStyle(Palette.secondary)
+                    }
+                    .padding(.vertical, 12)
+                    Rectangle().fill(Palette.hairline).frame(height: 1)
+                }
+            }
+            Text("Cviky, série a opakování zůstanou, váhy se spočítají podle tvých tréninků a dnešní připravenosti.")
+                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            PrimaryButton(title: busy == "preview" ? "Připravuji…" : "Naplánovat", systemImage: "calendar.badge.plus", busy: busy == "preview") {
+                Task { await planTemplate(t) }
+            }
+            .disabled(busy != nil || model.demo)
+            .padding(.top, 22)
+            if model.demo { Text("V ukázce se trénink neplánuje.").font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 8) }
+        }
+    }
+
     private func toggle(_ id: String) {
         if muscles.contains(id) { muscles.remove(id) } else if muscles.count < 5 { muscles.insert(id) }
     }
@@ -387,13 +424,26 @@ struct GymBuilderView: View {
                 }
                 .disabled(busy != nil || p.draftId == nil)
                 .padding(.top, 22)
-                HStack(spacing: 10) {
-                    SecondaryButton(title: "Jiný návrh", systemImage: "arrow.clockwise") { Task { await preview() } }
-                    SecondaryButton(title: "Změnit zadání", systemImage: "slider.horizontal.3") { proposal = nil; answer = nil }
+                if template == nil {
+                    HStack(spacing: 10) {
+                        SecondaryButton(title: "Jiný návrh", systemImage: "arrow.clockwise") { Task { await preview() } }
+                        SecondaryButton(title: "Změnit zadání", systemImage: "slider.horizontal.3") { proposal = nil; answer = nil }
+                    }
+                    .disabled(busy != nil)
+                    .padding(.top, 10)
+                } else {
+                    SecondaryButton(title: "Změnit den", systemImage: "calendar") { proposal = nil; answer = nil }
+                        .disabled(busy != nil)
+                        .padding(.top, 10)
                 }
-                .disabled(busy != nil)
-                .padding(.top, 10)
             }
+            // The workout without weights: kept to plan again, or sent to a friend.
+            let kept = WorkoutTemplate.from(p, minutes: minutes)
+            if template == nil || template?.fromName != nil {
+                SaveWorkoutButton(template: kept).padding(.top, 10)
+            }
+            ShareWorkoutButton(template: kept, date: isoDay, groups: WorkoutSharing.groups(p.muscles, template: kept))
+                .padding(.top, 10)
         }
     }
 
@@ -512,6 +562,16 @@ struct GymBuilderView: View {
             var next = try await model.api.previewGym(date: isoDay, minutes: minutes,
                                                       focus: focus == "upper" || focus == "lower" ? focus : nil,
                                                       muscles: focus == "muscles" ? BodyFigure.muscles.map { $0.id }.filter(muscles.contains) : [])
+            next.groupSupersets()
+            proposal = next
+            answer = nil
+            wish = ""
+        }
+    }
+
+    private func planTemplate(_ t: TemplatePlanRequest) async {
+        await run("preview") {
+            var next = try await model.api.planTemplate(t, date: isoDay)
             next.groupSupersets()
             proposal = next
             answer = nil

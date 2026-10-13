@@ -76,6 +76,17 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
+                // A deletion with its "Zpět" (AppModel.deleteLater).
+                if let toast = model.undoToast {
+                    PlanToastView(toast: toast) {
+                        model.undoToast = nil
+                        if let undo = toast.settle(undo: true) { Task { await undo() } }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, model.immersive ? 16 : 88)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2)
+                }
                 if !model.immersive {
                     TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
                            onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
@@ -98,6 +109,15 @@ struct RootView: View {
             .sheet(isPresented: $showCoach) { CoachView().dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .animation(.snappy, value: model.syncReport?.id)
+            .animation(.snappy, value: model.undoToast?.id)
+            // Without "Zpět" in 6 s the deletion goes through; also when another
+            // toast took its place.
+            .task(id: model.undoToast?.id) {
+                guard let current = model.undoToast else { return }
+                try? await Task.sleep(for: .seconds(6))
+                if model.undoToast?.id == current.id { model.undoToast = nil }
+                if let commit = current.settle(undo: false) { await commit() }
+            }
             // The toast goes away on its own unless its sheet is open.
             .task(id: model.syncReport?.id) {
                 guard let shown = model.syncReport?.id else { return }

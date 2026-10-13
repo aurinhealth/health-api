@@ -270,6 +270,11 @@ final class APIClient: @unchecked Sendable {
         try await get("/app/api/activity-detail?id=" + Self.query(id))
     }
 
+    /// A workout from the watch (Apple Health, Google Health).
+    func watchDetail(_ ref: WatchRef) async throws -> ActivityDetail {
+        try await get("/app/api/activity-detail/watch?source=" + Self.query(ref.source) + "&id=" + Self.query(ref.id))
+    }
+
     func plannedWorkout(eventId: String) async throws -> PlannedWorkout {
         try await get("/app/api/workouts/planned?id=" + Self.query(eventId))
     }
@@ -305,10 +310,24 @@ final class APIClient: @unchecked Sendable {
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
     /// A done one comes back with where it was sent (Synchronizace).
     @discardableResult
-    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String) async throws -> ManualWorkoutResult {
+    func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String,
+                       start: Date? = nil, heart: WindowHeartRate? = nil, pairWith: String? = nil) async throws -> ManualWorkoutResult {
         var body: JSONObject = ["name": .string(name), "date": .string(date), "sport": .string(sport), "minutes": .number(Double(minutes)),
                                 "completed": .bool(completed), "notes": .string(notes), "requestId": .string(UUID().uuidString)]
         if let rpe { body["rpe"] = .number(Double(rpe)) }
+        if let start {
+            // The window the heart rate was read for; the start's clock time in the phone's zone.
+            let iso = ISO8601DateFormatter()
+            body["start"] = .string(iso.string(from: start))
+            body["end"] = .string(iso.string(from: start.addingTimeInterval(Double(minutes) * 60)))
+            let clock = Calendar.current.dateComponents([.hour, .minute], from: start)
+            body["time"] = .string(String(format: "%02d:%02d", clock.hour ?? 12, clock.minute ?? 0))
+        }
+        if let v = heart?.avgHr { body["avgHr"] = .number(Double(v)) }
+        if let v = heart?.maxHr { body["maxHr"] = .number(Double(v)) }
+        if let v = heart?.kcal { body["kcal"] = .number(Double(v)) }
+        // The watch's record it is paired with: nothing is sent anywhere then.
+        if let pairWith { body["pairWith"] = .string(pairWith) }
         return try await send("/app/api/workouts/manual", method: "POST", body: body)
     }
 
@@ -470,7 +489,7 @@ final class APIClient: @unchecked Sendable {
         var request = makeRequest("/auth/app/session", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["token": token, "verifier": verifier])
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await load(request)
         try check(response, data)
         guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
     }
@@ -537,12 +556,13 @@ final class APIClient: @unchecked Sendable {
 
     /// The decoded answer and its JSON as it came.
     func getWithData<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> (T, Data) {
-        let (data, response) = try await session.data(for: makeRequest(path))
+        let (data, response) = try await load(makeRequest(path))
         try check(response, data)
         let value: T
         do {
             value = try decoder.decode(T.self, from: data)
         } catch {
+            ErrorLog.add(path: "GET \(path)", status: nil, message: ErrorLog.describe(error))
             throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
         if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
@@ -557,7 +577,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = item.body
         request.timeoutInterval = 20
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await load(request)
         guard let http = response as? HTTPURLResponse else { throw OutboxRefusal.retry(L10n.tr("Server neodpověděl.")) }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
@@ -581,14 +601,34 @@ final class APIClient: @unchecked Sendable {
         if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await load(request)
         try check(response, data)
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
             // Writes whose answer the app does not read may answer with nothing.
             if let ignored = JSONValue.null as? T { return ignored }
+            ErrorLog.add(path: "\(method) \(path)", status: nil, message: ErrorLog.describe(error))
             throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
+        }
+    }
+
+    /// Every request but the sign-out: what fails lands in ErrorLog, which
+    /// "Nahlásit problém" sends with the report.
+    private func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                ErrorLog.add(request, status: http.statusCode, message: json?["message"] as? String)
+            }
+            return (data, response)
+        } catch {
+            // A screen that went away cancels its requests; that is no failure.
+            if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
+                ErrorLog.add(request, status: nil, message: error.localizedDescription)
+            }
+            throw error
         }
     }
 

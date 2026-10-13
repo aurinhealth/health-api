@@ -137,7 +137,8 @@ struct ActivityTypeSheet: View {
         error = nil
         defer { saving = false }
         do {
-            _ = try await model.api.changeActivityType(id: activityId, type: chosen)
+            let change = try await model.api.changeActivityType(id: activityId, type: chosen)
+            if let key = change.key { await AppleHealthExport.shared.changeWorkoutType(key: key, type: chosen) }
             await model.activityTypeChanged()
             dismiss()
             onSaved()
