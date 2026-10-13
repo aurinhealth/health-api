@@ -7,7 +7,7 @@
 // with the account) as sync_name 'connection_<provider>'.
 import { L } from "./lang.js";
 
-export const HEALTH_PROVIDERS = ["google", "intervals"];
+export const HEALTH_PROVIDERS = ["google", "intervals", "ultrahuman"];
 const name = provider => "connection_" + provider;
 
 async function ensure(db) {
@@ -64,7 +64,7 @@ export async function readConnectionHealth(env) {
   if (!env?.DB || !userOf(env)) return out;
   try {
     await ensure(env.DB);
-    const rows = (await env.DB.prepare("SELECT sync_name,status,details_json FROM sync_status WHERE user_id=? AND sync_name IN ('connection_google','connection_intervals')").bind(userOf(env)).all()).results || [];
+    const rows = (await env.DB.prepare(`SELECT sync_name,status,details_json FROM sync_status WHERE user_id=? AND sync_name IN (${HEALTH_PROVIDERS.map(() => "?").join(",")})`).bind(userOf(env), ...HEALTH_PROVIDERS.map(name)).all()).results || [];
     for (const row of rows) {
       const provider = row.sync_name.slice("connection_".length), details = parse(row.details_json);
       out[provider] = { needsReconnect: row.status === "broken", lastError: row.status === "broken" ? details.lastError || null : null, lastErrorAt: details.lastErrorAt || null, lastSuccessAt: details.lastSuccessAt || null };

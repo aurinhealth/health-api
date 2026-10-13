@@ -17,6 +17,7 @@
 import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
 import { saveAppleFood } from "./apple-food.js";
+import { preferUltrahuman } from "./ultrahuman.js";
 
 export const SOURCE = "apple-health";
 export const WEARABLE_FAMILIES = "('google-wearables','apple-health')";
@@ -195,6 +196,7 @@ export async function afterGoogleSync(env, type, points) {
   try {
     let on = appleUsers.get(env);
     if (on === undefined) { on = Boolean(await env.DB.prepare("SELECT 1 FROM sync_status WHERE user_id = ? AND sync_name = ? AND status != 'disconnected'").bind(env.USER_ID, STATUS).first()); appleUsers.set(env, on); }
+    await preferUltrahuman(env.DB, env.USER_ID, [type], new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10));
     if (!on) return 0;
     return await replaceGoogleWithApple(env.DB, env.USER_ID, [type], new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10));
   } catch (error) { console.error("Apple Health dedupe failed", error.message); return 0; }
@@ -247,6 +249,8 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   const types = [...new Set(rows.map(r => r.data_type))];
   const oldest = rows.map(r => String(r.sample_time || r.end_time || r.start_time || "").slice(0, 10)).filter(Boolean).sort()[0];
   const replaced = types.length && oldest ? await replaceGoogleWithApple(db, userId, types, oldest) : 0;
+  // The Ultrahuman ring's nights stay ahead of the copies it writes to Apple Health.
+  if (types.length && oldest) await preferUltrahuman(db, userId, types, oldest);
   // Food and drinks other apps logged (apple-food.js), with their own window.
   const food = body.food && typeof body.food === "object" ? await saveAppleFood(db, userId, body.food) : { saved: 0, removed: 0 };
   const categories = (Array.isArray(body.categories) ? body.categories : []).map(String).filter(c => /^[a-z]{2,20}$/.test(c)).slice(0, 12);
