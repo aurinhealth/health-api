@@ -31,7 +31,8 @@ struct CoachTextCard: View {
     private var basis: [CoachText.Basis] { live ? (loaded?.basis ?? []) : [] }
 
     var body: some View {
-        Group {
+        // A stack, not a Group: on an empty Group the task never runs.
+        VStack(spacing: 0) {
             if text != nil || advice != nil {
                 card
             }
