@@ -173,6 +173,11 @@ final class AppModel {
         Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
     }
 
+    /// A detail on top of the current tab's screens.
+    func push(_ route: AppRoute) {
+        paths[tab, default: []].append(route)
+    }
+
     /// Opens a detail on its own tab (widgets, notifications, links).
     func open(_ route: AppRoute) {
         tab = route.tab
