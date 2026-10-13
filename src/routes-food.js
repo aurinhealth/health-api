@@ -9,7 +9,7 @@ import { foodIntake } from "./food-portions.js";
 import { productFromLabel } from "./food-sources.js";
 import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
-import { lookupFoodWithAI } from "./food-ai.js";
+import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry } from "./food-entry-management.js";
@@ -58,9 +58,11 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:L('AI není připojena (chybí OPENAI_API_KEY). Zadej hodnoty z etikety.', 'AI is not connected (OPENAI_API_KEY is missing). Enter the values from the label.')},{status:503});
     try{
       const body=await request.json().catch(()=>({})),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24);
-      const r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE});
+      let r=await lookupFoodWithAI(env,{name,barcode,language:env.INTERFACE_LANGUAGE});
+      // Not found on the web: with estimate=true and a name, typical values marked as an AI estimate.
+      if(!r.product&&body.estimate===true&&name.trim().length>=2)r=await estimateFoodWithAI(env,{name,language:env.INTERFACE_LANGUAGE});
       if(!r.product)return Response.json({status:'not_found',message:L('AI výrobek s jistotou nenašla. Zadej hodnoty z etikety (nebo ji vyfoť).', 'The AI couldn\'t find the product with certainty. Enter the values from the label (or take a photo of it).')},{headers:{'Cache-Control':'no-store'}});
-      return Response.json({status:'ok',product:{...r.product,name:r.product.name||name},model:r.model},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',product:{...r.product,name:r.product.name||name,barcode:r.product.barcode||barcode.replace(/\D/g,'')||null},model:r.model},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.limit?error.message:L('Dohledání přes AI selhalo: ', 'The AI lookup failed: ')+String(error.message).slice(0,160)},{status:error.limit?(error.status||429):502});}
   }
   // A label, a portion summary or a meal photographed: AI vision reads the
@@ -109,7 +111,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:L('Doplň energii i všechna tři makra pro zvolený základ tabulky.', 'Fill in the energy and all three macros for the chosen table basis.')},{status:400});
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
       const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
-      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,consumed_at:mealConsumedAt(body.date,body.mealType,body.time)||undefined,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,sugar_g:amount.sugar_g,source_url:p.source_url||null,ingredients})})}),env,ctx);
+      const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,consumed_at:mealConsumedAt(body.date,body.mealType,body.time)||undefined,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,sugar_g:amount.sugar_g,source_url:p.source_url||null,...(p.source==='ai-estimate'?{estimate:true}:{}),ingredients})})}),env,ctx);
       const result=await saved.json();if(!saved.ok)throw new Error(L('Uložení selhalo.', 'Saving failed.'));
       let personal=null,warning=null;
       if(p.source!=='composed'){try{personal=await savePersonalFood(env.DB,p,{used:true});}catch(error){warning=L('Jídlo je zapsané, ale potravinu pro příště se nepodařilo uložit: ', 'The meal is logged, but the food couldn\'t be saved for next time: ')+error.message;}}

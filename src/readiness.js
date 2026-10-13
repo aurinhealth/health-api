@@ -11,10 +11,13 @@
 //   the main night of the day (primaryNights);
 // - the sleep need from the profile's age and sleep goal, the strain of the
 //   day before and the sleep history (sleepNeedFor);
-// - the morning check-in on top (applyCheckin).
+// - the morning check-in on top (applyCheckin);
+// - with cycle tracking on (profile.cycle, dashboard-shared.js), the phase of
+//   each day, so the luteal rise is the athlete's normal (cycle-model.js).
 // Pure: the callers load the inputs.
 import { mergeWellnessRows, recoveryReadiness, applyCheckin, sleepNeedFor, sleepIndexScore, heartRateLoad, strainScore } from "./recovery-model.js";
 import { sleepSettings } from "./energy-profile.js";
+import { markCyclePhases } from "./cycle-model.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
@@ -56,7 +59,8 @@ export function strainOn(rows, date) {
 // missing, provisional, checkin) with the body's own number (`body`), the
 // sleep need (`need`: need, base, hrv, debt, naps), the night and the rows.
 export function readinessFor({ date, rows = null, google = [], intervals = [], sessions = [], profile = null, checkin = null } = {}) {
-  const merged = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
+  const plain = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
+  const merged = profile?.cycle ? markCyclePhases(plain, profile.cycle) : plain;
   const list = Array.isArray(sessions) ? sessions : [];
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });

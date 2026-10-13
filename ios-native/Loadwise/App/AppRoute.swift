@@ -35,6 +35,8 @@ enum AppRoute: Hashable {
     case weekPlan
     case dayReview
     case insights
+    /// Cycle tracking's calendar (Health → Cyklus).
+    case cycle
     /// Doporučení trenéra: every option for today (Today's card, + Trénink dne).
     case coachPick
     /// Knihovna → Moje tréninky and Od přátel (MyWorkouts.swift).
@@ -48,7 +50,7 @@ enum AppRoute: Hashable {
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
-        case .readiness, .sleep, .heart, .weight: return .health
+        case .readiness, .sleep, .heart, .weight, .cycle: return .health
         case .sleepSettings, .dayReview, .steps, .strain, .coachPick: return .today
         default: return .training
         }
@@ -86,6 +88,7 @@ enum AppRoute: Hashable {
         case "week-plan": self = .weekPlan
         case "day-review": self = .dayReview
         case "records": self = .insights
+        case "cycle": self = .cycle
         case "my-workouts": self = .myWorkouts
         case "friend-workouts": self = .friendWorkouts
         case "share" where parts.count > 1 && Self.isShareId(parts[1]): self = .sharedWorkout(parts[1])
@@ -152,6 +155,7 @@ struct RouteScreen: View {
         case .weekPlan: WeekPlanView()
         case .dayReview: DayReviewView()
         case .insights: InsightsView()
+        case .cycle: CycleCalendarView()
         case .coachPick: CoachPickView()
         case .myWorkouts: MyWorkoutsView(friends: false)
         case .friendWorkouts: MyWorkoutsView(friends: true)

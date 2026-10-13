@@ -64,6 +64,21 @@ struct PlanWidget: View {
     @Environment(AppModel.self) private var model
     let items: [TodaySnapshot.PlanItem]
     var today: String = ""
+    /// A pill or "vrátit" being saved.
+    @State private var busy = false
+
+    init(items: [TodaySnapshot.PlanItem], today: String = "") {
+        self.items = items
+        self.today = today
+    }
+
+    private func act(_ work: @escaping () async throws -> Void) {
+        busy = true
+        Task {
+            try? await work()
+            busy = false
+        }
+    }
 
     var body: some View {
         Card {
@@ -81,7 +96,10 @@ struct PlanWidget: View {
     /// or run its detail (done) or the planned workout.
     @ViewBuilder
     private func row(_ item: TodaySnapshot.PlanItem) -> some View {
-        if item.kind == "bedtime" {
+        if item.kind == "pill" || item.eased != nil {
+            // The pill (Vzato) and a session the cycle eased (vrátit) act in the row.
+            line(item)
+        } else if item.kind == "bedtime" {
             NavigationLink(value: AppRoute.sleepSettings) { line(item) }.buttonStyle(.plain)
         } else if item.kind == "workout", item.sport == "strength", !item.done, item.status != "missed" {
             NavigationLink(value: AppRoute.trainingMode(today.isEmpty ? AppModel.localDate(Date()) : today)) { line(item) }.buttonStyle(.plain)
@@ -112,7 +130,9 @@ struct PlanWidget: View {
             .frame(width: 46, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
-                if let detail = item.detail {
+                if let eased = item.eased {
+                    Text(eased.title).font(Typo.caption).foregroundStyle(Palette.muted).strikethrough()
+                } else if let detail = item.detail {
                     Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
@@ -125,7 +145,18 @@ struct PlanWidget: View {
 
     @ViewBuilder
     private func trailing(_ item: TodaySnapshot.PlanItem) -> some View {
-        if item.done, let session = item.session, let kcal = session.countedKcal {
+        if item.kind == "pill" {
+            PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: today.isEmpty ? nil : today) } }
+        } else if item.eased != nil {
+            Button { act { try await model.logCycleDay(today.isEmpty ? AppModel.localDate(Date()) : today, ["keepPlan": .bool(true)]) } } label: {
+                Label("vrátit", systemImage: "arrow.uturn.backward")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(Palette.pink)
+                    .padding(.horizontal, 12).frame(height: 30)
+                    .background(Palette.pinkSoft, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(busy)
+        } else if item.done, let session = item.session, let kcal = session.countedKcal {
             // A done session with its calories; the device's number waits for a check.
             VStack(alignment: .trailing, spacing: 1) {
                 NumberText(value: Fmt.int(kcal), unit: "kcal", size: 19)
@@ -280,9 +311,19 @@ struct HRVWidget: View {
 }
 
 extension TodaySnapshot.HRV {
-    /// Health's HRV in the shape the Today widget takes.
+    /// Health's HRV in the shape the Today widget takes (its last 30 days;
+    /// Health sends 90 for the detail chart).
     init(_ h: HealthSnapshot.HRV) {
-        self.init(value: h.value, baseline: h.baseline, low: h.low, high: h.high, trend: h.trend, series: h.series)
+        self.init(value: h.value, baseline: h.baseline, low: h.low, high: h.high, trend: h.trend, series: h.series.lastDays(30))
+    }
+}
+
+extension Array where Element == Point {
+    /// The points of the last `days` days up to the newest one.
+    func lastDays(_ days: Int) -> [Point] {
+        guard let newest = self.last?.date else { return self }
+        let from = ISODay.shift(newest, -(days - 1))
+        return filter { $0.date >= from }
     }
 }
 

@@ -14,6 +14,8 @@ struct BarcodeScanSheet: View {
     private var target: String { chosenMeal ?? meal }
     var onLogged: () -> Void = {}
     @State private var code: String?
+    /// What the athlete says an unknown code is, for the AI estimate.
+    @State private var guess = ""
     @State private var product: FoodProduct?
     @State private var amount = ""
     @State private var state: ScanState = .scanning
@@ -101,7 +103,8 @@ struct BarcodeScanSheet: View {
                 if let product {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text("✓ Nalezeno").font(Typo.caption).foregroundStyle(Palette.green)
+                            if product.source == "ai-estimate" { AIEstimateTag() }
+                            else { Text("✓ Nalezeno").font(Typo.caption).foregroundStyle(Palette.green) }
                             Spacer()
                             Button {
                                 var p = product
@@ -137,14 +140,18 @@ struct BarcodeScanSheet: View {
                 }
             case .notFound:
                 Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                Text("Zkus ho dohledat pomocí AI, nebo naskenuj jiný.").font(Typo.small).foregroundStyle(Palette.muted)
+                // With a name AI can estimate the food when the code is nowhere on the web.
+                TextField("Co to je? Třeba „tyčinka Margot“", text: $guess)
+                    .font(.subheadline).textInputAutocapitalization(.never)
+                    .padding(.horizontal, 16).frame(height: 46)
+                    .background(Palette.background, in: Capsule())
                 HStack(spacing: 10) {
                     Button("Skenovat znovu") { reset() }
                         .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 16).frame(height: 46)
                         .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                     Button { Task { await lookUp() } } label: {
-                        Label("Dohledat AI", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        Label(L10n.tr(guess.trimmingCharacters(in: .whitespaces).count >= 2 ? "Odhadnout AI" : "Dohledat AI"), systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                             .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
                     }
                 }
@@ -171,6 +178,7 @@ struct BarcodeScanSheet: View {
 
     private func reset() {
         code = nil
+        guess = ""
         product = nil
         error = nil
         state = .scanning
@@ -192,7 +200,9 @@ struct BarcodeScanSheet: View {
         guard let code else { return }
         state = .searching
         do {
-            if let p = try await model.api.lookupFood(name: "", barcode: code) { show(p) } else { state = .notFound; error = "AI ten kód nezná." }
+            let name = guess.trimmingCharacters(in: .whitespaces)
+            if let p = try await model.api.lookupFood(name: name, barcode: code) { show(p) }
+            else { state = .notFound; error = name.isEmpty ? "AI ten kód nezná. Napiš, co to je, a odhadne to." : "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." }
         } catch {
             self.error = error.localizedDescription
             state = .notFound

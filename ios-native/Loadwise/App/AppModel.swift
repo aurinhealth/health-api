@@ -47,6 +47,11 @@ final class AppModel {
     var showsFutureDay: Bool { selectedDate.map { $0 > Self.localDate(Date()) } ?? false }
     /// Stav sportovce on Today (active, sick, injured, on a break).
     private(set) var athleteStatus: AthleteStatus?
+    /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
+    /// false unless the profile's sex is female.
+    var cycle: CycleResponse?
+    /// Apple Health's cycle data went to the server in this run of the app.
+    @ObservationIgnored var cycleHealthSynced = false
 
     /// The server answered 426: this build is too old (src/app-version.js).
     private(set) var updateRequired = false
@@ -358,6 +363,7 @@ final class AppModel {
             errorMessage = nil
             _ = noteConnection(nil)
             if selectedDate == nil, let today {
+                await loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
             }

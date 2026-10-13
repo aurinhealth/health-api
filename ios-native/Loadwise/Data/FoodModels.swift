@@ -43,6 +43,8 @@ struct FoodSnapshot: Decodable, Equatable {
         var salt: Double? = nil
         /// Logged in another app and read from Apple Health ("Yazio"); not editable here.
         var app: String? = nil
+        /// Values estimated by AI (no such product was found): "AI odhad".
+        var estimate: Bool? = nil
     }
 
     /// What to aim for in this meal (its share of the day's targets).

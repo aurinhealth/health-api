@@ -299,9 +299,9 @@ struct HeartDetailContent: View {
                     if let s = status(hrv) { Pill(text: s.0, foreground: s.1, background: s.2) }
                 }
                 Card {
-                    WidgetHeader(title: "HRV po nocích", color: Palette.green, trailing: L10n.f("%@ dní", String(hrv.series.count)))
+                    WidgetHeader(title: "HRV po nocích", color: Palette.green)
                     TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
-                               band: Self.range(hrv.low, hrv.high), bandLabel: Self.normLabel(hrv.low, hrv.high))
+                               band: Self.range(hrv.low, hrv.high), bandLabel: Self.normLabel(hrv.low, hrv.high), worse: .below)
                 }
                 .padding(.top, 20)
                 ThreeCells(cells: [("7 dní", Fmt.int(hrv.week)), ("Norma (60 dní)", Fmt.int(hrv.baseline)), ("Trend", trend(hrv.trend))])
@@ -315,10 +315,10 @@ struct HeartDetailContent: View {
                 }
                 .padding(.top, 8)
                 Card {
-                    WidgetHeader(title: "Klidový tep po dnech", color: Palette.rust, trailing: L10n.f("%@ dní", String(rhr.series.count)))
+                    WidgetHeader(title: "Klidový tep po dnech", color: Palette.rust)
                     TrendChart(points: rhr.series, color: Palette.rust, unit: "bpm",
                                band: rhr.baseline.map { ($0 - 2)...($0 + 2) },
-                               bandLabel: L10n.tr("norma ± 2 bpm"), height: 160)
+                               bandLabel: L10n.tr("norma ± 2 bpm"), height: 160, worse: .above)
                 }
                 .padding(.top, 12)
             }

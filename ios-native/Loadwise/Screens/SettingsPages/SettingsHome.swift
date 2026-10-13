@@ -139,7 +139,7 @@ struct SettingsGoalsCard: View {
     }
 }
 
-/// Spánek, Posilovna, Jídlo a pití: one tile each, opening its settings.
+/// Spánek, Posilovna, Jídlo a pití (and Cyklus): one tile each, opening its settings.
 struct SettingsSectionTiles: View {
     let store: SettingsStore
 
@@ -148,6 +148,10 @@ struct SettingsSectionTiles: View {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
             tile("Posilovna", "dumbbell.fill", Palette.brown) { GymSettingsView() }
             tile("Jídlo a pití", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
+            // Cycle tracking: only with the profile's sex set to female.
+            if store.profile["sex"]?.string == "female" {
+                tile("Cyklus", "calendar", Palette.pink) { CycleSettingsView() }
+            }
         }
     }
 

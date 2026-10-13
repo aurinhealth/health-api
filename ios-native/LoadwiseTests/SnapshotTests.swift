@@ -470,6 +470,40 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(DrinksCard.remaining(ml: 2600, target: 2500), "cíl splněn")
     }
 
+    func testDataAgeLoadNoteAndWristTemperature() throws {
+        let calendar = Calendar.current
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 8, hour: 20)))
+        XCTAssertNil(DataAgePill.text(last: now.addingTimeInterval(-2 * 3600), now: now), "fresh data: nothing")
+        let today = try XCTUnwrap(DataAgePill.text(last: now.addingTimeInterval(-5 * 3600), now: now))
+        XCTAssertTrue(today.hasPrefix("data z "), today)
+        let yesterday = try XCTUnwrap(DataAgePill.text(last: now.addingTimeInterval(-23 * 3600), now: now))
+        XCTAssertTrue(yesterday.hasPrefix("data ze včera "), yesterday)
+        let older = try XCTUnwrap(DataAgePill.text(last: now.addingTimeInterval(-3 * 86400), now: now))
+        XCTAssertTrue(older.hasPrefix("data z 5. 10. "), older)
+
+        let raised = TrainingSnapshot.ACWR(value: 1.42, zone: "elevated", acute: 60, chronic: 42)
+        let monotonous = TrainingSnapshot.Monotony(value: 2.3, strain: 900, high: true)
+        let normal = TrainingSnapshot.Monotony(value: 1.2, strain: 500, high: false)
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: monotonous), "Poměr zátěže 1,42 · jednotvárný týden")
+        XCTAssertEqual(FormWidget.loadNote(acwr: raised, monotony: normal), "Poměr zátěže 1,42")
+        XCTAssertEqual(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 0.6, zone: "low", acute: 20, chronic: 33), monotony: monotonous), "Jednotvárný týden")
+        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 0.6, zone: "low", acute: 20, chronic: 33), monotony: normal))
+        XCTAssertNil(FormWidget.loadNote(acwr: TrainingSnapshot.ACWR(value: 1.1, zone: "sweetSpot", acute: 40, chronic: 36), monotony: nil))
+
+        let week: [Point] = [Point(date: "2026-10-01", value: 1), Point(date: "2026-10-02", value: 2), Point(date: "2026-10-08", value: 3)]
+        XCTAssertEqual(week.lastDays(7).map(\.date), ["2026-10-02", "2026-10-08"])
+
+        let nights = (0..<14).map { i in Point(date: ISODay.shift("2026-10-08", i - 13), value: i == 13 ? 0.9 : (i == 12 ? 0.4 : Double(i % 3) * 0.1 - 0.1)) }
+        let wrist = HealthSnapshot.WristTemp(value: 36.9, deviation: 0.9, series: [], deviations: nights)
+        try render("health-wrist-temperature", glow: Palette.Glow.health) {
+            VStack(spacing: 12) {
+                WristTempWidget(wrist: wrist, size: .medium)
+                WristTempWidget(wrist: HealthSnapshot.WristTemp(value: 36.3, deviation: nil, series: []), size: .small)
+            }
+            .padding(24)
+        }
+    }
+
     func testRoundFourScreens() throws {
         let model = AppModel(demo: true)
         try render("training-tools", glow: Palette.Glow.training, height: 330) {

@@ -31,6 +31,8 @@ export const PERSONAL_TABLES = {
   workout_feedback: {},
   coach_reflections: {},
   fluid_log: {},
+  // Food and drinks from other apps deleted in Aurin only (apple-food.js).
+  apple_food_hidden: { pk: ["user_id", "kind", "external_id"] },
   workout_schedule_links: {},
   training_profile: {},
   week_plan_preferences: {},
@@ -64,6 +66,9 @@ export const PERSONAL_TABLES = {
   // tests offered from the data (threshold-check.js).
   morning_checkins: {},
   threshold_checks: {},
+  // Cycle tracking (cycle-store.js): the settings and the logged days.
+  cycle_settings: {},
+  cycle_days: {},
   // The athlete's training plans (training-plans.js).
   training_plans: {},
   // Pairings made by hand (manual-pairs.js) and the choice of an activity's
