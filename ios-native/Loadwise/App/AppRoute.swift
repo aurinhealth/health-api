@@ -38,7 +38,7 @@ enum AppRoute: Hashable {
     /// Knihovna → Moje tréninky and Od přátel (MyWorkouts.swift).
     case myWorkouts
     case friendWorkouts
-    /// A friend's link opened in the app (petrfitnessdata.eu/t/<id>).
+    /// A friend's link opened in the app (aurin.health/t/<id>).
     case sharedWorkout(String)
     /// A saved or received workout planned for a day with the athlete's own weights.
     case planTemplate(TemplatePlanRequest)
@@ -52,11 +52,14 @@ enum AppRoute: Hashable {
         }
     }
 
+    /// Hosts of shared workout links: aurin.health, older links on petrfitnessdata.eu.
+    static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health", "petrfitnessdata.eu", "www.petrfitnessdata.eu"]
+
     /// loadwise://open/<name>: the home-screen widgets link here. A shared
     /// workout's link opens here too, as a universal link or from its web page.
     init?(url: URL) {
         let parts = url.pathComponents.filter { $0 != "/" }
-        if url.scheme == "https", ["petrfitnessdata.eu", "www.petrfitnessdata.eu"].contains(url.host() ?? "") {
+        if url.scheme == "https", Self.linkHosts.contains(url.host() ?? "") {
             guard parts.count == 2, parts[0] == "t", Self.isShareId(parts[1]) else { return nil }
             self = .sharedWorkout(parts[1])
             return

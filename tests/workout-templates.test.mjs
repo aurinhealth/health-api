@@ -57,7 +57,8 @@ test("a shared link lands once in the friend's Od přátel, with the sender's fi
   const image = Buffer.from("\x89PNG fake").toString("base64");
   const shared = await call(raw, 1, "POST", "/app/api/shares", { ...legs, image, date: "2099-01-05" });
   assert.equal(shared.status, 200);
-  assert.equal(shared.body.url, ORIGIN + "/t/" + shared.body.id);
+  // The link is on aurin.health even when the app still talks to the old host.
+  assert.equal(shared.body.url, "https://aurin.health/t/" + shared.body.id);
   // The friend opens it in the app.
   const seen = await call(raw, 2, "GET", "/app/api/shares/" + shared.body.id);
   assert.deepEqual([seen.body.share.name, seen.body.share.fromName, seen.body.share.own, seen.body.share.date], ["Nohy", "Petr", false, "2099-01-05"]);
@@ -93,6 +94,15 @@ test("the link's page shows the workout and its preview image to anyone", async 
   assert.match(html, /Petr ti posílá trénink/);
   assert.match(html, /4 × 8–12/);
   assert.match(html, new RegExp('og:image" content="' + ORIGIN + "/t/" + shared.body.id + '/og.png'));
+  assert.match(html, /· Aurin<\/title>/);
+  assert.match(html, /og:site_name" content="Aurin"/);
+  assert.match(html, /Otevřít v Aurinu/);
+  assert.match(html, /Aurin bude brzy v App Store/);
+  assert.doesNotMatch(html, /apple-itunes-app/);
+  // With the app's App Store ID: the Safari banner, and the store when the app is missing.
+  const listed = await (await publicSharePage(new Request(url), raw, url, { APP_STORE_ID: "6740000000" })).text();
+  assert.match(listed, /<meta name="apple-itunes-app" content="app-id=6740000000, app-argument=https:\/\/petrfitnessdata\.eu\/t\//);
+  assert.match(listed, /apps\.apple\.com\/app\/id6740000000/);
   const imageUrl = new URL(url + "/og.png");
   const image = await publicSharePage(new Request(imageUrl), raw, imageUrl);
   assert.equal(image.headers.get("content-type"), "image/png");
@@ -112,6 +122,9 @@ test("planned for the athlete, a shared workout keeps its exercises and sets but
   assert.deepEqual(work.filter(r => r[1] === "Pivot leg press").map(r => r[4]), ["8–12", "8–12", "8–12", "8–12"]);
   assert.equal(work.filter(r => r[1] === "Prone leg curl Prime").length, 3);
   assert.deepEqual(work.filter(r => r[1] === "Můj vlastní cvik").map(r => r[3]), ["", ""]);
+  // Unknown to the app: the first set is a test set the rest follow.
+  assert.match(work.find(r => r[1] === "Můj vlastní cvik")[9], /^zkušební série/);
+  assert.match(work.filter(r => r[1] === "Můj vlastní cvik")[1][9], /podle zkušební série/);
   assert.equal(plan.planName, "Nohy");
   assert.match(plan.rationale, /Petr/);
 });
@@ -184,4 +197,19 @@ test("a library ride becomes an own workout with its ranges", async () => {
   assert.equal(saved.status, 200, JSON.stringify(saved.body));
   assert.equal(saved.body.workout.name, lib.name);
   assert.ok(Math.abs(saved.body.workout.minutes - lib.duration_minutes) <= 1);
+});
+
+test("a planned ride, or the plan a done one fulfilled, turns into an own workout to save or share", async () => {
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))");
+  const event = { name: "VO2 5×4", type: "Ride", workout_doc: { steps: [{ duration: 600, power: { start: 50, end: 70, units: "%ftp" } }, { reps: 5, steps: [{ duration: 240, power: { value: 115, units: "%ftp" } }, { duration: 240, power: { value: 55, units: "%ftp" } }] }] } };
+  raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,payload_json) VALUES(1,'intervals','planned-workout','planned:77',?)").run(JSON.stringify(event));
+  const r = await call(raw, 1, "GET", "/app/api/my-workouts/from-planned?id=planned:77");
+  assert.equal(r.status, 200);
+  assert.equal(r.body.template.sport, "ride");
+  assert.equal(r.body.template.name, "VO2 5×4");
+  assert.equal(r.body.template.blocks.at(-1).repeats, 5);
+  // Another athlete's plan is not found.
+  assert.equal((await call(raw, 2, "GET", "/app/api/my-workouts/from-planned?id=planned:77")).status, 404);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM saved_workouts").get().n, 0, "nothing is saved");
 });

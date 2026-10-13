@@ -129,5 +129,5 @@ export function zwoFile(template) {
     const cadence = s.cadence ? ` Cadence="${s.cadence}"` : "";
     steps.push(`    <SteadyState Duration="${s.seconds}" Power="${((s.low + s.high) / 200).toFixed(3)}"${cadence}/>`);
   }
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file>\n  <author>Loadwise</author>\n  <name>${esc(template.name)}</name>\n  <description></description>\n  <sportType>bike</sportType>\n  <tags/>\n  <workout>\n${steps.join("\n")}\n  </workout>\n</workout_file>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<workout_file>\n  <author>Aurin</author>\n  <name>${esc(template.name)}</name>\n  <description></description>\n  <sportType>bike</sportType>\n  <tags/>\n  <workout>\n${steps.join("\n")}\n  </workout>\n</workout_file>\n`;
 }

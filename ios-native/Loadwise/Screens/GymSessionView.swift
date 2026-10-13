@@ -111,6 +111,14 @@ struct GymSessionView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 24)
                 }
+                // A done workout is kept or sent on too, without its weights.
+                if let day, !day.exercises.isEmpty {
+                    let kept = WorkoutTemplate.from(day, minutes: nil)
+                    if !kept.isEmpty {
+                        SaveWorkoutButton(template: kept).padding(.top, 10)
+                        ShareWorkoutButton(template: kept, date: nil, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
+                    }
+                }
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
@@ -300,6 +308,10 @@ struct ExerciseCard: View {
     var onAddSet: (() -> Void)? = nil
     var onRemoveSet: (() -> Void)? = nil
 
+    /// The note the server gives the first set of an exercise it has no weight for
+    /// (strength-generator.js TEST_SET_NOTE).
+    static func isTestSet(_ note: String) -> Bool { note.hasPrefix("zkušební série") || note.hasPrefix("test set") }
+
     /// A set can go while one is not done and another stays.
     private var canRemoveSet: Bool { exercise.sets.count > 1 && exercise.sets.contains { !$0.done } }
 
@@ -311,6 +323,11 @@ struct ExerciseCard: View {
                     Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií"))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if !failure.isEmpty { GymTag.failure.padding(.top, 4) }
+                    // No weight to start from (an exercise the app doesn't know): the test set's advice.
+                    if let first = exercise.sets.first(where: { !$0.warmup }), !first.done, let note = first.note, Self.isTestSet(note) {
+                        Text(Fmt.capitalized(note)).font(Typo.caption).foregroundStyle(Palette.amber)
+                            .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+                    }
                 }
                 Spacer()
                 ExerciseInfoButton(name: exercise.name, action: onTechnique)

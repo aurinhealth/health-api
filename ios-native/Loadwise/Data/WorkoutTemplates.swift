@@ -108,8 +108,13 @@ struct WorkoutTemplate: Codable, Hashable {
     static func from(_ day: GymDay, minutes: Int?) -> WorkoutTemplate {
         WorkoutTemplate(name: day.planName ?? L10n.tr("Silový trénink"), minutes: minutes,
                         exercises: day.exercises.filter { $0.workCount > 0 }.map { e in
-                            TemplateExercise(name: e.name, sets: min(e.workCount, 10), reps: cleanReps(e.sets.first { !$0.warmup }?.plannedReps ?? ""))
+                            TemplateExercise(name: e.name, sets: min(e.workCount, 10), reps: cleanReps(reps(e.sets.first { !$0.warmup })))
                         })
+    }
+
+    /// The planned repetitions of a set, or the ones done when none were planned.
+    private static func reps(_ set: GymSet?) -> String {
+        set?.plannedReps?.nilIfBlank ?? set?.reps?.nilIfBlank ?? ""
     }
 
     static func cleanReps(_ text: String) -> String {
@@ -222,6 +227,12 @@ extension APIClient {
     func scheduleSavedWorkout(id: String, date: String, indoor: Bool) async throws {
         let _: JSONValue = try await send("/app/api/my-workouts/" + id + "/schedule", method: "POST",
                                           body: ["date": JSONValue.string(date), "environment": .string(indoor ? "indoor" : "outdoor")])
+    }
+
+    /// A planned ride or run, or the plan a done one fulfilled, as an own workout; not saved yet.
+    func templateFromPlanned(eventId: String) async throws -> WorkoutTemplate {
+        let r: DescribeResponse = try await get("/app/api/my-workouts/from-planned?id=" + Self.query(eventId))
+        return r.template
     }
 
     /// A ride or run put together by AI from the athlete's words; not saved yet.

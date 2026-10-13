@@ -427,3 +427,27 @@ struct SavedEnduranceSheet: View {
         }
     }
 }
+
+/// "Uložit do Mých tréninků" and "Sdílet" under a planned or done ride or run:
+/// its sections as an own workout, without anything personal.
+struct PlannedTemplateButtons: View {
+    @Environment(AppModel.self) private var model
+    let eventId: String
+    var date: String? = nil
+    @State private var template: WorkoutTemplate?
+
+    var body: some View {
+        Group {
+            if let template {
+                VStack(spacing: 10) {
+                    SaveWorkoutButton(template: template)
+                    ShareWorkoutButton(template: template, date: date)
+                }
+            }
+        }
+        .task(id: eventId) {
+            guard template == nil, !model.demo else { return }
+            template = try? await model.api.templateFromPlanned(eventId: eventId)
+        }
+    }
+}

@@ -645,6 +645,7 @@ function progressionNote(estimate) {
 // actually lift drives the next session (own-history progression).
 export const FIRST_SESSION_LOAD = 0.6;
 const FIRST_SESSION_NOTE = () => L("první trénink: váha je opatrný odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě (RPE 7)", "first session: the weight is a careful estimate; adjust it so you have 2–3 reps in reserve (RPE 7)");
+const TEST_SET_NOTE = () => L("zkušební série: začni lehčí vahou, se kterou zvládneš opakování s rezervou 3–4; podle ní nastav další série (RPE 7–8)", "test set: start with a lighter weight you can do with 3–4 reps in reserve; set the next sets from it (RPE 7–8)");
 // Core work keeps its own repetitions when a training plan sets them for the rest.
 const CORE_PATTERNS = new Set(["core", "anti_rotation", "rotation", "trunk_flexion", "trunk_extension", "slam"]);
 function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false, planReps = null) {
@@ -711,7 +712,10 @@ export function templateStrengthPlan(context, template, options = {}) {
     const exercise = EXERCISES[item.name] ? item.name : normalizeExerciseName(item.name);
     const sets = Math.max(1, Math.min(10, Number(item.sets) || 3)), reps = String(item.reps || '10');
     if (!EXERCISES[exercise]) {
-      for (let i = 0; i < sets; i++) rows.push(["WORK", item.name, String(i + 1), "", reps, "", "", "", "FALSE", "", i === 0 ? "🎥 Video" : "", "", DEFAULT_EXECUTION]);
+      // An exercise the app doesn't know has no weight to start from: the
+      // first set is a test set, and its weight sets the rest.
+      rows.push(["WORK", item.name, "1", "", reps, "", "", "", "FALSE", TEST_SET_NOTE(), "🎥 Video", "", DEFAULT_EXECUTION]);
+      for (let i = 1; i < sets; i++) rows.push(["WORK", item.name, String(i + 1), "", reps, "", "", "", "FALSE", L("váhu podle zkušební série", "weight from the test set"), "", "", DEFAULT_EXECUTION]);
       continue;
     }
     const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps);

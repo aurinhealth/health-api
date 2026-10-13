@@ -13,7 +13,7 @@ export function appleAppSiteAssociationBody(env = {}) {
   if (!/^[A-Z0-9]{10}$/.test(team)) return null;
   const app = team + "." + APP_BUNDLE_ID;
   // applinks: a shared workout's link (/t/<id>, workout-templates.js) opens
-  // the app when it is installed (applinks:petrfitnessdata.eu in project.yml).
+  // the app when it is installed (applinks:aurin.health and petrfitnessdata.eu in project.yml).
   return { webcredentials: { apps: [app] }, applinks: { details: [{ appIDs: [app], components: [{ "/": "/t/*", comment: "Shared workouts" }] }] } };
 }
 

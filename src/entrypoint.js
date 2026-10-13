@@ -278,7 +278,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
     // A workout shared with a link: its page and preview image, for anyone.
-    const sharePage = await publicSharePage(request, rawEnv.DB, url);
+    const sharePage = await publicSharePage(request, rawEnv.DB, url, rawEnv);
     if (sharePage) return sharePage;
     // The App Review demo account connects no third-party service and sends nothing out (app-review.js).
     const demoRefusal = reviewRefusal(rawEnv, user, request.method, url.pathname);

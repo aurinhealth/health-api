@@ -21,6 +21,8 @@ import { ENDURANCE_SPORTS, cleanEnduranceTemplate, enduranceStructure, templateF
 import { totalMinutes } from "./workout-model.js";
 import { stepRows } from "./workout-explanation.js";
 import { getWorkout, scheduleWorkoutInIntervals } from "./workout-library.js";
+import { SITE_ORIGIN } from "./app-origin.js";
+import { plannedEventWorkout } from "./planned-detail.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 
@@ -210,6 +212,15 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       const result = await scheduleWorkoutInIntervals(env, env.DB, { workoutId: "own-" + row.id, date, confirm: true, environment: body.environment === "outdoor" ? "outdoor" : "indoor" });
       return json(result);
     }
+    // A planned ride or run (from the library, the coach or Intervals.icu), or
+    // the plan a done one fulfilled, as an own workout to save or share; nothing is saved.
+    if (path === "/app/api/my-workouts/from-planned" && request.method === "GET") {
+      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      let structure = [];
+      try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
+      if (!w || !structure.length) return json({ message: L("Trénink nemá úseky, které by šly uložit.", "The workout has no sections to save.") }, 404);
+      return json({ status: "ok", template: templateFromStructure(w.sport === "run" ? "run" : "ride", w.name, structure) });
+    }
     // A ride or run put together from the athlete's words; nothing is saved.
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
       const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);
@@ -239,7 +250,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       if (today >= MAX_SHARES_PER_DAY) return json({ message: L("Dnes už jsi sdílel hodně tréninků, zkus to zítra.", "You've shared many workouts today; try again tomorrow.") }, 429);
       const id = newId(), from = await senderName(env, session.user), date = DATE.test(String(body.date || "")) && body.date >= localToday() ? body.date : null;
       await db.prepare("INSERT INTO workout_shares(id,user_id,sport,name,from_name,plan_date,template_json,image_png) VALUES(?,?,?,?,?,?,?,?)").bind(id, env.USER_ID, template.sport, template.name, from, date, JSON.stringify(template), image).run();
-      return json({ status: "ok", id, url: shareUrl(url, id) });
+      return json({ status: "ok", id, url: shareUrl(env, id) });
     }
     const shared = /^\/app\/api\/shares\/([A-Za-z0-9]{10})$/.exec(path);
     if (shared && request.method === "GET") {
@@ -306,13 +317,27 @@ async function describeWorkout(env, sport, words) {
   return cleanEnduranceTemplate({ sport, name: data.name, blocks });
 }
 
+// The planned workout behind an event id ("planned:<id>"), as /app/api/workouts/planned reads it.
+async function plannedWorkout(env, eventId) {
+  const id = eventId.replace(/^planned:/, "").slice(0, 120);
+  if (!id) return null;
+  const link = await env.DB.prepare("SELECT workout_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1").bind(env.USER_ID, id).first().catch(() => null);
+  const library = link ? await getWorkout(env.DB, link.workout_id).catch(() => null) : null;
+  if (library) return library;
+  const row = await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID, "planned:" + id).first().catch(() => null);
+  let event = null;
+  try { event = JSON.parse(row?.payload_json || "null"); } catch { /* broken row */ }
+  return event ? plannedEventWorkout(event) : null;
+}
+
 async function readShare(db, id) {
   if (!ID.test(String(id || ""))) return null;
   await ensureShareTable(db);
   return db.prepare("SELECT id,user_id,sport,name,from_name,plan_date,template_json FROM workout_shares WHERE id=?").bind(String(id)).first();
 }
 
-export function shareUrl(url, id) { return new URL("/t/" + id, url.origin).toString(); }
+// Links are on aurin.health whichever host the app talks to, so they never change.
+export function shareUrl(env, id) { return new URL("/t/" + id, env?.APP_ORIGIN || SITE_ORIGIN).toString(); }
 
 // ----- The public page of a link (anyone, no sign-in) -----
 
@@ -320,7 +345,7 @@ const escapeHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;"
 const SPORT_LABEL = { gym: ["Posilovna", "Gym"], ride: ["Kolo", "Ride"], run: ["Běh", "Run"] };
 
 // /t/<id> and /t/<id>/og.png; null for any other path.
-export async function publicSharePage(request, db, url) {
+export async function publicSharePage(request, db, url, env = {}) {
   const m = /^\/t\/([A-Za-z0-9]{10})(\/og\.png|\/workout\.zwo)?$/.exec(url.pathname);
   if (!m || !db) return null;
   if (request.method !== "GET" && request.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
@@ -354,7 +379,12 @@ export async function publicSharePage(request, db, url) {
   const list = endurance ? sectionList(template) : exercises.map(e => `<li><span>${escapeHtml(e.name)}</span><span class="sr">${escapeHtml(e.sets + " × " + e.reps)}</span></li>`).join("");
   const description = from + " · " + meta;
   const og = share.has_image ? new URL("/t/" + share.id + "/og.png", url.origin).toString() : null;
-  const head = `<meta property="og:type" content="website"><meta property="og:site_name" content="Loadwise"><meta property="og:title" content="${escapeHtml(share.name)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(url.origin + url.pathname)}">` + (og ? `<meta property="og:image" content="${og}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">` : "");
+  // The App Store banner and the way there when the app is not installed;
+  // APP_STORE_ID is the app's Apple ID in App Store Connect.
+  const storeId = /^\d{6,12}$/.test(String(env.APP_STORE_ID || "")) ? String(env.APP_STORE_ID) : null;
+  const store = storeId ? "https://apps.apple.com/app/id" + storeId : null;
+  const banner = storeId ? `<meta name="apple-itunes-app" content="app-id=${storeId}, app-argument=${escapeHtml(url.origin + url.pathname)}">` : "";
+  const head = banner + `<meta property="og:type" content="website"><meta property="og:site_name" content="Aurin"><meta property="og:title" content="${escapeHtml(share.name)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:url" content="${escapeHtml(url.origin + url.pathname)}">` + (og ? `<meta property="og:image" content="${og}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta name="twitter:card" content="summary_large_image">` : "");
   const body = `<p class="eyebrow"><span class="avatar">${escapeHtml((share.from_name || "?").slice(0, 1).toUpperCase())}</span>${escapeHtml(from)}</p>
 <h1>${escapeHtml(share.name)}</h1>
 <p class="sub">${escapeHtml(meta)}</p>
@@ -362,9 +392,12 @@ ${muscles.length ? `<div class="bars">${muscles.map((name, i) => `<div><i class=
 ${endurance ? intervalGraph(template) : ""}
 <ol class="card">${list}</ol>
 <p class="note">${endurance ? t(share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
-<a class="button" href="loadwise://open/share/${share.id}">${t("Otevřít v aplikaci", "Open in the app")}</a>${share.sport === "ride" ? `
+<a class="button" id="open" href="loadwise://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
+<p class="note" id="noapp" hidden>${store ? `<a href="${store}">${t("Stáhni si Aurin z App Store", "Get Aurin on the App Store")}</a>` : t("Aurin bude brzy v App Store.", "Aurin is coming soon to the App Store.")}</p>${share.sport === "ride" ? `
 <a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
-  return new Response(page({ en, title: share.name, description, head, body }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+  // Without the app the scheme does nothing: the page stays, so it shows the way to the app.
+  const script = `<script>document.getElementById("open").addEventListener("click",function(){setTimeout(function(){if(!document.hidden){${store ? `location.href=${JSON.stringify(store)}` : `document.getElementById("noapp").hidden=false`}}},1500)})</script>`;
+  return new Response(page({ en, title: share.name, description, head, body: body + script }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
 }
 
 // The sections as bars over time, coloured by zone, like the app's chart.
@@ -389,7 +422,7 @@ function sectionList(template) {
 }
 
 function page({ en, title, description = "", head = "", body }) {
-  return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Loadwise</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
+  return `<!doctype html><html lang="${en ? "en" : "cs"}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>${escapeHtml(title)} · Aurin</title><meta name="description" content="${escapeHtml(description)}">${head}<style>
 :root{--bg:#F3EFE8;--card:#FBFAF7;--ink:#1B1A17;--muted:#6D6A63;--line:rgba(27,26,23,.09);--button:#15140F;--onbutton:#fff;--avatar:#1F6B52;--c0:#A35A12;--c1:#1F6B52;--c2:#4F46C8;--c3:#1D6FA3;--z1:#9C978D;--z2:#1D6FA3;--z3:#1F6B52;--z4:#C4782A;--z5:#B4532F}
 @media (prefers-color-scheme:dark){:root{--bg:#0A0B0C;--card:#1C1E1F;--ink:#ECEAE6;--muted:#9AA39F;--line:rgba(236,234,230,.08);--button:#F4F2EE;--onbutton:#0A0B0C;--avatar:#2E9E78;--c0:#F2B46B;--c1:#8FE6C4;--c2:#A5A1FF;--c3:#7CC3F0;--z1:#5C6266;--z2:#7CC3F0;--z3:#8FE6C4;--z4:#F0B36E;--z5:#F0907A}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
@@ -403,7 +436,7 @@ h1{font-family:"New York","Iowan Old Style",Georgia,serif;font-weight:400;font-s
 .card{list-style:none;margin:22px 0 0;padding:4px 18px;background:var(--card);border-radius:20px}
 .card li{display:flex;justify-content:space-between;gap:12px;padding:13px 0;border-top:1px solid var(--line)}.card li:first-child{border-top:0}
 .sr{color:var(--muted);white-space:nowrap}
-.note{color:var(--muted);font-size:14px;margin:14px 2px 0}
+.note{color:var(--muted);font-size:14px;margin:14px 2px 0}.note a{color:var(--ink)}
 .button{display:flex;align-items:center;justify-content:center;height:52px;margin-top:22px;border-radius:999px;background:var(--button);color:var(--onbutton);font-weight:600;text-decoration:none}
 .button.ghost{background:none;color:var(--ink);border:1px solid var(--line);margin-top:12px}
 .graph{display:block;width:100%;height:96px;margin-top:20px}
