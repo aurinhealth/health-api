@@ -741,22 +741,20 @@ struct TrainingModeView: View {
 
     /// Zahodit trénink: the day goes back to how it was before this screen,
     /// the clock stops without a workout in Apple Health (one saved by
-    /// Dokončit is deleted again).
+    /// Dokončit is deleted again), once "Zpět" had its 6 s.
     private func discard() async {
         restEnd = nil
-        saving = true
-        defer { saving = false }
-        if !model.demo {
-            do {
-                try await model.saveGym(original ?? GymDay(date: date, values: [], cancelled: nil), date: date)
-            } catch {
-                self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
-                return
-            }
-            await model.refreshTraining()
-        }
+        let model = model, live = live, date = date
+        let back = original ?? GymDay(date: date, values: [], cancelled: nil)
+        let workout = live.takeSaved()
         live.reset()
-        await live.deleteSaved()
+        model.deleteLater(L10n.tr("Trénink zahozen")) {
+            if !model.demo {
+                do { try await model.saveGym(back, date: date) } catch { model.notice = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription) }
+                await model.refreshTraining()
+            }
+            if let workout { await live.delete(workout) }
+        }
         dismiss()
     }
 

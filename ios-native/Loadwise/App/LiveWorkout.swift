@@ -84,13 +84,15 @@ final class LiveWorkout: NSObject {
         return saved
     }
 
-    /// Clears everything after the summary was shown (or the screen left early).
+    /// The saved workout, handed over once (deleted later, after "Zpět" passed).
+    func takeSaved() -> HKWorkout? {
+        defer { savedWorkout = nil; savedToHealth = false }
+        return savedWorkout
+    }
+
     /// Zahodit trénink after Dokončit: the workout saved to Apple Health goes
     /// too, with the calories and heart rate saved with it.
-    func deleteSaved() async {
-        guard let workout = savedWorkout else { return }
-        savedWorkout = nil
-        savedToHealth = false
+    func delete(_ workout: HKWorkout) async {
         let linked = HKQuery.predicateForObjects(from: workout)
         for type in [HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)] {
             _ = try? await store.deleteObjects(of: type, predicate: linked)
@@ -98,6 +100,7 @@ final class LiveWorkout: NSObject {
         try? await store.delete(workout)
     }
 
+    /// Clears everything after the summary was shown (or the screen left early).
     func reset() {
         poll?.cancel(); poll = nil
         stopSensor()

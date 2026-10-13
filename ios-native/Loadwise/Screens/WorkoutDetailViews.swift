@@ -713,9 +713,16 @@ struct PlannedWorkoutView: View {
         await run { try await model.api.movePlanned(eventId: id, to: AppModel.localDate(moveDate)) }
     }
 
+    /// Gone from the screen now, from the server after "Zpět" had its 6 s.
     private func delete() async {
         guard let id = session.eventId else { return }
-        await run { try await model.api.deletePlanned(eventId: id) }
+        let model = model
+        model.deleteLater(L10n.tr("Trénink smazán"), hide: id) {
+            do { try await model.api.deletePlanned(eventId: id) } catch { model.notice = error.localizedDescription }
+            await model.refreshTraining()
+            await model.refresh()
+        }
+        dismiss()
     }
 
     private func environment(indoor: Bool) async {

@@ -20,7 +20,7 @@ struct CalendarDay: Decodable, Equatable, Identifiable {
     let kcal: Double
     /// Workouts still planned.
     let planned: Int
-    let activities: [CalendarActivity]
+    var activities: [CalendarActivity]
     /// Past plans nothing was done for.
     var missed: Int? = nil
     /// The day against the plan (src/app-training.js dayPlanState): "good",
