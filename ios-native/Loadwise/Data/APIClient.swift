@@ -400,8 +400,10 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// AI lookup of a food by name or barcode (counts against the AI allowance).
-    func lookupFood(name: String, barcode: String? = nil) async throws -> FoodProduct? {
-        var body: JSONObject = ["name": .string(name)]
+    /// estimate: when the web has no such product, typical values marked as
+    /// an AI estimate (source "ai-estimate").
+    func lookupFood(name: String, barcode: String? = nil, estimate: Bool = true) async throws -> FoodProduct? {
+        var body: JSONObject = ["name": .string(name), "estimate": .bool(estimate)]
         if let barcode { body["barcode"] = .string(barcode) }
         let response: FoodLookupResponse = try await send("/app/api/food/ai-lookup", method: "POST", body: body)
         return response.status == "ok" ? response.product : nil
