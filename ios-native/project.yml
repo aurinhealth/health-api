@@ -93,6 +93,12 @@ targets:
           - CFBundleURLName: eu.petrfitnessdata.loadwise.native
             CFBundleURLSchemes:
               - loadwise
+        # Syncing without the app being opened (App/BackgroundRefresh.swift):
+        # iOS runs the refresh task a few times a day when it chooses.
+        UIBackgroundModes:
+          - fetch
+        BGTaskSchedulerPermittedIdentifiers:
+          - eu.petrfitnessdata.loadwise.native.refresh
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:

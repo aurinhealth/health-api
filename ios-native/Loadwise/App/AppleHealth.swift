@@ -215,7 +215,10 @@ final class AppleHealth {
         UserDefaults.standard.set(chosen.map(\.rawValue).sorted().joined(separator: ","), forKey: Self.categoriesKey)
     }
 
-    /// At launch: watch for new data while Apple Health is connected.
+    /// At launch (AppDelegate, also when iOS starts the app in the background
+    /// for new data) and after connecting: watch for new data while Apple
+    /// Health is connected. HealthKit only wakes an app that set its observers
+    /// up before the launch ended; later calls just swap in the app's client.
     func start(api: APIClient) {
         self.api = api
         guard enabled, isAvailable, observers.isEmpty else { return }
@@ -224,7 +227,11 @@ final class AppleHealth {
             let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
                 guard error == nil else { completion(); return }
                 Task { @MainActor in
-                    if let api = AppleHealth.shared.api { _ = await AppleHealth.shared.sync(api: api) }
+                    if let api = AppleHealth.shared.api {
+                        // Woken in the background: the widgets follow the new data.
+                        if UIApplication.shared.applicationState == .active { _ = await AppleHealth.shared.sync(api: api) }
+                        else { await BackgroundRefresh.refresh(api: api, widgets: false) }
+                    }
                     completion()
                 }
             }
