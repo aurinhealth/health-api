@@ -391,7 +391,7 @@ ${today}
 <div class="graph" aria-hidden="true">${graph}</div>
 <p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti.', 'Picked by AI from the library for today’s readiness.')}</p>
 </div>
-<div class="chips"><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span></div>
+<div class="chips"><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span></div>
 </div>
 </div></section>
 
