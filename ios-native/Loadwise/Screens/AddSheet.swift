@@ -12,10 +12,15 @@ struct AddSheet: View {
     @State private var weight = false
     @State private var workout = false
     @State private var drink = false
+    @State private var editing = false
     @State private var added: String?
     @State private var failed: String?
+    /// What "+" shows and in which order (PlusItem ids), set in Upravit.
+    @AppStorage("plusMenu.items") private var stored = PlusItem.defaults.joined(separator: ",")
 
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+    private var shown: [PlusItem] { PlusItem.list(stored) }
 
     var body: some View {
         PageScroll {
@@ -26,40 +31,30 @@ struct AddSheet: View {
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
 
-                section("Jídlo", "fork.knife", Palette.amberBar)
-                LazyVGrid(columns: columns, spacing: 10) {
-                    tile("Hledat", "magnifyingglass") { food = .search }
-                    tile("Vyfotit jídlo", "camera") { food = .photo }
-                    tile("Z galerie", "photo.on.rectangle") { food = .gallery }
-                    tile("Čárový kód", "barcode.viewfinder") { food = .scan }
-                    tile("Etiketa", "doc.text.viewfinder") { food = .label }
-                    tile("Ručně", "square.and.pencil") { food = .manual }
-                }
-
-                section("Pití", "drop.fill", Palette.blue)
-                DrinkQuickRow(add: { ml, kind in await save(ml: ml, kind: kind) }, other: { drink = true })
-                if let added { Label(added, systemImage: "checkmark.circle.fill").font(Typo.caption).foregroundStyle(Palette.green).padding(.top, 8) }
-                if let failed { Text(failed).font(Typo.caption).foregroundStyle(Palette.rust).padding(.top, 8) }
-
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        section("Váha", "scalemass", Palette.brown)
-                        tile("Zapsat váhu", "scalemass") { weight = true }
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        section("AI kouč", "sparkles", Palette.green)
-                        tile("Zeptat se", "bubble.left.and.text.bubble.right") { openCoach() }
+                ForEach(PlusItem.Section.allCases, id: \.self) { section in
+                    let items = shown.filter { $0.section == section }
+                    if !items.isEmpty {
+                        header(section)
+                        if section == .drink {
+                            DrinkQuickRow(add: { ml, kind in await save(ml: ml, kind: kind) }, other: { drink = true })
+                            if let added { Label(added, systemImage: "checkmark.circle.fill").font(Typo.caption).foregroundStyle(Palette.green).padding(.top, 8) }
+                            if let failed { Text(failed).font(Typo.caption).foregroundStyle(Palette.rust).padding(.top, 8) }
+                        } else {
+                            LazyVGrid(columns: columns, spacing: 10) {
+                                ForEach(items) { item in tile(item) }
+                            }
+                        }
                     }
                 }
 
-                section("Trénink", "figure.run", Palette.rust)
-                LazyVGrid(columns: columns, spacing: 10) {
-                    // Today's plan, or an empty workout the exercises are added to.
-                    tile("Začít trénink", "play.fill") { open(.trainingMode(AppModel.localDate(Date()))) }
-                    tile("Zapsat trénink", "square.and.pencil") { workout = true }
-                    tile("Sestavit posilovnu", "sparkles") { open(.gymBuilder) }
-                    tile("Knihovna", "books.vertical") { open(.library) }
+                Button { editing = true } label: {
+                    Label("Upravit", systemImage: "pencil").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .contentShape(Capsule())
                 }
+                .buttonStyle(.plain)
+                .padding(.top, 24)
             }
             .padding(24)
         }
@@ -72,27 +67,48 @@ struct AddSheet: View {
         .sheet(isPresented: $weight, onDismiss: { dismiss() }) { WeightEntrySheet() }
         .sheet(isPresented: $workout, onDismiss: { dismiss() }) { ManualWorkoutSheet() }
         .sheet(isPresented: $drink) { DrinkSheet { ml, kind in await save(ml: ml, kind: kind) } }
+        .sheet(isPresented: $editing) { PlusMenuEditor(stored: $stored) }
     }
 
-    private func section(_ title: String, _ symbol: String, _ color: Color) -> some View {
-        HStack(spacing: 7) {
-            Circle().fill(color).frame(width: 8, height: 8)
-            Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
-        }
-        .padding(.top, 22).padding(.bottom, 10)
+    private func header(_ section: PlusItem.Section) -> some View {
+        Label(L10n.tr(section.title), systemImage: section.symbol)
+            .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2)
+            .foregroundStyle(Palette.muted)
+            .labelStyle(TintedIcon(color: section.color))
+            .padding(.top, 22).padding(.bottom, 10)
     }
 
-    private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 20))
-                Text(title).font(.footnote.weight(.medium)).lineLimit(1).minimumScaleFactor(0.75)
+    private func tile(_ item: PlusItem) -> some View {
+        Button { run(item) } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: item.symbol).font(.system(size: 18)).foregroundStyle(item.section.color)
+                Text(L10n.tr(item.title)).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.75)
             }
-            .foregroundStyle(Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 78)
+            .padding(16)
+            .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
         .buttonStyle(PressableCardStyle())
+    }
+
+    private func run(_ item: PlusItem) {
+        switch item.id {
+        // Today's plan, or an empty workout the exercises are added to.
+        case "start": open(.trainingMode(AppModel.localDate(Date())))
+        case "log": workout = true
+        case "pick": open(.coachPick)
+        case "library": open(.library)
+        case "gymBuilder": open(.gymBuilder)
+        case "photo": food = .photo
+        case "search": food = .search
+        case "gallery": food = .gallery
+        case "scan": food = .scan
+        case "label": food = .label
+        case "manual": food = .manual
+        case "weight": weight = true
+        case "coach": openCoach()
+        default: break
+        }
     }
 
     private func save(ml: Int, kind: String) async {
@@ -108,6 +124,102 @@ struct AddSheet: View {
     private func open(_ route: AppRoute) {
         dismiss()
         model.open(route)
+    }
+}
+
+/// A label whose icon has its own colour.
+private struct TintedIcon: LabelStyle {
+    let color: Color
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 7) { configuration.icon.foregroundStyle(color); configuration.title }
+    }
+}
+
+/// One thing "+" can do. The user picks which show and their order (Upravit).
+struct PlusItem: Identifiable, Equatable {
+    enum Section: CaseIterable {
+        case training, food, drink, other
+        var title: String { switch self { case .training: "Trénink"; case .food: "Jídlo"; case .drink: "Pití"; case .other: "Další" } }
+        var symbol: String { switch self { case .training: "figure.run"; case .food: "fork.knife"; case .drink: "drop"; case .other: "plus.circle" } }
+        var color: Color { switch self { case .training: Palette.rust; case .food: Palette.amberBar; case .drink: Palette.blue; case .other: Palette.green } }
+    }
+
+    let id: String
+    let title: String
+    let symbol: String
+    let section: Section
+
+    static let all: [PlusItem] = [
+        PlusItem(id: "start", title: "Začít trénink", symbol: "play.fill", section: .training),
+        PlusItem(id: "log", title: "Zapsat trénink", symbol: "square.and.pencil", section: .training),
+        PlusItem(id: "pick", title: "Trénink dne", symbol: "sparkles", section: .training),
+        PlusItem(id: "library", title: "Knihovna", symbol: "books.vertical", section: .training),
+        PlusItem(id: "gymBuilder", title: "Sestavit posilovnu", symbol: "dumbbell", section: .training),
+        PlusItem(id: "photo", title: "Vyfotit jídlo", symbol: "camera", section: .food),
+        PlusItem(id: "search", title: "Hledat jídlo", symbol: "magnifyingglass", section: .food),
+        PlusItem(id: "scan", title: "Čárový kód", symbol: "barcode.viewfinder", section: .food),
+        PlusItem(id: "gallery", title: "Jídlo z galerie", symbol: "photo.on.rectangle", section: .food),
+        PlusItem(id: "label", title: "Etiketa", symbol: "doc.text.viewfinder", section: .food),
+        PlusItem(id: "manual", title: "Jídlo ručně", symbol: "square.and.pencil", section: .food),
+        PlusItem(id: "drink", title: "Pití", symbol: "drop", section: .drink),
+        PlusItem(id: "weight", title: "Zapsat váhu", symbol: "scalemass", section: .other),
+        PlusItem(id: "coach", title: "Zeptat se kouče", symbol: "bubble.left.and.text.bubble.right", section: .other)
+    ]
+
+    static let defaults = ["start", "log", "pick", "library", "photo", "search", "drink"]
+
+    static func list(_ stored: String) -> [PlusItem] {
+        stored.split(separator: ",").compactMap { id in all.first { $0.id == id } }
+    }
+}
+
+/// Upravit +: drag to reorder, − hides, + adds.
+struct PlusMenuEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var stored: String
+    @State private var shown: [PlusItem] = []
+
+    private var hidden: [PlusItem] { PlusItem.all.filter { !shown.contains($0) } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Zobrazené") {
+                    ForEach(shown) { item in row(item) }
+                        .onMove { shown.move(fromOffsets: $0, toOffset: $1) }
+                        .onDelete { shown.remove(atOffsets: $0) }
+                }
+                if !hidden.isEmpty {
+                    Section("Další") {
+                        ForEach(hidden) { item in
+                            HStack(spacing: 12) {
+                                Button { withAnimation { shown.append(item) } } label: {
+                                    Image(systemName: "plus.circle.fill").font(.title3).foregroundStyle(.white, Palette.green)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(L10n.f("Přidat %@", L10n.tr(item.title)))
+                                row(item)
+                            }
+                        }
+                    }
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle(L10n.tr("Upravit +"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { stored = shown.map(\.id).joined(separator: ","); dismiss() } label: { Text("Hotovo").bold() }
+                }
+            }
+            .onAppear { shown = PlusItem.list(stored) }
+        }
+        .tint(Palette.ink)
+    }
+
+    private func row(_ item: PlusItem) -> some View {
+        Label(L10n.tr(item.title), systemImage: item.symbol).foregroundStyle(Palette.ink)
     }
 }
 
