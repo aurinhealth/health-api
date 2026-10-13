@@ -22,7 +22,7 @@ function themeBound(hex){
 test('theme layers take surface, line and text colours from tokens',()=>{
   const found=[];
   for(const file of LAYERS){
-    const src=readFileSync(new URL('../src/'+file,import.meta.url),'utf8').replace(/:root[^{]*\{[^}]*\}/g,'').replace(/content="[^"]*"/g,'').replace(/const LIGHT = `[^`]*`/,'');
+    const src=readFileSync(new URL('../src/'+file,import.meta.url),'utf8').replace(/:root[^{]*\{[^}]*\}/g,'').replace(/content="[^"]*"/g,'');
     for(const m of src.matchAll(/#[0-9a-fA-F]{3,8}\b/g))if([4,5,7,9].includes(m[0].length)&&themeBound(m[0]))found.push(file+' '+m[0]);
   }
   assert.deepEqual(found,[],'use var(--token) or color-mix(in srgb,var(--text) N%,var(--bg)) instead of these colours');
@@ -35,14 +35,10 @@ test('the design system defines every token the layers mix from, once',async()=>
   for(const name of new Set([...html.matchAll(/color-mix\(in srgb,var\(--([a-z0-9-]+)\)/g)].map(m=>m[1]))) assert.match(roots[0],new RegExp('--'+name+':'),name);
 });
 
-test('light theme follows the lw-theme cookie or the system setting',async()=>{
+test('the public pages keep the app’s light palette without a theme switch',async()=>{
   const html=await overviewPage().text();
-  const head=html.slice(0,html.indexOf('<style>'));
-  assert.match(head,/lw-theme=\(light\|dark\)/,'theme is applied before the first paint');
-  assert.match(html,/:root\[data-theme="light"\]\{[^}]*--bg:/);
-  assert.match(html,/@media \(prefers-color-scheme:light\)\{:root:not\(\[data-theme="dark"\]\)\{[^}]*--bg:/);
-  for(const choice of ['light','dark'])assert.match(html,new RegExp('role="radio" data-theme-choice="'+choice+'"'),'top bar switch: '+choice);
-  assert.doesNotMatch(html,/data-theme-choice="system"/,'the device decides without a choice; there is no separate option for it');
+  assert.match(html,/:root\{color-scheme:light;[^}]*--bg:#F3EFE8;/);
+  assert.doesNotMatch(html,/lw-theme|data-theme/,'one look, taken from Palette.swift');
 });
 
 // Small text was 12px almost everywhere and hard to read; sizes under 15px now come from the

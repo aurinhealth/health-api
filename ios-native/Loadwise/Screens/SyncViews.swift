@@ -251,7 +251,7 @@ struct SyncDestinationView: View {
                     if let missing = destination.missingScopes, !missing.isEmpty { googlePermission(missing) }
                     sections(destination)
                     if id == "strava" {
-                        Text("Ze Stravy Loadwise nic nečte, jen do ní posílá.")
+                        Text("Ze Stravy Aurin nic nečte, jen do ní posílá.")
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                         SettingsGroup {
                             Button { confirmDisconnect = true } label: {
@@ -339,7 +339,7 @@ struct SyncDestinationView: View {
     private func connect(_ destination: SyncDestination) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.f("%@ zatím není připojené.", SyncApp.name(id))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Text(id == "strava" ? "Loadwise do Stravy posílá hotové aktivity a váhu. Nic z ní nečte." : "Připoj ho a vyber, co do něj Loadwise posílá.")
+            Text(id == "strava" ? "Aurin do Stravy posílá hotové aktivity a váhu. Nic z ní nečte." : "Připoj ho a vyber, co do něj Aurin posílá.")
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             if id == "strava" {
                 PrimaryButton(title: L10n.tr("Připojit Stravu"), busy: connecting) { Task { await connectStrava() } }
@@ -393,7 +393,7 @@ struct SyncDestinationView: View {
             Text("Google zatím nepovolil zápis").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             Text(missing.map(Self.scopeName).joined(separator: ", "))
                 .font(Typo.small).foregroundStyle(Palette.muted)
-            Text("Loadwise otevře souhlas Googlu jen pro zápis toho, co tu zapneš. Číst víc nebude.")
+            Text("Aurin otevře souhlas Googlu jen pro zápis toho, co tu zapneš. Číst víc nebude.")
                 .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             PrimaryButton(title: L10n.tr("Rozšířit oprávnění Google"), busy: connecting) { Task { await extendGoogle() } }
                 .disabled(connecting)
@@ -465,9 +465,9 @@ struct SyncHealthView: View {
 
     private var footer: String? {
         switch id {
-        case "apple": return "Do Apple Zdraví jde jen to, co v Loadwise sám zapíšeš."
-        case "google": return "Váhu a jídlo zapsané v Loadwise."
-        case "intervals": return "Z Google Health a Apple Zdraví do wellness v Intervals.icu. Co tam už je odjinud, Loadwise nepřepíše."
+        case "apple": return "Do Apple Zdraví jde jen to, co v Aurinu sám zapíšeš."
+        case "google": return "Váhu a jídlo zapsané v Aurinu."
+        case "intervals": return "Z Google Health a Apple Zdraví do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
         case "strava": return "Poslední váhu, když se změní."
         default: return nil
         }

@@ -10,7 +10,7 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
   with a code sent to the e-mail. After the first e-mail sign-in the app
   offers a passkey ("Příště přes Face ID", Data/Passkeys.swift); the sign-in
   screen then has "Přihlásit přes passkey". Passkeys need the
-  `webcredentials:petrfitnessdata.eu` entitlement (project.yml) and the
+  `webcredentials:aurin.health` entitlement (project.yml) and the
   server's `/.well-known/apple-app-site-association` (APPLE_TEAM_ID).
 - The first-run setup (Screens/SetupFlowView.swift): "Odkud brát data"
   (Apple Health on by default, Google Health, Intervals.icu, the consent to

@@ -25,10 +25,14 @@ test("without a team id the file is not served; other paths and methods pass", (
   assert.equal(appleAppSiteAssociation(get("/.well-known/apple-app-site-association", "POST"), env).status, 405);
 });
 
-test("iOS reads it anonymously, and the app's entitlement names the same domain", () => {
+test("iOS reads it anonymously, and the app's entitlement names the server it talks to", () => {
   assert.equal(isPublicPath("/.well-known/apple-app-site-association"), true);
   const project = readFileSync(new URL("../ios-native/project.yml", import.meta.url), "utf8");
-  assert.match(project, /com\.apple\.developer\.associated-domains:\s*\n\s*- webcredentials:petrfitnessdata\.eu/);
+  const client = readFileSync(new URL("../ios-native/Loadwise/Data/APIClient.swift", import.meta.url), "utf8");
+  const server = new URL(client.match(/static let server = URL\(string: "([^"]+)"\)!/)[1]).hostname;
+  assert.equal(server, "aurin.health");
+  const domains = project.match(/com\.apple\.developer\.associated-domains:\s*\n((?:\s*- .+\n)+)/)[1];
+  assert.match(domains, new RegExp("- webcredentials:" + server.replace(/\./g, "\\.") + "\n"));
   assert.match(project, new RegExp("PRODUCT_BUNDLE_IDENTIFIER: " + APP_BUNDLE_ID.replace(/\./g, "\\.") + "\\b"));
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   assert.ok(source.includes("appleAppSiteAssociation(request, rawEnv, url.pathname)"));

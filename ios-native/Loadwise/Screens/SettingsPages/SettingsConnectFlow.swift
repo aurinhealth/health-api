@@ -126,7 +126,7 @@ struct ConnectFlowSheets: ViewModifier {
                     }
                 }
             } message: {
-                Text("Data, která už Loadwise má, zůstanou. Nová přestanou chodit.")
+                Text("Data, která už Aurin má, zůstanou. Nová přestanou chodit.")
             }
     }
 }
@@ -156,9 +156,9 @@ struct GoogleDisclosureSheet: View {
                             Text(item.1).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    Toggle("Souhlasím, aby Loadwise takto používal moje data z Google Health.", isOn: $agree)
+                    Toggle("Souhlasím, aby Aurin takto používal moje data z Google Health.", isOn: $agree)
                         .font(Typo.small).tint(Palette.green).padding(.top, 6)
-                    Link("Zásady ochrany soukromí", destination: URL(string: "https://petrfitnessdata.eu/privacy")!).font(Typo.small)
+                    Link("Zásady ochrany soukromí", destination: URL(string: "https://aurin.health/privacy")!).font(Typo.small)
                     PrimaryButton(title: "Pokračovat na Google", systemImage: "arrow.up.forward") { proceed() }
                         .disabled(!agree).opacity(agree ? 1 : 0.5).padding(.top, 6)
                 }
