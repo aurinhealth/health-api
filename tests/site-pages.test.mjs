@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {existsSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 import {overviewPage,privacyPage,termsPage,supportPage} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
@@ -33,6 +33,21 @@ test('the overview follows the app section by section and every file it loads ex
     assert.ok(files.includes('fonts/newsreader.woff2'));
     for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
     assert.doesNotMatch(html,/\.webp"/,'the phone is drawn in HTML, not a screenshot');
+    assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
+  }
+});
+
+// The phone in the hero is the Today screen: its key numbers carry the app's own labels
+// (TodayView.swift, English from Localizable.strings), so a rename in the app fails here.
+test('the phone in the hero labels the key numbers like the app’s Today screen',async()=>{
+  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
+  const labels=[...read('Loadwise/Screens/TodayView.swift').matchAll(/\bcell\("([^"]+)"/g)].map(m=>m[1]);
+  assert.ok(labels.length>=3,'KeyNumbers cells');
+  const strings=read('Shared/en.lproj/Localizable.strings');
+  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1]||label;
+  for(const lang of ['cs','en']){
+    const html=await overviewPage(new Request('https://petrfitnessdata.eu/?lang='+lang)).text();
+    for(const label of labels)assert.match(html,new RegExp('<div class="k">'+(lang==='en'?en(label):label)+'</div>'),lang+' '+label);
   }
 });
 

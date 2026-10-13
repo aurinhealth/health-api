@@ -28,7 +28,7 @@ entrypoint.js → strength-gateway.js → index.js
 
 Vzhled veřejného webu: barvy a velikosti písma jsou tokeny v `src/design-system.js` (světlá paleta aplikace, web nemá přepínač vzhledu), ikony SVG v `src/icons.js`.
 
-Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`, ve světlé paletě aplikace (`ios-native/Loadwise/Design/Palette.swift`). Telefon na úvodní stránce je nakreslený v HTML podle obrazovky Dnes, takže web nepotřebuje snímky obrazovky; v `public/site/` je jen písmo Newsreader a obrázky pro sdílení `og.png` a `og-en.png`. Úvodní stránka se mění spolu s aplikací (pravidlo v `CLAUDE.md`). Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
+Veřejný web: úvodní stránka Přehled na `/` a stránky `/privacy`, `/terms`, `/support` jsou v `src/site-pages.js`, ve světlé paletě aplikace (`ios-native/Shared/Palette.swift`). Telefon na úvodní stránce je nakreslený v HTML podle obrazovky Dnes, takže web nepotřebuje snímky obrazovky; v `public/site/` je jen písmo Newsreader a obrázky pro sdílení `og.png` a `og-en.png`. Úvodní stránka se mění spolu s aplikací (pravidlo v `CLAUDE.md`). Anglický odstavec „Google Health data disclosure“ na úvodní stránce musí zůstat kvůli ověření aplikace u Googlu.
 
 Nová logika patří do samostatných modulů v `src/` volaných z `entrypoint.js` nebo `strength-gateway.js`.
 
