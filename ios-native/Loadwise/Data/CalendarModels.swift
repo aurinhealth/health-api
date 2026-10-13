@@ -71,7 +71,13 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
         let rounded: Int? = minutes.map { Int($0.rounded()) }
         return WeekSession(id: id, kind: kind, status: status, date: date, time: time, title: title, sport: sport,
                            minutes: rounded, tss: nil, activityId: activityId, eventId: eventId, plannedId: plannedId,
-                           adherence: adherence, adherenceReason: adherenceReason)
+                           watch: watchRef, adherence: adherence, adherenceReason: adherenceReason)
+    }
+
+    /// A done session from the watch opens its own detail.
+    private var watchRef: WatchRef? {
+        guard status == "done", let source, source == "google-wearables" || source == "apple-health" else { return nil }
+        return WatchRef(source: source, id: id)
     }
 
     private var kind: String {

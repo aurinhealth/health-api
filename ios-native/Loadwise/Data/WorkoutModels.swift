@@ -20,6 +20,9 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let eventId: String?
     /// On a done session: the plan it fulfils, for undoing a pairing.
     var plannedId: String? = nil
+    /// A workout from the watch (Apple Health, Google Health): its detail
+    /// (GET /app/api/activity-detail/watch).
+    var watch: WatchRef? = nil
     /// On a done session: the calories the device reported.
     var kcal: Double? = nil
     /// When those look implausible (src/activity-energy-check.js): the
@@ -304,14 +307,31 @@ struct GymAlternative: Decodable, Equatable, Identifiable {
 
 // MARK: - Activity detail (GET /app/api/activity-detail, src/activity-detail.js)
 
+/// Where a watch workout is kept: source_family and external_id.
+struct WatchRef: Decodable, Hashable {
+    let source: String
+    let id: String
+    var hasGps: Bool? = nil
+    /// The server has its route (Google); Apple's is read on the iPhone.
+    var route: Bool? = nil
+
+    /// The HealthKit workout's UUID of an Apple Health workout ("apple:<uuid>").
+    var appleUUID: UUID? {
+        guard source == "apple-health", id.hasPrefix("apple:") else { return nil }
+        return UUID(uuidString: String(id.dropFirst(6)))
+    }
+}
+
 struct ActivityDetail: Decodable, Equatable {
     let activity: Activity
     let analysis: Analysis?
-    let streams: [Stream]?
+    var streams: [Stream]?
     let intervals: [Lap]?
     let hrr: HeartRateRecovery?
     /// Heart-rate zones with their bpm range; power zones are in `analysis`.
     var hrZones: [Zone]? = nil
+    /// The watch's copy (or the watch workout itself), for its route.
+    var watch: WatchRef? = nil
 
     struct Activity: Decodable, Equatable {
         let name: String?
@@ -349,6 +369,28 @@ struct ActivityDetail: Decodable, Equatable {
     struct StreamPoint: Decodable, Equatable {
         let t: Double
         let v: Double?
+        /// latlng: [latitude, longitude].
+        var ll: [Double]? = nil
+
+        init(t: Double, v: Double?, ll: [Double]? = nil) {
+            self.t = t
+            self.v = v
+            self.ll = ll
+        }
+
+        enum CodingKeys: String, CodingKey { case t, v }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            t = try c.decode(Double.self, forKey: .t)
+            let value = try? c.decodeIfPresent(JSONValue.self, forKey: .v)
+            if case .array(let pair) = value {
+                v = nil
+                ll = pair.compactMap(\.number)
+            } else {
+                v = value?.number
+            }
+        }
     }
 
     struct Stream: Decodable, Equatable {

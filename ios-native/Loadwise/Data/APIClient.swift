@@ -248,6 +248,11 @@ final class APIClient: @unchecked Sendable {
         try await get("/app/api/activity-detail?id=" + Self.query(id))
     }
 
+    /// A workout from the watch (Apple Health, Google Health).
+    func watchDetail(_ ref: WatchRef) async throws -> ActivityDetail {
+        try await get("/app/api/activity-detail/watch?source=" + Self.query(ref.source) + "&id=" + Self.query(ref.id))
+    }
+
     func plannedWorkout(eventId: String) async throws -> PlannedWorkout {
         try await get("/app/api/workouts/planned?id=" + Self.query(eventId))
     }

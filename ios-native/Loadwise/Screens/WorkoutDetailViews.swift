@@ -166,7 +166,7 @@ struct WeekSessionsList: View {
         // its detail is the planned one, where it can move or be deleted.
         if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
-        if s.kind == "activity" { return s.activityId != nil ? .activity(s) : nil }
+        if s.kind == "activity" { return s.activityId != nil || s.watch != nil ? .activity(s) : nil }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
         return nil
     }
@@ -232,6 +232,8 @@ struct ActivityDetailView: View {
     @State private var error: String?
     @State private var feedback = false
     @State private var changingType = false
+    /// An Apple Health workout's route, read on the iPhone.
+    @State private var localRoute: [ActivityDetail.StreamPoint] = []
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -240,7 +242,7 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
-                    if !model.demo {
+                    if !model.demo, session.activityId != nil {
                         Menu {
                             Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
                         } label: {
@@ -253,12 +255,12 @@ struct ActivityDetailView: View {
                 .padding(.top, 24)
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
+                    ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail)
                 } else if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 50)
-                    Text("Detail se načítá z Intervals.icu.").font(Typo.caption).foregroundStyle(Palette.faint).frame(maxWidth: .infinity)
                 }
                 Button { feedback = true } label: {
                     Label("Jak to šlo?", systemImage: "text.bubble")
@@ -273,13 +275,26 @@ struct ActivityDetailView: View {
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
         }
-        .task {
-            guard detail == nil, let id = session.activityId, !model.demo else {
-                if model.demo { error = "V ukázce se detail nenačítá." }
-                return
+        .task { await load() }
+    }
+
+    /// Intervals.icu's detail (with the watch's heart rate and route where it
+    /// has none) or the watch workout's own; an Apple route from the iPhone.
+    private func load() async {
+        guard detail == nil else { return }
+        if model.demo { error = L10n.tr("V ukázce se detail nenačítá."); return }
+        do {
+            if let id = session.activityId {
+                detail = try await model.api.activityDetail(id: id)
+            } else if let watch = session.watch {
+                detail = try await model.api.watchDetail(watch)
             }
-            do { detail = try await model.api.activityDetail(id: id) } catch { self.error = error.localizedDescription }
+        } catch {
+            self.error = error.localizedDescription
+            return
         }
+        let hasRoute = detail?.streams?.contains { $0.type == "latlng" && !$0.points.isEmpty } == true
+        if !hasRoute, let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
     }
 }
 
