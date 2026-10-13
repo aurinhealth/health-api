@@ -212,16 +212,21 @@ final class AppleHealthExport {
         let end = min(Date(), start.addingTimeInterval(86400 - 1))
         guard end > start else { return }
         var totals: [(String, HKQuantityTypeIdentifier, HKUnit, Double)] = []
+        // What other apps wrote to Apple Health (and Aurin read back) is theirs:
+        // only Aurin's own share is written, so nothing counts twice there.
+        let entries = food.meals.flatMap(\.entries)
+        let other = entries.filter { $0.app != nil }
+        func theirs(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double { other.reduce(0.0) { $0 + ($1[keyPath: key] ?? 0) } }
         if prefs.health.allows("nutrition") {
-            let kcal = food.kcal ?? food.meals.flatMap(\.entries).reduce(0.0) { $0 + ($1.kcal ?? 0) }
+            let kcal = (food.kcal ?? entries.reduce(0.0) { $0 + ($1.kcal ?? 0) }) - theirs(\.kcal)
             totals.append(("kcal", .dietaryEnergyConsumed, .kilocalorie(), kcal))
-            totals.append(("protein", .dietaryProtein, .gram(), food.macros.protein.eaten ?? 0))
-            totals.append(("carbs", .dietaryCarbohydrates, .gram(), food.macros.carbs.eaten ?? 0))
-            totals.append(("fat", .dietaryFatTotal, .gram(), food.macros.fat.eaten ?? 0))
+            totals.append(("protein", .dietaryProtein, .gram(), (food.macros.protein.eaten ?? 0) - theirs(\.protein)))
+            totals.append(("carbs", .dietaryCarbohydrates, .gram(), (food.macros.carbs.eaten ?? 0) - theirs(\.carbs)))
+            totals.append(("fat", .dietaryFatTotal, .gram(), (food.macros.fat.eaten ?? 0) - theirs(\.fat)))
         }
         if prefs.health.allows("water") {
             let drinks = food.water.drinks ?? []
-            let water = drinks.isEmpty ? (food.water.ml ?? 0) : drinks.filter { $0.kind == "water" }.reduce(0.0) { $0 + ($1.ml ?? 0) }
+            let water = drinks.isEmpty ? (food.water.ml ?? 0) : drinks.filter { $0.kind == "water" && $0.app == nil }.reduce(0.0) { $0 + ($1.ml ?? 0) }
             totals.append(("water", .dietaryWater, .literUnit(with: .milli), water))
         }
         var written = UserDefaults.standard.dictionary(forKey: Self.writtenKey) as? [String: Double] ?? [:]
