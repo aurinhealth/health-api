@@ -124,14 +124,15 @@ struct SourcesSettingsView: View {
         var url: URL? = nil
     }
 
-    /// What is not connected yet: the services Loadwise reads itself, then the
+    /// What is not connected yet: the services Aurin reads itself (Ultrahuman once
+    /// the server offers it), then the
     /// watches and apps that come in through Intervals.icu.
     private var offers: [Offer] {
         var list: [Offer] = []
         if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
             list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
         }
-        for provider in available where provider.id == "google" || provider.id == "intervals" {
+        for provider in available where ["google", "ultrahuman", "intervals"].contains(provider.id) {
             list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
         }
         let settings = URL(string: "https://intervals.icu/settings")

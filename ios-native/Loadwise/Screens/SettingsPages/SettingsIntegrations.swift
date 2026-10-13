@@ -59,6 +59,7 @@ struct IntegrationCard: View {
         case "apple": return L10n.tr("spánek, tréninky, srdce, pohyb")
         case "intervals": return L10n.tr("tréninky, plán, zóny")
         case "google": return L10n.tr("spánek, tep, kroky")
+        case "ultrahuman": return L10n.tr("spánek, HRV, klidový tep, teplota")
         default: return L10n.tr("tréninky")
         }
     }
@@ -94,6 +95,9 @@ struct IntegrationIcon: View {
             case "garmin":
                 shape.fill(Color(light: 0x111111, dark: 0x111111))
                 Image(systemName: "triangle.fill").font(.system(size: size * 0.38, weight: .bold)).foregroundStyle(.white)
+            case "ultrahuman":
+                shape.fill(Color(light: 0x111111, dark: 0x111111))
+                Text(verbatim: "U").font(.system(size: size * 0.44, weight: .heavy)).foregroundStyle(.white)
             case "wahoo":
                 shape.fill(Color(light: 0x0B6FE0, dark: 0x0B6FE0))
                 Text(verbatim: "W").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
@@ -214,7 +218,7 @@ struct IntegrationDetailView: View {
 
             SettingsGroup {
                 Button { flow.disconnecting = current } label: {
-                    SettingsRow(title: "Odpojit", chevron: false, titleColor: Palette.rust)
+                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : "Odpojit", chevron: false, titleColor: Palette.rust)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.demo)

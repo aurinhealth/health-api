@@ -1820,3 +1820,9 @@
 "Co to je? Třeba „tyčinka Margot“" = "What is it? E.g. \"Snickers bar\"";
 "Odhadnout AI" = "Estimate with AI";
 "AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";
+
+"Ultrahuman je připojený, noci z prstenu se začínají stahovat." = "Ultrahuman is connected; the ring's nights are starting to download.";
+"Připojení Ultrahumanu se nepovedlo, zkus to znovu." = "Connecting Ultrahuman didn't work. Try again.";
+"Data z prstenu se smažou a noc se zase bude brát z hodinek." = "The ring's data will be deleted and your nights will come from your watch again.";
+"spánek, HRV, klidový tep, teplota" = "sleep, HRV, resting heart rate, temperature";
+"Odpojit a smazat data z prstenu" = "Disconnect and delete the ring's data";
