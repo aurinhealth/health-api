@@ -100,11 +100,16 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   }
   const sync=await syncLocalWorkout(env,row.id,fetchImpl);return {status:'ok',eventId:row.id,sync};
 }
-export async function completeLocalWorkout(db,id,{minutes,rpe,notes}={}){
+export async function completeLocalWorkout(db,id,{minutes,rpe,notes,avgHr,maxHr,kcal}={}){
   const row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const event=JSON.parse(row.event_json),duration=Number(minutes??event.moving_time/60);
   if(!Number.isFinite(duration)||duration<=0||duration>1440)throw new Error(L('Zadej skutečnou délku tréninku.', 'Enter the actual duration of the workout.'));
   const payload={...event,moving_time:duration*60,rpe:Number(rpe)||null,description:String(notes||'').slice(0,1000)};
+  // The watch's heart rate and calories of that window, when there were any.
+  const positive=v=>Number.isFinite(Number(v))&&Number(v)>0?Math.round(Number(v)):null;
+  if(positive(avgHr))payload.average_heartrate=positive(avgHr);
+  if(positive(maxHr))payload.max_heartrate=positive(maxHr);
+  if(positive(kcal))payload.calories=positive(kcal);
   await db.batch([
     db.prepare("UPDATE local_workouts SET status='completed' WHERE user_id=? AND id=?").bind(db.userId,row.id),
     db.prepare("UPDATE workout_exports SET status='not_exported',revision=? WHERE user_id=? AND local_id=? AND remote_id IS NULL").bind(row.revision,db.userId,row.id),

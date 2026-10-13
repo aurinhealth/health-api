@@ -5,6 +5,8 @@ import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
+import {heartRateWindow,heartRateKcal} from './manual-heart-rate.js';
+import {latestStoredWeight} from './athlete-weight.js';
 import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
@@ -549,6 +551,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{const body=await request.json();if(!body.id)throw new Error(L('Chybí potravina.', 'The food is missing.'));if(request.method==='DELETE'){await deletePersonalFood(env.DB,body.id);return Response.json({status:'ok'});}return Response.json({status:'ok',product:await savePersonalFood(env.DB,body)});}catch(error){return Response.json({message:error.message},{status:400});}
   }
+  // The heart rate and calories of a window, before a typed-in workout is saved.
+  if(url.pathname==='/app/api/workouts/manual/heart-rate'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const [weight,profile]=await Promise.all([latestStoredWeight(env.DB,env.USER_ID).catch(()=>null),dashboardProfile(env).catch(()=>({}))]);
+    const found=await heartRateWindow(env.DB,env.USER_ID,{start:url.searchParams.get('start'),end:url.searchParams.get('end'),weightKg:weight?.value_numeric,profile}).catch(()=>null);
+    return Response.json({status:'ok',heartRate:found&&found.avgHr!=null?found:null,weightKg:weight?.value_numeric??null,age:profile?.age??null,sex:profile?.sex||null},{headers:{'Cache-Control':'no-store'}});
+  }
   if(url.pathname==='/app/api/workouts/manual'&&request.method==='POST'){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{
@@ -558,11 +567,20 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!completed)assertTrainingAllowed(await getAthleteState(env.DB));
       const type=body.sport==='gym'?'WeightTraining':body.sport==='run'?'Run':'Ride';
       const requestId=/^[A-Za-z0-9_-]{10,80}$/.test(String(body.requestId||''))?String(body.requestId):crypto.randomUUID();
-      const event={external_id:'manual:'+requestId,category:'WORKOUT',name,type,start_date_local:date+'T12:00:00',moving_time:minutes*60,description:String(body.notes||'').slice(0,1000)};
-      const saved=await storeLocalEvent(env.DB,event);if(completed)await completeLocalWorkout(env.DB,saved.id,{minutes,rpe:body.rpe,notes:body.notes});
+      // Done with a start time (Zapsat trénink): the heart rate of that window,
+      // from the phone (Apple Health) or the Google Health samples kept here.
+      const time=/^\d{2}:\d{2}$/.test(String(body.time||''))?String(body.time):'12:00';
+      let heart=null;
+      if(completed&&body.start&&body.end){
+        const sent=[body.avgHr,body.maxHr,body.kcal].map(v=>Number.isFinite(Number(v))&&Number(v)>0?Math.round(Number(v)):null);
+        heart=sent[0]!=null?{avgHr:sent[0],maxHr:sent[1],kcal:sent[2]}:null;
+        if(!heart||heart.kcal==null){const [weight,profile]=await Promise.all([latestStoredWeight(env.DB,env.USER_ID).catch(()=>null),dashboardProfile(env).catch(()=>({}))]);const found=await heartRateWindow(env.DB,env.USER_ID,{start:body.start,end:body.end,weightKg:weight?.value_numeric,profile}).catch(()=>null);heart=heart?{...heart,kcal:heart.kcal??(found?.kcalSource==='energy'?found.kcal:heartRateKcal({avgHr:heart.avgHr,minutes,weightKg:weight?.value_numeric,age:profile?.age,sex:profile?.sex}))}:found?.avgHr!=null?found:null;}
+      }
+      const event={external_id:'manual:'+requestId,category:'WORKOUT',name,type,start_date_local:date+'T'+time+':00',moving_time:minutes*60,description:String(body.notes||'').slice(0,1000)};
+      const saved=await storeLocalEvent(env.DB,event);if(completed)await completeLocalWorkout(env.DB,saved.id,{minutes,rpe:body.rpe,notes:body.notes,avgHr:heart?.avgHr,maxHr:heart?.maxHr,kcal:heart?.kcal});
       if(!completed)return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:await syncLocalWorkout(env,saved.id)});
       // Done: to every destination the user sends activities to (Synchronizace).
-      const sent=await sendActivity(env,{key:'manual:'+saved.id,sport:body.sport,name,date,minutes,notes:body.notes,rpe:body.rpe},{googleToken}).catch(error=>{console.error('Activity send failed',error.message);return {key:'manual:'+saved.id,sends:[]};});
+      const sent=await sendActivity(env,{key:'manual:'+saved.id,sport:body.sport,name,date,minutes,notes:body.notes,rpe:body.rpe,start:body.start},{googleToken}).catch(error=>{console.error('Activity send failed',error.message);return {key:'manual:'+saved.id,sends:[]};});
       return Response.json({status:'ok',eventId:'planned:'+saved.id,sync:{status:'not_exported'},activityKey:sent.key,sends:sent.sends});
     }catch(error){return Response.json({message:error.message},{status:400});}
   }
