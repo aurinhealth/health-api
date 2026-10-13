@@ -1,6 +1,7 @@
 // Fluid intake: drinks logged per day and a daily target worked out from body
 // weight and the day's training. The target is a guide, not a prescription.
 import { L } from './lang.js';
+import { hideAppleFood } from "./apple-food.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime } from "./user-time.js";
 
@@ -81,7 +82,8 @@ export async function updateFluid(db, { id, ml, kind, at }) {
 
 export async function deleteFluid(db, id) {
   await ensure(db);
-  // A drink from another app stays: it is that app's (apple-food.js).
+  // A drink from another app goes from Aurin only and stays out of later syncs.
+  if (await hideAppleFood(db, db.userId, "drink", id)) return;
   await db.prepare("DELETE FROM fluid_log WHERE user_id=? AND id=? AND source IS NULL").bind(db.userId, Number(id)).run();
 }
 

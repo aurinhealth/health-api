@@ -31,6 +31,8 @@ export const PERSONAL_TABLES = {
   workout_feedback: {},
   coach_reflections: {},
   fluid_log: {},
+  // Food and drinks from other apps deleted in Aurin only (apple-food.js).
+  apple_food_hidden: { pk: ["user_id", "kind", "external_id"] },
   workout_schedule_links: {},
   training_profile: {},
   week_plan_preferences: {},

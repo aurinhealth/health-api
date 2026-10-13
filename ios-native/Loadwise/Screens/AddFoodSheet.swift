@@ -312,7 +312,7 @@ struct AddFoodSheet: View {
                 path.append(.amount(product))
                 message = nil
             } else {
-                message = "AI potravinu nenašla. Zadej ji ručně."
+                message = "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně."
             }
         } catch {
             message = error.localizedDescription
@@ -401,6 +401,7 @@ struct FoodAmountView: View {
                 CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(current.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    if product.source == "ai-estimate" { AIEstimateTag() }
                     if let brand = current.brand { Text(brand).font(Typo.small).foregroundStyle(Palette.muted) }
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {

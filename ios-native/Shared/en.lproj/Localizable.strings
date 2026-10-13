@@ -1889,3 +1889,9 @@
 "Tempa se ti spočítají podle tvého prahového tempa." = "Paces are worked out from your threshold pace.";
 "Watty se ti spočítají podle tvého FTP." = "Watts are worked out from your FTP.";
 "Odkazy, kterými jsi ho poslal, přestanou fungovat." = "Links you sent it with will stop working.";
+"Smazat jen v Aurinu" = "Delete in Aurin only";
+"AI odhad" = "AI estimate";
+"AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." = "The AI couldn't find or estimate it. Enter it by hand.";
+"Co to je? Třeba „tyčinka Margot“" = "What is it? E.g. \"Snickers bar\"";
+"Odhadnout AI" = "Estimate with AI";
+"AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";

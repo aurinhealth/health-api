@@ -4,7 +4,9 @@
 // logged in Aurin (food_logs, source 'apple-health') and the drinks into
 // fluid_log, so totals, meals and Pití count them. They are the other app's:
 // they are not edited here, and they are never sent on to Apple Health or
-// Google Health again (food-google-sync.js, AppleHealthExport.swift).
+// Google Health again (food-google-sync.js, AppleHealthExport.swift). Deleting
+// one removes it from Aurin only: Aurin cannot delete another app's data in
+// Apple Health, so it remembers the id and skips it in later syncs.
 import { ensureFoodLogTable } from "./food-log.js";
 import { ensure as ensureFluidLog } from "./fluids.js";
 
@@ -16,6 +18,25 @@ const num = (v, lo, hi) => { const n = Number(v); return v !== null && v !== "" 
 const round = (v, d = 1) => v == null ? null : Math.round(v * 10 ** d) / 10 ** d;
 const cleanId = v => { const s = String(v ?? "").trim(); return s && s.length <= 120 && /^[A-Za-z0-9:._+-]+$/.test(s) ? s : null; };
 const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+
+async function ensureHidden(db) {
+  await db.prepare("CREATE TABLE IF NOT EXISTS apple_food_hidden (user_id INTEGER NOT NULL, kind TEXT NOT NULL, external_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, kind, external_id))").run();
+}
+
+// Deletes an imported meal ("meal", a food_logs row) or drink ("drink", a
+// fluid_log row) from Aurin and keeps it out of later syncs.
+export async function hideAppleFood(db, userId, kind, rowId) {
+  const meal = kind === "meal";
+  const row = await db.prepare(meal
+    ? "SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs WHERE user_id=? AND id=? AND source=?"
+    : "SELECT id, external_id AS ext FROM fluid_log WHERE user_id=? AND id=? AND source=?").bind(userId, Number(rowId), FOOD_SOURCE).first();
+  if (!row) return false;
+  await ensureHidden(db);
+  const statements = [db.prepare(`DELETE FROM ${meal ? "food_logs" : "fluid_log"} WHERE user_id=? AND id=?`).bind(userId, row.id)];
+  if (row.ext) statements.unshift(db.prepare("INSERT OR IGNORE INTO apple_food_hidden (user_id, kind, external_id) VALUES (?,?,?)").bind(userId, kind, String(row.ext)));
+  await db.batch(statements);
+  return true;
+}
 
 // A meal name some apps use for the whole meal ("Breakfast", "Oběd").
 const MEAL_NAMES = [["breakfast", /^(breakfast|snídaně|snidane|frühstück)$/i], ["lunch", /^(lunch|oběd|obed|mittagessen)$/i],
@@ -63,10 +84,14 @@ export async function saveAppleFood(db, userId, input = {}) {
   const inWindow = item => item && item.date >= from && item.date <= to;
   // A list left out was not read (that kind is switched off): keep what is here.
   const readMeals = Array.isArray(input.meals), readDrinks = Array.isArray(input.drinks);
-  const meals = (readMeals ? input.meals : []).slice(0, MAX_ITEMS).map(appleFood).filter(inWindow);
-  const drinks = (readDrinks ? input.drinks : []).slice(0, MAX_ITEMS).map(appleDrink).filter(inWindow);
+  const mealsIn = (readMeals ? input.meals : []).slice(0, MAX_ITEMS).map(appleFood).filter(inWindow);
+  const drinksIn = (readDrinks ? input.drinks : []).slice(0, MAX_ITEMS).map(appleDrink).filter(inWindow);
   await ensureFoodLogTable(db);
   await ensureFluidLog(db);
+  await ensureHidden(db);
+  const hidden = new Set(((await db.prepare("SELECT kind || ':' || external_id AS k FROM apple_food_hidden WHERE user_id=?").bind(userId).all()).results || []).map(r => r.k));
+  const shown = kind => item => !hidden.has(kind + ":" + item.id);
+  const meals = mealsIn.filter(shown("meal")), drinks = drinksIn.filter(shown("drink"));
 
   const statements = [];
   const known = new Map(((await db.prepare(`SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs
