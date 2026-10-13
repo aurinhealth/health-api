@@ -1,11 +1,11 @@
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
+import { appOrigin } from "./app-origin.js";
 
 // "Sign in with Google" for the iPhone app. Only identity scopes are requested;
 // health data access stays in the separate /oauth/google connector flow.
-const ORIGIN = "https://petrfitnessdata.eu";
-export function googleLoginRedirectUri(env) {
-  return (env?.APP_ORIGIN || ORIGIN) + "/auth/google/callback";
+export function googleLoginRedirectUri(env, request) {
+  return appOrigin(env, request) + "/auth/google/callback";
 }
 const STATE_COOKIE = "pfd_google_login";
 const STATE_SECONDS = 600;
@@ -51,7 +51,7 @@ async function startLogin(env, request) {
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
-  u.searchParams.set("redirect_uri", googleLoginRedirectUri(env));
+  u.searchParams.set("redirect_uri", googleLoginRedirectUri(env, request));
   u.searchParams.set("response_type", "code");
   u.searchParams.set("scope", "openid email");
   u.searchParams.set("state", state);
@@ -79,7 +79,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   const response = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleLoginRedirectUri(env), grant_type: "authorization_code", code_verifier: verifier })
+    body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: googleLoginRedirectUri(env, request), grant_type: "authorization_code", code_verifier: verifier })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.id_token) return fail("failed");
