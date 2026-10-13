@@ -116,6 +116,7 @@ struct TodayContent: View {
                 PlanProposalCard(proposal: proposal).padding(.top, 10).id(proposal.type + proposal.text)
             }
             CoachCheckInCard(openCoach: openCoach).padding(.top, today.trainingPlan == nil ? 24 : 10)
+            WeekRevisionCard().padding(.top, 12)
             ThresholdCheckCard().padding(.top, 12)
         }
 

@@ -54,13 +54,15 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice } from './athlete-state.js';
 import { savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate } from './training-plans.js';
-import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes } from './adaptive-week.js';
+import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
+import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
@@ -565,6 +567,136 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),28)]),proposal=weekProposal({prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,focus:inputs.focus,weather,history,plan:await planForWeek(env,ctx,start)});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
       return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // "Plán týdne → Navrhne AI" (week-ai.js): the AI lays out the week from the
+  // same data as the coach, the rules' proposal and the athlete's note; the
+  // rules' proposal stands when the AI is not available.
+  if(url.pathname==='/app/api/coach/week-ai'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({})),today=localToday(),start=validTrainingDay(body.start)?mondayOfDate(body.start):mondayOfDate(today);
+      const note=typeof body.note==='string'?body.note.trim().slice(0,500):'';
+      const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today)]);
+      if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
+      const [weather,history,plan]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<today?start:today,28),planForWeek(env,ctx,start)]);
+      // The rules see an empty week, so they propose every day the athlete has time for.
+      const rules=weekProposal({prefs:{...prefs,days:prefs.days.map(()=>[])},state,start,today,week:inputs.week,fitness:inputs.fitness,focus:inputs.focus,weather,history,plan});
+      const fallback=rules.items.map(x=>({date:x.date,sport:x.sport==='strength'?'gym':x.sport,minutes:x.minutes,environment:x.sport==='gym'?null:x.environment,kind:null,focus:ROLE_FOCUS[x.role]||null,label:x.label||null,reason:x.reason||null,role:x.role||null,slot:x.slot||0}));
+      if(state.status&&state.status!=='active')return Response.json({status:'ok',start,ai:false,summary:null,items:[],warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
+      const dates=Array.from({length:7},(_,i)=>shiftDate(start,i)),weekDays=inputs.week.days.filter(d=>dates.includes(d.date));
+      const usedByDate={},existingSports={},existingSessions=[];
+      for(const d of weekDays){const list=sessionsOn(d);if(!list.length)continue;usedByDate[d.date]=list.reduce((n,a)=>n+(Number(a.durationHours)||0)*60,0);existingSports[d.date]=list.map(sportOf);existingSessions.push({date:d.date,sessions:list.map(a=>({sport:sportOf(a),name:a.name||null,minutes:Math.round((Number(a.durationHours)||0)*60)||null,done:(d.daily?.training?.completed||[]).includes(a)}))});}
+      const coach=coachContext({...inputs,profile:inputs.profile,focus:inputs.focus,capabilities:await getCapabilities(env.DB).catch(()=>({})),athleteFeedback:await recentWorkoutFeedback(env.DB,shiftDate(today,-28)).catch(()=>[]),now:localNow()});
+      const readiness={score:coach.cyclingCoachV2?.readiness?.score??null,zone:coach.cyclingCoachV2?.readiness?.status||null,tsb:coach.cyclingCoachV2?.readiness?.tsb??null};
+      delete coach.methodology;delete coach.cyclingCoachV2;
+      const facts={start,today,note:note||null,availabilityByDate:Object.fromEntries(dates.map(d=>[d,availabilityOn(prefs,d).minutes??null])),existingSessions,
+        rulesProposal:rules.items.map(x=>({date:x.date,sport:x.sport,minutes:x.minutes,environment:x.environment,role:x.role,label:x.label})),recoveryWeek:Boolean(rules.targets?.recovery),readiness,
+        weather:Object.fromEntries(Object.entries(weather||{}).map(([d,w])=>[d,{max:w.max,rain:w.rain,wind:w.wind}])),
+        trainingPlan:plan.pw?{name:plan.pw.template?.name||null,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec?.phase||null}:null,coach};
+      try{
+        const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports});
+        return Response.json({status:'ok',start,ai:true,summary:r.summary,items:r.items,warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        if(!error?.ai&&!/AI|souhlas|consent/i.test(String(error?.message||'')))console.error('Week AI failed',error?.message||error);
+        return Response.json({status:'ok',start,ai:false,summary:null,items:fallback,warnings:rules.warnings,message:L('AI teď není dostupná, návrh je podle pravidel aplikace.', 'AI isn\'t available right now; the proposal follows the app\'s rules.')},{headers:{'Cache-Control':'no-store'}});
+      }
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // "Upravit s AI" in a session's detail (week-ai.js): a chip is a rule, a
+  // sentence goes to the AI. Answers the session's new day, length, place and kind.
+  if(url.pathname==='/app/api/workouts/adjust'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({})),today=localToday();
+      const sport=WEEK_SPORTS.includes(body.sport)?body.sport:null,date=validTrainingDay(body.date)?body.date:null;
+      if(!sport||!date)throw new Error(L('Neplatný trénink.', 'Invalid workout.'));
+      const current={date,sport,minutes:Number(body.minutes)||60,environment:body.environment==='indoor'?'indoor':'outdoor',kind:sport==='gym'?'gym':KINDS.includes(body.kind)?body.kind:kindOfSystem(body.system)};
+      let changed;
+      if(['shorter','easier','harder','indoor','outdoor'].includes(body.chip))changed={...adjustByChip(current,body.chip),note:null};
+      else{
+        const text=typeof body.text==='string'?body.text.trim():'';
+        if(!text)throw new Error(L('Napiš, co změnit.', 'Write what to change.'));
+        const start=mondayOfDate(date),prefs=await getWeekPlan(env.DB,start);
+        const weekDays=Array.from({length:7},(_,i)=>shiftDate(start,i)).filter(d=>d>=today);
+        const others=(Array.isArray(body.others)?body.others:[]).slice(0,20).filter(o=>validTrainingDay(o?.date)).map(o=>({date:o.date,sport:String(o.sport||''),kind:KINDS.includes(o.kind)?o.kind:kindOfSystem(o.system)}));
+        const readiness=await todayReadiness(env,ctx,today).catch(()=>null);
+        try{changed=await adjustByText(env,{session:current,request:text,weekDays,availabilityByDate:Object.fromEntries(weekDays.map(d=>[d,availabilityOn(prefs,d).minutes??null])),otherSessions:others,readiness:{score:readiness?.score??null,zone:readiness?.zone||null},prefs,today});}
+        catch(error){return Response.json({status:'unavailable',message:error?.ai?error.message:L('AI teď není dostupná. Použij rychlé volby.', 'AI isn\'t available right now. Use the quick options.')},{status:503});}
+      }
+      return Response.json({status:'ok',session:{...changed,focus:FOCUS_OF[changed.kind]||null}},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // "Revize po tréninku" (week-revision.js): after a finished ride or run the
+  // coach proposes changes to the next sessions; GET builds it once per new
+  // session or rating, POST applies it ("Upravit") or keeps the plan ("Nechat").
+  if(url.pathname==='/app/api/coach/revision'&&['GET','POST'].includes(request.method)){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method==='POST'&&request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const today=localToday();
+      if(request.method==='POST'){
+        const body=await request.json().catch(()=>({})),date=[today,shiftDate(today,-1)].includes(body.date)?body.date:null;
+        if(!date||!['apply','keep'].includes(body.decision))throw new Error(L('Neplatná revize.', 'Invalid review.'));
+        const stored=await readRevision(env.DB,date);
+        if(!stored||stored.status!=='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});
+        if(body.decision==='keep'){await decideRevision(env.DB,date,'kept');return Response.json({status:'ok',revision:{...stored,status:'kept'}},{headers:{'Cache-Control':'no-store'}});}
+        assertTrainingAllowed(await getAthleteState(env.DB));
+        const changes=[];
+        for(const c of stored.changes||[]){
+          if(c.date<today||!c.to?.workoutId){changes.push({...c,applied:false});continue;}
+          const id=String(c.eventId).replace(/^planned:/,''),event=await env.DB.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
+          if(!event||String(event.start_time).slice(0,10)!==c.date){changes.push({...c,applied:false});continue;}
+          try{
+            const scheduled=await scheduleWorkoutInIntervals(env,env.DB,{workoutId:c.to.workoutId,date:c.date,confirm:true,environment:c.environment});
+            // The same workout already on that day is that event itself: it stays.
+            if(String(scheduled.intervalsEventId||'')!==id)await deletePlannedEvent(env,{eventId:id});
+            changes.push({...c,applied:true,newEventId:scheduled.eventId||null});
+          }catch(error){console.error('Revision change failed',error.message);changes.push({...c,applied:false});}
+        }
+        const revision={...stored,changes,status:'applied'};
+        await decideRevision(env.DB,date,'applied',{summary:stored.summary,changes,source:stored.source});
+        return Response.json({status:'ok',revision},{headers:{'Cache-Control':'no-store'}});
+      }
+      const inputs=await loadCoachInputs(env,ctx,internalAuth,today),days=inputs.week?.days||[];
+      const doneOn=d=>(days.find(x=>x.date===d)?.daily?.training?.completed||[]).filter(a=>['ride','run'].includes(sportOf(a)));
+      // Today's sessions, else yesterday's when its revision still waits.
+      let date=today,done=doneOn(today);
+      if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
+      const feedback=(await recentWorkoutFeedback(env.DB,date).catch(()=>[])).filter(f=>f.date===date);
+      const signature=revisionSignature(done,feedback),stored=await readRevision(env.DB,date);
+      // A decided revision stays decided; a waiting one is redone when a new session or rating came.
+      if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:stored.status==='kept'?null:stored},{headers:{'Cache-Control':'no-store'}});
+      const links=new Map();
+      const upcoming=[];
+      for(const d of days.filter(x=>x.date>date&&x.date>=today&&x.date<=shiftDate(date,6)).sort((a,b)=>a.date.localeCompare(b.date))){
+        for(const a of (d.daily?.training?.planned||[])){
+          const sport=sportOf(a);if(!['ride','run'].includes(sport)||!String(a.id||'').startsWith('planned:'))continue;
+          const id=String(a.id).replace(/^planned:/,'');
+          const link=links.get(id)??await env.DB.prepare('SELECT workout_id,environment FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=? ORDER BY id DESC LIMIT 1').bind(env.USER_ID,id).first().catch(()=>null);links.set(id,link);
+          const workout=link?.workout_id?await getWorkout(env.DB,link.workout_id).catch(()=>null):null;
+          upcoming.push({eventId:'planned:'+id,date:d.date,sport,name:a.name||workout?.name||null,minutes:Math.round((Number(a.durationHours)||Number(workout?.duration_minutes)/60||1)*60),kind:kindOfSystem(workout?.primary_system||a.name,'endurance'),environment:link?.environment||(/virtual/i.test(String(a.type||''))?'indoor':'outdoor')});
+        }
+      }
+      const doneFacts=done.map(a=>{const f=feedback.find(x=>sportOf({type:x.sport})===sportOf(a))||feedback[0];return {date,sport:sportOf(a),name:a.name||null,minutes:Math.round((Number(a.durationHours)||0)*60)||null,tss:Number(a.tss)||null,kind:f?.system?kindOfSystem(f.system):null};});
+      const readiness=await todayReadiness(env,ctx,today).catch(()=>null);
+      const reviews=await rideReviewsForCoach(env,ctx,days.find(x=>x.date===date)?.daily?.training,date,inputs.fitness?.wellness).catch(()=>[]);
+      const plans=new Map();const availabilityByDate={};
+      for(const u of upcoming){const w=mondayOfDate(u.date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);availabilityByDate[u.date]=p?availabilityOn(p,u.date).minutes??null:null;}
+      const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate};
+      const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
+      // Each change gets its workout now, so the card shows what replaces what.
+      const changes=[];
+      for(const c of r.changes||[]){
+        const generateUrl=new URL('https://internal/app/api/workouts/generate');
+        const response=await handleDashboardApi(new Request(generateUrl,{method:'POST',headers:{Origin:generateUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:c.date,sport:c.sport,environment:c.environment,availabilityMinutes:c.minutes,focus:FOCUS_OF[c.kind]||null,userInitiated:true})}),env,ctx,generateUrl,{signedIn:true}).catch(()=>null);
+        const g=response?await response.json().catch(()=>null):null;
+        if(g?.status==='ok'&&g.workout?.id)changes.push({...c,to:{workoutId:g.workout.id,name:g.workout.name,minutes:Math.round(Number(g.workout.duration_minutes)||c.minutes),kind:c.kind}});
+      }
+      const revision=await saveRevision(env.DB,{date,signature,revision:{summary:r.summary,changes,source:r.source}});
+      return Response.json({status:'ok',revision},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   {const r=await handleAccountApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
@@ -1441,7 +1573,9 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const weekTarget=!availabilityMinutes&&!body.resizeTo?chip:null;
       // The training plan's session for the day (training-plans.js), unless the
       // athlete picked a workout or asked for another option.
-      const planned=!body.workoutId&&!(Number(body.variant)>0)?chip?.plan||null:null;
+      // A kind the athlete or the AI week asked for ("Plán týdne", week-ai.js) wins over the plan's and the role's.
+      const askedFocus=Object.values(FOCUS_OF).includes(body.focus)?body.focus:null;
+      const planned=!body.workoutId&&!(Number(body.variant)>0)&&!askedFocus?chip?.plan||null:null;
       if(weekTarget?.minutes)availabilityMinutes=weekTarget.minutes;
       availabilityMinutes=trainingBudget(prefs,date,availabilityMinutes,{userInitiated});
       if(availabilityMinutes!=null&&availabilityMinutes<(genSport==='run'?20:30))throw new Error(L('V tento den nemáš dost času na tento trénink.', 'You don\'t have enough time for this workout on this day.'));
@@ -1451,9 +1585,12 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // Indoor is shorter (the chip already is when it says indoor).
       if(!userInitiated&&environment==='indoor'&&weekTarget?.environment!=='indoor')availabilityMinutes=availabilityMinutes!=null?indoorMinutes(genSport,availabilityMinutes):genSport==='ride'?90:60;
       const planFocus=planned?({quality:systemOf(genSport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]||null:null;
-      const roleFocus=planFocus||weekRole?.focus;
-      const goal=body.phase||roleFocus?{...(body.phase?{phase:String(body.phase)}:{}),...(roleFocus?{focus:roleFocus}:{})}:null;
-      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),goal,sport:genSport});
+      const roleFocus=askedFocus||planFocus||weekRole?.focus;
+      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{})}:null;
+      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
+      let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
+      // A hard kind asked for on a red morning gives way to the coach's own choice.
+      if(askedFocus&&!['recovery','endurance','long_endurance'].includes(askedFocus)&&coach.readiness?.status==='red')coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(planFocus||weekRole?.focus)});
       const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));
       const resizeTo=Number.isFinite(Number(body.resizeTo))&&Number(body.resizeTo)>0?trainingBudget(prefs,date,Number(body.resizeTo),{userInitiated}):null;
       if(resizeTo!=null&&resizeTo<(genSport==='run'?20:30))throw new Error(L('Na změnu délky nezbývá dost času.', 'There isn\'t enough time left to change the duration.'));
