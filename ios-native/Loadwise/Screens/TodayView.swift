@@ -320,7 +320,8 @@ struct KeyNumbers: View {
     }
 
     private var strainNote: String? {
-        if let t = today.strain.target { return L10n.f("cíl %@–%@", Fmt.decimal(t.low), Fmt.decimal(t.high)) }
+        // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
+        if let t = today.strain.target { return L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high)) }
         return today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
     }
 
@@ -340,7 +341,7 @@ struct KeyNumbers: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
-            Text(note ?? " ").font(Typo.caption).foregroundStyle(color).lineLimit(1)
+            Text(note ?? " ").font(Typo.caption).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

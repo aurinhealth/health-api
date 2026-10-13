@@ -153,6 +153,14 @@ test("An hourly bucket that ends at midnight counts on the day it started", asyn
   assert.equal(s.coverage.steps, "2026-10-10");
 });
 
+test("Google's light zone (every minute below moderate) does not count towards strain", () => {
+  // Google Health sends one row per minute; LIGHT covers sleep and sitting too.
+  const minute = (source_family, zone, i) => { const t = Date.parse(DATE + "T00:00:00Z") + i * 60000; return { source_family, zone, start_time: new Date(t).toISOString(), end_time: new Date(t + 60000).toISOString() }; };
+  const rows = [...Array.from({ length: 222 }, (_, i) => minute("google-wearables", "LIGHT", i)), ...Array.from({ length: 10 }, (_, i) => minute("google-wearables", "MODERATE", 600 + i)), minute("apple-health", "LIGHT", 900)];
+  const s = googleHealthSummary([], DATE, rows);
+  assert.deepEqual(s.wellness.find(r => r.id === DATE).hrZoneMinutes, { light: 1, moderate: 10, vigorous: 0, peak: 0 });
+});
+
 test("Today says how the HRV was measured when the source does", () => {
   const sdnn = wellness.map(r => ({ ...r, hrvSource: "apple-health:sdnn" }));
   assert.equal(buildToday({ ...input, health: { wellness: sdnn } }).hrv.metric, "sdnn");
