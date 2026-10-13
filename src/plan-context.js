@@ -1,6 +1,7 @@
 // The active training plans as the week planner and the screens see them, the
 // weather place of Today, the planning history and the saved gym plans per day.
 import { cached } from "./api-cache.js";
+import { gymTypes } from "./activity-type.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { getCapabilities } from "./workout-library.js";
 import { athleteThresholds } from "./intervals-athlete.js";
@@ -93,14 +94,14 @@ export async function trainingGymPlans(env,from,to){
     env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
     env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all()
   ]);
-  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={};
+  const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={},types=await gymTypes(env.DB,env.USER_ID,from,to).catch(()=>({}));
   for(const r of plans.results||[]){
     if(skip.has(r.workout_date))continue;
     let v=[];try{v=JSON.parse(r.values_json);}catch{}
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
     // done: sets per exercise that were ticked off (Hotovo) or have reps written in.
     const isDone=x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))||Number(x?.[6])>0,count=list=>list.reduce((m,x)=>{const n=String(x[1]).slice(0,80);m[n]=(m[n]||0)+1;return m;},{});
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,setsBy:count(rows),done:count(rows.filter(isDone))};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{})};
   }
   return out;
 }

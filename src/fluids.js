@@ -30,7 +30,9 @@ export function hydrationTarget({ weightKg = null, sex = "", trainingHours = 0, 
   };
 }
 
-async function ensure(db) {
+// Drinks other apps wrote to Apple Health carry source, external_id and app (apple-food.js).
+const columnsReady = new WeakSet();
+export async function ensure(db) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS fluid_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -41,6 +43,11 @@ async function ensure(db) {
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`).run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_fluid_log_user_date ON fluid_log(user_id, date)").run();
+  if (columnsReady.has(db)) return;
+  for (const column of ["source TEXT", "external_id TEXT", "app TEXT"]) {
+    try { await db.prepare("ALTER TABLE fluid_log ADD COLUMN " + column).run(); } catch (_) {}
+  }
+  columnsReady.add(db);
 }
 
 // A refused value (400); any other failure is the server's (500), so the app
@@ -62,7 +69,7 @@ export async function addFluid(db, { date, ml, kind = "water", at = null }) {
 // A drink changed afterwards: another amount, kind or time.
 export async function updateFluid(db, { id, ml, kind, at }) {
   await ensure(db);
-  const row = await db.prepare("SELECT id,date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND id=?").bind(db.userId, Number(id)).first();
+  const row = await db.prepare("SELECT id,date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND id=? AND source IS NULL").bind(db.userId, Number(id)).first();
   if (!row) throw invalid(L("Pití nenalezeno.", "Drink not found."));
   const amount = ml == null ? Number(row.ml) : Math.round(Number(ml));
   if (!(amount >= 10 && amount <= 3000)) throw invalid(L("Zadej množství 10–3000 ml.", "Enter an amount of 10–3,000 ml."));
@@ -74,13 +81,14 @@ export async function updateFluid(db, { id, ml, kind, at }) {
 
 export async function deleteFluid(db, id) {
   await ensure(db);
-  await db.prepare("DELETE FROM fluid_log WHERE user_id=? AND id=?").bind(db.userId, Number(id)).run();
+  // A drink from another app stays: it is that app's (apple-food.js).
+  await db.prepare("DELETE FROM fluid_log WHERE user_id=? AND id=? AND source IS NULL").bind(db.userId, Number(id)).run();
 }
 
 export async function listFluids(db, date) {
   await ensure(db);
-  const rows = (await db.prepare("SELECT id,date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND date=? ORDER BY consumed_at,id").bind(db.userId, date).all()).results || [];
-  return rows.map(r => ({ id: r.id, date: r.date, consumedAt: r.consumed_at, ml: Number(r.ml), kind: r.kind }));
+  const rows = (await db.prepare("SELECT id,date,consumed_at,ml,kind,app FROM fluid_log WHERE user_id=? AND date=? ORDER BY consumed_at,id").bind(db.userId, date).all()).results || [];
+  return rows.map(r => ({ id: r.id, date: r.date, consumedAt: r.consumed_at, ml: Number(r.ml), kind: r.kind, ...(r.app ? { app: r.app } : {}) }));
 }
 
 // Drinks logged in the food diary count too: an entry measured in ml, or the

@@ -5,8 +5,9 @@ Aplikace podporuje víc uživatelů. Každý se v aplikaci pro iPhone přihlašu
 ## Jednorázové nastavení (správce)
 
 1. **Google Cloud Console → APIs & Services → Credentials →** OAuth klient, jehož Client ID je v secretu `GOOGLE_CLIENT_ID`. Do *Authorized redirect URIs* přidej:
-   - `https://petrfitnessdata.eu/auth/google/callback` (přihlášení z aplikace pro iPhone)
-   - `https://petrfitnessdata.eu/oauth/google/callback` (připojení Google Health; už by tam mělo být)
+   - `https://aurin.health/auth/google/callback` (přihlášení z aplikace pro iPhone)
+   - `https://aurin.health/oauth/google/callback` (připojení Google Health)
+   - totéž na `https://petrfitnessdata.eu/…` pro starší verze aplikace
 2. Správce aplikace je účet z `OWNER_EMAIL` ve `wrangler.jsonc`. Všechna data, která v aplikaci existovala před zavedením více uživatelů, patří tomuto účtu.
 
 Secret `ALLOWED_GOOGLE_EMAILS` už potřeba není.
@@ -40,8 +41,8 @@ Fungují hned, nic se nenastavuje (`src/passkeys.js`, ověřování v `src/webau
 
 Pro pozvané bez účtu Google: zadají e-mail a přijde jim šestimístný kód (platí 10 minut, 5 pokusů, nejvýš 1 kód za minutu a 10 denně na adresu; `src/email-login.js`). Kód dostanou jen aktivní uživatelé, pozvané adresy a správce, ostatním aplikace odpoví stejně, ale nic nepošle. E-maily posílá Cloudflare Email Service přes binding `EMAIL` ve `wrangler.jsonc` (v plánu Workers Paid je 3 000 e-mailů měsíčně v ceně). Zapnutí:
 
-1. **Cloudflare → Compute → Email Service → Email Sending → Onboard Domain**: vyber `petrfitnessdata.eu` a nech Cloudflare přidat DNS záznamy (SPF, DKIM, DMARC a MX `cf-bounce`).
-2. Worker `health-api` → **Settings → Variables and Secrets**: secret `EMAIL_FROM` = adresa odesílatele na té doméně, např. `noreply@petrfitnessdata.eu`.
+1. **Cloudflare → Compute → Email Service → Email Sending → Onboard Domain**: vyber `aurin.health` a nech Cloudflare přidat DNS záznamy (SPF, DKIM, DMARC a MX `cf-bounce`). Záznamy jsou na `cf-bounce.aurin.health`, takže se nepletou s poštou iCloud+ na hlavní doméně (MX, SPF a DKIM `sig1`). Email Routing na `aurin.health` nezapínej, přepsal by MX iCloudu.
+2. Worker `health-api` → **Settings → Variables and Secrets**: secret `EMAIL_FROM` = `noreply@aurin.health`.
 
 Bez `EMAIL_FROM` se formulář s kódem na přihlašovací obrazovce neukáže. Když je e-mail zapnutý, dostane uživatel e-mail i ve chvíli, kdy si přidá přístupový klíč.
 

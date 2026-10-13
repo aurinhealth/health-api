@@ -546,6 +546,7 @@ struct DayReviewView: View {
 struct InsightsView: View {
     @Environment(AppModel.self) private var model
     @State private var insights: FitnessInsights?
+    @State private var sides: [GymSideBalance.Item] = []
     @State private var error: String?
 
     private static let cardio: [(String, String)] = [
@@ -561,6 +562,7 @@ struct InsightsView: View {
                 if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else if let insights {
+                    if !sides.isEmpty { sidesLink.padding(.top, 20) }
                     content(insights)
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
@@ -571,7 +573,28 @@ struct InsightsView: View {
             guard insights == nil else { return }
             guard !model.demo else { error = "V ukázce se rekordy nenačítají."; return }
             do { insights = try await model.api.fitnessInsights() } catch { self.error = error.localizedDescription }
+            sides = (try? await model.api.gymSides())?.sides ?? []
         }
+    }
+
+    /// One-sided exercises: Levá a pravá strana (GymSides.swift).
+    private var sidesLink: some View {
+        NavigationLink { GymSidesView(items: sides) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "figure.strengthtraining.functional").font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Palette.onAccent).frame(width: 34, height: 34)
+                    .background(Palette.blue, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text("Levá a pravá strana").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Spacer(minLength: 4)
+                if let weak = sides.first(where: { $0.weaker != nil }) {
+                    Text(verbatim: weak.exercise).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+            }
+            .padding(14)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

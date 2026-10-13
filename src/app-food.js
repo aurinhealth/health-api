@@ -79,7 +79,9 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         sugar: round(num(note.sugar_g), 1),
         salt: round(num(note.salt_g), 2),
         amount: amount != null && unit ? round(amount, 1) + " " + unitLabel(unit, round(amount, 1)) : null,
-        brand: note.brand || null
+        brand: note.brand || null,
+        // Logged in another app and read from Apple Health: shown with its name, not editable.
+        ...(e.source === "apple-health" ? { app: String(note.app || "Apple Health").slice(0, 60) } : {})
       };
     });
   const sum = key => round(entries.reduce((s, e) => s + (e[key] || 0), 0), key === "kcal" ? 0 : 1);
@@ -149,7 +151,7 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
       ml: num(fluids.hydrationMl ?? fluids.totalMl), target: num(fluids.target?.ml), drunkMl: num(fluids.totalMl),
       entries: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food").length,
       drinks: (Array.isArray(fluids.entries) ? fluids.entries : []).filter(f => f && f.kind !== "food" && Number(f.id) > 0)
-        .map(f => ({ id: Number(f.id), kind: f.kind, ml: num(f.ml), hydrationMl: num(f.hydrationMl ?? f.ml), time: entryTime(f.consumedAt) }))
+        .map(f => ({ id: Number(f.id), kind: f.kind, ml: num(f.ml), hydrationMl: num(f.hydrationMl ?? f.ml), time: entryTime(f.consumedAt), ...(f.app ? { app: String(f.app) } : {}) }))
     }
   };
 }

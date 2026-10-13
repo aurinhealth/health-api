@@ -49,104 +49,133 @@ struct ProFeature: Identifiable {
     ]
 }
 
-/// Settings → the first row, as "Bevel Pro".
+/// Settings → the first row: the logo and "Aurin Pro", a gold "Aktivní"
+/// with the plan.
 struct ProSettingsRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var hasPro = false
+
     var body: some View {
         NavigationLink { SubscriptionView() } label: {
             HStack(spacing: 12) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Palette.onButton)
-                    .frame(width: 32, height: 32)
-                    .background(Palette.button, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                Text("Aurin Pro").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                AurinMark(size: 22, gold: hasPro, glow: true)
+                AurinProTitle(size: 21, gold: hasPro)
                 Spacer()
+                if hasPro {
+                    Text("Aktivní").font(.subheadline).foregroundStyle(AurinMark.goldTop)
+                }
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
             }
-            .padding(.horizontal, 16).frame(minHeight: 56)
+            .padding(.horizontal, 18).frame(minHeight: 52)
+            .background(
+                RadialGradient(colors: [(hasPro ? AurinMark.goldTop : AurinMark.amber).opacity(0.18), .clear],
+                               center: .leading, startRadius: 0, endRadius: 180),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .task {
+            guard !model.demo else { return }
+            hasPro = (try? await model.api.subscription())?.hasAI == true
+        }
     }
 }
 
-/// Předplatné (Bevel's Manage Subscription): the current plan with what it has
-/// and lacks, and the way to Pro.
+/// Aurin Pro: the logo, the plan, a tile for each thing Pro brings (locked
+/// without it) and, without Pro, the plans and the way to the offer.
 struct SubscriptionView: View {
     @Environment(AppModel.self) private var model
     @State private var status: SubscriptionStatus?
     @State private var error: String?
 
+    private var hasPro: Bool { status?.hasAI == true }
+    private var unlocked: Bool { hasPro || status?.aiAccess == true }
+
     var body: some View {
-        SettingsPage(title: "Předplatné") {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(planTitle).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-                Text(planText).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                if let features = status?.features {
-                    VStack(alignment: .leading, spacing: 7) {
-                        ForEach(features, id: \.self) { feature in
-                            let has = !feature.ai || status?.aiAccess == true
-                            HStack(alignment: .top, spacing: 8) {
-                                Image(systemName: has ? "checkmark" : "xmark")
-                                    .font(.system(size: 12, weight: .bold))
-                                    .foregroundStyle(has ? Palette.green : Palette.rust)
-                                    .frame(width: 16).padding(.top, 2)
-                                Text(verbatim: feature.name).font(.subheadline).foregroundStyle(Palette.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel(feature.name + ", " + L10n.tr(has ? "máš" : "není v tarifu"))
-                        }
-                    }
-                    .padding(.top, 4)
-                } else if error == nil {
-                    ProgressView().frame(maxWidth: .infinity)
+        SettingsPage(title: "Aurin Pro") {
+            VStack(spacing: 16) {
+                AurinMark(size: 92, gold: hasPro, glow: true)
+                AurinProTitle(size: 44, gold: hasPro)
+                if let badge {
+                    Text(badge).font(.footnote.weight(.semibold))
+                        .foregroundStyle(hasPro ? AurinMark.goldTop : Palette.secondary)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background((hasPro ? AurinMark.goldTop : Palette.ink).opacity(0.12), in: Capsule())
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 12)
 
-            if status?.hasAI != true {
-                VStack(alignment: .leading, spacing: 0) {
-                    Button { Paywall.present(model) } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.onButton)
-                                .frame(width: 30, height: 30)
-                                .background(Palette.button, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            Text("Přejít na Aurin Pro").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(ProFeature.pro) { feature in
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .top) {
+                            Image(systemName: feature.symbol)
+                                .font(.system(size: 16, weight: .medium)).foregroundStyle(feature.color)
+                                .frame(width: 36, height: 36)
+                                .background(feature.color.opacity(0.14), in: Circle())
                             Spacer()
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                            if !unlocked {
+                                Image(systemName: "lock").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                            }
                         }
-                        .padding(16)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 16)
-                    Link(destination: URL(string: "https://aurin.health/terms")!) {
-                        Text("Otázky k předplatnému? Přečti si podmínky a ceny.").font(Typo.caption).foregroundStyle(Palette.muted).underline()
+                        Spacer(minLength: 14)
+                        Text(feature.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(16)
+                    .frame(maxWidth: .infinity, minHeight: 106, alignment: .leading)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(feature.title + (unlocked ? "" : ", " + L10n.tr("není v tarifu")))
                 }
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
+
+            if status != nil && !hasPro {
+                VStack(spacing: 14) {
+                    HStack(spacing: 10) {
+                        ForEach(ProPlans.main) { plan in
+                            Button { Paywall.present(model) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(plan.title).textCase(.uppercase).font(.caption.weight(.semibold))
+                                        .foregroundStyle(plan.best ? AurinMark.amber : Palette.muted)
+                                    if let price = plan.price { Text(price).font(.headline).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8) }
+                                    if let note = plan.note { Text(note).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1) }
+                                }
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(plan.best ? AurinMark.amber.opacity(0.08) : Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(plan.best ? AurinMark.amber : .clear, lineWidth: 1.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Button { Paywall.present(model) } label: {
+                        Text("Přejít na Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity, minHeight: 52)
+                            .background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else if status == nil && error == nil {
+                ProgressView().frame(maxWidth: .infinity)
+            }
+
+            Link(destination: URL(string: "https://aurin.health/terms")!) {
+                Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Palette.muted).underline()
+            }
+            .frame(maxWidth: .infinity)
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
         .task { await load() }
     }
 
-    private var planTitle: String {
-        if status?.hasAI == true { return "Aurin Pro" }
-        if status?.pilot ?? true { return L10n.tr("Aurin · pilot") }
-        return "Aurin Free"
-    }
-
-    private var planText: String {
-        if status?.hasAI == true { return L10n.tr("Předplatné je aktivní, všechno je odemčené.") }
-        if status?.pilot ?? true { return L10n.tr("Během pilotu pro pozvané máš všechno zdarma, i AI. Později bude AI součástí Aurin Pro.") }
-        return L10n.tr("Nemáš Pro. Klepni na „Přejít na Aurin Pro“ a vyber tarif.")
+    private var badge: String? {
+        guard let status else { return nil }
+        if status.hasAI { return L10n.tr("Aktivní") }
+        if status.pilot { return L10n.tr("Pilot · vše zdarma") }
+        return nil
     }
 
     private func load() async {

@@ -8,14 +8,18 @@ async function ensure(db){
 export function normalizeRecipe(input){
   const name=String(input.name||'').trim().slice(0,180),servings=Number(input.servings),ingredients=Array.isArray(input.ingredients)?input.ingredients:[];
   if(!name||!Number.isFinite(servings)||servings<=0||servings>100||!ingredients.length||ingredients.length>100)throw new Error(L('Doplň název, počet porcí a suroviny.', 'Add the name, number of servings and ingredients.'));
-  const sums={calories:0,protein_g:0,carbs_g:0,fat_g:0};
+  const sums={calories:0,protein_g:0,carbs_g:0,fat_g:0},extras={sugar_g:null,fiber_g:null,salt_g:null};
   const cleaned=ingredients.map(i=>{
     const item={name:String(i.name||'').trim().slice(0,180),quantity:Number(i.quantity),unit:['g','ml','piece'].includes(i.unit)?i.unit:'g'};
     if(!item.name||!Number.isFinite(item.quantity)||item.quantity<=0||item.quantity>100000)throw new Error(L('Doplň platné množství každé suroviny.', 'Add a valid amount for each ingredient.'));
     for(const k of Object.keys(sums)){const value=Number(i[k]);if(i[k]==null||i[k]===''||!Number.isFinite(value)||value<0||value>100000)throw new Error(L('Doplň nutriční hodnoty surovin pro použité množství.', 'Add the nutrition values of the ingredients for the amount used.'));item[k]=value;sums[k]+=value;}
+    // Sugars, fibre and salt are optional: summed over the ingredients that have them.
+    for(const k of Object.keys(extras)){const value=Number(i[k]);if(i[k]==null||i[k]===''||!Number.isFinite(value)||value<0||value>100000)continue;item[k]=value;extras[k]=(extras[k]??0)+value;}
     return item;
   });
-  return {name,servings,ingredients:cleaned,shared:input.shared===true,...sums,portion:{name,nutrition_basis:'portion',calories_100g:sums.calories/servings,protein_100g:sums.protein_g/servings,carbs_100g:sums.carbs_g/servings,fat_100g:sums.fat_g/servings,source:'personal_recipe'}};
+  const portion={name,nutrition_basis:'portion',calories_100g:sums.calories/servings,protein_100g:sums.protein_g/servings,carbs_100g:sums.carbs_g/servings,fat_100g:sums.fat_g/servings,source:'personal_recipe'};
+  for(const [k,field]of [['sugar_g','sugars_100g'],['fiber_g','fiber_100g'],['salt_g','salt_100g']])if(extras[k]!=null)portion[field]=extras[k]/servings;
+  return {name,servings,ingredients:cleaned,shared:input.shared===true,...sums,portion};
 }
 export async function listRecipes(db){await ensure(db);return (await db.prepare('SELECT id,recipe_json FROM personal_recipes WHERE user_id=? ORDER BY updated_at DESC').bind(db.userId).all()).results.map(r=>({...JSON.parse(r.recipe_json),id:r.id}));}
 async function removeContribution(db,id){

@@ -41,6 +41,8 @@ struct FoodSnapshot: Decodable, Equatable {
         var fiber: Double? = nil
         var sugar: Double? = nil
         var salt: Double? = nil
+        /// Logged in another app and read from Apple Health ("Yazio"); not editable here.
+        var app: String? = nil
     }
 
     /// What to aim for in this meal (its share of the day's targets).
@@ -82,6 +84,8 @@ struct FoodSnapshot: Decodable, Equatable {
         let ml: Double?
         let hydrationMl: Double?
         let time: String?
+        /// Logged in another app and read from Apple Health; not editable here.
+        var app: String? = nil
     }
 }
 

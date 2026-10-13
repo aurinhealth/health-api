@@ -20,7 +20,7 @@ struct CalendarDay: Decodable, Equatable, Identifiable {
     let kcal: Double
     /// Workouts still planned.
     let planned: Int
-    let activities: [CalendarActivity]
+    var activities: [CalendarActivity]
     /// Past plans nothing was done for.
     var missed: Int? = nil
     /// The day against the plan (src/app-training.js dayPlanState): "good",
@@ -71,7 +71,13 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
         let rounded: Int? = minutes.map { Int($0.rounded()) }
         return WeekSession(id: id, kind: kind, status: status, date: date, time: time, title: title, sport: sport,
                            minutes: rounded, tss: nil, activityId: activityId, eventId: eventId, plannedId: plannedId,
-                           adherence: adherence, adherenceReason: adherenceReason)
+                           watch: watchRef, adherence: adherence, adherenceReason: adherenceReason)
+    }
+
+    /// A done session from the watch opens its own detail.
+    private var watchRef: WatchRef? {
+        guard status == "done", let source, source == "google-wearables" || source == "apple-health" else { return nil }
+        return WatchRef(source: source, id: id)
     }
 
     private var kind: String {
@@ -173,4 +179,6 @@ struct ActivityTypeChange: Decodable {
     /// Where the change went ("intervals") and where it stays as it was.
     let sent: [String]?
     let kept: [String]?
+    /// Made in the app (gym:<date>, manual:<id>): its Apple Health copy is replaced here.
+    var key: String? = nil
 }

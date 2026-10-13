@@ -521,6 +521,19 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    /// Pití dnes: the day's drinks by kind (most hydrating first) and by part of the day.
+    func testDrinkHistoryGroups() throws {
+        let drinks = try XCTUnwrap(DemoData.food.water.drinks)
+        let kinds = DrinkHistory.byKind(drinks)
+        XCTAssertEqual(kinds.map(\.kind), ["water", "coffee"])
+        XCTAssertEqual(kinds[0].count, 2)
+        XCTAssertEqual(kinds[0].ml, 1400)
+        XCTAssertEqual(kinds[1].hydrationMl, 100)
+        let parts = DrinkHistory.byPart(drinks)
+        XCTAssertEqual(parts.map(\.title), ["Ráno", "Odpoledne"])
+        XCTAssertEqual(parts[0].drinks.map(\.id), [11, 12])
+    }
+
     /// The offer: the app playing in the phone at moments of the tour, and
     /// the list with the plans.
     func testPaywallTour() throws {
