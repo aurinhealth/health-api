@@ -15,7 +15,7 @@ struct AppleHealthConnectSheet: View {
             SettingsPage(title: "Apple Health") {
                 HStack(spacing: 14) {
                     IntegrationIcon(id: "apple", size: 56)
-                    Text("Co může Loadwise číst").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text("Co může Aurin číst").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
                 }
                 AppleHealthCategoryList(chosen: $chosen)
                     .disabled(working)

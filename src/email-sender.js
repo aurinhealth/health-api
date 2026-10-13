@@ -12,7 +12,7 @@ export function emailConfigured(env) {
 }
 
 export async function sendEmail(env, { to, subject, text, html }) {
-  const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Loadwise" }, to, subject, text, html });
+  const result = await env.EMAIL.send({ from: { email: emailSender(env), name: "Aurin" }, to, subject, text, html });
   return result?.messageId || null;
 }
 
@@ -25,18 +25,18 @@ function htmlEmail(lang, paragraphs, code = "") {
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>`
     + `<body style="margin:0;padding:24px 16px;background:#f4f4f5;color:#18181b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">`
     + `<div style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px 24px">`
-    + `<p style="margin:0 0 18px;font-size:17px;font-weight:700">Loadwise</p>${p(first)}${codeBlock}${rest.map(p).join("")}</div></body></html>`;
+    + `<p style="margin:0 0 18px;font-size:17px;font-weight:700">Aurin</p>${p(first)}${codeBlock}${rest.map(p).join("")}</div></body></html>`;
 }
 
 const CODE_TEXT = {
   cs: {
-    subject: code => `${code} je tvůj kód pro přihlášení do Loadwise`,
-    intro: "Tvůj kód pro přihlášení do Loadwise:",
+    subject: code => `${code} je tvůj kód pro přihlášení do Aurinu`,
+    intro: "Tvůj kód pro přihlášení do Aurinu:",
     outro: "Platí 10 minut. Pokud o kód nežádáš ty, e-mail ignoruj. Bez kódu se k účtu nikdo nedostane."
   },
   en: {
-    subject: code => `${code} is your Loadwise sign-in code`,
-    intro: "Your code to sign in to Loadwise:",
+    subject: code => `${code} is your Aurin sign-in code`,
+    intro: "Your code to sign in to Aurin:",
     outro: "It is valid for 10 minutes. If you did not ask for it, ignore this email. Nobody can get into your account without the code."
   }
 };
@@ -48,13 +48,13 @@ export function signInCodeEmail(lang, code) {
 
 const CHANGE_CODE_TEXT = {
   cs: {
-    subject: code => `${code} je tvůj kód pro změnu e-mailu v Loadwise`,
-    intro: "Tvůj kód, kterým potvrdíš tuhle adresu jako nový e-mail svého účtu Loadwise:",
+    subject: code => `${code} je tvůj kód pro změnu e-mailu v Aurinu`,
+    intro: "Tvůj kód, kterým potvrdíš tuhle adresu jako nový e-mail svého účtu Aurin:",
     outro: "Platí 10 minut. Pokud o změnu nežádáš ty, e-mail ignoruj."
   },
   en: {
-    subject: code => `${code} is your Loadwise email change code`,
-    intro: "Your code to confirm this address as the new email of your Loadwise account:",
+    subject: code => `${code} is your Aurin email change code`,
+    intro: "Your code to confirm this address as the new email of your Aurin account:",
     outro: "It is valid for 10 minutes. If you did not ask for the change, ignore this email."
   }
 };
@@ -66,12 +66,12 @@ export function emailChangeCodeEmail(lang, code) {
 
 const CHANGED_TEXT = {
   cs: {
-    subject: "E-mail tvého účtu Loadwise se změnil",
-    body: (address, when) => [`E-mail pro přihlášení do Loadwise se ${when} změnil na ${address}. Na tuhle adresu už kódy pro přihlášení chodit nebudou.`, "Pokud o tom nevíš, dej hned vědět správci aplikace."]
+    subject: "E-mail tvého účtu Aurin se změnil",
+    body: (address, when) => [`E-mail pro přihlášení do Aurinu se ${when} změnil na ${address}. Na tuhle adresu už kódy pro přihlášení chodit nebudou.`, "Pokud o tom nevíš, dej hned vědět správci aplikace."]
   },
   en: {
-    subject: "The email of your Loadwise account changed",
-    body: (address, when) => [`The email you sign in to Loadwise with changed to ${address} on ${when}. Sign-in codes no longer go to this address.`, "If this was not you, tell the app's administrator right away."]
+    subject: "The email of your Aurin account changed",
+    body: (address, when) => [`The email you sign in to Aurin with changed to ${address} on ${when}. Sign-in codes no longer go to this address.`, "If this was not you, tell the app's administrator right away."]
   }
 };
 
@@ -85,12 +85,12 @@ export function emailChangedEmail(lang, address, date = new Date()) {
 
 const PASSKEY_TEXT = {
   cs: {
-    subject: "K tvému účtu Loadwise přibyl přístupový klíč",
-    body: (name, when) => [`K tvému účtu Loadwise přibyl přístupový klíč (passkey) „${name}“, ${when}.`, "Pokud o tom nevíš, odeber ho v aplikaci v Nastavení → Účet a dej vědět správci aplikace."]
+    subject: "K tvému účtu Aurin přibyl přístupový klíč",
+    body: (name, when) => [`K tvému účtu Aurin přibyl přístupový klíč (passkey) „${name}“, ${when}.`, "Pokud o tom nevíš, odeber ho v aplikaci v Nastavení → Účet a dej vědět správci aplikace."]
   },
   en: {
-    subject: "A passkey was added to your Loadwise account",
-    body: (name, when) => [`A passkey “${name}” was added to your Loadwise account on ${when}.`, "If this was not you, remove it in the app under Settings → Account and tell the app's administrator."]
+    subject: "A passkey was added to your Aurin account",
+    body: (name, when) => [`A passkey “${name}” was added to your Aurin account on ${when}.`, "If this was not you, remove it in the app under Settings → Account and tell the app's administrator."]
   }
 };
 

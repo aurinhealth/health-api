@@ -55,8 +55,8 @@ function confirmPage(request, ticketText, ticket, email) {
   const en = /^en\b/i.test(request.headers.get("Accept-Language") || "");
   const service = ticket.provider.startsWith("google") ? "Google Health" : ticket.provider === "strava" ? "Strava" : "Intervals.icu";
   const t = en
-    ? { title: "Connect " + service, body: "Connect " + service + " to the Loadwise account", note: "If this isn't your account, close this page.", go: "Continue", lang: "en" }
-    : { title: "Připojit " + service, body: "Připojit " + service + " k účtu Loadwise", note: "Pokud to není tvůj účet, zavři tuto stránku.", go: "Pokračovat", lang: "cs" };
+    ? { title: "Connect " + service, body: "Connect " + service + " to the Aurin account", note: "If this isn't your account, close this page.", go: "Continue", lang: "en" }
+    : { title: "Připojit " + service, body: "Připojit " + service + " k účtu Aurin", note: "Pokud to není tvůj účet, zavři tuto stránku.", go: "Pokračovat", lang: "cs" };
   const html = `<!doctype html><html lang="${t.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(t.title)}</title>
 <style>body{font:17px -apple-system,system-ui,sans-serif;margin:0;padding:32px 20px;background:#fff;color:#111}@media(prefers-color-scheme:dark){body{background:#000;color:#eee}}main{max-width:420px;margin:auto}b{word-break:break-all}p.n{opacity:.7;font-size:15px}button{width:100%;padding:14px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font:600 17px -apple-system,system-ui,sans-serif;margin-top:16px}</style></head>
 <body><main><p>${escapeHtml(t.body)}</p><p><b>${escapeHtml(email)}</b></p><p class="n">${escapeHtml(t.note)}</p>

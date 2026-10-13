@@ -59,7 +59,7 @@ struct ProSettingsRow: View {
                     .foregroundStyle(Palette.onButton)
                     .frame(width: 32, height: 32)
                     .background(Palette.button, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-                Text("Loadwise Pro").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                Text("Aurin Pro").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                 Spacer()
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
             }
@@ -116,7 +116,7 @@ struct SubscriptionView: View {
                                 .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.onButton)
                                 .frame(width: 30, height: 30)
                                 .background(Palette.button, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            Text("Přejít na Loadwise Pro").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                            Text("Přejít na Aurin Pro").font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                             Spacer()
                             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
                         }
@@ -125,7 +125,7 @@ struct SubscriptionView: View {
                     }
                     .buttonStyle(.plain)
                     Rectangle().fill(Palette.hairline).frame(height: 1).padding(.horizontal, 16)
-                    Link(destination: URL(string: "https://petrfitnessdata.eu/terms")!) {
+                    Link(destination: URL(string: "https://aurin.health/terms")!) {
                         Text("Otázky k předplatnému? Přečti si podmínky a ceny.").font(Typo.caption).foregroundStyle(Palette.muted).underline()
                     }
                     .padding(16)
@@ -138,15 +138,15 @@ struct SubscriptionView: View {
     }
 
     private var planTitle: String {
-        if status?.hasAI == true { return "Loadwise Pro" }
-        if status?.pilot ?? true { return L10n.tr("Loadwise · pilot") }
-        return "Loadwise Free"
+        if status?.hasAI == true { return "Aurin Pro" }
+        if status?.pilot ?? true { return L10n.tr("Aurin · pilot") }
+        return "Aurin Free"
     }
 
     private var planText: String {
         if status?.hasAI == true { return L10n.tr("Předplatné je aktivní, všechno je odemčené.") }
-        if status?.pilot ?? true { return L10n.tr("Během pilotu pro pozvané máš všechno zdarma, i AI. Později bude AI součástí Loadwise Pro.") }
-        return L10n.tr("Nemáš Pro. Klepni na „Přejít na Loadwise Pro“ a vyber tarif.")
+        if status?.pilot ?? true { return L10n.tr("Během pilotu pro pozvané máš všechno zdarma, i AI. Později bude AI součástí Aurin Pro.") }
+        return L10n.tr("Nemáš Pro. Klepni na „Přejít na Aurin Pro“ a vyber tarif.")
     }
 
     private func load() async {
@@ -224,7 +224,7 @@ struct PaywallView: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 8)
 
-                Text("Začni naplno s Loadwise Pro")
+                Text("Začni naplno s Aurin Pro")
                     .font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 24).padding(.top, 12)
 
@@ -264,7 +264,7 @@ struct PaywallView: View {
             }
         }
         .sheet(isPresented: $allPlans) { AllPlansSheet(selected: $plan) }
-        .alert(L10n.tr("Loadwise Pro"), isPresented: Binding(get: { notYet != nil }, set: { if !$0 { notYet = nil } })) {
+        .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { notYet != nil }, set: { if !$0 { notYet = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(notYet ?? "") }
     }
@@ -611,11 +611,11 @@ struct AISubscriptionCard: View {
 
     var body: some View {
         Card {
-            Label("AI je součástí Loadwise Pro", systemImage: "sparkles").font(.headline).foregroundStyle(Palette.ink)
-            Text("Kouč, jídlo z fotky a hodnocení tréninků patří do Loadwise Pro. Zápisy, přehledy a plány zůstávají zdarma.")
+            Label("AI je součástí Aurin Pro", systemImage: "sparkles").font(.headline).foregroundStyle(Palette.ink)
+            Text("Kouč, jídlo z fotky a hodnocení tréninků patří do Aurin Pro. Zápisy, přehledy a plány zůstávají zdarma.")
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             Button(action: open) {
-                Text("Zobrazit Loadwise Pro").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                Text("Zobrazit Aurin Pro").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
             }
             .buttonStyle(.plain)
