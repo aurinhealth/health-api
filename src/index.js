@@ -1610,6 +1610,8 @@ function googleExerciseActivity(row) {
   return {
     id: row.external_id,
     source: "google-health",
+    // google-wearables or apple-health: where the app opens its detail.
+    family: row.source_family,
     averageHeartRate,
     type,
     calories: Number(metrics.caloriesKcal || 0),

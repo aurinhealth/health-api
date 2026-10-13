@@ -327,6 +327,8 @@ function sessionOf(w, date, status) {
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
     eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
+    // A workout from the watch opens its own detail (watch-detail.js).
+    ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } } : {}),
     ...(done ? energyOf(w) : {})
   };
 }

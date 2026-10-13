@@ -16,6 +16,7 @@ import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail } from './activity-detail.js';
+import { watchDetail, withWatch } from './watch-detail.js';
 import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
@@ -48,6 +49,7 @@ import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
+import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, weeklyRunCap, capRunVolume } from "./week-planner.js";
@@ -948,7 +950,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:L('Neplatná aktivita.', 'Invalid activity.')},{status:400});
     const known=await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind(env.USER_ID,'activity:'+id).first();
     if(!known)return Response.json({message:L('Aktivita není v tvé synchronizované historii.', 'The activity isn\'t in your synced history.')},{status:404});
-    return activityDetail(request,env,id,true);
+    // Heart rate and route from the watch when Intervals.icu has none.
+    const response=await activityDetail(request,env,id,true);
+    if(!response.ok)return response;
+    const detail=await withWatch(env,await response.json(),id,await watchOptions(env));
+    return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
+  }
+  // A workout from the watch (Apple Health, Google Health): summary, heart rate, zones, route.
+  if(url.pathname==='/app/api/activity-detail/watch'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const detail=await watchDetail(env,{source:url.searchParams.get('source'),id:url.searchParams.get('id'),...await watchOptions(env)}).catch(error=>{console.error('Watch detail failed',error.message);return null;});
+    if(!detail)return Response.json({message:L('Aktivita není v tvé synchronizované historii.', 'The activity isn\'t in your synced history.')},{status:404});
+    return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
   }
 
   // The coach's sentence on the app's Today, Training and Food screens
@@ -1479,3 +1492,10 @@ function logoResponse() {
   return new Response(svg, { status: 200, headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=86400" } });
 }
 
+
+// The athlete's heart-rate zones and, with the location permission, a Google
+// token for the route of a watch workout (watch-detail.js).
+async function watchOptions(env){
+  const t=await athleteThresholds(env).catch(()=>null);
+  return {hrZones:t?.hrZones||[],token:grantedExtras(env).location?()=>googleToken(env):null};
+}
