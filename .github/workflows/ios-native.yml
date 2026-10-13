@@ -93,31 +93,6 @@ jobs:
             done
           done
 
-      # TEMPORARY (PR #142): proof whether the bars render as Liquid Glass with
-      # UIDesignRequiresCompatibility on and off. The tab bar of Today is
-      # cropped, scaled down and printed as base64 between markers.
-      - name: Liquid Glass check
-        run: |
-          udid=${{ steps.sim.outputs.udid }}
-          xcrun simctl list runtimes | grep -i ios || true
-          xcrun simctl getenv "$udid" SIMULATOR_RUNTIME_VERSION || true
-          app=build/Build/Products/Debug-iphonesimulator/Loadwise.app
-          xcrun simctl ui "$udid" appearance light
-          shot() {
-            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab today -AppleLanguages "(cs)"
-            sleep 6
-            xcrun simctl io "$udid" screenshot "/tmp/glass-$1.png"
-            h=$(sips -g pixelHeight "/tmp/glass-$1.png" | awk '/pixelHeight/{print $2}')
-            w=$(sips -g pixelWidth "/tmp/glass-$1.png" | awk '/pixelWidth/{print $2}')
-            sips --cropToHeightWidth 360 "$w" --cropOffset $((h-360)) 0 "/tmp/glass-$1.png" --out "/tmp/crop-$1.png" >/dev/null
-            sips -Z 700 "/tmp/crop-$1.png" --out "/tmp/crop-$1.png" >/dev/null
-            echo "GLASS-BEGIN $1"; base64 -i "/tmp/crop-$1.png" | fold -w 4000; echo "GLASS-END $1"
-          }
-          shot compat-on
-          /usr/libexec/PlistBuddy -c "Delete :UIDesignRequiresCompatibility" "$app/Info.plist"
-          xcrun simctl install "$udid" "$app"
-          shot compat-off
-
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
         run: |
@@ -148,3 +123,27 @@ jobs:
           path: screens
           if-no-files-found: ignore
           retention-days: 30
+
+      # TEMPORARY (PR #142): proof whether the bars render as Liquid Glass with
+      # UIDesignRequiresCompatibility on and off. Today is scaled down and
+      # printed as base64 between markers, last so the log's tail holds it.
+      - name: Liquid Glass check
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          xcrun simctl list runtimes | grep -i ios || true
+          xcrun simctl getenv "$udid" SIMULATOR_RUNTIME_VERSION || true
+          app=build/Build/Products/Debug-iphonesimulator/Loadwise.app
+          xcrun simctl ui "$udid" appearance light
+          shot() {
+            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab today -AppleLanguages "(cs)"
+            sleep 6
+            xcrun simctl io "$udid" screenshot "/tmp/glass-$1.png"
+            sips -Z 800 -s format jpeg -s formatOptions 60 "/tmp/glass-$1.png" --out "/tmp/small-$1.jpg" >/dev/null
+            echo "GLASS-BEGIN $1"; base64 -i "/tmp/small-$1.jpg" | fold -w 4000; echo "GLASS-END $1"
+          }
+          shot compat-on
+          /usr/libexec/PlistBuddy -c "Delete :UIDesignRequiresCompatibility" "$app/Info.plist"
+          codesign --force --sign - "$app" || true
+          /usr/libexec/PlistBuddy -c "Print :UIDesignRequiresCompatibility" "$app/Info.plist" || echo "key removed"
+          xcrun simctl install "$udid" "$app"
+          shot compat-off
