@@ -10,7 +10,9 @@ import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from '..
 import {foodGooglePayload,queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from '../src/food-google-sync.js';
 const food={name:'Řecký jogurt',brand:'Test',nutrition_basis:'g',calories_100g:80,protein_100g:10,carbs_100g:6,fat_100g:2,quantity:'450 g',serving_size:'150 g',piece_size:'150 g',preferred_unit:'pack'};
 function scopedDbs(){return db();}
-function db(){const raw=createD1();raw.sqlite.exec('CREATE TABLE food_logs(id INTEGER PRIMARY KEY,user_id INTEGER,consumed_date TEXT,consumed_at TEXT,recipe_title TEXT,kcal REAL,protein_g REAL,carbs_g REAL,fat_g REAL,note TEXT,source TEXT)');raw.sqlite.prepare("INSERT INTO food_logs VALUES(1,1,'2026-09-28','2026-10-04T12:00:00Z','Jogurt',120,15,9,3,?, 'package_label')").run(JSON.stringify({mealType:'snack_pm',enteredQuantity:1}));return {raw,owner:scopedDb(raw,1),other:scopedDb(raw,2)};}
+function db(){const raw=createD1();raw.sqlite.exec('CREATE TABLE food_logs(id INTEGER PRIMARY KEY,user_id INTEGER,consumed_date TEXT,consumed_at TEXT,recipe_title TEXT,kcal REAL,protein_g REAL,carbs_g REAL,fat_g REAL,note TEXT,source TEXT)');// A few days old, inside the 14-day backfill window whatever today is.
+  const day=new Date(Date.now()-5*864e5).toISOString().slice(0,10);
+  raw.sqlite.prepare("INSERT INTO food_logs VALUES(1,1,?,?,'Jogurt',120,15,9,3,?, 'package_label')").run(day,day+'T12:00:00Z',JSON.stringify({mealType:'snack_pm',enteredQuantity:1}));return {raw,owner:scopedDb(raw,1),other:scopedDb(raw,2)};}
 const token=async()=> 'test-token';
 const resource='users/123/dataTypes/nutrition-log/dataPoints/abc';
 function mockGoogle(){const calls=[];return {calls,fetcher:async(url,options)=>{calls.push({url,...options,body:JSON.parse(options.body||'null')});return Response.json({done:true,response:options.body?.includes('"names"')?{}:{name:resource}});}};}
