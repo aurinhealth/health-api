@@ -146,6 +146,7 @@ final class AppleHealth {
             try await reader.requestAccess(chosen, share: export.isOn ? AppleHealthExport.shareTypes(export.prefs) : [])
         } catch {
             message = error.localizedDescription
+            ErrorLog.add(path: "Apple Health access", status: nil, message: error.localizedDescription)
             return false
         }
         setCategories(chosen)

@@ -164,6 +164,14 @@ struct ReportProblemView: View {
             if let error = apple.message { a["lastError"] = .string(error) }
             d["appleHealth"] = .object(a)
         }
+        // The week's failed requests, also from earlier launches (ErrorLog).
+        let stamp = ISO8601DateFormatter()
+        d["recentErrors"] = .array(ErrorLog.entries.map { entry -> JSONValue in
+            var o: JSONObject = ["at": .string(stamp.string(from: entry.at)), "path": .string(entry.path), "message": .string(entry.message)]
+            if let status = entry.status { o["status"] = .number(Double(status)) }
+            if let count = entry.count { o["count"] = .number(Double(count)) }
+            return .object(o)
+        })
         var errors: JSONObject = [:]
         if let e = model.errorMessage { errors["today"] = .string(e) }
         if let e = model.trainingError { errors["training"] = .string(e) }

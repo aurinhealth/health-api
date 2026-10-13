@@ -489,7 +489,7 @@ final class APIClient: @unchecked Sendable {
         var request = makeRequest("/auth/app/session", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: ["token": token, "verifier": verifier])
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await load(request)
         try check(response, data)
         guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
     }
@@ -556,12 +556,13 @@ final class APIClient: @unchecked Sendable {
 
     /// The decoded answer and its JSON as it came.
     func getWithData<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> (T, Data) {
-        let (data, response) = try await session.data(for: makeRequest(path))
+        let (data, response) = try await load(makeRequest(path))
         try check(response, data)
         let value: T
         do {
             value = try decoder.decode(T.self, from: data)
         } catch {
+            ErrorLog.add(path: "GET \(path)", status: nil, message: ErrorLog.describe(error))
             throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
         if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
@@ -576,7 +577,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = item.body
         request.timeoutInterval = 20
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await load(request)
         guard let http = response as? HTTPURLResponse else { throw OutboxRefusal.retry(L10n.tr("Server neodpověděl.")) }
         if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
@@ -600,14 +601,34 @@ final class APIClient: @unchecked Sendable {
         if let timeout { request.timeoutInterval = timeout }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await load(request)
         try check(response, data)
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
             // Writes whose answer the app does not read may answer with nothing.
             if let ignored = JSONValue.null as? T { return ignored }
+            ErrorLog.add(path: "\(method) \(path)", status: nil, message: ErrorLog.describe(error))
             throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
+        }
+    }
+
+    /// Every request but the sign-out: what fails lands in ErrorLog, which
+    /// "Nahlásit problém" sends with the report.
+    private func load(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                ErrorLog.add(request, status: http.statusCode, message: json?["message"] as? String)
+            }
+            return (data, response)
+        } catch {
+            // A screen that went away cancels its requests; that is no failure.
+            if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
+                ErrorLog.add(request, status: nil, message: error.localizedDescription)
+            }
+            throw error
         }
     }
 

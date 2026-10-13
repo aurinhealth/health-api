@@ -941,6 +941,7 @@ final class AppModel {
             OutboxStore.save([])
             // Apple Health was allowed for this account, not the next one.
             AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
+            ErrorLog.clear()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }
