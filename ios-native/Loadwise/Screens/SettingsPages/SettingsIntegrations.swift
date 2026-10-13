@@ -265,10 +265,10 @@ struct AddIntegrationSheet: View {
                         }
                     }
                 }
-                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Aurin jejich data dostane odtamtud.") {
+                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo nebo Oura připoj v Intervals.icu. Aurin jejich data dostane odtamtud.") {
                     Link(destination: URL(string: "https://intervals.icu/settings")!) {
                         SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.indigo), title: "Přes Intervals.icu",
-                                    subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura, Strava")
+                                    subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura")
                     }
                     .buttonStyle(.plain)
                 }

@@ -112,8 +112,8 @@ struct SourcesSettingsView: View {
 
     private func start(_ provider: String) {
         if provider == "apple" { connectingApple = true; return }
-        // Strava, Garmin and Wahoo come through Intervals.icu, so connect that first.
-        let target = ["strava", "garmin", "wahoo"].contains(provider) ? "intervals" : provider
+        // Garmin and Wahoo come through Intervals.icu, so connect that first.
+        let target = ["garmin", "wahoo"].contains(provider) ? "intervals" : provider
         flow.start(target, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
     }
 
@@ -137,7 +137,7 @@ struct SourcesSettingsView: View {
         }
         let settings = URL(string: "https://intervals.icu/settings")
         let viaIntervals = connected.contains { $0.id == "intervals" }
-        for (id, name) in [("strava", "Strava"), ("garmin", "Garmin"), ("wahoo", "Wahoo")] {
+        for (id, name) in [("garmin", "Garmin"), ("wahoo", "Wahoo")] {
             list.append(Offer(id: id, name: name, note: L10n.tr("přes Intervals"), url: viaIntervals ? settings : nil))
         }
         return list
