@@ -132,7 +132,10 @@ struct DrinkHistoryView: View {
                     SectionLabel(text: part.title).padding(.top, 12).padding(.bottom, 2)
                     ForEach(part.drinks) { d in
                         if d.app != nil {
-                            DrinkLine(drink: d)
+                            // Another app's drink: deleted from Aurin only.
+                            SwipeRow(delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
+                                DrinkLine(drink: d)
+                            }
                         } else {
                             SwipeRow(edit: { editing = d }, delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
                                 DrinkLine(drink: d)

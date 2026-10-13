@@ -81,7 +81,8 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         amount: amount != null && unit ? round(amount, 1) + " " + unitLabel(unit, round(amount, 1)) : null,
         brand: note.brand || null,
         // Logged in another app and read from Apple Health: shown with its name, not editable.
-        ...(e.source === "apple-health" ? { app: String(note.app || "Apple Health").slice(0, 60) } : {})
+        ...(e.source === "apple-health" ? { app: String(note.app || "Apple Health").slice(0, 60) } : {}),
+        ...(note.estimate === true ? { estimate: true } : {})
       };
     });
   const sum = key => round(entries.reduce((s, e) => s + (e[key] || 0), 0), key === "kcal" ? 0 : 1);

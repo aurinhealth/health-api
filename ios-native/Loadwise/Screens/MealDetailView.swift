@@ -116,9 +116,10 @@ struct FoodEntryCard: View {
 
     var body: some View {
         Group {
-            // Food from another app (Yazio…) through Apple Health changes there, not here.
+            // Food from another app (Yazio…) changes there; here it can only
+            // be deleted, from Aurin alone (it stays in that app and Apple Health).
             if entry.app != nil {
-                card
+                SwipeRow(delete: { confirmDelete = true }) { card }
             } else {
                 SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
                     card.onTapGesture { editing = true }
@@ -130,7 +131,7 @@ struct FoodEntryCard: View {
             FoodEntryEditSheet(entry: entry, date: model.food?.date ?? AppModel.localDate(Date()))
         }
         .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Smazat", role: .destructive) { Task { await model.deleteFood(id: entry.id) } }
+            Button(entry.app == nil ? "Smazat" : "Smazat jen v Aurinu", role: .destructive) { Task { await model.deleteFood(id: entry.id) } }
         }
     }
 
@@ -141,6 +142,7 @@ struct FoodEntryCard: View {
                     HStack(spacing: 6) {
                         Text(entry.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
                         if let app = entry.app { AppTag(name: app) }
+                        if entry.estimate == true { AIEstimateTag() }
                     }
                     if let detail = Self.detail(entry) {
                         Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
@@ -202,5 +204,15 @@ struct AppTag: View {
         Text(verbatim: name).font(.caption2.weight(.medium)).foregroundStyle(Palette.muted).lineLimit(1)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(Palette.track, in: Capsule())
+    }
+}
+
+/// Values AI estimated because no such product was found: "AI odhad".
+struct AIEstimateTag: View {
+    var body: some View {
+        Label("AI odhad", systemImage: "sparkles").labelStyle(.titleAndIcon)
+            .font(.caption2.weight(.semibold)).foregroundStyle(Palette.indigo).lineLimit(1)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Palette.indigo.opacity(0.16), in: Capsule())
     }
 }

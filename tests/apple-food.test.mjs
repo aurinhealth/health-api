@@ -38,21 +38,25 @@ test("food and water other apps wrote to Apple Health land in the diary and stay
   assert.equal((await listFluids(db, "2026-10-13")).length, 1);
 });
 
-test("other apps' food is not edited here and not sent on to Google; a copy is the athlete's own", async () => {
+test("other apps' food is not edited here and not sent on to Google; a copy is the athlete's own; deleting hides it for good", async () => {
   const raw = createD1(), db = scopedDb(raw, 7);
   diary(raw);
-  await saveAppleFood(raw, 7, { ...window, meals: [yogurt], drinks: [{ id: "W1", date: "2026-10-13", ml: 300 }] });
+  const sync = () => saveAppleFood(raw, 7, { ...window, meals: [yogurt], drinks: [{ id: "W1", date: "2026-10-13", ml: 300 }] });
+  await sync();
   const id = (await raw.prepare("SELECT id FROM food_logs WHERE user_id=7").first()).id;
   await assert.rejects(updateFoodEntry(db, id, { name: "Jogurt" }), /jiné aplikace/);
-  await assert.rejects(deleteFoodEntry(db, id), /jiné aplikace/);
   assert.deepEqual(await queueFoodGoogle(db, id), { status: "skipped" });
   const copy = await copyFoodEntry(db, id, "2026-10-14");
   const copied = await raw.prepare("SELECT source,note FROM food_logs WHERE id=?").bind(copy.id).first();
   assert.equal(copied.source, "manual");
   assert.equal(JSON.parse(copied.note).app, undefined);
-  const drink = (await listFluids(db, "2026-10-13"))[0];
-  await deleteFluid(db, drink.id);
-  assert.equal((await listFluids(db, "2026-10-13")).length, 1, "another app's drink stays");
+
+  // Deleting removes the meal and the drink from Aurin only; the next sync does not bring them back.
+  await deleteFoodEntry(db, id);
+  await deleteFluid(db, (await listFluids(db, "2026-10-13"))[0].id);
+  await sync();
+  assert.equal((await raw.prepare("SELECT COUNT(*) AS n FROM food_logs WHERE user_id=7 AND source='apple-health'").first()).n, 0);
+  assert.equal((await listFluids(db, "2026-10-13")).length, 0);
 });
 
 test("the food screen names the app an entry came from", () => {
