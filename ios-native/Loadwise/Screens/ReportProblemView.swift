@@ -152,8 +152,26 @@ struct ReportProblemView: View {
                 if let message = r.message { o["message"] = .string(message) }
                 return .object(o)
             })
-            d["lastSync"] = .object(s)
+            // "Synchronizovat vše" in Zdroje dat, not the providers' own syncs.
+            d["lastSyncEverything"] = .object(s)
         }
+        // What this iPhone reads and sends; the server only knows the last upload.
+        let apple = AppleHealth.shared
+        if apple.isAvailable {
+            var a: JSONObject = ["on": .bool(apple.enabled)]
+            if let at = apple.lastSync { a["lastSync"] = .string(ISO8601DateFormatter().string(from: at)) }
+            if apple.enabled { a["categories"] = .array(apple.categories.map(\.rawValue).sorted().map { JSONValue.string($0) }) }
+            if let error = apple.message { a["lastError"] = .string(error) }
+            d["appleHealth"] = .object(a)
+        }
+        // The week's failed requests, also from earlier launches (ErrorLog).
+        let stamp = ISO8601DateFormatter()
+        d["recentErrors"] = .array(ErrorLog.entries.map { entry -> JSONValue in
+            var o: JSONObject = ["at": .string(stamp.string(from: entry.at)), "path": .string(entry.path), "message": .string(entry.message)]
+            if let status = entry.status { o["status"] = .number(Double(status)) }
+            if let count = entry.count { o["count"] = .number(Double(count)) }
+            return .object(o)
+        })
         var errors: JSONObject = [:]
         if let e = model.errorMessage { errors["today"] = .string(e) }
         if let e = model.trainingError { errors["training"] = .string(e) }
