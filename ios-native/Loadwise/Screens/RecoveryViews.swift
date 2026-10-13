@@ -183,7 +183,7 @@ struct RecoveryRoutineView: View {
     private var exercises: [RecoveryToday.Exercise] { item.routine?.items ?? [] }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.today) {
+        DetailScreen(glow: Palette.Glow.today, title: item.routine?.title ?? item.title) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Regenerace · dnes").padding(.top, 24)
                 Text(verbatim: item.routine?.title ?? item.title)

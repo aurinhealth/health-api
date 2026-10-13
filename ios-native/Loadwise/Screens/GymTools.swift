@@ -232,7 +232,7 @@ struct GymBuilderView: View {
     private var isoDay: String { AppModel.localDate(day) }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: template == nil ? "Posilovna · sestavit trénink" : "Posilovna · naplánovat trénink").padding(.top, 24)
                 Text(proposal?.planName ?? template?.template.name ?? L10n.tr("Jaký trénink chceš?"))
@@ -651,7 +651,7 @@ struct EquipmentView: View {
     static let weightOptions: [Double] = [1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 12, 12.5, 14, 15, 16, 17.5, 18, 20, 22, 22.5, 24, 25, 26, 27.5, 28, 30, 32, 32.5, 34, 35, 36, 38, 40, 42, 44, 45, 46, 48, 50]
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Posilovna · vybavení").padding(.top, 24)
                 Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

@@ -17,7 +17,7 @@ struct TrainingLibraryView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: sport?.label ?? "Knihovna tréninků") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · knihovna").padding(.top, 24)
                 Text(sport?.label ?? "Knihovna tréninků").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
@@ -524,7 +524,7 @@ struct LibraryWorkoutSheet: View {
 /// "Knihovna cviků" on its own screen (deep link loadwise://open/exercises).
 struct ExerciseLibraryView: View {
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Cviky") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Posilovna · knihovna cviků").padding(.top, 24)
                 Text("Cviky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

@@ -27,6 +27,10 @@ final class AppModel {
     /// without data).
     var notice: String?
     private(set) var loading = false
+    /// The pill on top while the app syncs after opening (RootView SyncPill):
+    /// "Synchronizuji…", "Synchronizováno" for a moment, or a failure to retry.
+    private(set) var syncStatus: SyncStatus?
+    enum SyncStatus: Equatable { case syncing, done, failed }
     private(set) var signingIn = false
     var errorMessage: String?
     /// Sample data instead of the server ("Prohlédnout ukázku", screenshots).
@@ -335,10 +339,12 @@ final class AppModel {
         phase = .signedIn
     }
 
-    func refresh() async {
+    /// announce: the app was opened or pulled down, so the pill says it syncs.
+    func refresh(announce: Bool = false) async {
         guard !demo, phase == .signedIn else { return }
         loading = true
         defer { loading = false }
+        if announce { syncStatus = .syncing }
         await sendOutbox()
         // Last night and the morning's HRV from the watch before Today is computed.
         await AppleHealth.shared.sync(api: api)
@@ -356,17 +362,37 @@ final class AppModel {
                 WidgetBridge.update(today)
             }
             if let status = try? await api.athleteStatus() { athleteStatus = status }
+            if syncStatus == .syncing { finishSync(.done) }
         } catch APIError.unauthorized {
+            syncStatus = nil
             signOut(expired: true)
         } catch {
             // Without signal the saved screen stays; an error only without one.
             // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { return }
+            if Self.isCancellation(error) { if syncStatus == .syncing { syncStatus = nil }; return }
             let lost = noteConnection(error)
             if !(lost && today != nil) { errorMessage = error.localizedDescription }
-            if !lost && today != nil { notice = error.localizedDescription }
+            // Offline has its own note; the pill takes a failed sync.
+            if syncStatus == .syncing {
+                finishSync(lost ? nil : .failed)
+            } else if !lost && today != nil {
+                notice = error.localizedDescription
+            }
         }
     }
+
+    /// "Synchronizováno" goes away after 3 seconds; a failure stays until tapped.
+    private func finishSync(_ status: SyncStatus?) {
+        syncStatus = status
+        guard status == .done else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if syncStatus == .done { syncStatus = nil }
+        }
+    }
+
+    /// A tap on the failed pill: try again, or put it away.
+    func dismissSyncFailure() { if syncStatus == .failed { syncStatus = nil } }
 
     /// A tab's data again unless it came from the server in the last 5 minutes
     /// for the same day. Without this a tab kept the copy saved on the phone
@@ -382,7 +408,7 @@ final class AppModel {
         refreshing.insert(tab)
         defer { refreshing.remove(tab) }
         switch tab {
-        case .today: await refresh()
+        case .today: await refresh(announce: true)
         case .training: await refreshTraining()
         case .health: await refreshHealth()
         case .food: await refreshFood()

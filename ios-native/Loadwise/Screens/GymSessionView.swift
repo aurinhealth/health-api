@@ -63,7 +63,7 @@ struct GymSessionView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: day?.planName ?? "Posilovna") {
             content
         }
         .task { await load() }
