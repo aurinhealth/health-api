@@ -123,34 +123,3 @@ jobs:
           path: screens
           if-no-files-found: ignore
           retention-days: 30
-
-      # TEMPORARY (PR #142): proof whether the bars render as Liquid Glass with
-      # UIDesignRequiresCompatibility on and off. Today is scaled down and
-      # printed as base64 between markers, last so the log's tail holds it.
-      - name: Liquid Glass check
-        run: |
-          # Liquid Glass needs an iOS 26 runtime; the default pick above is iOS 18.
-          udid=$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          runtimes = sorted((r for r in devices if "iOS-26" in r), reverse=True)
-          print(next(d["udid"] for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")))')
-          xcrun simctl boot "$udid" || true
-          xcrun simctl bootstatus "$udid" -b
-          xcrun simctl getenv "$udid" SIMULATOR_RUNTIME_VERSION || true
-          app=build/Build/Products/Debug-iphonesimulator/Loadwise.app
-          xcrun simctl install "$udid" "$app"
-          xcrun simctl ui "$udid" appearance light
-          shot() {
-            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab today -AppleLanguages "(cs)"
-            sleep 6
-            xcrun simctl io "$udid" screenshot "/tmp/glass-$1.png"
-            sips -Z 800 -s format jpeg -s formatOptions 60 "/tmp/glass-$1.png" --out "/tmp/small-$1.jpg" >/dev/null
-            echo "GLASS-BEGIN $1"; base64 -i "/tmp/small-$1.jpg" | fold -w 4000; echo "GLASS-END $1"
-          }
-          shot compat-on
-          /usr/libexec/PlistBuddy -c "Delete :UIDesignRequiresCompatibility" "$app/Info.plist"
-          codesign --force --sign - "$app" || true
-          /usr/libexec/PlistBuddy -c "Print :UIDesignRequiresCompatibility" "$app/Info.plist" || echo "key removed"
-          xcrun simctl install "$udid" "$app"
-          shot compat-off
