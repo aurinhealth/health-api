@@ -15,6 +15,9 @@ function entryId(value){
 }
 function noteObject(value){try{const note=JSON.parse(value||'{}');return note&&typeof note==='object'&&!Array.isArray(note)?note:{legacyNote:String(value)}}catch{return value?{legacyNote:String(value)}:{}}}
 function changedDate(timestamp,date){return /^\d{4}-\d{2}-\d{2}/.test(String(timestamp||''))?date+String(timestamp).slice(10):date+'T12:00:00.000Z'}
+// Food another app wrote to Apple Health is that app's: it changes there (apple-food.js).
+const OTHER_APP='apple-health';
+async function own(db,id){const row=await existing(db,id);if(row.source===OTHER_APP)throw new Error(L('Tohle jídlo je z jiné aplikace, uprav ho tam.', 'This meal comes from another app, change it there.'));return row}
 async function existing(db,id){const row=await db.prepare('SELECT * FROM food_logs WHERE id=? AND user_id=?').bind(entryId(id),db.userId).first();if(!row)throw new Error(L('Jídlo už v deníku není.', 'The meal is no longer in the log.'));return row}
 
 // The amount the entry was logged with, in its own unit (150 g, 2 ks, 1 porce):
@@ -41,7 +44,7 @@ function rescale(row,note,amount){
 }
 
 export async function updateFoodEntry(db,id,patch){
-  const row=await existing(db,id),date=patch.date==null?row.consumed_date:dateValue(patch.date);
+  const row=await own(db,id),date=patch.date==null?row.consumed_date:dateValue(patch.date);
   const name=patch.name==null?row.recipe_title:String(patch.name).trim().slice(0,180);
   if(!name)throw new Error(L('Doplň název jídla.', 'Add the meal name.'));
   const note=noteObject(row.note);
@@ -65,13 +68,16 @@ export async function updateFoodEntry(db,id,patch){
 
 export async function copyFoodEntry(db,id,targetDate){
   const row=await existing(db,id),date=dateValue(targetDate);
+  // A copy of another app's food is the athlete's own entry.
+  let source=row.source,note=row.note;
+  if(source===OTHER_APP){const n=noteObject(row.note);delete n.external_id;delete n.app;source='manual';note=JSON.stringify(n)}
   const result=await db.prepare('INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .bind(db.userId,date,changedDate(row.consumed_at,date),row.cookbook_page,row.recipe_title,row.servings,row.kcal,row.protein_g,row.carbs_g,row.fat_g,row.fiber_g,row.source,row.note).run();
+    .bind(db.userId,date,changedDate(row.consumed_at,date),row.cookbook_page,row.recipe_title,row.servings,row.kcal,row.protein_g,row.carbs_g,row.fat_g,row.fiber_g,source,note).run();
   return {status:'ok',id:result.meta.last_row_id,date};
 }
 
 export async function deleteFoodEntry(db,id){
-  const row=await existing(db,id);
+  const row=await own(db,id);
   await db.prepare('DELETE FROM food_logs WHERE id=? AND user_id=?').bind(row.id,db.userId).run();
   return {status:'ok',id:row.id,date:row.consumed_date};
 }

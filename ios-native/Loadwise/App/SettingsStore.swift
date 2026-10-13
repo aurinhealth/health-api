@@ -44,6 +44,12 @@ final class SettingsStore {
             self.profile = response.profile ?? [:]
             suggestions = response.suggestions ?? [:]
             profileLoaded = true
+            // The name typed in Profil (maybe on another phone) is the one
+            // shown, so the avatar's letter comes from it, not the e-mail.
+            if let shown = self.profile["displayName"]?.string?.trimmingCharacters(in: .whitespaces).nilIfBlank {
+                UserDefaults.standard.set(shown, forKey: AppModel.displayNameKey)
+                UserDefaults.standard.set(String(shown.first!).uppercased(), forKey: AppModel.accountInitialKey)
+            }
             self.connections = (try? await connections)?.providers ?? []
             self.training = try? await training
             self.sync = try? await sync

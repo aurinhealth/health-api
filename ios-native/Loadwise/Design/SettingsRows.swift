@@ -1,8 +1,8 @@
 import SwiftUI
 
-// The Settings building blocks from the design ("Nastavení"): grouped white
-// cards with rows like the iOS Settings app, a coloured square icon on the
-// left, the current value and a chevron on the right.
+// The Settings building blocks ("Nastavení"), in Aurin's own quiet style:
+// rounded cards like Dnes and Propojení, a thin coloured symbol on the left,
+// a small spaced capital title above each card, and the app's own switch.
 
 /// A group of rows on one card, with an optional title above it.
 struct SettingsGroup<Content: View>: View {
@@ -13,13 +13,12 @@ struct SettingsGroup<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let title {
-                Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.secondary)
+                Text(title).font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                     .padding(.horizontal, 4)
                     .accessibilityAddTraits(.isHeader)
             }
             VStack(spacing: 0) { content }
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             if let footer {
                 Text(footer).font(Typo.caption).foregroundStyle(Palette.muted)
                     .padding(.horizontal, 4)
@@ -37,17 +36,16 @@ struct SettingsDivider: View {
     }
 }
 
-/// The coloured rounded square with a white symbol.
+/// A thin symbol in its colour, without a tile under it.
 struct SettingsIcon: View {
     let systemImage: String
     let color: Color
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: 30, height: 30)
-            .background(color, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .font(.system(size: 18, weight: .regular))
+            .foregroundStyle(color)
+            .frame(width: 26, height: 26)
             .accessibilityHidden(true)
     }
 }
@@ -62,7 +60,7 @@ struct SettingsRow: View {
     var titleColor: Color = Palette.ink
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             if let icon { icon }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.body).foregroundStyle(titleColor)
@@ -80,9 +78,9 @@ struct SettingsRow: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .frame(minHeight: 50)
+        .frame(minHeight: 52)
         .contentShape(Rectangle())
     }
 }
@@ -159,8 +157,8 @@ struct SettingsPage<Content: View>: View {
     }
 }
 
-/// The switch of the design: a capsule with a sliding knob that shows a check
-/// when on (instead of the plain system switch).
+/// The switch of the design: a light capsule in the ink colour with a dark
+/// knob when on, a faint one when off (instead of the green system switch).
 struct LoadwiseToggleStyle: ToggleStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -173,17 +171,11 @@ struct LoadwiseToggleStyle: ToggleStyle {
                 Spacer(minLength: 8)
                 ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                     Capsule()
-                        .fill(configuration.isOn ? Palette.green : Palette.ink.opacity(0.12))
-                        .frame(width: 54, height: 32)
+                        .fill(configuration.isOn ? Palette.button : Palette.ink.opacity(0.12))
+                        .frame(width: 50, height: 30)
                     Circle()
-                        .fill(Color.white)
-                        .frame(width: 26, height: 26)
-                        .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
-                        .overlay(
-                            Image(systemName: configuration.isOn ? "checkmark" : "minus")
-                                .font(.system(size: 10, weight: .heavy))
-                                .foregroundStyle(configuration.isOn ? Palette.green : Color.gray.opacity(0.6))
-                        )
+                        .fill(configuration.isOn ? Palette.onButton : Palette.muted)
+                        .frame(width: 24, height: 24)
                         .padding(3)
                 }
                 .opacity(isEnabled ? 1 : 0.45)

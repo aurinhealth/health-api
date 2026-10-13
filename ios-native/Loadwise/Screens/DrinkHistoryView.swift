@@ -1,0 +1,209 @@
+import SwiftUI
+
+/// Jídlo → Pití → a tap on the number: the day's drinks by kind (how much of
+/// each and what it counts for) or through the day. A swipe edits or deletes.
+struct DrinkHistoryView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var byTime = false
+    @State private var editing: FoodSnapshot.Drink?
+
+    private var water: FoodSnapshot.Water? { model.food?.water }
+    private var drinks: [FoodSnapshot.Drink] { water?.drinks ?? [] }
+
+    var body: some View {
+        ZStack {
+            ScreenBackground(glow: Palette.Glow.food)
+            PageScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        BackSlot { dismiss() }
+                        Spacer()
+                        SectionLabel(text: "Pití dnes")
+                        Spacer()
+                        BackSlot {}.hidden()
+                    }
+                    summary.padding(.top, 28)
+                    HStack(spacing: 6) {
+                        tab("Podle druhu", on: !byTime) { byTime = false }
+                        tab("Během dne", on: byTime) { byTime = true }
+                    }
+                    .padding(.top, 22)
+                    if drinks.isEmpty {
+                        Text("Dnes zatím nic.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 20)
+                    } else if byTime {
+                        timeList.padding(.top, 14)
+                    } else {
+                        kindList.padding(.top, 14)
+                    }
+                }
+                .padding(24)
+                .padding(.bottom, 100)
+            }
+        }
+        .floatingBack { dismiss() }
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(item: $editing) { d in
+            DrinkSheet(kind: d.kind, ml: Int(d.ml ?? 250), editing: true) { ml, kind in _ = await model.updateDrink(id: d.id, ml: ml, kind: kind) }
+        }
+    }
+
+    // MARK: - Summary
+
+    private var target: Double { max(water?.target ?? 2500, 1) }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(DrinkHistory.big(water?.ml ?? 0)).font(Typo.number(64)).foregroundStyle(Palette.ink)
+                Text("/ " + DrinksCard.litres(target)).font(Typo.number(26)).foregroundStyle(Palette.faint)
+            }
+            if let drunk = water?.drunkMl, abs(drunk - (water?.ml ?? 0)) >= 20 {
+                Text(L10n.f("vypito %@", DrinksCard.litres(drunk))).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            stackedBar.padding(.top, 12)
+        }
+    }
+
+    /// The day's goal as a bar, each kind of drink in its own colour.
+    private var stackedBar: some View {
+        let groups = DrinkHistory.byKind(drinks)
+        let total = max(target, groups.reduce(0) { $0 + $1.hydrationMl })
+        return GeometryReader { geo in
+            HStack(spacing: 3) {
+                ForEach(groups) { g in
+                    Rectangle().fill(DrinkHistory.color(g.kind))
+                        .frame(width: max(0, geo.size.width * g.hydrationMl / total - 3))
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Palette.track)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        }
+        .frame(height: 10)
+        .accessibilityHidden(true)
+    }
+
+    private func tab(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.easeOut(duration: 0.2), action) } label: {
+            Text(L10n.tr(title)).font(Typo.bodyStrong)
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .padding(.horizontal, 14).frame(height: 34)
+                .background(on ? Palette.button : .clear, in: Capsule())
+                .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    // MARK: - Lists
+
+    private var kindList: some View {
+        Card {
+            VStack(spacing: 0) {
+                ForEach(Array(DrinkHistory.byKind(drinks).enumerated()), id: \.element.id) { index, g in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    let kind = DrinkKind.find(g.kind)
+                    HStack(spacing: 12) {
+                        Image(systemName: kind?.symbol ?? "drop.fill").font(.system(size: 15))
+                            .foregroundStyle(DrinkHistory.color(g.kind))
+                            .frame(width: 34, height: 34)
+                            .background(DrinkHistory.color(g.kind).opacity(0.14), in: Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.tr(kind?.label ?? g.kind)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(L10n.f("%@× · vypito %@", Fmt.int(Double(g.count)), Units.volumeText(g.ml)))
+                                .font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 8)
+                        Text(Units.volumeText(g.hydrationMl)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                    }
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+
+    private var timeList: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(DrinkHistory.byPart(drinks), id: \.title) { part in
+                    SectionLabel(text: part.title).padding(.top, 12).padding(.bottom, 2)
+                    ForEach(part.drinks) { d in
+                        if d.app != nil {
+                            DrinkLine(drink: d)
+                        } else {
+                            SwipeRow(edit: { editing = d }, delete: { Task { _ = await model.deleteDrink(id: d.id) } }) {
+                                DrinkLine(drink: d)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The groupings of Pití dnes, apart from the view to test them.
+enum DrinkHistory {
+    struct KindGroup: Identifiable, Equatable {
+        let kind: String
+        var count: Int
+        var ml: Double
+        var hydrationMl: Double
+        var id: String { kind }
+    }
+
+    struct Part {
+        let title: String
+        let drinks: [FoodSnapshot.Drink]
+    }
+
+    /// Each kind once, the one that hydrated most first.
+    static func byKind(_ drinks: [FoodSnapshot.Drink]) -> [KindGroup] {
+        var groups: [KindGroup] = []
+        for d in drinks {
+            let ml = d.ml ?? 0, hydration = d.hydrationMl ?? ml
+            if let i = groups.firstIndex(where: { $0.kind == d.kind }) {
+                groups[i].count += 1
+                groups[i].ml += ml
+                groups[i].hydrationMl += hydration
+            } else {
+                groups.append(KindGroup(kind: d.kind, count: 1, ml: ml, hydrationMl: hydration))
+            }
+        }
+        return groups.sorted { $0.hydrationMl > $1.hydrationMl }
+    }
+
+    /// Ráno (until 10), Dopoledne (until 12), Odpoledne (until 18), Večer;
+    /// drinks without a time last. Empty parts are left out.
+    static func byPart(_ drinks: [FoodSnapshot.Drink]) -> [Part] {
+        let sorted = drinks.sorted { ($0.time ?? "99") < ($1.time ?? "99") }
+        func hour(_ d: FoodSnapshot.Drink) -> Int? { d.time.flatMap { Int($0.prefix(2)) } }
+        let parts: [(String, (Int) -> Bool)] = [("Ráno", { $0 < 10 }), ("Dopoledne", { $0 >= 10 && $0 < 12 }),
+                                                ("Odpoledne", { $0 >= 12 && $0 < 18 }), ("Večer", { $0 >= 18 })]
+        var out = parts.map { title, test in Part(title: title, drinks: sorted.filter { hour($0).map(test) ?? false }) }
+        out.append(Part(title: "Bez času", drinks: sorted.filter { hour($0) == nil }))
+        return out.filter { !$0.drinks.isEmpty }
+    }
+
+    static func color(_ kind: String) -> Color {
+        switch kind {
+        case "water": Palette.blue
+        case "coffee": Palette.sand
+        case "tea": Palette.green
+        case "milk": Palette.ink
+        case "juice", "soda": Palette.amber
+        case "sport": Palette.indigo
+        case "beer": Palette.gold
+        case "wine": Palette.rust
+        default: Palette.muted
+        }
+    }
+
+    /// The big number: litres, or fluid ounces in imperial units.
+    static func big(_ ml: Double) -> String {
+        Units.imperial ? Fmt.int(Units.volume(ml)) : Fmt.decimal(ml / 1000)
+    }
+}
