@@ -41,7 +41,7 @@ struct DrinkHistoryView: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack { dismiss() }
+        .floatingBack(title: "Pití dnes") { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(item: $editing) { d in
             DrinkSheet(kind: d.kind, ml: Int(d.ml ?? 250), editing: true) { ml, kind in _ = await model.updateDrink(id: d.id, ml: ml, kind: kind) }

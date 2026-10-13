@@ -120,7 +120,7 @@ struct CoachPickView: View {
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Doporučení trenéra") {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Co dnes sedí nejlíp, seřazené podle tvé připravenosti a týdne.")
                     .font(Typo.sentence(22)).foregroundStyle(Palette.secondary).padding(.top, 24)
