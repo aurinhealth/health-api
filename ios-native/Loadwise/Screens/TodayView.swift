@@ -21,7 +21,7 @@ struct TodayView: View {
                     TodayContent(today: today, openSettings: openSettings, openCoach: openCoach)
                         .padding(.bottom, 100)
                 }
-                .refreshable { await model.refresh() }
+                .refreshable { await model.refresh(announce: true) }
             } else if let message = model.errorMessage {
                 VStack(spacing: 16) {
                     Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -100,6 +100,9 @@ struct TodayContent: View {
 
         KeyNumbers(today: today)
             .padding(.top, model.selectedDate == nil ? 12 : 28)
+
+        // Doporučení trenéra: the day's activity from anything (CoachPick.swift).
+        if model.selectedDate == nil { CoachPickCard().padding(.top, 16) }
 
         if model.selectedDate == nil {
             if let plan = today.trainingPlan {
@@ -386,7 +389,8 @@ struct ConnectionProblemCard: View {
     @State private var intervalsKey = false
 
     var body: some View {
-        Group {
+        // A stack, not a Group: on an empty Group the task never runs.
+        VStack(spacing: 0) {
             if !problems.isEmpty {
                 Card {
                     WidgetHeader(title: "Propojení", color: Palette.rust)

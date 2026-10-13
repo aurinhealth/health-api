@@ -89,7 +89,7 @@ export function parseStrengthPlan(values) {
       completed: bool(r[8]),
       note: text(r[9]),
       video: text(r[10]),
-      ...strengthSetOptions({toFailure:!header.legacy&&bool(r[11]),superset:header.legacy?'':r[12]}),
+      ...strengthSetOptions({toFailure:!header.legacy&&bool(r[11]),superset:header.legacy?'':r[12],side:header.legacy?'':r[13]}),
       replacement: header.legacy ? text(r[11]) : "",
       execution: header.legacy ? text(r[12]) : ""
     });

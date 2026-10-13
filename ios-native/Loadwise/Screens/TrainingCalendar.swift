@@ -369,8 +369,10 @@ struct CalendarDayList: View {
     }
 
     static func route(_ a: CalendarActivity) -> AppRoute? {
+        // A gym session typed in by hand opens its plan, where it can be deleted (as in Trénink).
+        if a.status != "done", let id = a.eventId, id.hasPrefix("planned:local-"), a.sport == "strength" { return .planned(a.session) }
         if a.sport == "strength" && a.status != "missed" { return .gym(a.date) }
-        if a.status == "done" { return a.activityId != nil ? .activity(a.session) : nil }
+        if a.status == "done" { return a.activityId != nil || a.session.watch != nil ? .activity(a.session) : nil }
         return a.eventId != nil ? .planned(a.session) : nil
     }
 }
@@ -472,7 +474,7 @@ struct WatchActivityDetail: View {
                     Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
                         .accessibilityLabel("Zavřít")
                 }
-                if !model.demo, ["intervals", "google-wearables", "apple-health"].contains(activity.source ?? "") {
+                if !model.demo, ["intervals", "google-wearables", "apple-health", "local", "gym"].contains(activity.source ?? "") {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
@@ -487,7 +489,7 @@ struct WatchActivityDetail: View {
         .tint(Palette.ink)
         .presentationDetents([.medium, .large])
         .sheet(isPresented: $changingType) {
-            ActivityTypeSheet(activityId: activity.id, current: activity.type, source: activity.source) { dismiss() }
+            ActivityTypeSheet(activityId: activity.id, current: activity.type, source: activity.source == "gym" ? "app" : activity.source) { dismiss() }
         }
     }
 

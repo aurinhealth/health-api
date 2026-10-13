@@ -7,7 +7,7 @@ struct StrainDetailView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Námaha") {
             if let today = model.today {
                 StrainDetailContent(today: today, training: model.training)
             } else {

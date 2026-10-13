@@ -12,7 +12,7 @@ test('options use bounded groups and preserve plain notes without duplicating ta
   assert.equal(note,'Moje poznámka [Do selhání] [Supersérie A]');
   assert.equal(strengthOptionNote({note}),note);
   assert.equal(strengthOptionNote({note,toFailure:false,superset:''}),'Moje poznámka');
-  assert.deepEqual(strengthSetOptions({superset:'<script>'}),{toFailure:false,superset:''});
+  assert.deepEqual(strengthSetOptions({superset:'<script>'}),{toFailure:false,superset:'',side:''});
 });
 test('plan reload and completed-set history retain both options and failure effort',async()=>{
   const db=scopedDb(createD1(),1),set=row('Lat pulldown',1);set[5]='45';set[6]='8';set[8]='TRUE';set[11]='TRUE';

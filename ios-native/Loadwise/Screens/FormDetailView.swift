@@ -13,7 +13,7 @@ struct FormDetailView: View {
                     .padding(.bottom, 100)
             }
         }
-        .floatingBack { dismiss() }
+        .floatingBack(title: "Forma a kondice") { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }

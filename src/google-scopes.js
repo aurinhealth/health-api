@@ -18,7 +18,9 @@ export const EXTRA_SCOPES = {
   // sync-destinations.js). Only ever an extra, never one of HEALTH_SCOPES.
   activityWrite: "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.writeonly",
   // Birth date from the Google account (People API), for the age.
-  birthday: "https://www.googleapis.com/auth/user.birthday.read"
+  birthday: "https://www.googleapis.com/auth/user.birthday.read",
+  // The route of a workout recorded with GPS (exportExerciseTcx, watch-detail.js).
+  location: "https://www.googleapis.com/auth/googlehealth.location.readonly"
 };
 
 // Base permissions by what they unlock, for the connection status and for
@@ -80,7 +82,7 @@ export function skippedForPermission(env, error) {
 // scopes before.
 export function healthScopes(env) {
   const extras = grantedExtras(env);
-  const wanted = [...HEALTH_SCOPES, ...(extras.weightWrite ? [EXTRA_SCOPES.weightWrite] : []), ...(extras.activityWrite ? [EXTRA_SCOPES.activityWrite] : [])];
+  const wanted = [...HEALTH_SCOPES, ...(extras.weightWrite ? [EXTRA_SCOPES.weightWrite] : []), ...(extras.activityWrite ? [EXTRA_SCOPES.activityWrite] : []), ...(extras.location ? [EXTRA_SCOPES.location] : [])];
   return wanted.filter(scope => hasGoogleScope(env, scope));
 }
 

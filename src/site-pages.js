@@ -309,7 +309,7 @@ function pageLang(request) {
 // wellness-sync.js, the download and deletion in account-data.js.
 const UPDATED = {cs: '13. října 2026', en: '13 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
-const CONTACT_EMAIL = 'petrbouma1994@icloud.com';
+const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
 const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
@@ -391,7 +391,7 @@ ${today}
 <div class="graph" aria-hidden="true">${graph}</div>
 <p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti.', 'Picked by AI from the library for today’s readiness.')}</p>
 </div>
-<div class="chips"><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span></div>
+<div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
 </div>
 </div></section>
 
@@ -400,6 +400,7 @@ ${today}
 <div class="visual reveal">
 <div class="card">${muscles}</div>
 <div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">${t('Série 3 ze 4 · 80 kg × 8', 'Set 3 of 4 · 80 kg × 8')}</div></div><span class="clock">1:30</span></div>
+<div class="chips"><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span></div>
 </div>
 </div></section>
 
@@ -519,7 +520,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p>The use of information received from Google Health API and/or Developer Tools will adhere to the <a href="${HEALTH_POLICY}">Google Health API Developer and User Data Policy</a>, including the Limited Use requirements.</p>
 <h2>How Apple Health data is used</h2>
 <ul>
-<li>On iPhone, Aurin reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max and weight. It uses them only to show and evaluate your recovery, training load, workouts and calorie target.</li>
+<li>On iPhone, Aurin reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max, weight, and food and water logged in other apps. It uses them only to show and evaluate your recovery, training load, workouts, food diary and calorie target.</li>
 <li>Apple Health data goes only to our server and, for features you use, to the services under “Who receives your data”. We do not sell it, do not use or share it for advertising, and do not give it to data brokers.</li>
 <li>You change or remove access in the iPhone Settings → Health → Data Access & Devices → Aurin. Data already synced is deleted with your account.</li>
 </ul>
@@ -610,7 +611,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p>Použití informací získaných z Google Health API a vývojářských nástrojů se řídí <a href="${HEALTH_POLICY}">zásadami Google Health API Developer and User Data Policy</a> včetně požadavků na omezené použití (Limited Use).</p>
 <h2>Jak používáme data z Apple Health</h2>
 <ul>
-<li>Na iPhonu Aurinu čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max a váhu. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky a kalorický cíl.</li>
+<li>Na iPhonu Aurinu čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max, váhu a jídlo a pití zapsané v jiných aplikacích. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky, jídelníček a kalorický cíl.</li>
 <li>Data z Apple Health jdou jen na náš server a kvůli funkcím, které používáš, ke službám z části Kdo data dostává. Neprodáváme je, nepoužíváme ani nepředáváme k reklamě a nedáváme je obchodníkům s daty.</li>
 <li>Přístup změníš nebo zrušíš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Už synchronizovaná data se smažou s účtem.</li>
 </ul>

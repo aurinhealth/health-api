@@ -101,7 +101,7 @@ struct WeekPlanView: View {
     private var today: String { AppModel.localDate(Date()) }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Plán týdne") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Trénink · týden").padding(.top, 24)
                 Text("Plán týdne").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
@@ -529,7 +529,7 @@ struct WeekSessionDetailView: View {
     @State private var busy = false
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     SectionLabel(text: Fmt.dayHeading(session.date) + " · " + sportLabel(session.sport))
