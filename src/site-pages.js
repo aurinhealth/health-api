@@ -1,11 +1,11 @@
-// Public pages: the Loadwise overview on / and the policy pages. They use the iPhone app's light
+// Public pages: the Aurin overview on / and the policy pages. They use the iPhone app's light
 // palette (ios-native/Shared/Palette.swift): warm paper, white cards, Newsreader headings.
 // The phone on the overview is drawn in HTML from the app's Today screen, so it needs no screenshots
 // and speaks both languages. When the app changes what a section shows, change the section here too.
 import {themeTokens} from './design-system.js';
 import {icon} from './icons.js';
+import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
-const ORIGIN = 'https://petrfitnessdata.eu';
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
@@ -24,8 +24,8 @@ p{margin:0}
 /* Floating pill navigation. */
 .site-head{position:sticky;top:12px;z-index:20;display:flex;justify-content:center;padding:0 16px;margin-top:12px;pointer-events:none}
 .pill-nav{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border:1px solid var(--line);border-radius:999px;background:color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:saturate(1.4) blur(18px);-webkit-backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 8px 30px rgba(60,45,20,.08)}
-.logo{display:flex;align-items:center;gap:9px;color:var(--text);text-decoration:none;font-weight:600;font-size:16px;letter-spacing:-.01em;margin-right:10px}
-.logo img{width:26px;height:26px;border-radius:7px}
+.logo{display:flex;align-items:center;gap:9px;color:var(--text);text-decoration:none;margin-right:10px}
+.logo span{font:400 25px/1 Newsreader,"New York",Georgia,serif;letter-spacing:-.01em}
 .pill-nav .links{display:flex;gap:2px;margin-right:6px}
 .pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
@@ -179,7 +179,7 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 .disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
 
 .final{text-align:center;padding:150px 0 140px;background:radial-gradient(60% 70% at 50% 100%,var(--glow-training),transparent 75%)}
-.final img{width:84px;height:84px;border-radius:20px;box-shadow:0 14px 40px rgba(20,25,40,.25)}
+.final .mark{display:block;margin:0 auto}
 .final h2{font-size:clamp(52px,7vw,84px);margin-top:22px}
 .final .store{margin-top:30px}
 
@@ -239,6 +239,8 @@ function deviceLang(request) {
 
 const check = text => `<li>${icon('check')}<span>${text}</span></li>`;
 const APPLE_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.2.8 1.1 1.7 2.3 2.9 2.3 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6 0 0-2.4-.9-2.4-3.7zM14.2 5.6c.6-.8 1.1-1.8 1-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.3z"/></svg>';
+// The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
+const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
 const store = t => `<span class="store">${APPLE_LOGO}${t('Brzy v App Store', 'Coming soon to the App Store')}</span>`;
 
@@ -253,7 +255,7 @@ var c=b.dataset.langChoice,dev=document.documentElement.dataset.deviceLang;
 document.cookie=c===dev?'lw-lang=; path=/; max-age=0; samesite=lax':'lw-lang='+c+'; path=/; max-age=31536000; samesite=lax';
 var u=new URL(location.href);u.searchParams.delete('lang');location.replace(u.pathname+u.search+u.hash);});})();</script>`;
 
-function sitePage({title, description, lang, device, path, body, index=true}) {
+function sitePage({title, description, lang, device, origin, path, body, index=true}) {
   const t = (cs, en) => lang === 'en' ? en : cs;
   const html = `<!doctype html>
 <html lang="${lang}" class="site" data-device-lang="${device}">
@@ -265,11 +267,11 @@ function sitePage({title, description, lang, device, path, body, index=true}) {
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}">
-<meta property="og:image" content="${ORIGIN}/site/og${lang === 'en' ? '-en' : ''}.png">
+<meta property="og:image" content="${origin}/site/og${lang === 'en' ? '-en' : ''}.png">
 <meta property="og:locale" content="${t('cs_CZ', 'en_US')}">
-<link rel="alternate" hreflang="cs" href="${ORIGIN}${path}?lang=cs">
-<link rel="alternate" hreflang="en" href="${ORIGIN}${path}?lang=en">
-<link rel="alternate" hreflang="x-default" href="${ORIGIN}${path}">
+<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">
+<link rel="alternate" hreflang="en" href="${origin}${path}?lang=en">
+<link rel="alternate" hreflang="x-default" href="${origin}${path}">
 ${index ? '' : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
@@ -277,13 +279,13 @@ ${index ? '' : '<meta name="robots" content="noindex">'}
 </head>
 <body>
 <header class="site-head"><nav class="pill-nav" aria-label="${t('Hlavní', 'Main')}">
-<a class="logo" href="/"><img src="/logo.svg" alt="" width="26" height="26"><span>Loadwise</span></a>
+<a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
 <div class="links"><a href="/#pripravenost">${t('Funkce', 'Features')}</a><a href="/#kouc">${t('AI kouč', 'AI coach')}</a><a href="/#propojeni">${t('Propojení', 'Connections')}</a><a href="/#soukromi">${t('Soukromí', 'Privacy')}</a></div>
 ${langSwitch(lang)}
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
-<span>© 2026 Loadwise · petrfitnessdata.eu</span>
+<span>© 2026 Aurin · aurin.health</span>
 <nav aria-label="${t('Dokumenty', 'Documents')}"><a href="/privacy">${t('Ochrana soukromí', 'Privacy Policy')}</a><a href="/terms">${t('Podmínky', 'Terms')}</a><a href="/support">${t('Podpora', 'Support')}</a></nav>
 </div></footer>
 ${langSwitchScript}${revealScript}
@@ -292,16 +294,20 @@ ${langSwitchScript}${revealScript}
   return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'vary':'Cookie, Accept-Language', 'cache-control':'private, max-age=0, must-revalidate'}});
 }
 
-// Pages take the request (to pick the language) or nothing (Czech, for tests and previews).
+// Pages take the request (to pick the language and host) or nothing (Czech on aurin.health, for tests).
 function pageLang(request) {
-  return request ? {lang: siteLang(request), device: deviceLang(request)} : {lang: 'cs', device: 'cs'};
+  if (!request) return {lang: 'cs', device: 'cs', origin: SITE_ORIGIN};
+  // The site's home is aurin.health; petrfitnessdata.eu serves the same pages for older links.
+  // Absolute links (share image, language versions) keep to the host the page is served on.
+  const host = new URL(request.url).hostname;
+  return {lang: siteLang(request), device: deviceLang(request), origin: SERVER_HOSTS.has(host) ? `https://${host}` : SITE_ORIGIN};
 }
 
 // Google's policies ask the privacy policy to name every party that receives data, how it is stored and
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '11. října 2026', en: '11 October 2026'};
+const UPDATED = {cs: '13. října 2026', en: '13 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'petrbouma1994@icloud.com';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -311,10 +317,10 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The overview follows the app section by section: Today, readiness, strain, the plan, the gym,
 // food, the coach and the connections. The numbers are one believable morning, the same everywhere.
 export function overviewPage(request) {
-  const {lang, device} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
+  const {lang, device, origin} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
   const days = t(['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const short = t(['P', 'Ú', 'S', 'Č', 'P', 'S', 'N'], ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
-  const today = `<div class="phone" role="img" aria-label="${t('Loadwise v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Loadwise on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
+  const today = `<div class="phone" role="img" aria-label="${t('Aurin v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
 <div class="top"><span>${t('Pondělí 12. 10.', 'Monday, Oct 12')}</span><span class="me">P</span></div>
 <div class="lbl">${t('Připravenost', 'Readiness')}</div>
 <div class="ready"><b>78</b><span class="pill good">${t('vysoká', 'high')}</span></div>
@@ -337,10 +343,10 @@ export function overviewPage(request) {
     ['Google Health', 'Google Health', '<span class="logo-tile google">G</span>'],
     ['Intervals.icu', 'Intervals.icu', '<span class="logo-tile icu">i.icu</span>']]
     .map(([cs, en, logo]) => `<div class="source">${logo}<span>${t(cs, en)}</span><span class="ok">${icon('check')}</span></div>`).join('');
-  return sitePage({lang, device, path: '/',
-    title: t('Loadwise · trénuj podle toho, jak se dnes máš', 'Loadwise · train for how you feel today'),
-    description: t('Loadwise pro iPhone čte spánek, HRV a tréninky z Apple Zdraví, Google Health a Intervals.icu, každé ráno ukáže připravenost a podle ní navrhne trénink a jídlo.',
-      'Loadwise for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.'),
+  return sitePage({lang, device, origin, path: '/',
+    title: t('Aurin · trénuj podle toho, jak se dnes máš', 'Aurin · train for how you feel today'),
+    description: t('Aurin pro iPhone čte spánek, HRV a tréninky z Apple Zdraví, Google Health a Intervals.icu, každé ráno ukáže připravenost a podle ní navrhne trénink a jídlo.',
+      'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.'),
     body: `<main>
 <div class="hero">
 <div class="wrap">
@@ -436,17 +442,17 @@ ${check(t('Účet i se všemi daty kdykoli smažeš v Nastavení.', 'You can del
 ${check(`<a href="/privacy">${t('Celé zásady ochrany soukromí', 'Full privacy policy')}</a>`)}
 </ul>
 <div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
-<p>Loadwise (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
+<p>Aurin (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
 <p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows.</p>
-<p style="margin:12px 0 0">Two optional permissions are requested separately: adding weight records to Google Health (weight you log in Loadwise or Intervals.icu) and reading your date of birth from your Google Account to fill in your age.</p>
-<p style="margin:12px 0 0">Loadwise’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+<p style="margin:12px 0 0">Two optional permissions are requested separately: adding weight records to Google Health (weight you log in Aurin or Intervals.icu) and reading your date of birth from your Google Account to fill in your age.</p>
+<p style="margin:12px 0 0">Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 <p style="margin:12px 0 0">The use of information received from Google Health API and/or Developer Tools will adhere to the <a href="${HEALTH_POLICY}">Google Health API Developer and User Data Policy</a>, including the Limited Use requirements.</p></div>
 </div></section>
 
 <section class="final"><div class="wrap reveal">
-<img src="/logo.svg" alt="" width="84" height="84">
-<h2>Loadwise</h2>
+${mark(96)}
+<h2>Aurin</h2>
 ${store(t)}
 </div></section>
 </main>`
@@ -456,8 +462,8 @@ ${store(t)}
 // Policy pages. The English text is the reference version (Google verification reads it);
 // the Czech one says the same.
 function doc(request, path, title, html) {
-  const {lang, device} = pageLang(request), pick = x => lang === 'en' ? x.en : x.cs;
-  return sitePage({lang, device, path, title: `${pick(title)} · Loadwise`, description: lang === 'en' ? `${title.en} for Loadwise (petrfitnessdata.eu).` : `${title.cs} pro Loadwise (petrfitnessdata.eu).`,
+  const {lang, device, origin} = pageLang(request), pick = x => lang === 'en' ? x.en : x.cs;
+  return sitePage({lang, device, origin, path, title: `${pick(title)} · Aurin`, description: lang === 'en' ? `${title.en} for Aurin (aurin.health).` : `${title.cs} pro Aurin (aurin.health).`,
     body: `<main class="wrap doc"><h1>${pick(title)}</h1>${pick(html)}</main>`});
 }
 
@@ -467,17 +473,17 @@ export function privacyPage(request, {apple = false, email = false, open = false
   const methods = {en: (apple ? 'Apple, ' : '') + (email ? 'Google, a passkey or a one-time code sent to your email' : 'Google or a passkey'), cs: (apple ? 'přes Apple, ' : '') + (email ? 'přes Google, přístupovým klíčem nebo jednorázovým kódem z e-mailu' : 'přes Google nebo přístupovým klíčem')};
   return doc(request, '/privacy', {cs: 'Zásady ochrany soukromí', en: 'Privacy Policy'}, {
     en: `<p class="muted">Last updated: ${UPDATED.en}</p>
-<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Loadwise is currently available only by personal invitation.'}</p>
+<p><strong>Aurin</strong> (formerly Loadwise; Petr Fitness Data, aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently available only by personal invitation.'}</p>
 <h2>In short</h2>
 <ul>
-<li>We use your data only to provide the Loadwise features you use.</li>
+<li>We use your data only to provide the Aurin features you use.</li>
 <li>We do not sell your data, use it for advertising or share it with data brokers.</li>
 <li>You choose which services to connect. You can disconnect them, or delete your account and all its data, in the app at any time.</li>
 </ul>
 <h2>Data we collect</h2>
 <p><strong>Your account.</strong> When you sign in with Google, we receive your email address and your Google account ID. We use them to recognize you${open ? '' : ' and check your invitation'}, and we record when you last signed in.${apple ? ' When you sign in with Apple, we receive your Apple ID user identifier, the email address Apple shares with us (it can be a private relay address) and, the first time, your name if you choose to share it.' : ''}</p>
 <p><strong>Passkeys.</strong> When you add a passkey, we store its public key, its identifier, a random identifier of your account that the passkey keeps, the name of the device or password manager it was made in, and when it was added and last used. The private key stays on your device or in your password manager, and your fingerprint, face or screen lock never leaves your device.${email ? ' When you add a passkey, we send you an email about it, so you notice one you did not add.' : ''}</p>${email ? `
-<p><strong>Codes sent by email.</strong> When you ask for a sign-in code, we send a six-digit code to the address you entered, if it has access to Loadwise. We keep only a keyed hash of the code for 10 minutes, and counters that limit how many codes and attempts an address gets; these counters are deleted two days after the last code. A code sent to a new address also confirms changing your account’s email in Settings → Account; the old address then gets a notice of the change.</p>` : ''}
+<p><strong>Codes sent by email.</strong> When you ask for a sign-in code, we send a six-digit code to the address you entered, if it has access to Aurin. We keep only a keyed hash of the code for 10 minutes, and counters that limit how many codes and attempts an address gets; these counters are deleted two days after the last code. A code sent to a new address also confirms changing your account’s email in Settings → Account; the old address then gets a notice of the change.</p>` : ''}
 <p><strong>Google Health</strong>, only if you connect it and allow it on Google’s consent screen:</p>
 <ul>
 <li>activity and fitness: steps, distance, floors, active minutes, active zone minutes, active energy burned, time in heart rate zones, sedentary periods and exercise sessions;</li>
@@ -487,64 +493,64 @@ export function privacyPage(request, {apple = false, email = false, open = false
 </ul>
 <p>Two optional permissions are asked for separately: reading your date of birth from your Google Account, to fill in your age, and writing your weight to Google Health.</p>
 <p><strong>Intervals.icu</strong>, only if you connect it with your API key: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
-<p><strong>What you enter in Loadwise:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, and your conversations with the assistant.</p>
+<p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, and your conversations with the assistant.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
 <h2>How we use your data</h2>
 <ul>
 <li>to show your daily overview, training load, recovery, sleep and calorie and macro targets;</li>
 <li>to plan and adjust your workouts and nutrition;</li>
-<li>to keep data in sync between Loadwise and the services you connect, as described below;</li>
+<li>to keep data in sync between Aurin and the services you connect, as described below;</li>
 <li>to answer your questions in the assistant and run other AI features when you use them;</li>
 <li>to keep the service secure and fix errors.</li>
 </ul>
-<p>Loadwise is not a medical device and does not give medical advice or diagnoses.</p>
+<p>Aurin is not a medical device and does not give medical advice or diagnoses.</p>
 <h2>How Google user data is used</h2>
-<p>Google user data is used only to provide the user-facing training, recovery and nutrition features of Loadwise that you use:</p>
+<p>Google user data is used only to provide the user-facing training, recovery and nutrition features of Aurin that you use:</p>
 <ul>
-<li>We read Google Health data to show and evaluate your activity, health metrics, sleep and nutrition in Loadwise.</li>
-<li>We write to Google Health only the food and drinks you log in Loadwise and, if you allow it, the weight you record in Loadwise or Intervals.icu.</li>
+<li>We read Google Health data to show and evaluate your activity, health metrics, sleep and nutrition in Aurin.</li>
+<li>We write to Google Health only the food and drinks you log in Aurin and, if you allow it, the weight you record in Aurin or Intervals.icu.</li>
 <li>We transfer Google user data only to the services listed under “Who receives your data”, only to provide features you use and with your consent. Beyond that, only for security purposes, to comply with the law, or as part of a merger, acquisition or sale of the service after your explicit consent.</li>
 <li>We do not sell Google user data, do not use or transfer it for advertising, and do not transfer it to advertising platforms, data brokers or information resellers.</li>
 <li>We do not use Google user data to train AI models or to determine creditworthiness or for lending.</li>
 <li>No one reads your data unless you ask us to (for example, to help with a problem), it is needed for security purposes such as investigating abuse, or it is required by law. For internal operations we use only aggregated, anonymized data.</li>
 </ul>
-<p>Loadwise’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+<p>Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
 <p>The use of information received from Google Health API and/or Developer Tools will adhere to the <a href="${HEALTH_POLICY}">Google Health API Developer and User Data Policy</a>, including the Limited Use requirements.</p>
 <h2>How Apple Health data is used</h2>
 <ul>
-<li>On iPhone, Loadwise reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max and weight. It uses them only to show and evaluate your recovery, training load, workouts and calorie target.</li>
+<li>On iPhone, Aurin reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max and weight. It uses them only to show and evaluate your recovery, training load, workouts and calorie target.</li>
 <li>Apple Health data goes only to our server and, for features you use, to the services under “Who receives your data”. We do not sell it, do not use or share it for advertising, and do not give it to data brokers.</li>
-<li>You change or remove access in the iPhone Settings → Health → Data Access & Devices → Loadwise. Data already synced is deleted with your account.</li>
+<li>You change or remove access in the iPhone Settings → Health → Data Access & Devices → Aurin. Data already synced is deleted with your account.</li>
 </ul>
 <h2>Who receives your data</h2>
 <ul>
-<li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Loadwise, nutrition notes and calorie targets in your calendar, your weight, and every hour a copy of your daily wellness from Google Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
+<li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Aurin, nutrition notes and calorie targets in your calendar, your weight, and every hour a copy of your daily wellness from Google Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data. OpenAI processes it on our behalf, does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse.</li>
-<li><strong>Cloudflare</strong> runs Loadwise, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
+<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
 <li><strong>Open-Meteo</strong> gets only the place you choose for the weather in your training plan: a place you search for, or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
 <li><strong>Authorities</strong>, only when the law requires it.</li>
 </ul>
 <p>When you scan a barcode or a food label without AI, the image is processed on your device; the scanning library is loaded from the jsDelivr network. Exercise videos are embedded from YouTube in privacy-enhanced mode, and YouTube receives data only when you play a video.</p>
-<p><strong>Food database.</strong> Food search uses a catalogue stored with Loadwise (your searches are not sent anywhere else), made from open data: Open Food Facts (© Open Food Facts contributors, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (public domain), Fineli by THL (CC BY 4.0), Ciqual by Anses (Licence Ouverte / CC BY 4.0) and CoFID by Public Health England (Open Government Licence 3.0). The catalogue as a database is available under the ODbL; values are as the sources give them and are not checked against every label.</p>
+<p><strong>Food database.</strong> Food search uses a catalogue stored with Aurin (your searches are not sent anywhere else), made from open data: Open Food Facts (© Open Food Facts contributors, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (public domain), Fineli by THL (CC BY 4.0), Ciqual by Anses (Licence Ouverte / CC BY 4.0) and CoFID by Public Health England (Open Government Licence 3.0). The catalogue as a database is available under the ODbL; values are as the sources give them and are not checked against every label.</p>
 <p>Some of these providers are based in the United States. Where data leaves the European Union, they protect it with the safeguards the GDPR requires, such as the EU Standard Contractual Clauses.</p>
 <h2>Storage and security</h2>
 <ul>
-<li>Your data is stored in Loadwise’s database at Cloudflare, encrypted at rest. All connections use HTTPS.</li>
+<li>Your data is stored in Aurin’s database at Cloudflare, encrypted at rest. All connections use HTTPS.</li>
 <li>Access tokens and API keys for connected services are additionally encrypted (AES-GCM) with a key kept apart from the database.</li>
 <li>Each user sees only their own data. You sign in with ${methods.en}, and your session is a signed cookie that scripts cannot read.</li>
-<li>Only the operator has access to the systems that run Loadwise, and does not read users’ data except as described above.</li>
+<li>Only the operator has access to the systems that run Aurin, and does not read users’ data except as described above.</li>
 </ul>
 <h2>How long we keep data and how to delete it</h2>
 <ul>
 <li>We keep your data while you have an account. An account nobody has signed in to for two years is deleted automatically with all its data.</li>
-<li><strong>Disconnecting a service</strong> in Settings stops Loadwise from reading from and writing to it and removes the stored access; for Google, Loadwise also gives up its access at Google. Data imported so far stays in your account until you delete it or the account.</li>
-<li><strong>Deleting your account</strong> in Settings → Account immediately deletes your account and permanently deletes all its data in Loadwise (for a large account, the rest within minutes): profile, food, workouts, sleep and health data, connections, passkeys and assistant history. The record of your consents is deleted with it. Loadwise also gives up its access to your Google Account and clears its copy on the device you use. Database backups are overwritten within 30 days.</li>
-<li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Loadwise.</li>
-<li>Data that Loadwise copied to Intervals.icu or Google Health stays there; you can delete it in those services.</li>
-<li>You can also remove Loadwise’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Loadwise then can no longer read or write your Google data.</li>
-${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple ID settings, or unlink Apple in Settings → Account.</li>' : ''}
+<li><strong>Disconnecting a service</strong> in Settings stops Aurin from reading from and writing to it and removes the stored access; for Google, Aurin also gives up its access at Google. Data imported so far stays in your account until you delete it or the account.</li>
+<li><strong>Deleting your account</strong> in Settings → Account immediately deletes your account and permanently deletes all its data in Aurin (for a large account, the rest within minutes): profile, food, workouts, sleep and health data, connections, passkeys and assistant history. The record of your consents is deleted with it. Aurin also gives up its access to your Google Account and clears its copy on the device you use. Database backups are overwritten within 30 days.</li>
+<li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Aurin.</li>
+<li>Data that Aurin copied to Intervals.icu or Google Health stays there; you can delete it in those services.</li>
+<li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
+${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID settings, or unlink Apple in Settings → Account.</li>' : ''}
 <li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days.</li>
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
@@ -552,23 +558,23 @@ ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple 
 <p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. The consent covers sending the data an AI feature needs to OpenAI, because the AI features are part of the service. You withdraw your consent by deleting your account in Settings → Account, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
 <p>You have the right to access, correct and delete your data, to restrict or object to its processing and to receive it in a portable format. Most of this you can do directly in the app: in Settings → Account you can download all your data as a JSON Lines (NDJSON) file or delete your account. You can also lodge a complaint with the Czech Office for Personal Data Protection (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
 <h2>Children</h2>
-<p>Loadwise is not intended for children under 16, and we do not knowingly collect their data.</p>
+<p>Aurin is not intended for children under 16, and we do not knowingly collect their data.</p>
 <h2>Changes</h2>
-<p>We update this policy when Loadwise or the way it uses data changes, and publish the current version on this page with its date. Before we use data you have already given us in a new way, we ask for your consent.</p>
+<p>We update this policy when Aurin or the way it uses data changes, and publish the current version on this page with its date. Before we use data you have already given us in a new way, we ask for your consent.</p>
 <h2>Contact</h2>
 <p>For questions about this policy or your data, or to exercise your rights, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`,
     cs: `<p class="muted">Poslední změna: ${UPDATED.cs}</p>
-<p><strong>Loadwise</strong> (Petr Fitness Data, petrfitnessdata.eu) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Loadwise je zatím dostupný jen na osobní pozvánku.'}</p>
+<p><strong>Aurin</strong> (dříve Loadwise; Petr Fitness Data, aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím dostupný jen na osobní pozvánku.'}</p>
 <h2>Ve zkratce</h2>
 <ul>
-<li>Tvoje data používáme jen k funkcím Loadwise, které používáš.</li>
+<li>Tvoje data používáme jen k funkcím Aurinu, které používáš.</li>
 <li>Data neprodáváme, nepoužíváme k reklamě a nesdílíme s obchodníky s daty.</li>
 <li>Které služby propojíš, je na tobě. Kdykoli je v aplikaci odpojíš, nebo smažeš účet i se všemi daty.</li>
 </ul>
 <h2>Jaká data získáváme</h2>
 <p><strong>Tvůj účet.</strong> Když se přihlásíš přes Google, dostaneme tvou e-mailovou adresu a ID tvého účtu Google. Podle nich tě poznáme${open ? '' : ' a ověříme pozvánku'}. Zaznamenáváme i čas posledního přihlášení.${apple ? ' Když se přihlásíš přes Apple, dostaneme identifikátor tvého Apple ID, e-mail, který nám Apple předá (může to být skrytá adresa od Apple), a napoprvé i jméno, pokud ho sdílíš.' : ''}</p>
 <p><strong>Přístupové klíče (passkeys).</strong> Když si přidáš přístupový klíč, uložíme jeho veřejný klíč, jeho identifikátor, náhodný identifikátor tvého účtu, který si klíč pamatuje, název zařízení nebo správce hesel, ve kterém vznikl, a kdy byl přidaný a naposledy použitý. Soukromý klíč zůstává ve tvém zařízení nebo ve správci hesel a otisk prstu, obličej ani zámek obrazovky tvoje zařízení neopustí.${email ? ' Když si přidáš přístupový klíč, pošleme ti o tom e-mail, takže se o každém novém klíči dozvíš.' : ''}</p>${email ? `
-<p><strong>Kódy e-mailem.</strong> Když si řekneš o kód pro přihlášení, pošleme šestimístný kód na zadanou adresu, pokud má do Loadwise přístup. Uchováváme jen jeho otisk vytvořený tajným klíčem, a to 10 minut, a počítadla, která omezují, kolik kódů a pokusů adresa dostane; ta se smažou dva dny po posledním kódu. Kód poslaný na novou adresu potvrzuje i změnu e-mailu účtu v Nastavení → Účet; na starou adresu pak přijde upozornění.</p>` : ''}
+<p><strong>Kódy e-mailem.</strong> Když si řekneš o kód pro přihlášení, pošleme šestimístný kód na zadanou adresu, pokud má do Aurinu přístup. Uchováváme jen jeho otisk vytvořený tajným klíčem, a to 10 minut, a počítadla, která omezují, kolik kódů a pokusů adresa dostane; ta se smažou dva dny po posledním kódu. Kód poslaný na novou adresu potvrzuje i změnu e-mailu účtu v Nastavení → Účet; na starou adresu pak přijde upozornění.</p>` : ''}
 <p><strong>Google Health</strong>, jen když ho připojíš a povolíš na obrazovce souhlasu Google:</p>
 <ul>
 <li>aktivita a kondice: kroky, vzdálenost, patra, aktivní minuty, minuty v aktivních zónách, aktivní energie, čas v tepových zónách, období nečinnosti a tréninky;</li>
@@ -578,23 +584,23 @@ ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple 
 </ul>
 <p>Dvě oprávnění jsou nepovinná a žádáme o ně zvlášť: čtení data narození z tvého účtu Google, aby se doplnil věk, a zápis váhy do Google Health.</p>
 <p><strong>Intervals.icu</strong>, jen když ho připojíš svým klíčem API: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
-<p><strong>Co zadáš v Loadwise:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky a konverzace s asistentem.</p>
+<p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky a konverzace s asistentem.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
 <h2>K čemu data používáme</h2>
 <ul>
 <li>k přehledu dne, tréninkové zátěže, regenerace, spánku a cílů kalorií a maker;</li>
 <li>k plánování a úpravám tréninků a výživy;</li>
-<li>k synchronizaci dat mezi Loadwise a službami, které propojíš, jak popisujeme níže;</li>
+<li>k synchronizaci dat mezi Aurinem a službami, které propojíš, jak popisujeme níže;</li>
 <li>k odpovědím asistenta a dalším AI funkcím, když je použiješ;</li>
 <li>k zabezpečení služby a opravám chyb.</li>
 </ul>
-<p>Loadwise není zdravotnický prostředek a neposkytuje lékařské rady ani diagnózy.</p>
+<p>Aurin není zdravotnický prostředek a neposkytuje lékařské rady ani diagnózy.</p>
 <h2>Jak používáme data z Googlu</h2>
-<p>Data uživatelů z Googlu slouží jen k funkcím Loadwise pro trénink, regeneraci a výživu, které používáš:</p>
+<p>Data uživatelů z Googlu slouží jen k funkcím Aurinu pro trénink, regeneraci a výživu, které používáš:</p>
 <ul>
-<li>Data z Google Health čteme, abychom ti v Loadwise ukázali a vyhodnotili aktivitu, zdravotní měření, spánek a výživu.</li>
-<li>Do Google Health zapisujeme jen jídlo a pití, které zapíšeš v Loadwise, a když to povolíš, i váhu zapsanou v Loadwise nebo Intervals.icu.</li>
+<li>Data z Google Health čteme, abychom ti v Aurinu ukázali a vyhodnotili aktivitu, zdravotní měření, spánek a výživu.</li>
+<li>Do Google Health zapisujeme jen jídlo a pití, které zapíšeš v Aurinu, a když to povolíš, i váhu zapsanou v Aurinu nebo Intervals.icu.</li>
 <li>Data z Googlu předáváme jen službám z části Kdo data dostává, jen kvůli funkcím, které používáš, a s tvým souhlasem. Jinak už jen kvůli bezpečnosti, kvůli povinnosti ze zákona nebo při fúzi, akvizici či prodeji služby, a to po tvém výslovném souhlasu.</li>
 <li>Data z Googlu neprodáváme, nepoužíváme ani nepředáváme k reklamě a nepředáváme je reklamním platformám, obchodníkům s daty ani jiným přeprodejcům informací.</li>
 <li>Data z Googlu nepoužíváme k trénování modelů AI ani k posuzování úvěruschopnosti nebo půjček.</li>
@@ -604,38 +610,38 @@ ${apple ? '<li>You can stop using Sign in with Apple for Loadwise in your Apple 
 <p>Použití informací získaných z Google Health API a vývojářských nástrojů se řídí <a href="${HEALTH_POLICY}">zásadami Google Health API Developer and User Data Policy</a> včetně požadavků na omezené použití (Limited Use).</p>
 <h2>Jak používáme data z Apple Health</h2>
 <ul>
-<li>Na iPhonu Loadwise čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max a váhu. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky a kalorický cíl.</li>
+<li>Na iPhonu Aurinu čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max a váhu. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky a kalorický cíl.</li>
 <li>Data z Apple Health jdou jen na náš server a kvůli funkcím, které používáš, ke službám z části Kdo data dostává. Neprodáváme je, nepoužíváme ani nepředáváme k reklamě a nedáváme je obchodníkům s daty.</li>
-<li>Přístup změníš nebo zrušíš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Loadwise. Už synchronizovaná data se smažou s účtem.</li>
+<li>Přístup změníš nebo zrušíš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Už synchronizovaná data se smažou s účtem.</li>
 </ul>
 <h2>Kdo data dostává</h2>
 <ul>
-<li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Loadwise, poznámky k výživě a cíle kalorií v kalendáři, tvoji váhu a každou hodinu kopii denních wellness údajů z Google Health (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
+<li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Aurinu, poznámky k výživě a cíle kalorií v kalendáři, tvoji váhu a každou hodinu kopii denních wellness údajů z Google Health (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě. OpenAI je zpracovává naším jménem, data poslaná přes své API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití.</li>
-<li><strong>Cloudflare</strong> provozuje Loadwise, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
+<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
 <li><strong>Open-Meteo</strong> dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo, nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>
 <li><strong>Úřady</strong>, jen když to vyžaduje zákon.</li>
 </ul>
 <p>Když skenuješ čárový kód nebo etiketu bez AI, obrázek se zpracuje přímo ve tvém zařízení; knihovna pro skenování se načítá ze sítě jsDelivr. Videa cviků jsou vložená z YouTube v režimu se zvýšenou ochranou soukromí a YouTube dostane data, až když video spustíš.</p>
-<p><strong>Databáze potravin.</strong> Hledání potravin používá katalog uložený u Loadwise (co hledáš, se nikam dál neposílá), sestavený z otevřených dat: Open Food Facts (© přispěvatelé Open Food Facts, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (volné dílo), Fineli od THL (CC BY 4.0), Ciqual od Anses (Licence Ouverte / CC BY 4.0) a CoFID od Public Health England (Open Government Licence 3.0). Katalog jako databáze je k dispozici pod licencí ODbL; hodnoty jsou převzaté ze zdrojů a nejsou ověřené proti každé etiketě.</p>
+<p><strong>Databáze potravin.</strong> Hledání potravin používá katalog uložený u Aurinu (co hledáš, se nikam dál neposílá), sestavený z otevřených dat: Open Food Facts (© přispěvatelé Open Food Facts, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (volné dílo), Fineli od THL (CC BY 4.0), Ciqual od Anses (Licence Ouverte / CC BY 4.0) a CoFID od Public Health England (Open Government Licence 3.0). Katalog jako databáze je k dispozici pod licencí ODbL; hodnoty jsou převzaté ze zdrojů a nejsou ověřené proti každé etiketě.</p>
 <p>Někteří z těchto poskytovatelů sídlí ve Spojených státech. Když data opouštějí Evropskou unii, chrání je zárukami, které vyžaduje GDPR, například standardními smluvními doložkami EU.</p>
 <h2>Uložení a zabezpečení</h2>
 <ul>
-<li>Data jsou uložená v databázi Loadwise u Cloudflare a jsou šifrovaná. Všechna spojení používají HTTPS.</li>
+<li>Data jsou uložená v databázi Aurinu u Cloudflare a jsou šifrovaná. Všechna spojení používají HTTPS.</li>
 <li>Přístupové tokeny a klíče API k propojeným službám jsou navíc šifrované (AES-GCM) klíčem, který je uložený mimo databázi.</li>
 <li>Každý uživatel vidí jen svoje data. Přihlašuješ se ${methods.cs} a tvoje relace je podepsaná cookie, kterou skripty nepřečtou.</li>
-<li>K systémům, na kterých Loadwise běží, má přístup jen provozovatel a data uživatelů nečte, kromě případů popsaných výše.</li>
+<li>K systémům, na kterých Aurin běží, má přístup jen provozovatel a data uživatelů nečte, kromě případů popsaných výše.</li>
 </ul>
 <h2>Jak dlouho data uchováváme a jak je smazat</h2>
 <ul>
 <li>Data uchováváme, dokud máš účet. Účet, do kterého se nikdo dva roky nepřihlásil, automaticky smažeme i se všemi daty.</li>
-<li><strong>Odpojení služby</strong> v Nastavení zastaví čtení i zápis do ní a smaže uložený přístup; u Googlu se Loadwise vzdá přístupu i přímo u Googlu. Data, která se do té doby načetla, zůstanou v tvém účtu, dokud je nesmažeš, nebo nesmažeš účet.</li>
-<li><strong>Smazání účtu</strong> v Nastavení → Účet okamžitě smaže tvůj účet a natrvalo všechna data v Loadwise (u velkého účtu zbytek do několika minut): profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Smaže se i záznam o tvých souhlasech. Loadwise se zároveň vzdá přístupu k tvému účtu Google a smaže svou kopii v zařízení, ve kterém účet mažeš. Zálohy databáze se přepíšou do 30 dní.</li>
-<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Loadwise všechny tvoje přístupové klíče.</li>
-<li>Co Loadwise zkopíroval do Intervals.icu nebo Google Health, tam zůstane; smazat to můžeš v těchto službách.</li>
-<li>Přístup Loadwise můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Loadwise pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
-${apple ? '<li>Přihlašování přes Apple pro Loadwise ukončíš v nastavení svého Apple ID, nebo Apple odpojíš v Nastavení → Účet.</li>' : ''}
+<li><strong>Odpojení služby</strong> v Nastavení zastaví čtení i zápis do ní a smaže uložený přístup; u Googlu se Aurin vzdá přístupu i přímo u Googlu. Data, která se do té doby načetla, zůstanou v tvém účtu, dokud je nesmažeš, nebo nesmažeš účet.</li>
+<li><strong>Smazání účtu</strong> v Nastavení → Účet okamžitě smaže tvůj účet a natrvalo všechna data v Aurinu (u velkého účtu zbytek do několika minut): profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Smaže se i záznam o tvých souhlasech. Aurin se zároveň vzdá přístupu k tvému účtu Google a smaže svou kopii v zařízení, ve kterém účet mažeš. Zálohy databáze se přepíšou do 30 dní.</li>
+<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Aurinu všechny tvoje přístupové klíče.</li>
+<li>Co Aurin zkopíroval do Intervals.icu nebo Google Health, tam zůstane; smazat to můžeš v těchto službách.</li>
+<li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
+${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení svého Apple ID, nebo Apple odpojíš v Nastavení → Účet.</li>' : ''}
 <li>Technické záznamy se uchovávají několik dní a OpenAI uchovává požadavky AI nejvýš 30 dní.</li>
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
@@ -643,9 +649,9 @@ ${apple ? '<li>Přihlašování přes Apple pro Loadwise ukončíš v nastavení
 <p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI, protože AI funkce jsou součástí služby. Souhlas odvoláš smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
 <p>Máš právo na přístup ke svým datům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a na přenositelnost dat. Většinu z toho uděláš přímo v aplikaci: v Nastavení → Účet si všechna svoje data stáhneš jako soubor JSON Lines (NDJSON), nebo smažeš účet. Můžeš si také stěžovat u Úřadu pro ochranu osobních údajů (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
 <h2>Děti</h2>
-<p>Loadwise není určený dětem mladším 16 let a jejich data vědomě nesbíráme.</p>
+<p>Aurin není určený dětem mladším 16 let a jejich data vědomě nesbíráme.</p>
 <h2>Změny</h2>
-<p>Zásady upravíme, když se změní Loadwise nebo způsob práce s daty, a aktuální verzi s datem zveřejníme na této stránce. Než data, která už máme, použijeme novým způsobem, požádáme tě o souhlas.</p>
+<p>Zásady upravíme, když se změní Aurin nebo způsob práce s daty, a aktuální verzi s datem zveřejníme na této stránce. Než data, která už máme, použijeme novým způsobem, požádáme tě o souhlas.</p>
 <h2>Kontakt</h2>
 <p>S dotazy k těmto zásadám nebo ke svým datům a s uplatněním svých práv se obrať na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
 <p class="muted">Závazné je anglické znění: <a href="/privacy?lang=en">Privacy Policy</a>.</p>`
@@ -654,34 +660,34 @@ ${apple ? '<li>Přihlašování přes Apple pro Loadwise ukončíš v nastavení
 
 export function termsPage(request) {
   return doc(request, '/terms', {cs: 'Podmínky použití', en: 'Terms of Use'}, {
-    en: `<p>Loadwise is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.</p>`,
-    cs: `<p>Loadwise slouží k organizaci a plánování osobního tréninku. Za správnost propojených dat a za rozhodnutí, jestli je vygenerovaný trénink pro tebe vhodný, odpovídáš ty. Aplikace neposkytuje lékařskou diagnózu ani pomoc v nouzi. Používání aplikace vyžaduje přístup k propojené službě health-api.</p><p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
+    en: `<p>Aurin is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.</p>`,
+    cs: `<p>Aurin slouží k organizaci a plánování osobního tréninku. Za správnost propojených dat a za rozhodnutí, jestli je vygenerovaný trénink pro tebe vhodný, odpovídáš ty. Aplikace neposkytuje lékařskou diagnózu ani pomoc v nouzi. Používání aplikace vyžaduje přístup k propojené službě health-api.</p><p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
   });
 }
 
 export function supportPage(request, {apple = false, email = false, open = false} = {}) {
   return doc(request, '/support', {cs: 'Podpora', en: 'Support'}, {
-    en: `<p>${open ? '' : 'Loadwise is currently available only by personal invitation. '}If something does not work, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, and the error message the app showed. Never send passwords, API keys or other secrets.</p>
+    en: `<p>${open ? '' : 'Aurin is currently available only by personal invitation. '}If something does not work, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, and the error message the app showed. Never send passwords, API keys or other secrets.</p>
 <h2>Signing in</h2>
 <p>In the iPhone app, choose ${apple ? '<strong>Continue with Apple</strong>, ' : ''}<strong>Continue with Google</strong>${email ? ' or <strong>Continue with e-mail</strong>: you get a six-digit code that is valid for 10 minutes' : ''}. Use the same way each time, so you land in the same account.${open ? '' : ' If the app says your account is not invited, ask the operator to invite the address you use.'}</p>
 <h2>Passkeys</h2>
 <ul>
 <li>After your first sign-in with an e-mail code, the app offers <strong>Next time with Face ID</strong>. Agree, and your iPhone saves a passkey in its password manager.</li>
 <li>Next time, choose <strong>Sign in with a passkey</strong> and unlock it with Face ID, Touch ID or your passcode. A passkey saved in iCloud Keychain works on your other Apple devices too.</li>
-<li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Loadwise.</li>
+<li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Aurin.</li>
 </ul>
 <h2>Connecting and disconnecting services</h2>
 <ul>
 <li>In the app, open <strong>Settings → Connections</strong>. Google Health and Intervals.icu each have a card with a button to connect them and, once connected, to disconnect them.</li>
-<li>Before sending you to Google, Loadwise shows what it reads from Google Health, what it writes there and who receives the data, and asks for your consent.</li>
-<li>Disconnecting stops Loadwise from reading and writing data in that service. For Google, Loadwise also gives up its access at Google.</li>
-<li>You can also remove Loadwise’s access in your Google Account: open <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>, choose Loadwise and remove its access.</li>
+<li>Before sending you to Google, Aurin shows what it reads from Google Health, what it writes there and who receives the data, and asks for your consent.</li>
+<li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google.</li>
+<li>You can also remove Aurin’s access in your Google Account: open <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>, choose Aurin and remove its access.</li>
 </ul>
 <h2>Managing your data</h2>
 <ul>
 <li>You can edit or delete food, drinks and weight entries where you see them in the app, and change your profile in Settings.</li>
-<li>Data that Loadwise copied to Intervals.icu or Google Health can be edited or deleted in those services.</li>
-<li>To get a copy of everything Loadwise stores about you, open <strong>Settings → Account</strong> and choose <strong>Download my data</strong> (a JSON Lines file, one record per line).</li>
+<li>Data that Aurin copied to Intervals.icu or Google Health can be edited or deleted in those services.</li>
+<li>To get a copy of everything Aurin stores about you, open <strong>Settings → Account</strong> and choose <strong>Download my data</strong> (a JSON Lines file, one record per line).</li>
 </ul>
 <h2>Deleting your account and data</h2>
 <ol>
@@ -689,28 +695,28 @@ export function supportPage(request, {apple = false, email = false, open = false
 <li>If you want to keep a copy, first choose <strong>Download my data</strong>.</li>
 <li>Choose <strong>Delete account</strong>, type SMAZAT to confirm and choose <strong>Delete account permanently</strong>.</li>
 </ol>
-<p>Loadwise immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`,
-    cs: `<p>${open ? '' : 'Loadwise je zatím dostupný jen na osobní pozvánku. '}Když něco nefunguje, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy to bylo a jakou chybu aplikace ukázala. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
+<p>Aurin immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`,
+    cs: `<p>${open ? '' : 'Aurin je zatím dostupný jen na osobní pozvánku. '}Když něco nefunguje, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy to bylo a jakou chybu aplikace ukázala. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
 <h2>Přihlášení</h2>
 <p>V aplikaci pro iPhone zvol ${apple ? '<strong>Pokračovat přes Apple</strong>, ' : ''}<strong>Pokračovat přes Google</strong>${email ? ' nebo <strong>Pokračovat e-mailem</strong>: přijde ti šestimístný kód, který platí 10 minut' : ''}. Přihlašuj se pokaždé stejně, ať se dostaneš do stejného účtu.${open ? '' : ' Když aplikace hlásí, že účet není pozvaný, požádej provozovatele, ať pozve adresu, kterou používáš.'}</p>
 <h2>Přístupové klíče (passkeys)</h2>
 <ul>
 <li>Po prvním přihlášení kódem z e-mailu ti aplikace nabídne <strong>Příště přes Face ID</strong>. Když souhlasíš, iPhone si uloží přístupový klíč do správce hesel.</li>
 <li>Příště zvol <strong>Přihlásit přes passkey</strong> a odemkni ho přes Face ID, Touch ID nebo kódem telefonu. Klíč uložený v Klíčence na iCloudu funguje i na tvých dalších zařízeních Apple.</li>
-<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Loadwise všechny tvoje přístupové klíče.</li>
+<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Aurinu všechny tvoje přístupové klíče.</li>
 </ul>
 <h2>Připojení a odpojení služeb</h2>
 <ul>
 <li>V aplikaci otevři <strong>Nastavení → Propojení</strong>. Google Health i Intervals.icu tam mají kartu s tlačítkem pro připojení a po připojení i pro odpojení.</li>
-<li>Než tě Loadwise pošle na Google, ukáže, co z Google Health čte, co tam zapisuje a kdo data dostane, a požádá tě o souhlas.</li>
-<li>Odpojení zastaví čtení i zápis dat v dané službě. U Googlu se Loadwise vzdá přístupu i přímo u Googlu.</li>
-<li>Přístup Loadwise můžeš odebrat i ve svém účtu Google: otevři <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>, vyber Loadwise a přístup odeber.</li>
+<li>Než tě Aurin pošle na Google, ukáže, co z Google Health čte, co tam zapisuje a kdo data dostane, a požádá tě o souhlas.</li>
+<li>Odpojení zastaví čtení i zápis dat v dané službě. U Googlu se Aurin vzdá přístupu i přímo u Googlu.</li>
+<li>Přístup Aurinu můžeš odebrat i ve svém účtu Google: otevři <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>, vyber Aurin a přístup odeber.</li>
 </ul>
 <h2>Správa dat</h2>
 <ul>
 <li>Záznamy jídla, pití a váhy upravíš nebo smažeš tam, kde je v aplikaci vidíš, a profil změníš v Nastavení.</li>
-<li>Co Loadwise zkopíroval do Intervals.icu nebo Google Health, upravíš nebo smažeš v těchto službách.</li>
-<li>Kopii všeho, co o tobě Loadwise ukládá, si stáhneš v <strong>Nastavení → Účet</strong> tlačítkem <strong>Stáhnout moje data</strong> (soubor JSON Lines, jeden záznam na řádek).</li>
+<li>Co Aurin zkopíroval do Intervals.icu nebo Google Health, upravíš nebo smažeš v těchto službách.</li>
+<li>Kopii všeho, co o tobě Aurin ukládá, si stáhneš v <strong>Nastavení → Účet</strong> tlačítkem <strong>Stáhnout moje data</strong> (soubor JSON Lines, jeden záznam na řádek).</li>
 </ul>
 <h2>Smazání účtu a dat</h2>
 <ol>
@@ -718,6 +724,6 @@ export function supportPage(request, {apple = false, email = false, open = false
 <li>Jestli si chceš data nechat, nejdřív zvol <strong>Stáhnout moje data</strong>.</li>
 <li>Zvol <strong>Smazat účet</strong>, pro potvrzení napiš SMAZAT a zvol <strong>Smazat účet natrvalo</strong>.</li>
 </ol>
-<p>Loadwise okamžitě a natrvalo smaže tvůj účet a všechna data: profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Zároveň se vzdá přístupu k tvému účtu Google a smaže svou kopii ve tvém zařízení. Zálohy databáze se přepíšou do 30 dní. Co už je v Intervals.icu nebo Google Health, tam zůstane. Víc v <a href="/privacy">Zásadách ochrany soukromí</a>.</p>`
+<p>Aurin okamžitě a natrvalo smaže tvůj účet a všechna data: profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Zároveň se vzdá přístupu k tvému účtu Google a smaže svou kopii ve tvém zařízení. Zálohy databáze se přepíšou do 30 dní. Co už je v Intervals.icu nebo Google Health, tam zůstane. Víc v <a href="/privacy">Zásadách ochrany soukromí</a>.</p>`
   });
 }

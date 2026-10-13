@@ -5,7 +5,7 @@ import {overviewPage,privacyPage,termsPage,supportPage} from '../src/site-pages.
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
-  assert.match(html,/<title>Loadwise/);
+  assert.match(html,/<title>Aurin/);
   assert.match(html,/Google Health data disclosure/);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage])assert.doesNotMatch(await page().text(),/sheet/i,'Google Sheets is gone; the public pages must not mention it');
   assert.match(html,/may read fitness, health-metric, sleep, and nutrition data from Google Health/);
@@ -83,11 +83,11 @@ test('every public page has the CZ / EN switch and an English version',async()=>
 test('the privacy policy and support page cover what Google verification asks for',async()=>{
   const en=path=>visit(path,{'accept-language':'en'});
   const home=await overviewPage(en('/')).text(),privacy=await privacyPage(en('/privacy')).text(),support=await supportPage(en('/support')).text();
-  const limitedUse=[/Loadwise’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https:\/\/developers\.google\.com\/terms\/api-services-user-data-policy">Google API Services User Data Policy<\/a>, including the Limited Use requirements\./,
+  const limitedUse=[/Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https:\/\/developers\.google\.com\/terms\/api-services-user-data-policy">Google API Services User Data Policy<\/a>, including the Limited Use requirements\./,
     /The use of information received from Google Health API and\/or Developer Tools will adhere to the <a href="https:\/\/developers\.google\.com\/health\/policies\/health-api-developer-user-data-policy">Google Health API Developer and User Data Policy<\/a>, including the Limited Use requirements\./];
   for(const statement of limitedUse){assert.match(home,statement);assert.match(privacy,statement);}
   // The original disclosure stays word for word.
-  assert.match(home,/<p>Loadwise \(Petr Fitness Data\) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows\.<\/p>/);
+  assert.match(home,/<p>Aurin \(Petr Fitness Data\) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows\.<\/p>/);
   assert.match(home,/<p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows\.<\/p>/);
   // Every party that receives data, how it is secured, and what happens on disconnecting and deleting.
   for(const party of ['Intervals.icu','OpenAI','Cloudflare','Open-Meteo'])assert.match(privacy,new RegExp('<strong>'+party.replace('.','\\.')+'</strong>'),party);
@@ -101,7 +101,7 @@ test('the privacy policy and support page cover what Google verification asks fo
   assert.match(support,/<h2>Deleting your account and data<\/h2>/);
   assert.match(support,/myaccount\.google\.com\/connections/);
   const cs=await privacyPage(visit('/privacy',{'accept-language':'cs'})).text();
-  assert.match(cs,/Data uživatelů z Googlu slouží jen k funkcím Loadwise/);
+  assert.match(cs,/Data uživatelů z Googlu slouží jen k funkcím Aurinu/);
   assert.match(cs,/<strong>Smazání účtu<\/strong> v Nastavení/);
 });
 

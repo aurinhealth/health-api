@@ -247,9 +247,9 @@ jobs:
           login="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://petrfitnessdata.eu/auth/google?app=$(printf 'a%.0s' $(seq 1 43))")"
           case "$login" in "302 https://accounts.google.com/"*) ;; *) echo "Google sign-in is not set up (HTTP ${login%% *}); is SESSION_SECRET set?"; exit 1;; esac
           home="$(curl -fsS "https://petrfitnessdata.eu/")"
-          python -c 'import sys; s=sys.stdin.read(); assert "Loadwise" in s; assert "Google Health data disclosure" in s; assert "href=\"/privacy\"" in s' <<< "$home"
-          shot_type="$(curl -fsS -o /dev/null -w '%{content_type}' "https://petrfitnessdata.eu/site/today-dark.webp")"
-          [ "$shot_type" = "image/webp" ] || { echo "Overview screenshot not served, got $shot_type"; exit 1; }
+          python -c 'import sys; s=sys.stdin.read(); assert "Aurin" in s; assert "Google Health data disclosure" in s; assert "href=\"/privacy\"" in s' <<< "$home"
+          share_type="$(curl -fsS -o /dev/null -w '%{content_type}' "https://petrfitnessdata.eu/site/og.png")"
+          [ "$share_type" = "image/png" ] || { echo "Overview share image not served, got $share_type"; exit 1; }
           daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/daily")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"' <<< "$daily"
           sleep="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/sleep")"
