@@ -136,7 +136,7 @@ struct FoodContent: View {
         if let fiber = food.macros.fiber {
             FiberRow(title: "Vláknina", amount: fiber, color: Palette.green).padding(.top, 12)
         }
-        if let sugar = food.macros.sugar, (sugar.eaten ?? 0) > 0 {
+        if let sugar = food.macros.sugar {
             FiberRow(title: "Cukry", amount: sugar, color: Palette.amberBar, limit: true).padding(.top, 8)
         }
 

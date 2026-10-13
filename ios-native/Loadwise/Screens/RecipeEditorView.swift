@@ -105,11 +105,16 @@ struct RecipeEditorView: View {
         defer { saving = false }
         let ingredients: [JSONValue] = items.map { item in
             let p = item.product, q = item.value
-            return .object([
+            var values: JSONObject = [
                 "name": .string(p.name), "quantity": .number(q), "unit": .string(p.perPortion ? "piece" : p.unit),
                 "calories": .number(p.kcal(for: q) ?? 0), "protein_g": .number(p.grams(p.protein_100g, for: q) ?? 0),
                 "carbs_g": .number(p.grams(p.carbs_100g, for: q) ?? 0), "fat_g": .number(p.grams(p.fat_100g, for: q) ?? 0)
-            ])
+            ]
+            // Sugars, fibre and salt only when the food has them.
+            for (key, per100) in [("sugar_g", p.sugars_100g), ("fiber_g", p.fiber_100g), ("salt_g", p.salt_100g)] {
+                if let g = p.grams(per100, for: q) { values[key] = .number(g) }
+            }
+            return .object(values)
         }
         do {
             try await model.api.saveRecipe(name: name.trimmingCharacters(in: .whitespaces), servings: servings, ingredients: ingredients)
