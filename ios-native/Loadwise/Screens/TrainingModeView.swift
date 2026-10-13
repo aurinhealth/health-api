@@ -37,6 +37,10 @@ struct TrainingModeView: View {
     /// Dokončit trénink was tapped: the summary shows the totals.
     @State private var finishedSession = false
     @State private var totals: (minutes: Int, kcal: Double?, avgHr: Double?, maxHr: Double?, saved: Bool, zones: [Double])?
+    /// The day as it was before this screen, for Zahodit trénink.
+    @State private var original: GymDay?
+    @State private var confirmClose = false
+    @State private var picking = false
     private var live: LiveWorkout { LiveWorkout.shared }
 
     var body: some View {
@@ -90,6 +94,15 @@ struct TrainingModeView: View {
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
+        .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
+            Button("Pokračovat později") { dismiss() }
+            Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
+        }
+        .sheet(isPresented: $picking) {
+            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in
+                Task { await add(name) }
+            }
+        }
         .sheet(isPresented: $editing) {
             if let day {
                 PlanEditorSheet(day: day, catalog: catalog, date: date, current: index) { edited in Task { await saveEdited(edited) } }
@@ -99,7 +112,7 @@ struct TrainingModeView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { dismiss() }
+            CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
             if let day, !day.exercises.isEmpty {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title(day)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -162,6 +175,7 @@ struct TrainingModeView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
             nextExercise(day).padding(.top, 14)
+            addExerciseButton.padding(.top, 10)
         }
         .onChange(of: set?.row) { _, _ in prefill(set) }
         .onAppear { prefill(set) }
@@ -374,6 +388,7 @@ struct TrainingModeView: View {
             changesCard(day)
             if totals?.saved == true { healthCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            if !finishedSession { addExerciseButton }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
             } else {
@@ -516,18 +531,32 @@ struct TrainingModeView: View {
         }
     }
 
+    /// Nothing planned: an empty workout the exercises are added to one by one.
     private var empty: some View {
         VStack(alignment: .leading, spacing: 12) {
             Spacer()
-            Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
-                .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            if day?.cancelled == true {
+                Text("Dnešní posilovna je zrušená.").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+            } else {
+                Text("Prázdný trénink").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                PrimaryButton(title: L10n.tr("Přidat cvik"), systemImage: "plus") { picking = true }
+            }
             NavigationLink(value: AppRoute.gymBuilder) {
-                Label("Sestavit trénink", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                Label("Sestavit trénink", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.card, in: Capsule())
             }
             .buttonStyle(.plain)
             Spacer()
         }
+    }
+
+    private var addExerciseButton: some View {
+        Button { picking = true } label: {
+            Label("Přidat cvik", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .frame(maxWidth: .infinity).frame(height: 46)
+                .background(Palette.card, in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Parts
@@ -613,6 +642,7 @@ struct TrainingModeView: View {
         defer { loading = false }
         do {
             day = try await model.gymDay(date: date)
+            original = day
             startAtFirstOpen()
             history = await model.gymHistory()
             if let profile = try? await model.api.trainingProfile() {
@@ -622,6 +652,8 @@ struct TrainingModeView: View {
             if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }) {
                 await live.begin(since: nil, weightKg: model.today?.weight?.latest)
             }
+            // An empty workout: the exercise list for Přidat cvik.
+            if day?.exercises.isEmpty ?? true, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
         } catch {
             self.error = error.localizedDescription
         }
@@ -658,6 +690,56 @@ struct TrainingModeView: View {
         } catch {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
+    }
+
+    /// An exercise added on the way (or the first one of an empty workout),
+    /// with the coach's weights and reps from the history.
+    private func add(_ name: String) async {
+        var next = day ?? GymDay(date: date, values: [], cancelled: nil)
+        next.ensureHeader(date: date)
+        if next.startedAt == nil { next.markStarted(Date()) }
+        let suggestion = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name })
+        let allDone = next.exercises.allSatisfy { $0.sets.allSatisfy(\.done) }
+        next.appendExercise(name, suggestion: suggestion)
+        day = next
+        restEnd = nil
+        // Straight to the new exercise when nothing else is left.
+        if allDone { index = next.exercises.count - 1 }
+        if !live.running && !model.demo { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
+        await loadMuscles(next)
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
+    /// The cross: a workout changed here can be kept for later or thrown away.
+    private func close() {
+        if !finishedSession, let day, day != original, !day.exercises.isEmpty {
+            confirmClose = true
+        } else {
+            dismiss()
+        }
+    }
+
+    /// Zahodit trénink: the day goes back to how it was before this screen,
+    /// the clock stops without a workout in Apple Health.
+    private func discard() async {
+        restEnd = nil
+        if !model.demo {
+            do {
+                try await model.saveGym(original ?? GymDay(date: date, values: [], cancelled: nil), date: date)
+            } catch {
+                self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
+                return
+            }
+            await model.refreshTraining()
+        }
+        live.reset()
+        dismiss()
     }
 
     /// One set more for the current exercise (like its last one), or one fewer
