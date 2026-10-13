@@ -34,6 +34,9 @@ enum Palette {
     static let sand = Color(light: 0xE6D3B5, dark: 0x4A3B28)
     static let indigo = Color(light: 0x4F46C8, dark: 0xA5A1FF)
     static let lilac = Color(light: 0xD9D6F3, dark: 0x34325A)
+    /// Cycle tracking: the period, its soft fill.
+    static let pink = Color(light: 0xB83A6E, dark: 0xF0A0C0)
+    static let pinkSoft = Color(light: 0xF6DCE6, dark: 0x4A2A38)
     static let rust = Color(light: 0xB4532F, dark: 0xF0907A)
     static let blue = Color(light: 0x1D6FA3, dark: 0x7CC3F0)
     static let coffee = Color(light: 0x8A5A3B, dark: 0xD2A07E)

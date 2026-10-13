@@ -319,6 +319,8 @@ struct EventCard: View {
 
 struct FormWidget: View {
     let form: TrainingSnapshot.Form
+    /// "Poměr zátěže 1,42 · jednotvárný týden", only when out of normal.
+    var loadNote: String? = nil
     var size: WidgetSize = .small
 
     var body: some View {
@@ -333,9 +335,29 @@ struct FormWidget: View {
             } chart: { height in
                 FormLines(series: Array(form.series.suffix(size == .large ? 90 : 42)), height: height)
             }
+            if let loadNote {
+                Text(verbatim: loadNote).font(Typo.caption).foregroundStyle(Palette.amber)
+                    .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otevře detail formy a kondice")
+    }
+}
+
+extension FormWidget {
+    /// The acute:chronic load ratio when raised ("elevated", "high") and a
+    /// monotonous week, in one line; nil when both are normal (a low ratio
+    /// says nothing worth a line).
+    static func loadNote(acwr: TrainingSnapshot.ACWR?, monotony: TrainingSnapshot.Monotony?) -> String? {
+        var parts: [String] = []
+        if let acwr, let value = acwr.value, acwr.zone == "elevated" || acwr.zone == "high" {
+            parts.append(L10n.f("Poměr zátěže %@", Fmt.decimal(value, digits: 2)))
+        }
+        if monotony?.high == true {
+            parts.append(L10n.tr(parts.isEmpty ? "Jednotvárný týden" : "jednotvárný týden"))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

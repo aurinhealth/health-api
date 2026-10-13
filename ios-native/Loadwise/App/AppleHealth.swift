@@ -74,7 +74,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .energy:
             return [HKQuantityType(.activeEnergyBurned)]
         case .breathing:
-            return [HKQuantityType(.respiratoryRate), HKQuantityType(.oxygenSaturation)]
+            return [HKQuantityType(.respiratoryRate), HKQuantityType(.oxygenSaturation), HKQuantityType(.appleSleepingWristTemperature)]
         case .body:
             return [HKQuantityType(.bodyMass), HKQuantityType(.bodyFatPercentage), HKQuantityType(.leanBodyMass)]
         case .food:
@@ -215,7 +215,10 @@ final class AppleHealth {
         UserDefaults.standard.set(chosen.map(\.rawValue).sorted().joined(separator: ","), forKey: Self.categoriesKey)
     }
 
-    /// At launch: watch for new data while Apple Health is connected.
+    /// At launch (AppDelegate, also when iOS starts the app in the background
+    /// for new data) and after connecting: watch for new data while Apple
+    /// Health is connected. HealthKit only wakes an app that set its observers
+    /// up before the launch ended; later calls just swap in the app's client.
     func start(api: APIClient) {
         self.api = api
         guard enabled, isAvailable, observers.isEmpty else { return }
@@ -224,7 +227,11 @@ final class AppleHealth {
             let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
                 guard error == nil else { completion(); return }
                 Task { @MainActor in
-                    if let api = AppleHealth.shared.api { _ = await AppleHealth.shared.sync(api: api) }
+                    if let api = AppleHealth.shared.api {
+                        // Woken in the background: the widgets follow the new data.
+                        if UIApplication.shared.applicationState == .active { _ = await AppleHealth.shared.sync(api: api) }
+                        else { await BackgroundRefresh.refresh(api: api, widgets: false) }
+                    }
                     completion()
                 }
             }
@@ -471,6 +478,9 @@ final class HealthReader: @unchecked Sendable {
             let start = from(90)
             rest += await nightly(.respiratoryRate, unit: .count().unitDivided(by: .minute()), type: "daily-respiratory-rate", prefix: "resp", from: start, to: now)
             rest += await nightly(.oxygenSaturation, unit: .percent(), type: "daily-oxygen-saturation", prefix: "spo2", scale: 100, from: start, to: now)
+            // The watch's wrist temperature in sleep (°C, one value a night), to hundredths:
+            // the server compares it with the athlete's own nights (a few tenths matter).
+            rest += await nightly(.appleSleepingWristTemperature, unit: .degreeCelsius(), type: "daily-wrist-temperature", prefix: "wt", precision: 100, from: start, to: now)
         }
         if categories.contains(.body) {
             let start = from(365)
@@ -619,13 +629,13 @@ final class HealthReader: @unchecked Sendable {
         }
     }
 
-    /// The night's average (breathing, oxygen) on the day of waking up, as the
+    /// The night's average (breathing, oxygen, wrist temperature) on the day of waking up, as the
     /// nights themselves are dated: the watch measures them in sleep, and a
     /// calendar day would split one night between two days. A sample from
     /// 15:00 on belongs to the next day. The query starts at 15:00 the day
     /// before `from`, so the first day is whole; a day after today (this
     /// evening's samples) waits for the morning.
-    private func nightly(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, from: Date, to: Date) async -> [AppleRecord] {
+    private func nightly(_ id: HKQuantityTypeIdentifier, unit: HKUnit, type: String, prefix: String, scale: Double = 1, precision: Double = 10, from: Date, to: Date) async -> [AppleRecord] {
         let list = await samples(HKQuantityType(id), from: from.addingTimeInterval(-9 * 3600), to: to).compactMap { $0 as? HKQuantitySample }
         var byDay: [String: [Double]] = [:]
         for q in list {
@@ -635,7 +645,7 @@ final class HealthReader: @unchecked Sendable {
         return byDay.keys.sorted().compactMap { date -> AppleRecord? in
             guard date <= last, let values = byDay[date], !values.isEmpty else { return nil }
             let value = values.reduce(0, +) / Double(values.count)
-            return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * 10).rounded() / 10)
+            return AppleRecord(type: type, id: prefix + ":" + date, date: date, value: (value * scale * precision).rounded() / precision)
         }
     }
 

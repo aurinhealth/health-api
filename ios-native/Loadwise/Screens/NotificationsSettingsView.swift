@@ -177,6 +177,16 @@ struct NotificationsSettingsView: View {
             SettingsGroup {
                 SettingsToggle(title: "Ranní připravenost", isOn: $morning)
             }
+            // The pill: only with cycle tracking on and the pill chosen.
+            if let cycle = model.cycle, cycle.enabled, let settings = cycle.settings, settings.contraception == "pill" {
+                SettingsGroup {
+                    NavigationLink { PillReminderView() } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "pills.fill", color: Palette.indigo), title: "Antikoncepce",
+                                    value: settings.pillReminder ? ClockText.format(settings.pillReminderTime) : L10n.tr("vypnuto"))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .sheet(item: $editing) { kind in
             ReminderEditSheet(kind: kind)

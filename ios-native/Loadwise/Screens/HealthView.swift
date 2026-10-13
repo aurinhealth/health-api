@@ -70,6 +70,11 @@ struct HealthContent: View {
 
                 RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
                     .padding(.top, 24)
+
+                // Cycle tracking, only for today.
+                if model.selectedDate == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
+                    CycleHealthSection(state: state).padding(.top, 12)
+                }
             }
 
             WidgetBoard(panel: .health,
@@ -79,6 +84,7 @@ struct HealthContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }
 
@@ -138,7 +144,7 @@ enum ReadinessText {
         case "restingHR": return "Tep"
         case "sleep": return "Spánek"
         case "respiration": return "Dech"
-        case "skinTemp": return "Teplota"
+        case "skinTemp", "wristTemp": return "Teplota"
         case "checkin": return "Pocit"
         default: return key
         }
@@ -218,6 +224,7 @@ struct ReadinessDetailContent: View {
         case "sleep": return Fmt.hoursMinutes(r.sleepMinutes)
         case "respiration": return health.respiration.map { Fmt.decimal($0.value) + " /min" } ?? "–"
         case "skinTemp": return health.skinTemp.map { Fmt.signed(Units.temperatureChange($0.deviation), digits: 1) + " " + Units.temperatureUnit } ?? "–"
+        case "wristTemp": return health.wristTemp?.deviation.map { Fmt.signed(Units.temperatureChange($0), digits: 1) + " " + Units.temperatureUnit } ?? "–"
         case "checkin": return MorningCheckinCard.options.first { $0.id == r.checkin }.map { L10n.tr($0.label) } ?? ""
         default: return ""
         }
@@ -339,6 +346,44 @@ struct SkinTempWidget: View {
                          lo: 0, hi: 2, target: 1, height: height)
             }
         }
+    }
+}
+
+/// Apple Watch's wrist temperature: last night against the athlete's own
+/// nights and a bar for each of the last 14, last night's in rust.
+struct WristTempWidget: View {
+    let wrist: HealthSnapshot.WristTemp
+    var size: WidgetSize = .small
+
+    private var bars: [Point] { Array((wrist.deviations ?? []).suffix(14)) }
+
+    var body: some View {
+        Card {
+            WidgetHeader(title: "Teplota zápěstí", color: Palette.rust, trailing: nights)
+            VStack(alignment: .leading, spacing: 14) {
+                if let deviation = wrist.deviation {
+                    NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
+                               unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti normálu", Units.temperatureUnit))
+                } else {
+                    NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
+                }
+                if bars.count > 1 {
+                    BarChart(values: bars.map { max($0.value, 0) },
+                             styles: bars.indices.map { BarStyle(fill: $0 == bars.count - 1 ? Palette.rust : Palette.rust.opacity(0.28)) },
+                             lo: 0, hi: max(bars.map(\.value).max() ?? 0, 0.5),
+                             spacing: size == .small ? 2 : 4,
+                             height: size == .large ? 80 : size == .medium ? 48 : 34)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "14 nocí" above the bars.
+    private var nights: String? {
+        guard bars.count > 1, size != .small else { return nil }
+        return String(bars.count) + " " + Fmt.plural(bars.count, "noc", "noci", "nocí")
     }
 }
 

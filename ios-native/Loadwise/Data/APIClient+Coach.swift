@@ -141,17 +141,20 @@ struct AdjustResponse: Decodable {
 
 struct AdjustedSession: Decodable {
     let date: String
+    /// nil from an older server: the sport stays.
+    let sport: String?
     let minutes: Int
     let environment: String?
     let kind: String?
     let focus: String?
     let note: String?
 
-    enum CodingKeys: String, CodingKey { case date, minutes, environment, kind, focus, note }
+    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, note }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         date = try c.decode(String.self, forKey: .date)
+        sport = try? c.decodeIfPresent(String.self, forKey: .sport)
         minutes = Int(((try? c.decode(Double.self, forKey: .minutes)) ?? 60).rounded())
         environment = try? c.decodeIfPresent(String.self, forKey: .environment)
         kind = try? c.decodeIfPresent(String.self, forKey: .kind)
@@ -314,8 +317,19 @@ extension APIClient {
     }
 
     /// "Navrhne AI": the whole week from the AI, or the rules' proposal without it.
-    func weekAI(start: String, note: String) async throws -> WeekAIResponse {
-        try await send("/app/api/coach/week-ai", method: "POST", body: ["start": JSONValue.string(start), "note": .string(note)])
+    /// `correction` with `previous` fixes the AI's last proposal ("Opravit návrh").
+    func weekAI(start: String, note: String, correction: String? = nil, previous: [WeekSessionDraft] = []) async throws -> WeekAIResponse {
+        var body: JSONObject = ["start": .string(start), "note": .string(note)]
+        if let correction {
+            body["correction"] = .string(correction)
+            body["previous"] = .array(previous.map { s in
+                var x: JSONObject = ["date": .string(s.date), "sport": .string(s.sport), "minutes": .number(Double(s.minutes))]
+                if let environment = s.environment { x["environment"] = .string(environment) }
+                if let kind = s.kind { x["kind"] = .string(kind) }
+                return .object(x)
+            })
+        }
+        return try await send("/app/api/coach/week-ai", method: "POST", body: body)
     }
 
     /// "Upravit s AI": a quick chip ("shorter", "easier", "harder", "indoor") or

@@ -7,8 +7,9 @@ import UserNotifications
 // allowed and Settings → Oznámení → Ranní připravenost is on; otherwise, and
 // on "Odhlásit se", the token is removed from the server again.
 
-/// Receives the device token from iOS (LoadwiseApp's delegate adaptor).
-final class AppDelegate: NSObject, UIApplicationDelegate {
+/// Receives the device token from iOS (LoadwiseApp's delegate adaptor) and
+/// the answers to the pill reminder ("Vzato", "Za 30 minut").
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     /// The same server and session cookie as AppModel's client (shared cookie storage).
     private let api = APIClient()
 
@@ -16,7 +17,41 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // Every launch asks for the token again; it is sent only when it changed.
         let client = self.api
         Task { @MainActor in await PushRegistration.refresh(api: client) }
+        // Syncing without the app being opened (BackgroundRefresh.swift); not
+        // with the sample data of "-demo".
+        if !ProcessInfo.processInfo.arguments.contains("-demo") {
+            MainActor.assumeIsolated {
+                AppleHealth.shared.start(api: client)
+                BackgroundRefresh.register(api: client)
+                BackgroundRefresh.schedule()
+            }
+        }
+        let center = UNUserNotificationCenter.current()
+        center.setNotificationCategories([Reminders.pillNotificationCategory])
+        center.delegate = self
         return true
+    }
+
+    /// In the app the pill reminder shows as a banner; the others stay quiet
+    /// as before.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        notification.request.content.categoryIdentifier == Reminders.pillCategory ? [.banner, .sound, .list] : []
+    }
+
+    /// "Vzato" logs the pill of the reminder's day at this time; "Za 30
+    /// minut" asks again later.
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        let content = response.notification.request.content
+        guard content.categoryIdentifier == Reminders.pillCategory else { return }
+        let date = content.userInfo["date"] as? String ?? AppModel.localDate(Date())
+        switch response.actionIdentifier {
+        case Reminders.pillTakenAction:
+            _ = try? await api.saveCycleDay(["date": .string(date), "pill": .string(AppModel.clockNow())])
+        case Reminders.pillSnoozeAction:
+            await Reminders.snoozePill(date: date, title: content.title, body: content.body)
+        default:
+            break
+        }
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

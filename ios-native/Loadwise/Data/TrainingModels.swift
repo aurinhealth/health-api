@@ -10,6 +10,11 @@ struct TrainingSnapshot: Decodable, Equatable {
     let event: Event?
     let form: Form?
     let load: Load
+    /// The acute:chronic workload ratio (src/workload-ratio.js); null without
+    /// any load on record (older saved answers lack it).
+    let acwr: ACWR?
+    /// Foster's training monotony and the week's strain (older saved answers lack it).
+    let monotony: Monotony?
     let zones: Zones?
     let vo2max: VO2max?
     let activeCalories: ActiveCalories?
@@ -108,6 +113,24 @@ struct TrainingSnapshot: Decodable, Equatable {
     struct Load: Decodable, Equatable {
         let weeks: [WeekLoad]
         let intensity: Intensity?
+    }
+
+    /// The mean daily load of the last 7 days (acute) over that of the last 28
+    /// (chronic). value is null with under 21 days of history or no chronic load.
+    struct ACWR: Decodable, Equatable {
+        let value: Double?
+        /// "low" (< 0.8), "sweetSpot" (0.8–1.3), "elevated" (1.3–1.5), "high" (> 1.5).
+        let zone: String?
+        let acute: Double?
+        let chronic: Double?
+    }
+
+    /// Mean over standard deviation of the last 7 daily loads; strain is the
+    /// week's load × monotony; high above 2.0.
+    struct Monotony: Decodable, Equatable {
+        let value: Double?
+        let strain: Double?
+        let high: Bool?
     }
 
     /// Minutes in Google's heart-rate zones over 4 weeks.

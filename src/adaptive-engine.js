@@ -31,7 +31,7 @@ function recoveryMetrics(context){
     const sessions=Array.isArray(context.sleepSessions)?context.sleepSessions:[];
     const r=readinessFor({date:context.date,rows,sessions,profile:context.profile,checkin:context.checkin});
     const night=r.night,sleepNeed=r.need.need;
-    if(r.score!=null)return {score:r.score,zone:r.zone,model:"shared",flags:r.flags,provisional:!!r.provisional,sleepNeed,sleepMinutes:night?.durationMin??sleep?.value??null,hrv:r.components.hrv?.value??null,hrvBaseline:r.components.hrv?Math.round(r.components.hrv.baseline*10)/10:null,restingHr:r.components.restingHR?.value??null,restingHrBaseline:r.components.restingHR?Math.round(r.components.restingHR.baseline*10)/10:null};
+    if(r.score!=null)return {score:r.score,zone:r.zone,model:"shared",flags:r.flags,provisional:!!r.provisional,sleepNeed,sleepMinutes:night?.durationMin??sleep?.value??null,hrv:r.components.hrv?.value??null,hrvBaseline:r.components.hrv?Math.round(r.components.hrv.baseline*10)/10:null,restingHr:r.components.restingHR?.value??null,restingHrBaseline:r.components.restingHR?Math.round(r.components.restingHR.baseline*10)/10:null,wristTempDeviation:r.components.wristTemp?.deviation??null};
   }
   const legacy=legacyRecoveryMetrics(context),cap={tired:60,sick:25}[context?.checkin];
   return cap!=null?{...legacy,score:Math.min(legacy.score,cap)}:legacy;
