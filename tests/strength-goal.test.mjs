@@ -113,3 +113,13 @@ test('the warm-up starts with easy cardio and moves for the muscles of the sessi
   assert.ok(noCardio.warmup.items.every(x => x.id !== 'cardio') && noCardio.warmup.items.length === 3);
   assert.equal(normalizeTraining({ warmupCardio: false }).warmupCardio, false);
 });
+
+test('typical extra minutes follow the session length and the switches', async () => {
+  const { typicalExtraMinutes } = await import('../src/stretching.js');
+  const all = typicalExtraMinutes();
+  assert.ok(all[60].warmup > 0 && all[60].stretching > 0);
+  assert.ok(all[30].warmup <= all[90].warmup);
+  assert.ok(typicalExtraMinutes({ warmupCardio: false })[60].warmup < all[60].warmup);
+  const off = typicalExtraMinutes({ warmup: false, stretching: false });
+  assert.deepEqual(off[60], { warmup: 0, stretching: 0 });
+});

@@ -1926,3 +1926,9 @@
 "Rozcvička" = "Warm-up";
 "s kardiem" = "with cardio";
 "bez kardia" = "without cardio";
+"+%@ min navíc" = "+%@ min extra";
+"Celkem %@ min" = "%@ min in total";
+"%@ + %@ navíc" = "%@ + %@ extra";
+"+ %@ min rozcvička" = "+ %@ min warm-up";
+"+ %@ min protažení" = "+ %@ min stretching";
+"Posilování" = "Lifting";

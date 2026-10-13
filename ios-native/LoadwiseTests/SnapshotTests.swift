@@ -168,6 +168,7 @@ final class SnapshotTests: XCTestCase {
                 .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false)
             ]), date: "2026-10-14").padding(20)
         }
+        try render("gym-time", height: 200) { GymTimeCard(minutes: 60, warmup: 6, stretching: 5).padding(20) }
         try render("gym-stretch-info", height: 700) {
             StretchInfoSheet(item: .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false,
                                          steps: ["Z pozice na všech čtyřech si sedni hýžděmi na paty.", "Paže nech natažené před sebou na zemi a čelo polož na podložku.", "Zhluboka dýchej a s každým výdechem povol záda."]))

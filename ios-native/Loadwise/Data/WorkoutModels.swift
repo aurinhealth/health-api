@@ -85,6 +85,12 @@ struct GymDay: Decodable, Equatable {
         return values[3][1].string
     }
 
+    /// The length chosen for the lifting (header row 4, "Časový limit (min)"); the routines come on top.
+    var plannedMinutes: Int? {
+        guard values.count > 4, values[4].count > 1, values[4][0].string == "Časový limit (min)" else { return nil }
+        return values[4][1].number.map { Int($0) } ?? values[4][1].string.flatMap { Int($0) }
+    }
+
     /// The warm-up before and the stretching after the session (src/stretching.js), nil without them.
     var warmup: GymStretching? { GymStretching.routines(values)?.warmup }
     var stretching: GymStretching? { GymStretching.routines(values)?.stretching }

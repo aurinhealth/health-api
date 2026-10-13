@@ -24,6 +24,8 @@ struct GymSessionView: View {
     /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
     @State private var doneMode = false
     @State private var changingType = false
+    /// What the warm-up and stretching add to each length, shown under the length picker.
+    @State private var extra: [String: GymPreferences.Extra]?
 
     /// The lifting session from the watch or Intervals.icu that day.
     private var doneSession: WeekSession? { model.doneStrengthSession(on: date) }
@@ -145,6 +147,10 @@ struct GymSessionView: View {
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
+                if let planned = day.plannedMinutes, day.warmup != nil || day.stretching != nil {
+                    GymTimeCard(minutes: planned, warmup: day.warmup?.minutes ?? 0, stretching: day.stretching?.minutes ?? 0)
+                        .padding(.top, 14)
+                }
                 if !muscles.isEmpty {
                     Card {
                         WidgetHeader(title: "Co procvičíš", color: Palette.amberBar)
@@ -186,6 +192,14 @@ struct GymSessionView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.top, 18)
+                .task { if !model.demo, extra == nil { extra = (try? await model.api.gymPreferences())?.extraMinutes } }
+                if let added = extra?[String(minutes)], added.warmup + added.stretching > 0 {
+                    HStack(spacing: 8) {
+                        if added.warmup > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min rozcvička", String(added.warmup)), color: Palette.amber) }
+                        if added.stretching > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min protažení", String(added.stretching)), color: Palette.indigo) }
+                    }
+                    .padding(.top, 10)
+                }
                 Button { Task { await generate() } } label: {
                     Text(saving ? "Sestavuji…" : "Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())

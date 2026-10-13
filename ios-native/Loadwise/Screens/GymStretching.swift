@@ -117,7 +117,7 @@ struct StretchingCard: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(kind.title).font(.headline).foregroundStyle(Palette.ink)
-                    Text(verbatim: "\(stretching.minutes) min").font(Typo.caption).foregroundStyle(Palette.muted)
+                    ExtraMinutesPill(text: L10n.f("+%@ min navíc", String(stretching.minutes)), color: kind.color)
                 }
                 Spacer()
                 Button { timer = true } label: {
@@ -157,6 +157,9 @@ struct StretchingCard: View {
             }
             }
         }
+        // Dashed: on top of the chosen time, not part of the lifting.
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .strokeBorder(kind.color.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
         .sheet(item: $info) { item in StretchInfoSheet(item: item) }
         .fullScreenCover(isPresented: $timer) {
             StretchTimerView(stretching: stretching, kind: kind) { id in
@@ -346,6 +349,13 @@ struct GymPreferences: Decodable, Equatable {
     var warmup: Bool?
     var warmupCardio: Bool?
     var stretching: Bool
+    /// Typical minutes the routines add to each session length ("60" → warm-up and stretching).
+    var extraMinutes: [String: Extra]?
+
+    struct Extra: Decodable, Equatable {
+        let warmup: Int
+        let stretching: Int
+    }
 }
 
 extension APIClient {
@@ -450,6 +460,62 @@ struct GymPreferencesGroup: View {
         guard !model.demo, prefs != nil, !unchanged else { return }
         Task {
             do { apply(try await model.api.saveGymPreferences(change)); error = nil } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
+/// "+6 min navíc": time that comes on top of the chosen length.
+struct ExtraMinutesPill: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(verbatim: text).font(.caption.weight(.semibold)).foregroundStyle(color)
+            .padding(.horizontal, 10).frame(height: 24)
+            .background(color.opacity(0.15), in: Capsule())
+    }
+}
+
+/// Celkem 72 min: the warm-up, the lifting and the stretching as one bar.
+struct GymTimeCard: View {
+    let minutes: Int
+    let warmup: Int
+    let stretching: Int
+
+    var body: some View {
+        let extra = warmup + stretching
+        Card {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.f("Celkem %@ min", String(minutes + extra))).font(.headline).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(L10n.f("%@ + %@ navíc", String(minutes), String(extra))).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            GeometryReader { geo in
+                let parts = [(warmup, Palette.amber), (minutes, Palette.ink.opacity(0.85)), (stretching, Palette.indigo)].filter { $0.0 > 0 }
+                let total = CGFloat(parts.reduce(0) { $0 + $1.0 }), gap: CGFloat = 4
+                let width = max(0, geo.size.width - gap * CGFloat(parts.count - 1))
+                HStack(spacing: gap) {
+                    ForEach(parts.indices, id: \.self) { i in
+                        Capsule().fill(parts[i].1).frame(width: width * CGFloat(parts[i].0) / max(total, 1))
+                    }
+                }
+            }
+            .frame(height: 8)
+            HStack(alignment: .top) {
+                if warmup > 0 { label("Rozcvička", "+\(warmup) min", Palette.amber, .leading) }
+                Spacer()
+                label("Posilování", "\(minutes) min", Palette.ink, warmup > 0 ? .center : .leading)
+                Spacer()
+                if stretching > 0 { label("Protažení", "+\(stretching) min", Palette.indigo, .trailing) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func label(_ title: String, _ value: String, _ color: Color, _ alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(title).font(.caption.weight(.medium)).foregroundStyle(color)
+            Text(verbatim: value).font(Typo.caption).foregroundStyle(Palette.muted)
         }
     }
 }

@@ -2,7 +2,7 @@
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal } from "./strength-generator.js";
-import { stretchingFor, warmupFor } from "./stretching.js";
+import { stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences } from "./exercise-feedback.js";
@@ -42,7 +42,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});

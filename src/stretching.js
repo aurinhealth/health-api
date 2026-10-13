@@ -194,3 +194,17 @@ export function readRoutines(values) {
     return { warmup: parsed?.warmup?.items ? parsed.warmup : null, stretching: parsed?.stretching?.items ? parsed.stretching : null };
   } catch { return { warmup: null, stretching: null }; }
 }
+
+// Typical minutes the warm-up and stretching add to each session length, for
+// the length picker before a plan exists (a full-body session; 0 when off).
+export function typicalExtraMinutes({ warmup = true, warmupCardio = true, stretching = true } = {}) {
+  const rows = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'glutes'].map(m => ['WORK', m]);
+  const muscleOf = name => name;
+  return Object.fromEntries([30, 45, 60, 75, 90].map(minutes => {
+    const size = routineSize(minutes);
+    return [minutes, {
+      warmup: warmup ? warmupFor(rows, muscleOf, { ...size.warmup, cardio: warmupCardio }).minutes : 0,
+      stretching: stretching ? stretchingFor(rows, muscleOf, size.stretching).minutes : 0
+    }];
+  }));
+}
