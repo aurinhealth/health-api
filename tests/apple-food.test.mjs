@@ -31,6 +31,11 @@ test("food and water other apps wrote to Apple Health land in the diary and stay
   const after = (await raw.prepare("SELECT id,kcal FROM food_logs WHERE user_id=7").all()).results;
   assert.deepEqual(after, [{ id: rows[1].id, kcal: 210 }]);
   assert.equal((await listFluids(db, "2026-10-13")).length, 0);
+
+  // Pití switched off: no drinks list, so food still reconciles and drinks stay.
+  await saveAppleFood(raw, 7, { ...window, meals: [], drinks: [{ id: "W2", date: "2026-10-13", ml: 250 }] });
+  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }] }), { saved: 1, removed: 0 });
+  assert.equal((await listFluids(db, "2026-10-13")).length, 1);
 });
 
 test("other apps' food is not edited here and not sent on to Google; a copy is the athlete's own", async () => {

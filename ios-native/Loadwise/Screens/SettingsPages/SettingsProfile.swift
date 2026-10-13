@@ -23,7 +23,7 @@ struct ProfileSettingsView: View {
     @AppStorage(AvatarStore.emailKey) private var email = ""
 
     var body: some View {
-        SettingsPage(title: "Profil") {
+        SettingsPage(title: "Účet") {
             AvatarEditor().padding(.top, 8)
             if let error = store.errorMessage { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
 
@@ -56,7 +56,7 @@ struct ProfileSettingsView: View {
             }
 
             if !email.isEmpty {
-                SettingsGroup(title: "Účet") {
+                SettingsGroup {
                     Button {
                         UIPasteboard.general.string = email
                         copied = true

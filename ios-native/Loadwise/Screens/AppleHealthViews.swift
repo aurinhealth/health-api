@@ -52,31 +52,38 @@ struct AppleHealthCategoryList: View {
     @Binding var chosen: Set<HealthCategory>
 
     var body: some View {
-        SettingsGroup(footer: "Přístup k jednotlivým údajům můžeš kdykoli změnit i v Nastavení iPhonu → Zdraví → Přístup k datům.") {
-            ForEach(Array(HealthCategory.allCases.enumerated()), id: \.element) { index, category in
-                if index > 0 { SettingsDivider() }
-                HStack(spacing: 12) {
-                    SettingsIcon(systemImage: category.symbol, color: color(category))
-                    SettingsToggle(title: category.title, subtitle: L10n.tr(category.detail), isOn: Binding(
-                        get: { chosen.contains(category) },
-                        set: { if $0 { chosen.insert(category) } else { chosen.remove(category) } }
-                    ))
-                    .padding(.leading, -16)
+        VStack(spacing: 12) {
+            SettingsGroup {
+                SettingsToggle(title: "Zapnout vše", isOn: Binding(
+                    get: { chosen.count == HealthCategory.allCases.count },
+                    set: { chosen = $0 ? Set(HealthCategory.allCases) : [] }
+                ))
+            }
+            SettingsGroup {
+                ForEach(Array(HealthCategory.allCases.enumerated()), id: \.element) { index, category in
+                    if index > 0 { SettingsDivider() }
+                    HStack(spacing: 14) {
+                        SettingsIcon(systemImage: category.symbol, color: color(category))
+                        SettingsToggle(title: category.title, isOn: Binding(
+                            get: { chosen.contains(category) },
+                            set: { if $0 { chosen.insert(category) } else { chosen.remove(category) } }
+                        ))
+                        .padding(.leading, -16)
+                    }
+                    .padding(.leading, 18)
                 }
-                .padding(.leading, 16)
             }
         }
     }
 
     private func color(_ category: HealthCategory) -> Color {
         switch category {
-        case .sleep: return Palette.indigo
-        case .workouts: return Palette.amberBar
-        case .heart: return Color(light: 0xE5484D, dark: 0xF2777A)
-        case .activity: return Palette.rust
-        case .breathing: return Palette.blue
-        case .body: return Palette.green
-        case .food: return Palette.amber
+        case .sleep, .hrv: return Palette.indigo
+        case .heart, .resting: return Palette.rust
+        case .breathing, .water: return Palette.blue
+        case .steps, .workouts: return Palette.green
+        case .energy, .food: return Palette.amber
+        case .body: return Palette.brown
         }
     }
 }
@@ -103,7 +110,7 @@ struct AppleHealthSettings: View {
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text("Oprávnění").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.secondary).padding(.horizontal, 4)
+                Text("Oprávnění").font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                 AppleHealthCategoryList(chosen: $chosen)
                     .disabled(health.syncing || store.demo)
             }

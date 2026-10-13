@@ -61,8 +61,10 @@ export async function saveAppleFood(db, userId, input = {}) {
   const from = DAY.test(String(input?.from || "")) ? input.from : null, to = DAY.test(String(input?.to || "")) ? input.to : null;
   if (!from || !to || to < from) return { saved: 0, removed: 0 };
   const inWindow = item => item && item.date >= from && item.date <= to;
-  const meals = (Array.isArray(input.meals) ? input.meals : []).slice(0, MAX_ITEMS).map(appleFood).filter(inWindow);
-  const drinks = (Array.isArray(input.drinks) ? input.drinks : []).slice(0, MAX_ITEMS).map(appleDrink).filter(inWindow);
+  // A list left out was not read (that kind is switched off): keep what is here.
+  const readMeals = Array.isArray(input.meals), readDrinks = Array.isArray(input.drinks);
+  const meals = (readMeals ? input.meals : []).slice(0, MAX_ITEMS).map(appleFood).filter(inWindow);
+  const drinks = (readDrinks ? input.drinks : []).slice(0, MAX_ITEMS).map(appleDrink).filter(inWindow);
   await ensureFoodLogTable(db);
   await ensureFluidLog(db);
 
@@ -78,7 +80,7 @@ export async function saveAppleFood(db, userId, input = {}) {
       : db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,1,?,?,?,?,?,?,?)")
         .bind(userId, m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, FOOD_SOURCE, m.note));
   }
-  const removedMeals = [...known.values()];
+  const removedMeals = readMeals ? [...known.values()] : [];
   if (removedMeals.length) statements.push(db.prepare("DELETE FROM food_logs WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, FOOD_SOURCE, JSON.stringify(removedMeals)));
 
   const knownDrinks = new Map(((await db.prepare("SELECT id, external_id FROM fluid_log WHERE user_id=? AND source=? AND date>=? AND date<=?")
@@ -91,7 +93,7 @@ export async function saveAppleFood(db, userId, input = {}) {
       : db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind,source,external_id,app) VALUES(?,?,?,?,'water',?,?,?)")
         .bind(userId, d.date, d.consumed_at, d.ml, FOOD_SOURCE, d.id, d.app));
   }
-  const removedDrinks = [...knownDrinks.values()];
+  const removedDrinks = readDrinks ? [...knownDrinks.values()] : [];
   if (removedDrinks.length) statements.push(db.prepare("DELETE FROM fluid_log WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, FOOD_SOURCE, JSON.stringify(removedDrinks)));
 
   for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
