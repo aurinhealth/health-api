@@ -12,7 +12,7 @@ const google = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" };
 
 test("Google Health tokens carry weight writing only when it was granted", () => {
   assert.deepEqual(healthScopes({}), HEALTH_SCOPES);
-  assert.deepEqual(grantedExtras({}), { weightWrite: false, activityWrite: false, birthday: false });
+  assert.deepEqual(grantedExtras({}), { weightWrite: false, activityWrite: false, birthday: false, location: false });
   const granted = { GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.birthday] };
   assert.deepEqual(healthScopes(granted), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite]);
   // Writing workouts (Synchronizace) rides along once granted; it is never a base scope.
@@ -22,11 +22,11 @@ test("Google Health tokens carry weight writing only when it was granted", () =>
   assert.ok(!healthScopes(granted).includes(EXTRA_SCOPES.birthday));
 });
 
-test("connecting asks for Google Health only; 'extra' adds the optional scopes incrementally", async () => {
+test("connecting asks for Google Health and the workout route; 'extra' adds the optional scopes incrementally", async () => {
   const plain = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1"), google, "/oauth/google")).headers.get("Location"));
-  assert.deepEqual(plain.searchParams.get("scope").split(" "), HEALTH_SCOPES);
+  assert.deepEqual(plain.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.location]);
   const extra = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&extra=1"), google, "/oauth/google")).headers.get("Location"));
-  assert.deepEqual(extra.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.activityWrite, EXTRA_SCOPES.birthday]);
+  assert.deepEqual(extra.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.activityWrite, EXTRA_SCOPES.birthday, EXTRA_SCOPES.location]);
   assert.equal(extra.searchParams.get("include_granted_scopes"), "true");
 });
 
@@ -47,9 +47,9 @@ test("granted scopes are stored per user and offered in the connection status", 
   await saveConnectionSecret(env, "google_scopes", [...HEALTH_SCOPES, EXTRA_SCOPES.birthday].join(" "));
   const resolved = await connectionEnvironment(env);
   assert.deepEqual(resolved.CONNECTED_PROVIDERS, ["google"]);
-  assert.deepEqual(grantedExtras(resolved), { weightWrite: false, activityWrite: false, birthday: true });
+  assert.deepEqual(grantedExtras(resolved), { weightWrite: false, activityWrite: false, birthday: true, location: false });
   const g = (await connectionStatus(resolved)).providers.find(p => p.id === "google");
-  assert.deepEqual(g.extras, { weightWrite: false, activityWrite: false, birthday: true });
+  assert.deepEqual(g.extras, { weightWrite: false, activityWrite: false, birthday: true, location: false });
   assert.equal(g.extrasUrl, "/oauth/google?extra=1");
 });
 

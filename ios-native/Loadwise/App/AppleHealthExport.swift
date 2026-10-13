@@ -114,6 +114,73 @@ final class AppleHealthExport {
         }
     }
 
+    /// Změnit typ aktivity on a workout made in the app: its copy in Apple
+    /// Health is saved again with the new type; the same sync identifier with
+    /// a newer version replaces the old one.
+    func changeWorkoutType(key: String, type: String) async {
+        guard isAvailable, prefs.pushActivities, allowed(HKObjectType.workoutType()) else { return }
+        let predicate = HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier, allowedValues: ["loadwise:workout:" + key])
+        let found: HKWorkout? = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 1, sortDescriptors: nil) { _, samples, _ in
+                continuation.resume(returning: samples?.first as? HKWorkout)
+            }
+            store.execute(query)
+        }
+        guard let old = found else { return }
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = Self.workoutType(type)
+        let builder = HKWorkoutBuilder(healthStore: store, configuration: configuration, device: HKDevice.local())
+        var meta = metadata("workout:" + key)
+        meta[HKMetadataKeyWorkoutBrandName] = "Aurin"
+        do {
+            try await builder.beginCollection(at: old.startDate)
+            try await builder.addMetadata(meta)
+            try await builder.endCollection(at: old.endDate)
+            _ = try await builder.finishWorkout()
+        } catch {
+            // The old copy stays; the type is right in the app.
+        }
+    }
+
+    /// An Intervals.icu activity type (src/activity-type.js) as Apple's.
+    static func workoutType(_ type: String) -> HKWorkoutActivityType {
+        switch type {
+        case "Run", "TrailRun", "VirtualRun": return .running
+        case "Walk": return .walking
+        case "Hike", "Snowshoe": return .hiking
+        case "Ride", "VirtualRide", "MountainBikeRide", "GravelRide", "EBikeRide": return .cycling
+        case "WeightTraining": return .traditionalStrengthTraining
+        case "Crossfit": return .crossTraining
+        case "HighIntensityIntervalTraining": return .highIntensityIntervalTraining
+        case "Swim", "OpenWaterSwim": return .swimming
+        case "Rowing", "VirtualRow": return .rowing
+        case "Kayaking", "Canoeing": return .paddleSports
+        case "StandUpPaddling": return .paddleSports
+        case "Surfing", "Windsurf", "Kitesurf": return .surfingSports
+        case "Sail": return .sailing
+        case "NordicSki", "RollerSki": return .crossCountrySkiing
+        case "AlpineSki", "BackcountrySki": return .downhillSkiing
+        case "Snowboard": return .snowboarding
+        case "IceSkate", "InlineSkate": return .skatingSports
+        case "RockClimbing": return .climbing
+        case "Yoga": return .yoga
+        case "Pilates": return .pilates
+        case "Elliptical": return .elliptical
+        case "StairStepper": return .stairClimbing
+        case "Tennis": return .tennis
+        case "Squash": return .squash
+        case "Badminton": return .badminton
+        case "TableTennis": return .tableTennis
+        case "Padel": return .paddleSports
+        case "Pickleball": return .pickleball
+        case "Soccer": return .soccer
+        case "Hockey": return .hockey
+        case "Rugby": return .rugby
+        case "Golf": return .golf
+        default: return .other
+        }
+    }
+
     static func activityType(_ sport: String) -> HKWorkoutActivityType {
         switch sport {
         case "gym", "strength": return .traditionalStrengthTraining
