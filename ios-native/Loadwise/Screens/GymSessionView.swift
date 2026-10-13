@@ -23,9 +23,19 @@ struct GymSessionView: View {
     @State private var finishing = false
     /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
     @State private var doneMode = false
+    @State private var changingType = false
 
     /// The lifting session from the watch or Intervals.icu that day.
     private var doneSession: WeekSession? { model.doneStrengthSession(on: date) }
+
+    /// What Změnit typ aktivity changes: the plan saved in the app, else the watch's or Intervals.icu's session.
+    private var typeTarget: (id: String, type: String?, source: String?)? {
+        if !(day?.exercises.isEmpty ?? true) { return ("gym:" + date, "WeightTraining", "app") }
+        guard let s = doneSession else { return nil }
+        if s.activityId != nil { return (s.id, nil, "intervals") }
+        if let watch = s.watch { return (watch.id, nil, watch.source) }
+        return nil
+    }
 
     private var showsDone: Bool {
         if day?.cancelled == true { return false }
@@ -53,7 +63,7 @@ struct GymSessionView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: day?.planName ?? "Posilovna") {
             content
         }
         .task { await load() }
@@ -91,6 +101,19 @@ struct GymSessionView: View {
                     }
                     .accessibilityLabel("Změnit trénink")
                 }
+                // Done: the gym session was another sport (Crossfit, HIIT…).
+                if !model.demo && showsDone, let typeTarget {
+                    Menu {
+                        Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                    } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                            .frame(width: 36, height: 32).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Další volby")
+                    .sheet(isPresented: $changingType) {
+                        ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
+                    }
+                }
             }
             .padding(.top, 24)
             if loading && day == nil {
@@ -111,6 +134,14 @@ struct GymSessionView: View {
                     .buttonStyle(.plain)
                     .padding(.top, 24)
                 }
+                // A done workout is kept or sent on too, without its weights.
+                if let day, !day.exercises.isEmpty {
+                    let kept = WorkoutTemplate.from(day, minutes: nil)
+                    if !kept.isEmpty {
+                        SaveWorkoutButton(template: kept).padding(.top, 10)
+                        ShareWorkoutButton(template: kept, date: nil, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
+                    }
+                }
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
@@ -125,7 +156,7 @@ struct GymSessionView: View {
                     Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 }
                 NavigationLink(value: AppRoute.trainingMode(date)) {
-                    Label("Režim tréninku", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -137,6 +168,10 @@ struct GymSessionView: View {
                 }
                 .disabled(finishing)
                 .padding(.top, 24)
+                // The day's workout without weights: kept in Moje tréninky or sent to a friend.
+                let kept = WorkoutTemplate.from(day, minutes: nil)
+                SaveWorkoutButton(template: kept).padding(.top, 10)
+                ShareWorkoutButton(template: kept, date: date, groups: WorkoutSharing.groups(muscles, template: kept)).padding(.top, 10)
             } else {
                 Text(day?.cancelled == true ? "Dnešní posilovna je zrušená." : "Na tento den není posilovna v plánu.")
                     .font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 16)
@@ -296,6 +331,10 @@ struct ExerciseCard: View {
     var onAddSet: (() -> Void)? = nil
     var onRemoveSet: (() -> Void)? = nil
 
+    /// The note the server gives the first set of an exercise it has no weight for
+    /// (strength-generator.js TEST_SET_NOTE).
+    static func isTestSet(_ note: String) -> Bool { note.hasPrefix("zkušební série") || note.hasPrefix("test set") }
+
     /// A set can go while one is not done and another stays.
     private var canRemoveSet: Bool { exercise.sets.count > 1 && exercise.sets.contains { !$0.done } }
 
@@ -307,6 +346,11 @@ struct ExerciseCard: View {
                     Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií"))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if !failure.isEmpty { GymTag.failure.padding(.top, 4) }
+                    // No weight to start from (an exercise the app doesn't know): the test set's advice.
+                    if let first = exercise.sets.first(where: { !$0.warmup }), !first.done, let note = first.note, Self.isTestSet(note) {
+                        Text(Fmt.capitalized(note)).font(Typo.caption).foregroundStyle(Palette.amber)
+                            .fixedSize(horizontal: false, vertical: true).padding(.top, 4)
+                    }
                 }
                 Spacer()
                 ExerciseInfoButton(name: exercise.name, action: onTechnique)

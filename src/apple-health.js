@@ -16,6 +16,7 @@
 // activity matching).
 import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
+import { saveAppleFood } from "./apple-food.js";
 
 export const SOURCE = "apple-health";
 export const WEARABLE_FAMILIES = "('google-wearables','apple-health')";
@@ -248,9 +249,13 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   const types = [...new Set(rows.map(r => r.data_type))];
   const oldest = rows.map(r => String(r.sample_time || r.end_time || r.start_time || "").slice(0, 10)).filter(Boolean).sort()[0];
   const replaced = types.length && oldest ? await replaceGoogleWithApple(db, userId, types, oldest) : 0;
+  // Food and drinks other apps logged (apple-food.js), with their own window.
+  const food = body.food && typeof body.food === "object" ? await saveAppleFood(db, userId, body.food) : { saved: 0, removed: 0 };
   const categories = (Array.isArray(body.categories) ? body.categories : []).map(String).filter(c => /^[a-z]{2,20}$/.test(c)).slice(0, 12);
-  await writeStatus(db, userId, "ok", { saved: rows.length, skipped: input.length - rows.length, removed, replaced, categories });
-  return { status: "ok", saved: rows.length, skipped: input.length - rows.length, removed, replaced };
+  const saved = rows.length + food.saved;
+  removed += food.removed;
+  await writeStatus(db, userId, "ok", { saved, skipped: input.length - rows.length, removed, replaced, categories });
+  return { status: "ok", saved, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}) };
 }
 
 // Disconnecting: like the other services, the data Loadwise already has stays

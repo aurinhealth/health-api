@@ -20,6 +20,7 @@ export const PERSONAL_TABLES = {
   strength_sets: { unique: [["user_id", "source_key"]] },
   gym_plans: { pk: ["user_id", "workout_date"] },
   gym_plan_cancellations: { pk: ["user_id", "workout_date"] },
+  week_revisions: { pk: ["user_id", "date"] },
   dashboard_profile: { pk: ["user_id", "id"] },
   coach_inbox: { indexes: [["user_id", "created_at DESC"]] },
   sync_status: { pk: ["user_id", "sync_name"] },
@@ -71,10 +72,15 @@ export const PERSONAL_TABLES = {
   // Pairings made by hand (manual-pairs.js) and the choice of an activity's
   // calories (activity-energy-choices.js).
   manual_activity_pairs: { pk: ["user_id", "planned_id"] },
+  coach_picks: { pk: ["user_id", "date"] },
+  activity_type_overrides: { pk: ["user_id", "activity_key"] },
   activity_energy_choices: { pk: ["user_id", "activity_id"] },
   // The app's push device tokens and the once-a-day guard of the pushes (push.js).
   push_tokens: { pk: ["user_id", "token"] },
-  push_log: { pk: ["user_id", "kind", "local_date"] }
+  push_log: { pk: ["user_id", "kind", "local_date"] },
+  // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
+  saved_workouts: { pk: ["user_id", "id"] },
+  workout_shares: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

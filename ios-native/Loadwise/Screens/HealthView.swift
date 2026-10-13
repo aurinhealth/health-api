@@ -33,6 +33,8 @@ struct HealthView: View {
 /// A drill-down page: the section's background, a back button and a column.
 struct DetailScreen<Content: View>: View {
     var glow: Color = Palette.Glow.health
+    /// Shown in the pinned bar once the page is scrolled.
+    var title: String? = nil
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
 
@@ -49,7 +51,7 @@ struct DetailScreen<Content: View>: View {
                 .padding(.bottom, 100)
             }
         }
-        .floatingBack { dismiss() }
+        .floatingBack(title: title) { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 }

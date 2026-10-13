@@ -645,6 +645,7 @@ function progressionNote(estimate) {
 // actually lift drives the next session (own-history progression).
 export const FIRST_SESSION_LOAD = 0.6;
 const FIRST_SESSION_NOTE = () => L("první trénink: váha je opatrný odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě (RPE 7)", "first session: the weight is a careful estimate; adjust it so you have 2–3 reps in reserve (RPE 7)");
+const TEST_SET_NOTE = () => L("zkušební série: začni lehčí vahou, se kterou zvládneš opakování s rezervou 3–4; podle ní nastav další série (RPE 7–8)", "test set: start with a lighter weight you can do with 3–4 reps in reserve; set the next sets from it (RPE 7–8)");
 // Core work keeps its own repetitions when a training plan sets them for the rest.
 const CORE_PATTERNS = new Set(["core", "anti_rotation", "rotation", "trunk_flexion", "trunk_extension", "slam"]);
 function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false, planReps = null) {
@@ -694,6 +695,44 @@ export function snapDumbbells(rows, weights) {
     row[3] = String(best).replace(".", ",");
   }
   return rows;
+}
+
+// A saved or shared workout (workout-templates.js) planned for the athlete:
+// its exercises, order, sets and repetitions stay; the loads come from the
+// athlete's own history and today's readiness, as in a generated plan. An
+// exercise outside the catalogue keeps its sets with no load.
+export function templateStrengthPlan(context, template, options = {}) {
+  const policy = trainingStatus(context?.athleteState);
+  if (policy.paused) throw new Error(policy.headline + '. ' + policy.guidance[0]);
+  const factor = recoveryFactor(context), history = context?.strength?.recentCompletedSets || [], historyMap = recentExerciseMap(history);
+  const firstSession = !history.length, sex = athleteSex(context, options);
+  const rows = [], loadEstimates = [];
+  let warmedUp = false;
+  for (const item of template.exercises || []) {
+    const exercise = EXERCISES[item.name] ? item.name : normalizeExerciseName(item.name);
+    const sets = Math.max(1, Math.min(10, Number(item.sets) || 3)), reps = String(item.reps || '10');
+    if (!EXERCISES[exercise]) {
+      // An exercise the app doesn't know has no weight to start from: the
+      // first set is a test set, and its weight sets the rest.
+      rows.push(["WORK", item.name, "1", "", reps, "", "", "", "FALSE", TEST_SET_NOTE(), "🎥 Video", "", DEFAULT_EXECUTION]);
+      for (let i = 1; i < sets; i++) rows.push(["WORK", item.name, String(i + 1), "", reps, "", "", "", "FALSE", L("váhu podle zkušební série", "weight from the test set"), "", "", DEFAULT_EXECUTION]);
+      continue;
+    }
+    const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps);
+    const first = work.rows[0];
+    const own = Array.from({ length: sets }, (_, i) => { const r = first.slice(); r[2] = String(i + 1); r[4] = CORE_PATTERNS.has(EXERCISES[exercise].pattern) ? first[4] : reps; r[10] = i === 0 ? first[10] : ""; return r; });
+    const warmup = warmupRows(exercise, work.kg, !warmedUp);
+    if (warmup.length) warmedUp = true;
+    rows.push(...warmup, ...own);
+    loadEstimates.push({ exercise, sets, ...work.estimate });
+  }
+  if (!rows.some(r => r[0] === 'WORK')) throw new Error(L('Trénink nemá žádný cvik.', 'The workout has no exercise.'));
+  configureStrengthCoaching(rows, EXERCISES, { factor, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession });
+  const timing = estimateStrengthTiming(rows, EXERCISES, 600);
+  snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
+  const from = String(options.fromName || '').trim();
+  const rationale = (from ? L('Trénink ti posílá ' + from + '. ', from + ' sent you this workout. ') : '') + L('Cviky, série a opakování zůstaly, váhy jsou podle tvých tréninků a dnešní připravenosti.', 'The exercises, sets and reps stay; the weights follow your own workouts and today\'s readiness.') + (firstSession ? ' ' + L('První trénink v aplikaci: váhy jsou opatrný odhad, uprav je tak, aby ti zbyla 2–3 opakování v rezervě.', 'Your first workout in the app: the weights are a careful estimate; adjust them so you keep 2–3 reps in reserve.') : '');
+  return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true };
 }
 
 export function generateStrengthPlan(context, options = {}) {

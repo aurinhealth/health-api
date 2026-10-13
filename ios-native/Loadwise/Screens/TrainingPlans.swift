@@ -81,19 +81,16 @@ struct TrainingPlanCard: View {
     @Environment(AppModel.self) private var model
     @State private var plans: TrainingPlans?
     @State private var showing = false
+    /// Loaded or failed: "Vybrat plán" shows only then, so an active plan does not flash it.
+    @State private var tried = false
 
     var body: some View {
-        Group {
-            if let plans {
-                Button { showing = true } label: {
-                    VStack(spacing: 12) {
-                        if let active = plans.active { ActivePlanSummary(active: active) }
-                        if let gym = plans.activeGym { ActivePlanSummary(active: gym) }
-                        if plans.active == nil && plans.activeGym == nil { choose }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
+        // A container that is always there: on an empty Group the task below
+        // never runs, so the plans never loaded and the card stayed hidden.
+        VStack(spacing: 12) {
+            if let active = plans?.active { button(ActivePlanSummary(active: active)) }
+            if let gym = plans?.activeGym { button(ActivePlanSummary(active: gym)) }
+            if tried && plans?.active == nil && plans?.activeGym == nil { button(choose) }
         }
         .task {
             guard !model.demo else { return }
@@ -102,6 +99,15 @@ struct TrainingPlanCard: View {
         .sheet(isPresented: $showing, onDismiss: { Task { await load() } }) {
             if let plans { TrainingPlansSheet(plans: plans) }
         }
+    }
+
+    /// Opens the plans; when they have not loaded yet (no signal), tries again first.
+    private func button(_ label: some View) -> some View {
+        Button {
+            if plans != nil { showing = true; return }
+            Task { await load(); showing = plans != nil }
+        } label: { label }
+        .buttonStyle(.plain)
     }
 
     private var choose: some View {
@@ -116,7 +122,8 @@ struct TrainingPlanCard: View {
     }
 
     private func load() async {
-        plans = try? await model.api.trainingPlans()
+        if let fresh = try? await model.api.trainingPlans() { plans = fresh }
+        tried = true
     }
 }
 
@@ -554,7 +561,7 @@ struct PlanWeekView: View {
     @State private var error: String?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: Fmt.capitalized(week.phaseLabel)) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { " · " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
                 Text(Fmt.capitalized(week.phaseLabel)).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
@@ -608,7 +615,7 @@ struct PlanSessionView: View {
     let sport: String
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: session.workout?.name ?? session.label) {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: Fmt.capitalized(Fmt.weekdayShort(session.date)) + " " + Fmt.dayMonth(session.date)).padding(.top, 24)
                 Text(session.workout?.name ?? session.label ?? "").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)

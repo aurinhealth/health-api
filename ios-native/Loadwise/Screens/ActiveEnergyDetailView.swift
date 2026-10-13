@@ -8,7 +8,7 @@ struct ActiveEnergyDetailView: View {
     let training: TrainingSnapshot
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training) {
+        DetailScreen(glow: Palette.Glow.training, title: "Aktivní výdej") {
             if let active = training.activeCalories {
                 ActiveEnergyContent(active: active, today: training.date, calendar: model.calendar)
             } else {

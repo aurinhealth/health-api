@@ -30,7 +30,7 @@ export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/activity/types'&&request.method==='GET')return Response.json({status:'ok',types:activityTypes()},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/activity/type'&&request.method==='POST'){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    try{return Response.json(await changeActivityType(env,await request.json().catch(()=>({}))),{headers:{'Cache-Control':'no-store'}});}
+    try{return Response.json(await changeActivityType(env,await request.json().catch(()=>({})),{googleToken}),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }
   if(url.pathname==='/app/api/sync/sends'&&request.method==='GET'){

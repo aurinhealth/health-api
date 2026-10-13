@@ -129,7 +129,7 @@ export function daySessions(d, date, training = {}, gymDay = null) {
     sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit });
   }
   for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
-  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: "strength", minutes: null, tss: null, activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
+  if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: gymPlan.type ? groupOfType(gymPlan.type) || "other" : "strength", ...(gymPlan.type ? { type: gymPlan.type } : {}), minutes: null, tss: null, activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
   return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
 }
 
@@ -336,6 +336,9 @@ function sessionOf(w, date, status) {
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
     eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
+    // A workout from the watch opens its own detail (watch-detail.js).
+    ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
+      : done && /^(google-wearables|apple-health):./.test(String(w.payload?.pairedWith || "")) ? { watch: { source: w.payload.pairedWith.slice(0, w.payload.pairedWith.indexOf(":")), id: w.payload.pairedWith.slice(w.payload.pairedWith.indexOf(":") + 1) } } : {}),
     ...(done ? energyOf(w) : {})
   };
 }

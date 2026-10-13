@@ -19,7 +19,7 @@ struct TrainingSnapshot: Decodable, Equatable {
     let vo2max: VO2max?
     let activeCalories: ActiveCalories?
     /// The week's sessions, done and planned (older saved answers lack it).
-    let sessions: [WeekSession]?
+    var sessions: [WeekSession]?
     let thisWeek: ThisWeek
     /// No main sport and goal saved yet: Training shows "Nastav si zaměření a
     /// cíle" (older saved answers lack it).

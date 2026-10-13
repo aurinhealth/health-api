@@ -3,7 +3,7 @@
 "NSCameraUsageDescription" = "Aurin čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku.";
 "NSPhotoLibraryUsageDescription" = "Aurin načte fotku jídla nebo posilovny, kterou vybereš.";
 "NSLocationWhenInUseUsageDescription" = "Aurin vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.";
-"NSHealthShareUsageDescription" = "Aurin čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky, váhu a se zapnutým sledováním cyklu i menstruaci, ovulační testy a antikoncepci, aby spočítal regeneraci, zátěž a kalorický cíl.";
+"NSHealthShareUsageDescription" = "Aurin čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky, váhu, jídlo a pití z jiných aplikací a se zapnutým sledováním cyklu i menstruaci, ovulační testy a antikoncepci, aby spočítal regeneraci, zátěž a kalorický cíl.";
 "NSHealthUpdateUsageDescription" = "Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.";
 "NSAlarmKitUsageDescription" = "Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.";
 "NSBluetoothAlwaysUsageDescription" = "Aurin se připojí ke snímači tepu, který si spáruješ, aby v režimu tréninku ukázal tep.";

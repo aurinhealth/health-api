@@ -27,6 +27,10 @@ final class AppModel {
     /// without data).
     var notice: String?
     private(set) var loading = false
+    /// The pill on top while the app syncs after opening (RootView SyncPill):
+    /// "Synchronizuji…", "Synchronizováno" for a moment, or a failure to retry.
+    private(set) var syncStatus: SyncStatus?
+    enum SyncStatus: Equatable { case syncing, done, failed }
     private(set) var signingIn = false
     var errorMessage: String?
     /// Sample data instead of the server ("Prohlédnout ukázku", screenshots).
@@ -84,6 +88,25 @@ final class AppModel {
     /// A done activity just sent to the apps chosen in Synchronizace: the
     /// toast "Odesláno do 2 aplikací" and its sheet (SyncViews.swift).
     var syncReport: SyncReport?
+    /// A deleted workout waiting a few seconds for "Zpět" (RootView): the
+    /// deletion reaches the server and Apple Health only after that.
+    var undoToast: PlanToast?
+
+    /// hide: the planned event that leaves the week and the calendar at once;
+    /// "Zpět" brings it back with the next load.
+    func deleteLater(_ title: String, hide eventId: String? = nil, commit: @escaping () async -> Void) {
+        if let eventId {
+            training?.sessions?.removeAll { $0.eventId == eventId }
+            for (day, value) in calendar where value.activities.contains(where: { $0.eventId == eventId }) {
+                calendar[day]?.activities.removeAll { $0.eventId == eventId }
+            }
+        }
+        let undo: () async -> Void = eventId == nil ? {} : { [weak self] in
+            await self?.refreshTraining()
+            await self?.refresh()
+        }
+        undoToast = PlanToast(title: title, note: nil, cancelled: true, undo: undo, commit: commit)
+    }
     /// The Today and Food answers as they came, under the waiting writes.
     @ObservationIgnored private var todayBase: Data?
     @ObservationIgnored private var foodBase: Data?
@@ -157,6 +180,11 @@ final class AppModel {
 
     func path(_ tab: AppTab) -> Binding<[AppRoute]> {
         Binding(get: { self.paths[tab] ?? [] }, set: { self.paths[tab] = $0 })
+    }
+
+    /// A detail on top of the current tab's screens.
+    func push(_ route: AppRoute) {
+        paths[tab, default: []].append(route)
     }
 
     /// Opens a detail on its own tab (widgets, notifications, links).
@@ -293,6 +321,8 @@ final class AppModel {
             calendar = [:]
         }
         await loadAccountInitial()
+        // Back in the account that read Apple Health before signing out.
+        await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
         await checkSetup()
         // The morning readiness push for this account (PushRegistration.swift).
         await PushRegistration.refresh(api: api)
@@ -314,10 +344,12 @@ final class AppModel {
         phase = .signedIn
     }
 
-    func refresh() async {
+    /// announce: the app was opened or pulled down, so the pill says it syncs.
+    func refresh(announce: Bool = false) async {
         guard !demo, phase == .signedIn else { return }
         loading = true
         defer { loading = false }
+        if announce { syncStatus = .syncing }
         await sendOutbox()
         // Last night and the morning's HRV from the watch before Today is computed.
         await AppleHealth.shared.sync(api: api)
@@ -336,17 +368,37 @@ final class AppModel {
                 WidgetBridge.update(today)
             }
             if let status = try? await api.athleteStatus() { athleteStatus = status }
+            if syncStatus == .syncing { finishSync(.done) }
         } catch APIError.unauthorized {
+            syncStatus = nil
             signOut(expired: true)
         } catch {
             // Without signal the saved screen stays; an error only without one.
             // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { return }
+            if Self.isCancellation(error) { if syncStatus == .syncing { syncStatus = nil }; return }
             let lost = noteConnection(error)
             if !(lost && today != nil) { errorMessage = error.localizedDescription }
-            if !lost && today != nil { notice = error.localizedDescription }
+            // Offline has its own note; the pill takes a failed sync.
+            if syncStatus == .syncing {
+                finishSync(lost ? nil : .failed)
+            } else if !lost && today != nil {
+                notice = error.localizedDescription
+            }
         }
     }
+
+    /// "Synchronizováno" goes away after 3 seconds; a failure stays until tapped.
+    private func finishSync(_ status: SyncStatus?) {
+        syncStatus = status
+        guard status == .done else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            if syncStatus == .done { syncStatus = nil }
+        }
+    }
+
+    /// A tap on the failed pill: try again, or put it away.
+    func dismissSyncFailure() { if syncStatus == .failed { syncStatus = nil } }
 
     /// A tab's data again unless it came from the server in the last 5 minutes
     /// for the same day. Without this a tab kept the copy saved on the phone
@@ -362,7 +414,7 @@ final class AppModel {
         refreshing.insert(tab)
         defer { refreshing.remove(tab) }
         switch tab {
-        case .today: await refresh()
+        case .today: await refresh(announce: true)
         case .training: await refreshTraining()
         case .health: await refreshHealth()
         case .food: await refreshFood()
@@ -920,7 +972,8 @@ final class AppModel {
             outbox = []
             OutboxStore.save([])
             // Apple Health was allowed for this account, not the next one.
-            AppleHealth.shared.disconnect()
+            AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
+            ErrorLog.clear()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }
