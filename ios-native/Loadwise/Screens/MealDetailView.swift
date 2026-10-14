@@ -1,20 +1,29 @@
 import SwiftUI
 
 /// Jídlo → a meal: its calories and macros against the meal's targets, the
-/// fibre, sugar and salt, and every food with all its values.
+/// fibre, sugar and salt, and every food with all its values. Vybrat (or a
+/// swipe right on a food) ticks several foods to copy, move or delete.
 struct MealDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let type: String
     @State private var adding = false
+    @State private var selecting = false
+    @State private var selected: Set<Int> = []
+    @State private var moving: String?
+    @State private var confirmDelete = false
+
+    private var meal: FoodSnapshot.Meal? { model.food?.meals.first(where: { $0.type == type }) }
 
     var body: some View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.food)
             PageScroll {
-                if let meal = model.food?.meals.first(where: { $0.type == type }) {
-                    MealDetailContent(meal: meal, back: { dismiss() }, add: { adding = true })
-                        .padding(.bottom, 100)
+                if let meal {
+                    MealDetailContent(meal: meal, back: { dismiss() }, add: { adding = true },
+                                      selection: selecting ? $selected : nil,
+                                      startSelecting: { id in selected = [id]; withAnimation(.easeOut(duration: 0.2)) { selecting = true } })
+                        .padding(.bottom, selecting ? 190 : 100)
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         BackSlot { dismiss() }
@@ -24,10 +33,84 @@ struct MealDetailView: View {
                 }
             }
         }
-        .floatingBack(title: model.food?.meals.first(where: { $0.type == type })?.label,
-                      trailing: ChromeAction(systemImage: "plus", label: MealSlot.addText(type)) { adding = true }) { dismiss() }
+        .modifier(SelectionBar(selecting: $selecting, selected: $selected, allIds: meal?.entries.map(\.id) ?? [],
+                               title: meal?.label, add: MealSlot.addText(type), onAdd: { adding = true }, back: { dismiss() }))
+        .overlay(alignment: .bottom) {
+            if selecting {
+                BulkActionBar(count: selected.count, copy: { moving = "Kopírovat" }, move: { moving = "Přesunout" }, delete: { confirmDelete = true })
+                    .padding(.horizontal, 24).padding(.bottom, 92)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $adding) { AddFoodSheet(meal: type) }
+        .sheet(item: Binding(get: { moving.map { BulkVerb(verb: $0) } }, set: { moving = $0?.verb })) { v in
+            BulkMoveSheet(verb: v.verb, count: selected.count, from: model.food?.date ?? AppModel.localDate(Date()), meal: type) { date, mealType in
+                await run(v.verb == "Kopírovat" ? "copy" : "move", date: date, mealType: mealType)
+            }
+        }
+        .confirmationDialog(L10n.f("Smazat %@?", BulkMoveSheet.items(selected.count)), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Smazat", role: .destructive) { Task { _ = await run("delete") } }
+        }
+    }
+
+    /// Sends the change for the ticked foods; nil when it worked, else the message.
+    private func run(_ action: String, date: String? = nil, mealType: String? = nil) async -> String? {
+        let ids = selected.filter { $0 > 0 }
+        if action == "delete" { for id in selected where id < 0 { await model.deleteFood(id: id) } }
+        if !model.demo, !ids.isEmpty {
+            do {
+                let skipped = try await model.api.bulkFood(action, ids: Array(ids), date: date, mealType: mealType)
+                if !skipped.isEmpty { model.notice = L10n.tr("Jídlo z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě.") }
+            } catch {
+                return error.localizedDescription
+            }
+            await model.refreshFood()
+            await model.refresh()
+        }
+        withAnimation(.easeOut(duration: 0.2)) { selecting = false }
+        selected = []
+        return nil
+    }
+}
+
+/// The sheet's verb as an identifiable item.
+struct BulkVerb: Identifiable {
+    let verb: String
+    var id: String { verb }
+}
+
+/// The pinned bar of a list that can select: back, the page's "+" and
+/// Vybrat; while selecting Zrušit, "Vybráno 2" and Vše.
+struct SelectionBar: ViewModifier {
+    @Binding var selecting: Bool
+    @Binding var selected: Set<Int>
+    let allIds: [Int]
+    var title: String?
+    var add: String? = nil
+    var onAdd: (() -> Void)? = nil
+    let back: () -> Void
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if selecting {
+            let all = !allIds.isEmpty && Set(allIds).isSubset(of: selected)
+            content.floatingBack(title: L10n.f("Vybráno %@", String(selected.count)),
+                                 trailing: ChromeAction(systemImage: "checklist", label: all ? "Nic" : "Vše", text: all ? "Nic" : "Vše") {
+                                     selected = all ? [] : Set(allIds)
+                                 },
+                                 leading: ChromeAction(systemImage: "xmark", label: "Zrušit", text: "Zrušit") {
+                                     withAnimation(.easeOut(duration: 0.2)) { selecting = false }
+                                     selected = []
+                                 },
+                                 pinTitle: true, back)
+        } else {
+            content.floatingBack(title: title,
+                                 trailing: onAdd == nil ? nil : ChromeAction(systemImage: "plus", label: add ?? "Přidat") { onAdd?() },
+                                 extra: allIds.isEmpty ? nil : ChromeAction(systemImage: "checkmark.circle", label: "Vybrat", text: "Vybrat") {
+                                     withAnimation(.easeOut(duration: 0.2)) { selecting = true }
+                                 }, back)
+        }
     }
 }
 
@@ -36,6 +119,10 @@ struct MealDetailContent: View {
     let meal: FoodSnapshot.Meal
     var back: () -> Void = {}
     var add: () -> Void = {}
+    /// The ticked foods while selecting (Vybrat).
+    var selection: Binding<Set<Int>>? = nil
+    /// A swipe right on a food: start selecting with it ticked.
+    var startSelecting: ((Int) -> Void)? = nil
 
     private var goal: FoodSnapshot.Suggestion? { meal.target ?? meal.suggestion }
 
@@ -85,7 +172,17 @@ struct MealDetailContent: View {
                 PrimaryButton(title: MealSlot.addText(meal.type), systemImage: "plus", action: add).padding(.top, 16)
             } else {
                 VStack(spacing: 10) {
-                    ForEach(meal.entries) { FoodEntryCard(entry: $0) }
+                    ForEach(meal.entries) { entry in
+                        if let selection {
+                            SelectableRow(on: selection.wrappedValue.contains(entry.id), toggle: {
+                                if selection.wrappedValue.contains(entry.id) { selection.wrappedValue.remove(entry.id) } else { selection.wrappedValue.insert(entry.id) }
+                            }) {
+                                FoodEntryCard(entry: entry, plain: true)
+                            }
+                        } else {
+                            FoodEntryCard(entry: entry, select: startSelecting == nil ? nil : { startSelecting?(entry.id) })
+                        }
+                    }
                 }
                 .padding(.top, 10)
             }
@@ -111,17 +208,23 @@ struct MealDetailContent: View {
 struct FoodEntryCard: View {
     @Environment(AppModel.self) private var model
     let entry: FoodSnapshot.Entry
+    /// A swipe right shows Vybrat.
+    var select: (() -> Void)? = nil
+    /// While selecting: the card alone, no swipe or edit.
+    var plain = false
     @State private var editing = false
     @State private var confirmDelete = false
 
     var body: some View {
         Group {
+            if plain {
+                card
             // Food from another app (Yazio…) changes there; here it can only
             // be deleted, from Aurin alone (it stays in that app and Apple Health).
-            if entry.app != nil {
-                SwipeRow(delete: { confirmDelete = true }) { card }
+            } else if entry.app != nil {
+                SwipeRow(select: select, delete: { confirmDelete = true }) { card }
             } else {
-                SwipeRow(edit: { editing = true }, delete: { confirmDelete = true }) {
+                SwipeRow(edit: { editing = true }, select: select, delete: { confirmDelete = true }) {
                     card.onTapGesture { editing = true }
                 }
             }
