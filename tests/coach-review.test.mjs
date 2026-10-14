@@ -72,3 +72,12 @@ test("an answer that is not JSON is an error, never a headline", async () => {
   try { await assert.rejects(reviewDay({ OPENAI_API_KEY: "sk" }, { date: "2026-10-04" }), /Hodnocení se nepodařilo zpracovat/); }
   finally { globalThis.fetch = original; }
 });
+
+test("the day review counts nights, not naps, and names English weekdays in English", async () => {
+  const { buildReviewInput } = await import("../src/coach-review.js");
+  const { withLang } = await import("../src/lang.js");
+  const health = { sleep: [{ date: "2026-10-13", durationMin: 470 }, { date: "2026-10-13", durationMin: 25, nap: true }] };
+  const input = withLang("en", () => buildReviewInput({ date: "2026-10-14", today: "2026-10-14", health }));
+  assert.deepEqual(input.sleep.map(s => s.minutes), [470]);
+  assert.equal(input.day.weekday, "Wednesday");
+});

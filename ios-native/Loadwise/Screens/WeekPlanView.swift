@@ -63,7 +63,7 @@ struct WeekSessionDraft: Identifiable, Equatable {
         var next = self
         do {
             if sport == "gym" {
-                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [])
+                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [], fromWeek: true)
             } else {
                 let r = try await api.generateWeekSession(date: date, sport: sport, minutes: minutes, environment: environment, focus: focus,
                                                           resize: resize ? workout?.id : nil)

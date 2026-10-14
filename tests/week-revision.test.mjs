@@ -56,3 +56,14 @@ test("a new session or rating changes the signature", () => {
   assert.notEqual(a, revisionSignature([{ id: "activity:1" }], [{ rpe: 7 }]));
   assert.notEqual(a, revisionSignature([{ id: "activity:1" }, { id: "activity:2" }], []));
 });
+
+test("a harder change the checks undo keeps no reason, and a summary with only dropped changes goes", async () => {
+  // Harder next to the VO₂max day is undone; the longer session stays without the "harder" reason.
+  const [change] = sanitizeChanges([{ eventId: "planned:1", kind: "threshold", minutes: 90, reason: "Přitlač práh 3×12." }], upcoming, { availabilityByDate: { "2026-10-15": 120 } });
+  assert.equal(change.kind, "endurance");
+  assert.equal(change.reason, null);
+  const ask = async () => ({ text: JSON.stringify({ summary: "Přitlačím čtvrtek na práh.", changes: [{ eventId: "planned:1", kind: "threshold", minutes: 60, reason: "Přitlač." }] }) });
+  const r = await reviseWeek({}, { date: "2026-10-14", done: [], feedback: [], readiness: null, upcoming }, { ask });
+  assert.deepEqual(r.changes, []);
+  assert.doesNotMatch(r.summary, /Přitlačím/);
+});
