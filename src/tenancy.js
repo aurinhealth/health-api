@@ -82,6 +82,8 @@ export const PERSONAL_TABLES = {
   push_log: { pk: ["user_id", "kind", "local_date"] },
   // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
   saved_workouts: { pk: ["user_id", "id"] },
+  // The AI's own rides and runs for a day (ai-workout-compose.js).
+  ai_workouts: { pk: ["user_id", "id"] },
   workout_shares: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");

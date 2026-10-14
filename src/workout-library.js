@@ -1,5 +1,6 @@
 import { trainingSetup } from './onboarding.js';
 import { ownLibraryWorkout } from "./endurance-templates.js";
+import { getAiWorkout } from "./ai-workout-compose.js";
 import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-workouts.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
@@ -66,6 +67,9 @@ export async function getWorkout(db, id) {
     const row = await db.prepare("SELECT id,sport,name,structure_json FROM saved_workouts WHERE user_id=? AND id=?").bind(db.userId, own[1]).first().catch(() => null);
     return row ? ownLibraryWorkout(row) : null;
   }
+  // "ai-<id>": the AI's own workout for a day (ai-workout-compose.js).
+  const ai = String(id).match(/^ai-([A-Za-z0-9]{10})$/);
+  if (ai) return getAiWorkout(db, ai[1]);
   // "<id>~<minutes>": a workout resized to another length (see resizeWorkout).
   const resized = String(id).match(/^(.+)~(\d{2,3})$/);
   if (resized) { const base = await getWorkout(db, resized[1]); return base ? resizeWorkout(base, Number(resized[2])) : null; }

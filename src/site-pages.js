@@ -392,7 +392,7 @@ ${today}
 <div class="card workout">
 <div class="head"><span class="name">Sweet spot 3×12 ${icon('spark')}</span><span class="len">${t('1 h 25 min', '1h 25m')}</span></div>
 <div class="graph" aria-hidden="true">${graph}</div>
-<p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti.', 'Picked by AI from the library for today’s readiness.')}</p>
+<p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti. Když v ní nic nesedí, AI sestaví vlastní.', 'Picked by AI from the library for today’s readiness. When nothing there fits, the AI builds its own.')}</p>
 </div>
 <div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Tréninkové plány s přehledem týdnů', 'Training plans with a week-by-week overview')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
 </div>
