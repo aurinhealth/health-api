@@ -185,3 +185,39 @@ test('the coach picks at most two known pictures for an answer',()=>{
   assert.deepEqual(r.visuals,['form','sleep']);
   assert.deepEqual(coachAnswerText('Obyčejný text',{actions:true}).visuals,[]);
 });
+
+test('a proposed workout keeps the kind the answer recommends, and confirming plans it',()=>{
+  const context={athleteState:'active',workoutLibraryRecommendations:[]};
+  const action={type:'workout',date:'2026-10-08',sport:'ride',minutes:60,reason:'Nohy jsou unavené',workoutId:'',kind:'endurance'};
+  assert.equal(validateCoachActions([action],context,today)[0].kind,'endurance');
+  assert.equal(validateCoachActions([{...action,kind:'gym'}],context,today)[0].kind,undefined);
+  assert.equal(validateCoachActions([{...action,sport:'gym',minutes:45,kind:'endurance'}],context,today)[0].kind,undefined);
+  const schema=COACH_ACTION_FORMAT.schema.properties.actions.items;assert.ok(schema.required.includes('kind'));
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  // The kind reaches the generator, and Potvrdit schedules the ride or run and saves the gym draft.
+  assert.match(entry,/FOCUS_OF\[a\.kind\]\?\{focus:FOCUS_OF\[a\.kind\]\}/);
+  assert.match(entry,/scheduleWorkoutInIntervals\(env,env\.DB,\{workoutId:preview\.workout\.id,date:a\.date,confirm:true/);
+  assert.match(entry,/\/app\/api\/gym\/confirm'\),saved=await handleDashboardApi/);
+});
+
+test('watch sessions reach the coach with distance, pace, power and elevation, and VO2max is in the wellness',()=>{
+  const run=compactActivity({id:'apple-1',type:'Run',durationHours:1,payload:{exercise:{exerciseType:'RUNNING',metricsSummary:{distanceMeters:12000,averagePowerWatts:250,averageHeartRateBeatsPerMinute:150,maxHeartRateBeatsPerMinute:172,elevationGainMeters:120,caloriesKcal:800}}}});
+  assert.deepEqual([run.distanceKm,run.pace,run.averagePower,run.averageHeartRate,run.maxHeartRate,run.elevationM,run.calories],[12,'5:00/km',250,150,172,120,800]);
+  // Google gives the distance in millimetres.
+  assert.equal(compactActivity({type:'Ride',durationHours:2,payload:{exercise:{metricsSummary:{distanceMillimeters:60000000}}}}).distanceKm,60);
+  const context=coachContext({date:'2026-10-14',health:{wellness:[{id:'2026-10-14',vo2max:52.4}]}});
+  assert.equal(context.health.at(-1).vo2max,52.4);
+});
+
+test('remarks about the proposal are not kept as lasting preferences; the question picks the sport',()=>{
+  for(const m of ['I like this plan, but make Thursday shorter','I prefer the first option','Nechci to, dej mi jinou variantu','Líbí se mi tenhle návrh'])assert.equal(explicitPreference(m),null,m);
+  assert.equal(explicitPreference('I prefer riding outdoors'),'I prefer riding outdoors');
+  assert.equal(engineSport({sport:'cycling'},null,'Můžu zítra běžet tempo?'),'run');
+  assert.equal(engineSport({sport:'running'},null,'Should I ride hard today?'),'ride');
+  assert.equal(engineSport({sport:'cycling'},null,'Should I run or ride?'),'ride');
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  // Dropped proposals are named in the answer; the plan's week and the cycle reach the coach.
+  assert.match(entry,/neprošl'\+\(dropped===1\?'':'y'\)\+' kontrolou aplikace/);
+  assert.match(entry,/coachCtx\.trainingPlan=\{name:targets\.plan\.name/);
+  assert.match(entry,/sleepGoal:profile\.sleepGoal,cycle:profile\.cycle\|\|null/);
+});

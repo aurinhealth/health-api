@@ -226,7 +226,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);
       if (!words) throw new Error(L("Popiš, jaký trénink chceš.", "Describe the workout you want."));
       if (!env.OPENAI_API_KEY) return json({ message: L("AI není připojena (chybí OPENAI_API_KEY).", "AI is not connected (OPENAI_API_KEY is missing).") }, 503);
-      return json({ status: "ok", template: await describeWorkout(env, sport, words) });
+      return json({ status: "ok", template: await describeWorkout(env, sport, words, await thresholdsOf(env)) });
     }
     const one = /^\/app\/api\/my-workouts\/([A-Za-z0-9]{10})$/.exec(path);
     if (one && request.method === "PUT") {
@@ -311,14 +311,24 @@ function describeInstructions(sport) {
     "Return blocks in order. A block is a section (repeats 1, one step) or a repeat (repeats 2–30, 1–6 steps done in turn).",
     "Each step has a short label in the athlete's language (warm-up, the effort, recovery, cool-down), a length in seconds" + (sport === "run" ? " or in km (then seconds is null)" : " (km is null)") + ", and an intensity range low–high as % of " + (sport === "run" ? "threshold pace speed" : "FTP") + ".",
     "Zones: " + zones + ". Use the zone's range unless the athlete gives other numbers. Recoveries between efforts sit in Z1.",
+    "When the athlete gives " + (sport === "run" ? "a pace (min/km), convert it with the threshold pace in the data: % = threshold pace seconds ÷ given pace seconds × 100" : "watts, convert them with the FTP in the data: % = watts ÷ FTP × 100") + ". Without a threshold in the data use the zone that the description fits.",
     "Add a warm-up and a cool-down when the athlete doesn't exclude them. Keep the total length the athlete asked for; at most 6 hours.",
     sport === "ride" ? "Cadence in rpm only when the athlete asks for it, else null." : "Cadence is always null.",
     "The name is short, like a workout title (\"Sweet spot 3×15\", \"Kilometrovky\"), in the athlete's language."
   ].join("\n");
 }
 
-async function describeWorkout(env, sport, words) {
-  const r = await callOpenAI(env, { feature: "workout-describe", instructions: describeInstructions(sport), input: JSON.stringify({ sport, language: lang(), description: words }), format: DESCRIBE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
+// The athlete's thresholds go along, so "3×10 at 280 W" or "4:10/km" turn into
+// the right % instead of a guess.
+export function describeInput(sport, words, thresholds) {
+  const pace = Number(thresholds?.runThresholdPace) > 0 ? Math.round(thresholds.runThresholdPace) : null;
+  const threshold = sport === "run" ? (pace ? { thresholdPace: Math.floor(pace / 60) + ":" + String(pace % 60).padStart(2, "0") + "/km", thresholdPaceSeconds: pace } : null)
+    : Number(thresholds?.ftp) > 0 ? { ftpWatts: Math.round(thresholds.ftp) } : null;
+  return JSON.stringify({ sport, language: lang(), threshold, description: words });
+}
+
+async function describeWorkout(env, sport, words, thresholds = null) {
+  const r = await callOpenAI(env, { feature: "workout-describe", instructions: describeInstructions(sport), input: describeInput(sport, words, thresholds), format: DESCRIBE_SCHEMA, maxOutputTokens: 3000, model: lightModel(env) });
   let data;
   try { data = JSON.parse(r.text); } catch { throw new Error(L("Trénink se nepodařilo sestavit, zkus ho popsat jinak.", "The workout couldn't be built; try describing it differently.")); }
   const blocks = (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(st => ({ label: st.label, low: st.low, high: st.high, cadence: st.cadence, ...(sport === "run" && st.km ? { km: st.km } : { seconds: st.seconds }) })) }));
