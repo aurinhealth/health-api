@@ -2,9 +2,11 @@ import Foundation
 
 // The sample training calendar: six weeks back and two ahead of the sample day.
 extension DemoData {
-    static let calendarByDate: [String: CalendarDay] = Dictionary(uniqueKeysWithValues: calendar(around: training.date).map { ($0.date, $0) })
+    static var calendarByDate: [String: CalendarDay] { L10n.isEnglish ? calendarEnglish : calendarCzech }
+    private static let calendarCzech = Dictionary(uniqueKeysWithValues: calendar(around: training.date, english: false).map { ($0.date, $0) })
+    private static let calendarEnglish = Dictionary(uniqueKeysWithValues: calendar(around: training.date, english: true).map { ($0.date, $0) })
 
-    static func calendar(around today: String) -> [CalendarDay] {
+    static func calendar(around today: String, english: Bool = L10n.isEnglish) -> [CalendarDay] {
         // Per weekday (Monday first): what a usual week holds.
         let week: [[(String, String, Double, Double?, Double)]] = [
             [("strength", "Posilovna · horní tělo", 55, nil, 320)],
@@ -25,7 +27,7 @@ extension DemoData {
             let list: [CalendarActivity] = items.enumerated().compactMap { i, item -> CalendarActivity? in
                 if !done && item.0 == "walk" { return nil }
                 let adherence: String? = !done ? nil : item.0 == "walk" ? "offplan" : differently ? "off" : "good"
-                return CalendarActivity(id: date + "-\(i)", sport: item.0, status: done ? "done" : "planned", title: item.1, date: date,
+                return CalendarActivity(id: date + "-\(i)", sport: item.0, status: done ? "done" : "planned", title: english ? Self.english[item.1] ?? item.1 : item.1, date: date,
                                         time: i == 0 ? "07:30" : "17:10", minutes: item.2, km: item.3, kcal: done ? item.4 : nil,
                                         activityId: nil, eventId: nil, adherence: adherence)
             }
