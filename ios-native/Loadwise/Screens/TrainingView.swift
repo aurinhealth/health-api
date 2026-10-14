@@ -5,6 +5,8 @@ struct TrainingView: View {
     @State private var addingWorkout = false
     /// A moved or cancelled session with its undo (Tréninky týdne).
     @State private var toast: PlanToast?
+    /// The day chosen in the calendar, shown in the pinned bar.
+    @State private var calendarDay: String?
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -12,10 +14,19 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast)
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast, pickDay: { calendarDay = $0 })
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
+                    .tabTopBar {
+                        if let day = calendarDay, day != training.date {
+                            TabBarTitle(text: L10n.tr("Trénink") + " · " + Fmt.dayShort(day, today: training.date), tinted: true)
+                        } else {
+                            TabBarTitle(text: L10n.f("Trénink · týden %@", String(training.week)))
+                        }
+                        Spacer(minLength: 0)
+                        ChromeButton(systemImage: "plus", label: "Zapsat trénink") { addingWorkout = true }
+                    }
                 } else if let message = model.trainingError {
                     VStack(spacing: 16) {
                         Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -61,6 +72,7 @@ struct TrainingContent: View {
     let training: TrainingSnapshot
     var addWorkout: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
+    var pickDay: (String) -> Void = { _ in }
     @State private var editing = false
     @State private var focusSheet = false
 
@@ -79,7 +91,7 @@ struct TrainingContent: View {
                         .padding(.top, 18)
                 }
 
-                TrainingCalendarCard(today: training.date)
+                TrainingCalendarCard(today: training.date, onPick: pickDay)
                     .padding(.top, 18)
 
                 StrainHero(training: training)

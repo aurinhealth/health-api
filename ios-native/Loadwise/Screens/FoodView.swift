@@ -25,6 +25,11 @@ struct FoodView: View {
                         .padding(.bottom, 100)
                 }
                 .refreshable { await model.refreshFood() }
+                .tabTopBar {
+                    DayBar(date: food.date, ahead: true)
+                    Spacer(minLength: 0)
+                    ChromeButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód") { scanning = true }
+                }
             } else if let message = model.foodError {
                 VStack(spacing: 16) {
                     Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -107,6 +112,7 @@ struct FoodContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .daySwipe(date: food.date, ahead: true, enabled: !editing)
     }
 
     private var board: some View {

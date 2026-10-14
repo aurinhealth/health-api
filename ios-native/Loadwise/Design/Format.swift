@@ -40,6 +40,54 @@ enum Fmt {
         return out.string(from: date).uppercased(with: locale)
     }
 
+    /// The day's title on Dnes, Zdraví and Jídlo: "Dnes", "Včera", "Zítra" or
+    /// the weekday ("Pondělí").
+    static func dayTitle(_ isoDate: String, today: String) -> String {
+        if let word = dayWord(isoDate, today: today) { return L10n.tr(word) }
+        guard let date = isoDay(isoDate) else { return isoDate }
+        let text = formatted(date, "EEEE")
+        return text.prefix(1).uppercased(with: locale) + text.dropFirst()
+    }
+
+    /// Under the title: "středa 14. října" when the title is a word, else
+    /// "12. října".
+    static func daySubtitle(_ isoDate: String, today: String) -> String {
+        guard let date = isoDay(isoDate) else { return "" }
+        if dayWord(isoDate, today: today) != nil {
+            return formatted(date, L10n.isEnglish ? "EEEE, MMMM d" : "EEEE d. MMMM")
+        }
+        return formatted(date, L10n.isEnglish ? "MMMM d" : "d. MMMM")
+    }
+
+    /// The day in the pinned bar: "Dnes · st 14. 10." or "Po 12. 10.".
+    static func dayShort(_ isoDate: String, today: String) -> String {
+        guard let date = isoDay(isoDate) else { return isoDate }
+        let short = formatted(date, L10n.isEnglish ? "EEE, MMM d" : "EEE d. M.")
+        if let word = dayWord(isoDate, today: today) { return L10n.tr(word) + " · " + short }
+        return short.prefix(1).uppercased(with: locale) + short.dropFirst()
+    }
+
+    private static func dayWord(_ isoDate: String, today: String) -> String? {
+        if isoDate == today { return "Dnes" }
+        if AppModel.shift(today, by: -1) == isoDate { return "Včera" }
+        if AppModel.shift(today, by: 1) == isoDate { return "Zítra" }
+        return nil
+    }
+
+    private static func isoDay(_ isoDate: String) -> Date? {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.dateFormat = "yyyy-MM-dd"
+        return parser.date(from: isoDate)
+    }
+
+    private static func formatted(_ date: Date, _ format: String) -> String {
+        let out = DateFormatter()
+        out.locale = locale
+        out.dateFormat = format
+        return out.string(from: date)
+    }
+
     /// One-letter Czech weekday for a chart label: "P", "Ú", "S", "Č", "P", "S", "N".
     static func weekdayInitial(_ isoDate: String) -> String {
         let parser = DateFormatter()

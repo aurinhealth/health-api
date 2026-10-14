@@ -7,6 +7,8 @@ import SwiftUI
 struct TrainingCalendarCard: View {
     @Environment(AppModel.self) private var model
     let today: String
+    /// The chosen day, for the pinned bar of Trénink.
+    var onPick: (String) -> Void = { _ in }
     @State private var selected: String?
     @State private var centered: String?
     @State private var expanded = false
@@ -117,6 +119,7 @@ struct TrainingCalendarCard: View {
 
     private func pick(_ date: String, scroll: Bool, proxy: ScrollViewProxy? = nil) {
         selected = date
+        onPick(date)
         if scroll, let proxy { withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(date, anchor: .center) } }
         else { centered = date }
     }
