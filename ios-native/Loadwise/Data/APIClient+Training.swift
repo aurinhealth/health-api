@@ -42,6 +42,24 @@ extension APIClient {
         try await send("/app/api/activity/type", method: "POST", body: ["id": JSONValue.string(id), "type": .string(type)])
     }
 
+    // MARK: Calories and deleting (src/activity-edits.js)
+
+    /// Where a done activity can be deleted: "app" (everywhere the app put it),
+    /// "intervals" (here, or in Intervals.icu too) or "watch" (here only).
+    func activityDeleteOptions(id: String) async throws -> ActivityDeleteOptions {
+        try await get("/app/api/activity/delete?id=" + (id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? id))
+    }
+
+    func deleteActivity(id: String, everywhere: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/activity/delete", method: "POST", body: ["id": JSONValue.string(id), "everywhere": .bool(everywhere)])
+    }
+
+    /// The calories Aurin counts for a done activity; nil goes back to the device's.
+    func setActivityKcal(id: String, kcal: Int?) async throws {
+        let value: JSONValue = kcal.map { JSONValue.number(Double($0)) } ?? .null
+        let _: JSONValue = try await send("/app/api/activity/kcal", method: "POST", body: ["id": JSONValue.string(id), "kcal": value])
+    }
+
     // MARK: Exercises and the AI builder
 
     func gymExercises() async throws -> [GymCatalogExercise] {

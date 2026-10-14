@@ -76,9 +76,10 @@ export const typeName = type => { const t = BY_TYPE.get(type); return t ? L(t[1]
 /** GET /app/api/activity/types: the list in the user's language. */
 export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
 
-// Every sync that writes an exercise row (Google Health, Apple Health) keeps
-// a type the user chose: use in place of `payload_json = excluded.payload_json`.
-export const KEEP_TYPE_SQL = `payload_json = CASE
+// Every sync that writes an activity or exercise row (Intervals.icu, Google
+// Health, Apple Health) keeps a type the user chose and calories set in Aurin
+// (activity-edits.js): use in place of `payload_json = excluded.payload_json`.
+const TYPED = `CASE
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json)
     AND json_extract(health_datapoints.payload_json, '$.loadwiseType') IS NOT NULL
     AND json_type(excluded.payload_json, '$.exercise') = 'object'
@@ -87,6 +88,16 @@ export const KEEP_TYPE_SQL = `payload_json = CASE
     '$.exercise.exerciseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
     '$.exercise.displayName', json_extract(health_datapoints.payload_json, '$.exercise.displayName'))
   ELSE excluded.payload_json END`;
+const KCAL = "json_extract(health_datapoints.payload_json, '$.loadwiseKcal')";
+const DEVICE = "json_extract(health_datapoints.payload_json, '$.loadwiseKcalDevice')";
+export const KEEP_TYPE_SQL = `payload_json = CASE
+  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND ${KCAL} IS NOT NULL
+  THEN CASE WHEN json_type(excluded.payload_json, '$.exercise.metricsSummary') = 'object'
+    THEN json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.exercise.metricsSummary.caloriesKcal', ${KCAL})
+    WHEN json_type(excluded.payload_json, '$.exercise') = 'object'
+    THEN json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.exercise.metricsSummary', json_object('caloriesKcal', ${KCAL}))
+    ELSE json_replace(json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.calories', ${KCAL}), '$.calories_kcal', ${KCAL}) END
+  ELSE ${TYPED} END`;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 

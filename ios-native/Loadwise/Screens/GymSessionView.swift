@@ -26,6 +26,8 @@ struct GymSessionView: View {
     @State private var changingType = false
     /// What the warm-up and stretching add to each length, shown under the length picker.
     @State private var extra: [String: GymPreferences.Extra]?
+    @State private var deleting = false
+    @State private var editingKcal = false
 
     /// The lifting session from the watch or Intervals.icu that day.
     private var doneSession: WeekSession? { model.doneStrengthSession(on: date) }
@@ -107,6 +109,10 @@ struct GymSessionView: View {
                 if !model.demo && showsDone, let typeTarget {
                     Menu {
                         Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                        if typeTarget.source != "app" {
+                            Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
+                        }
+                        Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                     } label: {
                         Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
                             .frame(width: 36, height: 32).contentShape(Rectangle())
@@ -115,6 +121,9 @@ struct GymSessionView: View {
                     .sheet(isPresented: $changingType) {
                         ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
                     }
+                    .activityEditing(id: typeTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
+                                     kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
+                                     deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
                 }
             }
             .padding(.top, 24)

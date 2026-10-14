@@ -122,6 +122,13 @@ extension AppModel {
             ?? sameDay.first { $0.sport == activity.sport && $0.time != nil && $0.time == activity.time }
     }
 
+    /// The week's or Today's copy of a done session opened from elsewhere (the
+    /// calendar's copy has no calorie check), else the session itself.
+    func liveSession(_ session: WeekSession) -> WeekSession {
+        let pool = (training?.sessions ?? []) + (today?.plan.compactMap { $0.session } ?? [])
+        return pool.first { $0.id == session.id && $0.status == "done" } ?? session
+    }
+
     /// The calories a calendar row counts with: the estimate once the user
     /// chose it for a flagged session (the calendar itself has the device's).
     func countedKcal(_ activity: CalendarActivity) -> Double? {

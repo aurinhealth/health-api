@@ -30,6 +30,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     var kcalEstimate: KcalEstimate? = nil
     /// The user's choice for it: "estimate" or "device"; nil while unchecked.
     var kcalChoice: String? = nil
+    /// The calories were set in Aurin (by hand or by the coach); kcalDevice
+    /// is what the device said (src/activity-edits.js).
+    var kcalEdited: Bool? = nil
+    var kcalDevice: Double? = nil
 
     struct KcalEstimate: Decodable, Hashable {
         let value: Double?

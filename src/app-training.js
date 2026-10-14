@@ -350,6 +350,8 @@ function sessionOf(w, date, status) {
 function energyOf(w) {
   const kcal = round(num(w.energyCheck?.reported ?? w.reportedCalories ?? w.calories));
   if (!(kcal > 0)) return {};
+  // Set in Aurin by hand or by the coach (activity-edits.js); the device's number stays known.
+  if (w.payload?.loadwiseKcal != null) return { kcal, kcalEdited: true, ...(num(w.payload.loadwiseKcalDevice) > 0 ? { kcalDevice: round(num(w.payload.loadwiseKcalDevice)) } : {}) };
   const c = w.energyCheck;
   if (c?.status !== "review") return { kcal };
   const out = { kcal, kcalEstimate: { value: round(num(w.autoCaloriesForPlanning ?? w.caloriesForPlanning ?? c.estimated)), low: c.low, high: c.high, reason: c.reason || null } };

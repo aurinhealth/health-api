@@ -74,7 +74,27 @@ export function coversSession(outer, inner) {
   if (g.kind !== "other" && g.kind !== o.kind) return false;
   return g.at >= o.at - MARGIN && g.at + g.minutes * 60000 <= o.at + o.minutes * 60000 + MARGIN;
 }
-export const sameSession = (x, y) => sessionGap(x, y) != null || coversSession(x, y) || coversSession(y, x);
+// Two records that share most of their time are one workout even when the
+// starts and lengths are too far apart for sessionGap: a watch's automatic
+// detection starts late or runs on after the ride (a Fitbit "stationary bike"
+// of 85 minutes around a 60-minute ride). The share is of the longer record,
+// so a walk inside a long ride or a long session around a short one stay
+// separate. Another sport needs nearly the same window: the watch named the
+// ride something else.
+const SAME_KIND_SHARE = 0.6, OTHER_KIND_SHARE = 0.8;
+export function overlapShare(x, y) {
+  const a = sessionOf(x), b = sessionOf(y);
+  if (!a || !b || a.stub || b.stub || !(a.minutes > 0) || !(b.minutes > 0)) return 0;
+  const shared = Math.min(a.at + a.minutes * 60000, b.at + b.minutes * 60000) - Math.max(a.at, b.at);
+  return shared > 0 ? shared / (Math.max(a.minutes, b.minutes) * 60000) : 0;
+}
+function overlapping(x, y) {
+  const a = sessionOf(x), b = sessionOf(y);
+  if (!a || !b) return false;
+  const sameKind = !a.kind || !b.kind || a.kind === b.kind || a.kind === "other" || b.kind === "other";
+  return overlapShare(x, y) >= (sameKind ? SAME_KIND_SHARE : OTHER_KIND_SHARE);
+}
+export const sameSession = (x, y) => sessionGap(x, y) != null || coversSession(x, y) || coversSession(y, x) || overlapping(x, y);
 
 // Which of the two records to keep: a full Intervals.icu activity, then the
 // watch's Google exercise, then an Intervals.icu stub.
@@ -101,7 +121,20 @@ export function pairSessions(rows) {
   for (const g of google) {
     if (used.has(g)) continue;
     const outer = other.find(o => coversSession(o, g));
-    if (outer) pairs.push({ keep: outer, drop: g, inside: true });
+    if (outer) { used.add(g); pairs.push({ keep: outer, drop: g, inside: true }); }
+  }
+  // What is left and shares most of its time with an activity is the same
+  // workout measured again (overlapping): the richer record stays, the most
+  // shared first.
+  const overlaps = [];
+  for (const g of google) if (!used.has(g)) for (const o of other) if (overlapping(g, o)) overlaps.push({ g, o, share: overlapShare(g, o) });
+  for (const c of overlaps.sort((a, b) => b.share - a.share)) {
+    if (used.has(c.g)) continue;
+    used.add(c.g);
+    const keep = richerSession(c.o, c.g), free = !used.has(c.o);
+    used.add(c.o);
+    // An activity already paired keeps its pair; this one only goes with it.
+    pairs.push({ keep, drop: keep === c.o ? c.g : c.o, inside: !free });
   }
   return pairs;
 }
