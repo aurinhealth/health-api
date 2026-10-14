@@ -13,6 +13,10 @@ struct HealthView: View {
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshHealth() }
+                    .tabTopBar {
+                        DayBar(date: health.date)
+                        Spacer(minLength: 0)
+                    }
                 } else if let message = model.healthError {
                     VStack(spacing: 16) {
                         Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -66,7 +70,6 @@ struct HealthContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 DayNavigator(date: health.date)
-                    .frame(height: 36)
 
                 RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
                     .padding(.top, 24)
@@ -84,6 +87,7 @@ struct HealthContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .daySwipe(date: health.date, enabled: !editing)
         .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }
