@@ -1991,3 +1991,9 @@
 "Zrušené tréninky: %@. Až se ti uleví, napiš kouči a plán vrátíme." = "Cancelled sessions: %@. When you feel better, tell the coach and we'll bring the plan back.";
 "Až se ti uleví, napiš kouči a plán vrátíme." = "When you feel better, tell the coach and we'll bring the plan back.";
 "Zpět na Trénink" = "Back to Training";
+
+/* The coach's own push (Settings → Oznámení → Kouč) */
+"Ozve se sám, nejvýš 1× denně" = "Speaks up on its own, at most once a day";
+"Vyměněno" = "Swapped";
+"Trénink zůstal, jak byl" = "The session stayed as it was";
+"%@ min" = "%@ min";

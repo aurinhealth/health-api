@@ -30,6 +30,12 @@ extension APIClient {
         let r: Response = try await send("/app/api/athlete-state", method: "POST", body: body)
         return r.state
     }
+
+    /// Settings → Oznámení: which of the server's pushes the phone wants
+    /// (the morning readiness, the coach's own messages).
+    func setPushChoices(morning: Bool, coach: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["notify": .object(["morning": .bool(morning), "coach": .bool(coach)])])
+    }
 }
 
 // The morning check-in on Today (src/morning-checkin.js): how the athlete

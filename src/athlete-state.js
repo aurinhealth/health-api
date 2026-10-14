@@ -42,6 +42,14 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   }
   // "Still true": the coach asks again in two weeks.
   if (patch.keep != null && state.memoryMeta[patch.keep]?.check) state.memoryMeta[patch.keep].check = shiftDate(date, CHECK_DAYS);
+  // Settings → Oznámení: the morning readiness and the coach's own messages, on until turned off.
+  if (patch.notify && typeof patch.notify === 'object') {
+    state.notify = { ...(state.notify || {}) };
+    for (const key of ['morning', 'coach']) if (typeof patch.notify[key] === 'boolean') state.notify[key] = patch.notify[key];
+  }
+  // Kept by the coach's push (coach-push.js): the last time zone seen and the message waiting for an answer.
+  if (patch.zone !== undefined) state.zone = patch.zone;
+  if (patch.nudge !== undefined) state.nudge = patch.nudge;
   if (patch.dismiss) state.dismissed = [...new Set([...state.dismissed, clean(patch.dismiss)])].slice(-30);
   await db.prepare('INSERT INTO athlete_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json').bind(db.userId, JSON.stringify(state)).run();
   return state;

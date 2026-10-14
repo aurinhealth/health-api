@@ -34,6 +34,18 @@ struct CoachCheckIn: Decodable {
     }
 }
 
+/// What the coach's push offered and how it ended (src/coach-push.js).
+struct CoachNudge: Decodable {
+    /// "pending", "kept" or "swapped".
+    let status: String
+    let to: Replacement?
+
+    struct Replacement: Decodable {
+        let name: String?
+        let minutes: Int?
+    }
+}
+
 private struct CoachMemoriesResponse: Decodable {
     let memories: [CoachMemory]?
 }
@@ -309,6 +321,14 @@ extension APIClient {
     @discardableResult
     func keepMemory(_ text: String) async throws -> [CoachMemory] {
         try await changeMemories(["keep": .string(text)])
+    }
+
+    /// The coach's push "… vyměním za lehkou jízdu 60 min?": "swap" or "keep".
+    /// Answers the easy session put in its place.
+    func answerCoachNudge(date: String, decision: String) async throws -> CoachNudge? {
+        struct Response: Decodable { let nudge: CoachNudge? }
+        let r: Response = try await send("/app/api/coach/nudge", method: "POST", body: ["date": .string(date), "decision": .string(decision)])
+        return r.nudge
     }
 
     private func changeMemories(_ body: [String: JSONValue]) async throws -> [CoachMemory] {

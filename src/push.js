@@ -123,13 +123,15 @@ const apnsHost = (env, environment) => env.APNS_SANDBOX === "1" || env.APNS_SAND
 const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotForTopic", "ExpiredToken"]);
 
 // One alert to one device: {ok}, {ok:false, gone:true} for a dead token.
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now() } = {}) {
+// alert: a text, or {title, body}; category names the phone's buttons for it
+// (the coach's "Vyměnit" / "Nechat"), data rides along for them.
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
     headers: { authorization: "bearer " + jwt, "apns-topic": APNS_TOPIC, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
-    body: JSON.stringify({ aps: { alert, sound: "default" } })
+    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}) } })
   });
   if (response.status === 200) return { ok: true };
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
