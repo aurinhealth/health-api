@@ -1997,3 +1997,17 @@
 "Vyměněno" = "Swapped";
 "Trénink zůstal, jak byl" = "The session stayed as it was";
 "%@ min" = "%@ min";
+
+/* Trénink → Svaly (MuscleViews.swift) */
+"odpočaté" = "rested";
+"pozítří" = "in 2 days";
+"za %@ dny" = "in %@ days";
+"za %@ dní" = "in %@ days";
+"Z posledních 3 dní" = "From the last 3 days";
+"Všechny svaly jsou odpočaté" = "All muscles are rested";
+"Vnější stehna" = "Abductors";
+"Vnitřní stehna" = "Adductors";
+"Běh 14 km" = "Run 14 km";
+"Posilovna, nohy" = "Gym, legs";
+"Posilovna, horní část těla" = "Gym, upper body";
+"pondělí" = "Monday";
