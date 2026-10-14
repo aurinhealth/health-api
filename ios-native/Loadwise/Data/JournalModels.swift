@@ -118,6 +118,8 @@ struct JournalCard: Decodable, Equatable {
     let date: String
     let isToday: Bool
     var mood: Double? = nil
+    /// Only the evening card asks the mood; the morning check-in asks it on Today.
+    var askMood: Bool? = nil
     let answered: Int
     let total: Int
     let open: Int

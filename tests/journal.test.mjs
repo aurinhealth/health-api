@@ -233,11 +233,14 @@ test("the Today card goes once the day is answered or put away", async () => {
   const settings = await getJournalSettings(db);
   const d = shiftDay(today, -1);
   assert.equal((await journalCard(db, today, 8)).open, 9);
+  assert.equal((await journalCard(db, today, 8)).askMood, false);
   for (const key of settings.pinned) await saveJournalEntry(db, settings, { date: d, key, answer: 0 });
-  // Answered, the mood still missing.
-  assert.equal((await journalCard(db, today, 8)).open, 0);
-  await saveJournalEntry(db, settings, { date: d, key: "mood", amount: 3 });
+  // In the morning the check-in asks how you feel, so yesterday's answers are enough.
   assert.equal(await journalCard(db, today, 8), null);
+  // In the evening the card asks about today, the mood included.
+  for (const key of settings.pinned) await saveJournalEntry(db, settings, { date: today, key, answer: 0 });
+  const evening = await journalCard(db, today, 20);
+  assert.ok(evening === null || evening.askMood === true);
   // Put away: gone for the day.
   const other = scopedDb(createD1(), 9);
   const request = (path, body) => new Request("https://aurin.health" + path, { method: body ? "POST" : "GET", headers: { Origin: "https://aurin.health" }, ...(body ? { body: JSON.stringify(body) } : {}) });

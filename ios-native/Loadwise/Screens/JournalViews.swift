@@ -232,8 +232,10 @@ struct JournalTodayCard: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.tr("Dnes už neukazovat"))
             }
-            Text("Jak se cítíš?").font(Typo.sentence(21)).foregroundStyle(Palette.ink)
-            MoodPicker(mood: mood, disabled: busy) { level in Task { await setMood(card, level) } }
+            if card.askMood ?? card.isToday {
+                Text("Jak se cítíš?").font(Typo.sentence(21)).foregroundStyle(Palette.ink)
+                MoodPicker(mood: mood, disabled: busy) { level in Task { await setMood(card, level) } }
+            }
             VStack(spacing: 0) {
                 ForEach(Array(card.rows.enumerated()), id: \.element.id) { index, row in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }

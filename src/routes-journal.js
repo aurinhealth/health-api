@@ -159,7 +159,9 @@ export function thresholdText(item, days, threshold) {
 
 // The Today card: in the morning (from 4:00) the questions about yesterday,
 // in the evening (from 19:00) today's evening questions while unanswered.
-// Gone once the day is answered (and the mood given) or put away.
+// Gone once the day is answered (and, in the evening, the mood given) or put
+// away. In the morning Today already asks "Jak se dnes cítíš?" (the check-in),
+// so the card about yesterday leaves the mood to the Deník screen.
 export async function journalCard(db, today, hour) {
   if (hour < 4) return null;
   const settings = await getJournalSettings(db);
@@ -173,11 +175,12 @@ export async function journalCard(db, today, hour) {
   const views = (date === today ? items.filter(i => i.when === "evening") : items).map(i => journalItemOnDay(i, entries.get(date)?.get(i.key), auto[date]?.[i.key]));
   const mood = entries.get(date)?.get(MOOD)?.amount ?? null;
   const unanswered = views.filter(v => !v.answered).length;
-  if (!unanswered && mood != null) return null;
+  if (!unanswered && (mood != null || date !== today)) return null;
   return {
     date,
     isToday: date === today,
     mood,
+    askMood: date === today,
     answered: views.length - unanswered,
     total: views.length,
     open: unanswered,
