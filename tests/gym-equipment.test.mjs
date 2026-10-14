@@ -134,3 +134,14 @@ test("a prescribed failure set (stored as RPE 10) doesn't take a step back", () 
   assert.equal(progressionDecision(rows, "Leg extension", "10–12").decision, "increase");
   assert.equal(progressionDecision(rows.map(r => ({ ...r, note: "" })), "Leg extension", "10–12").decision, "decrease");
 });
+
+test("dumbbells are picked before the note: a step up reaches the next dumbbell, one with none left holds", async () => {
+  const { dumbbellFor } = await import("../src/strength-generator.js");
+  const have = [10, 15, 20, 25];
+  assert.deepEqual([dumbbellFor({ kg: 21, referenceKg: 20, progression: "increase" }, have).kg, dumbbellFor({ kg: 21, referenceKg: 20, progression: "increase" }, have).progression], [25, "increase"]);
+  assert.equal(dumbbellFor({ kg: 18.5, referenceKg: 20, progression: "decrease" }, have).kg, 15);
+  assert.equal(dumbbellFor({ kg: 21, referenceKg: 20, progression: "hold" }, have).kg, 20);
+  const top = dumbbellFor({ kg: 26, referenceKg: 25, progression: "increase" }, have);
+  assert.deepEqual([top.kg, top.progression], [25, "hold"]);
+  assert.equal(dumbbellFor({ kg: 21, progression: "increase" }, []).kg, 21);
+});

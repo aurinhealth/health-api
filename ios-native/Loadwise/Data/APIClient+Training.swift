@@ -90,9 +90,11 @@ extension APIClient {
     }
 
     /// The AI changes the proposal by the athlete's words ("bez dřepů, víc ramen").
-    func adjustGym(rows: [[JSONValue]], request: String) async throws -> (rows: [[JSONValue]], answer: String?, muscles: [String: [String: Double]]) {
-        let r: GymAdjustResponse = try await send("/app/api/gym/adjust", method: "POST",
-                                                  body: ["rows": JSONValue.array(rows.map { .array($0) }), "request": .string(request)])
+    /// minutes: the session's length, which the changed plan must still fit.
+    func adjustGym(rows: [[JSONValue]], request: String, minutes: Int? = nil) async throws -> (rows: [[JSONValue]], answer: String?, muscles: [String: [String: Double]]) {
+        var body: JSONObject = ["rows": JSONValue.array(rows.map { .array($0) }), "request": .string(request)]
+        if let minutes { body["minutes"] = .number(Double(minutes)) }
+        let r: GymAdjustResponse = try await send("/app/api/gym/adjust", method: "POST", body: body)
         return (r.rows ?? rows, r.answer, r.muscles ?? [:])
     }
 
