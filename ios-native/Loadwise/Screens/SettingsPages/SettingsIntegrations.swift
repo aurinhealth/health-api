@@ -192,7 +192,7 @@ struct IntegrationDetailView: View {
 
             SettingsGroup {
                 Button { flow.disconnecting = current } label: {
-                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : "Odpojit", chevron: false, titleColor: Palette.rust)
+                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : current.id == "whoop" ? "Odpojit a smazat data z WHOOPu" : "Odpojit", chevron: false, titleColor: Palette.rust)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.demo)

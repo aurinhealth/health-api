@@ -1986,3 +1986,7 @@
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
 "Tréninky naplánované v Aurinu, kalorický cíl, váhu a denní hodnoty z Google Health." = "Workouts planned in Aurin, calorie target, weight and daily values from Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
+/* WHOOP in Zdroje dat */
+"Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů." = "The WHOOP data will be deleted and your nights will come from your other sources again.";
+"Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve." = "Sleep and its stages, resting heart rate, HRV, breathing and blood oxygen.";
+"Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";
