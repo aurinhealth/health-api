@@ -6,7 +6,7 @@ list with each point's state.
 
 | # | Point | State |
 |---|-------|-------|
-| 1 | Odznaky (badges) | waiting for confirmation of what it covers |
+| 1 | Ikony (app icons): sets A and G and 13 new Pro icons in the icon picker | waits for #156 to merge |
 | 2 | Deník (journal): ✕/✓ questions filled from the day's data, own items, "Co na tebe působí" impact on readiness, HRV, sleep and resting heart rate | built, waiting for CI |
 
 Mockups: `/mnt/project-files/mockups/denik/` (journal).
