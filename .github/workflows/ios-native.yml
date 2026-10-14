@@ -34,6 +34,9 @@ jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 40
+    # Pushes the website screenshots to the site-screens branch (never on pull requests).
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: ios-native
@@ -92,6 +95,33 @@ jobs:
               xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/simulator-$tab-$mode.png"
             done
           done
+
+      # The website shows the real app (src/site-pages.js): English, light mode, sample
+      # data and a clean status bar.
+      - name: Screenshot the app for the website
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          mkdir -p "$GITHUB_WORKSPACE/screens/site"
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          for tab in today training health food; do
+            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 6
+            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/$tab.png"
+          done
+
+      # Artifacts cannot be fetched from where the website is edited, so outside pull
+      # requests the website screenshots also go to the site-screens branch (one commit).
+      - name: Publish the website screenshots
+        if: github.event_name != 'pull_request'
+        working-directory: ${{ github.workspace }}/screens/site
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q -b site-screens
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com add .
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "Website screenshots from ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/site-screens
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
