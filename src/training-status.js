@@ -2,7 +2,7 @@
 // historical measurements or diagnosing a condition from sensor data.
 import { L } from './lang.js';
 
-export const ATHLETE_STATUSES = { active: 'Active', sick: 'Sick', injured: 'Injured', on_break: 'On break' };
+export const ATHLETE_STATUSES = { active: 'Active', sick: 'Sick', injured: 'Injured', on_break: 'Rest' };
 const label = status => ({ active: L('Aktivní', 'Active'), sick: L('Nemoc', 'Sick'), injured: L('Zranění', 'Injured'), on_break: L('Pauza', 'Rest') })[status];
 const headline = status => ({ sick: L('Nemoc · odpočinek během nemoci', 'Sick · rest while you are ill'), injured: L('Zranění · respektuj omezení', 'Injured · respect your limitations'), on_break: L('Pauza · tréninková přestávka', 'Rest · a break from training') })[status] || null;
 export function trainingStatus(state = {}) {
