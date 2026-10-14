@@ -43,3 +43,16 @@ test('an auto-paired workout moves the level by its measured intensity', () => {
   assert.ok(calculateCapabilityUpdate(current, workout, { survey: 'auto_completed', completedPercent: 100, intensityRatio: 1.05 }).delta
     < calculateCapabilityUpdate(current, workout, { survey: 'completed', completedPercent: 100, rpe: 6 }).delta);
 });
+
+test('Intervals.icu curves: the key durations and distances', async () => {
+  const { powerCurvePoints, paceCurvePoints, intervalsCurves } = await import('../src/performance-trends.js');
+  assert.deepEqual(powerCurvePoints({ list: [{ id: '42d', secs: [5, 60, 300, 1200, 3600], values: [900, 450, 320, 270, 250] }] }),
+    { '42d': { '5s': 900, '1min': 450, '5min': 320, '20min': 270, '60min': 250 } });
+  assert.equal(powerCurvePoints({ list: [{ id: '90d', secs: [1200], watts: [280] }] })['90d']['20min'], 280);
+  const pace = paceCurvePoints({ list: [{ id: '42d', distance: [1000, 5000], values: [210, 1200] }] });
+  assert.deepEqual(pace['42d']['5km'], { time: '20:00', pace: '4:00/km' });
+  assert.equal(powerCurvePoints({}), null);
+  assert.equal(await intervalsCurves({}, 'x'), null);
+  const fake = async url => ({ ok: true, json: async () => url.includes('power') ? { list: [{ id: '42d', secs: [1200], values: [270] }] } : null });
+  assert.deepEqual(await intervalsCurves({ INTERVALS_API_KEY: 'k' }, 'x', fake), { ridePower: { '42d': { '20min': 270 } } });
+});

@@ -97,3 +97,50 @@ export function performanceTrends(sessions = [], athlete = {}, today) {
   const run = runTrends(recent, athlete, today, sessions || []), ride = rideTrends(recent, athlete, today, sessions || []);
   return run || ride ? { ...(run ? { run } : {}), ...(ride ? { ride } : {}) } : null;
 }
+
+// ---- Intervals.icu curves ---------------------------------------------------
+// The best power over 5 s – 60 min and the best run times over 400 m – 21 km
+// in the last 42 and 90 days, from Intervals.icu (computed there from the
+// second-by-second records the app does not download). Null without
+// Intervals.icu or when it doesn't answer.
+const POWER_POINTS = [5, 60, 300, 1200, 3600];
+const PACE_POINTS = [400, 1000, 5000, 10000, 21097];
+const at = (keys, values, want) => {
+  const i = (keys || []).indexOf(want);
+  return i >= 0 && Number(values?.[i]) > 0 ? Number(values[i]) : null;
+};
+export function powerCurvePoints(body) {
+  const list = Array.isArray(body?.list) ? body.list : [];
+  const out = {};
+  for (const curve of list) {
+    // The REST curve set calls the numbers values, the scripting model watts.
+    const watts = Array.isArray(curve?.values) ? curve.values : curve?.watts;
+    if (!curve?.id || !Array.isArray(curve.secs) || !Array.isArray(watts)) continue;
+    const points = Object.fromEntries(POWER_POINTS.map(s => [s < 60 ? s + "s" : s / 60 + "min", round(at(curve.secs, watts, s))]).filter(([, v]) => v));
+    if (Object.keys(points).length) out[curve.id] = points;
+  }
+  return Object.keys(out).length ? out : null;
+}
+export function paceCurvePoints(body) {
+  const list = Array.isArray(body?.list) ? body.list : [];
+  const out = {};
+  for (const curve of list) {
+    const times = Array.isArray(curve?.values) ? curve.values : curve?.secs;
+    if (!curve?.id || !Array.isArray(curve.distance) || !Array.isArray(times)) continue;
+    const points = {};
+    for (const m of PACE_POINTS) {
+      const secs = at(curve.distance, times, m);
+      if (secs) points[m >= 1000 ? round(m / 1000, 1) + "km" : m + "m"] = { time: Math.floor(secs / 60) + ":" + String(Math.round(secs % 60)).padStart(2, "0"), pace: paceText(secs / (m / 1000)) };
+    }
+    if (Object.keys(points).length) out[curve.id] = points;
+  }
+  return Object.keys(out).length ? out : null;
+}
+export async function intervalsCurves(env, authorization, fetchImpl = fetch) {
+  if (!env.INTERVALS_API_KEY) return null;
+  const get = path => fetchImpl("https://intervals.icu/api/v1/athlete/0/" + path, { headers: { Authorization: authorization, Accept: "application/json" }, signal: AbortSignal.timeout(8000) })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+  const [power, pace] = await Promise.all([get("power-curves?type=Ride&curves=42d,90d"), get("pace-curves?type=Run&curves=42d,90d")]);
+  const ride = powerCurvePoints(power), run = paceCurvePoints(pace);
+  return ride || run ? { ...(ride ? { ridePower: ride } : {}), ...(run ? { runBest: run } : {}) } : null;
+}
