@@ -60,7 +60,6 @@ struct LiveGymView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .keyboardDoneButton()
         .task { await load() }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }

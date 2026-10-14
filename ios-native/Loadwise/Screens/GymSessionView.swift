@@ -89,7 +89,6 @@ struct GymSessionView: View {
         .sheet(isPresented: $ratingDone) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
         }
-        .keyboardDoneButton()
     }
 
     @ViewBuilder
@@ -729,19 +728,6 @@ struct SupersetGroup<Content: View>: View {
         .padding(.leading, 12)
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 2, style: .continuous).fill(Palette.indigo).frame(width: 4)
-        }
-    }
-}
-
-extension View {
-    /// "Hotovo" above the keyboard: the number pads have no return key.
-    func keyboardDoneButton() -> some View {
-        toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Hotovo") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
-                    .fontWeight(.semibold)
-            }
         }
     }
 }
