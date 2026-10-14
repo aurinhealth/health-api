@@ -169,11 +169,7 @@ export function sessionIntervals(session, intervals, name = null) {
 export async function recentIntervals(sessions = [], today, detail, limit = 6) {
   const since = shift(today, -14);
   const recent = (sessions || []).filter(s => s.id && s.date > since && s.date <= today && s.minutes >= 15).sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit);
-  const out = [];
-  for (const s of recent) {
-    const d = await detail(s.id).catch(() => null);
-    const summary = d ? sessionIntervals(s, d.intervals, d.activity?.name) : null;
-    if (summary) out.push(summary);
-  }
+  const details = await Promise.all(recent.map(s => detail(s.id).catch(() => null)));
+  const out = recent.map((s, i) => details[i] ? sessionIntervals(s, details[i].intervals, details[i].activity?.name) : null).filter(Boolean);
   return out.length ? out : null;
 }
