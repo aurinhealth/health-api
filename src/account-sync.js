@@ -8,6 +8,7 @@ import {retryWorkoutExports} from './local-workouts.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
 import {syncUltrahuman} from './ultrahuman.js';
+import {syncWhoop} from './whoop.js';
 import {L} from './lang.js';
 const shiftDate=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 
@@ -45,6 +46,7 @@ export async function recentDashboardImport(env,ctx){
   if(providers.includes('google'))jobs.push(collect('google','/sync/google/recent'));
   if(providers.includes('intervals'))jobs.push(collect('intervals','/sync/intervals/recent'));
   if(providers.includes('ultrahuman'))jobs.push(syncUltrahuman(env,{days:3}).then(r=>({source:'ultrahuman',status:r.status})).catch(()=>({source:'ultrahuman',status:'error'})));
+  if(providers.includes('whoop'))jobs.push(syncWhoop(env,{days:3}).then(r=>({source:'whoop',status:r.status})).catch(()=>({source:'whoop',status:'error'})));
   const results=await Promise.all(jobs);
   results.push(...await retryWorkoutExports(env).catch(()=>[{source:'exports',status:'error'}]));
   results.push(await collect('matching','/sync/match'));

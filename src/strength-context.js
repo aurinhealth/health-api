@@ -4,7 +4,8 @@ import { getAthleteState } from './athlete-state.js';
 import { isQualityName } from './session-intensity.js';
 import { dateFormat } from "./date-format.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
-import { timeZone } from "./user-time.js";
+import { timeZone, localDateTime } from "./user-time.js";
+import { activityKindOf, sameSession } from "./activity-match.js";
 const DEFAULT_ACTIVITY_DAYS = 14;
 const DEFAULT_PLANNED_DAYS = 7;
 
@@ -59,6 +60,7 @@ function durationHours(a) {
 }
 function textOf(a) { return `${a?.type || ""} ${a?.activity_type || ""} ${a?.category || ""} ${a?.name || a?.title || ""}`.toLowerCase(); }
 export function isRide(a) { return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textOf(a)); }
+export function isRun(a) { return !isRide(a) && /\b(run|running|trail run|treadmill|virtualrun)\b/.test(textOf(a)); }
 function semanticIntensityText(a) {
   const fields = [
     a?.name, a?.title, a?.workout_type, a?.workoutType,
@@ -74,14 +76,29 @@ export function isIntensity(a) {
   const semantic = semanticIntensityText(a);
   return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic) || isQualityName(semantic);
 }
-function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), intensity: isIntensity(a) }; }
-function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), intensity: isIntensity(e), payload: e }; }
+function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), running: isRun(a), intensity: isIntensity(a) }; }
+function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), running: isRun(e), intensity: isIntensity(e), payload: e }; }
+// A watch workout (payload.exercise) in the shape of an Intervals.icu activity.
+const WATCH_TYPE = { ride: "Ride", run: "Run", walk: "Walk", strength: "WeightTraining", swim: "Swim" };
+export function watchActivity(row) {
+  let p = {}; try { p = JSON.parse(row.payload_json || "{}"); } catch { return null; }
+  const ex = p.exercise; if (!ex || !row.start_time) return null;
+  const active = Number(String(ex.activeDuration || "").replace(/s$/i, "")), span = row.end_time ? (Date.parse(row.end_time) - Date.parse(row.start_time)) / 1000 : NaN;
+  const seconds = active > 0 ? active : span > 0 ? span : null, m = ex.metricsSummary || {};
+  return { id: "watch:" + row.start_time, start_date_local: localDateTime(row.start_time), type: WATCH_TYPE[activityKindOf(ex.exerciseType)] || String(ex.exerciseType || "Workout"), name: ex.displayName || "", duration: seconds ? seconds / 3600 : null, calories: m.caloriesKcal ?? null, average_watts: m.averagePowerWatts ?? null, source: row.source_family };
+}
 function intervalsAuth(env) { if (!env.INTERVALS_API_KEY) throw new Error("INTERVALS_API_KEY is not configured"); return intervalsAuthorization(env.INTERVALS_API_KEY); }
 async function intervalsGet(env, path) {
   if(/\/(activities|events)\?/.test(path)){
     const query=new URL('https://internal'+path).searchParams,type=path.includes('/events?')?'planned-workout':'activity';
-    const rows=(await env.DB.prepare("SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type=? AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,type,query.get('oldest'),query.get('newest')+'T23:59:59').all()).results||[];
-    return rows.map(r=>{try{return JSON.parse(r.payload_json);}catch{return null;}}).filter(Boolean);
+    const rows=(await env.DB.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND (source_family IN ('intervals','local') AND data_type=? OR ?='activity' AND source_family IN ('apple-health','google-wearables') AND data_type='exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,type,type,query.get('oldest'),query.get('newest')+'T23:59:59').all()).results||[];
+    // Workouts from the watch (Apple Health, Google Health) count like the
+    // ones from Intervals.icu; one recorded by both is kept from Intervals.
+    const own=rows.filter(r=>r.source_family==='intervals'||r.source_family==='local');
+    return rows.map(r=>{
+      if(r.source_family==='intervals'||r.source_family==='local'){try{return JSON.parse(r.payload_json);}catch{return null;}}
+      return own.some(o=>sameSession(r,o))?null:watchActivity(r);
+    }).filter(Boolean);
   }
   if(!env.INTERVALS_API_KEY)return [];
   const response = await fetch("https://intervals.icu/api/v1" + path, { headers: { Authorization: intervalsAuth(env), Accept: "application/json" } });
@@ -187,30 +204,36 @@ export async function buildStrengthContext(env, requestedDate = null) {
     ? { date, rows: plannedStrengthRows.map(row => [row.type, row.exercise, row.setNo, row.plannedKg, row.plannedReps]) }
     : null;
   const context = { status: "ok", source: "stored", date, cycling: { recentActivities: recent, plannedWorkouts: planned, recentRideHours: Math.round(recent.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, recentRideTss: Math.round(recent.reduce((s,x)=>s+n(x.tss),0)), plannedRideHours: Math.round(planned.reduce((s,x)=>s+n(x.durationHours),0)*100)/100, plannedRideTss: Math.round(planned.reduce((s,x)=>s+n(x.tss),0)), nextRide: planned[0] || null, lastRide: recent[0] || null }, recovery, strength: { source: "d1", historyReady: true, completedSetCount: strengthHistory.length, recentCompletedSets: strengthHistory, plannedWorkout: plannedStrengthWorkout, planRead } , weightTrend: await d1WeightTrend(env,date) };
+  // Runs load the legs too: the gym spares them before a hard or long run.
+  const runs = activities.filter(x => x.running && x.date <= date).sort((a,b) => String(b.start).localeCompare(String(a.start))), plannedRuns = events.filter(x => x.running && x.date >= date && n(x.durationHours) > 0 && n(x.durationHours) <= 6).sort((a,b) => String(a.start).localeCompare(String(b.start)));
+  context.running = { recentActivities: runs, plannedWorkouts: plannedRuns, nextRun: plannedRuns[0] || null, lastRun: runs[0] || null };
   context.sports={recentActivities:activities.filter(x=>x.date<=date).sort((a,b)=>String(b.start).localeCompare(String(a.start)))};
   // One recovery week for everything: the gym deloads in the week the plan
   // and the ride/run coach treat as a recovery week (src/week-planner.js).
   try {
-    const { recoveryWeek, weekLoadsBefore, hrvWeekTrendDown } = await import("./week-planner.js");
+    const { recoveryWeek, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } = await import("./week-planner.js"), { googleDashboard } = await import("./google-dashboard.js");
     const monday = new Date(Date.parse(date + "T12:00:00Z") - ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
     // 90 days, as Today and the ride coach load them: one readiness
     // (readiness.js) from the same wellness everywhere.
     const oldestWellness = new Date(Math.min(Date.parse(monday + "T12:00:00Z") - 22 * 86400000, Date.parse(date + "T12:00:00Z") - 90 * 86400000)).toISOString().slice(0, 10);
-    const wellness = await intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`);
+    // Without Intervals.icu the watch's HRV (Apple, Google, Ultrahuman) still calls a recovery week.
+    const [wellness, google] = await Promise.all([intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`).catch(() => []), googleDashboard(env.DB, date).catch(() => ({ wellness: [] }))]);
     const rows = Array.isArray(wellness) ? wellness : [], ctl = Number([...rows].reverse().find(r => Number(r.ctl) > 0)?.ctl) || null;
     const weekLoads = weekLoadsBefore(rows, monday);
-    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads, hrvDown: hrvWeekTrendDown(rows, monday) }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
+    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads, hrvDown: hrvWeekTrendDown(hrvSourceRows(rows, google.wellness, monday), monday) }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
     context.intervalsWellness = rows;
+    context.googleWellness = google.wellness || [];
   } catch { context.recoveryWeek = { recovery: false, reason: null, known: false }; }
   // The day's HRV, resting HR and breathing with their history, as the dashboard
   // reads them: Google Health first, Intervals.icu filling the gaps.
   try {
     const { googleDashboard } = await import("./google-dashboard.js"), { mergeWellnessRows } = await import("./recovery-model.js");
-    const google = await googleDashboard(env.DB, date).catch(() => ({ wellness: [] }));
+    const google = context.googleWellness ? { wellness: context.googleWellness } : await googleDashboard(env.DB, date).catch(() => ({ wellness: [] }));
     context.wellnessSeries = mergeWellnessRows(google.wellness, context.intervalsWellness);
   } catch { context.wellnessSeries = []; }
   const intervalsWellness = Array.isArray(context.intervalsWellness) ? context.intervalsWellness : [];
   delete context.intervalsWellness;
+  delete context.googleWellness;
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
   // The morning check-in lowers the readiness (morning-checkin.js).
@@ -223,7 +246,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   try {
     const { sleepSessionFromRow } = await import("./sleep-sessions.js"), { mergeIntervalsSleep } = await import("./intervals-sleep.js");
     const since = new Date(Date.parse(date + "T12:00:00Z") - 30 * 86400000).toISOString().slice(0, 10), until = new Date(Date.parse(date + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
-    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
+    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
     const seen = new Set();
     const own = rows.map(sleepSessionFromRow).filter(s => { const k = s.startTime + "|" + s.endTime; if (seen.has(k)) return false; seen.add(k); return s.durationMin > 0; });
     context.sleepSessions = mergeIntervalsSleep(own, intervalsWellness, { start: since, end: until });

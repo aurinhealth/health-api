@@ -111,3 +111,21 @@ test("stale sleep and future wellness are not used as today's readiness",()=>{
   assert.equal(result.readiness.sleepMinutes,null);
   assert.equal(result.readiness.tsb,null);
 });
+
+test("a hard session two or more days ahead is not eased for missing recovery data", async () => {
+  const { localToday } = await import("../src/user-time.js");
+  const today = localToday(), sh = (d, k) => new Date(Date.parse(d + "T12:00:00Z") + k * 864e5).toISOString().slice(0, 10);
+  const wellness = []; for (let i = 60; i >= 0; i--) wellness.push({ id: sh(today, -i), ctl: 60, atl: 55, tsb: 5, hrv: 70 + (i % 3), restingHR: 50, sleepSecs: 28000 });
+  const sleep = []; for (let i = 30; i >= 0; i--) sleep.push({ date: sh(today, -i), durationMin: 470, endTime: sh(today, -i) + "T06:30:00" });
+  const rides = [2, 4, 6, 8, 10, 13].map(i => ({ date: sh(today, -i), daily: { training: { completed: [{ date: sh(today, -i), name: "Endurance", type: "Ride", tss: 60, durationHours: 1.5, completed: true }], planned: [] } } }));
+  const build = (k, tsb = 5) => buildCyclingCoachV2({ date: sh(today, k), week: { days: rides }, fitness: { wellness: wellness.map(w => ({ ...w, tsb })) }, health: { sleep, wellness: [] }, gym: { history: [] }, availabilityMinutes: 90, goal: { focus: "threshold" }, sport: "ride" });
+  // Tomorrow follows today's readiness; later days follow the load only.
+  assert.equal(build(1).readiness.status, build(0).readiness.status);
+  for (const k of [2, 4]) {
+    const coach = build(k);
+    assert.equal(coach.readiness.status, "green");
+    assert.equal(coach.recommendation.session.kind, "threshold");
+    // Deep fatigue still caps a day ahead.
+    assert.equal(build(k, -35).readiness.status, "red");
+  }
+});

@@ -185,3 +185,64 @@ test('the coach picks at most two known pictures for an answer',()=>{
   assert.deepEqual(r.visuals,['form','sleep']);
   assert.deepEqual(coachAnswerText('Obyčejný text',{actions:true}).visuals,[]);
 });
+
+test('a proposed workout keeps the kind the answer recommends, and confirming plans it',()=>{
+  const context={athleteState:'active',workoutLibraryRecommendations:[]};
+  const action={type:'workout',date:'2026-10-08',sport:'ride',minutes:60,reason:'Nohy jsou unavené',workoutId:'',kind:'endurance'};
+  assert.equal(validateCoachActions([action],context,today)[0].kind,'endurance');
+  assert.equal(validateCoachActions([{...action,kind:'gym'}],context,today)[0].kind,undefined);
+  assert.equal(validateCoachActions([{...action,sport:'gym',minutes:45,kind:'endurance'}],context,today)[0].kind,undefined);
+  const schema=COACH_ACTION_FORMAT.schema.properties.actions.items;assert.ok(schema.required.includes('kind'));
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  // The kind reaches the generator, and Potvrdit schedules the ride or run and saves the gym draft.
+  assert.match(entry,/FOCUS_OF\[a\.kind\]\?\{focus:FOCUS_OF\[a\.kind\]\}/);
+  assert.match(entry,/scheduleWorkoutInIntervals\(env,env\.DB,\{workoutId:preview\.workout\.id,date:a\.date,confirm:true/);
+  assert.match(entry,/\/app\/api\/gym\/confirm'\),saved=await handleDashboardApi/);
+});
+
+test('watch sessions reach the coach with distance, pace, power and elevation, and VO2max is in the wellness',()=>{
+  const run=compactActivity({id:'apple-1',type:'Run',durationHours:1,payload:{exercise:{exerciseType:'RUNNING',metricsSummary:{distanceMeters:12000,averagePowerWatts:250,averageHeartRateBeatsPerMinute:150,maxHeartRateBeatsPerMinute:172,elevationGainMeters:120,caloriesKcal:800}}}});
+  assert.deepEqual([run.distanceKm,run.pace,run.averagePower,run.averageHeartRate,run.maxHeartRate,run.elevationM,run.calories],[12,'5:00/km',250,150,172,120,800]);
+  // Google gives the distance in millimetres.
+  assert.equal(compactActivity({type:'Ride',durationHours:2,payload:{exercise:{metricsSummary:{distanceMillimeters:60000000}}}}).distanceKm,60);
+  const context=coachContext({date:'2026-10-14',health:{wellness:[{id:'2026-10-14',vo2max:52.4}]}});
+  assert.equal(context.health.at(-1).vo2max,52.4);
+});
+
+test('remarks about the proposal are not kept as lasting preferences; the question picks the sport',()=>{
+  for(const m of ['I like this plan, but make Thursday shorter','I prefer the first option','Nechci to, dej mi jinou variantu','Líbí se mi tenhle návrh'])assert.equal(explicitPreference(m),null,m);
+  assert.equal(explicitPreference('I prefer riding outdoors'),'I prefer riding outdoors');
+  assert.equal(engineSport({sport:'cycling'},null,'Můžu zítra běžet tempo?'),'run');
+  assert.equal(engineSport({sport:'running'},null,'Should I ride hard today?'),'ride');
+  assert.equal(engineSport({sport:'cycling'},null,'Should I run or ride?'),'ride');
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  // Dropped proposals are named in the answer; the plan's week and the cycle reach the coach.
+  assert.match(entry,/neprošl'\+\(dropped===1\?'':'y'\)\+' kontrolou aplikace/);
+  assert.match(entry,/coachCtx\.trainingPlan=\{name:targets\.plan\.name/);
+  assert.match(entry,/sleepGoal:profile\.sleepGoal,cycle:profile\.cycle\|\|null/);
+});
+
+test('the coach\'s food view carries the weight goal, deficit, minimum, burned energy, drinks and the last days', () => {
+  const n = { calorieTarget: 2400, macros: { protein_g: 150 }, foodLog: { totals: { kcal: 900, protein_g: 50 } }, calorieBreakdown: { minTarget: 1900, weightLossDeficit: 400 }, targetWeightKg: 80, reason: 'Zítřejší kolo je zohledněné už dnes.', energyBudget: { active: 600 } };
+  const daily = { weight: { current: 86.4, average7d: 86.6, average30d: 87.9 }, burned: { total: 2900, activity: 700 } };
+  const week = { days: [{ date: '2026-10-12', daily: { nutrition: { calorieTarget: 2500, foodLog: { totals: { kcal: 2300, protein_g: 140 } } } } }, { date: '2026-10-13', daily: { nutrition: { foodLog: { totals: { kcal: 0 } } } } }, { date: '2026-10-14', daily: {} }] };
+  const c = nutritionContext(n, { daily, week, fluids: { hydrationMl: 900, target: { ml: 2600 } }, date: '2026-10-14' });
+  assert.equal(c.minimumKcal, 1900);
+  assert.equal(c.deficitKcal, 400);
+  assert.deepEqual(c.weight, { currentKg: 86.4, average7dKg: 86.6, average30dKg: 87.9, goalKg: 80 });
+  assert.deepEqual(c.burned, { dayKcal: 2900, activityKcal: 700, activeSoFarKcal: 600 });
+  assert.deepEqual(c.drinks, { drunkMl: 900, targetMl: 2600 });
+  assert.deepEqual(c.lastDays, [{ date: '2026-10-12', eatenKcal: 2300, proteinG: 140, targetKcal: 2500 }]);
+  assert.match(c.targetReason, /kolo/);
+  assert.equal(nutritionContext({ calorieTarget: 2000 }).weight, undefined);
+});
+
+test('the coach sees VO2max, walking heart rate, heart rate recovery and the athlete\'s own wellness marks', async () => {
+  const { compactWellnessRow } = await import('../src/coach-assistant.js');
+  const row = compactWellnessRow({ id: '2026-10-13', vo2max: 52.34, walkingHR: 96.4, hrRecovery: 31, fatigue: 3, soreness: 2, mood: null, stress: 9 });
+  assert.equal(row.vo2max, 52.3);
+  assert.equal(row.walkingHR, 96);
+  assert.equal(row.hrRecovery, 31);
+  assert.deepEqual(row.feelings, { fatigue: 3, soreness: 2, scale: '1 best, 4 worst' });
+  assert.equal(compactWellnessRow({ id: '2026-10-13' }).feelings, undefined);
+});

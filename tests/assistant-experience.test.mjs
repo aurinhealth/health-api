@@ -31,6 +31,10 @@ test('gym context includes actual planned sets and usable replacements',()=>{
   assert.equal(arnold.name,'DB Arnold press');assert.equal(arnold.sets[0].kg,10);assert.equal(arnold.sets[0].toFailure,true);
   assert.ok(arnold.alternatives.some(a=>a.name==='DB shoulder press'));
   assert.equal(todayGymContext(gym,'2026-10-05'),null);
+  // Alternatives and swaps follow the athlete's own equipment, not the default gym.
+  const home={...gym,equipment:{equipment:'bodyweight',stations:[]}};
+  assert.ok(!todayGymContext(home,date).exercises[0].alternatives.some(a=>a.name==='DB shoulder press'));
+  assert.throws(()=>prepareGymSwap(home,'DB Arnold press','DB shoulder press','Náhrada'),/katalogu/);
 });
 test('confirmed exercise swap preserves logged sets, options and unrelated edits',()=>{
   const action=prepareGymSwap(gym,'DB Arnold press','DB shoulder press','Jednodušší tlak.'),changed=structuredClone(gym.values);

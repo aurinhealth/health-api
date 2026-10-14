@@ -226,3 +226,10 @@ test("deleting an own workout ends the links it was shared by, not a friend's sa
   assert.equal((await call(raw, 2, "GET", "/app/api/shares/" + other.body.id)).status, 200, "another workout's link stays");
   assert.equal((await call(raw, 2, "GET", "/app/api/my-workouts")).body.workouts.length, 1, "the friend keeps the copy");
 });
+
+test("Popiš slovy sends the athlete's FTP or threshold pace, so watts and paces convert exactly", async () => {
+  const { describeInput } = await import("../src/workout-templates.js");
+  assert.deepEqual(JSON.parse(describeInput("ride", "3×10 na 280 W", { ftp: 280.4 })).threshold, { ftpWatts: 280 });
+  assert.deepEqual(JSON.parse(describeInput("run", "5×1 km za 4:10", { runThresholdPace: 265 })).threshold, { thresholdPace: "4:25/km", thresholdPaceSeconds: 265 });
+  assert.equal(JSON.parse(describeInput("ride", "hodinu lehce", null)).threshold, null);
+});

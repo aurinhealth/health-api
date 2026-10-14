@@ -46,3 +46,11 @@ test("early in the day the expected day from the profile is the floor of the tar
   assert.equal(busy.nutrition.calorieTarget, 4000);
   assert.equal(busy.nutrition.energyBudget.basis, "google-health");
 });
+
+test("watch calories the user chose not to count do not raise the food target", () => {
+  const daily = day();
+  daily.training = { completed: [{ energyChoice: "estimate", energyCheck: { reported: 1200 }, caloriesForPlanning: 500 }] };
+  const counted = applyEnergyBudget(daily, profile, { today: { activeCalories: 2000 } });
+  assert.equal(counted.nutrition.energyBudget.active, 1300);
+  assert.equal(counted.nutrition.calorieTarget, applyEnergyBudget(day(), profile, { today: { activeCalories: 1300 } }).nutrition.calorieTarget);
+});

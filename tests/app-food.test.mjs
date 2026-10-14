@@ -107,3 +107,15 @@ test("Sugar from the entries against a tenth of the energy", () => {
   assert.deepEqual(f.macros.sugar, { eaten: 12.5, target: Math.round(2650 * 0.1 / 4) });
   assert.equal(f.meals[0].entries.find(e => e.name === "Jogurt").sugar, 12.5);
 });
+
+test("Food tells the coach's text the hour, the safe minimum and the weight goal", async () => {
+  const f = buildFood({ ...input, daily: { ...input.daily, weight: { current: 86, average7d: 86.4, average30d: 87.2 }, nutrition: { ...input.daily.nutrition, targetWeightKg: 80, calorieBreakdown: { ...input.daily.nutrition.calorieBreakdown, minTarget: 1900, weightLossDeficit: 400 } } } });
+  assert.equal(f.hour, 15);
+  assert.equal(f.minimumKcal, 1900);
+  assert.deepEqual(f.goal, { weightKg: 86, average7dKg: 86.4, average30dKg: 87.2, targetWeightKg: 80, deficitKcal: 400 });
+  const { screenFacts } = await import("../src/screen-texts.js");
+  const facts = screenFacts("food", f);
+  assert.equal(facts.facts.minimumKcal, 1900);
+  assert.equal(facts.facts.weight.targetWeightKg, 80);
+  assert.notEqual(screenFacts("food", { ...f, hour: 19 }).fingerprint, facts.fingerprint);
+});

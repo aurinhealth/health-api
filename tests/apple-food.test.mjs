@@ -69,3 +69,15 @@ test("the food screen names the app an entry came from", () => {
   assert.equal(mealTypeOfName("Oběd"), "lunch");
   assert.equal(mealTypeOfName("Kuře s rýží"), null);
 });
+
+test("an app writing to both Apple Health and Google Health counts once", async () => {
+  const raw = createD1();
+  diary(raw);
+  await saveAppleFood(raw, 7, { ...window, meals: [yogurt], drinks: [{ id: "W1", date: "2026-10-13", time: "09:30", ml: 300 }] });
+  // The same yogurt and glass through Google Health (its own ids, a few minutes off), plus a different meal.
+  const google = await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, id: "g1", time: "12:45", kcal: 204.6 }, { ...yogurt, id: "g2", name: "Banán", kcal: 105 }], drinks: [{ id: "gw1", date: "2026-10-13", time: "09:40", ml: 300 }] }, { source: "google-health" });
+  assert.equal(google.saved, 1);
+  const rows = (await raw.prepare("SELECT recipe_title AS name, source FROM food_logs WHERE user_id=7 ORDER BY id").all()).results;
+  assert.deepEqual(rows.map(r => [r.name, r.source]), [["Řecký jogurt", "apple-health"], ["Banán", "google-health"]]);
+  assert.equal((await raw.prepare("SELECT COUNT(*) AS n FROM fluid_log WHERE user_id=7").first()).n, 1);
+});

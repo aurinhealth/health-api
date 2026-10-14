@@ -593,6 +593,62 @@ final class SnapshotTests: XCTestCase {
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1) }
     }
 
+    /// Training plans: before the start, the running plan, a week and the result.
+    func testTrainingPlanScreens() throws {
+        func block(_ minutes: Double, _ low: Double, _ high: Double, repeats: Int = 1) -> String {
+            #"{"repeats":\#(repeats),"steps":[{"durationSeconds":\#(minutes * 60),"percentLow":\#(low),"percentHigh":\#(high)}]}"#
+        }
+        let ss = "[" + [block(12, 50, 60), block(15, 88, 92), block(5, 50, 55), block(15, 88, 92), block(13, 45, 55)].joined(separator: ",") + "]"
+        let thr = "[" + [block(12, 50, 60), block(8, 96, 100), block(4, 50, 55), block(8, 96, 100), block(4, 50, 55), block(8, 96, 100), block(12, 45, 55)].joined(separator: ",") + "]"
+        let z2 = "[" + [block(10, 50, 60), block(55, 65, 72), block(10, 45, 55)].joined(separator: ",") + "]"
+        let phases: [(String, String, Double, [String])] = [
+            ("test", "Test FTP", 1, ["Test FTP", "Sweet spot 2×15"]), ("build", "Budování", 1.04, ["Práh 3×8", "Sweet spot 2×20"]),
+            ("build", "Budování", 1.07, ["Práh 4×8", "Nad/pod prahem 3×12"]), ("recovery", "Odpočinek", 0.65, ["Tempo 2×15"]),
+            ("build", "Budování", 1.04, ["Práh 3×12", "Sweet spot 2×25"]), ("build", "Budování", 1.07, ["Práh 2×20", "Nad/pod prahem 3×9"]),
+            ("peak", "Vrchol", 1.1, ["Práh 2×20", "Nad/pod prahem 3×15"]), ("test", "Test FTP", 0.7, ["Test FTP"])]
+        let minutes = [290, 305, 315, 190, 305, 315, 325, 205]
+        let weeks = phases.enumerated().map { i, p in
+            #"{"week":\#(i + 1),"phase":"\#(p.0)","phaseLabel":"\#(p.1)","load":\#(p.2),"keys":[\#(p.3.map { "\"\($0)\"" }.joined(separator: ","))],"longMinutes":null,"race":false}"#
+        }.joined(separator: ",")
+        let template = #"{"id":"ride-ftp","sport":"ride","name":"Kolo: FTP","goal":"Vyšší FTP za 8 týdnů","description":"","level":"intermediate","weeksCount":8,"days":[3,6],"race":null,"weeks":[\#(weeks)]}"#
+        let plansJSON = #"{"templates":[\#(template)],"active":{"id":7,"templateId":"ride-ftp","name":"Kolo: FTP","startDate":"2026-10-20","firstDay":null,"endDate":"2026-12-14","raceDate":null,"raceKm":null,"week":3,"weeksCount":8,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"weekDays":null,"completion":{"1":97,"2":84},"template":\#(template)},"activeGym":null,"started":null}"#
+        let previewWeeks = phases.enumerated().map { i, p in
+            #"{"week":\#(i + 1),"phase":"\#(p.0)","phaseLabel":"\#(p.1)","keys":[],"race":false,"sessions":\#(i == 3 || i == 7 ? 3 : 4),"minutes":\#(minutes[i]),"tss":\#(minutes[i] * 86 / 100)}"#
+        }.joined(separator: ",")
+        let previewJSON = #"{"startDate":"2026-10-20","firstDay":null,"endDate":"2026-12-14","days":[1,3,5,6],"weeks":[\#(previewWeeks)],"totals":{"sessions":30,"minutes":2250,"tss":1935}}"#
+        func session(_ date: String, _ name: String, _ kind: String, _ minutes: Int, _ load: Int, _ steps: String, done: Bool) -> String {
+            #"{"date":"\#(date)","label":"\#(name)","kind":"\#(kind)","minutes":\#(minutes),"workoutId":"w-\#(date)","done":\#(done),"editable":\#(!done),"edited":false,"workout":{"name":"\#(name)","sport":"ride","environment":"outdoor","duration_minutes":\#(minutes),"target_load":\#(load),"intensity_factor":0.8,"description":null,"steps":\#(steps)}}"#
+        }
+        let weekJSON = #"{"week":3,"weeksCount":8,"monday":"2026-11-03","phaseLabel":"Budování","weekDays":null,"sessions":["# + [
+            session("2026-11-04", "Práh 4×8", "quality", 75, 86, thr, done: true),
+            session("2026-11-06", "Z2 1 h 15", "easy", 75, 55, z2, done: false),
+            session("2026-11-08", "Nad/pod prahem 3×12", "quality", 90, 98, ss, done: false),
+            session("2026-11-09", "Z2 1 h 30", "long", 90, 64, z2, done: false)].joined(separator: ",") + "]}"
+        let resultJSON = #"{"id":7,"templateId":"ride-ftp","name":"Kolo: FTP","sport":"ride","startDate":"2026-10-20","endDate":"2026-12-14","ftpStart":248,"ftpEnd":263,"ctlStart":52,"ctlEnd":61,"sessionsDone":28,"sessionsPlanned":30,"minutesDone":2110,"minutesPlanned":2250,"completion":{"1":97,"2":84,"3":100,"4":92,"5":71,"6":88,"7":95,"8":100},"weeks":[\#(weeks)],"next":[{"id":"ride-vo2","name":"Kolo: VO₂max blok","goal":"Vyšší strop aerobního výkonu"}]}"#
+        let decoder = JSONDecoder()
+        let plans = try decoder.decode(TrainingPlans.self, from: Data(plansJSON.utf8))
+        let preview = try decoder.decode(PlanPreview.self, from: Data(previewJSON.utf8))
+        let week = try decoder.decode(PlanWeekDetail.self, from: Data(weekJSON.utf8))
+        let result = try decoder.decode(PlanResult.self, from: Data(resultJSON.utf8))
+        let active = try XCTUnwrap(plans.active)
+        let model = AppModel(demo: true)
+        try render("plan-card", glow: Palette.Glow.training, height: 260) { ActivePlanSummary(active: active).padding(24) }
+        try render("plan-preview", glow: Palette.Glow.training, height: 1150) {
+            PlanPreviewContent(template: active.template, preview: preview) {}.padding(.horizontal, 24).environment(model)
+        }
+        try render("plan-active", glow: Palette.Glow.training, height: 1500) {
+            NavigationStack { ActivePlanContent(active: active, preview: preview, week: week).padding(.horizontal, 24) }.environment(model)
+        }
+        try render("plan-week", glow: Palette.Glow.training, height: 1000) {
+            NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: week).padding(.horizontal, 24) }.environment(model)
+        }
+        try render("plan-week-days", height: 700) { WeekDaysSheet(week: week, usual: 4).environment(model) }
+        try render("plan-move", height: 340) { MoveSessionSheet(session: week.sessions[2], detail: week) { _ in } }
+        try render("plan-result", glow: Palette.Glow.today, height: 1150) {
+            NavigationStack { PlanResultContent(result: result, plans: plans).padding(.horizontal, 24) }.environment(model)
+        }
+    }
+
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
