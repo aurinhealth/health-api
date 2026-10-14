@@ -2085,7 +2085,7 @@
 "Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";
 
 /* Connection failures in words a user can act on (APIClient.readable) */
-"Síť, ke které je telefon připojený, nepustila zabezpečené spojení s Aurinem. Veřejná Wi-Fi často vyžaduje nejdřív přihlášení. Přihlas se v ní, nebo přepni na mobilní data." = "The network your phone is on blocked a secure connection to Aurin. Public Wi-Fi often wants you to sign in first. Sign in there, or switch to mobile data.";
+"Síť blokuje spojení. Přihlas se do Wi-Fi, nebo přepni na data." = "The network is blocking the connection. Sign in to the Wi-Fi or switch to mobile data.";
 "Telefon není připojený k internetu." = "Your phone isn't connected to the internet.";
 "Mobilní data v roamingu jsou vypnutá." = "Data roaming is off.";
 "Server neodpověděl včas. Zkus to za chvíli znovu." = "The server didn't answer in time. Try again in a moment.";

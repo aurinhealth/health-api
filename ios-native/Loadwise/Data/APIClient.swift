@@ -647,7 +647,7 @@ final class APIClient: @unchecked Sendable {
         switch url.code {
         case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
              .serverCertificateHasBadDate, .serverCertificateNotYetValid, .clientCertificateRejected:
-            text = L10n.tr("Síť, ke které je telefon připojený, nepustila zabezpečené spojení s Aurinem. Veřejná Wi-Fi často vyžaduje nejdřív přihlášení. Přihlas se v ní, nebo přepni na mobilní data.")
+            text = L10n.tr("Síť blokuje spojení. Přihlas se do Wi-Fi, nebo přepni na data.")
         case .notConnectedToInternet, .dataNotAllowed:
             text = L10n.tr("Telefon není připojený k internetu.")
         case .internationalRoamingOff:
