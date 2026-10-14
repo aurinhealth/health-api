@@ -436,10 +436,7 @@ struct BedtimeSetupCard: View {
 struct ConnectionProblemCard: View {
     @Environment(AppModel.self) private var model
     @State private var problems: [ConnectionsResponse.Provider] = []
-    @State private var working: String?
-    @State private var message: String?
-    @State private var googleDisclosure = false
-    @State private var intervalsKey = false
+    @State private var connecting: ConnectTarget?
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -458,19 +455,13 @@ struct ConnectionProblemCard: View {
                             }
                             Spacer(minLength: 8)
                             Button { start(provider.id) } label: {
-                                Group {
-                                    if working == provider.id { ProgressView().tint(Palette.onButton) } else { Text("Připojit znovu") }
-                                }
+                                Text("Připojit znovu")
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
                                 .padding(.horizontal, 14).frame(height: 34)
                                 .background(Palette.button, in: Capsule())
                             }
                             .buttonStyle(.plain)
-                            .disabled(working != nil)
                         }
-                    }
-                    if let message {
-                        Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .padding(.top, 20)
@@ -480,12 +471,7 @@ struct ConnectionProblemCard: View {
             guard !model.loading else { return }
             await load()
         }
-        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
-            googleDisclosure = false
-            // The browser sheet opens once this one has closed.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
-        } }
-        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await load() } }
+        .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await load() } }
     }
 
     private func load() async {
@@ -493,27 +479,8 @@ struct ConnectionProblemCard: View {
         withAnimation { problems = response.providers.filter(\.needsAttention) }
     }
 
-    /// Google first shows what Loadwise does with the data (Google's policy).
+    /// The service's connect screen (ServiceConnectSheet), the same as in Zdroje dat.
     private func start(_ provider: String) {
-        if provider == "google" { googleDisclosure = true } else { connect(provider) }
-    }
-
-    private func connect(_ provider: String) {
-        Task {
-            working = provider
-            defer { working = nil }
-            do {
-                guard let event = try await model.connect(provider: provider) else { return }
-                switch event {
-                case "google", "intervals": message = nil
-                case "intervals-failed": intervalsKey = true
-                case "expired": message = L10n.tr("Odkaz vypršel, zkus to znovu.")
-                default: message = L10n.tr("Připojení se nedokončilo.")
-                }
-                await load()
-            } catch {
-                message = error.localizedDescription
-            }
-        }
+        connecting = ConnectTarget(id: provider)
     }
 }

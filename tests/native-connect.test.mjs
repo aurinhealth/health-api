@@ -80,6 +80,33 @@ test("another browser sees whose account it is and signs in only after confirmin
   assert.equal((await post(origin)).headers.get("Location"), "loadwise://connected?event=expired");
 });
 
+test("the confirm page lets Safari send its origin, and a same-site POST without one still counts", async () => {
+  const cenv = connectEnv();
+  const ticket = await connectTicket(3, "google", env.SESSION_SECRET);
+  const url = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket));
+  const page = await handleNativeConnect(new Request(url), cenv, url, { user: null, signedIn: false });
+  // no-referrer made the browser post the form with "Origin: null" (Neplatný původ požadavku).
+  assert.equal(page.headers.get("Referrer-Policy"), "same-origin");
+  const post = headers => handleNativeConnect(new Request(origin + "/auth/app/connect", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", ...headers }, body: "ticket=" + encodeURIComponent(ticket) }), cenv, new URL(origin + "/auth/app/connect"), { user: null, signedIn: false });
+  assert.equal((await post({ Origin: "null", "Sec-Fetch-Site": "cross-site" })).status, 403);
+  assert.equal((await post({ Origin: "null" })).status, 403);
+  const confirmed = await post({ Origin: "null", "Sec-Fetch-Site": "same-origin" });
+  assert.equal(confirmed.status, 303);
+  assert.equal(confirmed.headers.get("Location"), "/oauth/google?consent=1&return=native");
+});
+
+test("the app's own sheet, which repeats the ticket in a header, skips the confirm page", async () => {
+  const cenv = connectEnv();
+  const ticket = await connectTicket(3, "google", env.SESSION_SECRET);
+  const url = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket));
+  const other = await connectTicket(3, "google", env.SESSION_SECRET);
+  assert.equal((await handleNativeConnect(new Request(url, { headers: { "X-Aurin-Connect": other } }), cenv, url, { user: null, signedIn: false })).status, 200);
+  const direct = await handleNativeConnect(new Request(url, { headers: { "X-Aurin-Connect": ticket } }), cenv, url, { user: null, signedIn: false });
+  assert.equal(direct.status, 303);
+  assert.equal(direct.headers.get("Location"), "/oauth/google?consent=1&return=native");
+  assert.match(direct.headers.get("Set-Cookie"), /HttpOnly; Secure/);
+});
+
 test("a native connection returns to the app", () => {
   assert.equal(connectReturn(new Request(origin + "/oauth/intervals?return=native")), "native");
   assert.equal(connectReturnUrl("native", "intervals"), "loadwise://connected?event=intervals");
