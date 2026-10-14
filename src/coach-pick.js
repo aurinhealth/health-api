@@ -149,8 +149,12 @@ export async function lessKinds(db, userId) {
   return ((await db.prepare("SELECT kind FROM coach_pick_less WHERE user_id=?").bind(userId).all()).results || []).map(r => r.kind);
 }
 
+// Today's recovery tip in the coach's card (recovery-today.js) takes the same
+// list; stretching is only there.
+const LESS_KINDS = [...KINDS, "stretch"];
+
 export async function setLess(db, userId, kind, less = true) {
-  if (!KINDS.includes(kind)) throw new Error(L("Neplatná volba.", "Invalid choice."));
+  if (!LESS_KINDS.includes(kind)) throw new Error(L("Neplatná volba.", "Invalid choice."));
   await db.prepare(LESS_TABLE).run();
   if (less) await db.prepare("INSERT INTO coach_pick_less (user_id, kind, created_at) VALUES (?, ?, ?) ON CONFLICT(user_id, kind) DO NOTHING").bind(userId, kind, new Date().toISOString()).run();
   else await db.prepare("DELETE FROM coach_pick_less WHERE user_id=? AND kind=?").bind(userId, kind).run();

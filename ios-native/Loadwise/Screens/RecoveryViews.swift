@@ -2,14 +2,15 @@ import Combine
 import SwiftUI
 import UIKit
 
-// "Regenerace na dnes" on Today after a training day (GET /app/api/today →
-// recovery, src/recovery-today.js): the coach's sentence and two or three
-// things to do. The stretch opens its routine (moves with a hold or reps, tick
+// The recovery tip on Today after a training day (GET /app/api/today →
+// recovery, src/recovery-today.js): one thing to do, shown inside the coach's
+// card. The stretch opens its routine (moves with a hold or reps, tick
 // circles, a timer); a finished routine and a ticked sauna are saved into the
-// day's plan as done (POST /app/api/recovery).
+// day's plan as done (POST /app/api/recovery). A long press marks it done or
+// asks to see it less ("Doporučovat méně", POST /app/api/coach/pick/less).
 
-/// The card on Today; nothing on a day without recovery or on an earlier day.
-struct RecoveryTodayCard: View {
+/// The tip rows under the coach's sentence; nothing on a day without recovery or on an earlier day.
+struct RecoveryTipRows: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
 
@@ -17,22 +18,17 @@ struct RecoveryTodayCard: View {
     @State private var savingSauna = false
     @State private var error: String?
 
+    static func hasTip(_ today: TodaySnapshot, selectedDate: String?) -> Bool {
+        selectedDate == nil && !(today.recovery?.items.isEmpty ?? true)
+    }
+
     var body: some View {
-        if model.selectedDate == nil, let recovery = today.recovery, !recovery.items.isEmpty {
-            Card {
-                WidgetHeader(title: recovery.title ?? L10n.tr("Regenerace na dnes"), color: Palette.green)
-                if let text = recovery.text {
-                    Text(verbatim: text)
-                        .font(Typo.sentence(20))
-                        .foregroundStyle(Palette.ink)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                VStack(spacing: 0) {
-                    ForEach(Array(recovery.items.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { Divider().overlay(Palette.hairline) }
-                        row(item)
-                    }
+        if Self.hasTip(today, selectedDate: model.selectedDate), let recovery = today.recovery {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(recovery.items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().overlay(Palette.hairline) }
+                    row(item)
+                        .contextMenu { menu(item) }
                 }
                 if let error {
                     Text(error).font(Typo.caption).foregroundStyle(Palette.rust)
@@ -42,6 +38,32 @@ struct RecoveryTodayCard: View {
                 RecoveryRoutineView(item: item, date: today.date)
             }
         }
+    }
+
+    @ViewBuilder
+    private func menu(_ item: RecoveryToday.Item) -> some View {
+        if !item.isDone {
+            Button { Task { await markDone(item) } } label: { Label("Hotovo", systemImage: "checkmark.circle") }
+        }
+        Button { Task { await recommendLess(item) } } label: { Label("Doporučovat méně", systemImage: "minus.circle") }
+    }
+
+    private func markDone(_ item: RecoveryToday.Item) async {
+        guard !model.demo else { return }
+        do {
+            try await model.api.saveRecoveryDone(date: today.date, kind: item.kind, sport: item.sport, focus: item.focus)
+            error = nil
+            await model.refresh()
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func recommendLess(_ item: RecoveryToday.Item) async {
+        guard !model.demo else { return }
+        do {
+            try await model.api.recommendLess(kind: item.kind, less: true)
+            error = nil
+            await model.refresh()
+        } catch { self.error = error.localizedDescription }
     }
 
     @ViewBuilder
@@ -59,9 +81,6 @@ struct RecoveryTodayCard: View {
             .buttonStyle(.plain)
             .disabled(savingSauna || model.demo || (item.isDone && item.savedId == nil))
             .accessibilityHint(item.isDone ? L10n.tr("Vrátit") : L10n.tr("Označit jako hotové"))
-        case "bedtime":
-            NavigationLink(value: AppRoute.sleepSettings) { line(item, trailing: AnyView(chevron)) }
-                .buttonStyle(.plain)
         default:
             line(item, trailing: AnyView(EmptyView()))
         }

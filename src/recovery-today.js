@@ -1,8 +1,8 @@
-// "Regenerace na dnes" on the app's Today screen: after a training day, one
+// The recovery tip in the coach's card on Today: after a training day, one
 // sentence why (what today's or yesterday's session loaded and what tomorrow
-// brings) and two or three things to do: the stretching routine for that
-// session (recovery-plan.js), a sauna and tonight's bedtime. Pure: buildToday
-// (app-today.js) passes the day's sessions, tomorrow's plan and tonight's sleep.
+// brings) and one thing to do: the stretching routine for that session
+// (recovery-plan.js), or a sauna when the athlete wants stretching less often.
+// Pure: buildToday (app-today.js) passes the day's sessions and tomorrow's plan.
 import { L } from "./lang.js";
 import { recoveryRoutine, describeRecovery, routineAreas } from "./recovery-plan.js";
 import { EXERCISES } from "./strength-generator.js";
@@ -90,16 +90,12 @@ const stretchTitle = sport => sport === "gym" ? L("Protažení po posilovně", "
   : sport === "run" ? L("Protažení po běhu", "Stretch after the run")
   : L("Protažení", "Stretching");
 
-const sleepText = minutes => {
-  const h = Math.floor(minutes / 60), m = minutes % 60;
-  return h + " h" + (m ? " " + String(m).padStart(2, "0") : "");
-};
-
 // today/yesterday/tomorrow: the days' sessions as daySessions (app-training.js)
 // lists them (tomorrow null when not known); gym: {date: gym plan} for the
-// exercises of a strength session; tonight: {bedtime, need} or null; saved:
-// the day's recovery sessions (listRecovery), to mark what is done already.
-export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym = {}, date = null, tonight = null, saved = [] } = {}) {
+// exercises of a strength session; saved: the day's recovery sessions
+// (listRecovery), to mark what is done already; less: the kinds marked
+// "Doporučovat méně" (coach-pick.js).
+export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym = {}, date = null, saved = [], less = [] } = {}) {
   const doneToday = (today || []).filter(s => loaded(s));
   const doneYesterday = (yesterday || []).filter(s => loaded(s, true));
   const when = doneToday.length ? "today" : doneYesterday.length ? "yesterday" : null;
@@ -120,7 +116,7 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
   const done = kind => (saved || []).some(r => r?.kind === kind && r.done);
   // The saved row of a done sauna, so a tap by mistake can be taken back.
   const savedId = kind => (saved || []).find(r => r?.kind === kind && r.done)?.id ?? null;
-  const items = [{
+  const options = [{
     kind: "stretch",
     title: stretchTitle(sport),
     detail: [described.minutes + " min", routineAreas(routine.items).join(", ")].filter(Boolean).join(" · "),
@@ -130,8 +126,11 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
     routine: { title: stretchTitle(sport), minutes: described.minutes, items: described.items }
   }];
   // A sauna on the evening of the training day, not the morning after.
-  if (when === "today") items.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna"), savedId: savedId("sauna") });
-  if (tonight?.bedtime && num(tonight.need) > 0) items.push({ kind: "bedtime", title: L("Do postele v ", "Bed at ") + tonight.bedtime, detail: L("dnes potřebuješ " + sleepText(num(tonight.need)) + " spánku", "you need " + sleepText(num(tonight.need)) + " of sleep tonight"), time: tonight.bedtime, done: false });
+  if (when === "today") options.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna"), savedId: savedId("sauna") });
+  // One tip in the coach's card (Petr, 2026-10-14): the first the athlete
+  // didn't mark "Doporučovat méně". Bedtime is Plán dne's.
+  const items = options.filter(o => !(less || []).includes(o.kind)).slice(0, 1);
+  if (!items.length) return null;
 
   return { title: L("Regenerace na dnes", "Recovery for today"), text: loadText(main, when, worked) + tomorrowText(tomorrow), basedOn: when, items };
 }

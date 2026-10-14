@@ -134,8 +134,9 @@ struct TodayContent: View {
             ThresholdCheckCard().padding(.top, 12)
         }
 
-        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil).padding(.top, 32)
-        RecoveryTodayCard(today: today).padding(.top, 12)
+        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil,
+                      tip: RecoveryTipRows.hasTip(today, selectedDate: model.selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
+            .padding(.top, 32)
     }
 }
 

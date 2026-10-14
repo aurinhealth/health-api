@@ -155,18 +155,16 @@ struct PlanWidget: View {
 
     private func line(_ item: TodaySnapshot.PlanItem) -> some View {
         HStack(spacing: 14) {
-            // A planned session has no clock: it comes after the last record.
-            Group {
+            // The kind's icon, with the clock under it (a planned session has
+            // none: it comes after the last record).
+            VStack(spacing: 3) {
+                PlanItemIcon(item: item)
                 if let time = item.time {
-                    Text(ClockText.format(time)).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
-                        .lineLimit(1).minimumScaleFactor(0.5)
-                } else {
-                    Image(systemName: item.status == "missed" ? "xmark.circle" : "circle.dashed")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(item.status == "missed" ? Palette.rust : Palette.faint)
+                    Text(ClockText.format(time)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.faint)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-            .frame(width: 46, alignment: .leading)
+            .frame(width: 46)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
                 if let eased = item.eased {
@@ -218,6 +216,49 @@ struct PlanWidget: View {
         } else if item.kind == "bedtime" {
             Image(systemName: "alarm").font(.footnote.weight(.semibold)).foregroundStyle(Palette.indigo)
                 .accessibilityLabel("Nastavit budík a cíl spánku")
+        }
+    }
+}
+
+/// Plán dne's icon: the sport, stretching, sauna, the pill or bedtime; a
+/// missed session in rust.
+private struct PlanItemIcon: View {
+    let item: TodaySnapshot.PlanItem
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: 38, height: 38)
+            .background(color.opacity(0.16), in: Circle())
+            .opacity(item.done ? 0.7 : 1)
+            .accessibilityHidden(true)
+    }
+
+    private var symbol: String {
+        switch item.kind {
+        case "workout": return item.status == "missed" ? "xmark" : SportIcon.symbol(item.sport ?? "")
+        case "recovery": return item.recovery == "sauna" ? "flame.fill" : "figure.flexibility"
+        case "bedtime": return "bed.double.fill"
+        case "pill": return "pills.fill"
+        default: return "circle"
+        }
+    }
+
+    private var color: Color {
+        if item.status == "missed" { return Palette.rust }
+        switch item.kind {
+        case "workout":
+            switch item.sport {
+            case "ride": return Palette.green
+            case "run": return Palette.amber
+            case "strength": return Palette.blue
+            default: return Palette.muted
+            }
+        case "recovery": return item.recovery == "sauna" ? Palette.amber : Palette.green
+        case "bedtime": return Palette.indigo
+        case "pill": return Palette.pink
+        default: return Palette.muted
         }
     }
 }

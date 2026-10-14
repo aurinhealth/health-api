@@ -146,7 +146,8 @@ struct TodaySnapshot: Decodable, Equatable {
         /// A hard session shown as an easy one on a hard cycle day; `title`
         /// is the original, back with "vrátit".
         var eased: Eased? = nil
-        /// Stretching or sauna: its saved row, to delete it from the day.
+        /// Stretching or sauna: which one, and its saved row to delete it from the day.
+        var recovery: String? = nil
         var recoveryId: Int? = nil
 
         struct Eased: Decodable, Equatable {

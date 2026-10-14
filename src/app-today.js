@@ -186,8 +186,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     yesterday: daySessions(shift(date, -1), date, rec.yesterday || {}, gymByDate[shift(date, -1)] || null).sessions,
     tomorrow: rec.tomorrow ? daySessions(shift(date, 1), date, rec.tomorrow, gymByDate[shift(date, 1)] || null).sessions : null,
     gym: gymByDate,
-    tonight: plan ? { bedtime: clock(plan.bed), need: tonightNeed } : null,
-    saved: savedRecovery
+    saved: savedRecovery,
+    less: Array.isArray(rec.less) ? rec.less : []
   }) : null;
   const stretchName = recoveryCard?.items?.find(i => i.kind === "stretch")?.title;
   const recoveryItems = savedRecovery.map(r => ({
