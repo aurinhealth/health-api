@@ -115,7 +115,7 @@ struct TodayContent: View {
         KeyNumbers(today: today)
             .padding(.top, model.selectedDate == nil ? 12 : 28)
 
-        // Doporučení trenéra: the day's activity from anything (CoachPick.swift).
+        // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if model.selectedDate == nil { CoachPickCard().padding(.top, 16) }
 
         if model.selectedDate == nil {

@@ -14,7 +14,7 @@ import { withFocus } from "./athlete-focus.js";
 
 const HARD_ZONES = new Set(["threshold", "vo2max", "anaerobic", "sprint"]);
 // The most minutes at threshold and above for the morning's readiness.
-const HARD_CAP = { green: 45, yellow: 20, red: 0 };
+export const HARD_CAP = { green: 45, yellow: 20, red: 0 };
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 

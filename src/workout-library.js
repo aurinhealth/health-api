@@ -1,5 +1,6 @@
 import { trainingSetup } from './onboarding.js';
 import { ownLibraryWorkout } from "./endurance-templates.js";
+import { getAiWorkout } from "./ai-workout-compose.js";
 import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-workouts.js';
 // Adaptive workout library: the shared catalog (built-in workouts plus any
 // rows in workout_library), per-user capability progression, ranking, "generate a
@@ -66,6 +67,9 @@ export async function getWorkout(db, id) {
     const row = await db.prepare("SELECT id,sport,name,structure_json FROM saved_workouts WHERE user_id=? AND id=?").bind(db.userId, own[1]).first().catch(() => null);
     return row ? ownLibraryWorkout(row) : null;
   }
+  // "ai-<id>": the AI's own workout for a day (ai-workout-compose.js).
+  const ai = String(id).match(/^ai-([A-Za-z0-9]{10})$/);
+  if (ai) return getAiWorkout(db, ai[1]);
   // "<id>~<minutes>": a workout resized to another length (see resizeWorkout).
   const resized = String(id).match(/^(.+)~(\d{2,3})$/);
   if (resized) { const base = await getWorkout(db, resized[1]); return base ? resizeWorkout(base, Number(resized[2])) : null; }
@@ -107,6 +111,8 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const system = String(filters.system || "").toLowerCase(), duration = n(filters.durationMinutes), durationTolerance = n(filters.durationTolerance, 15);
   // A soft length (the coach's suggestion) only ranks; nothing is filtered out by length.
   const softDuration = filters.durationSoft === true && duration != null, durationScale = softDuration ? Math.max(30, duration * .6) : durationTolerance;
+  // The day's time in the week plan caps a soft (coach's) length: nothing longer is offered.
+  const maxDuration = n(filters.maxDurationMinutes);
   const targetLoad = n(filters.targetLoad), loadTolerance = n(filters.loadTolerance, 35), maxDifficulty = n(filters.maxDifficulty), minDifficulty = n(filters.minDifficulty);
   const readiness = String(context.readiness || "green").toLowerCase(), hardDays = n(context.hardBikeDaysRolling7d, 0), phase = String(context.phase || "").toLowerCase();
   const recentFamilies = new Set(context.recentFamilies || []);
@@ -118,6 +124,7 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const reachable = 25 + (system ? 25 : preferred ? 15 : 0) + (duration != null ? durationWeight : 0) + (targetLoad != null ? 12 : 0) + 18;
   const ranked = workouts.filter(w => (!system || w.primary_system === system || w.secondary_system === system)
     && (duration == null || softDuration || Math.abs(n(w.duration_minutes, 0) - duration) <= durationTolerance)
+    && (maxDuration == null || n(w.duration_minutes, 0) <= maxDuration)
     && (maxDifficulty == null || n(w.difficulty, 99) <= maxDifficulty)
     && (minDifficulty == null || n(w.difficulty, 0) >= minDifficulty)
     && (filters.environment !== "outdoor" || !n(w.indoor_only, 0))
