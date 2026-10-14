@@ -15,7 +15,7 @@ import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, mi
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
-import { activityDetail } from './activity-detail.js';
+import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
 import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
@@ -121,6 +121,8 @@ import { handleCycleApi } from "./routes-cycle.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
+import { loadThresholdSessions } from "./threshold-check-state.js";
+import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
 
 
 // Requests that read or preview only and so keep the cache.
@@ -455,6 +457,18 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{})};
 }
 function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
+// Runs and rides for the coach: six weeks of trends, the Intervals.icu curves
+// and the laps of the last two weeks (performance-trends.js).
+async function coachPerformance(env,ctx,date){
+  const loaded=await loadThresholdSessions(env,ctx,date).catch(()=>null);
+  const [curves,intervals]=await Promise.all([
+    cached(env,ctx,'curves:'+date,()=>intervalsCurves(env,intervalsAuthorization(env.INTERVALS_API_KEY))).catch(()=>null),
+    env.INTERVALS_API_KEY&&loaded?cached(env,ctx,'laps:'+date,()=>recentIntervals(loaded.sessions,date,id=>rideIntervals(env,id))).catch(()=>null):null
+  ]);
+  const trends=loaded?performanceTrends(loaded.sessions,loaded.athlete,date):null;
+  const out={...(trends||{}),...(curves?{curves}:{}),...(intervals?{intervals}:{})};
+  return Object.keys(out).length?out:null;
+}
 async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
@@ -474,7 +488,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
   const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
-  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),performance:await coachPerformance(env,ctx,date)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities

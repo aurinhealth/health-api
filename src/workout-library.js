@@ -353,7 +353,16 @@ export function calculateCapabilityUpdate(current,workout,feedback={}){
   const level=n(current?.level,3),difficulty=n(workout?.difficulty,level),completed=clamp(n(feedback.completedPercent,100)/100,0,1),rpe=n(feedback.rpe),survey=String(feedback.survey||"").toLowerCase();
   let delta=0;let success=false;
   if(survey==="auto_completed"){
-    // A paired activity and its duration do not prove that the work intervals were completed.
+    // A paired activity and its duration do not prove that the work intervals
+    // were completed, but its measured intensity against the plan's does: a
+    // ride or run done whole at (or above) the planned intensity moves the
+    // level up a little, one clearly easier moves it down. Smaller steps than
+    // the athlete's own rating, which may still follow.
+    const ratio=n(feedback.intensityRatio);
+    if(ratio!=null&&completed>=.9){
+      if(ratio>=1.03)delta=.12;else if(ratio>=.97)delta=.06;else if(ratio<.9)delta=-.06;
+      if(delta>0){success=true;delta*=clamp(.7+(difficulty-level)*.25,.5,1.35);}
+    }
   } else if(completed>=.9&&survey!=="failed"){
     success=true;
     if(rpe!=null&&rpe<=6.5)delta=.30;
@@ -367,7 +376,7 @@ export function calculateCapabilityUpdate(current,workout,feedback={}){
   return {level:Math.round(next*100)/100,confidence:Math.round(confidence*100)/100,attempts,successes,delta:Math.round(delta*100)/100,success};
 }
 
-export async function recordWorkoutFeedback(db, { workoutId, scheduledDate = null, completedPercent = 100, rpe = null, survey = "completed", notes = null }) {
+export async function recordWorkoutFeedback(db, { workoutId, scheduledDate = null, completedPercent = 100, rpe = null, survey = "completed", notes = null, intensityRatio = null }) {
   if (!Number.isFinite(Number(completedPercent)) || Number(completedPercent) < 0 || Number(completedPercent) > 150) throw new Error(L("Dokončení musí být 0–150 %.", "Completion must be 0–150 %."));
   if (rpe != null && (!Number.isFinite(Number(rpe)) || Number(rpe) < 1 || Number(rpe) > 10)) throw new Error(L("RPE musí být 1–10.", "RPE must be 1–10."));
   if (scheduledDate && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) throw new Error(L("Neplatné datum tréninku.", "Invalid workout date."));
@@ -379,7 +388,7 @@ export async function recordWorkoutFeedback(db, { workoutId, scheduledDate = nul
     if (previous) throw new Error(L("Tento workout už má uložené hodnocení.", "This workout already has a saved rating."));
   }
   const capabilities = await getCapabilities(db, sport), current = capabilities[w.primary_system];
-  const next = calculateCapabilityUpdate(current, w, { completedPercent, rpe, survey });
+  const next = calculateCapabilityUpdate(current, w, { completedPercent, rpe, survey, intensityRatio });
   await db.batch([
     db.prepare(`INSERT INTO training_capabilities(user_id,sport,system,level,confidence,attempts,successes,last_workout_id,last_rpe,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(user_id,sport,system) DO UPDATE SET level=excluded.level,confidence=excluded.confidence,attempts=excluded.attempts,successes=excluded.successes,last_workout_id=excluded.last_workout_id,last_rpe=excluded.last_rpe,updated_at=excluded.updated_at`)

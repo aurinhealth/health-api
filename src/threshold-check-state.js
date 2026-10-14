@@ -16,12 +16,15 @@ import { shiftDate, dashboardProfile, mondayOfDate } from "./dashboard-shared.js
 // day's activity (Intervals.icu intervals); without them the app asks for the
 // values.
 export const TEST_IDS={ride:['test-ride-ftp20','test-ride-lthr30'],run:['test-run-tt30']};
-export async function thresholdCheckState(env,ctx,today){
+// The last 90 days of rides and runs (threshold-check.js sessions), the
+// athlete's thresholds and the heart-rate anchors the estimates use. Shared
+// with the coach's performance trends (performance-trends.js).
+export async function loadThresholdSessions(env,ctx,today){
   const from=shiftDate(today,-90);
-  const [rows,thresholds,profile,checks,rest]=await Promise.all([
+  const [rows,thresholds,profile,rest]=await Promise.all([
     env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,from,shiftDate(today,1)).all().then(r=>r.results||[]).catch(()=>[]),
     cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),
-    dashboardProfile(env).catch(()=>null),getChecks(env.DB),
+    dashboardProfile(env).catch(()=>null),
     env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(today,-30)).all().then(r=>(r.results||[]).map(x=>Number(x.value_numeric)).sort((a,b)=>a-b)).catch(()=>[])
   ]);
   const byActivity=new Map(),activities=[];
@@ -29,6 +32,10 @@ export async function thresholdCheckState(env,ctx,today){
   const sessions=thresholdSessions(dedupeActivities(activities),byActivity);
   const age=Number(profile?.age)||null;
   const athlete={ftp:thresholds.ftp,lthr:thresholds.lthr,runLthr:thresholds.runLthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null)};
+  return {sessions,thresholds,athlete};
+}
+export async function thresholdCheckState(env,ctx,today){
+  const [{sessions,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
   // The week plan's next 10 days for the recommended test day.
