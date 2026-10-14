@@ -120,24 +120,73 @@ struct ReadinessCard: View {
     }
 }
 
-/// "HRV +12 · Tep +6 · Spánek +4 · Zátěž …": what moved readiness from 70.
+/// HRV, resting heart rate and sleep under the readiness: today's value,
+/// higher or lower than usual and a band with the usual range. Parts without
+/// a range (breathing, temperature, the morning check-in) follow in one line
+/// as readiness points.
 struct PartsRow: View {
     let parts: [HealthSnapshot.Part]
 
+    private var measured: [HealthSnapshot.Part] { parts.filter { $0.value != nil && $0.low != nil && $0.high != nil } }
+    private var others: [HealthSnapshot.Part] { parts.filter { !measured.contains($0) } }
+
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
-                if index > 0 { Rectangle().fill(Palette.hairline).frame(width: 1, height: 34) }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(ReadinessText.label(part.key)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                    Text(Fmt.signed(Double(part.points))).font(Typo.number(22))
-                        .foregroundStyle(part.points >= 0 ? Palette.green : Palette.rust)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(Array(measured.enumerated()), id: \.element.id) { index, part in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(width: 1).padding(.vertical, 2) }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(ReadinessText.label(part.key)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                            Text(ReadinessText.value(part)).font(Typo.number(24)).foregroundStyle(Palette.ink)
+                            Text(ReadinessText.unit(part.key)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        Text(ReadinessText.word(part)).font(Typo.caption.weight(.medium))
+                            .foregroundStyle(ReadinessText.color(part)).lineLimit(1).minimumScaleFactor(0.8)
+                        RangeBand(part: part).padding(.top, 6)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading, index > 0 ? 12 : 0)
+                    .padding(.trailing, index < measured.count - 1 ? 12 : 0)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, index > 0 ? 12 : 0)
+            }
+            if !others.isEmpty {
+                Text(others.map { L10n.tr(ReadinessText.label($0.key)) + " " + Fmt.signed(Double($0.points)) }.joined(separator: " · "))
+                    .font(Typo.caption).foregroundStyle(others.contains { $0.points < 0 } ? Palette.rust : Palette.green)
             }
         }
         .padding(.top, 4)
+    }
+}
+
+/// A slim track with the usual range lighter and a dot at today's value; the
+/// range takes the middle third, so values well outside it still fit.
+struct RangeBand: View {
+    let part: HealthSnapshot.Part
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.ink.opacity(0.07))
+                Capsule().fill(Palette.ink.opacity(0.16)).frame(width: w / 3).offset(x: w / 3)
+                Circle().fill(ReadinessText.color(part))
+                    .overlay(Circle().stroke(Palette.card, lineWidth: 2))
+                    .frame(width: 10, height: 10)
+                    .offset(x: position * w - 5)
+            }
+            .frame(height: 6)
+            .frame(maxHeight: .infinity)
+        }
+        .frame(height: 10)
+        .accessibilityHidden(true)
+    }
+
+    private var position: Double {
+        guard let value = part.value, let low = part.low, let high = part.high, high > low else { return 0.5 }
+        let span = high - low
+        return min(max((value - low + span) / (3 * span), 0.03), 0.97)
     }
 }
 
@@ -145,13 +194,66 @@ enum ReadinessText {
     static func label(_ key: String) -> String {
         switch key {
         case "hrv": return "HRV"
-        case "restingHR": return "Tep"
+        case "restingHR": return "Klidový tep"
         case "sleep": return "Spánek"
         case "respiration": return "Dech"
         case "skinTemp", "wristTemp": return "Teplota"
         case "checkin": return "Pocit"
         default: return key
         }
+    }
+
+    static func unit(_ key: String) -> String {
+        switch key {
+        case "hrv": return "ms"
+        case "restingHR": return "/min"
+        case "sleep": return "h"
+        default: return ""
+        }
+    }
+
+    static func value(_ part: HealthSnapshot.Part) -> String {
+        part.key == "sleep" ? Fmt.hoursMinutes(part.value) : Fmt.int(part.value)
+    }
+
+    /// "58–70 ms", "7:10–8:00 h".
+    static func range(_ part: HealthSnapshot.Part) -> String {
+        let show = { (x: Double?) in part.key == "sleep" ? Fmt.hoursMinutes(x) : Fmt.int(x) }
+        return show(part.low) + "–" + show(part.high) + " " + unit(part.key)
+    }
+
+    /// -1 under the usual range, 1 above it, 0 within.
+    static func side(_ part: HealthSnapshot.Part) -> Int {
+        guard let value = part.value, let low = part.low, let high = part.high else { return 0 }
+        return value > high ? 1 : value < low ? -1 : 0
+    }
+
+    /// "↑ vyšší", "↓ kratší", "v normálu" on the card.
+    static func word(_ part: HealthSnapshot.Part) -> String {
+        switch side(part) {
+        case 1: return "↑ " + L10n.tr(part.key == "sleep" ? "delší" : "vyšší")
+        case -1: return "↓ " + L10n.tr(part.key == "sleep" ? "kratší" : "nižší")
+        default: return L10n.tr("v normálu")
+        }
+    }
+
+    /// "↑ nad normálem" in the readiness detail.
+    static func longWord(_ part: HealthSnapshot.Part) -> String {
+        switch side(part) {
+        case 1: return "↑ " + L10n.tr("nad normálem")
+        case -1: return "↓ " + L10n.tr("pod normálem")
+        default: return L10n.tr("v normálu")
+        }
+    }
+
+    /// Green when the value helps the readiness, rust when it costs points.
+    static func color(_ part: HealthSnapshot.Part) -> Color {
+        part.points < 0 ? Palette.rust : Palette.green
+    }
+
+    /// "−8 bodů připravenosti".
+    static func points(_ points: Int) -> String {
+        L10n.f("%@ %@ připravenosti", Fmt.signed(Double(points)), Fmt.plural(abs(points), "bod", "body", "bodů"))
     }
 
     static func pill(_ zone: String?) -> (String, Color, Color)? {
@@ -188,13 +290,28 @@ struct ReadinessDetailContent: View {
             SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
             VStack(spacing: 0) {
                 ForEach(r.parts) { part in
-                    HStack {
-                        Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
-                        Spacer()
-                        Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                        Text(Fmt.signed(Double(part.points))).font(Typo.number(20))
-                            .foregroundStyle(part.points >= 0 ? Palette.green : Palette.rust)
-                            .frame(width: 46, alignment: .trailing)
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+                        }
+                        if part.low != nil, part.high != nil, part.value != nil {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(L10n.f("tvůj normál %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
+                                Spacer()
+                                Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
+                            }
+                            RangeBand(part: part).padding(.top, 8)
+                        }
+                        HStack {
+                            Spacer()
+                            Text(ReadinessText.points(part.points)).font(Typo.caption.weight(.medium))
+                                .foregroundStyle(ReadinessText.color(part))
+                                .padding(.horizontal, 10).padding(.vertical, 4)
+                                .background(Palette.ink.opacity(0.06), in: Capsule())
+                        }
+                        .padding(.top, 6)
                     }
                     .padding(.vertical, 13)
                     Rectangle().fill(Palette.hairline).frame(height: 1)

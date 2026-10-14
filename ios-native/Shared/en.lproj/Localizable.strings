@@ -2152,3 +2152,14 @@
 "Doporučovat znovu" = "Recommend again";
 "Sauna" = "Sauna";
 "Skrýt klávesnici" = "Hide keyboard";
+"vyšší" = "higher";
+"nižší" = "lower";
+"delší" = "longer";
+"kratší" = "shorter";
+"v normálu" = "normal";
+"nad normálem" = "above normal";
+"pod normálem" = "below normal";
+"bod" = "point";
+"bodů" = "points";
+"%@ %@ připravenosti" = "%@ readiness %@";
+"tvůj normál %@" = "your normal %@";
