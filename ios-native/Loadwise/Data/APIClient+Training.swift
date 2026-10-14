@@ -78,10 +78,12 @@ extension APIClient {
 
     /// A proposal for the day (not saved): the length, and either a focus
     /// ("upper", "lower") or 1–5 muscle groups to work.
-    func previewGym(date: String, minutes: Int, focus: String?, muscles: [String]) async throws -> GymProposal {
+    /// fromWeek: the focus is the week plan's role ("Posilovna · s rezervou"),
+    /// which keeps a full body with lighter legs, not the athlete's "upper body".
+    func previewGym(date: String, minutes: Int, focus: String?, muscles: [String], fromWeek: Bool = false) async throws -> GymProposal {
         var body: JSONObject = ["date": .string(date), "durationMinutes": .number(Double(minutes)), "preview": .bool(true), "userInitiated": .bool(true)]
         if !muscles.isEmpty { body["focusMuscles"] = .array(muscles.map { .string($0) }) }
-        else if let focus { body["focus"] = .string(focus) }
+        else if let focus { body["focus"] = .string(focus); if fromWeek { body["focusSource"] = .string("week") } }
         let r: GymPreviewResponse = try await send("/app/api/gym/generate", method: "POST", body: body)
         guard let plan = r.plan else { throw APIError.message(r.message ?? L10n.tr("Trénink se nepodařilo sestavit.")) }
         return GymProposal(draftId: r.draftId, planName: plan.planName ?? "Silový trénink", rationale: plan.rationale, rows: plan.rows, muscles: r.muscles ?? [:])

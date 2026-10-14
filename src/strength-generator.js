@@ -317,6 +317,8 @@ function daysFrom(item, date) {
 const within = (item, date, from, to) => { const d = daysFrom(item, date); return d == null || (d >= from && d <= to); };
 const longRide = x => (num(x?.durationHours) || 0) >= 2.5;
 const hardRide = x => isIntensity(x) || longRide(x);
+// A run loads the legs harder per hour than a ride: 90 minutes is long.
+const hardRun = x => isIntensity(x) || (num(x?.durationHours) || 0) >= 1.5;
 // Form (TSB = CTL − ATL, Banister's fitness–fatigue model as Intervals.icu
 // reports it with each activity) says how much fatigue the endurance training
 // left. It replaces an acute:chronic load ratio, which adds no predictive
@@ -355,7 +357,14 @@ function legProtection(context) {
     const d = daysFrom(next, date);
     return { protect: true, reason: L((d === 0 ? "Dnes" : d === 1 ? "Zítra" : "Brzy") + " je v plánu " + (isIntensity(next) ? "náročná jízda" : "dlouhá jízda"), (isIntensity(next) ? "A hard ride" : "A long ride") + " is planned " + (d === 0 ? "today" : d === 1 ? "tomorrow" : "soon")) + fmt(next) + "." };
   }
-  const near = (context?.cycling?.plannedWorkouts || []).filter(x => within(x, date, 0, 2) && hardRide(x));
+  const run = context?.running?.nextRun;
+  if (run && within(run, date, 0, 1) && hardRun(run)) {
+    const d = daysFrom(run, date);
+    return { protect: true, reason: L((d === 0 ? "Dnes" : d === 1 ? "Zítra" : "Brzy") + " je v plánu " + (isIntensity(run) ? "náročný běh" : "dlouhý běh"), (isIntensity(run) ? "A hard run" : "A long run") + " is planned " + (d === 0 ? "today" : d === 1 ? "tomorrow" : "soon")) + fmt(run) + "." };
+  }
+  const nearRides = (context?.cycling?.plannedWorkouts || []).filter(x => within(x, date, 0, 2) && hardRide(x)), nearRuns = (context?.running?.plannedWorkouts || []).filter(x => within(x, date, 0, 2) && hardRun(x));
+  const near = [...nearRides, ...nearRuns];
+  if (near.length >= 2 && nearRuns.length) return { protect: true, reason: nearRides.length ? L("Během dvou dnů jsou v plánu dva náročné tréninky.", "Two hard sessions are planned within two days.") : L("Během dvou dnů jsou v plánu dva náročné běhy.", "Two hard runs are planned within two days.") };
   if (near.length >= 2) return { protect: true, reason: L("Během dvou dnů jsou v plánu dvě náročné jízdy.", "Two hard rides are planned within two days.") };
   const ctl = num(context?.cycling?.lastRide?.ctl) || num(context?.cycling?.recentActivities?.[0]?.ctl) || null;
   const last48 = (context?.cycling?.recentActivities || []).filter(x => within(x, date, -1, 0)).slice(0, 3).reduce((sum, x) => sum + (num(x.tss) || 0), 0);
@@ -587,7 +596,7 @@ function choosePlan(context, options = {}) {
   const leg = pick(["quad", "hinge", "posterior", "unilateral"]);
   const kneeFirst = ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
   const exercises = [leg, ...build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], accessories[0], accessories[1], ["horizontalPull", "verticalPull"], accessories[2], ["horizontalPush", "verticalPush"], accessories[3]])].filter(Boolean);
-  const reason = protection.reason || (weekUpper ? L("Podle plánu týdne je blízko klíčová jízda.", "According to the week plan, a key ride is coming up.") : "");
+  const reason = protection.reason || (weekUpper ? L("Podle plánu týdne je blízko klíčový trénink.", "According to the week plan, a key session is coming up.") : "");
   return {
     ...base,
     name: protectLegs?L("Full Body · s rezervou","Full Body · with reserve"):"Full Body",

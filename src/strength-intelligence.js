@@ -1,4 +1,5 @@
 import { normalizeExerciseName } from "./strength-normalization.js";
+import { strengthSetOptions } from "./gym-set-options.js";
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
@@ -276,7 +277,9 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
   for (const r of rows || []) {
     const kg = n(r.actual_kg), reps = n(r.actual_reps), date = dateKey(r.workout_date);
     if (kg == null || reps == null || !date) continue;
-    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, rpe: normalizeRpe(r.rpe) });
+    // A set the plan sent to failure is stored as RPE 10; that is the plan,
+    // not a sign the load was too heavy, so its RPE doesn't decide the step.
+    (sessions.get(date) || sessions.set(date, []).get(date)).push({ kg, reps, rpe: strengthSetOptions(r).toFailure ? null : normalizeRpe(r.rpe) });
   }
   const dates = [...sessions.keys()].sort((a, b) => b.localeCompare(a));
   if (!dates.length) return null;

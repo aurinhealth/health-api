@@ -128,3 +128,9 @@ test("dumbbell exercises ask for a dumbbell the athlete has", async () => {
   assert.equal(rows[1][3], "42,5", "machines stay");
   assert.equal(rows[2][3], "8", "between two, the lighter one");
 });
+
+test("a prescribed failure set (stored as RPE 10) doesn't take a step back", () => {
+  const rows = [{ actual_kg: 40, actual_reps: 12, rpe: 10, note: "[Do selhání]", workout_date: "2026-10-01" }, { actual_kg: 40, actual_reps: 12, rpe: 8, workout_date: "2026-10-01" }];
+  assert.equal(progressionDecision(rows, "Leg extension", "10–12").decision, "increase");
+  assert.equal(progressionDecision(rows.map(r => ({ ...r, note: "" })), "Leg extension", "10–12").decision, "decrease");
+});
