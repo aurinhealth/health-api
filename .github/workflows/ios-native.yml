@@ -6,7 +6,8 @@ name: iOS native app
 # - Loadwise-native-unsigned.ipa: install with Sideloadly (free Apple ID,
 #   valid for 7 days, then install again). It sits next to the Capacitor app.
 # - Loadwise-native-screens: whole-screen snapshots in light and dark mode
-#   from the sample data, plus simulator screenshots of the running app.
+#   from the sample data, plus simulator screenshots of the running app
+#   (site/: the English, light-mode shots the website uses).
 
 on:
   workflow_dispatch:
@@ -34,9 +35,6 @@ jobs:
   build:
     runs-on: macos-15
     timeout-minutes: 40
-    # Pushes the website screenshots to the site-screens branch (never on pull requests).
-    permissions:
-      contents: write
     defaults:
       run:
         working-directory: ios-native
@@ -109,19 +107,6 @@ jobs:
             sleep 6
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/$tab.png"
           done
-
-      # Artifacts cannot be fetched from where the website is edited, so outside pull
-      # requests the website screenshots also go to the site-screens branch (one commit).
-      - name: Publish the website screenshots
-        if: github.event_name != 'pull_request'
-        working-directory: ${{ github.workspace }}/screens/site
-        env:
-          TOKEN: ${{ github.token }}
-        run: |
-          git init -q -b site-screens
-          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com add .
-          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -qm "Website screenshots from ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
-          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/site-screens
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
