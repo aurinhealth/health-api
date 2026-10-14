@@ -172,7 +172,7 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
 // (Assets.xcassets), and say what Aurin sends back only where the app can sync to that service.
 test('the connections use the app’s own logos and only the services the app offers',async()=>{
   const html=await overviewPage().text();
-  const section=html.slice(html.indexOf('<section id="propojeni">'),html.indexOf('<section id="soukromi">'));
+  const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
   const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
   for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg']]){

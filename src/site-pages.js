@@ -1,11 +1,12 @@
 // Public pages: the Aurin overview on / and the policy pages. They use the iPhone app's light
 // palette (ios-native/Shared/Palette.swift): warm paper, white cards, Newsreader headings.
-// The phone on the overview is drawn in HTML from the app's Today screen, so it needs no screenshots.
+// The phones on the overview are drawn in HTML from the app's screens (Today in the hero, then one
+// phone whose screen follows the story's chapters), so they need no screenshots.
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
 // have a Czech version at ?lang=cs, linked from the page and the footer.
 import {themeTokens} from './design-system.js';
-import {icon} from './icons.js';
+import {icon, ICON_PATHS} from './icons.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
@@ -33,179 +34,192 @@ p{margin:0}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
 
 /* The store badge: the app is not in the App Store yet, so it is a label, not a link. */
-.store{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 26px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600}
+.store{display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 28px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600;box-shadow:0 14px 30px -12px rgba(21,20,15,.6)}
 .store svg{width:20px;height:20px;fill:currentColor}
 
-/* Hero. */
-.hero{text-align:center;margin-top:-76px;padding:168px 0 0;background:radial-gradient(70% 60% at 50% 0%,var(--glow-today),transparent 75%)}
-.hero h1{font-size:clamp(52px,8.4vw,108px);max-width:940px;margin:0 auto}
-.hero .store{margin-top:34px}
-.stage{position:relative;width:min(100%,760px);margin:72px auto 0;padding:0 16px 96px}
-.float{position:absolute;z-index:1;text-align:left;width:220px;padding:16px 18px;border-radius:22px;background:var(--panel);box-shadow:0 18px 50px rgba(80,60,30,.12)}
-.float .k{font-size:13px;color:var(--muted)}
-.float .v{font-size:30px;font-weight:600;letter-spacing:-.03em;margin-top:2px}
-.float .d{font-size:13px;font-weight:600}
-.float.left{left:0;top:180px}
-.float.right{right:0;top:340px}
-@media (min-width:961px){.stage{width:min(100%,900px)}.stage .phone{zoom:1.22}.float.left{top:240px}.float.right{top:430px}}
+/* Grain over the whole page: printed paper rather than a flat screen. */
+.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.06;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
-/* The phone, drawn in HTML from the app's Today screen. */
-.phone{width:290px;margin:0 auto;padding:8px;border-radius:50px;background:var(--frame);box-shadow:0 40px 90px rgba(80,60,30,.20);text-align:left}
-.screen{position:relative;height:590px;padding:50px 18px 0;border-radius:42px;overflow:hidden;background:radial-gradient(120% 45% at 50% 0%,var(--glow-today),var(--bg) 70%);font-size:13px;line-height:1.35}
-.screen::before{content:"";position:absolute;top:11px;left:50%;width:92px;height:26px;transform:translateX(-50%);border-radius:14px;background:#000}
-.screen .top{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px}
+/* Aurora: the two halves of the mark (and a little lilac) drifting slowly behind the hero and the end. */
+.aurora{position:absolute;inset:-12% -10% 0;overflow:hidden;pointer-events:none;z-index:0}
+.aurora i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5}
+.aurora .a{width:52vmax;height:40vmax;left:-8vmax;top:-6vmax;background:var(--logo-load)}
+.aurora .b{width:48vmax;height:42vmax;right:-10vmax;top:6vmax;background:var(--logo-recovery)}
+.aurora .c{width:34vmax;height:30vmax;left:30%;top:22vmax;background:var(--aurora-lilac);opacity:.35}
+.aurora::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,var(--bg))}
+
+/* Hero: the line, then the phone lying back that stands up as you scroll, with glass cards around it. */
+.hero{position:relative;margin-top:-76px;padding:168px 0 0;text-align:center;overflow:clip}
+.hero .wrap{position:relative;z-index:1}
+.kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 55%,transparent);border:1px solid color-mix(in srgb,var(--panel) 80%,transparent);font-size:14px;font-weight:600;color:var(--sec);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.hero h1{font-size:clamp(58px,9.6vw,136px);line-height:.98;letter-spacing:-.025em;max-width:1000px;margin:26px auto 0}
+.hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
+.hero h1 .w>span{display:inline-block}
+.lede{max-width:560px;margin:26px auto 0;font-size:20px;color:var(--sec)}
+.hero .store{margin-top:34px}
+.stage{position:relative;height:770px;margin-top:72px;perspective:1600px;z-index:1}
+.stage .device{position:absolute;left:50%;top:0;transform:translateX(-50%) rotateX(calc(26deg * (1 - var(--p,1)))) scale(calc(.86 + .14 * var(--p,1)));transform-origin:50% 0}
+.glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:22px;background:color-mix(in srgb,var(--panel) 70%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:0 24px 60px -18px rgba(80,60,30,.28);transform:translateY(calc(var(--depth) * (1 - var(--p,1)) * 1px))}
+.glass .k{font-size:13px;color:var(--muted)}.glass .v{font-size:30px;font-weight:600;letter-spacing:-.03em}.glass .d{font-size:13px;font-weight:600}
+.glass.g1{left:calc(50% - 400px);top:160px;--depth:140}.glass.g2{right:calc(50% - 400px);top:330px;--depth:260}
+.glass.g3{left:calc(50% - 430px);top:480px;width:250px;--depth:380;font-size:15px}
+
+/* A real-looking iPhone: titanium edge, black bezel, the island, glass glare and a deep shadow.
+   Its screens are drawn from the app's own screens (TodayView.swift and the tabs it opens). */
+.device{position:relative;width:322px;padding:10px;border-radius:58px;text-align:left;background:linear-gradient(140deg,var(--device-hi) 0%,var(--device-lo) 18%,var(--device-hi) 34%,var(--device-lo) 58%,var(--device-mid) 80%,var(--device-lo) 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.7),inset 0 0 3px 1px rgba(0,0,0,.25),0 2px 2px rgba(0,0,0,.08),0 60px 120px -30px rgba(60,40,15,.45),0 30px 60px -30px rgba(0,0,0,.35)}
+.device::before,.device::after{content:"";position:absolute;width:4px;border-radius:2px;background:linear-gradient(var(--device-mid),var(--device-lo))}
+.device::before{left:-3px;top:150px;height:58px}.device::after{right:-3px;top:190px;height:86px}
+.bezel{padding:5px;border-radius:49px;background:#000}
+.screen{position:relative;height:640px;border-radius:44px;overflow:hidden;background:radial-gradient(120% 45% at 50% 0%,var(--glow-today),var(--bg) 70%);font-size:13px;line-height:1.35;color:var(--text)}
+.screen::before{content:"";position:absolute;z-index:3;top:11px;left:50%;width:96px;height:28px;transform:translateX(-50%);border-radius:15px;background:#000}
+.screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
+.scr{position:absolute;inset:0;padding:54px 16px 0;transition:opacity .6s ease,transform .8s cubic-bezier(.16,1,.3,1)}
+.scr:not(.on){opacity:0;transform:translateY(18px) scale(.98)}
+.screen .top{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:15px}
 .screen .me{width:28px;height:28px;border-radius:50%;background:var(--button);color:var(--on-button);display:grid;place-items:center;font-size:13px}
-.screen .lbl{margin-top:24px;color:var(--muted)}
+.screen .lbl{margin-top:22px;color:var(--muted)}
 .screen .ready{display:flex;align-items:flex-end;gap:8px}
-.screen .ready b{font:400 92px/.9 Newsreader,Georgia,serif;letter-spacing:-.04em}
-.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
+.screen .ready b{font:400 96px/.9 Newsreader,Georgia,serif;letter-spacing:-.04em}
+.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-bottom:12px}
 .pill.good{background:var(--green-soft);color:var(--green)}
-.screen .pill{margin-bottom:12px}
-.pc{background:var(--panel);border-radius:18px;padding:12px 13px;margin-top:10px}
-.cells{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px}
-.cells>div+div{border-left:1px solid var(--line);padding-left:11px}
-.cells .k{font-size:11.5px;color:var(--muted)}
-.cells .v{font-size:23px;font-weight:500;letter-spacing:-.02em;margin-top:1px}
-.cells .d{font-size:11px}
-.next{display:flex;align-items:center;gap:11px}
+.pc{background:var(--panel);border-radius:18px;padding:12px 13px;margin-top:10px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.cells{display:grid;grid-template-columns:repeat(3,1fr)}
+.cells>div+div{border-left:1px solid var(--line);padding-left:10px}
+.screen .k,.screen .s{font-size:11.5px;color:var(--muted)}
+.screen .v{font-size:23px;font-weight:500;letter-spacing:-.02em}
+.screen .d{font-size:11px}
+.up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
+.next{display:flex;align-items:center;gap:11px}.next .t{font-weight:600}
 .sport{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;color:#fff}
 .sport .icon{width:19px;height:19px}
-.next .t{font-weight:600;display:flex;align-items:center;gap:5px}
-.next .t .icon{width:12px;height:12px;color:var(--amber)}
-.next .s{font-size:12px;color:var(--muted)}
-.tabbar{position:absolute;left:12px;right:12px;bottom:12px;height:54px;border-radius:27px;background:color-mix(in srgb,var(--panel) 82%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;box-shadow:0 8px 24px rgba(60,45,20,.12);color:var(--muted)}
-.tabbar .icon{width:21px;height:21px}
-.tabbar .on{color:var(--text)}
+.screen .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.screen .tag{font-weight:600;font-size:12px}
+.screen .len{font:400 20px Newsreader,Georgia,serif;color:var(--sec)}
+.screen .num{font-size:52px;font-weight:600;letter-spacing:-.04em;line-height:1.1}
+.gauge{position:relative;height:10px;border-radius:5px;background:var(--track);margin-top:10px}
+.gauge i{position:absolute;top:0;bottom:0;border-radius:5px}
+.gauge .fill{left:0;width:54%;background:var(--amber-bar)}
+.gauge .band{left:57%;width:14%;top:-3px;bottom:-3px;border:1.5px solid var(--amber-bar);background:color-mix(in srgb,var(--amber-bar) 20%,transparent)}
+.week{display:flex;gap:6px;align-items:flex-end;height:110px;margin-top:12px}
+.week i{flex:1;border-radius:5px;background:var(--track)}.week i.on{background:var(--amber-bar)}
+.days{display:flex;font-size:11px;color:var(--muted);margin-top:6px}.days span{flex:1;text-align:center}
+.cal{display:flex}.cal div{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+.cal b{display:grid;place-items:center;width:30px;height:30px;margin:6px auto 0;border-radius:50%;font-size:13px;color:var(--text);border:2px solid transparent}
+.cal .today{background:var(--amber-bar);color:#fff}.cal .ride{border-color:var(--amber-bar)}.cal .gym{border-color:var(--indigo)}.cal .run{border-color:var(--green)}
+.graph{display:flex;gap:3px;align-items:flex-end;height:90px;margin-top:12px}
+.graph i{border-radius:3px}.graph .easy{background:var(--blue);opacity:.75}.graph .hard{background:var(--amber-bar)}
+.muscle{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px}
+.muscle+.muscle{border-top:1px solid var(--line)}
+.muscle .m{width:70px;font-weight:500}
+.muscle .bar{flex:1;height:7px;border-radius:4px;background:var(--track);overflow:hidden}
+.muscle .bar i{display:block;height:100%;border-radius:4px}
+.muscle .p{width:38px;text-align:right;color:var(--muted);font-size:12px}
+.live{display:flex;align-items:center;gap:11px}.live .t{font-weight:600}
+.live .clock{margin-left:auto;font-size:24px;font-weight:600;letter-spacing:-.02em}
+.food{display:flex;align-items:center;gap:16px}
+.ring{width:104px;height:104px;flex:none;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:12}.ring .track{stroke:var(--track)}.ring .val{stroke:var(--green);stroke-linecap:round;stroke-dasharray:218 314}
+.screen .kcal{font-size:30px;font-weight:600;letter-spacing:-.03em}
+.mac{font-size:12px;margin-top:3px}.mac i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.tiles .pc{text-align:center;padding:14px 6px}.tiles .icon{display:block;margin:0 auto 6px;width:22px;height:22px}
+.chat{display:flex;flex-direction:column;gap:10px;margin-top:18px;font-size:14px}
+.chat .me{align-self:flex-end;max-width:86%;padding:11px 14px;border-radius:18px 18px 5px 18px;background:var(--button);color:var(--on-button)}
+.chat .slot{position:relative;align-self:flex-start;max-width:92%}
+.chat .ai{padding:12px 14px;border-radius:18px 18px 18px 5px;background:var(--panel)}
+.chat .typing{display:none}
+.acts{display:flex;gap:6px;margin-top:10px}
+.acts span{padding:6px 11px;border-radius:999px;font-size:12px;font-weight:600;background:var(--panel2)}
+.acts span:first-child{background:var(--green);color:#fff}
+.tabbar{position:absolute;left:12px;right:12px;bottom:14px;height:56px;border-radius:28px;background:color-mix(in srgb,var(--panel) 80%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;color:var(--muted);box-shadow:0 8px 24px rgba(60,45,20,.12)}
+.tabbar .icon{width:21px;height:21px}.tabbar .on{color:var(--text)}
 .tabbar .add{width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button);display:grid;place-items:center}
 .tabbar .add .icon{width:18px;height:18px;stroke-width:2.4}
 
-/* Sections: text on one side, the picture on the other; stacked on phones. */
-section{padding:120px 0 0}
-/* A soft section tint that fades out before the section's edges, so no seam shows. */
-section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380px,var(--glow),transparent)}
-.glow-health{--glow:var(--glow-health)}.glow-training{--glow:var(--glow-training)}.glow-food{--glow:var(--glow-food)}.glow-today{--glow:var(--glow-today)}
-.feature{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,520px);gap:80px;align-items:center}
-.feature.flip .text{order:2}
-.feature .text h2+p:not(.free){margin-top:20px;color:var(--sec)}
-.eyebrow{font-size:13px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
-.feature h2,.center h2{font-size:clamp(42px,5.4vw,68px)}
-.card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
-.card+.card,.card+.trio,.trio+.trio{margin-top:12px}
-.note{font-size:16px;color:var(--sec);margin-top:14px}
-.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.trio .card{margin:0;padding:18px 16px;border-radius:22px}
-.trio .k{font-size:13px;color:var(--muted)}
-.trio .v{font-size:28px;font-weight:500;letter-spacing:-.03em;margin-top:4px}
-.trio .d{font-size:13px;font-weight:600;margin-top:2px}
-.tile{text-align:center}
-.tile .icon{width:26px;height:26px;margin:0 auto;display:block}
-.tile span{display:block;font-size:15px;font-weight:500;margin-top:8px}
-.big{font:400 150px/.85 Newsreader,Georgia,serif;letter-spacing:-.05em;color:var(--green);text-align:center}
-.readiness>.card:first-child{padding:40px 24px 30px;text-align:center}
-.up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
+/* The story: the phone stays while the chapters scroll past, and its screen follows the chapter
+   in view. Each chapter is a section of the app, in the order of its tabs. */
+.story{position:relative}
+.story .pin{position:sticky;top:0;height:100vh;height:100svh;z-index:2;pointer-events:none;display:flex;align-items:center}
+.story .pin .wrap{width:100%;display:flex;justify-content:flex-end}
+.story .pin .device{margin-right:calc(25% - 161px);transform:scale(1.05)}
+.story .glow{position:absolute;inset:0;z-index:-1;background:radial-gradient(40% 55% at 72% 50%,var(--glow,var(--glow-today)),transparent 70%)}
+.progress{position:absolute;left:24px;bottom:44px;display:flex;gap:8px}
+.progress i{width:28px;height:4px;border-radius:2px;background:var(--track);overflow:hidden}
+.progress i b{display:block;height:100%;width:calc(var(--f,0) * 100%);background:var(--text)}
+.story .steps{position:relative;z-index:1;margin-top:-100vh;margin-top:-100svh}
+.step{position:relative;min-height:100vh;display:flex;align-items:center}
+.step .wrap{width:100%}
+.step .text{max-width:470px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
+.step h2{font-size:clamp(46px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
+.step p{margin-top:20px;font-size:20px;color:var(--sec)}
+.step p.free{color:var(--green);font-weight:600}
 
-.gauge-head{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;color:var(--muted)}
-.gauge-head .warm{font-weight:600}
-.num{font-size:58px;font-weight:600;letter-spacing:-.04em;line-height:1.1;margin-top:4px}
-.gauge{position:relative;height:12px;border-radius:6px;background:var(--track);margin-top:14px}
-.gauge i{position:absolute;top:0;bottom:0;border-radius:6px}
-.gauge .fill{left:0;width:54%;background:var(--amber-bar)}
-.gauge .band{left:57%;width:14%;top:-4px;bottom:-4px;border:1.5px solid var(--amber-bar);background:color-mix(in srgb,var(--amber-bar) 20%,transparent)}
-.week{display:flex;gap:7px;align-items:flex-end;height:96px;margin-top:30px}
-.week i{flex:1;border-radius:5px;background:var(--track)}
-.week i.on{background:var(--amber-bar)}
-.days{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:8px}
-.days span{flex:1;text-align:center}
-
-.cal{display:flex}
-.cal div{flex:1;text-align:center;font-size:12px;color:var(--muted)}
-.cal b{display:grid;place-items:center;width:34px;height:34px;margin:7px auto 0;border-radius:50%;font-size:14px;font-weight:600;color:var(--text);border:2px solid transparent}
-.cal .today{background:var(--amber-bar);color:#fff}
-.cal .ride{border-color:var(--amber-bar)}.cal .gym{border-color:var(--indigo)}.cal .run{border-color:var(--green)}
-.workout .head{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.workout .name{font-size:19px;font-weight:600;display:flex;gap:7px;align-items:center}
-.workout .name .icon{width:16px;height:16px;color:var(--amber)}
-.workout .len{font:400 24px Newsreader,Georgia,serif;color:var(--sec);white-space:nowrap}
-.graph{display:flex;gap:3px;align-items:flex-end;height:78px;margin-top:18px}
-.graph i{border-radius:3px}
-.graph .easy{background:var(--blue);opacity:.75}.graph .hard{background:var(--amber-bar)}
-.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-.chips span{padding:9px 15px;border-radius:999px;background:var(--panel);font-size:15px;font-weight:500}
-
-.muscle{display:flex;align-items:center;gap:14px;padding:11px 0;font-size:16px}
-.muscle+.muscle{border-top:1px solid var(--line)}
-.muscle .m{width:104px;font-weight:500}
-.muscle .bar{flex:1;height:8px;border-radius:4px;background:var(--track);overflow:hidden}
-.muscle .bar i{display:block;height:100%;border-radius:4px}
-.muscle .p{width:46px;text-align:right;color:var(--muted);font-size:15px}
-.live{display:flex;align-items:center;gap:14px}
-.live .t{font-size:17px;font-weight:600}
-.live .s{font-size:14px;color:var(--muted)}
-.live .clock{margin-left:auto;font-size:26px;font-weight:600;letter-spacing:-.02em}
-
-.food{display:flex;align-items:center;gap:24px}
-.ring{width:124px;height:124px;flex:none;transform:rotate(-90deg)}
-.ring circle{fill:none;stroke-width:12}
-.ring .track{stroke:var(--track)}.ring .val{stroke:var(--green);stroke-linecap:round}
-.food .kcal{font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.1}
-.food .of{font-size:15px;color:var(--muted)}
-.macros{list-style:none;padding:0;margin:12px 0 0;font-size:14px;line-height:1.75}
-.macros i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
-
-.chat{display:flex;flex-direction:column;gap:12px;font-size:16.5px;line-height:1.45}
-.chat .me{align-self:flex-end;max-width:84%;padding:13px 18px;border-radius:22px 22px 6px 22px;background:var(--button);color:var(--on-button)}
-.chat .slot{position:relative;align-self:flex-start;max-width:90%}
-.chat .ai{padding:16px 18px;border-radius:22px 22px 22px 6px;background:var(--panel)}
-.chat .acts{display:flex;gap:8px;margin-top:12px}
-.chat .acts span{padding:8px 14px;border-radius:999px;font-size:14px;font-weight:600;background:var(--panel2)}
-.chat .acts span:first-child{background:var(--green);color:#fff}
-.free{margin-top:22px;font-size:17px;font-weight:600;color:var(--green)}
-
-/* Connections: the services around the Aurin mark; dots flow in along one curve and back along the
-   other. Tapping a logo shows what Aurin reads from it and what it sends back. */
+/* Connections: the services around the Aurin mark. Dots and the things they carry flow in along one
+   curve and back along the other; tapping a logo says what Aurin reads from it and sends back. */
+.connect{padding:140px 0 40px}
+.center{text-align:center;max-width:760px;margin:0 auto}
+.center h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
+.center .sub{max-width:560px;margin:22px auto 0;font-size:20px;color:var(--sec)}
+.connect .box{max-width:720px;margin:56px auto 0}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.hub{position:relative;aspect-ratio:520/300;padding:0;overflow:hidden;background:var(--panel2)}
+.hub{position:relative;aspect-ratio:520/320;border-radius:32px;overflow:hidden;background:var(--panel2);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--panel) 70%,transparent)}
 .hub .lines{position:absolute;inset:0;width:100%;height:100%}
 .hub .lines path{fill:none;stroke-linecap:round}
-.hub .base{stroke:color-mix(in srgb,var(--panel) 70%,transparent);stroke-width:2}
+.hub .base{stroke:color-mix(in srgb,var(--panel) 80%,transparent);stroke-width:2.5}
 .hub .flow{stroke-width:5;stroke-dasharray:0 18;transition:opacity .4s}
 .hub .flow.in{stroke:var(--green)}.hub .flow.out{stroke:var(--amber-bar)}
-.tabs .hub [data-svc]:not(.on) .flow{opacity:.28}
-.hub .core{position:absolute;left:50%;top:50%;width:84px;height:84px;margin:-42px 0 0 -42px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 10px 30px rgba(60,45,20,.14)}
-.hub .node{position:absolute;width:58px;height:58px;margin:-29px 0 0 -29px;padding:0;border:0;border-radius:16px;background:none;cursor:pointer;transition:transform .3s cubic-bezier(.2,.7,.2,1)}
-.hub .node::before{content:"";position:absolute;inset:-9px;border-radius:24px;background:var(--panel);opacity:0;transition:opacity .3s}
-.hub .node[aria-selected=true]{transform:scale(1.08)}
+.tabs .hub [data-svc]:not(.on) .flow{opacity:.22}
+.hub .packets:not(.on){display:none}
+.hub .pk circle{fill:var(--panel);stroke-width:2}
+.hub .pk.in circle{stroke:var(--green)}.hub .pk.out circle{stroke:var(--amber-bar)}
+.hub .pk svg{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hub .pk.in svg{stroke:var(--green)}.hub .pk.out svg{stroke:var(--amber)}
+.hub .core{position:absolute;left:50%;top:50%;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
+.hub .node{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;padding:0;border:0;border-radius:18px;background:none;cursor:pointer;transition:transform .4s cubic-bezier(.16,1,.3,1)}
+.hub .node::before{content:"";position:absolute;inset:-10px;border-radius:26px;background:var(--panel);opacity:0;transition:opacity .3s;box-shadow:0 10px 30px rgba(60,45,20,.14)}
+.hub .node[aria-selected=true]{transform:scale(1.1)}
 .hub .node[aria-selected=true]::before{opacity:1}
 .hub .node img{position:relative;display:block;width:100%;height:100%}
 .hub .node img.pad{padding:4%}
 .uh-tile{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:26%;background:#000}
 .uh-tile img{width:56%!important;height:auto!important}
-.legend{display:flex;gap:20px;justify-content:center;margin-top:14px;font-size:14px;color:var(--muted)}
+.legend{display:flex;gap:20px;justify-content:center;margin-top:16px;font-size:14px;color:var(--muted)}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
 .legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
-.panels{margin-top:14px}
-.svc h3{font-size:19px;font-weight:600}
-.svc .io{display:grid;grid-template-columns:104px 1fr;gap:12px;margin-top:10px;font-size:16px;color:var(--sec)}
-.svc .lbl{font-size:13px;font-weight:600;padding-top:2px}
+.panels{margin-top:16px;padding:24px 26px;border-radius:28px;background:var(--panel);box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.svc h3{font-size:21px;font-weight:600}
+.svc .io{display:grid;grid-template-columns:130px 1fr;gap:12px;margin-top:16px;align-items:start}
+.svc .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding-top:7px}
+.svc .lbl .icon{width:15px;height:15px;stroke-width:2.4}
 .svc .lbl.in{color:var(--green)}.svc .lbl.out{color:var(--amber)}
-.svc+.svc{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+.svc .items{display:flex;flex-wrap:wrap;gap:8px}
+.svc .items span{display:inline-flex;align-items:center;gap:7px;padding:7px 12px 7px 10px;border-radius:999px;font-size:15px;font-weight:500;background:var(--bg)}
+.svc .items .icon{width:16px;height:16px}
+.svc .in+.items .icon{color:var(--green)}.svc .out+.items .icon{color:var(--amber)}
+.svc .none{font-size:15px;color:var(--muted);padding-top:6px}
+.svc+.svc{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}
 .tabs .svc+.svc{margin:0;padding:0;border:0}
 .tabs .svc:not(.on){display:none}
 
-.center{text-align:center;max-width:760px;margin:0 auto}
-.center .lock{width:32px;height:32px;color:var(--muted);margin-bottom:18px}
-.checks{list-style:none;margin:32px auto 0;padding:6px 24px;max-width:620px;text-align:left}
-.checks li{display:flex;gap:12px;align-items:flex-start;padding:14px 0;font-size:17px;font-weight:500}
-.checks li+li{border-top:1px solid var(--line)}
-.checks .icon{color:var(--green);margin-top:2px}
-.checks a{font-weight:600}
-.disclosure{max-width:620px;margin:12px auto 0;padding:22px 24px;text-align:left}
+/* Privacy: the sentence lights up word by word as you read it; the details and Google's text follow. */
+.privacy{padding:150px 0 0}
+.privacy .say{max-width:980px;margin:0 auto}
+.privacy .lock{width:44px;height:44px;color:var(--green);margin-bottom:28px;stroke-width:1.8}
+.privacy .big{font:400 clamp(36px,5.2vw,72px)/1.08 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em}
+.privacy .big span{transition:opacity .25s}
+.js .privacy .big span:not(.lit){opacity:.16}
+.privacy .more{margin-top:30px;font-size:18px;font-weight:600}
+.card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.disclosure{max-width:680px;margin:56px auto 0;padding:24px 26px;text-align:left}
 .disclosure h3{font-size:16px;font-weight:600;margin-bottom:10px}
 .disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
 
 /* Questions: plain details/summary, so they open without JS; browsers that can animate to auto height do. */
+#faq{padding:140px 0 0}
 .faq{max-width:760px;margin:0 auto}
-.faq h2{text-align:center;font-size:clamp(42px,5.4vw,68px);margin-bottom:36px}
+.faq h2{text-align:center;font-size:clamp(46px,6.2vw,88px);letter-spacing:-.025em;margin-bottom:40px}
 .faq details{border-top:1px solid var(--line)}
 .faq details:last-child{border-bottom:1px solid var(--line)}
 .faq summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 2px;font-size:19px;font-weight:600;cursor:pointer;list-style:none}
@@ -214,9 +228,11 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 .faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
 
-.final{text-align:center;padding:150px 0 140px;background:radial-gradient(60% 70% at 50% 100%,var(--glow-training),transparent 75%)}
-.final .mark{display:block;margin:0 auto}
-.final h2{font-size:clamp(52px,7vw,84px);margin-top:22px}
+.final{position:relative;padding:190px 0 200px;text-align:center;overflow:clip}
+.final .aurora{inset:0}.final .aurora::after{background:linear-gradient(var(--bg),transparent 35%,transparent 70%,var(--bg))}
+.final .wrap{position:relative;z-index:1}
+.final .mark{display:block;margin:0 auto 26px;filter:drop-shadow(0 20px 30px rgba(60,45,20,.18))}
+.final h2{font-size:clamp(58px,8vw,104px)}
 .final .store{margin-top:30px}
 
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
@@ -235,66 +251,82 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 .doc p{color:var(--sec);margin-bottom:12px}
 .doc ul,.doc ol{color:var(--sec);margin:0 0 12px;padding-left:22px}.doc li{margin-bottom:6px}
 
-/* Content fades up as it scrolls in; only with JS and without reduced motion. */
-.chat .typing{display:none}
+/* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora
+   drifts, content fades up as it scrolls in, and each phone screen draws itself when it comes on. */
 @media (prefers-reduced-motion:no-preference){
-  .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}
+  .js .hero h1 .w>span{transform:translateY(105%);animation:rise 1.1s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.15s + var(--i) * 90ms)}
+  @keyframes rise{to{transform:none}}
+  .js .hero .lede,.js .hero .store,.js .hero .kicker{opacity:0;animation:fade 1s .8s forwards}
+  .js .hero .kicker{animation-delay:.05s}.js .hero .store{animation-delay:1s}
+  .js .stage{opacity:0;animation:fade 1.2s .5s forwards}
+  @keyframes fade{to{opacity:1}}
+  .aurora i{animation:drift 22s ease-in-out infinite alternate}
+  .aurora .b{animation-duration:26s;animation-delay:-8s}.aurora .c{animation-duration:30s;animation-delay:-14s}
+  @keyframes drift{33%{transform:translate(6vmax,4vmax) scale(1.08)}66%{transform:translate(-4vmax,7vmax) scale(.94)}100%{transform:translate(3vmax,-3vmax) scale(1.04)}}
+  .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
-  /* Charts draw themselves once they are in view: bars grow, the ring fills, numbers count up (script). */
-  .js .reveal .week i,.js .reveal .graph i{transform:scaleY(0);transform-origin:50% 100%;transition:transform .9s cubic-bezier(.2,.7,.2,1) calc(.25s + var(--i,0) * 70ms)}
-  .js .reveal .muscle .bar i,.js .reveal .gauge .fill{transform:scaleX(0);transform-origin:0 50%;transition:transform 1.2s cubic-bezier(.2,.7,.2,1) calc(.3s + var(--i,0) * 120ms)}
-  .js .reveal.in .week i,.js .reveal.in .graph i,.js .reveal.in .muscle .bar i,.js .reveal.in .gauge .fill{transform:none}
-  .js .reveal .ring .val{stroke-dasharray:0 314;transition:stroke-dasharray 1.5s cubic-bezier(.2,.7,.2,1) .3s}
-  .js .reveal.in .ring .val{stroke-dasharray:218 314}
-  .js .reveal .cal .today{box-shadow:0 0 0 0 color-mix(in srgb,var(--amber-bar) 45%,transparent)}
-  .js .reveal.in .cal .today{animation:ping 2.4s 1s infinite}
-  @keyframes ping{70%,100%{box-shadow:0 0 0 10px transparent}}
-  /* The coach: your question, a moment of typing, then the answer. */
-  .js .chat.reveal .me,.js .chat.reveal .ai{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1)}
-  .js .chat.reveal.in .me{opacity:1;transform:none;transition-delay:.35s}
-  .js .chat.reveal.in .ai{opacity:1;transform:none;transition-delay:2.2s}
-  .js .chat.reveal .typing{position:absolute;left:0;top:0;display:flex;gap:5px;padding:18px 20px;border-radius:22px 22px 22px 6px;background:var(--panel);opacity:0}
-  .js .chat.reveal.in .typing{animation:typing 1.4s .9s both}
-  .chat .typing i{width:8px;height:8px;border-radius:50%;background:var(--muted);animation:dot 1s infinite}
+  .js .step .text{opacity:.18;transition:opacity .6s ease}
+  .js .step.on .text{opacity:1}
+  .js .scr .week i,.js .scr .graph i{transform:scaleY(0);transform-origin:50% 100%;transition:transform .9s cubic-bezier(.16,1,.3,1) calc(.2s + var(--i,0) * 70ms)}
+  .js .scr .muscle .bar i,.js .scr .gauge .fill{transform:scaleX(0);transform-origin:0 50%;transition:transform 1.1s cubic-bezier(.16,1,.3,1) calc(.25s + var(--i,0) * 110ms)}
+  .js .scr.on .week i,.js .scr.on .graph i,.js .scr.on .muscle .bar i,.js .scr.on .gauge .fill{transform:none}
+  .js .scr .ring .val{stroke-dasharray:0 314;transition:stroke-dasharray 1.5s cubic-bezier(.16,1,.3,1) .25s}
+  .js .scr.on .ring .val{stroke-dasharray:218 314}
+  .js .scr.on .cal .today{animation:ping 2.4s 1s infinite}
+  @keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--amber-bar) 50%,transparent)}70%,100%{box-shadow:0 0 0 9px transparent}}
+  .js .scr .chat .me,.js .scr .chat .ai{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s cubic-bezier(.16,1,.3,1)}
+  .js .scr.on .chat .me{opacity:1;transform:none;transition-delay:.4s}
+  .js .scr.on .chat .ai{opacity:1;transform:none;transition-delay:2.2s}
+  .js .scr .chat .typing{position:absolute;left:0;top:0;display:flex;gap:5px;padding:14px 16px;border-radius:18px 18px 18px 5px;background:var(--panel);opacity:0}
+  .js .scr.on .chat .typing{animation:typing 1.4s .9s both}
+  .chat .typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:dot 1s infinite}
   .chat .typing i:nth-child(2){animation-delay:.15s}.chat .typing i:nth-child(3){animation-delay:.3s}
   @keyframes typing{0%{opacity:0}15%,85%{opacity:1}100%{opacity:0}}
   @keyframes dot{0%,60%,100%{transform:none;opacity:.45}30%{transform:translateY(-4px);opacity:1}}
-  /* Data keeps flowing between the services and Aurin; the mark breathes as it arrives. */
-  .tabs .svc.on{animation:svc-in .45s cubic-bezier(.2,.7,.2,1)}
-  @keyframes svc-in{from{opacity:0;transform:translateY(8px)}}
   .hub .flow{animation:flow 1.1s linear infinite}
   @keyframes flow{to{stroke-dashoffset:-36}}
-  .hub .core{animation:breathe 3.2s ease-in-out infinite}
-  @keyframes breathe{50%{box-shadow:0 10px 30px rgba(60,45,20,.14),0 0 0 10px color-mix(in srgb,var(--green) 12%,transparent)}}
-  /* The two numbers next to the phone drift gently. */
-  .float{animation:drift 7s ease-in-out infinite}.float.right{animation-delay:-3.5s}
-  @keyframes drift{50%{transform:translateY(-10px)}}
+  .hub .core{animation:breathe 2.4s ease-in-out infinite}
+  @keyframes breathe{50%{box-shadow:0 14px 34px rgba(60,45,20,.16),0 0 0 12px color-mix(in srgb,var(--logo-recovery) 16%,transparent)}}
+  .hub .node:not([aria-selected=true]){animation:bob 5s ease-in-out infinite}
+  .hub .node:nth-of-type(2){animation-delay:-1.2s}.hub .node:nth-of-type(3){animation-delay:-2.5s}.hub .node:nth-of-type(4){animation-delay:-3.7s}
+  @keyframes bob{50%{transform:translateY(-6px)}}
+  .tabs .svc.on h3{animation:fade .5s both}
+  .tabs .svc.on .items span{opacity:0;animation:chip .5s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.08s + var(--i,0) * 60ms)}
+  @keyframes chip{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
   @supports (interpolate-size:allow-keywords){
     .faq{interpolate-size:allow-keywords}
-    .faq details::details-content{height:0;overflow:clip;transition:height .35s cubic-bezier(.2,.7,.2,1),content-visibility .35s allow-discrete}
+    .faq details::details-content{height:0;overflow:clip;transition:height .35s cubic-bezier(.16,1,.3,1),content-visibility .35s allow-discrete}
     .faq details[open]::details-content{height:auto}
   }
 }
 
 @media (max-width:960px){
   .pill-nav .links{display:none}
-  .float{display:none}
-  .feature{grid-template-columns:1fr;gap:32px}
-  .feature.flip .text{order:0}
-  .visual{max-width:520px}
-  section{padding-top:88px}
+  .glass.g3{display:none}
+  .glass.g1{left:max(4px,calc(50% - 320px))}.glass.g2{right:max(4px,calc(50% - 320px))}
+  /* Phones: the chapter's words sit at the top, the phone below; the next words slide out from behind it. */
+  .story .pin{align-items:flex-end}
+  .story .pin .wrap{justify-content:center}
+  .story .pin .device{margin:0 0 6px;transform:scale(.7);transform-origin:50% 100%}
+  .story .glow{background:radial-gradient(70% 45% at 50% 75%,var(--glow,var(--glow-today)),transparent 70%)}
+  .progress{display:none}
+  .step{align-items:flex-start}
+  .step .text{padding-top:88px}
+  .js .step .text{opacity:0}
+  .step h2{font-size:38px}.step p{font-size:16px;line-height:1.45;margin-top:10px}.eyebrow{margin-bottom:10px}
+  .connect{padding-top:110px}
 }
+@media (max-width:960px) and (max-height:780px){.story .pin .device{transform:scale(.6)}}
 @media (max-width:560px){
   .wrap{padding:0 16px}
   .hero{padding-top:132px}
-  .stage{margin-top:48px;padding-bottom:64px}
-  .card{padding:20px;border-radius:24px}
-  .trio{gap:8px}
-  .trio .card{padding:14px 12px;border-radius:20px}
-  .trio .v{font-size:24px}
-  .big{font-size:124px}
-  .food{gap:18px}.ring{width:104px;height:104px}.food .kcal{font-size:32px}
-  .muscle .m{width:84px}
+  .lede{font-size:18px}
+  .stage{height:700px;margin-top:56px}
+  .glass{padding:12px 14px}.glass .v{font-size:24px}
+  .glass.g1{top:110px}.glass.g2{top:300px}
+  .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
+  .panels{padding:20px}
+  .hub{border-radius:24px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -313,35 +345,50 @@ function deviceLang(request) {
   return /^(cs|sk)\b/.test(first) ? 'cs' : 'en';
 }
 
-const check = text => `<li>${icon('check')}<span>${text}</span></li>`;
 const APPLE_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.2.8 1.1 1.7 2.3 2.9 2.3 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6 0 0-2.4-.9-2.4-3.7zM14.2 5.6c.6-.8 1.1-1.8 1-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.3z"/></svg>';
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
 const store = () => `<span class="store">${APPLE_LOGO}Coming soon to the App Store</span>`;
 
-const revealScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
+// The page's motion. Scroll drives it: the hero phone stands up, the story's phone follows the chapter
+// in view, the privacy sentence lights up. Without JS everything is simply shown; with reduced
+// motion nothing moves and the story still switches screens.
+const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
 var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-// Numbers count up from zero the first time they come into view, in the format they are written in.
+// Numbers count up from zero the first time their screen comes on, in the format they are written in.
 function count(el){var t=el.textContent,d=(t.split('.')[1]||'').length,to=parseFloat(t.replace(/,/g,'')),s=performance.now();
 function f(n){return n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});}
 (function step(now){var k=Math.min(1,(now-s)/1300);el.textContent=f(to*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);else el.textContent=t;})(s);}
-// The rest timer in the gym card runs down and starts again.
+// The rest timer on the gym screen runs down and starts again.
 function rest(el){var from=+el.dataset.rest,left=from;setInterval(function(){left=left>0?left-1:from;el.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0');},1000);}
-function shown(el){el.classList.add('in');if(still)return;
-el.querySelectorAll('.count').forEach(count);el.querySelectorAll('[data-rest]').forEach(rest);}
-if(!('IntersectionObserver' in window)){r.classList.remove('js');}
-else{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){shown(e.target);io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
-document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}
+function wake(el){if(still||el.dataset.woke)return;el.dataset.woke=1;el.querySelectorAll('.count').forEach(count);el.querySelectorAll('[data-rest]').forEach(rest);}
+if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');wake(e.target);io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
+document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
+var stage=document.querySelector('.stage'),story=document.querySelector('.story'),priv=document.querySelector('.privacy .big');
+var steps=story?[].slice.call(story.querySelectorAll('.step')):[],scrs=story?[].slice.call(story.querySelectorAll('.scr')):[],bars=story?[].slice.call(story.querySelectorAll('.progress i')):[];
+var words=priv?[].slice.call(priv.querySelectorAll('span')):[],last=-1,queued=false;
+if(stage)wake(stage);
+function frame(){queued=false;var vh=innerHeight;
+ if(stage){var s=stage.getBoundingClientRect(),p=still?1:Math.min(1,Math.max(0,(vh-s.top)/(vh*.9)-.3));stage.style.setProperty('--p',p.toFixed(3));}
+ if(steps.length){var at=0,line=vh*(innerWidth>960?.5:.14);steps.forEach(function(el,j){if(el.getBoundingClientRect().top<line)at=j;});
+  bars.forEach(function(b,j){var q=steps[j].getBoundingClientRect(),f=Math.min(1,Math.max(0,(vh*.5-q.top)/q.height));b.style.setProperty('--f',f.toFixed(3));});
+  if(at!==last){last=at;steps.forEach(function(el,j){el.classList.toggle('on',j===at);});scrs.forEach(function(el,j){el.classList.toggle('on',j===at);if(j===at)wake(el);});
+   story.style.setProperty('--glow','var(--'+steps[at].dataset.glow+')');}}
+ if(words.length){var q=priv.getBoundingClientRect(),k=still?1:Math.min(1,Math.max(0,(vh*.8-q.top)/(q.height+vh*.25)));
+  words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}}
+function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
+addEventListener('scroll',ask,{passive:true});addEventListener('resize',ask);frame();
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
 var hub=document.querySelector('.hub');if(!hub)return;
-var tabs=[].slice.call(hub.querySelectorAll('[role=tab]')),at=0,timer;
-function pick(i){at=i;tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
-document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelector('[data-svc='+id+']').classList.toggle('on',on);});}
+if(still&&hub.querySelector('svg').pauseAnimations)hub.querySelector('svg').pauseAnimations();
+var tabs=[].slice.call(hub.querySelectorAll('[role=tab]')),cur=0,timer;
+function pick(i){cur=i;tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
+document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAll('[data-svc='+id+']').forEach(function(g){g.classList.toggle('on',on);});});}
 tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
 t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
-if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[at].focus();}});});
-r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((at+1)%tabs.length);},3800);})();</script>`;
+if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
+r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>`;
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true}) {
   const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
@@ -379,7 +426,7 @@ ${body}
 </div>
 <div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
-${revealScript}
+${siteScript}
 </body></html>`;
   return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate'}});
 }
@@ -406,159 +453,146 @@ const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-p
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
 const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 
-// The overview follows the app section by section: Today, readiness, strain, the plan, the gym,
-// food, the coach and the connections. The numbers are one believable morning, the same everywhere.
+// The overview follows the app: Today in the hero, then a story with one phone whose screen follows
+// the chapters (readiness, strain, the plan, the gym, food, the coach), the connections, privacy and
+// questions. The numbers are one believable morning, the same everywhere.
 export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
-  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const short = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const today = `<div class="phone" role="img" aria-label="Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout"><div class="screen" aria-hidden="true">
-<div class="top"><span>Monday, Oct 12</span><span class="me">P</span></div>
-<div class="lbl">Readiness</div>
-<div class="ready"><b class="count">78</b><span class="pill good">high</span></div>
-<div class="pc cells">
+  const tabbar = on => `<div class="tabbar">${['today', 'training', 'plus', 'meal', 'heart'].map(n => n === 'plus' ? `<span class="add">${icon('plus')}</span>` : `<span class="${n === on ? 'on' : ''}">${icon(n)}</span>`).join('')}</div>`;
+  const cells = `<div class="pc cells">
 <div><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
 <div><div class="k">Strain</div><div class="v">11.4</div><div class="d warm">plan ~14</div></div>
-<div><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div></div>
-<div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">1h 25m · today at 5:30 pm</div></div></div>
-<div class="pc"><div class="s" style="color:var(--muted);font-size:12px">Coach</div><div style="margin-top:3px">You slept well and your HRV is above normal. Go all in on today’s intervals.</div></div>
-<div class="tabbar"><span class="on">${icon('today')}</span><span>${icon('training')}</span><span class="add">${icon('plus')}</span><span>${icon('meal')}</span><span>${icon('heart')}</span></div>
-</div></div>`;
-  const graph = [[9,34,'easy'],[15,74,'hard'],[4,34,'easy'],[15,74,'hard'],[4,34,'easy'],[15,74,'hard'],[9,28,'easy']]
+<div><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div></div>`;
+  const today = `<div class="top"><span>Monday, Oct 12</span><span class="me">P</span></div>
+<div class="lbl">Readiness</div>
+<div class="ready"><b class="count">78</b><span class="pill good">high</span></div>
+${cells}
+<div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12</div><div class="s">1h 25m · today at 5:30 pm</div></div></div>
+<div class="pc"><div class="s">Coach</div><div style="margin-top:3px">You slept well and your HRV is above normal. Go all in on today’s intervals.</div></div>
+${tabbar('today')}`;
+  const week = [30, 55, 20, 70, 45, 15, 62].map((h, i) => `<i class="${[1, 3, 4, 6].includes(i) ? 'on' : ''}" style="height:${h}%;--i:${i}"></i>`).join('');
+  const graph = [[9, 34, 'easy'], [15, 74, 'hard'], [4, 34, 'easy'], [15, 74, 'hard'], [4, 34, 'easy'], [15, 74, 'hard'], [9, 28, 'easy']]
     .map(([w, h, k], i) => `<i class="${k}" style="width:${w}%;height:${h}%;--i:${i}"></i>`).join('');
-  const cal = [['12','today'],['13','gym'],['14','run'],['15',''],['16','ride'],['17','run'],['18','']]
-    .map(([n, k], i) => `<div>${days[i]}<b class="${k}">${n}</b></div>`).join('');
-  const week = [30,55,20,70,45,15,62].map((h, i) => `<i class="${[1,3,4,6].includes(i) ? 'on' : ''}" style="height:${h}%;--i:${i}"></i>`).join('');
-  const muscles = [['Chest',92,'green'],['Back',81,'green'],['Legs',54,'amber-bar'],['Shoulders',38,'rust']]
+  const cal = [['M', '12', 'today'], ['T', '13', 'gym'], ['W', '14', 'run'], ['T', '15', ''], ['F', '16', 'ride'], ['S', '17', 'run'], ['S', '18', '']]
+    .map(([d, n, k]) => `<div>${d}<b class="${k}">${n}</b></div>`).join('');
+  const muscles = [['Chest', 92, 'green'], ['Back', 81, 'green'], ['Legs', 54, 'amber-bar'], ['Shoulders', 38, 'rust']]
     .map(([m, p, c], i) => `<div class="muscle"><span class="m">${m}</span><span class="bar"><i style="width:${p}%;background:var(--${c});--i:${i}"></i></span><span class="p">${p} %</span></div>`).join('');
-  // Connections: what Aurin reads from each service and what it sends back (SyncViews.swift,
-  // SettingsIntegrations.swift). Each logo sits where the app shows it, unchanged.
+  // The story's chapters: [section id, eyebrow, headline, line, glow, phone screen].
+  const chapters = [
+    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'glow-health', today],
+    ['zatez', 'Strain', 'Know when to push and when to back off.', 'Every workout and every step adds up. Aurin shows where today should land and how your week builds.', 'glow-training',
+      `<div class="top"><span>Strain</span></div>
+<div class="pc"><div class="row"><span class="s">Today</span><span class="tag warm">target 12–15</span></div><div class="num count">11.4</div><div class="gauge"><i class="band"></i><i class="fill"></i></div></div>
+<div class="pc"><div class="s">This week</div><div class="week">${week}</div><div class="days"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div></div>
+<div class="pc"><div class="s">Coach</div><div style="margin-top:3px">Two hard days in a row. Keep tomorrow easy.</div></div>${tabbar('today')}`],
+    ['trenink', 'Training', 'A plan that adapts.', 'Rides, runs and gym sessions picked for how you recovered. Plan the week yourself or let the AI do it, rate each workout, and sync it with Intervals.icu.', 'glow-training',
+      `<div class="top"><span>Training</span></div>
+<div class="pc cal">${cal}</div>
+<div class="pc"><div class="row"><b>Sweet spot 3×12</b><span class="len">1h 25m</span></div><div class="graph">${graph}</div><div class="s" style="margin-top:8px">Picked by AI for today’s readiness</div></div>
+<div class="pc next"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Upper body</div><div class="s">Tomorrow · 50 min</div></div></div>${tabbar('training')}`],
+    ['posilovna', 'Gym', 'Sets, weights and muscle recovery.', 'Supersets, left and right side, warm-up and stretching, and a rest timer between sets.', 'glow-health',
+      `<div class="top"><span>Upper body</span></div>
+<div class="pc live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">Set 3 of 4 · 80 kg × 8</div></div><span class="clock" data-rest="90">1:30</span></div>
+<div class="pc"><div class="s">Muscle recovery</div>${muscles}</div>
+<div class="pc next"><span class="sport" style="background:var(--green)">${icon('check')}</span><div><div class="t">Pull-ups</div><div class="s">Next · 3 × 10</div></div></div>${tabbar('training')}`],
+    ['vyziva', 'Nutrition', 'Food that follows your training.', 'Snap a photo, scan a barcode or let the AI estimate it. Your target moves with the day’s load, and food from other apps comes in too.', 'glow-food',
+      `<div class="top"><span>Food</span></div>
+<div class="pc food"><svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="50"/><circle class="val" cx="60" cy="60" r="50"/></svg><div><div class="kcal count">1,840</div><div class="s">of 2,650 kcal</div><div class="mac"><i style="background:var(--protein)"></i>protein 112 g</div><div class="mac"><i style="background:var(--carbs)"></i>carbs 240 g</div><div class="mac"><i style="background:var(--fat)"></i>fat 58 g</div></div></div>
+<div class="tiles"><div class="pc" style="color:var(--green)">${icon('camera')}<span style="color:var(--text)">Photo</span></div><div class="pc" style="color:var(--amber)">${icon('barcode')}<span style="color:var(--text)">Barcode</span></div><div class="pc" style="color:var(--blue)">${icon('drop')}<span style="color:var(--text)">Drinks</span></div></div>
+<div class="pc"><div class="s">Lunch · 12:40</div><div style="margin-top:3px">Chicken, rice and vegetables · 640 kcal</div></div>${tabbar('meal')}`],
+    ['kouc', 'AI coach', 'Just ask. It knows your data.', '<span class="free">Free for everyone.</span>', 'glow-today',
+      `<div class="top"><span>Coach</span></div>
+<div class="chat"><div class="me">I only slept 6 hours. Should I still do the intervals?</div>
+<div class="slot"><div class="typing"><i></i><i></i><i></i></div><div class="ai">Your HRV is normal, but your sleep debt is growing. I’d cut it to 2×12 and go to bed 30 minutes earlier tonight.<div class="acts"><span>Adjust workout</span><span>Keep it</span></div></div></div></div>${tabbar('today')}`]];
+  const steps = chapters.map(([id, eyebrow, h, p, glow]) => `<section id="${id}" class="step" data-glow="${glow}"><div class="wrap"><div class="text"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2><p${p.startsWith('<span') ? ' class="free"' : ''}>${p.replace(/<\/?span[^>]*>/g, '')}</p></div></div></section>`).join('\n');
+
+  // Connections: what Aurin reads from each service and what it sends back, as the app's connect
+  // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">', x: 92, y: 72,
-      reads: 'sleep, workouts, heart rate, HRV, steps, weight', sends: 'workouts, weight, food, water'},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">', x: 92, y: 228,
-      reads: 'sleep, workouts, heart rate, HRV, steps, food', sends: 'workouts, weight, food'},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">', x: 428, y: 72,
-      reads: 'workouts with power, your plan, zones', sends: 'planned workouts, finished workouts, weight, sleep, HRV'},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>', x: 428, y: 228,
-      reads: 'sleep, HRV, resting heart rate, temperature', sends: ''}];
-  // Two curves per service: dots flow along the upper one into Aurin and along the lower one back out.
-  const curve = (x, y, dy) => `M${x} ${y + dy}C${(x + 260) / 2} ${y + dy} ${(x + 260) / 2} ${150 + dy} 260 ${150 + dy}`;
-  const back = (x, y, dy) => `M260 ${150 + dy}C${(x + 260) / 2} ${150 + dy} ${(x + 260) / 2} ${y + dy} ${x} ${y + dy}`;
-  const lines = services.map(({id, x, y, sends}) => `<g data-svc="${id}"><path class="base" d="${curve(x, y, -7)}"/><path class="flow in" d="${curve(x, y, -7)}"/>${sends ? `<path class="base" d="${back(x, y, 7)}"/><path class="flow out" d="${back(x, y, 7)}"/>` : ''}</g>`).join('');
-  const nodes = services.map(({id, name, logo, x, y}, i) => `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="left:${x / 5.2}%;top:${y / 3}%">${logo}<span class="vh">${name}</span></button>`).join('');
-  const panels = services.map(({id, name, reads, sends}) => `<div class="svc" id="svc-${id}" role="tabpanel" aria-labelledby="tab-${id}">
+    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">', x: 84, y: 70,
+      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
+      sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
+    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">', x: 84, y: 250,
+      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
+      sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
+    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">', x: 436, y: 70,
+      reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
+      sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>', x: 436, y: 250,
+      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: []}];
+  // Two curves per service: dots and what they carry flow along the upper one into Aurin and along the lower one back out.
+  const into = (x, y) => `M${x} ${y - 8}C${(x + 260) / 2} ${y - 8} ${(x + 260) / 2} 152 260 152`;
+  const back = (x, y) => `M260 168C${(x + 260) / 2} 168 ${(x + 260) / 2} ${y + 8} ${x} ${y + 8}`;
+  const packets = (items, d, dir) => items.map(([name], i) => {
+    const dur = 3.6, begin = (i * dur / items.length).toFixed(2);
+    return `<g class="pk ${dir}" opacity="0"><circle r="17"/><svg x="-10" y="-10" width="20" height="20" viewBox="0 0 24 24">${ICON_PATHS[name]}</svg><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" path="${d}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .25 1"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.82;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
+  }).join('');
+  const lines = services.map(({id, x, y, reads, sends}, i) => `<g data-svc="${id}"${i === 0 ? ' class="on"' : ''}><path class="base" d="${into(x, y)}"/><path class="flow in" d="${into(x, y)}"/>${sends.length ? `<path class="base" d="${back(x, y)}"/><path class="flow out" d="${back(x, y)}"/>` : ''}</g>`).join('')
+    + services.map(({id, x, y, reads, sends}, i) => `<g class="packets${i === 0 ? ' on' : ''}" data-svc="${id}">${packets(reads, into(x, y), 'in')}${packets(sends, back(x, y), 'out')}</g>`).join('');
+  const nodes = services.map(({id, name, logo, x, y}, i) => `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="left:${(x / 5.2).toFixed(2)}%;top:${(y / 3.2).toFixed(2)}%">${logo}<span class="vh">${name}</span></button>`).join('');
+  const chips = items => `<div class="items">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
+  const panels = services.map(({id, name, reads, sends}, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${id}" role="tabpanel" aria-labelledby="tab-${id}">
 <h3>${name}</h3>
-<div class="io"><span class="lbl in">Into Aurin</span><span>${reads}</span></div>
-<div class="io"><span class="lbl out">Sent back</span><span>${sends || 'nothing, Aurin only reads the ring'}</span></div>
+<div class="io"><div class="lbl in">${icon('down')}Into Aurin</div>${chips(reads)}</div>
+<div class="io"><div class="lbl out">${icon('up')}Sent back</div>${sends.length ? chips(sends) : '<div class="none">nothing, Aurin only reads the ring</div>'}</div>
 </div>`).join('');
+
+  const faq = [
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring connects directly.'],
+    ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
+    ['What does it cost?', 'Aurin is free, the AI coach included. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.'],
+    ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
+    ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
+    ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
+    ['Is Aurin a medical device?', 'No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.'],
+    ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`]]
+    .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
+  const headline = 'Train for how you feel today.';
+  const aurora = '<div class="aurora" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i></div>';
+
   return sitePage({lang, origin, path: '/',
     title: 'Aurin · train for how you feel today',
     description: 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.',
     body: `<main>
-<div class="hero">
+<div class="hero">${aurora}
 <div class="wrap">
-<h1>Train for how you feel today.</h1>
+<span class="kicker"><i></i>Free AI coach for iPhone</span>
+<h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
+<p class="lede">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
 ${store()}
 </div>
-<div class="stage reveal">
-<div class="float left" aria-hidden="true"><div class="k">HRV</div><div class="v">66 ms</div><div class="d up">↑ 8 ms</div></div>
-<div class="float right" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
-${today}
+<div class="stage">
+<div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">66 ms</div><div class="d up">↑ 8 ms above normal</div></div>
+<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
+<div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on today’s intervals.</div></div>
+<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${today}</div></div></div></div>
 </div>
 </div>
 
-<section id="pripravenost" class="glow-health"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">Readiness</div><h2>One number every morning.</h2></div>
-<div class="visual readiness reveal">
-<div class="card"><div class="big count">78</div><p class="note">HRV, resting heart rate and sleep against your normal</p></div>
-<div class="trio">
-<div class="card"><div class="k">HRV</div><div class="v count">66</div><div class="d up">↑ 8 ms</div></div>
-<div class="card"><div class="k">Resting HR</div><div class="v count">48</div><div class="d up">↓ 2</div></div>
-<div class="card"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">debt 0:40</div></div>
-</div></div>
-</div></section>
+<div class="story">
+<div class="pin" aria-hidden="true"><div class="glow"></div><div class="wrap"><div class="device"><div class="bezel"><div class="screen">${chapters.map(([id, , , , , screen], i) => `<div class="scr${i === 0 ? ' on' : ''}" data-s="${id}">${screen}</div>`).join('')}</div></div></div></div>
+<div class="progress">${chapters.map(() => '<i><b></b></i>').join('')}</div></div>
+<div class="steps">
+${steps}
+</div>
+</div>
 
-<section id="zatez"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">Strain</div><h2>Know when to push and when to back off.</h2></div>
-<div class="visual reveal"><div class="card">
-<div class="gauge-head"><span>Today</span><span class="warm">target 12–15</span></div>
-<div class="num count">11.4</div>
-<div class="gauge"><i class="band"></i><i class="fill"></i></div>
-<div class="week">${week}</div>
-<div class="days">${short.map(d => `<span>${d}</span>`).join('')}</div>
-</div></div>
-</div></section>
-
-<section id="trenink" class="glow-training"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">Training</div><h2>A plan that adapts.</h2></div>
-<div class="visual reveal">
-<div class="card cal">${cal}</div>
-<div class="card workout">
-<div class="head"><span class="name">Sweet spot 3×12 ${icon('spark')}</span><span class="len">1h 25m</span></div>
-<div class="graph" aria-hidden="true">${graph}</div>
-<p class="note">Picked by AI from the library for today’s readiness.</p>
-</div>
-<div class="chips"><span>Coach’s pick of the day</span><span>Ride</span><span>Run</span><span>Gym</span><span>Week plan by you or the AI</span><span>Review after each workout</span><span>Syncs with Intervals.icu</span><span>One workout from watch and Intervals.icu</span><span>Your own workouts</span><span>Share with friends</span></div>
-</div>
-</div></section>
-
-<section id="posilovna"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">Gym</div><h2>Sets, weights and muscle recovery.</h2></div>
-<div class="visual reveal">
-<div class="card">${muscles}</div>
-<div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">Set 3 of 4 · 80 kg × 8</div></div><span class="clock" data-rest="90">1:30</span></div>
-<div class="chips"><span>Supersets</span><span>Left and right side</span><span>Strength, muscle or fitness</span><span>Warm-up and stretching</span></div>
-</div>
-</div></section>
-
-<section id="vyziva" class="glow-food"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">Nutrition</div><h2>Food that follows your training.</h2></div>
-<div class="visual reveal">
-<div class="card food">
-<svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="50"/><circle class="val" cx="60" cy="60" r="50" stroke-dasharray="218 314"/></svg>
-<div><div class="kcal count">1,840</div><div class="of">of 2,650 kcal</div>
-<ul class="macros"><li><i style="background:var(--protein)"></i>protein 112 g</li><li><i style="background:var(--carbs)"></i>carbs 240 g</li><li><i style="background:var(--fat)"></i>fat 58 g</li></ul></div>
-</div>
-<div class="trio">
-<div class="card tile" style="color:var(--green)">${icon('camera')}<span style="color:var(--text)">Photo</span></div>
-<div class="card tile" style="color:var(--amber)">${icon('barcode')}<span style="color:var(--text)">Barcode</span></div>
-<div class="card tile" style="color:var(--blue)">${icon('drop')}<span style="color:var(--text)">Drinks</span></div>
-</div>
-<div class="chips"><span>AI estimate</span><span>Food from other apps</span><span>Copy and move in bulk</span></div>
-</div>
-</div></section>
-
-<section id="kouc" class="glow-today"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">AI coach</div><h2>Just ask. It knows your data.</h2><p class="free">Free for everyone.</p></div>
-<div class="visual chat reveal">
-<div class="me">I only slept 6 hours. Should I still do the intervals?</div>
-<div class="slot"><div class="typing" aria-hidden="true"><i></i><i></i><i></i></div><div class="ai">Your HRV is normal, but your sleep debt is growing. I’d cut it to 2×12 and go to bed 30 minutes earlier tonight.
-<div class="acts" aria-hidden="true"><span>Adjust workout</span><span>Keep it</span></div></div></div>
-</div>
-</div></section>
-
-<section id="propojeni"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">Connections</div><h2>Data in, workouts out.</h2><p>Wear more than one device? Aurin takes the night and the day from the one you wear most, or you pick the source yourself.</p></div>
-<div class="visual connect reveal">
-<div class="card hub">
-<svg class="lines" viewBox="0 0 520 300" aria-hidden="true">${lines}</svg>
-<div class="core" aria-hidden="true">${mark(46)}</div>
+<section id="propojeni" class="connect"><div class="wrap">
+<div class="center reveal"><h2>Works with what you wear.</h2><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
+<div class="box reveal">
+<div class="hub">
+<svg class="lines" viewBox="0 0 520 320" aria-hidden="true">${lines}</svg>
+<div class="core" aria-hidden="true">${mark(52)}</div>
 <div role="tablist" aria-label="Connected services">${nodes}</div>
 </div>
 <div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span></div>
-<div class="card panels">${panels}</div>
+<div class="panels">${panels}</div>
 </div>
 </div></section>
 
-<section id="soukromi"><div class="wrap">
-<div class="center reveal">${LOCK}<h2>Your data works only for you.</h2></div>
-<ul class="card checks reveal">
-${check('It reads only what you allow.')}
-${check('It never sells your data or uses it for ads.')}
-${check('You can delete your account and all its data in Settings at any time.')}
-${check(`<a href="/privacy">Full privacy policy</a>`)}
-</ul>
+<section id="soukromi" class="privacy"><div class="wrap">
+<div class="say">${LOCK}<p class="big">${'Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.'.split(' ').map(w => `<span>${w}</span>`).join(' ')}</p>
+<p class="more"><a href="/privacy">Full privacy policy</a></p></div>
 <div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
@@ -570,18 +604,11 @@ ${check(`<a href="/privacy">Full privacy policy</a>`)}
 
 <section id="faq"><div class="wrap faq reveal">
 <h2>Questions</h2>
-<details><summary>Do I need an Apple Watch?</summary><p>No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring connects directly.</p></details>
-<details><summary>Which phones does Aurin run on?</summary><p>Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.</p></details>
-<details><summary>What does it cost?</summary><p>Aurin is free, the AI coach included. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.</p></details>
-<details><summary>I wear more than one device. Which one counts?</summary><p>For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.</p></details>
-<details><summary>What does the AI coach see?</summary><p>Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.</p></details>
-<details><summary>Can I delete my data?</summary><p>Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.</p></details>
-<details><summary>Is Aurin a medical device?</summary><p>No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.</p></details>
-<details><summary>Something doesn’t work. What now?</summary><p>In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p></details>
+${faq}
 </div></section>
 
-<section class="final"><div class="wrap reveal">
-${mark(96)}
+<section class="final">${aurora}<div class="wrap reveal">
+${mark(120)}
 <h2>Aurin</h2>
 ${store()}
 </div></section>

@@ -8,7 +8,8 @@ sees in the app (a screen or section, a number on Today, a connection, sign-in, 
 availability) updates the overview in the same pull request. The site is in English only:
 
 - Each section of the overview matches a part of the app; the phone in the hero is drawn in HTML from
-  the Today screen, so its labels and layout follow `TodayView.swift`.
+  the Today screen, so its labels and layout follow `TodayView.swift`. The story below it has one
+  chapter per app area, and its phone shows that area's screen.
 - Colours come from the light palette in `ios-native/Shared/Palette.swift`.
 - After changing the hero, render the share image `public/site/og-en.png` (1200×630) again.
 - The privacy policy and the terms also have a Czech version (`?lang=cs`, linked from the page and the
