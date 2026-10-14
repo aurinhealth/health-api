@@ -152,6 +152,16 @@ final class SnapshotTests: XCTestCase {
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }
 
+    /// The long Today in English and metric units: the website's coach chapter is cut from it.
+    func testWebsiteToday() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        try render("site-today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
     func testSettingsScreens() throws {
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings", height: 1700) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)) }
