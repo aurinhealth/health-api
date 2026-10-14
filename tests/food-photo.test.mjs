@@ -55,3 +55,8 @@ test('barcode digits read by AI count only with a valid check digit', async () =
     assert.equal((await readBarcodeWithAI({ OPENAI_API_KEY: 'k' }, { image: IMAGE })).barcode, null);
   } finally { globalThis.fetch = original; }
 });
+
+test('a meal photo with impossible portion values is not offered', () => {
+  assert.equal(photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 7200, protein_g: 45, carbs_g: 80, fat_g: 22 }), 'portion'), null);
+  assert.equal(photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 900, protein_g: 45, carbs_g: 800, fat_g: 22 }), 'portion'), null);
+});

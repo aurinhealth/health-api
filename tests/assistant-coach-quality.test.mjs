@@ -221,3 +221,28 @@ test('remarks about the proposal are not kept as lasting preferences; the questi
   assert.match(entry,/coachCtx\.trainingPlan=\{name:targets\.plan\.name/);
   assert.match(entry,/sleepGoal:profile\.sleepGoal,cycle:profile\.cycle\|\|null/);
 });
+
+test('the coach\'s food view carries the weight goal, deficit, minimum, burned energy, drinks and the last days', () => {
+  const n = { calorieTarget: 2400, macros: { protein_g: 150 }, foodLog: { totals: { kcal: 900, protein_g: 50 } }, calorieBreakdown: { minTarget: 1900, weightLossDeficit: 400 }, targetWeightKg: 80, reason: 'Zítřejší kolo je zohledněné už dnes.', energyBudget: { active: 600 } };
+  const daily = { weight: { current: 86.4, average7d: 86.6, average30d: 87.9 }, burned: { total: 2900, activity: 700 } };
+  const week = { days: [{ date: '2026-10-12', daily: { nutrition: { calorieTarget: 2500, foodLog: { totals: { kcal: 2300, protein_g: 140 } } } } }, { date: '2026-10-13', daily: { nutrition: { foodLog: { totals: { kcal: 0 } } } } }, { date: '2026-10-14', daily: {} }] };
+  const c = nutritionContext(n, { daily, week, fluids: { hydrationMl: 900, target: { ml: 2600 } }, date: '2026-10-14' });
+  assert.equal(c.minimumKcal, 1900);
+  assert.equal(c.deficitKcal, 400);
+  assert.deepEqual(c.weight, { currentKg: 86.4, average7dKg: 86.6, average30dKg: 87.9, goalKg: 80 });
+  assert.deepEqual(c.burned, { dayKcal: 2900, activityKcal: 700, activeSoFarKcal: 600 });
+  assert.deepEqual(c.drinks, { drunkMl: 900, targetMl: 2600 });
+  assert.deepEqual(c.lastDays, [{ date: '2026-10-12', eatenKcal: 2300, proteinG: 140, targetKcal: 2500 }]);
+  assert.match(c.targetReason, /kolo/);
+  assert.equal(nutritionContext({ calorieTarget: 2000 }).weight, undefined);
+});
+
+test('the coach sees VO2max, walking heart rate, heart rate recovery and the athlete\'s own wellness marks', async () => {
+  const { compactWellnessRow } = await import('../src/coach-assistant.js');
+  const row = compactWellnessRow({ id: '2026-10-13', vo2max: 52.34, walkingHR: 96.4, hrRecovery: 31, fatigue: 3, soreness: 2, mood: null, stress: 9 });
+  assert.equal(row.vo2max, 52.3);
+  assert.equal(row.walkingHR, 96);
+  assert.equal(row.hrRecovery, 31);
+  assert.deepEqual(row.feelings, { fatigue: 3, soreness: 2, scale: '1 best, 4 worst' });
+  assert.equal(compactWellnessRow({ id: '2026-10-13' }).feelings, undefined);
+});

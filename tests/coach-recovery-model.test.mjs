@@ -63,3 +63,16 @@ test('the week target holds at maintenance when CTL already ramps over 8 a week'
   assert.equal(weekTargets(args).target,Math.round(420*1.05));
   const hold=weekTargets({...args,rampRate:9});assert.equal(hold.target,420);assert.equal(hold.rampHold,true);
 });
+
+test('the recovery week reads HRV from the source with the most mornings, never a mix', async () => {
+  const { hrvWeekTrendDown, hrvSourceRows } = await import('../src/week-planner.js');
+  const monday = '2026-10-05', d = o => new Date(Date.parse(monday + 'T12:00:00Z') + o * 86400000).toISOString().slice(0, 10);
+  // No Intervals.icu HRV; the watch (Google, RMSSD) falls in the last week, Apple's few SDNN days do not count.
+  const health = Array.from({ length: 67 }, (_, i) => ({ id: d(-67 + i), hrv: 40, hrvBySource: { 'google-wearables': i >= 60 ? 55 : 70 + (i % 5), ...(i % 20 === 0 ? { 'apple-health:sdnn': 40 } : {}) } }));
+  const rows = hrvSourceRows([{ id: d(-1), hrv: 60 }], health, monday);
+  assert.equal(rows.find(r => r.id === d(-1)).hrv, 55);
+  assert.equal(hrvWeekTrendDown(rows, monday), true);
+  // Intervals.icu with more mornings wins.
+  const intervals = Array.from({ length: 67 }, (_, i) => ({ id: d(-67 + i), hrv: 70 + (i % 5) }));
+  assert.equal(hrvWeekTrendDown(hrvSourceRows(intervals, health, monday), monday), false);
+});

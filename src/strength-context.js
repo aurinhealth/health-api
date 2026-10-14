@@ -211,26 +211,29 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // One recovery week for everything: the gym deloads in the week the plan
   // and the ride/run coach treat as a recovery week (src/week-planner.js).
   try {
-    const { recoveryWeek, weekLoadsBefore, hrvWeekTrendDown } = await import("./week-planner.js");
+    const { recoveryWeek, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } = await import("./week-planner.js"), { googleDashboard } = await import("./google-dashboard.js");
     const monday = new Date(Date.parse(date + "T12:00:00Z") - ((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
     // 90 days, as Today and the ride coach load them: one readiness
     // (readiness.js) from the same wellness everywhere.
     const oldestWellness = new Date(Math.min(Date.parse(monday + "T12:00:00Z") - 22 * 86400000, Date.parse(date + "T12:00:00Z") - 90 * 86400000)).toISOString().slice(0, 10);
-    const wellness = await intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`);
+    // Without Intervals.icu the watch's HRV (Apple, Google, Ultrahuman) still calls a recovery week.
+    const [wellness, google] = await Promise.all([intervalsGet(env, `/athlete/0/wellness?oldest=${oldestWellness}&newest=${date}`).catch(() => []), googleDashboard(env.DB, date).catch(() => ({ wellness: [] }))]);
     const rows = Array.isArray(wellness) ? wellness : [], ctl = Number([...rows].reverse().find(r => Number(r.ctl) > 0)?.ctl) || null;
     const weekLoads = weekLoadsBefore(rows, monday);
-    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads, hrvDown: hrvWeekTrendDown(rows, monday) }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
+    context.recoveryWeek = { ...recoveryWeek({ base: ctl ? ctl * 7 : null, weekLoads, hrvDown: hrvWeekTrendDown(hrvSourceRows(rows, google.wellness, monday), monday) }), weekLoads, ctl, known: Boolean(ctl && weekLoads.length) };
     context.intervalsWellness = rows;
+    context.googleWellness = google.wellness || [];
   } catch { context.recoveryWeek = { recovery: false, reason: null, known: false }; }
   // The day's HRV, resting HR and breathing with their history, as the dashboard
   // reads them: Google Health first, Intervals.icu filling the gaps.
   try {
     const { googleDashboard } = await import("./google-dashboard.js"), { mergeWellnessRows } = await import("./recovery-model.js");
-    const google = await googleDashboard(env.DB, date).catch(() => ({ wellness: [] }));
+    const google = context.googleWellness ? { wellness: context.googleWellness } : await googleDashboard(env.DB, date).catch(() => ({ wellness: [] }));
     context.wellnessSeries = mergeWellnessRows(google.wellness, context.intervalsWellness);
   } catch { context.wellnessSeries = []; }
   const intervalsWellness = Array.isArray(context.intervalsWellness) ? context.intervalsWellness : [];
   delete context.intervalsWellness;
+  delete context.googleWellness;
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
   // The morning check-in lowers the readiness (morning-checkin.js).
@@ -243,7 +246,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   try {
     const { sleepSessionFromRow } = await import("./sleep-sessions.js"), { mergeIntervalsSleep } = await import("./intervals-sleep.js");
     const since = new Date(Date.parse(date + "T12:00:00Z") - 30 * 86400000).toISOString().slice(0, 10), until = new Date(Date.parse(date + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
-    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
+    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
     const seen = new Set();
     const own = rows.map(sleepSessionFromRow).filter(s => { const k = s.startTime + "|" + s.endTime; if (seen.has(k)) return false; seen.add(k); return s.durationMin > 0; });
     context.sleepSessions = mergeIntervalsSleep(own, intervalsWellness, { start: since, end: until });
