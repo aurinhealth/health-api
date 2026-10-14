@@ -142,3 +142,65 @@ extension GymDay {
         return exercises.map(\.name).filter { seen.insert($0).inserted }
     }
 }
+
+/// "Jak to šlo?" right under a session's numbers: one row that opens
+/// FeedbackSheet, and once rated says what was saved ("Náročnost 6 ·
+/// Nesedělo" over the note). `reload` changes when the sheet closes.
+struct FeedbackRow: View {
+    @Environment(AppModel.self) private var model
+    let session: WeekSession
+    var workoutId: String? = nil
+    var reload = 0
+    let open: () -> Void
+    @State private var rpe: Int?
+    @State private var fit: String?
+    @State private var note: String?
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 12) {
+                Image(systemName: "text.bubble").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.amber)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    if let note {
+                        Text(verbatim: note).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            .padding(.horizontal, 16).frame(minHeight: 54)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .task(id: reload) { await load() }
+    }
+
+    private var title: String {
+        let effort: String? = rpe.map { L10n.tr("Náročnost") + " \($0)" }
+        let fitted: String? = fit.flatMap { id in PlanFitPicker.fits.first { $0.id == id } }.map { L10n.tr($0.label) }
+        let parts: [String] = [effort, fitted].compactMap { $0 }
+        return parts.isEmpty ? L10n.tr("Jak to šlo?") : parts.joined(separator: " · ")
+    }
+
+    /// What FeedbackSheet saved for this session: the RPE (on the calendar
+    /// link or the coach's note), the note and how well the plan fitted.
+    private func load() async {
+        guard !model.demo else { return }
+        let api = model.api, date = session.date
+        async let links = try? api.scheduledWorkouts()
+        async let notesOfDay = try? api.coachReflections(date: date)
+        async let ratingsOfDay = try? api.workoutRatings(date: date)
+        let link = ScheduledWorkout.link(for: session, in: (await links) ?? [])
+        let reflections: [CoachReflection] = (await notesOfDay) ?? []
+        let own = ((await ratingsOfDay) ?? []).first { $0.sessionId == session.id }
+        let id = link.flatMap { $0.workoutId.isEmpty ? nil : $0.workoutId } ?? workoutId
+        // Only this session's note: the library workout's, else the day's note kept without one.
+        let reflection: CoachReflection?
+        if let id { reflection = reflections.first { $0.workoutId == id } } else { reflection = reflections.first { $0.workoutId == nil } }
+        rpe = (link?.feedbackRpe ?? reflection?.rpe).map { Int($0.rounded()) }
+        fit = own?.rating
+        note = reflection?.notes?.nilIfBlank ?? own?.text?.nilIfBlank
+    }
+}

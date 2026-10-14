@@ -211,6 +211,13 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(today.plan.count, 2)
         XCTAssertEqual(today.steps.hourly?.reduce(0, +), today.steps.today)
         XCTAssertEqual(Fmt.dayHeading(today.date), "ČTVRTEK 8. ŘÍJNA")
+        XCTAssertEqual(Fmt.dayTitle("2026-10-08", today: "2026-10-08"), "Dnes")
+        XCTAssertEqual(Fmt.daySubtitle("2026-10-08", today: "2026-10-08"), "čtvrtek 8. října")
+        XCTAssertEqual(Fmt.dayShort("2026-10-08", today: "2026-10-08"), "Dnes · čt 8. 10.")
+        XCTAssertEqual(Fmt.dayTitle("2026-10-07", today: "2026-10-08"), "Včera")
+        XCTAssertEqual(Fmt.dayTitle("2026-10-05", today: "2026-10-08"), "Pondělí")
+        XCTAssertEqual(Fmt.daySubtitle("2026-10-05", today: "2026-10-08"), "5. října")
+        XCTAssertEqual(Fmt.dayShort("2026-10-05", today: "2026-10-08"), "Po 5. 10.")
         XCTAssertEqual(Fmt.hoursMinutes(432), "7:12")
         XCTAssertEqual(Fmt.decimal(8.4), "8,4")
     }

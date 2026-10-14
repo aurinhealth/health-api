@@ -15,6 +15,36 @@ struct AssistantResult: Decodable, Equatable {
     /// "food_draft": a sentence about food became entries to confirm (src/food-chat.js).
     var kind: String? = nil
     var draft: FoodDraft? = nil
+    /// What the coach remembered, forgot or rewrote with this answer.
+    var memoryChanges: MemoryChanges? = nil
+
+    struct MemoryChanges: Decodable, Equatable {
+        let saved: String?
+        let forgotten: [String]?
+        let updated: [Update]?
+
+        struct Update: Decodable, Equatable {
+            let from: String
+            let to: String
+        }
+
+        /// One line under the answer per change, each with "Zpět".
+        var chips: [CoachMemoryChip] {
+            (saved.map { [CoachMemoryChip(kind: .saved, text: $0)] } ?? [])
+                + (forgotten ?? []).map { CoachMemoryChip(kind: .forgotten, text: $0) }
+                + (updated ?? []).map { CoachMemoryChip(kind: .updated, text: $0.to, from: $0.from) }
+        }
+    }
+}
+
+/// "Zapamatováno", "Zapomenuto" or "Upraveno" under an answer.
+struct CoachMemoryChip: Identifiable, Equatable {
+    enum Kind { case saved, forgotten, updated }
+    let id = UUID()
+    let kind: Kind
+    let text: String
+    var from: String? = nil
+    var undone = false
 }
 
 /// What the coach read from "K obědu jsem měl kuře s rýží": the day and the
@@ -37,6 +67,14 @@ struct FoodDraft: Decodable, Equatable {
     }
 }
 
+/// One thing the coach remembers (GET /app/api/athlete-state, src/athlete-state.js memoryList).
+struct CoachMemory: Decodable, Equatable, Identifiable {
+    let text: String
+    let since: String?
+    let check: String?
+    var id: String { text }
+}
+
 /// A change the coach proposes; nothing happens until it is confirmed
 /// (POST /app/api/assistant/action, src/coach-actions.js).
 struct CoachAction: Decodable, Equatable, Identifiable {
@@ -55,6 +93,10 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     var activityName: String? = nil
     var fromKcal: Double? = nil
     var kcal: Double? = nil
+    /// activity_merge: the second part; activity_time: the start now and the new one.
+    var otherName: String? = nil
+    var fromTime: String? = nil
+    var time: String? = nil
 
     struct Snapshot: Decodable, Equatable {
         let name: String?
@@ -74,6 +116,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
+        case "activity_delete": return L10n.tr("Smazat aktivitu")
+        case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
+        case "activity_time": return L10n.tr("Upravit čas")
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
@@ -82,6 +127,18 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let label = L10n.tr(["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? ""))
             return L10n.f("Stav: %@", label)
         default: return type
+        }
+    }
+
+    /// The line under the title of a change of a done activity:
+    /// "Běh 07:02 + Běh 07:31", "Jízda 18:10 · út 14. 10.", "Posilovna · 17:30 → 18:00".
+    var detail: String? {
+        let day = date.map { Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) }
+        switch type {
+        case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: " · ")
+        case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
+        case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: " · ")
+        default: return nil
         }
     }
 }
