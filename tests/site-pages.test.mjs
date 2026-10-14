@@ -26,7 +26,7 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
-  for(const id of ['pripravenost','zatez','trenink','posilovna','vyziva','kouc','propojeni','soukromi'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  for(const id of ['pripravenost','zatez','trenink','posilovna','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
   const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
@@ -166,4 +166,33 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
   assert.match(robots,/Sitemap: https:\/\/aurin\.health\/sitemap\.xml/);
   const map=await sitemapXml(new Request('https://aurin.health/sitemap.xml')).text();
   for(const path of ['/','/support','/privacy','/terms','/privacy?lang=cs','/terms?lang=cs'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
+});
+
+// Connections show only the services the app offers to connect, each with the app's own logo file
+// (Assets.xcassets), and say what Aurin sends back only where the app can sync to that service.
+test('the connections use the app’s own logos and only the services the app offers',async()=>{
+  const html=await overviewPage().text();
+  const section=html.slice(html.indexOf('<section id="propojeni">'),html.indexOf('<section id="soukromi">'));
+  const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
+  const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
+  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg']]){
+    assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
+    assert.ok(section.includes('/site/logos/'+file),file);
+  }
+  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman']);
+  assert.doesNotMatch(section,/whoop|strava|garmin|wahoo|oura/i,'only services the app offers');
+  const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
+  for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
+  assert.doesNotMatch(sync,/SyncDestination\(id: "ultrahuman"/);
+  assert.match(section,/nothing, Aurin only reads the ring/);
+});
+
+test('the questions open without JS and name the app’s real Settings paths',async()=>{
+  const strings=readFileSync(new URL('../ios-native/Shared/en.lproj/Localizable.strings',import.meta.url),'utf8');
+  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
+  const html=await overviewPage().text();
+  const faq=html.slice(html.indexOf('<section id="faq">'),html.indexOf('<section class="final">'));
+  assert.ok((faq.match(/<details><summary>/g)||[]).length>=6);
+  for(const label of ['Settings → '+en('Zdroje dat'),'Settings → '+en('Soukromí a data').replace('&','&amp;'),'Settings → Help → '+en('Nahlásit problém')])assert.ok(faq.includes(label),label);
+  assert.match(faq,/mailto:support@aurin\.health/);
 });
