@@ -109,7 +109,7 @@ struct SourcesSettingsView: View {
         .sheet(isPresented: $adding) {
             AddIntegrationSheet(available: available, appleConnected: connected.contains { $0.id == "apple" }) { provider in
                 adding = false
-                // The next sheet (Google's disclosure, the browser) once this one has closed.
+                // The service's connect screen once this sheet has closed.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { start(provider) }
             }
         }
@@ -143,7 +143,7 @@ struct SourcesSettingsView: View {
 
     private func start(_ provider: String) {
         if provider == "apple" { connectingApple = true; return }
-        flow.start(provider, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
+        flow.start(provider)
     }
 
     private struct Offer {

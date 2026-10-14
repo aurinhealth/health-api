@@ -28,10 +28,7 @@ struct SetupFlowView: View {
     @State private var appleRead = false
     @State private var appleFilled = false
     @State private var providers: [ConnectionsResponse.Provider] = []
-    @State private var working: String?
-    @State private var sourceMessage: String?
-    @State private var googleDisclosure = false
-    @State private var intervalsKey = false
+    @State private var connecting: ConnectTarget?
     @State private var syncRun = 0
     @State private var syncState: String?
     // What the server's suggestions (Google Health) filled in, as shown in the
@@ -96,12 +93,7 @@ struct SetupFlowView: View {
                 health.disconnect()
             }
         }
-        .sheet(isPresented: $googleDisclosure) { GoogleDisclosureSheet {
-            googleDisclosure = false
-            // The browser sheet opens once this one has closed.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { connect("google") }
-        } }
-        .sheet(isPresented: $intervalsKey) { IntervalsKeySheet { await loadProviders(); syncRun += 1 } }
+        .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
         .interactiveDismissDisabled()
     }
 
@@ -178,9 +170,6 @@ struct SetupFlowView: View {
         if let message = health.message {
             Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
         }
-        if let sourceMessage {
-            Text(sourceMessage).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
-        }
         if consentNeeded { consentRow.padding(.top, 10) }
     }
 
@@ -206,20 +195,16 @@ struct SetupFlowView: View {
             IntegrationIcon(id: provider.id, size: 30)
             Text(provider.name ?? provider.id).font(.body).foregroundStyle(Palette.ink)
             Spacer()
-            if working == provider.id {
-                ProgressView()
-            } else if provider.connected == true {
+            if provider.connected == true {
                 Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
             } else if provider.id == "intervals" {
                 Menu {
-                    Button { connect("intervals") } label: { Label("Připojit", systemImage: "link") }
-                    Button { intervalsKey = true } label: { Label("Vložit API klíč", systemImage: "key") }
+                    Button { connecting = ConnectTarget(id: "intervals") } label: { Label("Připojit", systemImage: "link") }
+                    Button { connecting = ConnectTarget(id: "intervals", withKey: true) } label: { Label("Vložit API klíč", systemImage: "key") }
                 } label: { connectLabel }
-                .disabled(working != nil)
             } else {
-                Button { googleDisclosure = true } label: { connectLabel }
+                Button { connecting = ConnectTarget(id: provider.id) } label: { connectLabel }
                     .buttonStyle(.plain)
-                    .disabled(working != nil)
             }
         }
         .padding(.horizontal, 16)
@@ -455,28 +440,6 @@ struct SetupFlowView: View {
 
     private func loadProviders() async {
         if let list = try? await model.api.connections() { providers = list.providers }
-    }
-
-    private func connect(_ provider: String) {
-        Task {
-            working = provider
-            sourceMessage = nil
-            defer { working = nil }
-            do {
-                guard let event = try await model.connect(provider: provider) else { return }
-                switch event {
-                case "google", "intervals": syncRun += 1
-                case "intervals-failed":
-                    sourceMessage = L10n.tr("Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč.")
-                    intervalsKey = true
-                case "expired": sourceMessage = L10n.tr("Odkaz vypršel, zkus to znovu.")
-                default: sourceMessage = L10n.tr("Připojení se nedokončilo.")
-                }
-                await loadProviders()
-            } catch {
-                sourceMessage = error.localizedDescription
-            }
-        }
     }
 
     /// The import after connecting (GET /app/api/sync): started unless it already
