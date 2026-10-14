@@ -5,6 +5,7 @@
 import { L } from './lang.js';
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { normalizeBarcode } from "./food-sources.js";
+import { macroEnergy, nutritionConsistency } from "./food-label.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const nullableNumber = { type: ["number", "null"] };
@@ -51,14 +52,26 @@ export function productFromLookup(answer, { barcode = null, citations = [] } = {
   if (!r || r.found === false) return null;
   const values = { calories_100g: num(r.calories), protein_100g: num(r.protein_g), carbs_100g: num(r.carbs_g), fat_100g: num(r.fat_g), sugars_100g: num(r.sugar_g), fiber_100g: num(r.fiber_g), salt_100g: num(r.salt_g) };
   if (["calories_100g", "protein_100g", "carbs_100g", "fat_100g"].some(k => values[k] == null || values[k] < 0)) return null;
-  if (values.calories_100g > 1000 || ["protein_100g", "carbs_100g", "fat_100g"].some(k => values[k] > 100)) return null;
+  if (["protein_100g", "carbs_100g", "fat_100g"].some(k => values[k] > 100)) return null;
+  // The numbers have to be possible: no more than 100 g of nutrients in 100 g,
+  // and no less energy than the macronutrients alone carry. Energy above the
+  // macros stays possible (alcohol), so it only lowers the confidence.
+  if (values.protein_100g + values.carbs_100g + values.fat_100g + (values.fiber_100g || 0) > 105) return null;
+  const macros = macroEnergy(values);
+  // kJ given as kcal: the energy in kcal matches the macros once divided by
+  // 4.184. Below 40 kcal a drink with alcohol (beer) looks the same, so it stays.
+  const kcalFromKj = values.calories_100g / 4.184;
+  if (kcalFromKj >= 40 && nutritionConsistency(values) && Math.abs(kcalFromKj - macros) <= Math.max(15, macros * .15)) values.calories_100g = Math.round(kcalFromKj);
+  if (values.calories_100g > 1000) return null;
+  if (macros > values.calories_100g * 1.3 + 25) return null;
+  const warning = nutritionConsistency(values, L(" Ověř hodnoty na obalu.", " Check the values on the package."));
   const sources = [...new Map(citations.filter(c => /^https?:\/\//i.test(String(c.url))).map(c => [c.url, c])).values()].slice(0, 5);
   return {
     name: String(r.name || "").trim().slice(0, 180), brand: String(r.brand || "").trim().slice(0, 120),
     barcode: normalizeBarcode(barcode), nutrition_basis: r.nutrition_basis === "ml" ? "ml" : "g", ...values,
     serving_size: String(r.serving_size || "").slice(0, 60), quantity: String(r.package_size || "").slice(0, 100),
-    source: "ai", confidence: ["high", "medium", "low"].includes(r.confidence) ? r.confidence : "low",
-    note: String(r.note || "").slice(0, 300), sources
+    source: "ai", confidence: !warning && ["high", "medium", "low"].includes(r.confidence) ? r.confidence : "low",
+    note: String(r.note || "").slice(0, 300), sources, ...(warning ? { warning } : {})
   };
 }
 

@@ -43,9 +43,13 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
 // A lasting preference ("Nechci běhat"), not a remark about one day or a
 // question: "Nechci dnes nohy" or "Nechci zítra kolo?" are not remembered.
 const TEMPORARY=/\?|(?<!\p{L})(?:dnes|dneska|dnešní\p{L}*|zítra|zítřejší\p{L}*|teď|ted|tentokrát|(?:tento|tenhle|tenhleten) (?:týden|víkend)|today|tonight|tomorrow|now|this (?:time|week|weekend))(?!\p{L})/iu;
+const PROPOSAL_REF=/(?:\bplán\w*|návrh\w*|variant\w*|možnost\w*|tenhle|tohle|tuhle|tento trénink|\bto\b[,.!?]|\bthis\b|\bthat\b|\bit\b[,.!?]|\boption|\bproposal|\bplan\b|\bversion)/i;
 export function explicitPreference(message) {
   const text=String(message||'');
   if(TEMPORARY.test(text))return null;
+  // About the coach's proposal ("I like this plan, but…", "nechci to, dej jinou
+  // variantu"), not a lasting habit, so nothing to keep for every later answer.
+  if(PROPOSAL_REF.test(text))return null;
   return /(?:nemám rád|nemam rad|nemám ráda|nemam rada|nechci|nesnáším|nesnasim|preferuji|preferuju|mám rád|mam rad|mám ráda|mam rada|\bi (?:don'?t|do not) (?:like|want|enjoy)\b|\bi (?:hate|prefer|like|love|enjoy)\b)/i.test(text) ? clean(text) : null;
 }
 export function assertTrainingAllowed(state) {

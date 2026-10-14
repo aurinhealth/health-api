@@ -37,3 +37,17 @@ test("the server offers the AI lookup and saves the confirmed food for next time
   assert.match(entry, /url\.pathname==='\/app\/api\/food\/ai-lookup'/);
   assert.match(entry, /personal=await savePersonalFood\(env\.DB,p,\{used:true\}\)/);
 });
+
+test("AI values are checked against their macros: kJ becomes kcal, impossible ones are dropped, a mismatch is flagged", () => {
+  assert.equal(productFromLookup(answer).confidence, "high");
+  assert.equal(productFromLookup(answer).warning, undefined);
+  // 2013 is the Snickers' energy in kJ.
+  assert.equal(productFromLookup({ ...answer, calories: 2013 }).calories_100g, 481);
+  assert.equal(productFromLookup({ ...answer, calories: 50, protein_g: 30, carbs_g: 30, fat_g: 20 }), null);
+  assert.equal(productFromLookup({ ...answer, protein_g: 40, carbs_g: 40, fat_g: 30 }), null);
+  // Beer: alcohol carries energy the macros do not show.
+  const beer = productFromLookup({ ...answer, name: "Pivo", nutrition_basis: "ml", calories: 43, protein_g: .5, carbs_g: 3.6, fat_g: 0 });
+  assert.equal(beer.calories_100g, 43);
+  assert.equal(beer.confidence, "low");
+  assert.match(beer.warning, /nesedí/);
+});

@@ -6,6 +6,8 @@ import { L } from './lang.js';
 import { callOpenAI, lightModel } from './coach-assistant.js';
 import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
 import { GYM_PLAN_COLUMNS } from './gym-plan-store.js';
+import { estimateStrengthTiming } from './strength-timing.js';
+import { EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
 
 const MAX_ROWS = 80, MAX_EXERCISES = 14, MAX_SETS = 8;
 const kgText = v => v == null || v === '' || !Number.isFinite(Number(String(v).replace(',', '.'))) ? '' : String(Math.round(Number(String(v).replace(',', '.')) * 2) / 2).replace('.', ',');
@@ -37,14 +39,16 @@ Používej jen přesné názvy cviků ze seznamu catalog nebo cviky, které už 
 Cviky, kterých se přání netýká, nech beze změny i s jejich vahami, opakováními a rozcvičkou (WARMUP).
 U nového cviku nastav váhu podle history (poslední série toho cviku), jinak kg null; opakování jako text, např. "8-10".
 Cviky ze seznamu disliked sportovec nemá rád: nepřidávej je, pokud o ně výslovně nežádá. Cviky ze seznamu liked má rád, při jinak rovné volbě je upřednostni.
-Kratší trénink znamená méně sérií nebo cviků, delší víc. Nejvýš ${MAX_EXERCISES} cviků a ${MAX_SETS} sérií na cvik.
+Kratší trénink znamená méně sérií nebo cviků, delší víc. Nejvýš ${MAX_EXERCISES} cviků a ${MAX_SETS} sérií na cvik. Když je minutes, trénink se do nich musí vejít.
+ratings jsou hodnocení posledních tréninků od sportovce (co mu nesedělo); ber je v úvahu.
 V answer jednou až dvěma krátkými českými větami řekni, co jsi změnil.`,
 `You are a gym coach. Change the strength session as the athlete asks and return the whole adjusted plan.
 Use only the exact exercise names from the catalog list or exercises already in the plan. Do not invent other exercises.
 Leave the exercises the request does not concern unchanged, including their loads, reps and warm-up (WARMUP).
 For a new exercise set the load from history (the last sets of that exercise), otherwise kg null; reps as text, e.g. "8-10".
 The athlete dislikes the exercises in disliked: do not add them unless explicitly asked. They like the ones in liked; prefer them when the choice is otherwise even.
-A shorter session means fewer sets or exercises, a longer one more. At most ${MAX_EXERCISES} exercises and ${MAX_SETS} sets per exercise.
+A shorter session means fewer sets or exercises, a longer one more. At most ${MAX_EXERCISES} exercises and ${MAX_SETS} sets per exercise. When minutes is given, the session must fit in it.
+ratings are the athlete's ratings of the last sessions (what didn't fit); take them into account.
 In answer say in one or two short English sentences what you changed.`);
 // The model's numbers are checked (A10): a weight within 0–500 kg or none, reps
 // like "8" or "8-10" or the plan's own value.
@@ -69,11 +73,44 @@ export function rowsFromModel(exercises, original, catalog) {
     sets.forEach((s, i) => {
       const warm = s.type === 'WARMUP', failure = !warm && i === lastWork && work.some(r => /^(true|1)$/i.test(r[11]));
       const planned = (warm ? own.find(r => String(r[0]).toUpperCase() === 'WARMUP') : null) || first;
-      rows.push([warm ? 'WARMUP' : 'WORK', name, '', kgText(kgOf(s.kg)), repsOf(s.reps, String(planned?.[4] || '')).slice(0, 12), '', '', '', 'FALSE', warm ? '[WARMUP]' : first?.[9] || catalog.get(name)?.note || '', '', failure ? 'TRUE' : 'FALSE', warm ? '' : first?.[12] || '']);
+      // A note's "+2,5 kg" or "= last time" belongs to the old load: it goes when the AI changed the weight.
+      const kg = kgText(kgOf(s.kg)), note = warm ? '[WARMUP]' : first?.[9] != null && first[9] !== '' ? (kg !== first[3] ? withoutProgression(first[9]) : first[9]) : catalog.get(name)?.note || '';
+      rows.push([warm ? 'WARMUP' : 'WORK', name, '', kg, repsOf(s.reps, String(planned?.[4] || '')).slice(0, 12), '', '', '', 'FALSE', note, '', failure ? 'TRUE' : 'FALSE', warm ? '' : first?.[12] || '']);
     });
   }
   const seq = new Map();
   for (const r of rows) { const key = r[0] + '|' + r[1], n = (seq.get(key) || 0) + 1; seq.set(key, n); r[2] = String(n); }
+  return rows;
+}
+
+// The generator's progression part of a note ("↑ minule 3× 10 op. @ 20 kg → +2,5 kg", "= minule …", a return after a break).
+export const withoutProgression = note => String(note || '').replace(/;\s*(?:[↑↓=] |po delší pauze lehčeji \(|lighter after a longer break \()[^;\[]*\)?/g, ' ').replace(/\s+/g, ' ').replace(/ ;/g, ';').trim();
+
+// A session longer than the time it has loses work sets, one at a time from
+// the exercise with the most (the later one on a tie); each keeps at least one.
+export function fitGymMinutes(rows, minutes, catalog = EXERCISE_INTELLIGENCE) {
+  if (!(Number(minutes) > 0)) return rows;
+  let out = rows;
+  for (let guard = 0; guard < 60 && estimateStrengthTiming(out, catalog, minutes).totalSeconds > minutes * 60; guard++) {
+    const counts = new Map();
+    for (const r of out) if (r[0] === 'WORK') counts.set(r[1], (counts.get(r[1]) || 0) + 1);
+    const most = [...counts].filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1])[0];
+    if (!most) break;
+    const i = out.map(r => r[0] === 'WORK' && r[1] === most[0]).lastIndexOf(true);
+    out = out.filter((_, j) => j !== i);
+  }
+  return out;
+}
+
+// Dumbbells the athlete has (kg per hand), the nearest one.
+export function snapGymDumbbells(rows, weights) {
+  const have = (Array.isArray(weights) ? weights : []).map(Number).filter(kg => kg > 0);
+  if (!have.length) return rows;
+  for (const r of rows) {
+    const kg = Number(String(r[3] || '').replace(',', '.'));
+    if (EXERCISE_INTELLIGENCE[r[1]]?.loadUnit !== 'per_hand_kg' || !(kg > 0)) continue;
+    r[3] = kgText(have.reduce((a, b) => Math.abs(b - kg) < Math.abs(a - kg) ? b : a));
+  }
   return rows;
 }
 
@@ -88,13 +125,16 @@ export function fillGymLoads(rows, history = []) {
   }
   return rows;
 }
-export async function adjustGymPlan(env, { rows, request, history = [], taste = {} }) {
-  const items = gymExerciseCatalog(), catalog = new Map(items.map(e => [e.name, e]));
+export async function adjustGymPlan(env, { rows, request, history = [], taste = {}, ratings = [], equipment = null, dumbbells = null, minutes = null, ask = null }) {
+  // Only exercises the athlete's equipment allows (as "Přidat cvik" offers them); the plan's own stay.
+  const inPlan = new Set(rows.map(r => r?.[1]).filter(Boolean));
+  const items = gymExerciseCatalog().filter(e => inPlan.has(e.name) || !equipment || equipment(e.name)), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
-  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], ...(taste.memories?.length ? { preferenceMemory: taste.memories } : {}) });
-  const r = await callOpenAI(env, { feature: "gym-adjust", instructions: adjustInstructions() + MEMORY_RULE(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
-  const data = JSON.parse(r.text), out = fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history);
+  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], minutes: Number(minutes) > 0 ? Number(minutes) : null, ratings, ...(taste.memories?.length ? { preferenceMemory: taste.memories } : {}) });
+  const params = { instructions: adjustInstructions() + MEMORY_RULE(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) };
+  const r = ask ? await ask(env, { feature: "gym-adjust", ...params }) : await callOpenAI(env, { feature: "gym-adjust", ...params });
+  const data = JSON.parse(r.text), out = fitGymMinutes(snapGymDumbbells(fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history), dumbbells), minutes);
   if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));
   return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };
 }

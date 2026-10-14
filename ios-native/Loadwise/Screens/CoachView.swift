@@ -28,6 +28,10 @@ struct CoachView: View {
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
         var visuals: [String] = []
+        /// Food read from a sentence, waiting for "Zapsat"; `logged` once decided.
+        var food: FoodDraft? = nil
+        var logged: String? = nil
+        var loggedOK = false
     }
 
     var body: some View {
@@ -38,7 +42,8 @@ struct CoachView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty { welcome }
                             ForEach(messages) { bubble in
-                                BubbleView(bubble: bubble, decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } })
+                                BubbleView(bubble: bubble, decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
+                                           logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } })
                                     .id(bubble.id)
                             }
                             if let progress, sending {
@@ -199,11 +204,16 @@ struct CoachView: View {
                         if let a = result.answer { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
+                        // A food sentence: the card says it all, the summary text is not shown.
+                        if result.kind == "food_draft", let draft = result.draft, draft.items.contains(where: { $0.product != nil }) {
+                            $0.food = draft
+                            $0.text = ""
+                        }
                     }
                     if let chat = result.chatId { chatId = chat }
                 }
             }
-            messages.removeAll { $0.id == id && $0.text.isEmpty }
+            messages.removeAll { $0.id == id && $0.text.isEmpty && $0.food == nil }
         } catch APIError.aiConsentRequired {
             messages.removeAll { $0.id == id }
             unsent = (mine.id, text)
@@ -233,17 +243,50 @@ struct CoachView: View {
         }
     }
 
+    /// Logs the confirmed foods (nil items: "Ne"), then says what is left of the day.
+    private func logFood(_ items: [(product: FoodProduct, amount: Double, meal: String)]?, meal: String, in bubble: UUID) async {
+        guard let draft = messages.first(where: { $0.id == bubble })?.food else { return }
+        guard let items else { edit(bubble) { $0.logged = L10n.tr("Nezapsáno.") }; return }
+        var failed: String?
+        for item in items {
+            if let message = await model.logFood(product: item.product, amount: item.amount, meal: item.meal, day: draft.date, refreshAfter: false) { failed = message }
+        }
+        await model.refreshFood()
+        await model.refresh()
+        if let failed { edit(bubble) { $0.logged = failed }; return }
+        edit(bubble) { $0.logged = L10n.tr(Self.loggedTo[meal] ?? "Zapsáno"); $0.loggedOK = true }
+        if let left = Self.leftText(model.food, date: draft.date) { messages.append(Bubble(mine: false, text: left)) }
+    }
+
+    static let loggedTo = ["breakfast": "Zapsáno do snídaně", "snack_am": "Zapsáno do dopolední svačiny", "lunch": "Zapsáno do oběda",
+                           "snack_pm": "Zapsáno do odpolední svačiny", "dinner": "Zapsáno do večeře", "snack_late": "Zapsáno do druhé večeře"]
+
+    /// "Zbývá ti 1 340 kcal a 88 g bílkovin." from the day's food, when it is that day.
+    static func leftText(_ food: FoodSnapshot?, date: String) -> String? {
+        guard let food, food.date == date, let target = food.target else { return nil }
+        let kcal = Int((target - (food.kcal ?? 0)).rounded())
+        if kcal <= 0 { return L10n.tr("Cíl na dnešek je splněný.") }
+        let protein = food.macros.protein.target.map { Int(($0 - (food.macros.protein.eaten ?? 0)).rounded()) } ?? 0
+        return protein > 0 ? L10n.f("Zbývá ti %d kcal a %d g bílkovin.", kcal, protein) : L10n.f("Zbývá ti %d kcal.", kcal)
+    }
+
     private func newChat() {
         messages = []
         chatId = nil
         error = nil
     }
 
+    /// The server keeps a one-line "[Návrhy: …]" with each answer, so later
+    /// turns know what was proposed; a reopened chat shows the answer only.
+    static func withoutProposalNote(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\s*\[(?:Návrhy|Proposals): [^\]]*\]\s*$"#, with: "", options: .regularExpression)
+    }
+
     private func open(_ id: Int) async {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
-            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.content) }
+            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.role == "user" ? $0.content : Self.withoutProposalNote($0.content)) }
         } catch {
             self.error = error.localizedDescription
         }
@@ -253,6 +296,7 @@ struct CoachView: View {
 struct BubbleView: View {
     let bubble: CoachView.Bubble
     var decide: (CoachAction, Bool) -> Void
+    var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -276,6 +320,9 @@ struct BubbleView: View {
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] }, decide: { decide(action, $0) })
+            }
+            if let food = bubble.food {
+                FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.mine ? .trailing : .leading)

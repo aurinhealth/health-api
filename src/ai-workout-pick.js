@@ -10,6 +10,7 @@ import { L } from "./lang.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { flattenSteps, zoneOf, zonesFor } from "./workout-model.js";
+import { withFocus } from "./athlete-focus.js";
 
 const HARD_ZONES = new Set(["threshold", "vo2max", "anaerobic", "sprint"]);
 // The most minutes at threshold and above for the morning's readiness.
@@ -63,7 +64,9 @@ function instructions() {
 
 // generated: generateWorkout's answer. Returns it with the AI's workout first
 // and `ai: { reason }` on it, or unchanged.
-export async function aiWorkoutPick(env, generated, { sport = "ride", minutes = null, coach = {}, today = {}, ask = callOpenAI } = {}) {
+// focus: athleteFocus (main sport, goal, race), so the pick leans to what the
+// athlete trains for when the morning allows more than one candidate.
+export async function aiWorkoutPick(env, generated, { sport = "ride", minutes = null, coach = {}, today = {}, focus = null, ask = callOpenAI } = {}) {
   if (generated?.status !== "ok" || !generated.workout) return generated;
   if (!env.OPENAI_API_KEY) return generated;
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
@@ -85,7 +88,7 @@ export async function aiWorkoutPick(env, generated, { sport = "ride", minutes = 
     candidates
   };
   try {
-    const r = await ask(env, { feature: "workout-pick", instructions: instructions(), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: SCHEMA, maxOutputTokens: 1200, model: lightModel(env) });
+    const r = await ask(env, { feature: "workout-pick", instructions: withFocus(instructions(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: SCHEMA, maxOutputTokens: 1200, model: lightModel(env) });
     let parsed = null; try { parsed = JSON.parse(r.text); } catch { parsed = null; }
     const chosen = pool.find(w => w.id === String(parsed?.id || ""));
     const reason = String(parsed?.reason || "").trim().slice(0, 300);

@@ -81,9 +81,11 @@ cycle appears only when the athlete shares her menstrual cycle: phase, cycle day
 Daily availability limits automatic proposals. When userInitiated=true the user is choosing or changing a workout in the chat: their explicit duration, an added workout and a move take precedence over the saved daily time, including a day with zero availability. Do not refuse or shorten such a request because of availability; without an explicit choice keep planning within the time available. Never cancel an already planned workout unless the user asks.
 
 When the context has a cyclingCoachV2 object, take its readiness guardrails, capability progression and load balance as the basis for decisions. Judge HRV and resting heart rate only against the athlete's own average (cyclingCoachV2.readiness.hrv and restingHr), never against generic values. Take the season phase from cyclingCoachV2.constraints.phase: base, build, taper (the week before the main race: less volume, only short sharp intensity), openers (a short activation the day before the race) and race. You may change the exact structure of a workout when it fits the goal better, but you must never ignore red readiness, excessive accumulated fatigue or a clash with lower-body gym work without saying so explicitly.
+cyclingCoachV2.readiness.todayZone is the readiness zone the Today screen shows; status can be lower because of training load (TSB) or the morning check-in. When they differ, name both (Today green, but the load says take it easier) so the athlete doesn't see two answers.
 
 trends holds long-term facts computed by the app (HRV and resting heart rate over 6 weeks, sleep debt over the last 7 nights, nights in a row under the sleep need, CTL over 6 weeks, the acute:chronic workload ratio acwr with its zone, training monotony over 7 days with its strain; an acwr above 1.5 or monotony above 2.0 calls for caution). Use at most one of them per answer, and only when it bears on the question; never work out trends of your own from the daily rows.
 performance holds the last 6 weeks of runs and rides computed by the app: per week the volume and the average pace or power, efficiencyChangePercent (speed or power per heartbeat above rest, last 3 weeks against the 3 before; + means fitter), the best efforts (whole-session averages, not power-curve peaks), Intervals.icu eFTP, the threshold the data suggest and curves (from Intervals.icu: the best power over 5 s to 60 min and the best run times over 400 m to 21 km in the last 42 and 90 days; the real peaks) and intervals (the laps or work efforts of the rides and runs of the last 14 days from Intervals.icu, newest first: minutes, average and normalized watts, heart rate, pace). Read the efforts, not only the session average: in an FTP or threshold test the result is in the test lap (95 % of a 20-minute lap's watts is the FTP; the average of a 30-minute run lap is the threshold pace), and in an interval session the laps show whether the athlete held, faded in or overshot the targets. Use it when the athlete asks how they are progressing, how fast or how hard to go, or when you set targets: base paces and watts on what they actually did recently, and when the data suggest a threshold well away from the one set, say so and suggest the test rather than changing the zones yourself.
+trainingPlan is the athlete's active training plan (name, week of weeks, phase) and its sessions this week (date, sport, kind, minutes). They are the plan's key days: when you advise on such a day, say how it fits the plan, and move or ease a plan session only for a concrete reason from the data.
 
 When workoutLibraryRecommendations is available, prefer the most suitable existing library workout over inventing a new structure. Weigh suitability, challenge gap, duration, load, source and how it fits the surrounding days. Propose a new workout only when the library has no suitable option, and say so clearly.
 
@@ -139,15 +141,17 @@ cycle je jen tehdy, když sportovkyně sdílí menstruační cyklus: fáze, den 
 Denní availability omezuje automatické návrhy. Pokud userInitiated=true, uživatel vybírá nebo mění trénink v chatu: jeho výslovná délka, přidání dalšího tréninku i přesun mají před uloženým denním časem přednost, včetně dne s nulovou dostupností. Takový požadavek neodmítej ani nezkracuj kvůli availability; bez výslovné volby dál plánuj podle časových možností. Již naplánovaný trénink neruš bez žádosti uživatele.
 
 Pokud je v kontextu objekt cyclingCoachV2, ber jeho readiness guardrails, capability progression a load balance jako rozhodovací základ. HRV a klidový tep posuzuj jen vůči vlastnímu průměru sportovce (cyclingCoachV2.readiness.hrv a restingHr), nikdy podle obecných hodnot. Fázi sezóny ber z cyclingCoachV2.constraints.phase: base, build, taper (týden před hlavním závodem méně objemu a jen krátká ostrá intenzita), openers (den před závodem krátká aktivace) a race. Můžeš změnit konkrétní strukturu workoutu, pokud to lépe odpovídá cíli, ale nesmíš ignorovat červenou readiness, nadměrnou kumulovanou únavu nebo konflikt s lower-body gymem bez výslovného vysvětlení.
+cyclingCoachV2.readiness.todayZone je zóna připravenosti, kterou ukazuje obrazovka Dnes; status může být nižší kvůli zátěži (TSB) nebo rannímu pocitu. Když se liší, řekni obojí (Dnes zelená, ale zátěž říká ubrat), ať sportovec nevidí dvě různé odpovědi.
 
 trends obsahuje dlouhodobá fakta spočítaná aplikací (HRV a klidový tep za 6 týdnů, spánkový dluh za posledních 7 nocí, kolik nocí po sobě byl spánek pod potřebou, CTL za 6 týdnů, poměr akutní a chronické zátěže acwr se zónou, monotónnost tréninku za 7 dní se strainem; acwr nad 1,5 nebo monotónnost nad 2,0 volá po opatrnosti). V jedné odpovědi použij nejvýš jedno z nich, a jen když k otázce patří; vlastní trendy z denních řádků nepočítej.
 performance obsahuje posledních 6 týdnů běhů a jízd spočítaných aplikací: po týdnech objem a průměrné tempo nebo výkon, efficiencyChangePercent (rychlost nebo výkon na tep nad klidovým, poslední 3 týdny proti 3 předchozím; + znamená lepší kondici), nejlepší výkony (průměry celých tréninků, ne vrcholy křivky výkonu), eFTP z Intervals.icu, práh, na který ukazují data, a curves (z Intervals.icu: nejlepší výkon za 5 s až 60 min a nejlepší časy běhu na 400 m až 21 km za posledních 42 a 90 dní; skutečné vrcholy) a intervals (úseky nebo pracovní intervaly jízd a běhů za posledních 14 dní z Intervals.icu, od nejnovějších: minuty, průměrný a normalizovaný výkon, tep, tempo). Čti jednotlivé úseky, ne jen průměr tréninku: u testu FTP nebo prahu je výsledek v testovacím úseku (95 % wattů z 20minutového úseku je FTP; průměr 30minutového běžeckého úseku je prahové tempo) a u intervalového tréninku úseky ukážou, jestli sportovec cíle udržel, odpadal nebo je přestřelil. Použij to, když se sportovec ptá, jak se zlepšuje, jak rychle nebo jak silně jet či běžet, nebo když stanovuješ cíle: tempa a watty opři o to, co v poslední době opravdu zvládl, a když data ukazují práh výrazně jinde než nastavený, řekni to a navrhni test místo toho, abys zóny měnil sám.
+trainingPlan je aktivní tréninkový plán sportovce (název, týden z kolika, fáze) a jeho tréninky tento týden (date, sport, kind, minutes). Jsou to klíčové dny plánu: když radíš k takovému dni, řekni, jak sedí do plánu, a trénink z plánu přesuň nebo zlehči jen z konkrétního důvodu v datech.
 
 Pokud je k dispozici workoutLibraryRecommendations, preferuj nejvhodnější existující workout z knihovny před vymýšlením nové struktury. Posuzuj suitability, challenge gap, délku, zátěž, zdroj a návaznost na okolní dny. Nový workout navrhni jen tehdy, když knihovna nemá vhodnou variantu, a jasně to uveď.
 
 thresholds obsahuje FTP, LTHR, maximální a klidovou tepovku, prahové tempo běhu (s/km) a zóny výkonu, tepu a tempa podle nastavení sportovce, athlete jeho váhu, pohlaví a věk. Intenzitu udávej ve wattech a tepech z těchto zón. Když chybí kritická data, nastav konzervativní intenzitu a napiš, co by zpřesnilo rozhodnutí. Nepředstírej znalost FTP, VO2max, tepových zón, bolesti nebo zdravotního stavu, pokud nejsou v datech. Neordinuj léčbu.
 
-now je aktuální čas v Praze, každý den ve week má weekday a availabilityMinutes (čas na sport, null = neurčeno). sleep je spánek posledních nocí v minutách. today.nutrition obsahuje kalorický cíl, makra, snědené a zbývající množství. strengthProgress shrnuje cviky za 8 týdnů (poslední série kg×opakování@RPE, nejlepší odhad 1RM, trend); gym jsou jednotlivé série za 14 dní. coachProposals jsou dřívější návrhy a jejich stav (čeká, potvrzeno, odmítnuto) – navazuj na ně a neopakuj odmítnuté bez nového důvodu. Řádek „[Návrhy: …]“ na konci tvých dřívějších odpovědí doplnila aplikace; sám ho nepiš.
+now je aktuální čas v časovém pásmu sportovce, každý den ve week má weekday a availabilityMinutes (čas na sport, null = neurčeno). sleep je spánek posledních nocí v minutách. today.nutrition obsahuje kalorický cíl, makra, snědené a zbývající množství. strengthProgress shrnuje cviky za 8 týdnů (poslední série kg×opakování@RPE, nejlepší odhad 1RM, trend); gym jsou jednotlivé série za 14 dní. coachProposals jsou dřívější návrhy a jejich stav (čeká, potvrzeno, odmítnuto) – navazuj na ně a neopakuj odmítnuté bez nového důvodu. Řádek „[Návrhy: …]“ na konci tvých dřívějších odpovědí doplnila aplikace; sám ho nepiš.
 
 Když uživatel žádá plán, uveď ${S.planUnit} pro každý relevantní den:
 - účel jednotky,
@@ -174,27 +178,42 @@ export const coachInstructions = coachInstructionsFor();
 
 // "2026-10-05 19:09" in the user's zone: the coach knows what is left of the day.
 export { localNow } from "./user-time.js";
-const WEEKDAYS=['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'];
-export const weekdayOf=date=>WEEKDAYS[new Date(String(date)+'T12:00:00Z').getUTCDay()]||null;
+const WEEKDAYS=['neděle','pondělí','úterý','středa','čtvrtek','pátek','sobota'],WEEKDAYS_EN=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+export const weekdayOf=date=>L(WEEKDAYS,WEEKDAYS_EN)[new Date(String(date)+'T12:00:00Z').getUTCDay()]||null;
 const shiftDay=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 const num=v=>v==null||v===''||!Number.isFinite(Number(v))?null:Number(v);
 const first=(...values)=>values.map(num).find(v=>v!=null)??null;
 const round=(v,digits=0)=>v==null?null:Math.round(v*10**digits)/10**digits;
 const compactObject=o=>Object.fromEntries(Object.entries(o).filter(([,v])=>v!=null&&v!==''&&!(Array.isArray(v)&&!v.length)));
+const filled=o=>{const c=compactObject(o);return Object.keys(c).length?c:null;};
 
+const paceText=s=>{if(!s)return null;const t=Math.round(s);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+'/km';};
+// A watch session from Apple Health or Google keeps its numbers in
+// exercise.metricsSummary, named by shape (distanceMeters, distanceMillimeters,
+// averageHeartRateBeatsPerMinute…), a number or {value|bpm}.
+function watchMetric(metrics,match){
+  const key=Object.keys(metrics).find(k=>match.test(k)&&!/zone|variab/i.test(k));if(!key)return null;
+  const v=metrics[key],n=num(v&&typeof v==='object'?v.bpm??v.value??v.count:v);
+  return n==null||n<=0?null:/millimeter/i.test(key)?n/1000:n;
+}
 // Intervals.icu keeps power, heart rate, RPE and zone times in the raw payload
 // rather than on the activity; the coach gets these numbers, not the record.
+// Watch sessions add theirs from metricsSummary, so a ride or run recorded only
+// by Apple Watch or a Fitbit still reaches the coach with distance and power.
 export function compactActivity(a={}){
-  const p=a.payload&&typeof a.payload==='object'?a.payload:{},intensity=first(a.intensityFactor,p.icu_intensity),distance=first(p.distance);
+  const p=a.payload&&typeof a.payload==='object'?a.payload:{},w=p.exercise?.metricsSummary&&typeof p.exercise.metricsSummary==='object'?p.exercise.metricsSummary:{};
+  const intensity=first(a.intensityFactor,p.icu_intensity),distance=first(p.distance,watchMetric(w,/^distance/i));
+  const hours=num(a.durationHours),run=/run/i.test(String(a.type||p.type||p.exercise?.exerciseType||''));
+  const pace=run&&distance>=500&&hours>0?hours*3600/(distance/1000):null;
   const minutes=secs=>round(num(secs)/60);
   return compactObject({
     id:a.id,name:a.name||p.name,type:a.type||p.type,durationHours:round(num(a.durationHours),2),tss:round(first(a.tss,p.icu_training_load)),
-    averagePower:round(first(a.averagePower,p.icu_average_watts,p.average_watts)),normalizedPower:round(first(a.normalizedPower,p.icu_weighted_average_watts,p.weighted_average_watts)),
-    averageHeartRate:round(first(a.averageHeartRate,p.average_heartrate,p.average_hr)),maxHeartRate:round(first(a.maxHeartRate,p.max_heartrate)),
+    averagePower:round(first(a.averagePower,p.icu_average_watts,p.average_watts,watchMetric(w,/power/i))),normalizedPower:round(first(a.normalizedPower,p.icu_weighted_average_watts,p.weighted_average_watts)),
+    averageHeartRate:round(first(a.averageHeartRate,p.average_heartrate,p.average_hr,watchMetric(w,/heart.*(avg|average)|(avg|average).*heart/i))),maxHeartRate:round(first(a.maxHeartRate,p.max_heartrate,watchMetric(w,/heart.*max|max.*heart/i))),
     // Intervals stores intensity as a percentage of FTP (75 = IF 0.75).
     intensityFactor:intensity==null?null:round(intensity>3?intensity/100:intensity,2),
     rpe:first(a.rpe,p.icu_rpe,p.perceived_exertion),feel:first(p.feel),ftp:first(p.icu_ftp),decouplingPercent:round(first(p.decoupling),1),
-    distanceKm:distance==null?null:round(distance/1000,1),elevationM:round(first(p.total_elevation_gain)),calories:round(first(a.calories)),
+    distanceKm:distance==null?null:round(distance/1000,1),pace:pace?paceText(pace):null,elevationM:round(first(p.total_elevation_gain,watchMetric(w,/elevation/i))),calories:round(first(a.calories,watchMetric(w,/calorie/i))),
     powerZoneMinutes:Array.isArray(p.icu_zone_times)?p.icu_zone_times.map(z=>({zone:z.id,minutes:minutes(z.secs)})).filter(z=>z.minutes>0):null,
     hrZoneMinutes:Array.isArray(p.icu_hr_zone_times)?p.icu_hr_zone_times.map((secs,i)=>({zone:'Z'+(i+1),minutes:minutes(secs)})).filter(z=>z.minutes>0):null,
     tags:a.tags
@@ -208,13 +227,24 @@ export function compactTraining(training){
     matched:(training.matched||[]).map(m=>compactObject({planned:m.planned?compactPlanned(m.planned):null,actualId:m.actualId}))});
 }
 
-// Calorie target, macros, what was eaten and what is left today.
-export function nutritionContext(n){
+// Calorie target, macros, what was eaten and what is left today, with what
+// food advice needs around it: why the target is what it is (a long ride
+// tomorrow), the safe minimum, the weight trend and goal, the deficit, what
+// the day burned, drinks and the last days' eating.
+export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}={}){
   if(!n||typeof n!=='object')return null;
-  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros||null;
+  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros||null,b=n.calorieBreakdown||{};
   const left=(goal,have)=>num(goal)==null?null:Math.round(num(goal)-(num(have)||0));
+  const w=daily?.weight||{},avg=x=>round(num(x),1);
+  const lastDays=date?(week?.days||[]).filter(d=>d.date<date&&d.date>=shiftDay(date,-7)).map(d=>{const t=d.daily?.nutrition?.foodLog?.totals;return t&&num(t.kcal)>0?compactObject({date:d.date,eatenKcal:round(num(t.kcal)),proteinG:round(num(t.protein_g)),targetKcal:round(num(d.daily?.nutrition?.calorieTarget))}):null;}).filter(Boolean):[];
   return compactObject({calorieTarget:target,macros,eaten,
-    remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)})});
+    remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)}),
+    targetReason:typeof n.reason==='string'?n.reason.slice(0,400):null,
+    minimumKcal:num(b.minTarget),deficitKcal:num(b.weightLossDeficit),
+    weight:filled({currentKg:avg(w.current??n.currentWeight),average7dKg:avg(w.average7d),average30dKg:avg(w.average30d),goalKg:avg(n.targetWeightKg)}),
+    burned:filled({dayKcal:round(num(daily?.burned?.total)),activityKcal:round(num(daily?.burned?.activity)),activeSoFarKcal:round(num(n.energyBudget?.active))}),
+    drinks:fluids&&num(fluids.target?.ml)!=null?{drunkMl:round(num(fluids.hydrationMl??fluids.totalMl)||0),targetMl:num(fluids.target.ml)}:null,
+    lastDays:lastDays.length?lastDays:null});
 }
 
 // One strength set as the coach reads it; a blank entry means the prescription.
@@ -235,11 +265,10 @@ export function strengthProgress(history=[],date,weeks=8){
     const last=sessions.at(-1),rated=sessions.filter(s=>s.best),best=rated.reduce((b,s)=>!b||s.best>b.best?s:b,null);
     const half=Math.floor(rated.length/2),mean=list=>list.reduce((sum,s)=>sum+s.best,0)/list.length,change=rated.length>=2?mean(rated.slice(-half))/mean(rated.slice(0,half))-1:null;
     return compactObject({exercise,sessions:sessions.length,lastDate:last.date,lastSets:last.sets.map(s=>(s.kg??'?')+' kg×'+(s.reps??'?')+(s.rpe!=null?' @RPE '+s.rpe:'')).join(', '),
-      bestE1rmKg:best?round(best.best,1):null,bestDate:best?.date,trend:change==null?null:change>.025?'roste':change<-.025?'klesá':'stabilní',trendPercent:change==null?null:round(change*100)});
+      bestE1rmKg:best?round(best.best,1):null,bestDate:best?.date,trend:change==null?null:change>.025?L('roste','rising'):change<-.025?L('klesá','falling'):L('stabilní','stable'),trendPercent:change==null?null:round(change*100)});
   }).sort((a,b)=>b.lastDate.localeCompare(a.lastDate)).slice(0,25);
 }
 
-const paceText=s=>{if(!s)return null;const t=Math.round(s);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+'/km';};
 // FTP, heart rate and pace thresholds with the athlete's zones (athleteThresholds).
 export function thresholdsContext(t){
   if(!t)return null;
@@ -258,8 +287,15 @@ export function sleepNights(sessions=[],date,nights=7){
   for(const s of sessions||[]){const day=String(s.date||s.endTime||'').slice(0,10),minutes=num(s.durationMin);if(!day||day<since||day>date||!minutes)continue;if(!byDay.has(day)||minutes>byDay.get(day))byDay.set(day,minutes);}
   return [...byDay].sort(([a],[b])=>a.localeCompare(b)).map(([day,minutes])=>({date:day,minutes:Math.round(minutes)}));
 }
-// The engine plans rides or runs: the open screen first, then the main sport.
-export function engineSport(focus,appContext=null){const s=appContext?.sport;return s==='ride'||s==='run'?s:focus?.sport==='running'?'run':'ride';}
+// The engine plans rides or runs: the open screen first, then the sport the
+// message asks about ("a run tomorrow?"), then the main sport.
+const RUN_WORDS=/\bběh|\bběž|\bběhat|\bbehat|\bklus|\brun(?:s|ning)?\b|\bjog/i,RIDE_WORDS=/\bkol[aeou]?\b|\bkolem\b|\bjízd|\bjezd|\bvyjížď|\btrenažér|\bride|\bbike|\bcycl/i;
+export function engineSport(focus,appContext=null,message=''){
+  const s=appContext?.sport;if(s==='ride'||s==='run')return s;
+  const run=RUN_WORDS.test(message),ride=RIDE_WORDS.test(message);
+  if(run!==ride)return run?'run':'ride';
+  return focus?.sport==='running'?'run':'ride';
+}
 // The engine's goal from the main event: base far out, build in the last 12
 // weeks; the final 3 weeks stay automatic (the engine has no taper phase).
 export function focusGoal(focus){
@@ -290,10 +326,10 @@ export function compactWellness(rows,{date=null,days=14}={}){
 
 // The long-term facts for the chat, as { trends } or nothing.
 export function coachTrends({date,fitness,health,profile}){
-  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null});
+  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null,sleepGoal:profile?.sleepGoal??null});
   return trends?{trends}:{};
 }
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,workoutRatings=[]}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[]}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -315,7 +351,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     thresholds:thresholdsContext(thresholds),athlete:athleteProfileContext(profile,daily?.weight?.current),
     // Only when the athlete shares it (cycle-model.js cycleForCoach).
     ...(cycle?{cycle}:{}),
-    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition)},
+    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date})},
     week:days,
     fitness:compactWellness(fitness?.wellness,{date,days:14}),
     sleep:sleepNights(health?.sleep,date),
