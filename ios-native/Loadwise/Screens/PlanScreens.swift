@@ -646,34 +646,52 @@ struct PlanSessionList: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text(Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date) + " · " + planDuration(s.length) + (s.workout?.target_load.map { " · " + Fmt.int($0) + " TSS" } ?? ""))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(subtitle(s)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 Spacer()
-                if s.done == true {
-                    Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.green)
-                        .frame(width: 24, height: 24).background(Palette.greenSoft, in: Circle())
-                        .accessibilityLabel(L10n.tr("hotovo"))
-                } else if s.date == today {
-                    Text("dnes").font(.caption2.weight(.semibold)).foregroundStyle(Palette.amber)
-                        .padding(.horizontal, 8).padding(.vertical, 3).background(Palette.amberSoft, in: Capsule())
-                }
-                if s.editable == true {
-                    Menu { actions(s) } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
-                            .frame(width: 32, height: 32).contentShape(Rectangle())
-                    }
-                    .accessibilityLabel(L10n.tr("Upravit trénink"))
-                } else {
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
-                }
+                badge(s)
+                trailing(s)
             }
-            if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
-                WorkoutProfile(blocks: blocks, sport: sport, compact: true).opacity(s.done == true ? 0.5 : 1)
-            }
+            profile(s)
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+    }
+
+    private func subtitle(_ s: PlanWeekDetail.Session) -> String {
+        var text: String = Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date)
+        text += " · " + planDuration(s.length)
+        if let load = s.workout?.target_load { text += " · " + Fmt.int(load) + " TSS" }
+        return text
+    }
+
+    @ViewBuilder private func badge(_ s: PlanWeekDetail.Session) -> some View {
+        if s.done == true {
+            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.green)
+                .frame(width: 24, height: 24).background(Palette.greenSoft, in: Circle())
+                .accessibilityLabel(L10n.tr("hotovo"))
+        } else if s.date == today {
+            Text("dnes").font(.caption2.weight(.semibold)).foregroundStyle(Palette.amber)
+                .padding(.horizontal, 8).padding(.vertical, 3).background(Palette.amberSoft, in: Capsule())
+        }
+    }
+
+    @ViewBuilder private func trailing(_ s: PlanWeekDetail.Session) -> some View {
+        if s.editable == true {
+            Menu { actions(s) } label: {
+                Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                    .frame(width: 32, height: 32).contentShape(Rectangle())
+            }
+            .accessibilityLabel(L10n.tr("Upravit trénink"))
+        } else {
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+        }
+    }
+
+    @ViewBuilder private func profile(_ s: PlanWeekDetail.Session) -> some View {
+        if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
+            WorkoutProfile(blocks: blocks, sport: sport, compact: true).opacity(s.done == true ? 0.5 : 1)
+        }
     }
 
     private func edit(_ change: JSONObject) async {
