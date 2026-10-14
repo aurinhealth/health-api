@@ -11,9 +11,26 @@ struct CoachCheckIn: Decodable {
         let headline: String?
         let reasons: [String]?
         let message: String?
-        /// "memory_check": a passing memory ("bolí mě koleno") to confirm or forget.
+        /// "memory_check": a passing memory ("bolí mě koleno") to confirm or forget;
+        /// "illness": signs of an oncoming illness (src/illness-check.js).
         var kind: String? = nil
         var memory: String? = nil
+        /// illness: each sign against the normal, and the sessions it may cancel.
+        var rows: [Row]? = nil
+        var sessions: [Session]? = nil
+
+        struct Row: Decodable, Equatable, Identifiable {
+            let id: String
+            let label: String
+            let value: String
+        }
+
+        struct Session: Decodable, Equatable, Identifiable {
+            let eventId: String
+            let date: String
+            let name: String
+            var id: String { eventId }
+        }
     }
 }
 

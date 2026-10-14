@@ -424,7 +424,7 @@ ${today}
 </div></section>
 
 <section id="kouc" class="glow-today"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">${t('AI kouč', 'AI coach')}</div><h2>${t('Ptej se. Zná tvoje data.', 'Just ask. It knows your data.')}</h2><p>${t('Pamatuje si, co mu řekneš, a co si pamatuje, vidíš a upravíš.', 'It remembers what you tell it, and you can see and edit what it remembers.')}</p><p class="free">${t('Zdarma pro všechny.', 'Free for everyone.')}</p></div>
+<div class="text reveal"><div class="eyebrow">${t('AI kouč', 'AI coach')}</div><h2>${t('Ptej se. Zná tvoje data.', 'Just ask. It knows your data.')}</h2><p>${t('Pamatuje si, co mu řekneš, a co si pamatuje, vidíš a upravíš. Když noc ukáže, že na tebe něco leze, ozve se sám a nabídne volno.', 'It remembers what you tell it, and you can see and edit what it remembers. When your night shows something may be coming on, it speaks up and offers rest.')}</p><p class="free">${t('Zdarma pro všechny.', 'Free for everyone.')}</p></div>
 <div class="visual chat reveal">
 <div class="me">${t('Spal jsem jen 6 hodin. Mám jet ty intervaly?', 'I only slept 6 hours. Should I still do the intervals?')}</div>
 <div class="ai">${t('HRV máš v normálu, ale spánkový dluh roste. Zkrátil bych to na 2×12 a dnes šel spát o 30 minut dřív.', 'Your HRV is normal, but your sleep debt is growing. I’d cut it to 2×12 and go to bed 30 minutes earlier tonight.')}

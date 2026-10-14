@@ -1980,3 +1980,14 @@
 "Upraveno: %@" = "Changed: %@";
 "Už neplatí" = "No longer true";
 "Pořád platí" = "Still true";
+
+/* Possible illness (coach check-in on Dnes) */
+"Přepnout na Nemoc" = "Switch to Sick";
+"Do kdy" = "Until";
+"Neurčito" = "Open-ended";
+"Tréninky, které zruším" = "Sessions I'll cancel";
+"Stav Nemoc" = "Status: Sick";
+"Stav Nemoc do %@" = "Status: Sick through %@";
+"Zrušené tréninky: %@. Až se ti uleví, napiš kouči a plán vrátíme." = "Cancelled sessions: %@. When you feel better, tell the coach and we'll bring the plan back.";
+"Až se ti uleví, napiš kouči a plán vrátíme." = "When you feel better, tell the coach and we'll bring the plan back.";
+"Zpět na Trénink" = "Back to Training";

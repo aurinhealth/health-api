@@ -21,10 +21,12 @@ extension APIClient {
         return r.state
     }
 
-    func setAthleteStatus(_ status: String, until: String?, note: String?) async throws -> AthleteStatus {
+    /// `cancel`: planned sessions (event ids) to cancel with a status other than Trénink.
+    func setAthleteStatus(_ status: String, until: String?, note: String?, cancel: [String] = []) async throws -> AthleteStatus {
         struct Response: Decodable { let state: AthleteStatus }
         var body: JSONObject = ["status": .string(status), "note": .string(note ?? "")]
         body["statusUntil"] = until.map { .string($0) } ?? .null
+        if !cancel.isEmpty { body["cancel"] = .array(cancel.map { .string($0) }) }
         let r: Response = try await send("/app/api/athlete-state", method: "POST", body: body)
         return r.state
     }

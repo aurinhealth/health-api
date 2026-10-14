@@ -432,9 +432,9 @@ final class AppModel {
 
     /// A new Stav sportovce. The coach and the plans follow it, so Today and
     /// Training load again.
-    func setAthleteStatus(_ status: String, until: String?, note: String?) async throws {
+    func setAthleteStatus(_ status: String, until: String?, note: String?, cancel: [String] = []) async throws {
         guard !demo else { athleteStatus = AthleteStatus(status: status, note: note, statusUntil: until); return }
-        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note)
+        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note, cancel: cancel)
         await refresh()
         if training != nil { await refreshTraining() }
     }
