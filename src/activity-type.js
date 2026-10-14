@@ -146,7 +146,7 @@ export async function changeActivityType(env, { id, type } = {}, { fetchImpl = f
   }
 
   const row = await env.DB.prepare(`SELECT id, source_family, data_type, external_id, payload_json FROM health_datapoints
-    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local') AND data_type = 'activity')
+    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local', 'wahoo') AND data_type = 'activity')
       OR (source_family IN ('google-wearables', 'apple-health') AND data_type = 'exercise')) LIMIT 1`).bind(env.USER_ID, key).first();
   if (!row) throw fail(L('Aktivita nebyla nalezena.', 'The activity wasn\'t found.'), 404);
   let payload = {};
@@ -178,6 +178,12 @@ export async function changeActivityType(env, { id, type } = {}, { fetchImpl = f
     return { status: 'ok', type: entry[0], sent: ['intervals'], kept: [] };
   }
 
+  // A Wahoo ride: changed in Aurin only (Wahoo's own type stays).
+  if (row.source_family === 'wahoo') {
+    payload.type = entry[0];
+    await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
+    return { status: 'ok', type: entry[0], sent: [], kept: ['wahoo'] };
+  }
   // A watch session from Google Health or Apple Health: kept in Loadwise only.
   payload.exercise = payload.exercise && typeof payload.exercise === 'object' ? payload.exercise : {};
   payload.exercise.exerciseType = entry[0];

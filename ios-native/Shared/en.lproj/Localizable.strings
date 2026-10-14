@@ -2141,6 +2141,13 @@
 "Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve." = "Sleep and its stages, resting heart rate, HRV, breathing and blood oxygen.";
 "Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";
 
+/* Wahoo in Zdroje dat */
+"Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit." = "The Wahoo rides and runs will be deleted from Aurin and the plan will stop going to Wahoo.";
+"Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci." = "Done rides and runs: time, distance, power, TSS, heart rate and cadence.";
+"Tréninky naplánované v Aurinu, do ELEMNT a KICKR." = "Workouts planned in Aurin, to the ELEMNT and KICKR.";
+"Odpojit a smazat jízdy z Wahoo" = "Disconnect and delete the Wahoo rides";
+"Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá." = "In Aurin only: Wahoo keeps it, Aurin stops counting it.";
+
 /* Aktivita dne (CoachPick.swift) */
 "Aktivita dne" = "Activity of the day";
 "trenažér" = "trainer";
