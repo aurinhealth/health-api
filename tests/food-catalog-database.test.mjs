@@ -221,3 +221,16 @@ test('live search smoke proves the Worker reads FOODS and cleans its exact canar
   await assert.rejects(smokeFoodCatalog({api:f.api,foods:'foods',oidcToken:'test-oidc',fetchImpl:async()=>Response.json({status:'ok',candidates:[]})}),/lookup failed/);
   assert.equal(count(f.foods,'shared_foods'),0);
 });
+
+test('values the AI looked up or estimated stay private and keep out of the common catalogue',async()=>{
+  const f=setup(),a=await userDataEnvironment(f.env,user(3)),b=await userDataEnvironment(f.env,user(4));
+  const saved=await savePersonalFood(a.DB,{...product,source:'ai-estimate'});
+  assert.equal(saved.origin,'ai-estimate');
+  assert.equal(count(f.core,'shared_foods'),0);
+  // Editing it later (the app sends it back as the user's own) keeps it private.
+  await savePersonalFood(a.DB,{...product,id:saved.id,source:'personal',calories_100g:52});
+  assert.equal(count(f.core,'shared_foods'),0);
+  assert.equal((await searchFoodCatalog(b.DB,'',product.barcode)).length,0);
+  await savePersonalFood(b.DB,product);
+  assert.equal(count(f.core,'shared_foods'),1);
+});

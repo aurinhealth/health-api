@@ -1,3 +1,4 @@
+import { L } from './lang.js';
 import {productFromLabel} from './food-sources.js';
 import {foodPackageSize} from './food-portions.js';
 import {saveSharedFood,searchSharedFoods,removeFoodContribution} from './shared-foods.js';
@@ -14,11 +15,16 @@ export async function savePersonalFood(db,input,{used=false}={}){
   }
   const portion=p?.nutrition_basis==='portion';
   await ensure(db);
-  if(input.id&&!await db.prepare('SELECT food_key FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,String(input.id)).first())throw new Error('Potravina nebyla nalezena.');
-  if(!p?.name||p.name.length>180||!['g','ml','portion'].includes(p.nutrition_basis)||['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||p[k]<0||p[k]>(k==='calories_100g'?(portion?10000:1000):(portion?1000:100))))throw new Error('Doplň název, jednotku a platné nutriční hodnoty.');
-  await ensure(db);const product={...p,quantity:String(input.quantity||'').slice(0,100),source:'personal',confidence:'user'};
+  const existing=input.id?await db.prepare('SELECT product_json FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,String(input.id)).first():null;
+  if(input.id&&!existing)throw new Error(L('Potravina nebyla nalezena.', 'The food was not found.'));
+  // Values the AI looked up or estimated stay the user's own: they never enter
+  // the common catalogue, where the next scan of the barcode would show them
+  // as if read from the label. Editing the food later keeps that origin.
+  const origin=['ai','ai-estimate'].includes(input.source)?input.source:['ai','ai-estimate'].includes(input.origin)?input.origin:(()=>{try{return JSON.parse(existing?.product_json||'{}').origin||null;}catch{return null;}})();
+  if(!p?.name||p.name.length>180||!['g','ml','portion'].includes(p.nutrition_basis)||['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||p[k]<0||p[k]>(k==='calories_100g'?(portion?10000:1000):(portion?1000:100))))throw new Error(L('Doplň název, jednotku a platné nutriční hodnoty.', 'Fill in the name, the unit and valid nutrition values.'));
+  await ensure(db);const product={...p,quantity:String(input.quantity||'').slice(0,100),source:'personal',confidence:'user',...(origin?{origin}:{})};
   await db.prepare('INSERT INTO personal_foods(user_id,food_key,product_json,use_count) VALUES(?,?,?,?) ON CONFLICT(user_id,food_key) DO UPDATE SET product_json=excluded.product_json,updated_at=CURRENT_TIMESTAMP,use_count=personal_foods.use_count+excluded.use_count').bind(db.userId,input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand),JSON.stringify(product),used?1:0).run();
-  const id=input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand);await saveSharedFood(db,product,id);return {...product,id};
+  const id=input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand);if(origin)await removeFoodContribution(db,id);else await saveSharedFood(db,product,id);return {...product,id};
 }
 export async function searchPersonalFoods(db,name,barcode){await ensure(db);const r=await db.prepare('SELECT food_key,product_json FROM personal_foods WHERE user_id=? ORDER BY updated_at DESC LIMIT 500').bind(db.userId).all();return(r.results||[]).map(r=>({...JSON.parse(r.product_json),id:r.food_key})).filter(p=>barcode?String(p.barcode)===String(barcode):foodSimilarity(name,p.name)>=.65).sort((a,b)=>foodSimilarity(name,b.name)-foodSimilarity(name,a.name)).slice(0,12);}
 export async function listPersonalFoods(db,{sort='recent'}={}){await ensure(db);const order=sort==='frequent'?'use_count DESC,updated_at DESC':'updated_at DESC';return (await db.prepare('SELECT food_key,product_json,use_count FROM personal_foods WHERE user_id=? ORDER BY '+order+' LIMIT 500').bind(db.userId).all()).results.map(r=>({...JSON.parse(r.product_json),id:r.food_key,uses:Number(r.use_count)||0}));}
@@ -29,4 +35,4 @@ export async function searchFoodCatalog(db,name,barcode){
   return result.slice(0,12);
 }
 
-export async function deletePersonalFood(db,id){await ensure(db);const r=await db.prepare('DELETE FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,String(id)).run();if(!r.meta.changes)throw new Error('Potravina nebyla nalezena.');await removeFoodContribution(db,id);}
+export async function deletePersonalFood(db,id){await ensure(db);const r=await db.prepare('DELETE FROM personal_foods WHERE user_id=? AND food_key=?').bind(db.userId,String(id)).run();if(!r.meta.changes)throw new Error(L('Potravina nebyla nalezena.', 'The food was not found.'));await removeFoodContribution(db,id);}

@@ -33,12 +33,17 @@ export function parseNutritionLabel(text){
 
 // A warning when energy and macronutrients do not add up (4/4/9 kcal per g,
 // fibre 2), which is the usual sign of a misread digit or a wrong column.
-export function nutritionConsistency(values={}){
-  const kcal=Number(values.calories_100g),p=Number(values.protein_100g),c=Number(values.carbs_100g),f=Number(values.fat_100g);
-  if(![kcal,p,c,f].every(Number.isFinite)||kcal<40)return null;
-  const fiber=Number(values.fiber_100g)||0,estimate=4*p+4*Math.max(0,c)+9*f+2*fiber;
+// The energy the macronutrients add up to (kcal per 100 g), or null.
+export function macroEnergy(values={}){
+  const p=Number(values.protein_100g),c=Number(values.carbs_100g),f=Number(values.fat_100g);
+  if(![p,c,f].every(Number.isFinite))return null;
+  return 4*p+4*Math.max(0,c)+9*f+2*(Number(values.fiber_100g)||0);
+}
+export function nutritionConsistency(values={},check=L(' Zkontroluj přepis proti fotce.', ' Check the values against the photo.')){
+  const kcal=Number(values.calories_100g),estimate=macroEnergy(values);
+  if(!Number.isFinite(kcal)||estimate==null||kcal<40)return null;
   if(Math.abs(estimate-kcal)<=Math.max(25,kcal*.2))return null;
-  return L('Energie ', 'Energy ')+Math.round(kcal)+L(' kcal nesedí s makroživinami (≈ ', ' kcal doesn\'t match the macros (≈ ')+Math.round(estimate)+L(' kcal). Zkontroluj přepis proti fotce.', ' kcal). Check the values against the photo.');
+  return L('Energie ', 'Energy ')+Math.round(kcal)+L(' kcal nesedí s makroživinami (≈ ', ' kcal doesn\'t match the macros (≈ ')+Math.round(estimate)+' kcal).'+check;
 }
 
 export function parseNutritionPortion(text){

@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// GET /app/api/plans (src/training-plans.js): the plans to choose from and
-/// the active one. The plan sets the week (key sessions, the long one, the
-/// load); the coach still decides each day from readiness.
+/// GET /app/api/plans (src/training-plans.js): the plans to choose from, the
+/// active one and a finished plan's result. The plan sets the week (key
+/// sessions, the long one, the load); the coach still decides each day from
+/// readiness.
 struct TrainingPlans: Decodable, Equatable {
     struct Week: Decodable, Equatable, Identifiable {
         var id: Int { week }
@@ -34,9 +35,13 @@ struct TrainingPlans: Decodable, Equatable {
     }
 
     struct Active: Decodable, Equatable {
+        var id: Int? = nil
         let templateId: String
         let name: String
         let startDate: String
+        /// Started mid-week: the first week runs from this day.
+        var firstDay: String? = nil
+        var endDate: String? = nil
         let raceDate: String?
         let raceKm: Double?
         let week: Int
@@ -49,7 +54,13 @@ struct TrainingPlans: Decodable, Equatable {
         let shiftedWeeks: Int?
         /// A lighter week after a break in a race plan.
         let returning: Bool?
+        /// Fewer training days chosen for this week.
+        var weekDays: Int? = nil
+        /// Each past week done, in % (keys are week numbers).
+        var completion: [String: Int]? = nil
         let template: Template
+
+        func done(_ week: Int) -> Int? { completion?[String(week)] }
     }
 
     struct Started: Decodable, Equatable {
@@ -61,9 +72,64 @@ struct TrainingPlans: Decodable, Equatable {
     let active: Active?
     /// The gym plan runs beside a ride or run plan.
     let activeGym: Active?
+    var finished: PlanResult? = nil
     let started: Started?
 
     func active(for sport: String) -> Active? { sport == "gym" ? activeGym : active }
+}
+
+/// GET /app/api/plans/preview: the plan's weeks before it starts (or the
+/// running plan's with ?active=1), an estimate from the athlete's days and fitness.
+struct PlanPreview: Decodable, Equatable {
+    struct Week: Decodable, Equatable, Identifiable {
+        var id: Int { week }
+        let week: Int
+        let phase: String
+        let phaseLabel: String
+        let keys: [String]
+        let race: Bool
+        let sessions: Int
+        let minutes: Int
+        let tss: Int
+    }
+    struct Totals: Decodable, Equatable {
+        let sessions: Int
+        let minutes: Int
+        let tss: Int
+    }
+    let startDate: String
+    var firstDay: String? = nil
+    let endDate: String
+    let days: [Int]
+    let weeks: [Week]
+    let totals: Totals
+    var raceDate: String? = nil
+}
+
+/// A finished plan: FTP and fitness before and after, what was done.
+struct PlanResult: Decodable, Equatable {
+    struct Next: Decodable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let goal: String
+    }
+    let id: Int
+    let templateId: String
+    let name: String
+    let sport: String
+    let startDate: String
+    let endDate: String
+    let ftpStart: Double?
+    let ftpEnd: Double?
+    let ctlStart: Double?
+    let ctlEnd: Double?
+    let sessionsDone: Int
+    let sessionsPlanned: Int?
+    let minutesDone: Int
+    let minutesPlanned: Int?
+    let completion: [String: Int]
+    let weeks: [TrainingPlans.Week]
+    let next: [Next]
 }
 
 extension APIClient {
@@ -74,13 +140,185 @@ extension APIClient {
     func trainingPlanAction(_ body: JSONObject) async throws -> TrainingPlans {
         try await send("/app/api/plans", method: "POST", body: body)
     }
+
+    func trainingPlanPreview(templateId: String? = nil, startDate: String? = nil, days: [Int]? = nil, raceDate: String? = nil) async throws -> PlanPreview {
+        var query = templateId == nil ? ["active=1"] : ["templateId=" + templateId!]
+        if let startDate { query.append("startDate=" + startDate) }
+        if let days, !days.isEmpty { query.append("days=" + days.map(String.init).joined(separator: ",")) }
+        if let raceDate { query.append("raceDate=" + raceDate) }
+        return try await get("/app/api/plans/preview?" + query.joined(separator: "&"))
+    }
 }
 
-/// On Training: the active plan with its weeks, or a button to choose one.
+// MARK: - Colours
+
+/// The plan's colours: weeks ahead by their phase, past weeks by how much was done.
+enum PlanColors {
+    static func phase(_ phase: String) -> Color {
+        switch phase {
+        case "test": Palette.blue
+        case "peak": Palette.amber
+        case "recovery", "taper": Palette.sand
+        case "race": Palette.green
+        default: Palette.amberBar
+        }
+    }
+
+    /// 90 % and more green, 75–89 gold, 50–74 amber, less rust.
+    static func done(_ percent: Int) -> Color {
+        percent >= 90 ? Palette.green : percent >= 75 ? Palette.gold : percent >= 50 ? Palette.amber : Palette.rust
+    }
+}
+
+/// "4,8 h" over a bar: hours with one decimal.
+private func hoursLabel(_ minutes: Int) -> String {
+    let hours = Double(minutes) / 60
+    let text = hours.rounded() == hours ? String(Int(hours)) : String(format: "%.1f", locale: Fmt.locale, hours)
+    return text + " h"
+}
+
+/// "4 h 50" in the plan's rows.
+func planDuration(_ minutes: Int) -> String {
+    minutes >= 60 ? "\(minutes / 60) h" + (minutes % 60 > 0 ? String(format: " %02d", minutes % 60) : "") : "\(minutes) min"
+}
+
+// MARK: - The weeks as bars
+
+/// One bar a week: its height the time (or the load), past weeks coloured by
+/// how much was done with the % above, weeks ahead by phase with the hours.
+struct PlanWeeksChart: View {
+    struct Bar: Identifiable {
+        var id: Int { week }
+        let week: Int
+        let phase: String
+        let value: Double
+        let minutes: Int?
+        let done: Int?
+    }
+    let bars: [Bar]
+    var current = 0
+    /// On Training's card: the bars only.
+    var compact = false
+
+    var body: some View {
+        let top = max(bars.map(\.value).max() ?? 1, 0.01)
+        let height: CGFloat = compact ? 40 : 96
+        HStack(alignment: .bottom, spacing: compact ? 4 : 6) {
+            ForEach(bars) { bar in
+                let color = bar.done.map(PlanColors.done) ?? PlanColors.phase(bar.phase)
+                VStack(spacing: 6) {
+                    VStack(spacing: 4) {
+                        Spacer(minLength: 0)
+                        if !compact, let label = bar.done.map({ "\($0) %" }) ?? bar.minutes.map(hoursLabel) {
+                            Text(label)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(bar.done != nil ? color : Palette.secondary)
+                                .lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        RoundedRectangle(cornerRadius: compact ? 5 : 7, style: .continuous)
+                            .fill(color)
+                            .frame(height: max(4, height * CGFloat(bar.value / top)))
+                            .overlay {
+                                if bar.week == current {
+                                    RoundedRectangle(cornerRadius: compact ? 5 : 7, style: .continuous).stroke(Palette.ink, lineWidth: 2)
+                                }
+                            }
+                    }
+                    .frame(height: height + (compact ? 0 : 18))
+                    if !compact {
+                        Text(String(bar.week))
+                            .font(.caption.weight(bar.week == current ? .semibold : .medium).monospacedDigit())
+                            .foregroundStyle(bar.week == current ? Palette.ink : Palette.faint)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// The plan's weeks; with a preview the bars are the time, else the load.
+    static func bars(weeks: [TrainingPlans.Week], preview: PlanPreview? = nil, active: TrainingPlans.Active? = nil, completion: [String: Int]? = nil) -> [Bar] {
+        weeks.map { w in
+            let minutes = preview?.weeks.first { $0.week == w.week }?.minutes
+            let done = (completion ?? active?.completion)?[String(w.week)]
+            return Bar(week: w.week, phase: w.phase, value: minutes.map(Double.init) ?? w.load, minutes: minutes, done: done)
+        }
+    }
+}
+
+/// The phases the colours stand for, under the chart before the start.
+struct PlanLegend: View {
+    let weeks: [TrainingPlans.Week]
+
+    var body: some View {
+        let phases = weeks.reduce(into: [TrainingPlans.Week]()) { list, w in
+            if !list.contains(where: { $0.phase == w.phase }) { list.append(w) }
+        }
+        HStack(spacing: 14) {
+            ForEach(phases, id: \.phase) { w in
+                HStack(spacing: 6) {
+                    Circle().fill(PlanColors.phase(w.phase)).frame(width: 8, height: 8)
+                    Text(w.phaseLabel).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+            }
+        }
+    }
+}
+
+/// A row of a week: its number (coloured once done), phase, key sessions and
+/// either the sessions and time or how much was done.
+struct PlanWeekRow: View {
+    let week: Int
+    let phase: String
+    let phaseLabel: String
+    let keys: [String]
+    var sessions: Int? = nil
+    var minutes: Int? = nil
+    var done: Int? = nil
+    var current = false
+    var chevron = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(String(week))
+                .font(.footnote.weight(.semibold).monospacedDigit())
+                .foregroundStyle(done != nil || current ? Palette.onAccent : Palette.ink)
+                .frame(width: 28, height: 28)
+                .background(done.map(PlanColors.done) ?? (current ? Palette.button : Palette.track), in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(phaseLabel).font(Typo.bodyStrong)
+                        .foregroundStyle(phase == "recovery" || phase == "taper" ? Palette.muted : Palette.ink)
+                    Spacer(minLength: 8)
+                    if let done {
+                        Text("\(done) %").font(.footnote.weight(.semibold)).foregroundStyle(PlanColors.done(done))
+                    } else if let sessions, let minutes {
+                        Text("\(sessions)× · " + planDuration(minutes)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                if !keys.isEmpty {
+                    Text(keys.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if chevron {
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint).padding(.top, 2)
+            }
+        }
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - On Training
+
+/// On Training: the active plan (a tap opens it), a finished plan's result,
+/// or a button to choose one.
 struct TrainingPlanCard: View {
     @Environment(AppModel.self) private var model
     @State private var plans: TrainingPlans?
-    @State private var showing = false
+    @State private var choosing = false
     /// Loaded or failed: "Vybrat plán" shows only then, so an active plan does not flash it.
     @State private var tried = false
 
@@ -88,26 +326,35 @@ struct TrainingPlanCard: View {
         // A container that is always there: on an empty Group the task below
         // never runs, so the plans never loaded and the card stayed hidden.
         VStack(spacing: 12) {
-            if let active = plans?.active { button(ActivePlanSummary(active: active)) }
-            if let gym = plans?.activeGym { button(ActivePlanSummary(active: gym)) }
-            if tried && plans?.active == nil && plans?.activeGym == nil { button(choose) }
+            if let plans, let active = plans.active {
+                NavigationLink { ActivePlanView(plans: plans) } label: { ActivePlanSummary(active: active) }
+                    .buttonStyle(.plain)
+            } else if let result = plans?.finished {
+                NavigationLink { PlanResultView(result: result, plans: plans) } label: { finishedCard(result) }
+                    .buttonStyle(.plain)
+            }
+            if let plans, let gym = plans.activeGym {
+                NavigationLink { PlanDetailView(template: gym.template, active: gym) } label: { ActivePlanSummary(active: gym) }
+                    .buttonStyle(.plain)
+            }
+            if tried && plans?.active == nil && plans?.activeGym == nil && plans?.finished == nil {
+                Button { open() } label: { choose }.buttonStyle(.plain)
+            }
         }
         .task {
             guard !model.demo else { return }
             await load()
         }
-        .sheet(isPresented: $showing, onDismiss: { Task { await load() } }) {
+        .onAppear { if tried, !model.demo { Task { await load() } } }
+        .sheet(isPresented: $choosing, onDismiss: { Task { await load() } }) {
             if let plans { TrainingPlansSheet(plans: plans) }
         }
     }
 
-    /// Opens the plans; when they have not loaded yet (no signal), tries again first.
-    private func button(_ label: some View) -> some View {
-        Button {
-            if plans != nil { showing = true; return }
-            Task { await load(); showing = plans != nil }
-        } label: { label }
-        .buttonStyle(.plain)
+    /// Opens the list; when the plans have not loaded yet (no signal), tries again first.
+    private func open() {
+        if plans != nil { choosing = true; return }
+        Task { await load(); choosing = plans != nil }
     }
 
     private var choose: some View {
@@ -121,23 +368,34 @@ struct TrainingPlanCard: View {
         }
     }
 
+    private func finishedCard(_ result: PlanResult) -> some View {
+        Card {
+            WidgetHeader(title: L10n.tr("Plán splněn"), color: Palette.green)
+            HStack {
+                Text(result.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+        }
+    }
+
     private func load() async {
         if let fresh = try? await model.api.trainingPlans() { plans = fresh }
         tried = true
     }
 }
 
-/// The active plan: its name, the weeks as a strip (done, now, ahead) and
-/// this week's key sessions.
+/// The active plan on Training: its name, the weeks as small bars (past ones
+/// coloured by how much was done) and this week's key sessions.
 struct ActivePlanSummary: View {
     let active: TrainingPlans.Active
 
     var body: some View {
         Card {
             WidgetHeader(title: L10n.tr("Plán"), color: Palette.amberBar,
-                         trailing: active.paused == true ? L10n.tr("pozastaveno") : active.started ? L10n.f("týden %@/%@", String(active.week), String(active.weeksCount)) : L10n.f("od %@", Fmt.dayMonth(active.startDate)))
+                         trailing: active.paused == true ? L10n.tr("pozastaveno") : active.started ? L10n.f("týden %@/%@", String(active.week), String(active.weeksCount)) : L10n.f("od %@", Fmt.dayMonth(active.firstDay ?? active.startDate)))
             Text(active.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
-            WeekStrip(weeks: active.template.weeks, current: active.started ? active.week : 0)
+            PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: active.template.weeks, active: active), current: active.started ? active.week : 0, compact: true)
             if active.started, let week = active.template.weeks.first(where: { $0.week == active.week }) {
                 Text(([active.returning == true ? L10n.tr("návrat") : week.phaseLabel] + week.keys.prefix(active.returning == true ? 1 : week.keys.count)).joined(separator: " · "))
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
@@ -147,32 +405,7 @@ struct ActivePlanSummary: View {
     }
 }
 
-/// One capsule a week: lighter weeks lower, the race week green.
-struct WeekStrip: View {
-    let weeks: [TrainingPlans.Week]
-    let current: Int
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 3) {
-            ForEach(weeks) { w in
-                Capsule()
-                    .fill(color(w))
-                    .frame(height: w.race ? 14 : w.load < 0.8 ? 7 : 12)
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .frame(height: 14, alignment: .bottom)
-        .accessibilityHidden(true)
-    }
-
-    private func color(_ w: TrainingPlans.Week) -> Color {
-        if w.race { return w.week <= current ? Palette.green : Palette.green.opacity(0.4) }
-        if w.week == current { return Palette.amberBar }
-        return w.week < current ? Palette.amberBar.opacity(0.45) : Palette.track
-    }
-}
-
-/// Choosing a plan: running or cycling, the plans, and one plan's weeks.
+/// Choosing a plan: running, cycling or the gym, and the plans with their goal.
 struct TrainingPlansSheet: View {
     @Environment(\.dismiss) private var dismiss
     let plans: TrainingPlans
@@ -181,12 +414,6 @@ struct TrainingPlansSheet: View {
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Tréninkové plány") {
-                ForEach([plans.active, plans.activeGym].compactMap { $0 }, id: \.templateId) { active in
-                    NavigationLink { PlanDetailView(template: active.template, active: active) } label: {
-                        ActivePlanSummary(active: active)
-                    }
-                    .buttonStyle(.plain)
-                }
                 Picker("Sport", selection: $sport) {
                     Text("Běh").tag("run")
                     Text("Kolo").tag("ride")
@@ -197,9 +424,13 @@ struct TrainingPlansSheet: View {
                     let list = plans.templates.filter { $0.sport == sport }
                     ForEach(Array(list.enumerated()), id: \.element.id) { index, template in
                         if index > 0 { SettingsDivider() }
-                        NavigationLink { PlanDetailView(template: template, active: plans.active(for: template.sport == "gym" ? "gym" : "endurance")) } label: {
-                            SettingsRow(title: template.name, value: "\(template.weeksCount) " + Fmt.plural(template.weeksCount, "týden", "týdny", "týdnů"))
-                        }
+                        NavigationLink {
+                            if template.sport == "gym" {
+                                PlanDetailView(template: template, active: plans.activeGym)
+                            } else {
+                                PlanPreviewView(template: template, replacing: plans.active, done: { dismiss() })
+                            }
+                        } label: { row(template) }
                         .buttonStyle(.plain)
                     }
                 }
@@ -210,17 +441,28 @@ struct TrainingPlansSheet: View {
         }
         .onAppear { sport = plans.active?.template.sport ?? "run" }
     }
+
+    private func row(_ template: TrainingPlans.Template) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(template.name).font(.body).foregroundStyle(Palette.ink)
+                Text(template.goal).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text("\(template.weeksCount) " + Fmt.plural(template.weeksCount, "týden", "týdny", "týdnů")).font(.body).foregroundStyle(Palette.muted)
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
 }
 
-/// One plan: its weeks, and starting it (on a race date for race plans) or
-/// ending it when it is the active one.
+/// A gym plan: its weeks, and starting it or ending it when it is the active one.
 struct PlanDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let template: TrainingPlans.Template
     let active: TrainingPlans.Active?
-    @State private var raceDate = Date()
-    @State private var raceKm: Double = 0
     @State private var busy = false
     @State private var error: String?
     @State private var started: TrainingPlans.Started?
@@ -238,95 +480,30 @@ struct PlanDetailView: View {
             SettingsGroup {
                 ForEach(Array(template.weeks.enumerated()), id: \.element.id) { index, week in
                     if index > 0 { SettingsDivider() }
-                    if isActive && template.sport != "gym" {
-                        NavigationLink { PlanWeekView(week: week, sport: template.sport) } label: { weekRow(week) }
-                            .buttonStyle(.plain)
-                    } else {
-                        weekRow(week)
-                    }
+                    PlanWeekRow(week: week.week, phase: week.phase, phaseLabel: week.phaseLabel, keys: week.keys,
+                                current: isActive && active?.started == true && active?.week == week.week)
+                        .padding(.horizontal, 16)
                 }
             }
             if let started {
-                startedNote(started)
+                Card {
+                    WidgetHeader(title: L10n.tr("Plán začíná"), color: Palette.green)
+                    Text(started.firstWeek > 1 ? L10n.f("Začínáš týdnem %@.", String(started.firstWeek)) : L10n.f("První týden od %@.", Fmt.dayMonth(startDate ?? "")))
+                        .font(Typo.sentence(20)).foregroundStyle(Palette.ink)
+                }
             } else if isActive {
                 SecondaryButton(title: "Ukončit plán", systemImage: "xmark") { confirmStop = true }
                     .disabled(busy || model.demo)
             } else {
-                startForm
+                PrimaryButton(title: L10n.tr(active == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", busy: busy) {
+                    Task { await act(["action": .string("start"), "templateId": .string(template.id)]) }
+                }
+                .disabled(busy || model.demo)
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
-        .onAppear {
-            raceKm = template.race?.km ?? 0
-            raceDate = Calendar.current.date(byAdding: .day, value: template.weeksCount * 7, to: Date()) ?? Date()
-        }
         .confirmationDialog("Ukončit plán?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("Ukončit plán", role: .destructive) { Task { await act(["action": .string("stop"), "sport": .string(template.sport)]) } }
-        }
-    }
-
-    private func weekRow(_ week: TrainingPlans.Week) -> some View {
-        let now = isActive && active?.started == true && active?.week == week.week
-        return HStack(alignment: .top, spacing: 12) {
-            Text(String(week.week))
-                .font(.footnote.weight(.semibold).monospacedDigit())
-                .foregroundStyle(now ? Palette.onButton : Palette.ink)
-                .frame(width: 28, height: 28)
-                .background(now ? Palette.button : Palette.track, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text(week.phaseLabel).font(.subheadline.weight(.semibold)).foregroundStyle(week.load < 0.8 ? Palette.muted : Palette.ink)
-                let lines = week.keys + (week.longMinutes.map { [L10n.f("dlouhý %@", Fmt.duration($0))] } ?? []) + (week.race ? [L10n.tr("závod")] : [])
-                if !lines.isEmpty {
-                    Text(lines.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            Spacer(minLength: 0)
-            if isActive && template.sport != "gym" {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder private var startForm: some View {
-        if let race = template.race {
-            SettingsGroup {
-                DatePicker("Datum závodu", selection: $raceDate, in: Date()..., displayedComponents: .date)
-                    .environment(\.locale, Fmt.locale)
-                    .padding(.horizontal, 16).frame(minHeight: 50)
-                if let options = race.options, options.count > 1 {
-                    SettingsDivider()
-                    Picker("Vzdálenost", selection: $raceKm) {
-                        ForEach(options, id: \.self) { Text(Units.distanceText($0)).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(16)
-                }
-            }
-        }
-        PrimaryButton(title: L10n.tr(active == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", busy: busy) {
-            var body: JSONObject = ["action": .string("start"), "templateId": .string(template.id)]
-            if template.race != nil {
-                body["raceDate"] = .string(AppModel.localDate(raceDate))
-                body["raceKm"] = .number(raceKm)
-            }
-            Task { await act(body) }
-        }
-        .disabled(busy || model.demo)
-    }
-
-    private func startedNote(_ s: TrainingPlans.Started) -> some View {
-        Card {
-            WidgetHeader(title: L10n.tr("Plán začíná"), color: Palette.green)
-            Text(s.firstWeek > 1 ? L10n.f("Začínáš týdnem %@.", String(s.firstWeek)) : L10n.f("První týden od %@.", Fmt.dayMonth(startDate ?? "")))
-                .font(Typo.sentence(20)).foregroundStyle(Palette.ink)
-            if !s.addedDays.isEmpty, let monday = startDate {
-                Text(L10n.f("Do týdenního plánu jsem přidal: %@.", s.addedDays.map { Fmt.weekdayShort(ISODay.shift(monday, $0)) }.joined(separator: ", ")))
-                    .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
@@ -338,7 +515,7 @@ struct PlanDetailView: View {
             error = nil
             await model.refreshTraining()
             if let s = result.started {
-                startDate = result.active?.startDate
+                startDate = result.activeGym?.startDate
                 started = s
             } else {
                 dismiss()
@@ -526,87 +703,7 @@ struct PlanPausedCard: View {
     }
 }
 
-// MARK: - One week of the plan
-
-/// GET /app/api/plans/week?week=N.
-struct PlanWeekDetail: Decodable, Equatable {
-    struct Session: Decodable, Equatable, Identifiable {
-        var id: String { date + (workoutId ?? "") }
-        let date: String
-        let label: String?
-        let kind: String
-        let minutes: Double?
-        let workoutId: String?
-        let workout: PlannedWorkout.Workout?
-    }
-    let week: Int
-    let weeksCount: Int
-    let monday: String
-    let phaseLabel: String?
-    let sessions: [Session]
-}
-
-extension APIClient {
-    func trainingPlanWeek(_ week: Int) async throws -> PlanWeekDetail {
-        try await get("/app/api/plans/week?week=\(week)")
-    }
-}
-
-/// A week of the plan: its sessions, each with its profile; tap for the session.
-struct PlanWeekView: View {
-    @Environment(AppModel.self) private var model
-    let week: TrainingPlans.Week
-    let sport: String
-    @State private var detail: PlanWeekDetail?
-    @State private var error: String?
-
-    var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: Fmt.capitalized(week.phaseLabel)) {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: L10n.f("Týden %@", String(week.week)) + (detail.map { " · " + Fmt.dayMonth($0.monday) + "–" + Fmt.dayMonth(ISODay.shift($0.monday, 6)) } ?? "")).padding(.top, 24)
-                Text(Fmt.capitalized(week.phaseLabel)).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                if let detail {
-                    Card {
-                        ForEach(Array(detail.sessions.enumerated()), id: \.element.id) { index, s in
-                            if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                            NavigationLink { PlanSessionView(session: s, sport: sport) } label: { row(s) }
-                                .buttonStyle(.plain)
-                                .disabled(s.workout == nil)
-                        }
-                    }
-                    .padding(.top, 18)
-                } else if let error {
-                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 18)
-                } else {
-                    ProgressView().padding(.top, 30).frame(maxWidth: .infinity)
-                }
-            }
-        }
-        .task {
-            guard detail == nil, !model.demo else { return }
-            do { detail = try await model.api.trainingPlanWeek(week.week) } catch { self.error = error.localizedDescription }
-        }
-    }
-
-    private func row(_ s: PlanWeekDetail.Session) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(s.workout?.name ?? s.label ?? "").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    Text(Fmt.weekdayShort(s.date) + " " + Fmt.dayMonth(s.date) + (s.minutes.map { " · " + Fmt.duration(Int($0)) } ?? ""))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
-            }
-            if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
-                WorkoutProfile(blocks: blocks, sport: sport, compact: true)
-            }
-        }
-        .padding(.vertical, 6)
-        .contentShape(Rectangle())
-    }
-}
+// MARK: - One session of the plan
 
 /// One session of the plan: its profile, steps and sending it to the watch.
 struct PlanSessionView: View {

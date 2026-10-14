@@ -44,6 +44,11 @@ export async function planSportDates(env,sport,from,to){
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
   return [...new Set(rows.map(activityFromRow).filter(a=>a&&a.kind===sport&&a.date>=from&&a.date<to&&(a.minutes==null||a.minutes>=15)).map(a=>a.date))];
 }
+// Minutes of the sport done, from (inclusive) to (exclusive): a plan's result.
+export async function planSportMinutes(env,sport,from,to){
+  const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(from,-1),shiftDate(to,1)).all()).results||[];
+  return dedupeActivities(rows.map(activityFromRow)).filter(a=>a&&a.kind===sport&&a.date>=from&&a.date<to).reduce((sum,a)=>sum+(Number(a.minutes)||0),0);
+}
 // The key days (quality, test, long) the plan put in a week.
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
