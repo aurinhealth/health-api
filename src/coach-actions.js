@@ -35,7 +35,7 @@ export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|v
 export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl/i;
 const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
-const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',gym:'gym'},{ride:'ride',run:'run',gym:'gym'}),STATUS_NAMES=()=>L({active:'Trénink',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Training',sick:'Sick',injured:'Injured',on_break:'On break'});
+const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',gym:'gym'},{ride:'ride',run:'run',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
 // One line per validated proposal, stored with the answer so later turns know it.
 export function actionSummary(a){
   const workout=a.eventSnapshot?.name||L('trénink','workout');
@@ -45,7 +45,7 @@ export function actionSummary(a){
   if(a.type==='activity_kcal')return L('Kalorie ','Calories of ')+(a.activityName||L('aktivity','the activity'))+' ('+shortDate(a.date)+'): '+a.kcal+' kcal';
   if(a.type==='gym_swap')return L('Vyměnit ','Swap ')+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
   if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdne na ','Add a '+SPORT_NAMES()[a.sport]+' to the week on ')+shortDate(a.date);
-  if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Trénink od ',' (back to Training from ')+shortDate(a.statusUntil)+')':'');
+  if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Aktivní od ',' (back to Active from ')+shortDate(a.statusUntil)+')':'');
   if(a.type==='move')return L('Přesunout ','Move ')+workout+L(' na ',' to ')+shortDate(a.date);
   if(a.type==='rest')return L('Odstranit ','Remove ')+workout+' ('+shortDate(a.date)+')';
   return L('Připravit '+SPORT_NAMES()[a.sport],'Prepare a '+SPORT_NAMES()[a.sport])+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date);

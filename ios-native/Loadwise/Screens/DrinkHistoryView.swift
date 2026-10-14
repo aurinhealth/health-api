@@ -180,7 +180,7 @@ struct DrinkHistoryView: View {
         if !model.demo, !ids.isEmpty {
             do {
                 let skipped = try await model.api.bulkFluids(action, ids: Array(ids), date: date)
-                if !skipped.isEmpty { model.notice = L10n.tr("Pití z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě.") }
+                if !skipped.isEmpty { model.notice = L10n.tr("Pití z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě.") }
             } catch {
                 return error.localizedDescription
             }
