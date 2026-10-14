@@ -447,6 +447,8 @@ struct WatchActivityDetail: View {
     @Environment(AppModel.self) private var model
     let activity: CalendarActivity
     @State private var changingType = false
+    @State private var deleting = false
+    @State private var editingKcal = false
 
     var body: some View {
         NavigationStack {
@@ -478,6 +480,12 @@ struct WatchActivityDetail: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu {
                             Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                            if activity.status == "done" && activity.source != "gym" {
+                                Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
+                            }
+                            if activity.status == "done" {
+                                Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
+                            }
                         } label: {
                             Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
                         }
@@ -491,6 +499,9 @@ struct WatchActivityDetail: View {
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: activity.id, current: activity.type, source: activity.source == "gym" ? "app" : activity.source) { dismiss() }
         }
+        .activityEditing(id: activity.id, title: activity.title, kcal: model.countedKcal(activity),
+                         edited: model.doneSession(for: activity)?.kcalEdited == true,
+                         deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
     }
 
     /// "Chůze · st 8. 10. · 10:00–11:10".
