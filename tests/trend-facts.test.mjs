@@ -96,7 +96,7 @@ test("the Training text gets today's readiness, the trends and the zone rule in 
 
 test("the coach-text route adds the readiness and trends in one place", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.equal(entry.match(/\bdayReadiness\(/g).length, 2, "the day review and the screen texts");
+  assert.equal(entry.match(/\bdayReadiness\(/g).length, 3, "the day review, the screen texts and the note after a workout");
   assert.match(entry, /async function coachTextExtras\(env,ctx,internalAuth,screen\)/);
   assert.match(entry, /coachTextExtras\(env,ctx,internalAuth,screen\)\.catch/);
 });
@@ -141,4 +141,11 @@ test("a sentence looks up at most three unknown foods; the rest stay without val
   assert.deepEqual(lookups, ["a", "c", "d"], "a saved food does not use up a lookup");
   assert.equal(draft.items.length, 6);
   assert.deepEqual(draft.items.map(i => Boolean(i.product)), [true, true, true, true, false, false]);
+});
+
+test("sleep debt is measured against the athlete's own sleep goal", async () => {
+  const { trendFacts } = await import("../src/trend-facts.js");
+  const sessions = Array.from({ length: 7 }, (_, i) => ({ date: new Date(Date.parse("2026-10-14T12:00:00Z") - i * 86400000).toISOString().slice(0, 10), durationMin: 420 }));
+  assert.equal(trendFacts({ date: "2026-10-14", sessions, sleepGoal: 420 }).sleepDebt7d.hours, 0);
+  assert.ok(trendFacts({ date: "2026-10-14", sessions })?.sleepDebt7d?.hours > 0);
 });
