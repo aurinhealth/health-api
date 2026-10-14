@@ -21,7 +21,7 @@ test("every answer carries the security headers", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) assert.equal(response.headers.get(name), value, name);
   assert.match(response.headers.get("Content-Security-Policy"), /frame-ancestors 'none'/);
-  assert.equal(response.headers.get("content-type"), "application/json");
+  assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
 });
 
 test("a header the app sets itself is kept", async () => {
@@ -69,4 +69,10 @@ test("Cloudflare runs the secured app", () => {
   assert.match(wrangler, /"main": "src\/main\.js"/);
   assert.match(main, /import app from "\.\/entrypoint\.js"/);
   assert.match(main, /export default secured\(webAppClosed\(app\)\)/);
+});
+
+test("JSON answers name UTF-8, so a Czech message opened in the browser reads right", async () => {
+  const { withSecurityHeaders } = await import("../src/web-security.js");
+  assert.equal(withSecurityHeaders(Response.json({ message: "Neplatný" })).headers.get("Content-Type"), "application/json; charset=utf-8");
+  assert.equal(withSecurityHeaders(new Response("{}", { headers: { "Content-Type": "application/geo+json" } })).headers.get("Content-Type"), "application/geo+json");
 });
