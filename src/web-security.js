@@ -22,6 +22,9 @@ export function withSecurityHeaders(response) {
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
     if (!secured.headers.has(name)) secured.headers.set(name, value);
   }
+  // Response.json says only "application/json", and Safari then shows a message
+  // opened in the browser (the connect sheet) as Latin-1: "NeplatnÃ½".
+  if (/^application\/json\s*$/i.test(secured.headers.get("Content-Type") || "")) secured.headers.set("Content-Type", "application/json; charset=utf-8");
   return secured;
 }
 
