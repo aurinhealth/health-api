@@ -28,6 +28,13 @@ extension APIClient {
         return try await send("/app/api/gym/equipment/detect", method: "POST", body: body, timeout: 180)
     }
 
+    // MARK: Muscles
+
+    /// Trénink → Svaly: how tired each muscle is and when it is rested (src/muscle-fatigue.js).
+    func muscles() async throws -> MuscleFatigue {
+        try await get("/app/api/muscles")
+    }
+
     // MARK: Activity type
 
     /// Every sport a done activity can be (src/activity-type.js).
@@ -109,14 +116,13 @@ extension APIClient {
     /// The ride or run library: a length with its ± tolerance, the type and a
     /// difficulty band (1–10, src/workout-model.js difficultyFromStructure).
     func searchWorkouts(sport: String, minutes: Int?, tolerance: Int? = nil, system: String?, indoor: Bool,
-                        difficulty: ClosedRange<Double>? = nil) async throws -> [LibraryWorkout] {
+                        difficulty: ClosedRange<Double>? = nil) async throws -> WorkoutSearchResponse {
         var path = "/app/api/workouts/search?sport=" + sport + "&environment=" + (indoor ? "indoor" : "outdoor") + "&limit=40"
         if let minutes { path += "&duration=\(minutes)" }
         if let tolerance, minutes != nil { path += "&durationTolerance=\(tolerance)" }
         if let system { path += "&system=" + system }
         if let difficulty { path += "&minDifficulty=\(difficulty.lowerBound)&maxDifficulty=\(difficulty.upperBound)" }
-        let r: WorkoutSearchResponse = try await get(path)
-        return r.workouts
+        return try await get(path)
     }
 
     /// The coach's workout for today (POST /app/api/workouts/generate): the

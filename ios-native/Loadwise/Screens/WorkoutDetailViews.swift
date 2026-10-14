@@ -231,6 +231,8 @@ struct ActivityDetailView: View {
     @State private var detail: ActivityDetail?
     @State private var error: String?
     @State private var feedback = false
+    /// Counts closed "Jak to šlo?" sheets, so the row under the numbers reloads.
+    @State private var feedbackClosed = 0
     @State private var changingType = false
     @State private var deleting = false
     @State private var editingKcal = false
@@ -262,7 +264,8 @@ struct ActivityDetailView: View {
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
-                    ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote)
+                    ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote,
+                                          rating: model.demo ? nil : AnyView(FeedbackRow(session: session, reload: feedbackClosed) { feedback = true }))
                     // Device calories that look like a measurement error (src/activity-energy-check.js).
                     if !model.demo { KcalCheck(session: model.liveSession(session), date: session.date) }
                 } else if let error {
@@ -270,22 +273,15 @@ struct ActivityDetailView: View {
                 } else {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 50)
                 }
-                Button { feedback = true } label: {
-                    Label("Jak to šlo?", systemImage: "text.bubble")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 48)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                }
-                .padding(.top, 28)
                 // A ride or run done to a plan: its sections kept or sent on.
                 if let planned = session.plannedId, session.sport == "ride" || session.sport == "run" {
-                    PlannedTemplateButtons(eventId: planned).padding(.top, 10)
+                    PlannedTemplateButtons(eventId: planned).padding(.top, 28)
                 }
             }
         }
         .activityEditing(id: session.id, title: detail?.activity.name ?? session.title, kcal: countedKcal ?? detail?.activity.calories,
                          edited: model.liveSession(session).kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
-        .sheet(isPresented: $feedback) { FeedbackSheet(session: session) }
+        .sheet(isPresented: $feedback, onDismiss: { feedbackClosed += 1 }) { FeedbackSheet(session: session) }
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
         }
@@ -333,6 +329,8 @@ struct ActivityDetailContent: View {
     /// What Aurin counts, when it differs from the source's number, and why.
     var kcal: Double? = nil
     var kcalNote: String? = nil
+    /// "Jak to šlo?" right under the numbers.
+    var rating: AnyView? = nil
     /// The minute the finger is on, shared by the power and heart-rate charts.
     @State private var cursor: Double?
 
@@ -357,6 +355,7 @@ struct ActivityDetailContent: View {
                 }
             }
             .padding(.top, 22)
+            if let rating { rating.padding(.top, 18) }
 
             let watts = samples("watts"), hr = samples("heartrate")
             let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
@@ -627,6 +626,9 @@ struct PlannedWorkoutView: View {
     @State private var error: String?
     @State private var confirmDelete = false
     @State private var rating = false
+    @State private var ratingClosed = 0
+
+    private var libraryId: String? { plan?.source == "library" ? plan?.workout.id?.string : nil }
 
     /// Today's or a past session can be rated: it may be done without being paired yet.
     private var ratable: Bool { session.date <= AppModel.localDate(Date()) && !model.demo }
@@ -642,6 +644,9 @@ struct PlannedWorkoutView: View {
                     if let f = plan?.workout.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
                 }
                 .padding(.top, 16)
+                if ratable {
+                    FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
+                }
                 if let blocks = plan?.workout.steps, !WorkoutProfile.segments(blocks).isEmpty, session.sport == "ride" || session.sport == "run" {
                     Card { WorkoutProfile(blocks: blocks, sport: session.sport) }.padding(.top, 16)
                 }
@@ -675,17 +680,6 @@ struct PlannedWorkoutView: View {
                     .padding(.top, 28)
                 }
 
-                if ratable {
-                    Button { rating = true } label: {
-                        Label("Ohodnotit", systemImage: "text.bubble")
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 48)
-                            .background(Palette.button, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 28)
-                }
-
                 SectionLabel(text: "Změnit").padding(.top, 30)
                 VStack(spacing: 10) {
                     if moving {
@@ -710,7 +704,7 @@ struct PlannedWorkoutView: View {
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
             }
         }
-        .sheet(isPresented: $rating) { FeedbackSheet(session: session, workoutId: plan?.source == "library" ? plan?.workout.id?.string : nil) }
+        .sheet(isPresented: $rating, onDismiss: { ratingClosed += 1 }) { FeedbackSheet(session: session, workoutId: libraryId) }
         .confirmationDialog("Smazat „\(session.title)“ z plánu?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { Task { await delete() } }
         } message: {
@@ -845,9 +839,20 @@ struct FeedbackSheet: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Náročnost").font(.body)
                         Spacer()
-                        Text("\(Int(rpe)) / 10").font(Typo.number(24))
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("\(Int(rpe)) / 10").font(Typo.number(24))
+                            Text(Self.effortWord(Int(rpe))).font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
+                        }
                     }
-                    Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar).disabled(saved)
+                    VStack(spacing: 4) {
+                        Slider(value: $rpe, in: 1...10, step: 1).tint(Palette.amberBar).disabled(saved)
+                        HStack {
+                            Text(verbatim: L10n.isEnglish ? "Easy" : "Lehké")
+                            Spacer()
+                            Text(verbatim: L10n.isEnglish ? "Very hard" : "Velmi těžké")
+                        }
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
                     TextField("Poznámka pro trenéra (nohy těžké, spal jsem málo…)", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                         .padding(12)
@@ -967,6 +972,17 @@ struct FeedbackSheet: View {
                 return
             }
         }
+    }
+
+    /// What each step of the effort scale (RPE, Borg CR10) means.
+    /// Both languages written here: the same Czech words mean other things elsewhere in the app.
+    static func effortWord(_ rpe: Int) -> String {
+        let words = L10n.isEnglish
+            ? ["Very easy", "Easy", "Comfortable", "Moderate", "Somewhat hard", "Hard",
+               "Very hard", "Really hard", "Near max", "Max effort"]
+            : ["Velmi lehké", "Lehké", "Pohodové", "Mírně náročné", "Střední", "Náročné",
+               "Hodně náročné", "Velmi těžké", "Na hraně", "Maximum"]
+        return words[min(10, max(1, rpe)) - 1]
     }
 
     static func intervalsText(_ intervals: WorkoutFeedbackResult.Intervals?) -> String? {

@@ -18,6 +18,8 @@ import { writeStrengthPlanToIntervals } from '../src/intervals-strength.js';
 import { exerciseMuscles } from '../src/fitness-insights.js';
 import { internalHeaders } from '../src/internal-auth.js';
 import { exercisePreferences } from '../src/exercise-feedback.js';
+import { searchWorkoutLibrary, parseWorkoutSearchFilters, stepRows } from '../src/workout-library.js';
+import { systemOf } from '../src/training-plans.js';
 
 const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
@@ -51,11 +53,13 @@ async function api(minutes) {
     }),
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({}),
-    handleWorkoutTemplatesApi: async () => undefined
+    handleWorkoutTemplatesApi: async () => undefined,
+    searchWorkoutLibrary, parseWorkoutSearchFilters, stepRows, systemOf, reconcileWorkoutLibraryCompletions: async () => {}, rideFtpFor: t => ({ ftp: t.ftp, estimated: false }), explainWorkout: () => ({ title: '' })
   });
   vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\n// Earlier proposals of the assistant'), context);
   for (const text of routeModules) vm.runInContext(text.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
   vm.runInContext(slice(source, 'async function handleDashboardApi(', '\n// The concrete workout'), context);
+  vm.runInContext(slice(source, 'async function defaultDayCoach(', '\n// The athlete\'s ratings since a day'), context);
   vm.runInContext(slice(source, 'async function workoutPreview(', '\nfunction logoResponse('), context);
   vm.runInContext(slice(gateway, 'async function generateStrengthPlanRoute(', '\nasync function syncStrength('), context);
   context.app = { fetch: async (request, requestEnv, ctx) => {
@@ -67,6 +71,10 @@ async function api(minutes) {
   return { db, raw, context, env, async post(path, body) {
     const url = new URL('https://internal' + path);
     const response = await context.handleDashboardApi(new Request(url, { method: 'POST', headers: { Origin: url.origin, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), env, {}, url, { signedIn: true });
+    return { status: response.status, data: await response.json() };
+  }, async get(path) {
+    const url = new URL('https://internal' + path);
+    const response = await context.handleDashboardApi(new Request(url), env, {}, url, { signedIn: true });
     return { status: response.status, data: await response.json() };
   } };
 }
@@ -151,4 +159,32 @@ test('a resize keeps its length; generation and the focused gym keep the week pl
   const gym = await app.post('/app/api/gym/generate', { date: today, focusMuscles: ['chest'] });
   assert.equal(gym.status, 400);
   assert.match(gym.data.message, /30 minut/);
+});
+
+test('the library ranks by the coach\'s session, as the proposal above it, not by the whole free time', async () => {
+  const app = await api(180);
+  // A tired morning: short night, fatigue above fitness.
+  app.context.loadCoachInputs = async (_env, _ctx, _auth, date) => ({
+    date, week: { days: [] }, fitness: { wellness: [{ id: date, ctl: 50, atl: 85 }] },
+    health: { sleep: [{ type: 'sleep', durationMin: 300, endTime: date + 'T06:00:00' }] }
+  });
+  const coach = await app.context.defaultDayCoach(app.env, await app.context.loadCoachInputs(app.env, {}, null, today), today, 'ride', { prefs: await getWeekPlan(app.db, today), plan: null, targets: null });
+  const session = coach.recommendation.session.durationMinutes;
+  assert.ok(session < 180, 'the fixture coach wants less than the free time');
+  const list = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=10');
+  assert.equal(list.status, 200, list.data.message);
+  assert.equal(list.data.coachPick.durationMinutes, session);
+  const kind = coach.recommendation.session.kind;
+  assert.equal(list.data.coachPick.system, kind === 'long_endurance' ? 'endurance' : kind === 'vo2' ? 'vo2max' : kind);
+  assert.ok(Math.abs(list.data.workouts[0].duration_minutes - session) <= 30, `top workout ${list.data.workouts[0].duration_minutes} min vs ${session}`);
+});
+
+test('Doporučená in the library keeps to the day\'s time in the week plan; a picked length does not', async () => {
+  const app = await api(45);
+  const list = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=40');
+  assert.equal(list.status, 200, list.data.message);
+  assert.ok(list.data.workouts.length > 0);
+  assert.ok(list.data.workouts.every(w => w.duration_minutes <= 45), list.data.workouts.map(w => w.duration_minutes).join(','));
+  const picked = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=40&duration=120&durationTolerance=15');
+  assert.ok(picked.data.workouts.some(w => w.duration_minutes > 45));
 });
