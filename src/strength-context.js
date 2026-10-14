@@ -216,7 +216,7 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // The morning check-in lowers the readiness (morning-checkin.js).
   try { const { getCheckin } = await import("./morning-checkin.js"); context.checkin = await getCheckin(env.DB, date); } catch { context.checkin = null; }
   // The sleep goal sets the sleep need, as on Today (readiness.js).
-  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null }; } catch { context.profile = { sex: "" }; }
+  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null, mainSport: profile?.mainSport && profile.mainSport !== "auto" ? profile.mainSport : "" }; } catch { context.profile = { sex: "" }; }
   // The last 30 days of Google Health and Apple Health sleep (nights and
   // naps) with the Intervals.icu nights they miss, as Today has them: the
   // recovery score's sleep part and the sleep need.

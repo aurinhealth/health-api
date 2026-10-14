@@ -232,6 +232,8 @@ struct ActivityDetailView: View {
     @State private var error: String?
     @State private var feedback = false
     @State private var changingType = false
+    @State private var deleting = false
+    @State private var editingKcal = false
     /// An Apple Health workout's route, read on the iPhone.
     @State private var localRoute: [ActivityDetail.StreamPoint] = []
     @Environment(\.dismiss) private var dismiss
@@ -242,9 +244,13 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
-                    if !model.demo, session.activityId != nil {
+                    if !model.demo, session.status == "done" {
                         Menu {
-                            Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                            if session.activityId != nil {
+                                Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
+                            }
+                            Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
+                            Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                         } label: {
                             Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
                                 .frame(width: 36, height: 32).contentShape(Rectangle())
@@ -256,7 +262,9 @@ struct ActivityDetailView: View {
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
-                    ActivityDetailContent(detail: detail)
+                    ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote)
+                    // Device calories that look like a measurement error (src/activity-energy-check.js).
+                    if !model.demo { KcalCheck(session: model.liveSession(session), date: session.date) }
                 } else if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else {
@@ -275,11 +283,29 @@ struct ActivityDetailView: View {
                 }
             }
         }
+        .activityEditing(id: session.id, title: detail?.activity.name ?? session.title, kcal: countedKcal ?? detail?.activity.calories,
+                         edited: model.liveSession(session).kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
         .sheet(isPresented: $feedback) { FeedbackSheet(session: session) }
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
         }
         .task { await load() }
+    }
+
+    /// The calories Aurin counts for it: set in Aurin, the estimate the user
+    /// chose for a flagged number, else the device's (the week's copy, fresher
+    /// than the detail).
+    private var countedKcal: Double? {
+        let live = model.liveSession(session)
+        if KcalChoiceStore.shared.choice(for: live) == "estimate", let estimate = live.kcalEstimate?.value { return estimate }
+        return live.kcal
+    }
+    /// "upraveno, zařízení 772" under a number set in Aurin.
+    private var kcalNote: String? {
+        let live = model.liveSession(session)
+        if live.kcalEdited == true { return live.kcalDevice.map { L10n.f("upraveno, zařízení %@", Fmt.int($0)) } ?? L10n.tr("upraveno") }
+        if KcalChoiceStore.shared.choice(for: live) == "estimate", let device = live.kcal { return L10n.f("odhad, hodinky %@", Fmt.int(device)) }
+        return nil
     }
 
     /// Intervals.icu's detail (with the watch's heart rate and route where it
@@ -304,6 +330,9 @@ struct ActivityDetailView: View {
 
 struct ActivityDetailContent: View {
     let detail: ActivityDetail
+    /// What Aurin counts, when it differs from the source's number, and why.
+    var kcal: Double? = nil
+    var kcalNote: String? = nil
     /// The minute the finger is on, shared by the power and heart-rate charts.
     @State private var cursor: Double?
 
@@ -320,7 +349,12 @@ struct ActivityDetailContent: View {
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
-                if let c = a.calories { stat("Energie", Fmt.int(c) + " kcal") }
+                if let c = kcal ?? a.calories {
+                    VStack(alignment: .leading, spacing: 2) {
+                        stat("Energie", Fmt.int(c) + " kcal")
+                        if let kcalNote { Text(verbatim: kcalNote).font(Typo.caption).foregroundStyle(Palette.muted) }
+                    }
+                }
             }
             .padding(.top, 22)
 

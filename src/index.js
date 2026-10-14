@@ -14,6 +14,7 @@ import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
 import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
+import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { afterGoogleSync } from "./apple-health.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
@@ -926,6 +927,8 @@ async function saveGooglePointsBatch(env, family, type, points) {
 async function syncGoogleRecent(env){
   const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise','weight'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])).map(c=>c[0]==='weight'?['weight','weight','sample','all-sources',2]:c);
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
+  // Food and drinks other apps logged in Google Health (google-food.js).
+  results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // Data the user did not give permission for is not a failure.
   const result={status:results.some(r=>r.status!=='ok'&&r.status!=='skipped')?'partial':'ok',results};
   if(results.some(r=>r.type==='exercise'&&r.saved>0))await matchActivities(env,{days:14}).catch(error=>console.error('Activity matching failed',error.message));
@@ -1334,6 +1337,8 @@ export async function matchActivities(env, { days = null } = {}) {
      AND ((source_family IN ('intervals','local') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
      -- Google copies of Apple Health workouts stay out (apple-health.js).
      AND NOT (source_family = 'google-wearables' AND COALESCE(matched_activity_id,'') = 'apple-health')
+     -- Deleted in Aurin (activity-edits.js): stays hidden, pairs with nothing.
+     AND COALESCE(matched_activity_id,'') != 'deleted'
      AND start_time IS NOT NULL AND start_time >= ?
      ORDER BY start_time`
   ).bind(env.USER_ID, since).all()).results || [];
@@ -1841,7 +1846,9 @@ async function energyForDate(env, date) {
       return (name && name!=="unknown") || (type && type!=="unknown") || Number(a.durationHours||0)>0 || Number(a.calories||0)>0;
     })
     .sort((a, b) => new Date(a.start || 0).getTime() - new Date(b.start || 0).getTime());
-  const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||''));
+  // Calories the user set in Aurin (activity-edits.js) are not checked again.
+  const edited=a=>a.payload?.loadwiseKcal!=null;
+  const walking=completed.filter(a=>/^(Walk|Walking)$/i.test(a.type||'')&&!edited(a));
   if(walking.length){
     const telemetry=(await env.DB.prepare("SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family IN ('google-wearables','apple-health') AND data_type='active-energy-burned' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,dayStart,dayEnd).all().catch(()=>({results:[]}))).results||[];
     for(const activity of walking){
@@ -1855,7 +1862,7 @@ async function energyForDate(env, date) {
   // A lifting session's device calories are checked the same way; the energy
   // budget then plans with the estimate instead of an inflated number.
   for(const activity of completed){
-    if(activity.energyCheck)continue;
+    if(activity.energyCheck||edited(activity))continue;
     const check=strengthEnergyCheck(activity,weight?.value_numeric);
     if(check?.status==='review'||check?.status==='consistent'){activity.energyCheck=check;activity.caloriesForPlanning=check.status==='review'?check.estimated:activity.calories;}
   }

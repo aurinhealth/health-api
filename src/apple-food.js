@@ -11,6 +11,9 @@ import { ensureFoodLogTable } from "./food-log.js";
 import { ensure as ensureFluidLog } from "./fluids.js";
 
 export const FOOD_SOURCE = "apple-health";
+// Food and drinks other apps logged in Google Health come the same way (google-food.js).
+export const GOOGLE_FOOD_SOURCE = "google-health";
+export const OTHER_APP_SOURCES = [FOOD_SOURCE, GOOGLE_FOOD_SOURCE];
 const MAX_ITEMS = 2000;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -28,8 +31,8 @@ async function ensureHidden(db) {
 export async function hideAppleFood(db, userId, kind, rowId) {
   const meal = kind === "meal";
   const row = await db.prepare(meal
-    ? "SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs WHERE user_id=? AND id=? AND source=?"
-    : "SELECT id, external_id AS ext FROM fluid_log WHERE user_id=? AND id=? AND source=?").bind(userId, Number(rowId), FOOD_SOURCE).first();
+    ? "SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs WHERE user_id=? AND id=? AND source IN (?,?)"
+    : "SELECT id, external_id AS ext FROM fluid_log WHERE user_id=? AND id=? AND source IN (?,?)").bind(userId, Number(rowId), ...OTHER_APP_SOURCES).first();
   if (!row) return false;
   await ensureHidden(db);
   const statements = [db.prepare(`DELETE FROM ${meal ? "food_logs" : "fluid_log"} WHERE user_id=? AND id=?`).bind(userId, row.id)];
@@ -41,6 +44,8 @@ export async function hideAppleFood(db, userId, kind, rowId) {
 // A meal name some apps use for the whole meal ("Breakfast", "Oběd").
 const MEAL_NAMES = [["breakfast", /^(breakfast|snídaně|snidane|frühstück)$/i], ["lunch", /^(lunch|oběd|obed|mittagessen)$/i],
   ["dinner", /^(dinner|supper|večeře|vecere|abendessen)$/i], ["snack", /^(snack|snacks|svačina|svacina|zwischenmahlzeit)$/i]];
+// Google Health's meal types (google-food.js).
+const GOOGLE_MEALS = { BREAKFAST: "breakfast", LUNCH: "lunch", DINNER: "dinner", SNACK: "snack" };
 export function mealTypeOfName(name) {
   for (const [type, re] of MEAL_NAMES) if (re.test(String(name || "").trim())) return type;
   return null;
@@ -55,7 +60,7 @@ export function appleFood(r) {
   const name = text(r.name, 120) || app;
   const time = CLOCK.test(String(r.time || "")) ? r.time : null;
   const note = { external_id: id, app, sugar_g: round(num(r.sugar, 0, 1000)), salt_g: round(num(r.salt, 0, 200), 2) };
-  const meal = mealTypeOfName(r.name);
+  const meal = mealTypeOfName(r.name) || GOOGLE_MEALS[r.mealType] || null;
   if (meal) note.mealType = meal;
   return {
     id, date, consumed_at: date + "T" + (time || "12:00") + ":00", name,
@@ -78,7 +83,7 @@ export function appleDrink(r) {
 // POST body part: { food: { from, to, meals: [...], drinks: [...] } }. The
 // window says the app sent everything from those days: what it did not send
 // was deleted in the other app and goes here too.
-export async function saveAppleFood(db, userId, input = {}) {
+export async function saveAppleFood(db, userId, input = {}, { source = FOOD_SOURCE } = {}) {
   const from = DAY.test(String(input?.from || "")) ? input.from : null, to = DAY.test(String(input?.to || "")) ? input.to : null;
   if (!from || !to || to < from) return { saved: 0, removed: 0 };
   const inWindow = item => item && item.date >= from && item.date <= to;
@@ -95,7 +100,7 @@ export async function saveAppleFood(db, userId, input = {}) {
 
   const statements = [];
   const known = new Map(((await db.prepare(`SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs
-    WHERE user_id=? AND source=? AND consumed_date>=? AND consumed_date<=?`).bind(userId, FOOD_SOURCE, from, to).all()).results || []).map(r => [r.ext, r.id]));
+    WHERE user_id=? AND source=? AND consumed_date>=? AND consumed_date<=?`).bind(userId, source, from, to).all()).results || []).map(r => [r.ext, r.id]));
   for (const m of meals) {
     const id = known.get(m.id);
     known.delete(m.id);
@@ -103,23 +108,23 @@ export async function saveAppleFood(db, userId, input = {}) {
       ? db.prepare("UPDATE food_logs SET consumed_date=?,consumed_at=?,recipe_title=?,kcal=?,protein_g=?,carbs_g=?,fat_g=?,fiber_g=?,note=? WHERE user_id=? AND id=?")
         .bind(m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, m.note, userId, id)
       : db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,1,?,?,?,?,?,?,?)")
-        .bind(userId, m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, FOOD_SOURCE, m.note));
+        .bind(userId, m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, source, m.note));
   }
   const removedMeals = readMeals ? [...known.values()] : [];
-  if (removedMeals.length) statements.push(db.prepare("DELETE FROM food_logs WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, FOOD_SOURCE, JSON.stringify(removedMeals)));
+  if (removedMeals.length) statements.push(db.prepare("DELETE FROM food_logs WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, source, JSON.stringify(removedMeals)));
 
   const knownDrinks = new Map(((await db.prepare("SELECT id, external_id FROM fluid_log WHERE user_id=? AND source=? AND date>=? AND date<=?")
-    .bind(userId, FOOD_SOURCE, from, to).all()).results || []).map(r => [r.external_id, r.id]));
+    .bind(userId, source, from, to).all()).results || []).map(r => [r.external_id, r.id]));
   for (const d of drinks) {
     const id = knownDrinks.get(d.id);
     knownDrinks.delete(d.id);
     statements.push(id
       ? db.prepare("UPDATE fluid_log SET date=?,consumed_at=?,ml=?,app=? WHERE user_id=? AND id=?").bind(d.date, d.consumed_at, d.ml, d.app, userId, id)
       : db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind,source,external_id,app) VALUES(?,?,?,?,'water',?,?,?)")
-        .bind(userId, d.date, d.consumed_at, d.ml, FOOD_SOURCE, d.id, d.app));
+        .bind(userId, d.date, d.consumed_at, d.ml, source, d.id, d.app));
   }
   const removedDrinks = readDrinks ? [...knownDrinks.values()] : [];
-  if (removedDrinks.length) statements.push(db.prepare("DELETE FROM fluid_log WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, FOOD_SOURCE, JSON.stringify(removedDrinks)));
+  if (removedDrinks.length) statements.push(db.prepare("DELETE FROM fluid_log WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, source, JSON.stringify(removedDrinks)));
 
   for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
   return { saved: meals.length + drinks.length, removed: removedMeals.length + removedDrinks.length };

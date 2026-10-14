@@ -122,6 +122,7 @@ import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
 import { handleCycleApi } from "./routes-cycle.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
+import { setActivityKcal } from "./activity-edits.js";
 
 
 // Requests that read or preview only and so keep the cache.
@@ -1068,6 +1069,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Do minulého dne už nelze přidat sport.', 'You can\'t add a sport to a past day.'));
           result={date:a.date,prefs:await addWeekSport(env.DB,a.date,a.sport)};
         }
+        else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal});await bumpCacheVersion(env.DB);}
         else if(a.type==='workout'){
           // The workout the chat showed is the one that gets planned.
           result=a.preview||await workoutPreview(env,ctx,a);

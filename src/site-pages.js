@@ -393,7 +393,7 @@ ${today}
 <div class="graph" aria-hidden="true">${graph}</div>
 <p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti.', 'Picked by AI from the library for today’s readiness.')}</p>
 </div>
-<div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
+<div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
 </div>
 </div></section>
 
@@ -402,7 +402,7 @@ ${today}
 <div class="visual reveal">
 <div class="card">${muscles}</div>
 <div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">${t('Série 3 ze 4 · 80 kg × 8', 'Set 3 of 4 · 80 kg × 8')}</div></div><span class="clock">1:30</span></div>
-<div class="chips"><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span></div>
+<div class="chips"><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span><span>${t('Síla, svaly nebo kondice', 'Strength, muscle or fitness')}</span><span>${t('Rozcvička a protažení', 'Warm-up and stretching')}</span></div>
 </div>
 </div></section>
 
@@ -419,7 +419,7 @@ ${today}
 <div class="card tile" style="color:var(--amber)">${icon('barcode')}<span style="color:var(--text)">${t('Kód', 'Barcode')}</span></div>
 <div class="card tile" style="color:var(--blue)">${icon('drop')}<span style="color:var(--text)">${t('Pití', 'Drinks')}</span></div>
 </div>
-<div class="chips"><span>${t('AI odhad', 'AI estimate')}</span><span>${t('Jídlo z jiných aplikací', 'Food from other apps')}</span></div>
+<div class="chips"><span>${t('AI odhad', 'AI estimate')}</span><span>${t('Jídlo z jiných aplikací', 'Food from other apps')}</span><span>${t('Hromadné kopírování a přesun', 'Copy and move in bulk')}</span></div>
 </div>
 </div></section>
 
