@@ -75,29 +75,11 @@ struct SettingsMenu: View {
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "chart.bar", color: Palette.rust), title: "Zóny")
                 }
-<<<<<<< HEAD
-                SettingsDivider()
-                NavigationLink { AppearanceSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
-                }
-                SettingsDivider()
-                NavigationLink { AppIconSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "app.badge", color: Palette.amber), title: "Ikona aplikace")
-                }
-                SettingsDivider()
-                NavigationLink { CustomizeSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "slider.horizontal.3", color: Palette.indigo), title: "Přizpůsobení")
-                }
-                SettingsDivider()
-                NavigationLink { LanguageSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk")
-=======
                 if !SettingsSectionTiles.cycleTile(store, model) {
                     SettingsDivider()
                     NavigationLink { CycleSettingsView() } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.pink), title: "Cyklus")
                     }
->>>>>>> origin/main
                 }
             }
             .buttonStyle(.plain)
@@ -133,6 +115,10 @@ struct SettingsMenu: View {
                 SettingsDivider()
                 NavigationLink { AppearanceSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
+                }
+                SettingsDivider()
+                NavigationLink { AppIconSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "app.badge", color: Palette.amber), title: "Ikona aplikace")
                 }
                 SettingsDivider()
                 NavigationLink { LanguageSettingsView() } label: {
