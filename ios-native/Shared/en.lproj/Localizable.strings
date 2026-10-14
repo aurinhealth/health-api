@@ -1971,6 +1971,62 @@
 "upraveno" = "edited";
 "odhad, hodinky %@" = "estimate, watch %@";
 "Kalorie %@ (%@): %@ kcal" = "Calories of %@ (%@): %@ kcal";
+"Co si kouč pamatuje" = "What the coach remembers";
+"Kouč si zatím nic nepamatuje." = "The coach doesn't remember anything yet.";
+"Co si má kouč pamatovat" = "What the coach should remember";
+"Vráceno" = "Undone";
+"Zapamatováno" = "Remembered";
+"Zapomenuto: %@" = "Forgotten: %@";
+"Upraveno: %@" = "Changed: %@";
+"Už neplatí" = "No longer true";
+"Pořád platí" = "Still true";
+
+/* Possible illness (coach check-in on Dnes) */
+"Přepnout na Nemoc" = "Switch to Sick";
+"Do kdy" = "Until";
+"Neurčito" = "Open-ended";
+"Tréninky, které zruším" = "Sessions I'll cancel";
+"Stav Nemoc" = "Status: Sick";
+"Stav Nemoc do %@" = "Status: Sick through %@";
+"Zrušené tréninky: %@. Až se ti uleví, napiš kouči a plán vrátíme." = "Cancelled sessions: %@. When you feel better, tell the coach and we'll bring the plan back.";
+"Až se ti uleví, napiš kouči a plán vrátíme." = "When you feel better, tell the coach and we'll bring the plan back.";
+"Zpět na Trénink" = "Back to Training";
+
+/* The coach's own push (Settings → Oznámení → Kouč) */
+"Ozve se sám, nejvýš 1× denně" = "Speaks up on its own, at most once a day";
+"Vyměněno" = "Swapped";
+"Trénink zůstal, jak byl" = "The session stayed as it was";
+"%@ min" = "%@ min";
+
+/* The coach's changes to done activities in the chat */
+"Sloučit 2 aktivity" = "Merge 2 activities";
+"Upravit čas" = "Change the time";
+
+/* Trénink → Svaly (MuscleViews.swift) */
+"odpočaté" = "rested";
+"pozítří" = "in 2 days";
+"za %@ dny" = "in %@ days";
+"za %@ dní" = "in %@ days";
+"Z posledních 3 dní" = "From the last 3 days";
+"Všechny svaly jsou odpočaté" = "All muscles are rested";
+"Vnější stehna" = "Abductors";
+"Vnitřní stehna" = "Adductors";
+"Běh 14 km" = "Run 14 km";
+"Posilovna, nohy" = "Gym, legs";
+"Posilovna, horní část těla" = "Gym, upper body";
+"pondělí" = "Monday";
+
+/* Trénink → Svaly: the figure and a tapped muscle (MuscleViews.swift) */
+"zepředu" = "front";
+"zezadu" = "back";
+"unavené" = "tired";
+"zotavuje se" = "recovering";
+"Z čeho" = "What tired it";
+"hlavně" = "mostly";
+"trochu" = "a little";
+"1 série" = "1 set";
+"%@ série" = "%@ sets";
+"%@ sérií" = "%@ sets";
 "Propojit %@ s Aurinem" = "Connect %@ with Aurin";
 "Aurin čte" = "Aurin reads";
 "Aurin zapisuje" = "Aurin writes";

@@ -151,6 +151,8 @@ struct NotificationsSettingsView: View {
     @AppStorage(Reminders.weekTimeKey) private var weekTime = 19 * 60
     /// The morning readiness push from the server (PushRegistration.swift).
     @AppStorage(PushRegistration.morningKey) private var morning = true
+    /// The coach's own message from the server (src/coach-push.js).
+    @AppStorage(PushRegistration.coachKey) private var coach = true
     @State private var allowed: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
     /// the meals and days, read straight from UserDefaults, are shown anew).
@@ -176,6 +178,8 @@ struct NotificationsSettingsView: View {
             }
             SettingsGroup {
                 SettingsToggle(title: "Ranní připravenost", isOn: $morning)
+                SettingsDivider()
+                SettingsToggle(title: "Kouč", subtitle: "Ozve se sám, nejvýš 1× denně", isOn: $coach)
             }
             // The pill: only with cycle tracking on and the pill chosen.
             if let cycle = model.cycle, cycle.enabled, let settings = cycle.settings, settings.contraception == "pill" {
@@ -307,12 +311,12 @@ struct NotificationsSettingsView: View {
 
     private func check() async {
         let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
-        if status == .notDetermined, bedtime || workout || water || meals || food || weight || week || morning {
+        if status == .notDetermined, bedtime || workout || water || meals || food || weight || week || morning || coach {
             allowed = await Reminders.requestPermission()
         } else {
             allowed = status == .authorized || status == .provisional
         }
-        // The permission or the Ranní připravenost switch may have changed:
+        // The permission or the Ranní připravenost or Kouč switch may have changed:
         // the push token is sent or taken off the server.
         await PushRegistration.refresh(api: model.api)
     }
