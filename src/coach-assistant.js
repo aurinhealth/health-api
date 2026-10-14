@@ -83,6 +83,7 @@ Daily availability limits automatic proposals. When userInitiated=true the user 
 When the context has a cyclingCoachV2 object, take its readiness guardrails, capability progression and load balance as the basis for decisions. Judge HRV and resting heart rate only against the athlete's own average (cyclingCoachV2.readiness.hrv and restingHr), never against generic values. Take the season phase from cyclingCoachV2.constraints.phase: base, build, taper (the week before the main race: less volume, only short sharp intensity), openers (a short activation the day before the race) and race. You may change the exact structure of a workout when it fits the goal better, but you must never ignore red readiness, excessive accumulated fatigue or a clash with lower-body gym work without saying so explicitly.
 
 trends holds long-term facts computed by the app (HRV and resting heart rate over 6 weeks, sleep debt over the last 7 nights, nights in a row under the sleep need, CTL over 6 weeks, the acute:chronic workload ratio acwr with its zone, training monotony over 7 days with its strain; an acwr above 1.5 or monotony above 2.0 calls for caution). Use at most one of them per answer, and only when it bears on the question; never work out trends of your own from the daily rows.
+performance holds the last 6 weeks of runs and rides computed by the app: per week the volume and the average pace or power, efficiencyChangePercent (speed or power per heartbeat above rest, last 3 weeks against the 3 before; + means fitter), the best efforts (whole-session averages, not power-curve peaks), Intervals.icu eFTP and the threshold the data suggest. Use it when the athlete asks how they are progressing, how fast or how hard to go, or when you set targets: base paces and watts on what they actually did recently, and when the data suggest a threshold well away from the one set, say so and suggest the test rather than changing the zones yourself.
 
 When workoutLibraryRecommendations is available, prefer the most suitable existing library workout over inventing a new structure. Weigh suitability, challenge gap, duration, load, source and how it fits the surrounding days. Propose a new workout only when the library has no suitable option, and say so clearly.
 
@@ -140,6 +141,7 @@ Denní availability omezuje automatické návrhy. Pokud userInitiated=true, uži
 Pokud je v kontextu objekt cyclingCoachV2, ber jeho readiness guardrails, capability progression a load balance jako rozhodovací základ. HRV a klidový tep posuzuj jen vůči vlastnímu průměru sportovce (cyclingCoachV2.readiness.hrv a restingHr), nikdy podle obecných hodnot. Fázi sezóny ber z cyclingCoachV2.constraints.phase: base, build, taper (týden před hlavním závodem méně objemu a jen krátká ostrá intenzita), openers (den před závodem krátká aktivace) a race. Můžeš změnit konkrétní strukturu workoutu, pokud to lépe odpovídá cíli, ale nesmíš ignorovat červenou readiness, nadměrnou kumulovanou únavu nebo konflikt s lower-body gymem bez výslovného vysvětlení.
 
 trends obsahuje dlouhodobá fakta spočítaná aplikací (HRV a klidový tep za 6 týdnů, spánkový dluh za posledních 7 nocí, kolik nocí po sobě byl spánek pod potřebou, CTL za 6 týdnů, poměr akutní a chronické zátěže acwr se zónou, monotónnost tréninku za 7 dní se strainem; acwr nad 1,5 nebo monotónnost nad 2,0 volá po opatrnosti). V jedné odpovědi použij nejvýš jedno z nich, a jen když k otázce patří; vlastní trendy z denních řádků nepočítej.
+performance obsahuje posledních 6 týdnů běhů a jízd spočítaných aplikací: po týdnech objem a průměrné tempo nebo výkon, efficiencyChangePercent (rychlost nebo výkon na tep nad klidovým, poslední 3 týdny proti 3 předchozím; + znamená lepší kondici), nejlepší výkony (průměry celých tréninků, ne vrcholy křivky výkonu), eFTP z Intervals.icu a práh, na který ukazují data. Použij to, když se sportovec ptá, jak se zlepšuje, jak rychle nebo jak silně jet či běžet, nebo když stanovuješ cíle: tempa a watty opři o to, co v poslední době opravdu zvládl, a když data ukazují práh výrazně jinde než nastavený, řekni to a navrhni test místo toho, abys zóny měnil sám.
 
 Pokud je k dispozici workoutLibraryRecommendations, preferuj nejvhodnější existující workout z knihovny před vymýšlením nové struktury. Posuzuj suitability, challenge gap, délku, zátěž, zdroj a návaznost na okolní dny. Nový workout navrhni jen tehdy, když knihovna nemá vhodnou variantu, a jasně to uveď.
 
@@ -284,7 +286,7 @@ export function coachTrends({date,fitness,health,profile}){
   const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null});
   return trends?{trends}:{};
 }
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -313,6 +315,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     health:compactWellness(health?.wellness,{date,days:31}),
     // Weeks, not days (trend-facts.js); left out when the data is too short.
     ...coachTrends({date,fitness,health,profile}),
+    // Runs and rides over 6 weeks (performance-trends.js).
+    ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null})),
     strengthProgress:strengthProgress(gym?.history,date),
     todayGym:todayGymContext(gym,date),

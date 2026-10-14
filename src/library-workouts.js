@@ -7,7 +7,8 @@ import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 
 // Marks scheduled library workouts as done once Intervals.icu shows the ride.
-// Capability only changes with the athlete's own feedback (see calculateCapabilityUpdate).
+// Capability changes with the athlete's own feedback, and a little with the
+// measured intensity against the plan's (see calculateCapabilityUpdate).
 // The completed activity paired with a scheduled library workout, and how
 // much of it was done (time, or training load when both are known).
 export async function matchScheduledActivity(env,ctx,internalAuth,link){
@@ -22,7 +23,11 @@ export async function matchScheduledActivity(env,ctx,internalAuth,link){
   const plannedTss=Number(match.planned?.tss),actualTss=Number(actual.tss);
   const ratio=plannedTss>0&&actualTss>0?actualTss/plannedTss:actualMinutes/Math.max(1,Number(link.duration_minutes));
   const rawRpe=actual.rpe??actual.payload?.icu_rpe??actual.payload?.rpe;
-  return {actual,activityId:actual.source==='intervals'?String(actual.payload?.id||actual.id||''):null,completedPercent:Math.round(Math.max(0,Math.min(120,ratio*100))),rpe:Number.isFinite(Number(rawRpe))&&Number(rawRpe)>=1&&Number(rawRpe)<=10?Number(rawRpe):null};
+  // Measured intensity against the plan's (IF from planned TSS and time, as TSS = h × IF² × 100).
+  const plannedHours=Number(link.duration_minutes)/60,plannedIf=plannedTss>0&&plannedHours>0?Math.sqrt(plannedTss/(plannedHours*100)):null;
+  const rawIf=Number(actual.intensityFactor??actual.payload?.icu_intensity),actualIf=rawIf>0?(rawIf>3?rawIf/100:rawIf):null;
+  const intensityRatio=plannedIf&&actualIf?Math.round(actualIf/plannedIf*1000)/1000:null;
+  return {actual,intensityRatio,activityId:actual.source==='intervals'?String(actual.payload?.id||actual.id||''):null,completedPercent:Math.round(Math.max(0,Math.min(120,ratio*100))),rpe:Number.isFinite(Number(rawRpe))&&Number(rawRpe)>=1&&Number(rawRpe)<=10?Number(rawRpe):null};
 }
 export async function reconcileWorkoutLibraryCompletions(env,ctx,internalAuth){
   try{
@@ -30,7 +35,7 @@ export async function reconcileWorkoutLibraryCompletions(env,ctx,internalAuth){
       if(await hasFeedback(env.DB,link.workout_id,link.scheduled_date)){await markScheduleCompleted(env.DB,link.id);continue}
       const m=await matchScheduledActivity(env,ctx,internalAuth,link);
       if(!m)continue;
-      await recordWorkoutFeedback(env.DB,{workoutId:link.workout_id,scheduledDate:link.scheduled_date,completedPercent:m.completedPercent,rpe:m.rpe,survey:"auto_completed",notes:L("Automaticky spárováno s dokončenou aktivitou v Intervals.icu", "Automatically matched with a completed activity in Intervals.icu")});
+      await recordWorkoutFeedback(env.DB,{workoutId:link.workout_id,scheduledDate:link.scheduled_date,completedPercent:m.completedPercent,rpe:m.rpe,intensityRatio:m.intensityRatio,survey:"auto_completed",notes:L("Automaticky spárováno s dokončenou aktivitou v Intervals.icu", "Automatically matched with a completed activity in Intervals.icu")});
     }
   }catch(error){console.error("Workout capability reconciliation failed",error)}
 }

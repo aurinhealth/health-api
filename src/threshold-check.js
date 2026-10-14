@@ -78,6 +78,7 @@ export function thresholdSessions(activities, rowsById) {
       avgHr: finite(p.average_heartrate ?? m.averageHeartRateBeatsPerMinute),
       avgPower: p.device_watts === false ? null : finite(p.icu_average_watts ?? p.average_watts ?? m.averagePowerWatts),
       distance: finite(p.distance ?? p.icu_distance ?? m.distanceMeters ?? (mm != null ? mm / 1000 : null)),
+      normPower: p.device_watts === false ? null : finite(p.icu_weighted_average_watts ?? p.weighted_average_watts),
       rollingFtp: finite(p.icu_rolling_ftp),
       id: typeof p.id === "string" ? p.id : null
     });
