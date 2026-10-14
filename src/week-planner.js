@@ -242,6 +242,19 @@ export function hrvWeekTrendDown(wellness, weekStart) {
   if (week.length < 5 || base.mean == null) return false;
   return week.reduce((a, v) => a + v, 0) / week.length < base.mean - 0.5 * Math.max(base.sd, 0.05);
 }
+// The HRV rows the recovery-week check reads: one source only, the one with
+// the most mornings over the 67 days before the week (Intervals.icu, or one
+// device of the health rows: Apple Health, Google Health, Ultrahuman). Never a
+// mix, because devices measure HRV differently (SDNN against RMSSD).
+export function hrvSourceRows(intervals = [], health = [], weekStart) {
+  const day = n => new Date(Date.parse(weekStart + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10), from = day(-67);
+  const candidates = [(intervals || []).map(r => ({ id: r?.id, hrv: r?.hrv }))];
+  const keys = new Set((health || []).flatMap(r => Object.keys(r?.hrvBySource || {})));
+  for (const key of keys) candidates.push((health || []).map(r => ({ id: r?.id, hrv: r?.hrvBySource?.[key] })));
+  if (!keys.size) candidates.push((health || []).map(r => ({ id: r?.id, hrv: r?.hrv })));
+  const mornings = rows => rows.filter(r => r.id >= from && r.id < weekStart && Number(r.hrv) > 0).length;
+  return candidates.reduce((best, rows) => mornings(rows) > mornings(best) ? rows : best);
+}
 // Training load of the three weeks before `weekStart` from Intervals.icu
 // wellness rows (last week first); a week with too few rows ends the series.
 export function weekLoadsBefore(wellness, weekStart) {
