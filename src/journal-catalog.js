@@ -229,10 +229,18 @@ export function itemView(item) {
   const out = { key: item.key, name, category: item.cat, type: item.type, icon: item.icon || CATEGORY_ICON[item.cat] || "circle.dotted", when: item.when || "morning" };
   if (item.custom) out.custom = true;
   if (item.auto) out.auto = true;
-  if (item.type === "amount") Object.assign(out, { unit: unitText(item.unit, 5), step: item.step, usual: item.usual, max: item.max, ...(item.withTime ? { withTime: true } : {}) });
+  // "limit", "low", "high" and "initial" rather than max, min and default: names Swift keeps for itself.
+  if (item.type === "amount") Object.assign(out, { unit: unitText(item.unit, 5), units: unitForms(item.unit), step: item.step, usual: item.usual, limit: item.max, ...(item.withTime ? { withTime: true } : {}) });
   if (item.type === "time" && item.late) out.late = item.late;
-  if (item.follow) out.follow = item.follow.map(f => ({ key: f.key, label: L(f.cs, f.en), kind: f.kind, unit: f.unit, ...(f.options ? { options: f.options } : {}), ...(f.min != null ? { min: f.min, max: f.max, step: f.step } : {}), default: f.default }));
+  if (item.follow) out.follow = item.follow.map(f => ({ key: f.key, label: L(f.cs, f.en), kind: f.kind, unit: f.unit, ...(f.options ? { options: f.options } : {}), ...(f.min != null ? { low: f.min, high: f.max, step: f.step } : {}), initial: f.default }));
   return out;
+}
+
+// The unit's forms for the app's stepper: [1, 2–4, 5+] in Czech, [1, 2+] in English.
+function unitForms(unit) {
+  if (!unit) return null;
+  if (typeof unit === "string") return [unit, unit, unit];
+  return L("cs", "en") === "en" ? [unit.en[0], unit.en[1], unit.en[1]] : unit.cs;
 }
 
 // The unit after an amount: "mg", "2 nápoje", "5 drinks".

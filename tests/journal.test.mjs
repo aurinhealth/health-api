@@ -325,3 +325,13 @@ test("journal reads go through the primary key, not a scan", async () => {
   assert.match(plan("SELECT date FROM journal_entries WHERE user_id=? AND item_key='sick' AND answer=1 AND date>=? AND date<=?"), /SEARCH journal_entries USING (INDEX|PRIMARY KEY)/);
   assert.match(plan("SELECT settings_json FROM journal_settings WHERE user_id=?"), /SEARCH journal_settings USING (INTEGER PRIMARY KEY|INDEX|PRIMARY KEY)/);
 });
+
+test("the English app gets the catalogue and the day without Czech", async () => {
+  const CZECH = /[ěščřžýůňťďĚŠČŘŽÝŮŇŤĎ]/;
+  const db = scopedDb(createD1(), 7);
+  const catalog = await withLang("en", () => journalCatalog(db));
+  assert.doesNotMatch(JSON.stringify(catalog), CZECH);
+  const day = await withLang("en", () => journalDay(db, shiftDay(today, -1), today));
+  assert.doesNotMatch(JSON.stringify(day), CZECH);
+  assert.match(JSON.stringify(await withLang("cs", () => journalCatalog(db))), CZECH);
+});

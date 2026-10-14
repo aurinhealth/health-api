@@ -365,7 +365,7 @@ ${today}
 <section id="pripravenost" class="glow-health"><div class="wrap feature">
 <div class="text reveal"><div class="eyebrow">${t('Připravenost', 'Readiness')}</div><h2>${t('Každé ráno jedno číslo.', 'One number every morning.')}</h2></div>
 <div class="visual readiness reveal">
-<div class="card"><div class="big">78</div><p class="note">${t('HRV, klidový tep a spánek proti tvému normálu', 'HRV, resting heart rate and sleep against your normal')}</p></div>
+<div class="card"><div class="big">78</div><p class="note">${t('HRV, klidový tep a spánek proti tvému normálu', 'HRV, resting heart rate and sleep against your normal')}</p><p class="note">${t('Deník ti ukáže, co ho zvedá a co sráží: alkohol, pozdní jídlo nebo sauna.', 'The journal shows what lifts it and what drags it down: alcohol, a late meal or the sauna.')}</p></div>
 <div class="trio">
 <div class="card"><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div>
 <div class="card"><div class="k">${t('Tep v klidu', 'Resting HR')}</div><div class="v">48</div><div class="d up">↓ 2</div></div>

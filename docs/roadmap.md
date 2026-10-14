@@ -7,6 +7,6 @@ list with each point's state.
 | # | Point | State |
 |---|-------|-------|
 | 1 | Odznaky (badges) | waiting for confirmation of what it covers |
-| 2 | Deník (journal): ✕/✓ questions filled from the day's data, own items, "Co na tebe působí" impact on readiness, HRV, sleep and resting heart rate | in progress |
+| 2 | Deník (journal): ✕/✓ questions filled from the day's data, own items, "Co na tebe působí" impact on readiness, HRV, sleep and resting heart rate | built, waiting for CI |
 
 Mockups: `/mnt/project-files/mockups/denik/` (journal).

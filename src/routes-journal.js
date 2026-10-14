@@ -181,7 +181,7 @@ export async function journalCard(db, today, hour) {
     answered: views.length - unanswered,
     total: views.length,
     open: unanswered,
-    rows: views.filter(v => v.auto && v.answered && v.value).map(v => ({ key: v.key, name: v.name, icon: v.icon, value: v.value }))
+    rows: views.filter(v => v.auto && v.answered && v.value).map(v => ({ key: v.key, name: v.name, icon: v.icon, category: v.category, value: v.value }))
   };
 }
 

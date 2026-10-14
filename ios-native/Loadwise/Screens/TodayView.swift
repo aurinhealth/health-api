@@ -95,6 +95,8 @@ struct TodayContent: View {
             if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
                 TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
             }
+            // Deník: the morning questions about yesterday, and "Nový objev".
+            JournalTodayCard()
         }
 
         // Today's weather at the week plan's place (or the offer to set

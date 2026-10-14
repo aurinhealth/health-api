@@ -46,12 +46,16 @@ enum AppRoute: Hashable {
     case sharedWorkout(String)
     /// A saved or received workout planned for a day with the athlete's own weights.
     case planTemplate(TemplatePlanRequest)
+    /// Deník for a day (Today's card), Co na tebe působí, and one item's detail (key, metric).
+    case journal(String)
+    case journalImpact
+    case journalItem(String, String)
 
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .heart, .weight, .cycle: return .health
-        case .sleepSettings, .dayReview, .steps, .strain, .coachPick: return .today
+        case .sleepSettings, .dayReview, .steps, .strain, .coachPick, .journal, .journalImpact, .journalItem: return .today
         default: return .training
         }
     }
@@ -89,6 +93,7 @@ enum AppRoute: Hashable {
         case "day-review": self = .dayReview
         case "records": self = .insights
         case "cycle": self = .cycle
+        case "journal": self = .journal(parts.count > 1 ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts
         case "friend-workouts": self = .friendWorkouts
         case "share" where parts.count > 1 && Self.isShareId(parts[1]): self = .sharedWorkout(parts[1])
@@ -161,6 +166,9 @@ struct RouteScreen: View {
         case .friendWorkouts: MyWorkoutsView(friends: true)
         case .sharedWorkout(let id): SharedWorkoutView(id: id)
         case .planTemplate(let request): GymBuilderView(date: request.date ?? AppModel.localDate(Date()), template: request)
+        case .journal(let date): JournalView(date: date)
+        case .journalImpact: JournalImpactView()
+        case .journalItem(let key, let metric): JournalItemView(key: key, metric: metric)
         }
     }
 }
