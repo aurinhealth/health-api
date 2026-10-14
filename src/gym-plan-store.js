@@ -5,6 +5,7 @@ import { L } from './lang.js';
 import { parseStrengthPlan, importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { strengthSetOptions } from './gym-set-options.js';
 import { splitSides, sideBalance, lastSideChoice } from './gym-sides.js';
+import { routinesRow } from './stretching.js';
 
 export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana"];
 const MAX_ROWS = 100;
@@ -71,7 +72,7 @@ export async function saveGymPlan(db, date, values) {
 
 const videoUrl = exercise => "https://www.youtube.com/results?search_query=" + encodeURIComponent(String(exercise || "").trim() + " exercise technique");
 
-// A generated plan ({date, rows, planName, rationale, protectedLegs, loadFactor}) in the stored layout.
+// A generated plan ({date, rows, planName, rationale, protectedLegs, loadFactor, warmup, stretching}) in the stored layout.
 export function planValues(body = {}) {
   const date = String(body.date || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid date; expected YYYY-MM-DD");
@@ -85,7 +86,7 @@ export function planValues(body = {}) {
     [planName + "  •  " + date.split("-").reverse().join(". ")],
     ["Datum", date, "Plán", planName, "Nohy", body.protectedLegs === true ? "CHRÁNĚNO" : "NORMÁLNĚ", "Load", Number.isFinite(load) ? load.toFixed(2).replace(".", ",") : "—"],
     ["Poznámka", String(body.rationale || "").trim()],
-    body.timing ? ['Časový limit (min)', body.timing.requestedMinutes, 'Odhad (min)', body.timing.estimatedMinutes] : [], [],
+    body.timing ? ['Časový limit (min)', body.timing.requestedMinutes, 'Odhad (min)', body.timing.estimatedMinutes] : [], routinesRow(body),
     GYM_PLAN_COLUMNS
   ];
   const sets = rows.map(row => {

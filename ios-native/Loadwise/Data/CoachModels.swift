@@ -28,6 +28,10 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     let fromExercise: String?
     let toExercise: String?
     let eventSnapshot: Snapshot?
+    /// activity_kcal: the done activity, its calories now and the new ones.
+    var activityName: String? = nil
+    var fromKcal: Double? = nil
+    var kcal: Double? = nil
 
     struct Snapshot: Decodable, Equatable {
         let name: String?
@@ -47,6 +51,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
+        case "activity_kcal":
+            let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
+            return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
         case "week_sport": return L10n.f("Týdenní plán: %@ %@", day, L10n.tr(["ride": "kolo", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? (sport ?? "")))
         case "status":
             let label = L10n.tr(["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? ""))

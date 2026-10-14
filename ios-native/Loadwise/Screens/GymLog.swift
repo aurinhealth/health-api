@@ -244,7 +244,7 @@ struct KcalCheck: View {
         VStack(alignment: .leading, spacing: 0) {
             if store.choice(for: session) == nil, let kcal = session.kcal, let estimate = session.kcalEstimate?.value {
                 KcalCheckCard(device: kcal, estimate: estimate, low: session.kcalEstimate?.low, high: session.kcalEstimate?.high,
-                              minutes: session.minutes, reason: session.kcalEstimate?.reason, busy: store.busy.contains(session.id)) { choice in
+                              minutes: session.sport == "strength" ? session.minutes : nil, reason: session.kcalEstimate?.reason, busy: store.busy.contains(session.id)) { choice in
                     Task { await store.choose(choice, for: session, date: date, model: model) }
                 }
                 .padding(.top, 18)

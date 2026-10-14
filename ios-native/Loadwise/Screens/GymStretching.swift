@@ -1,0 +1,521 @@
+import SwiftUI
+
+// Trénink na míru (the gym goal, the experience, the warm-up and stretching)
+// and the warm-up and stretching of a gym session (src/stretching.js): a card
+// to tick, each move's photos and steps behind "i", and a timer that leads
+// through every hold.
+
+/// The warm-up or the stretching: its moves in order.
+struct GymStretching: Decodable, Equatable {
+    let minutes: Int
+    let items: [Item]
+
+    struct Item: Decodable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let seconds: Int
+        let sides: Bool
+        var rounds: Int = 1
+        var steps: [String] = []
+        var photos: [String] = []
+
+        enum CodingKeys: String, CodingKey { case id, name, seconds, sides, rounds, steps, photos }
+
+        init(id: String, name: String, seconds: Int, sides: Bool, rounds: Int = 1, steps: [String] = [], photos: [String] = []) {
+            self.id = id; self.name = name; self.seconds = seconds; self.sides = sides
+            self.rounds = rounds; self.steps = steps; self.photos = photos
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(String.self, forKey: .id)
+            name = try c.decode(String.self, forKey: .name)
+            seconds = try c.decode(Int.self, forKey: .seconds)
+            sides = try c.decodeIfPresent(Bool.self, forKey: .sides) ?? false
+            rounds = max(1, try c.decodeIfPresent(Int.self, forKey: .rounds) ?? 1)
+            steps = try c.decodeIfPresent([String].self, forKey: .steps) ?? []
+            photos = try c.decodeIfPresent([String].self, forKey: .photos) ?? []
+        }
+
+        /// "2 × 30 s na stranu", "45 s", "3 min".
+        var duration: String {
+            let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
+            return (rounds > 1 ? "\(rounds) × " : "") + time + (sides ? " " + L10n.tr("na stranu") : "")
+        }
+
+        var photoURLs: [URL] { photos.compactMap(URL.init(string:)) }
+    }
+
+    /// The plan's sixth row: ["Rozcvička a protažení", "{warmup, stretching}"].
+    static let row = 5
+
+    struct Routines: Decodable {
+        let warmup: GymStretching?
+        let stretching: GymStretching?
+    }
+
+    static func routines(_ values: [[JSONValue]]) -> Routines? {
+        guard values.count > row, values[row].count > 1, values[row][0].string == "Rozcvička a protažení",
+              let data = values[row][1].string?.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(Routines.self, from: data)
+    }
+
+    init(minutes: Int, items: [Item]) {
+        self.minutes = minutes
+        self.items = items
+    }
+
+    /// Every hold in order: each round, on each side.
+    var holds: [Hold] {
+        items.flatMap { item in
+            (1...item.rounds).flatMap { round in
+                (item.sides ? [L10n.tr("levá"), L10n.tr("pravá")] : [nil]).map { Hold(item: item, round: round, side: $0) }
+            }
+        }
+    }
+
+    struct Hold: Equatable {
+        let item: Item
+        let round: Int
+        let side: String?
+        /// The item's last hold: it is done after this one.
+        var closesItem: Bool { round == item.rounds && (side == nil || side == L10n.tr("pravá")) }
+    }
+}
+
+enum GymRoutineKind {
+    case warmup, stretching
+
+    var title: String { self == .warmup ? "Rozcvička" : "Protažení" }
+    var symbol: String { self == .warmup ? "figure.run" : "figure.flexibility" }
+    var color: Color { self == .warmup ? Palette.amber : Palette.indigo }
+    var doneTitle: String { self == .warmup ? "Rozcvička hotová" : "Protažení hotovo" }
+    /// Ticks kept apart: the warm-up and the stretching can share a move.
+    var key: String { self == .warmup ? "w-" : "" }
+}
+
+/// Rozcvička or Protažení: the moves in order, each ticked when done, with
+/// Spustit. `compact` shows only the title row (the top of Režim tréninku).
+struct StretchingCard: View {
+    let stretching: GymStretching
+    let date: String
+    var kind: GymRoutineKind = .stretching
+    var compact = false
+    @AppStorage("gym.stretching.done") private var stored = ""
+    @State private var info: GymStretching.Item?
+    @State private var timer = false
+
+    private var done: Set<String> { Self.done(stored, date: date) }
+    private func isDone(_ item: GymStretching.Item) -> Bool { done.contains(kind.key + item.id) }
+
+    var body: some View {
+        Card {
+            HStack(spacing: 10) {
+                Image(systemName: kind.symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(kind.color)
+                    .frame(width: 36, height: 36)
+                    .background(kind.color.opacity(0.14), in: Circle())
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(kind.title).font(.headline).foregroundStyle(Palette.ink)
+                    ExtraMinutesPill(text: L10n.f("+%@ min navíc", String(stretching.minutes)), color: kind.color)
+                }
+                Spacer()
+                Button { timer = true } label: {
+                    Label("Spustit", systemImage: "play.fill").font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.onButton)
+                        .padding(.horizontal, 14).frame(height: 36)
+                        .background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            if !compact {
+            VStack(spacing: 0) {
+                ForEach(Array(stretching.items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().overlay(Palette.hairline) }
+                    HStack(spacing: 12) {
+                        Button { stored = Self.toggled(stored, date: date, id: kind.key + item.id) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: isDone(item) ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 21)).foregroundStyle(isDone(item) ? Palette.green : Palette.faint)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink)
+                                        .strikethrough(isDone(item), color: Palette.muted)
+                                    Text(verbatim: item.duration).font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                                Spacer(minLength: 8)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(isDone(item) ? .isSelected : [])
+                        if !item.steps.isEmpty || !item.photos.isEmpty {
+                            ExerciseInfoButton(name: item.name) { info = item }
+                        }
+                    }
+                    .frame(minHeight: 52)
+                }
+            }
+            }
+        }
+        // Dashed: on top of the chosen time, not part of the lifting.
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .strokeBorder(kind.color.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+        .sheet(item: $info) { item in StretchInfoSheet(item: item) }
+        .fullScreenCover(isPresented: $timer) {
+            StretchTimerView(stretching: stretching, kind: kind) { id in
+                let key = kind.key + id
+                if !Self.done(stored, date: date).contains(key) { stored = Self.toggled(stored, date: date, id: key) }
+            }
+        }
+    }
+
+    static func done(_ stored: String, date: String) -> Set<String> {
+        let prefix = date + ":"
+        return Set(stored.split(separator: ",").map(String.init).filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) })
+    }
+
+    /// Ticks or unticks a stretch; only the last week's days are kept.
+    static func toggled(_ stored: String, date: String, id: String) -> String {
+        var all = stored.split(separator: ",").map(String.init)
+        let key = date + ":" + id
+        if let i = all.firstIndex(of: key) { all.remove(at: i) } else { all.append(key) }
+        let oldest = Calendar.current.date(byAdding: .day, value: -7, to: Date()).map { isoDay.string(from: $0) } ?? ""
+        return all.filter { String($0.prefix(10)) >= oldest }.joined(separator: ",")
+    }
+
+    private static let isoDay: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+}
+
+/// "i" of a stretch: its photos, how long and how to do it.
+struct StretchInfoSheet: View {
+    let item: GymStretching.Item
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if !item.photoURLs.isEmpty { ExercisePhotos(urls: item.photoURLs, labeled: false) }
+                    Text(verbatim: item.duration).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(item.steps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                                Text(verbatim: "\(index + 1).").font(Typo.bodyStrong).foregroundStyle(Palette.indigo)
+                                Text(verbatim: step).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    if item.id != "cardio" {
+                        Text("Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet.")
+                            .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(20)
+            }
+            .background(Palette.background)
+            .navigationTitle(item.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
+        }
+        .presentationDetents([.large])
+    }
+}
+
+/// Spustit: every hold in turn with a countdown, 5 s to move between them.
+struct StretchTimerView: View {
+    let stretching: GymStretching
+    var kind: GymRoutineKind = .stretching
+    var onItemDone: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var index = 0
+    @State private var left = Self.moveSeconds
+    @State private var moving = true
+    @State private var paused = false
+    @State private var finished = false
+    @State private var beeps = 0
+
+    static let moveSeconds = 5
+
+    private var holds: [GymStretching.Hold] { stretching.holds }
+    private var hold: GymStretching.Hold? { holds.indices.contains(index) ? holds[index] : nil }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            HStack {
+                Text(verbatim: "\(min(index + 1, holds.count))/\(holds.count)").font(Typo.caption).foregroundStyle(Palette.muted)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).frame(width: 36, height: 36)
+                }
+                .foregroundStyle(Palette.ink)
+                .accessibilityLabel(L10n.tr("Zavřít"))
+            }
+            if finished {
+                Spacer()
+                Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundStyle(Palette.green)
+                Text(kind.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Spacer()
+                PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
+            } else if let hold {
+                Text(verbatim: hold.item.name).font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center)
+                Text(verbatim: subtitle(hold)).font(.subheadline).foregroundStyle(Palette.muted)
+                if !hold.item.photoURLs.isEmpty { ExercisePhotos(urls: hold.item.photoURLs, labeled: false) }
+                ZStack {
+                    Circle().stroke(Palette.track, lineWidth: 10)
+                    Circle().trim(from: 0, to: progress(hold))
+                        .stroke(moving ? Palette.faint : kind.color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 1), value: left)
+                    VStack(spacing: 2) {
+                        Text(verbatim: "\(left)").font(Typo.number(54)).foregroundStyle(Palette.ink).monospacedDigit()
+                        Text(moving ? "Připrav se" : kind == .warmup ? "Cvič" : "Drž").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                .frame(width: 170, height: 170)
+                Spacer(minLength: 0)
+                HStack(spacing: 14) {
+                    Button { paused.toggle() } label: {
+                        Label(paused ? "Pokračovat" : "Pauza", systemImage: paused ? "play.fill" : "pause.fill")
+                            .font(Typo.bodyStrong).frame(maxWidth: .infinity).frame(height: 50)
+                            .foregroundStyle(Palette.ink)
+                            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                    }
+                    Button { next() } label: {
+                        Label("Další", systemImage: "forward.fill")
+                            .font(Typo.bodyStrong).frame(maxWidth: .infinity).frame(height: 50)
+                            .foregroundStyle(Palette.onButton).background(Palette.button, in: Capsule())
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(20)
+        .background(Palette.background.ignoresSafeArea())
+        .sensoryFeedback(.success, trigger: beeps)
+        .task { await run() }
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+
+    /// "Série 1/2 · levá".
+    private func subtitle(_ hold: GymStretching.Hold) -> String {
+        var parts: [String] = []
+        if hold.item.rounds > 1 { parts.append(L10n.f("Série %@", "\(hold.round)/\(hold.item.rounds)")) }
+        if let side = hold.side { parts.append(side) }
+        return parts.isEmpty ? hold.item.duration : parts.joined(separator: " · ")
+    }
+
+    private func progress(_ hold: GymStretching.Hold) -> CGFloat {
+        let total = moving ? Self.moveSeconds : hold.item.seconds
+        return CGFloat(total - left) / CGFloat(max(total, 1))
+    }
+
+    private func run() async {
+        while !finished, !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            guard !paused, !finished else { continue }
+            if left > 1 { left -= 1; continue }
+            if moving, let hold { moving = false; left = hold.item.seconds; beeps += 1 } else { next() }
+        }
+    }
+
+    /// The hold is over (or skipped): its stretch is ticked after its last hold.
+    private func next() {
+        if let hold, hold.closesItem { onItemDone(hold.item.id) }
+        beeps += 1
+        if index + 1 >= holds.count { finished = true; return }
+        index += 1
+        moving = true
+        left = Self.moveSeconds
+    }
+}
+
+// MARK: - Trénink na míru (GET/POST /app/api/gym/preferences, src/routes-gym.js)
+
+struct GymPreferences: Decodable, Equatable {
+    var goal: String
+    /// What "auto" follows: the goal for the main sport ("auto" without one).
+    var recommendedGoal: String?
+    /// "auto" or the chosen beginner / regular / experienced.
+    var experience: String
+    /// What the training history says while the experience is "auto".
+    var autoExperience: String?
+    var warmup: Bool?
+    var warmupCardio: Bool?
+    var stretching: Bool
+    /// Typical minutes the routines add to each session length ("60" → warm-up and stretching).
+    var extraMinutes: [String: Extra]?
+
+    struct Extra: Decodable, Equatable {
+        let warmup: Int
+        let stretching: Int
+    }
+}
+
+extension APIClient {
+    func gymPreferences() async throws -> GymPreferences {
+        try await get("/app/api/gym/preferences")
+    }
+
+    func saveGymPreferences(_ changes: JSONObject) async throws -> GymPreferences {
+        try await send("/app/api/gym/preferences", method: "POST", body: changes)
+    }
+}
+
+/// Cíl, Zkušenost and Protažení na konci: each saved as soon as it changes.
+struct GymPreferencesGroup: View {
+    @Environment(AppModel.self) private var model
+    @State private var prefs: GymPreferences?
+    @State private var goal = "auto"
+    @State private var experience = "auto"
+    @State private var warmupMode = "cardio"
+    @State private var stretching = true
+    @State private var error: String?
+
+    static let goals = [("strength", "Síla"), ("strength_muscle", "Síla a svaly"), ("muscle", "Svaly"), ("muscle_fitness", "Svaly a kondice"), ("fitness", "Kondice")]
+    static let warmupModes = [("cardio", "s kardiem"), ("moves", "bez kardia"), ("off", "vypnutá")]
+    static func warmupMode(_ prefs: GymPreferences) -> String {
+        prefs.warmup == false ? "off" : prefs.warmupCardio == false ? "moves" : "cardio"
+    }
+    static let levels = [("beginner", "začátečník"), ("regular", "pravidelně"), ("experienced", "zkušený")]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            group
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        }
+        .task { await load() }
+        .onChange(of: goal) { _, value in goalChanged(value) }
+        .onChange(of: experience) { _, value in experienceChanged(value) }
+        .onChange(of: warmupMode) { _, value in warmupChanged(value) }
+        .onChange(of: stretching) { _, value in stretchingChanged(value) }
+    }
+
+    private var group: some View {
+        SettingsGroup(title: "Trénink na míru") {
+            SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
+            SettingsDivider()
+            SettingsPicker(title: "Zkušenost", selection: $experience, options: experienceOptions)
+            SettingsDivider()
+            SettingsPicker(title: "Rozcvička", selection: $warmupMode, options: Self.warmupModes)
+            SettingsDivider()
+            SettingsToggle(title: "Protažení na konci", isOn: $stretching)
+        }
+        .disabled(prefs == nil && !model.demo)
+    }
+
+    private func goalChanged(_ value: String) {
+        save(["goal": .string(value)], unchanged: prefs?.goal == value)
+    }
+
+    private func experienceChanged(_ value: String) {
+        save(["experience": .string(value)], unchanged: prefs?.experience == value)
+    }
+
+    private func warmupChanged(_ value: String) {
+        var current: String?
+        if let prefs { current = Self.warmupMode(prefs) }
+        let change: JSONObject = ["warmup": .bool(value != "off"), "warmupCardio": .bool(value == "cardio")]
+        save(change, unchanged: current == value)
+    }
+
+    private func stretchingChanged(_ value: Bool) {
+        save(["stretching": .bool(value)], unchanged: prefs?.stretching == value)
+    }
+
+    /// "podle sportu · síla a svaly": what the main sport recommends.
+    private var goalOptions: [(String, String)] {
+        let guess = prefs?.recommendedGoal.flatMap { id in Self.goals.first { $0.0 == id }?.1 }
+        let auto = guess.map { L10n.tr("podle sportu") + " · " + L10n.tr($0).lowercased() } ?? L10n.tr("automaticky")
+        return [("auto", auto)] + Self.goals
+    }
+
+    /// "automaticky · pravidelně": the level Aurin reads from the training history.
+    private var experienceOptions: [(String, String)] {
+        let guess = prefs?.autoExperience.flatMap { id in Self.levels.first { $0.0 == id }?.1 }
+        let auto = guess.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky")
+        return [("auto", auto)] + Self.levels
+    }
+
+    private func load() async {
+        guard !model.demo, prefs == nil else { return }
+        do { apply(try await model.api.gymPreferences()) } catch { self.error = error.localizedDescription }
+    }
+
+    private func apply(_ value: GymPreferences) {
+        prefs = value
+        goal = value.goal
+        experience = value.experience
+        warmupMode = Self.warmupMode(value)
+        stretching = value.stretching
+    }
+
+    private func save(_ change: JSONObject, unchanged: Bool) {
+        guard !model.demo, prefs != nil, !unchanged else { return }
+        Task {
+            do { apply(try await model.api.saveGymPreferences(change)); error = nil } catch { self.error = error.localizedDescription }
+        }
+    }
+}
+
+/// "+6 min navíc": time that comes on top of the chosen length.
+struct ExtraMinutesPill: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        Text(verbatim: text).font(.caption.weight(.semibold)).foregroundStyle(color)
+            .padding(.horizontal, 10).frame(height: 24)
+            .background(color.opacity(0.15), in: Capsule())
+    }
+}
+
+/// Celkem 72 min: the warm-up, the lifting and the stretching as one bar.
+struct GymTimeCard: View {
+    let minutes: Int
+    let warmup: Int
+    let stretching: Int
+
+    var body: some View {
+        let extra = warmup + stretching
+        Card {
+            HStack(alignment: .firstTextBaseline) {
+                Text(L10n.f("Celkem %@ min", String(minutes + extra))).font(.headline).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(L10n.f("%@ + %@ navíc", String(minutes), String(extra))).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            GeometryReader { geo in
+                let parts = [(warmup, Palette.amber), (minutes, Palette.ink.opacity(0.85)), (stretching, Palette.indigo)].filter { $0.0 > 0 }
+                let total = CGFloat(parts.reduce(0) { $0 + $1.0 }), gap: CGFloat = 4
+                let width = max(0, geo.size.width - gap * CGFloat(parts.count - 1))
+                HStack(spacing: gap) {
+                    ForEach(parts.indices, id: \.self) { i in
+                        Capsule().fill(parts[i].1).frame(width: width * CGFloat(parts[i].0) / max(total, 1))
+                    }
+                }
+            }
+            .frame(height: 8)
+            HStack(alignment: .top) {
+                if warmup > 0 { label("Rozcvička", "+\(warmup) min", Palette.amber, .leading) }
+                Spacer()
+                label("Posilování", "\(minutes) min", Palette.ink, warmup > 0 ? .center : .leading)
+                Spacer()
+                if stretching > 0 { label("Protažení", "+\(stretching) min", Palette.indigo, .trailing) }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func label(_ title: String, _ value: String, _ color: Color, _ alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(title).font(.caption.weight(.medium)).foregroundStyle(color)
+            Text(verbatim: value).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+}

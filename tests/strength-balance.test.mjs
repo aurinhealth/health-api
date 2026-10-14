@@ -72,3 +72,12 @@ test('AI sees recent completed strength sets instead of the oldest tail of desce
   const context=coachContext({date:'2026-10-04',gym:{history}});
   assert.equal(context.gym.length,1);assert.equal(context.strengthCoverage.setsLast7Days.quads,1);assert.equal(context.strengthCoverage.setsLast7Days.chest,undefined);
 });
+test('a hard or long run tomorrow spares the legs like a key ride, and says it is a run',()=>{
+  const context=base();
+  const run={date:'2026-10-05',type:'Run',name:'Intervaly 6×800',intensity:true,durationHours:1};
+  context.running={recentActivities:[],plannedWorkouts:[run],nextRun:run};
+  const plan=generateStrengthPlan(context,{durationMinutes:60});
+  assert.equal(plan.protectedLegs,true);assert.match(plan.rationale,/Zítra je v plánu náročný běh \(Intervaly 6×800\)/);assert.doesNotMatch(plan.rationale,/jízd/);
+  context.running.nextRun=context.running.plannedWorkouts[0]={date:'2026-10-05',type:'Run',name:'Klidný běh',intensity:false,durationHours:.75};
+  assert.equal(generateStrengthPlan(context,{durationMinutes:60}).protectedLegs,false);
+});

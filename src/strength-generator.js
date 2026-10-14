@@ -16,6 +16,7 @@ const availableAt = hasKnownStations;
 import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
+import { stretchingFor, warmupFor, routineSize } from './stretching.js';
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -316,6 +317,8 @@ function daysFrom(item, date) {
 const within = (item, date, from, to) => { const d = daysFrom(item, date); return d == null || (d >= from && d <= to); };
 const longRide = x => (num(x?.durationHours) || 0) >= 2.5;
 const hardRide = x => isIntensity(x) || longRide(x);
+// A run loads the legs harder per hour than a ride: 90 minutes is long.
+const hardRun = x => isIntensity(x) || (num(x?.durationHours) || 0) >= 1.5;
 // Form (TSB = CTL − ATL, Banister's fitness–fatigue model as Intervals.icu
 // reports it with each activity) says how much fatigue the endurance training
 // left. It replaces an acute:chronic load ratio, which adds no predictive
@@ -354,7 +357,14 @@ function legProtection(context) {
     const d = daysFrom(next, date);
     return { protect: true, reason: L((d === 0 ? "Dnes" : d === 1 ? "Zítra" : "Brzy") + " je v plánu " + (isIntensity(next) ? "náročná jízda" : "dlouhá jízda"), (isIntensity(next) ? "A hard ride" : "A long ride") + " is planned " + (d === 0 ? "today" : d === 1 ? "tomorrow" : "soon")) + fmt(next) + "." };
   }
-  const near = (context?.cycling?.plannedWorkouts || []).filter(x => within(x, date, 0, 2) && hardRide(x));
+  const run = context?.running?.nextRun;
+  if (run && within(run, date, 0, 1) && hardRun(run)) {
+    const d = daysFrom(run, date);
+    return { protect: true, reason: L((d === 0 ? "Dnes" : d === 1 ? "Zítra" : "Brzy") + " je v plánu " + (isIntensity(run) ? "náročný běh" : "dlouhý běh"), (isIntensity(run) ? "A hard run" : "A long run") + " is planned " + (d === 0 ? "today" : d === 1 ? "tomorrow" : "soon")) + fmt(run) + "." };
+  }
+  const nearRides = (context?.cycling?.plannedWorkouts || []).filter(x => within(x, date, 0, 2) && hardRide(x)), nearRuns = (context?.running?.plannedWorkouts || []).filter(x => within(x, date, 0, 2) && hardRun(x));
+  const near = [...nearRides, ...nearRuns];
+  if (near.length >= 2 && nearRuns.length) return { protect: true, reason: nearRides.length ? L("Během dvou dnů jsou v plánu dva náročné tréninky.", "Two hard sessions are planned within two days.") : L("Během dvou dnů jsou v plánu dva náročné běhy.", "Two hard runs are planned within two days.") };
   if (near.length >= 2) return { protect: true, reason: L("Během dvou dnů jsou v plánu dvě náročné jízdy.", "Two hard rides are planned within two days.") };
   const ctl = num(context?.cycling?.lastRide?.ctl) || num(context?.cycling?.recentActivities?.[0]?.ctl) || null;
   const last48 = (context?.cycling?.recentActivities || []).filter(x => within(x, date, -1, 0)).slice(0, 3).reduce((sum, x) => sum + (num(x.tss) || 0), 0);
@@ -586,7 +596,7 @@ function choosePlan(context, options = {}) {
   const leg = pick(["quad", "hinge", "posterior", "unilateral"]);
   const kneeFirst = ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
   const exercises = [leg, ...build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], accessories[0], accessories[1], ["horizontalPull", "verticalPull"], accessories[2], ["horizontalPush", "verticalPush"], accessories[3]])].filter(Boolean);
-  const reason = protection.reason || (weekUpper ? L("Podle plánu týdne je blízko klíčová jízda.", "According to the week plan, a key ride is coming up.") : "");
+  const reason = protection.reason || (weekUpper ? L("Podle plánu týdne je blízko klíčový trénink.", "According to the week plan, a key session is coming up.") : "");
   return {
     ...base,
     name: protectLegs?L("Full Body · s rezervou","Full Body · with reserve"):"Full Body",
@@ -645,18 +655,60 @@ function progressionNote(estimate) {
 // actually lift drives the next session (own-history progression).
 export const FIRST_SESSION_LOAD = 0.6;
 const FIRST_SESSION_NOTE = () => L("první trénink: váha je opatrný odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě (RPE 7)", "first session: the weight is a careful estimate; adjust it so you have 2–3 reps in reserve (RPE 7)");
+const CATALOGUE_SCALE = { beginner: FIRST_SESSION_LOAD, regular: 0.8, experienced: 1 };
+const NEW_EXERCISE_NOTE = () => L("nový cvik: váha je odhad, uprav ji tak, aby ti zbyla 2–3 opakování v rezervě", "new exercise: the weight is an estimate; adjust it so you have 2–3 reps in reserve");
 const TEST_SET_NOTE = () => L("zkušební série: začni lehčí vahou, se kterou zvládneš opakování s rezervou 3–4; podle ní nastav další série (RPE 7–8)", "test set: start with a lighter weight you can do with 3–4 reps in reserve; set the next sets from it (RPE 7–8)");
 // Core work keeps its own repetitions when a training plan sets them for the rest.
 const CORE_PATTERNS = new Set(["core", "anti_rotation", "rotation", "trunk_flexion", "trunk_extension", "slam"]);
-function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false, planReps = null) {
-  const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex) * (firstSession ? FIRST_SESSION_LOAD : 1);
-  const ownReps = planReps && !CORE_PATTERNS.has(def.pattern) ? planReps : def.reps;
-  const estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: ownReps, fallbackKg, loadFactor: factor, today });
+// The athlete's gym goal (onboarding.js trainingSetup.goal): strength is few
+// heavy reps on the main lifts, muscle the middle range, fitness many light
+// reps, and two steps in between. "auto" follows the main sport
+// (recommendedGoal). A beginner's main lifts stay at 6–8 even for strength,
+// while the technique settles.
+export const STRENGTH_GOALS = ['auto', 'strength', 'strength_muscle', 'muscle', 'muscle_fitness', 'fitness'];
+// A cyclist needs strong legs without much weight (strength and muscle), a
+// runner light, durable legs (muscle and fitness), a lifter muscle. Without a
+// known sport each exercise keeps its own range ("auto").
+export function recommendedGoal(mainSport, experience) {
+  const goal = { cycling: 'strength_muscle', running: 'muscle_fitness', triathlon: 'muscle_fitness', strength: 'muscle' }[mainSport] || 'auto';
+  return experience === 'beginner' && goal === 'strength_muscle' ? 'muscle' : goal;
+}
+export function goalReps(def, goal, experience) {
+  if (!def || !goal || goal === 'auto' || CORE_PATTERNS.has(def.pattern) || !def.baseKg) return def?.reps;
+  const main = def.warmup === true, heavy = def.fatigue >= .7, beginner = experience === 'beginner';
+  if (goal === 'strength') return main ? (beginner ? '6–8' : '3–6') : heavy ? '6–8' : def.reps;
+  if (goal === 'strength_muscle') return main ? (beginner ? '6–8' : '5–8') : heavy ? '6–10' : '8–12';
+  if (goal === 'muscle') return main ? '6–10' : '8–12';
+  if (goal === 'muscle_fitness') return main ? '8–12' : '12–15';
+  if (goal === 'fitness') return '12–15';
+  return def.reps;
+}
+// A dumbbell the athlete has, before the note is written: up to the next one
+// for a step up (steps of 5 kg would otherwise round every increase away), down
+// for a step back, else the nearest. A step up that no dumbbell allows holds.
+export function dumbbellFor(estimate, weights) {
+  const have = (Array.isArray(weights) ? weights : []).map(Number).filter(kg => kg > 0).sort((a, b) => a - b), kg = Number(estimate?.kg);
+  if (!have.length || !(kg > 0)) return estimate;
+  const up = estimate.progression === "increase", down = estimate.progression === "decrease" || estimate.progression === "return";
+  const best = up ? have.find(w => w >= kg - 1e-9) ?? have.at(-1) : down ? [...have].reverse().find(w => w <= kg + 1e-9) ?? have[0] : have.reduce((a, b) => Math.abs(b - kg) < Math.abs(a - kg) ? b : a);
+  const out = { ...estimate, kg: best };
+  if (estimate.referenceKg != null && best === Number(estimate.referenceKg) && (up || down)) out.progression = "hold";
+  return out;
+}
+function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volumeModifier = 1, maxSets = 4, sex = "", today = null, firstSession = false, planReps = null, goal = 'auto', experience = '', dumbbells = null) {
+  // The catalogue's loads are an experienced athlete's: anyone else starts an
+  // exercise new to them lighter, as on the first session.
+  const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex) * (firstSession ? FIRST_SESSION_LOAD : CATALOGUE_SCALE[experience] ?? CATALOGUE_SCALE.regular);
+  const ownReps = planReps && !CORE_PATTERNS.has(def.pattern) ? planReps : goalReps(def, goal, experience);
+  let estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: ownReps, fallbackKg, loadFactor: factor, today });
+  if (EXERCISE_INTELLIGENCE[exercise]?.loadUnit === "per_hand_kg") estimate = dumbbellFor(estimate, dumbbells);
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
   const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : ownReps;
-  const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier), maxSets);
+  // Strength for an experienced athlete: one more set of the main lifts.
+  const extra = !planReps && (goal === 'strength' || goal === 'strength_muscle') && experience === 'experienced' && def.warmup ? 1 : 0;
+  const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier) + extra, maxSets + extra);
   const progression = progressionNote(estimate);
-  const note = (estimate.source === "cross-exercise-estimate" ? def.note + L("; odhad z ", "; estimated from ") + estimate.referenceExercise + L(", ověř RPE", ", check the RPE") : def.note) + (progression ? "; " + progression : "") + (firstSession ? "; " + FIRST_SESSION_NOTE() : "");
+  const note = (estimate.source === "cross-exercise-estimate" ? def.note + L("; odhad z ", "; estimated from ") + estimate.referenceExercise + L(", ověř RPE", ", check the RPE") : def.note) + (progression ? "; " + progression : "") + (firstSession ? "; " + FIRST_SESSION_NOTE() : estimate.source === "catalogue-default" && kg != null ? "; " + NEW_EXERCISE_NOTE() : "");
   const rows = [];
   for (let i = 0; i < sets; i++) rows.push(["WORK", exercise, String(i + 1), kg == null ? "" : kgText(kg), reps, "", "", "", "FALSE", note, i === 0 ? "🎥 Video" : "", "", execution]);
   return { rows, kg, sets, estimate };
@@ -718,7 +770,7 @@ export function templateStrengthPlan(context, template, options = {}) {
       for (let i = 1; i < sets; i++) rows.push(["WORK", item.name, String(i + 1), "", reps, "", "", "", "FALSE", L("váhu podle zkušební série", "weight from the test set"), "", "", DEFAULT_EXECUTION]);
       continue;
     }
-    const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps);
+    const work = workRows(exercise, historyMap, factor, false, new Map(), 1, 10, sex, context.date, firstSession, reps, 'auto', '', context?.trainingSetup?.dumbbellWeights);
     const first = work.rows[0];
     const own = Array.from({ length: sets }, (_, i) => { const r = first.slice(); r[2] = String(i + 1); r[4] = CORE_PATTERNS.has(EXERCISES[exercise].pattern) ? first[4] : reps; r[10] = i === 0 ? first[10] : ""; return r; });
     const warmup = warmupRows(exercise, work.kg, !warmedUp);
@@ -817,7 +869,10 @@ export function generateStrengthPlan(context, options = {}) {
   const nearRide = legProtection(context);
   const durationVolume = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? .75 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? .9 : 1;
   const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume, deload ? 0.6 : 1);
-  const maxSets = context.trainingSetup?.experience==='beginner'?2:Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4;
+  const experience = context.trainingSetup?.experience || '', chosenGoal = STRENGTH_GOALS.includes(context.trainingSetup?.goal) ? context.trainingSetup.goal : 'auto';
+  const sport = context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '';
+  const goal = planPhase ? 'auto' : chosenGoal === 'auto' ? recommendedGoal(sport, experience) : chosenGoal;
+  const maxSets = Math.min(experience==='beginner'?2:Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4, goal === 'fitness' ? 3 : 4);
   let warmedUp = false;
   for (const exercise of exercises) {
     const muscle=EXERCISES[exercise].muscle;
@@ -829,11 +884,12 @@ export function generateStrengthPlan(context, options = {}) {
     const moderated=leg&&(explicitLegs?nearRide.protect:!chosen.protectedLegs&&sport>=1&&sport<1.5);
     const reducedDose=!moderated&&(leg?!explicitLegs&&(chosen.protectedLegs||sport>=1.5):sport>=1);
     const cap=Math.min(reducedDose?Math.min(2,maxSets):moderated?Math.min(3,maxSets):maxSets,planPhase?.sets||4);
-    const work = workRows(exercise, historyMap, reducedDose||moderated?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date, firstSession, planPhase?.reps||null);
+    const work = workRows(exercise, historyMap, reducedDose||moderated?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date, firstSession, planPhase?.reps||null, goal, experience, context?.trainingSetup?.dumbbellWeights);
     if(planPhase)for(const row of work.rows)row[9]+=L('; '+planPhase.phaseName+': RPE '+planPhase.rpe,'; '+planPhase.phaseName+': RPE '+planPhase.rpe);
     if(reducedDose)for(const row of work.rows)row[9]+=L('; sportovní zátěž: nejvýše 2 pracovní série, nech si 3–4 opakování v rezervě (RPE 6–7)','; load from other sports: at most 2 work sets, keep 3–4 reps in reserve (RPE 6–7)');
-    if(deload)for(const row of work.rows)row[9]+=L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve');
-    if(moderated)for(const row of work.rows)row[9]+=explicitLegs?L('; blízko je náročná jízda: nech si 2–3 opakování v rezervě (RPE 7)','; a hard ride is coming up: keep 2–3 reps in reserve (RPE 7)'):L('; nohy po jízdě: nech si 2–3 opakování v rezervě (RPE 7)','; legs after riding: keep 2–3 reps in reserve (RPE 7)');
+    // One instruction per set: the deload's reserve replaces "one more rep".
+    if(deload)for(const row of work.rows)row[9]=row[9].replace(/ – (?:cíl: o opakování víc|goal: one more rep)/,'')+L('; odlehčený týden: stejná váha, 3 opakování v rezervě','; deload week: same weight, 3 reps in reserve');
+    if(moderated)for(const row of work.rows)row[9]+=explicitLegs?L('; blízko je náročný trénink: nech si 2–3 opakování v rezervě (RPE 7)','; a hard session is coming up: keep 2–3 reps in reserve (RPE 7)'):L('; nohy po vytrvalostním tréninku: nech si 2–3 opakování v rezervě (RPE 7)','; legs after endurance training: keep 2–3 reps in reserve (RPE 7)');
     if(stallSwaps[exercise])for(const row of work.rows)row[9]+=L('; místo '+stallSwaps[exercise]+': 3 tréninky bez posunu, nový podnět (k původnímu cviku se vrátíme)','; instead of '+stallSwaps[exercise]+': 3 sessions without progress, a new stimulus (we\'ll return to the original exercise)');
     const warmup = warmupRows(exercise, work.kg, !warmedUp);
     if (warmup.length) warmedUp = true;
@@ -841,9 +897,18 @@ export function generateStrengthPlan(context, options = {}) {
     loadEstimates.push({ exercise, sets: work.sets, reducedDose, moderated, ...work.estimate });
   }
   const requestedMinutes = Number(options.durationMinutes) > 0 ? Number(options.durationMinutes) : Math.max(60, (Number(options.maxExercises) || 5) * 12);
-  const configure = () => configureStrengthCoaching(rows, EXERCISES, { factor, muscleLoad, protectedLegs: chosen.protectedLegs, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession });
+  const configure = () => configureStrengthCoaching(rows, EXERCISES, { factor, muscleLoad, protectedLegs: chosen.protectedLegs, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession: firstSession || experience === 'beginner', goal });
   configure();
-  let timing = estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
+  // The warm-up before and the stretching after (each on unless turned off in
+  // Posilovna) come on top of the chosen time, which is for the lifting.
+  const withWarmup = context.trainingSetup?.warmup !== false, withStretching = context.trainingSetup?.stretching !== false;
+  const muscleOf = name => EXERCISES[name]?.muscle;
+  let warmup = null, stretching = null;
+  const size = routineSize(requestedMinutes);
+  const routinesNow = () => { warmup = withWarmup ? warmupFor(rows, muscleOf, { ...size.warmup, cardio: context.trainingSetup?.warmupCardio !== false }) : null; stretching = withStretching ? stretchingFor(rows, muscleOf, size.stretching) : null; };
+  routinesNow();
+  const measure = () => estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
+  let timing = measure();
   while (timing.totalSeconds > requestedMinutes * 60) {
     // Take a set from the exercise with the most sets (the later one on a tie),
     // so the volume stays even instead of one exercise keeping four sets.
@@ -853,7 +918,7 @@ export function generateStrengthPlan(context, options = {}) {
     if (removable) rows.splice(rows.findLastIndex(r => r[0] === 'WORK' && r[1] === removable), 1);
     else if (!focusMuscles && names.length > 1) { const last = names.at(-1); for (let i = rows.length - 1; i >= 0; i--) if (rows[i][1] === last) rows.splice(i, 1); }
     else throw new Error(L('Zvolené partie se s rozcvičením a pauzami nevejdou do ' + requestedMinutes + ' minut. Vyber méně partií nebo delší čas.', 'The chosen muscle groups with warm-up and rests don\'t fit into ' + requestedMinutes + ' minutes. Choose fewer groups or more time.'));
-    configure(); timing = estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
+    configure(); routinesNow(); timing = measure();
   }
   for (let i = loadEstimates.length - 1; i >= 0; i--) {
     loadEstimates[i].sets = rows.filter(r => r[0] === 'WORK' && r[1] === loadEstimates[i].exercise).length;
@@ -866,10 +931,20 @@ export function generateStrengthPlan(context, options = {}) {
   const fmtDay = d => new Date(d + 'T12:00:00Z').toLocaleDateString(L('cs-CZ', 'en-GB'), { weekday: 'short', day: 'numeric', month: L('numeric', 'short'), timeZone: 'UTC' });
   const nearby = (chosen.plannedSessions || []).map(x => fmtDay(x.date).replace(/\.$/, ''));
   const swapped = Object.entries(stallSwaps).filter(([ex]) => rows.some(r => r[1] === ex)).map(([ex, old]) => old + ' → ' + ex);
-  const rationale = (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '');
+  const extraMinutes = [warmup && [L('rozcvička', 'warm-up'), warmup.minutes], stretching && [L('protažení', 'stretching'), stretching.minutes]].filter(Boolean);
+  const extraText = extraMinutes.length ? L(' Navíc ', ' On top: ') + extraMinutes.map(([name, min]) => name + ' ' + min + ' min').join(L(' a ', ' and ')) + '.' : '';
+  const goalLine = {
+    strength: L('síla: hlavní cviky v nižším počtu opakování s delší pauzou', 'strength: the main lifts in fewer reps with longer rests'),
+    strength_muscle: L('síla a svaly: těžší hlavní cviky, doplňky ve středním rozsahu', 'strength and muscle: heavier main lifts, accessories in the middle range'),
+    muscle: L('svaly: střední rozsah opakování', 'muscle: the middle rep range'),
+    muscle_fitness: L('svaly a kondice: víc opakování a kratší pauzy', 'muscle and fitness: more reps and shorter rests'),
+    fitness: L('kondice: hodně opakování a krátké pauzy', 'fitness: many reps and short rests')
+  }[goal];
+  const goalText = goalLine ? (chosenGoal === 'auto' ? L('Cíl podle tvého sportu – ', 'Goal from your sport – ') : L('Cíl ', 'Goal ')) + goalLine + '. ' : '';
+  const rationale = goalText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '');
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));
-  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.'), timing, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
+  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.') + extraText, timing: { ...timing, routineSeconds: (warmup?.seconds || 0) + (stretching?.seconds || 0) }, warmup, stretching, goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };

@@ -173,6 +173,14 @@ struct ActivityTypeOption: Decodable, Hashable, Identifiable {
     var id: String { type }
 }
 
+/// GET /app/api/activity/delete?id= (src/activity-edits.js deleteOptions).
+struct ActivityDeleteOptions: Decodable, Equatable {
+    /// "app", "intervals" or "watch".
+    let kind: String
+    /// With "watch": "google" or "apple".
+    var source: String? = nil
+}
+
 struct ActivityTypeChange: Decodable {
     let status: String?
     let type: String?

@@ -87,6 +87,29 @@ export async function deleteFluid(db, id) {
   await db.prepare("DELETE FROM fluid_log WHERE user_id=? AND id=? AND source IS NULL").bind(db.userId, Number(id)).run();
 }
 
+// Several drinks at once (Vybrat in Pití dnes): delete, move to another day
+// (keeping the clock) or copy there. Another app's drink is deleted from Aurin
+// only and copied as the athlete's own; it cannot be moved.
+export async function bulkFluids(db, { action, ids, date } = {}) {
+  const list = [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter(n => Number.isInteger(n) && n > 0))].slice(0, 100);
+  if (!list.length) throw invalid(L("Nic není vybrané.", "Nothing is selected."));
+  if (!["delete", "move", "copy"].includes(action)) throw invalid(L("Neznámá akce.", "Unknown action."));
+  if (action !== "delete" && !/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw invalid(L("Neplatné datum.", "Invalid date."));
+  await ensure(db);
+  const done = [], skipped = [];
+  for (const id of list) {
+    if (action === "delete") { await deleteFluid(db, id); done.push(id); continue; }
+    const row = await db.prepare("SELECT id,consumed_at,ml,kind,source FROM fluid_log WHERE user_id=? AND id=?").bind(db.userId, id).first();
+    if (!row) continue;
+    const at = date + String(row.consumed_at || "T12:00").slice(10, 16);
+    if (action === "copy") { await addFluid(db, { date, ml: row.ml, kind: row.kind, at }); done.push(id); continue; }
+    if (row.source) { skipped.push(id); continue; }
+    await db.prepare("UPDATE fluid_log SET date=?,consumed_at=? WHERE user_id=? AND id=?").bind(date, at, db.userId, id).run();
+    done.push(id);
+  }
+  return { done, skipped };
+}
+
 export async function listFluids(db, date) {
   await ensure(db);
   const rows = (await db.prepare("SELECT id,date,consumed_at,ml,kind,app FROM fluid_log WHERE user_id=? AND date=? ORDER BY consumed_at,id").bind(db.userId, date).all()).results || [];

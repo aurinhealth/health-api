@@ -38,9 +38,11 @@ export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDa
     let kind = REVISE_KINDS.includes(c.kind) ? c.kind : u.kind || "endurance";
     if (u.sport === "run" && kind === "sweet_spot") kind = "tempo";
     const harder = HARD_KINDS.has(kind) && !HARD_KINDS.has(u.kind);
+    // A harder session the checks undo keeps no reason that still asks for it.
+    let undone = false;
     if (harder) {
       const neighbour = [...kindOn.keys()].some(d => d !== u.date && gap(d, u.date) <= 1);
-      if (readiness?.zone === "red" || neighbour) kind = u.kind || "endurance";
+      if (readiness?.zone === "red" || neighbour) { kind = u.kind || "endurance"; undone = true; }
     }
     const budget = num(availabilityByDate[u.date]);
     const cap = Math.min(MAX_MINUTES[u.sport], Math.max(u.minutes || 0, budget && budget > 0 ? budget : 0, MIN_MINUTES[u.sport]));
@@ -49,7 +51,7 @@ export function sanitizeChanges(changes, upcoming, { done = [], availabilityByDa
     if (kind === u.kind && Math.abs(minutes - (u.minutes || 0)) < 5) continue;
     seen.add(u.eventId);
     if (HARD_KINDS.has(kind)) kindOn.set(u.date, kind); else if (kindOn.get(u.date) && !HARD_KINDS.has(kind)) kindOn.delete(u.date);
-    out.push({ eventId: u.eventId, date: u.date, sport: u.sport, environment: u.environment || "outdoor", from: { name: u.name, minutes: u.minutes, kind: u.kind || null }, kind, minutes, reason: String(c.reason || "").trim().slice(0, 240) || null });
+    out.push({ eventId: u.eventId, date: u.date, sport: u.sport, environment: u.environment || "outdoor", from: { name: u.name, minutes: u.minutes, kind: u.kind || null }, kind, minutes, reason: undone ? null : String(c.reason || "").trim().slice(0, 240) || null });
     if (out.length >= MAX_CHANGES) break;
   }
   return out.sort((a, b) => a.date.localeCompare(b.date));
@@ -115,7 +117,10 @@ export async function reviseWeek(env, facts, { focus = null, ask = callOpenAI } 
     parsed = rulesRevision(facts);
   }
   const changes = sanitizeChanges(parsed?.changes, facts.upcoming || [], { done: facts.done, availabilityByDate: facts.availabilityByDate, readiness: facts.readiness });
-  const summary = String(parsed?.summary || "").trim().slice(0, 400) || rulesRevision({ ...facts, upcoming: [] }).summary;
+  // A summary that promised changes the checks all dropped would show above an
+  // empty card; the rules then say how the session went.
+  const promised = Array.isArray(parsed?.changes) && parsed.changes.length > 0;
+  const summary = (promised && !changes.length ? "" : String(parsed?.summary || "").trim().slice(0, 400)) || rulesRevision({ ...facts, upcoming: [] }).summary;
   return { summary, changes, source };
 }
 

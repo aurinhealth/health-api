@@ -30,6 +30,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     var kcalEstimate: KcalEstimate? = nil
     /// The user's choice for it: "estimate" or "device"; nil while unchecked.
     var kcalChoice: String? = nil
+    /// The calories were set in Aurin (by hand or by the coach); kcalDevice
+    /// is what the device said (src/activity-edits.js).
+    var kcalEdited: Bool? = nil
+    var kcalDevice: Double? = nil
 
     struct KcalEstimate: Decodable, Hashable {
         let value: Double?
@@ -84,6 +88,16 @@ struct GymDay: Decodable, Equatable {
         guard values.count > 3, values[3].count > 1 else { return nil }
         return values[3][1].string
     }
+
+    /// The length chosen for the lifting (header row 4, "Časový limit (min)"); the routines come on top.
+    var plannedMinutes: Int? {
+        guard values.count > 4, values[4].count > 1, values[4][0].string == "Časový limit (min)" else { return nil }
+        return values[4][1].number.map { Int($0) } ?? values[4][1].string.flatMap { Int($0) }
+    }
+
+    /// The warm-up before and the stretching after the session (src/stretching.js), nil without them.
+    var warmup: GymStretching? { GymStretching.routines(values)?.warmup }
+    var stretching: GymStretching? { GymStretching.routines(values)?.stretching }
 
     /// The sets grouped by exercise, in the plan's order.
     var exercises: [GymExercise] {

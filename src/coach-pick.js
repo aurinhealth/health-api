@@ -37,7 +37,7 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
   const options = [
     endurance("ride", ride),
     endurance("run", run),
-    { kind: "gym", title: lowerTired ? L("Posilovna · horní polovina", "Gym · upper body") : L("Posilovna · celé tělo", "Gym · full body"), detail: lowerTired ? L("50 min · nohy nech odpočinout", "50 min · let the legs rest") : L("50 min", "50 min") },
+    { kind: "gym", title: lowerTired ? L("Posilovna · horní polovina", "Gym · upper body") : L("Posilovna · celé tělo", "Gym · full body"), detail: lowerTired ? L("60 min · nohy nech odpočinout", "60 min · let the legs rest") : L("60 min", "60 min") },
     { kind: "swim", title: L("Plavání · technika", "Swim · technique"), detail: L("45 min · lehce", "45 min · easy") },
     { kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min · po tréninku nebo místo něj", "3 × 12 min · after training or instead of it") },
     { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka a protažení", "A walk and stretching") }
@@ -77,8 +77,13 @@ function reasonFor(best, { status, ride, lowerTired, planned, trainedToday }) {
   if (status === "red") return [sentence(why) || L("Připravenost je dnes nízká.", "Readiness is low today."), L("Dnes radši odpočívej.", "Rest today instead.")].join(" ");
   if (planned.includes(best.kind)) return L("Sedí to s plánem na dnešek a připravenost na to máš.", "It fits today's plan and you're ready for it.");
   if (best.kind === "gym" && lowerTired) return L("Nohy po posilovně ještě nejsou čerstvé, dnes horní polovina.", "Your legs aren't fresh after the gym yet, so upper body today.");
-  if (status === "green") return lowerTired ? L("Odpočatý jsi, jen nohy nech ještě odpočinout.", "You're rested, just let the legs recover a bit more.") : L("Jsi odpočatý, dnes je prostor na kvalitu.", "You're rested, today there's room for quality.");
-  return L("Připravenost je střední, dnes spíš lehčí objem.", "Readiness is moderate, so a lighter volume today.");
+  // The words follow the option: "quality" only when the pick is a hard session.
+  if (status === "green") return lowerTired ? L("Odpočatý jsi, jen nohy nech ještě odpočinout.", "You're rested, just let the legs recover a bit more.")
+    : best.hard ? L("Jsi odpočatý, dnes je prostor na kvalitu.", "You're rested, today there's room for quality.")
+    : best.kind === "ride" || best.kind === "run" ? L("Jsi odpočatý, dnes to stačí v klidném tempu.", "You're rested, an easy pace is enough today.")
+    : L("Jsi odpočatý, tohle dnes sedí nejlíp.", "You're rested, this fits today best.");
+  return best.hard ? L("Připravenost je střední, kvalitu dnes dávkuj opatrně.", "Readiness is moderate, so dose the quality carefully today.")
+    : L("Připravenost je střední, dnes spíš lehčí objem.", "Readiness is moderate, so a lighter volume today.");
 }
 
 // What the athlete did lately, and today.

@@ -2,10 +2,10 @@
 // GET /app/api/cycle (?month=YYYY-MM for the calendar), POST
 // /app/api/cycle/settings, /app/api/cycle/day (what was logged on a day) and
 // /app/api/cycle/apple (Apple Health's menstrual flow and ovulation tests).
-// Only for a profile whose sex is female.
+// Open to everyone, whatever the profile's sex; the app offers it up front
+// only to women (SettingsHome.swift).
 import { getCycleSettings, saveCycleSettings, listCycleDays, saveCycleDay, importAppleCycle } from "./cycle-store.js";
 import { cycleState, cycleMonth, askPeriodToday } from "./cycle-model.js";
-import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 
@@ -26,16 +26,12 @@ export async function handleCycleApi(request, env, ctx, url, session) {
   if (!url.pathname.startsWith("/app/api/cycle")) return undefined;
   if (!session.signedIn) return Response.json({ message: L("Přihlas se do dashboardu.", "Sign in to the app.") }, { status: 401 });
   try {
-    const profile = await loadEffectiveProfile(env.DB, env.USER_ID).catch(() => null);
-    const available = profile?.sex === "female";
     const today = localToday();
     if (url.pathname === "/app/api/cycle" && request.method === "GET") {
-      if (!available) return Response.json({ status: "ok", available: false }, noStore);
       return Response.json({ status: "ok", available: true, ...(await cycleView(env.DB, today, url.searchParams.get("month"))) }, noStore);
     }
     if (request.method !== "POST") return Response.json({ message: "Method not allowed" }, { status: 405 });
     if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
-    if (!available) return Response.json({ message: L("Sledování cyklu je jen pro ženy v profilu.", "Cycle tracking needs the profile's sex set to female.") }, { status: 400 });
     const body = await request.json().catch(() => ({}));
     if (url.pathname === "/app/api/cycle/settings") {
       await saveCycleSettings(env.DB, body);

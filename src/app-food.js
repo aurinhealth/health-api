@@ -80,8 +80,8 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         salt: round(num(note.salt_g), 2),
         amount: amount != null && unit ? round(amount, 1) + " " + unitLabel(unit, round(amount, 1)) : null,
         brand: note.brand || null,
-        // Logged in another app and read from Apple Health: shown with its name, not editable.
-        ...(e.source === "apple-health" ? { app: String(note.app || "Apple Health").slice(0, 60) } : {}),
+        // Logged in another app and read from Apple or Google Health: shown with its name, not editable.
+        ...(e.source === "apple-health" || e.source === "google-health" ? { app: String(note.app || (e.source === "google-health" ? "Google Health" : "Apple Health")).slice(0, 60) } : {}),
         ...(note.estimate === true ? { estimate: true } : {})
       };
     });

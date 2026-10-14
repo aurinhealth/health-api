@@ -1,10 +1,11 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment } from "./strength-generator.js";
+import { fitsEquipment, EXERCISES, recommendedGoal } from "./strength-generator.js";
+import { routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
-import { exercisePreferences } from "./exercise-feedback.js";
+import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
 import { EXERCISE_STATIONS } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
@@ -34,6 +35,25 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       // Places (several gyms, home) with the active one; or the flat fields of older clients.
       try{const body=await request.json().catch(()=>({}));const input=Array.isArray(body.places)?{places:body.places,activePlace:body.activePlace}:{equipment:body.equipment,stations:body.stations,gymName:body.gymName,gymUrl:body.gymUrl,...(Array.isArray(body.dumbbellWeights)?{dumbbellWeights:body.dumbbellWeights}:{})};const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);return Response.json({status:'ok',equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'});}
       catch(error){return Response.json({message:error.message},{status:400});}
+    }
+  }
+  // Trénink na míru (Nastavení → Posilovna): the goal, the experience (auto
+  // from the training history unless chosen), the warm-up and the stretching.
+  if(url.pathname==='/app/api/gym/preferences'){
+    // The goal "auto" follows the main sport (profile, else the training history).
+    const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
+    if(request.method==='GET')return reply(await trainingSetup(env.DB));
+    if(request.method==='POST'){
+      if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      const body=await request.json().catch(()=>({})),input={};
+      if(body.goal!=null)input.goal=String(body.goal);
+      if(body.experience!=null)input.experience=String(body.experience);
+      if(typeof body.stretching==='boolean')input.stretching=body.stretching;
+      if(typeof body.warmup==='boolean')input.warmup=body.warmup;
+      if(typeof body.warmupCardio==='boolean')input.warmupCardio=body.warmupCardio;
+      const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);
+      return reply(training);
     }
   }
   if(url.pathname==='/app/api/gym/equipment/detect'&&request.method==='POST'){
@@ -88,8 +108,10 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       const body=await request.json().catch(()=>({})),text=String(body.request||'').trim().slice(0,300);
       if(!text)throw new Error(L('Napiš, co v tréninku změnit.', 'Write what to change in the workout.'));
       const rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(Array.isArray(body.rows)?body.rows:[]).map(r=>String(r?.[1]??'').trim()).filter(Boolean)]));
-      const [history,taste]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB)]);
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste});
+      // What the athlete's equipment allows, the session's time and what they said about recent sessions.
+      const [history,taste,setup,ratings]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB),trainingSetup(env.DB).catch(()=>null),recentWorkoutRatings(env.DB,{sport:'strength',since:shiftDate(localToday(),-28)})]);
+      const minutes=Number(body.minutes)>0&&Number(body.minutes)<=240?Number(body.minutes):null;
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste,ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}
@@ -110,7 +132,9 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // Muscles each exercise of the day loads (plan and saved sets), for the body figure.
       const names=new Set([...(data.values||[]).slice(7).map(r=>r?.[1]),...history.filter(r=>String(r.workout_date||'').slice(0,10)===date).map(r=>r.exercise)].filter(Boolean));
       const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
-      return Response.json({...data,history,muscles,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
+      // The athlete's equipment, so the coach swaps exercises only for ones it allows.
+      const setup=await trainingSetup(env.DB).catch(()=>null),equipment=setup?{equipment:setup.equipment||null,stations:setup.stations||[]}:null;
+      return Response.json({...data,history,muscles,equipment,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
       try {
@@ -199,6 +223,14 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       if(draft.kind!=='gym_preview'||!plan||plan.date<localToday())throw new Error(L('Neplatný nebo starý návrh.', 'Invalid or outdated proposal.'));
       // The proposal as changed in its preview (exercises from the catalog or the proposal itself).
       if(Array.isArray(body.rows))plan.rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(plan.rows||[]).map(r=>r?.[1]).filter(Boolean)]));
+      // Stretching follows the exercises as changed in the preview.
+      const muscleOf=name=>EXERCISES[name]?.muscle;
+      // With the size and the cardio choice the proposal had, not the defaults.
+      if(Array.isArray(body.rows)){
+        const size=routineSize(Number(draft.minutes)||60),setup=await trainingSetup(env.DB).catch(()=>null);
+        if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,cardio:setup?.warmupCardio!==false})||plan.warmup;
+        if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,size.stretching)||plan.stretching;
+      }
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
       const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
       if(!r.ok)throw new Error(L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));

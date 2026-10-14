@@ -582,9 +582,11 @@ struct GymBuilderView: View {
     private func adjust() async {
         guard let p = proposal else { return }
         await run("adjust") {
-            let r = try await model.api.adjustGym(rows: p.rows, request: wish)
+            let r = try await model.api.adjustGym(rows: p.rows, request: wish, minutes: minutes)
             var next = p
             next.rows = r.rows
+            // The generator's reasons were for its exercises; the AI's answer says what changed.
+            next.rationale = nil
             if !r.muscles.isEmpty { next.muscles = r.muscles }
             next.groupSupersets()
             proposal = next

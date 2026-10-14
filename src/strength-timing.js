@@ -23,11 +23,14 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
 }
 
-export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false } = {}) {
+// Rests by the gym goal: heavy strength sets need the longest, fitness the shortest.
+const GOAL_RESTS = { strength: [180, 180, 120], strength_muscle: [150, 150, 90], muscle: [120, 105, 75], muscle_fitness: [90, 75, 60], fitness: [75, 60, 45] };
+export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false, goal = 'auto' } = {}) {
+  const [heavy, main, other] = GOAL_RESTS[goal] || [150, 120, 75];
   for (const r of rows) {
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     r[11] = 'FALSE'; r[12] = '';
-    const rest = warm ? 60 : def.fatigue >= 1.2 ? 150 : def.warmup ? 120 : 75;
+    const rest = warm ? 60 : def.fatigue >= 1.2 ? heavy : def.warmup ? main : other;
     r[9] = String(r[9] || '').replace(/\s*\[Pauza \d+ s\]/g, '').replace(/; (?:poslední série do technického selhání, jen při čistém provedení|last set to technical failure, only with clean technique)/g, '') + ' [Pauza ' + rest + ' s]';
   }
   const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
@@ -44,9 +47,11 @@ export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoa
     for (const r of rows) if (r[0] === 'WORK' && [name, other].includes(r[1])) r[12] = id;
   }
   // Only one last isolation set reaches technical failure on well-recovered
-  // days, and never in a first session, whose loads are still a guess.
+  // days, and never in a first session, whose loads are still a guess, nor on
+  // an exercise whose note already asks for reps in reserve or calls the load
+  // an estimate (one set never carries two opposite instructions).
   if (!firstSession && factor >= .97 && (recoveryScore == null || recoveryScore >= 70)) {
-    const name = names.find(n => catalog[n]?.fatigue <= .5 && !catalog[n]?.warmup && (muscleLoad.get(catalog[n]?.muscle) || 0) < 2.5 && !/sportovní zátěž|load from other sports/.test(rows.find(r => r[1] === n)?.[9] || '') && !(protectedLegs && ['quads','hamstrings','glutes','calves'].includes(catalog[n]?.muscle)));
+    const name = names.find(n => catalog[n]?.fatigue <= .5 && !catalog[n]?.warmup && (muscleLoad.get(catalog[n]?.muscle) || 0) < 2.5 && !/sportovní zátěž|load from other sports|rezerv|reserve|odhad|estimate/i.test(rows.find(r => r[1] === n)?.[9] || '') && !(protectedLegs && ['quads','hamstrings','glutes','calves'].includes(catalog[n]?.muscle)));
     const last = name && rows.filter(r => r[0] === 'WORK' && r[1] === name).at(-1);
     if (last) { last[11] = 'TRUE'; last[9] += L('; poslední série do technického selhání, jen při čistém provedení', '; last set to technical failure, only with clean technique'); }
   }

@@ -14,6 +14,7 @@ struct SourcesSettingsView: View {
     @State private var adding = false
     @State private var connectingApple = false
     @State private var flow = ConnectFlowState()
+    @State private var choosing: PriorityPart?
 
     private var connected: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected == true } }
     private var available: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected != true && $0.configured != false } }
@@ -49,6 +50,16 @@ struct SourcesSettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+
+            // Where the night and the day come from, once two devices can measure them.
+            if nightChoices.count > 1 || dayChoices.count > 1 {
+                SettingsGroup(title: "Odkud brát data") {
+                    if nightChoices.count > 1 { priorityRow(.night) }
+                    if nightChoices.count > 1 && dayChoices.count > 1 { SettingsDivider() }
+                    if dayChoices.count > 1 { priorityRow(.day) }
+                }
+                .padding(.top, 10)
             }
 
             if store.loaded && !store.demo {
@@ -98,8 +109,16 @@ struct SourcesSettingsView: View {
         .sheet(isPresented: $adding) {
             AddIntegrationSheet(available: available, appleConnected: connected.contains { $0.id == "apple" }) { provider in
                 adding = false
-                // The next sheet (Google's disclosure, the browser) once this one has closed.
+                // The service's connect screen once this sheet has closed.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { start(provider) }
+            }
+        }
+        .sheet(item: $choosing) { part in
+            SourcePrioritySheet(part: part, choices: part == .night ? nightChoices : dayChoices,
+                                selected: part == .night ? store.priority.night : store.priority.day) { choice in
+                var next = store.priority
+                if part == .night { next.night = choice } else { next.day = choice }
+                Task { await store.savePriority(next) }
             }
         }
         .sheet(isPresented: $connectingApple) {
@@ -108,13 +127,23 @@ struct SourcesSettingsView: View {
         .connectFlow($flow, actions: actions, store: store)
     }
 
+    /// The connected sources that measure the night (the ring too) and the day, in the server's order.
+    private var nightChoices: [String] { ["ultrahuman", "google", "apple"].filter { id in connected.contains { $0.id == id } } }
+    private var dayChoices: [String] { ["google", "apple"].filter { id in connected.contains { $0.id == id } } }
+
+    private func priorityRow(_ part: PriorityPart) -> some View {
+        let value = part == .night ? store.priority.night : store.priority.day
+        return Button { choosing = part } label: {
+            SettingsRow(title: part.title, value: SourcePrioritySheet.name(value))
+        }
+        .buttonStyle(.plain)
+    }
+
     private var lastSync: String? { store.sync?.updatedAt.flatMap(SourceActions.when) }
 
     private func start(_ provider: String) {
         if provider == "apple" { connectingApple = true; return }
-        // Strava, Garmin and Wahoo come through Intervals.icu, so connect that first.
-        let target = ["strava", "garmin", "wahoo"].contains(provider) ? "intervals" : provider
-        flow.start(target, actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true })
+        flow.start(provider)
     }
 
     private struct Offer {
@@ -124,21 +153,84 @@ struct SourcesSettingsView: View {
         var url: URL? = nil
     }
 
-    /// What is not connected yet: the services Loadwise reads itself, then the
+    /// What is not connected yet: the services Aurin reads itself (Ultrahuman once
+    /// the server offers it), then the
     /// watches and apps that come in through Intervals.icu.
     private var offers: [Offer] {
         var list: [Offer] = []
         if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
             list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
         }
-        for provider in available where provider.id == "google" || provider.id == "intervals" {
+        for provider in available where ["google", "ultrahuman", "intervals"].contains(provider.id) {
             list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
         }
-        let settings = URL(string: "https://intervals.icu/settings")
-        let viaIntervals = connected.contains { $0.id == "intervals" }
-        for (id, name) in [("strava", "Strava"), ("garmin", "Garmin"), ("wahoo", "Wahoo")] {
-            list.append(Offer(id: id, name: name, note: L10n.tr("přes Intervals"), url: viaIntervals ? settings : nil))
-        }
         return list
+    }
+}
+
+enum PriorityPart: String, Identifiable {
+    case night, day
+    var id: String { rawValue }
+    var title: String { self == .night ? L10n.tr("Spánek a noc") : L10n.tr("Pohyb přes den") }
+}
+
+/// Automaticky or one connected source for the night or the day (src/source-priority.js).
+struct SourcePrioritySheet: View {
+    let part: PriorityPart
+    let choices: [String]
+    let selected: String
+    let choose: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    static func name(_ id: String) -> String {
+        switch id {
+        case "apple": "Apple Health"
+        case "google": "Google Health"
+        case "ultrahuman": "Ultrahuman"
+        default: L10n.tr("Automaticky")
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(part.title).font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Spacer()
+                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+            }
+            SettingsGroup(footer: L10n.tr("Automaticky bere zdroj s nejúplnějšími a nejstabilnějšími daty.")) {
+                ForEach(Array((["auto"] + choices).enumerated()), id: \.element) { index, id in
+                    if index > 0 { SettingsDivider() }
+                    Button {
+                        choose(id)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 14) {
+                            if id == "auto" {
+                                Image(systemName: "sparkle").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink)
+                                    .frame(width: 34, height: 34)
+                                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                            } else {
+                                IntegrationIcon(id: id, size: 34)
+                            }
+                            Text(Self.name(id)).font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            if id == selected {
+                                Image(systemName: "checkmark").font(.body.weight(.semibold)).foregroundStyle(Palette.green)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 56)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(id == selected ? .isSelected : [])
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationBackground(Palette.settingsBackground)
     }
 }

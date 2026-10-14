@@ -3,18 +3,29 @@ import SwiftUI
 /// Nastavení → Pauzy v posilovně: how long the rest is between the sets of an
 /// exercise and before the next exercise (Režim tréninku counts it down).
 struct GymRestSettingsView: View {
-    @AppStorage("restSets") private var restSets = 90
-    @AppStorage("restExercises") private var restExercises = 120
-
     static let options: [Int] = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300]
 
     var body: some View {
-        SettingsPage(title: "Pauzy v posilovně") {
-            SettingsGroup(title: "Délka pauzy") {
-                row("Mezi sériemi", $restSets)
-                SettingsDivider()
-                row("Před dalším cvikem", $restExercises)
-            }
+        SettingsPage(title: "Pauzy v posilovně") { GymRestGroup() }
+    }
+
+    static func label(_ seconds: Int) -> String {
+        if seconds == 0 { return L10n.tr("bez pauzy") }
+        if seconds < 60 { return "\(seconds) s" }
+        return seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds / 60) min \(seconds % 60) s"
+    }
+}
+
+/// The two rests as menus: between the sets and before the next exercise.
+struct GymRestGroup: View {
+    @AppStorage("restSets") private var restSets = 90
+    @AppStorage("restExercises") private var restExercises = 120
+
+    var body: some View {
+        SettingsGroup(title: "Délka pauzy") {
+            row("Mezi sériemi", $restSets)
+            SettingsDivider()
+            row("Před dalším cvikem", $restExercises)
         }
     }
 
@@ -23,19 +34,13 @@ struct GymRestSettingsView: View {
             Text(title).font(.body).foregroundStyle(Palette.ink)
             Spacer(minLength: 8)
             Picker(L10n.tr(title), selection: value) {
-                ForEach(Self.options, id: \.self) { Text(Self.label($0)).tag($0) }
+                ForEach(GymRestSettingsView.options, id: \.self) { Text(GymRestSettingsView.label($0)).tag($0) }
             }
             .pickerStyle(.menu)
             .tint(Palette.muted)
             .labelsHidden()
         }
         .padding(.leading, 16).padding(.trailing, 8).frame(minHeight: 50)
-    }
-
-    static func label(_ seconds: Int) -> String {
-        if seconds == 0 { return L10n.tr("bez pauzy") }
-        if seconds < 60 { return "\(seconds) s" }
-        return seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds / 60) min \(seconds % 60) s"
     }
 }
 
