@@ -22,6 +22,14 @@ struct TodayView: View {
                         .padding(.bottom, 100)
                 }
                 .refreshable { await model.refresh(announce: true) }
+                .tabTopBar {
+                    DayBar(date: today.date)
+                    Spacer(minLength: 0)
+                    ChromeButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
+                    Button(action: openSettings) { AvatarView(size: 36) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Profil a nastavení")
+                }
             } else if let message = model.errorMessage {
                 VStack(spacing: 16) {
                     Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -64,6 +72,7 @@ struct TodayContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .daySwipe(date: today.date, enabled: !editing)
     }
 
     /// Everything above the widgets: the day, readiness, weather and the coach.
@@ -130,6 +139,36 @@ struct TodayContent: View {
     }
 }
 
+/// Dnes, Zdraví and Jídlo: a swipe right goes a day back, a swipe left a day
+/// forward, as far as the arrows go. Off while the widgets are being edited.
+private struct DaySwipe: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let date: String
+    var ahead: Bool
+    var enabled: Bool
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 30).onEnded { value in
+                let width = value.translation.width, height = value.translation.height
+                guard enabled, !model.demo, !model.loading, abs(width) > 80, abs(width) > abs(height) * 2 else { return }
+                if width > 0 {
+                    Task { await model.showDay(offset: -1) }
+                } else if DayNavigator.canGoForward(model: model, date: date, ahead: ahead) {
+                    Task { await model.showDay(offset: 1, ahead: ahead) }
+                }
+            },
+            including: enabled ? .all : .subviews
+        )
+    }
+}
+
+extension View {
+    func daySwipe(date: String, ahead: Bool = false, enabled: Bool = true) -> some View {
+        modifier(DaySwipe(date: date, ahead: ahead, enabled: enabled))
+    }
+}
+
 /// "data ze včera 21:10 · obnovit" under the day when Apple Health last
 /// reached the server more than 3 hours ago; nothing while it is fresh.
 /// A tap syncs and reloads Today.
@@ -177,42 +216,119 @@ struct DataAgePill: View {
     }
 }
 
-/// "‹ ČTVRTEK 8. ŘÍJNA ›": a day back, a day forward (not past today; Food
-/// goes two weeks ahead for planned and copied meals).
+/// "‹ Dnes" over "středa 14. října": the day as the screen's title, a day
+/// back and a day forward (not past today; Food goes two weeks ahead for
+/// planned and copied meals). Scrolled down, DayBar keeps the day on top.
 struct DayNavigator: View {
     @Environment(AppModel.self) private var model
     let date: String
     var ahead = false
 
-    private var canGoForward: Bool {
+    private var today: String { AppModel.localDate(Date()) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Button { Task { await model.showDay(offset: -1) } } label: {
+                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 28, height: 36)
+                }
+                .foregroundStyle(Palette.muted)
+                .accessibilityLabel("Předchozí den")
+                Text(verbatim: Fmt.dayTitle(date, today: today))
+                    .font(Typo.sentence(30, relativeTo: .title))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .accessibilityAddTraits(.isHeader)
+                if Self.canGoForward(model: model, date: date, ahead: ahead) {
+                    Button { Task { await model.showDay(offset: 1, ahead: ahead) } } label: {
+                        Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold)).frame(width: 28, height: 36)
+                    }
+                    .foregroundStyle(Palette.muted)
+                    .accessibilityLabel("Další den")
+                }
+                if model.selectedDate != nil {
+                    Button { Task { await model.showToday() } } label: {
+                        Text("Dnes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 10).frame(height: 28)
+                            .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                    }
+                    .padding(.leading, 4)
+                }
+            }
+            Text(verbatim: Fmt.daySubtitle(date, today: today))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Palette.muted)
+                .padding(.leading, 34)
+        }
+        .disabled(model.demo || model.loading)
+    }
+
+    static func canGoForward(model: AppModel, date: String, ahead: Bool) -> Bool {
         guard ahead else { return model.selectedDate != nil }
         let last = AppModel.shift(AppModel.localDate(Date()), by: AppModel.foodDaysAhead) ?? date
         return date < last
     }
+}
+
+/// The day in the pinned glass bar of Dnes, Zdraví and Jídlo once their
+/// header has scrolled away: "‹ Dnes · st 14. 10. ›", and an earlier (or
+/// later) day tinted, with "Dnes" next to it.
+struct DayBar: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    var ahead = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Button { Task { await model.showDay(offset: -1) } } label: {
-                Image(systemName: "chevron.left").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 36)
-            }
-            .accessibilityLabel("Předchozí den")
-            SectionLabel(text: Fmt.dayHeading(date))
-            if canGoForward {
-                Button { Task { await model.showDay(offset: 1, ahead: ahead) } } label: {
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).frame(width: 28, height: 36)
+        DayCapsule(date: date, today: AppModel.localDate(Date()),
+                   canGoForward: DayNavigator.canGoForward(model: model, date: date, ahead: ahead),
+                   move: { offset in Task { await model.showDay(offset: offset, ahead: ahead) } },
+                   showToday: { Task { await model.showToday() } })
+            .disabled(model.demo || model.loading)
+    }
+}
+
+/// The glass "‹ Po 12. 10. ›" of the tabs' pinned bars, with "Dnes" next to
+/// it on another day (DayBar, and the calendar's day on Trénink).
+struct DayCapsule: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    let today: String
+    var canGoForward = true
+    let move: (Int) -> Void
+    let showToday: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 0) {
+                Button { move(-1) } label: {
+                    Image(systemName: "chevron.left").frame(width: 30, height: 40).contentShape(Rectangle())
                 }
+                .accessibilityLabel("Předchozí den")
+                Text(verbatim: Fmt.dayShort(date, today: today))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Button { move(1) } label: {
+                    Image(systemName: "chevron.right").frame(width: 30, height: 40).contentShape(Rectangle())
+                }
+                .opacity(canGoForward ? 1 : 0.25)
+                .disabled(!canGoForward)
                 .accessibilityLabel("Další den")
             }
-            if model.selectedDate != nil {
-                Button { Task { await model.showToday() } } label: {
-                    Text("Dnes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 10).frame(height: 28)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Palette.muted)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 2)
+            .background(date == today ? Color.clear : Palette.amberSoft.opacity(0.85), in: Capsule())
+            .chromeGlass(in: Capsule())
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            if date != today {
+                ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes", action: showToday)
             }
         }
-        .foregroundStyle(Palette.muted)
-        .disabled(model.demo || model.loading)
+        // While the sync pill shows (RootView), it takes the day's place.
+        .opacity(model.syncStatus == nil ? 1 : 0)
     }
 }
 

@@ -266,6 +266,46 @@ extension View {
     }
 }
 
+/// The pinned bar of a tab (Dnes, Zdraví, Trénink, Jídlo): once the page's
+/// own header has scrolled away, the day (DayCapsule) stays
+/// on top in glass with the header's buttons. Put on the tab's PageScroll, so
+/// the pages it opens keep their own bar.
+private struct TabTopBar<Bar: View>: ViewModifier {
+    let bar: Bar
+    @Environment(\.scrollReport) private var parent
+    @State private var scrolled = false
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.scrollReport, { (offset: CGFloat) in
+                parent?(offset)
+                let now = offset > 56
+                if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
+            })
+            .overlay(alignment: .top) {
+                if scrolled {
+                    HStack(spacing: 10) { bar }
+                        .padding(.horizontal, 18)
+                        .padding(.top, 6)
+                        .padding(.bottom, 10)
+                        .background {
+                            Rectangle().fill(.ultraThinMaterial)
+                                .mask(LinearGradient(colors: [.black, .black, .black.opacity(0)], startPoint: .top, endPoint: .bottom))
+                                .ignoresSafeArea(edges: .top)
+                        }
+                        .transition(.opacity)
+                }
+            }
+    }
+}
+
+extension View {
+    /// Keeps the tab's day or name on top once its header scrolls away.
+    func tabTopBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
+        modifier(TabTopBar(bar: bar()))
+    }
+}
+
 /// A page's own back button: its place only when the page pins one.
 struct BackSlot: View {
     @Environment(\.floatingBack) private var floating
