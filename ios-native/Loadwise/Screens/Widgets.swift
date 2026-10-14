@@ -60,6 +60,39 @@ struct FoodWidget: View {
     }
 }
 
+/// Plán dne's long-press menu: "Smazat aktivitu" with the same questions as
+/// the activity's detail, or "Smazat" for a stretching or sauna.
+private struct PlanRowMenu: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let item: TodaySnapshot.PlanItem
+    @State private var deleting = false
+    @State private var editingKcal = false
+
+    func body(content: Content) -> some View {
+        if model.demo {
+            content
+        } else if item.kind == "workout", item.done, let session = item.session, session.kind == "activity" {
+            content
+                .contextMenu {
+                    Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
+                }
+                .activityEditing(id: session.id, title: session.title, kcal: session.kcal,
+                                 edited: session.kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal)
+        } else if item.kind == "recovery", let id = item.recoveryId {
+            content.contextMenu {
+                Button(role: .destructive) {
+                    Task {
+                        try? await model.api.deleteRecovery(id: id)
+                        await model.refresh()
+                    }
+                } label: { Label("Smazat", systemImage: "trash") }
+            }
+        } else {
+            content
+        }
+    }
+}
+
 struct PlanWidget: View {
     @Environment(AppModel.self) private var model
     let items: [TodaySnapshot.PlanItem]
@@ -94,8 +127,14 @@ struct PlanWidget: View {
 
     /// Bedtime opens Nastavení spánku, a gym session its workout mode, a ride
     /// or run its detail (done) or the planned workout.
-    @ViewBuilder
+    /// A long press deletes a done activity (as its detail's ⋯) or a saved
+    /// stretching or sauna.
     private func row(_ item: TodaySnapshot.PlanItem) -> some View {
+        rowContent(item).modifier(PlanRowMenu(item: item))
+    }
+
+    @ViewBuilder
+    private func rowContent(_ item: TodaySnapshot.PlanItem) -> some View {
         if item.kind == "pill" || item.eased != nil {
             // The pill (Vzato) and a session the cycle eased (vrátit) act in the row.
             line(item)

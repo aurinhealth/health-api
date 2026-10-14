@@ -99,10 +99,10 @@ struct TodayContent: View {
         .padding(.top, 40)
 
         if model.selectedDate == nil {
-            MorningCheckinCard(feeling: today.checkin, top: 20)
-            // Cycle tracking: the morning question, or the day's log.
+            // Cycle tracking: the morning question, or the day's log. (The
+            // "Jak se dnes cítíš?" card is gone: it lowered the readiness.)
             if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
-                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 20)
             }
         }
 

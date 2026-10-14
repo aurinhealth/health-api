@@ -118,6 +118,8 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
   const routine = recoveryRoutine({ sport, focus });
   const described = describeRecovery({ kind: "stretch", items: routine.items });
   const done = kind => (saved || []).some(r => r?.kind === kind && r.done);
+  // The saved row of a done sauna, so a tap by mistake can be taken back.
+  const savedId = kind => (saved || []).find(r => r?.kind === kind && r.done)?.id ?? null;
   const items = [{
     kind: "stretch",
     title: stretchTitle(sport),
@@ -128,7 +130,7 @@ export function recoveryToday({ today = [], yesterday = [], tomorrow = null, gym
     routine: { title: stretchTitle(sport), minutes: described.minutes, items: described.items }
   }];
   // A sauna on the evening of the training day, not the morning after.
-  if (when === "today") items.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna") });
+  if (when === "today") items.push({ kind: "sauna", title: "Sauna", detail: L("3× 10 min večer, pak hodně pít", "3× 10 min in the evening, then drink plenty"), done: done("sauna"), savedId: savedId("sauna") });
   if (tonight?.bedtime && num(tonight.need) > 0) items.push({ kind: "bedtime", title: L("Do postele v ", "Bed at ") + tonight.bedtime, detail: L("dnes potřebuješ " + sleepText(num(tonight.need)) + " spánku", "you need " + sleepText(num(tonight.need)) + " of sleep tonight"), time: tonight.bedtime, done: false });
 
   return { title: L("Regenerace na dnes", "Recovery for today"), text: loadText(main, when, worked) + tomorrowText(tomorrow), basedOn: when, items };

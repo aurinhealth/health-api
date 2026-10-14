@@ -193,6 +193,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const recoveryItems = savedRecovery.map(r => ({
     kind: "recovery",
     recovery: r.kind,
+    // The saved row, so Plán dne can delete it (DELETE /app/api/recovery).
+    recoveryId: r.id ?? null,
     time: r.done ? clockOf(r.doneAt) : null,
     title: r.kind === "stretch" && stretchName ? stretchName : r.title,
     detail: r.minutes + " min" + (r.kind === "sauna" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),

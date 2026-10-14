@@ -57,8 +57,8 @@ struct RecoveryTodayCard: View {
                 line(item, trailing: AnyView(tickCircle(item.isDone, busy: savingSauna)))
             }
             .buttonStyle(.plain)
-            .disabled(item.isDone || savingSauna || model.demo)
-            .accessibilityHint(item.isDone ? "" : L10n.tr("Označit jako hotové"))
+            .disabled(savingSauna || model.demo || (item.isDone && item.savedId == nil))
+            .accessibilityHint(item.isDone ? L10n.tr("Vrátit") : L10n.tr("Označit jako hotové"))
         case "bedtime":
             NavigationLink(value: AppRoute.sleepSettings) { line(item, trailing: AnyView(chevron)) }
                 .buttonStyle(.plain)
@@ -113,12 +113,18 @@ struct RecoveryTodayCard: View {
         .frame(width: 26, height: 26)
     }
 
+    /// Ticks the sauna off, or takes back a tick made by mistake.
     private func saveSauna(_ item: RecoveryToday.Item) async {
-        guard !item.isDone, !model.demo else { return }
+        guard !model.demo else { return }
         savingSauna = true
         defer { savingSauna = false }
         do {
-            try await model.api.saveRecoveryDone(date: today.date, kind: "sauna", sport: nil, focus: nil)
+            if item.isDone {
+                guard let id = item.savedId else { return }
+                try await model.api.deleteRecovery(id: id)
+            } else {
+                try await model.api.saveRecoveryDone(date: today.date, kind: "sauna", sport: nil, focus: nil)
+            }
             error = nil
             await model.refresh()
         } catch {
