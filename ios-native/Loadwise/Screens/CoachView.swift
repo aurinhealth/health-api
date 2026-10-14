@@ -239,11 +239,17 @@ struct CoachView: View {
         error = nil
     }
 
+    /// The server keeps a one-line "[Návrhy: …]" with each answer, so later
+    /// turns know what was proposed; a reopened chat shows the answer only.
+    static func withoutProposalNote(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\s*\[(?:Návrhy|Proposals): [^\]]*\]\s*$"#, with: "", options: .regularExpression)
+    }
+
     private func open(_ id: Int) async {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
-            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.content) }
+            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.role == "user" ? $0.content : Self.withoutProposalNote($0.content)) }
         } catch {
             self.error = error.localizedDescription
         }
