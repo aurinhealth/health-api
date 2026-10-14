@@ -96,7 +96,7 @@ struct AddSheet: View {
         // Today's plan, or an empty workout the exercises are added to.
         case "start": open(.trainingMode(AppModel.localDate(Date())))
         case "log": workout = true
-        case "pick": open(.coachPick)
+        case "pick": open(.coachPick(true))
         case "library": open(.library)
         case "gymBuilder": open(.gymBuilder)
         case "photo": food = .photo
@@ -152,7 +152,7 @@ struct PlusItem: Identifiable, Equatable {
     static let all: [PlusItem] = [
         PlusItem(id: "start", title: "Začít trénink", symbol: "play.fill", section: .training),
         PlusItem(id: "log", title: "Zapsat trénink", symbol: "square.and.pencil", section: .training),
-        PlusItem(id: "pick", title: "Trénink dne", symbol: "sparkles", section: .training),
+        PlusItem(id: "pick", title: "Aktivita dne", symbol: "sparkles", section: .training),
         PlusItem(id: "library", title: "Knihovna", symbol: "books.vertical", section: .training),
         PlusItem(id: "gymBuilder", title: "Sestavit posilovnu", symbol: "dumbbell", section: .training),
         PlusItem(id: "photo", title: "Vyfotit jídlo", symbol: "camera", section: .food),

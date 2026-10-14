@@ -50,7 +50,8 @@ import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
 import { explainWorkout } from "./workout-explanation.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
-import { rankOptions, recentKinds, pickState, savePick } from "./coach-pick.js";
+import { composeWorkout, poorFit } from "./ai-workout-compose.js";
+import { rankOptions, recentKinds, pickState, savePick, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -704,7 +705,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       return Response.json({status:'ok',date,feeling:await saveCheckin(env.DB,date,body.feeling??null)},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
-  // Doporučení trenéra: today's activity from anything the athlete does (coach-pick.js).
+  // Aktivita dne: "Doporučovat méně" for a kind (coach-pick.js setLess).
+  if(url.pathname==='/app/api/coach/pick/less'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{const body=await request.json();return Response.json(await setLess(env.DB,env.USER_ID,String(body.kind||''),body.less!==false));}catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // Aktivita dne: today's activity from anything the athlete does (coach-pick.js),
+  // every option with its workout ready.
   if(url.pathname==='/app/api/coach/pick'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     const date=localToday();
@@ -718,8 +726,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [ride,run]=await Promise.all([defaultDayCoach(env,inputs,date,'ride',week),defaultDayCoach(env,inputs,date,'run',week)]);
       const [profiles,recent,state,gym]=await Promise.all([loadProfiles(env.DB,env.USER_ID).catch(()=>({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(()=>null)]);
       const planned=[...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
-      const ranked=rankOptions({ride,run,mainSport:profiles?.effective?.mainSport||'general',sports:recent.sports,today:recent.today,declines:state.declines,planned});
-      return Response.json({status:'ok',date,...ranked,chosen:state.chosen},{headers:{'Cache-Control':'no-store'}});
+      const ranked=rankOptions({ride,run,mainSport:profiles?.effective?.mainSport||'general',sports:recent.sports,today:recent.today,declines:state.declines,planned,done:recent.done});
+      // The ready workouts stay while the options do (pickSignature), so a sync
+      // that changes nothing asks the AI nothing.
+      const signature=pickSignature(ranked);
+      let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
+      if(!details){details=await pickDetails(env,ctx,ranked,date,gym);await storeDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>{});}
+      const less=await lessKinds(env.DB,env.USER_ID).catch(()=>[]);
+      const options=ranked.options.filter(o=>o.best||!less.includes(o.kind)).map(o=>{
+        const d=details[o.kind];if(!d)return o;
+        const detail=d.minutes?d.minutes+' min'+(o.detail.includes(' · ')?o.detail.slice(o.detail.indexOf(' · ')):''):o.detail;
+        return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{})};
+      });
+      return Response.json({status:'ok',date,...ranked,options,less,chosen:state.chosen},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
   if(url.pathname==='/app/api/coach/check-in'&&request.method==='GET'){
@@ -1836,6 +1855,31 @@ async function feedbackSince(env,since){
   const own=(await listReflections(env.DB,{limit:20}).catch(()=>[])).filter(r=>r.date>=since&&(r.rpe!=null||r.notes)&&!library.some(f=>r.workoutId&&f.workoutId===r.workoutId));
   return [...library,...own.map(r=>({date:r.date,workoutId:r.workoutId||null,name:null,system:null,sport:null,rpe:r.rpe,notes:r.notes||null,completedPercent:null}))].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,14);
 }
+// The ready ride, run and gym of the day's options (Aktivita dne): the coach's
+// workout as the library's Návrh kouče makes it (the AI picks or writes only
+// the best one's) and the gym proposal; the rest have fixed lines.
+async function pickDetails(env,ctx,ranked,date,gymPlan){
+  const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({}));
+  const post=async(path,body)=>{const u=new URL('https://internal'+path),r=await handleDashboardApi(new Request(u,{method:'POST',headers:{Origin:u.origin,'Content-Type':'application/json'},body:JSON.stringify(body)}),env,ctx,u,{signedIn:true});const d=await r.json().catch(()=>null);return r.ok?d:null;};
+  const out={};
+  await Promise.all(ranked.options.map(async o=>{
+    try{
+      if(o.kind==='ride'||o.kind==='run'){
+        const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:o.best===true}),w=g?.status==='ok'?g.workout:null;
+        if(!w)return;
+        let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+        const steps=o.kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+        const {structure_json,...workout}=w;
+        out[o.kind]={workout:{...workout,steps,ai:w.ai||g.ai||null},lines:workoutLines(steps,o.kind),minutes:Math.round(Number(w.duration_minutes)||0)||null};
+      }else if(o.kind==='gym'){
+        if((gymPlan?.values||[]).length>7){out.gym={lines:gymLines(gymPlan.values),gym:{planned:true}};return;}
+        const g=await post('/app/api/gym/generate',{date,durationMinutes:60,preview:true,...(ranked.lowerTired?{focus:'upper'}:{})});
+        if(g?.plan?.rows&&g.draftId)out.gym={lines:gymLines(g.plan.rows),gym:{draftId:g.draftId,rows:g.plan.rows}};
+      }
+    }catch(error){console.error('Activity of the day',o.kind,error?.message||error);}
+  }));
+  return out;
+}
 async function workoutPreview(env,ctx,a){
   const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
   // The library workout named in the answer, at the proposed length; without one
@@ -1873,12 +1917,22 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
       await cached(env,ctx,'reconcile:'+localToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
       const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):localToday();
-      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport),sport});
+      // The same coach as the library's Návrh kouče (the week plan's role and
+      // the day's time), so the list ranks what the proposal above it says.
+      const prefs=await getWeekPlan(env.DB,date).catch(()=>null),plan=prefs?await planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null):null;
+      const week={prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null};
+      const coach=await defaultDayCoach(env,await loadCoachInputs(env,ctx,internalAuth,date),date,sport,week);
       const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
-      // Without a length the list is ranked by the length the coach would pick
-      // for the day (50 min or 4 h alike); no length is filtered out.
-      const filters=parseWorkoutSearchFilters(url.searchParams),autoDuration=filters.durationMinutes==null&&Number(coach.constraints?.availableMinutes)>0?{durationMinutes:Number(coach.constraints.availableMinutes)}:null;
+      // Without a length the list is ranked by the length of the coach's
+      // session (the free time is only its limit), indoors shorter, as the
+      // proposal is; no length is filtered out.
+      const filters=parseWorkoutSearchFilters(url.searchParams),free=Number(coach.constraints?.availableMinutes)||null,coachMinutes=Number(coach.recommendation?.session?.durationMinutes)||null;
+      const freeMinutes=free&&filters.environment==='indoor'?indoorMinutes(sport,free):free,dayMinutes=coachMinutes&&freeMinutes?Math.min(coachMinutes,freeMinutes):coachMinutes||freeMinutes;
+      const autoDuration=filters.durationMinutes==null&&dayMinutes>0?{durationMinutes:dayMinutes}:null;
       if(autoDuration)Object.assign(filters,{durationMinutes:autoDuration.durationMinutes,durationSoft:true});
+      // Doporučená keeps to the day's time in the week plan (a length the athlete picks does not).
+      const dayLimit=filters.durationMinutes==null||autoDuration?trainingBudget(prefs,date,null):null;
+      if(dayLimit>0)filters.maxDurationMinutes=dayLimit;
       // With no type chosen, the type the coach recommends for the day ranks first.
       const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
       const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),cached(env,ctx,'thresholds',()=>athleteThresholds(env))]);
@@ -1947,8 +2001,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // Today's proposal in the library: the AI picks among the rules' safe
       // candidates for the morning and says why (ai-workout-pick.js).
       if(body.ai===true&&date===localToday()&&!planWorkout&&!body.workoutId&&!(Number(body.variant)>0)&&resizeTo==null&&generated.status==='ok'){
-        const before=generated.workout?.id;
-        generated=await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today:{score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await getCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null,ratings:await recentWorkoutRatings(env.DB,{sport:genSport,since:shiftDate(date,-42)})},focus:coachInputs.focus});
+        const before=generated.workout?.id,today={score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await getCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null,ratings:await recentWorkoutRatings(env.DB,{sport:genSport,since:shiftDate(date,-42)})};
+        // Nothing in the library fits the day well: the AI writes its own (ai-workout-compose.js).
+        const own=poorFit(generated.workout,{sport:genSport,kind:coachKind})?await composeWorkout(env,{sport:genSport,kind:coachKind,minutes:sessionMinutes||generated.durationMinutes,coach,today,focus:coachInputs.focus}):null;
+        generated=own?{...generated,workout:renderForEnvironment(own,environment),alternatives:[generated.workout,...(generated.alternatives||[])].slice(0,3),ai:own.ai}:await aiWorkoutPick(env,generated,{sport:genSport,minutes:sessionMinutes,coach,today,focus:coachInputs.focus});
         if(generated.workout?.id!==before)try{generated.explanation=explainWorkout(generated.workout,{coach,environment:generated.workout.environment||environment,thresholds,sport:genSport});}catch{}
       }
       const planInfo=planned&&plan.pw?{name:plan.pw.template.name,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec.phase,kind:planned.kind,followed:Boolean(planWorkout)}:null;

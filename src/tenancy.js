@@ -75,6 +75,8 @@ export const PERSONAL_TABLES = {
   // calories (activity-energy-choices.js).
   manual_activity_pairs: { pk: ["user_id", "planned_id"] },
   coach_picks: { pk: ["user_id", "date"] },
+  coach_pick_less: { pk: ["user_id", "kind"] },
+  coach_pick_details: { pk: ["user_id", "date"] },
   activity_type_overrides: { pk: ["user_id", "activity_key"] },
   activity_energy_choices: { pk: ["user_id", "activity_id"] },
   // The app's push device tokens and the once-a-day guard of the pushes (push.js).
@@ -83,6 +85,8 @@ export const PERSONAL_TABLES = {
   activity_undo: { pk: ["user_id", "token"] },
   // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
   saved_workouts: { pk: ["user_id", "id"] },
+  // The AI's own rides and runs for a day (ai-workout-compose.js).
+  ai_workouts: { pk: ["user_id", "id"] },
   workout_shares: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
