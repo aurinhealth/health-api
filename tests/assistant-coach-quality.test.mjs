@@ -185,3 +185,17 @@ test('the coach picks at most two known pictures for an answer',()=>{
   assert.deepEqual(r.visuals,['form','sleep']);
   assert.deepEqual(coachAnswerText('Obyčejný text',{actions:true}).visuals,[]);
 });
+
+test('a proposed workout keeps the kind the answer recommends, and confirming plans it',()=>{
+  const context={athleteState:'active',workoutLibraryRecommendations:[]};
+  const action={type:'workout',date:'2026-10-08',sport:'ride',minutes:60,reason:'Nohy jsou unavené',workoutId:'',kind:'endurance'};
+  assert.equal(validateCoachActions([action],context,today)[0].kind,'endurance');
+  assert.equal(validateCoachActions([{...action,kind:'gym'}],context,today)[0].kind,undefined);
+  assert.equal(validateCoachActions([{...action,sport:'gym',minutes:45,kind:'endurance'}],context,today)[0].kind,undefined);
+  const schema=COACH_ACTION_FORMAT.schema.properties.actions.items;assert.ok(schema.required.includes('kind'));
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  // The kind reaches the generator, and Potvrdit schedules the ride or run and saves the gym draft.
+  assert.match(entry,/FOCUS_OF\[a\.kind\]\?\{focus:FOCUS_OF\[a\.kind\]\}/);
+  assert.match(entry,/scheduleWorkoutInIntervals\(env,env\.DB,\{workoutId:preview\.workout\.id,date:a\.date,confirm:true/);
+  assert.match(entry,/\/app\/api\/gym\/confirm'\),saved=await handleDashboardApi/);
+});

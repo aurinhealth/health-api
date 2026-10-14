@@ -1085,8 +1085,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         }
         else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal});await bumpCacheVersion(env.DB);}
         else if(a.type==='workout'){
-          // The workout the chat showed is the one that gets planned.
-          result=a.preview||await workoutPreview(env,ctx,a);
+          // The workout the chat showed is the one that gets planned: the ride
+          // or run goes to the calendar (and Intervals.icu), the gym draft is saved.
+          if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Do minulého dne už nelze přidat trénink.', 'You can\'t add a workout to a past day.'));
+          const preview=a.preview||await workoutPreview(env,ctx,a);
+          if(a.sport==='gym'){
+            if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
+            const confirmUrl=new URL('https://internal/app/api/gym/confirm'),saved=await handleDashboardApi(new Request(confirmUrl,{method:'POST',headers:{Origin:confirmUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId:preview.draftId})}),env,ctx,confirmUrl,{signedIn:true});
+            const savedBody=await saved.json().catch(()=>({}));if(!saved.ok)throw new Error(savedBody.message||L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
+            result={...savedBody,preview};
+          }else{
+            if(!preview.workout?.id)throw new Error(L('Trénink se nepodařilo připravit. Požádej o nový návrh.', 'The workout couldn\'t be prepared. Ask for a new proposal.'));
+            result={...await scheduleWorkoutInIntervals(env,env.DB,{workoutId:preview.workout.id,date:a.date,confirm:true,environment:preview.environment||preview.workout.environment||'outdoor'}),preview};
+          }
         }else{
           const id=a.eventId.replace(/^planned:/,''),event=await env.DB.prepare("SELECT start_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.USER_ID,'planned:'+id).first();
           const payload=event?JSON.parse(event.payload_json||'{}'):null;
@@ -1550,8 +1561,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
 // gym plan, not yet in the calendar); a gym plan carries the muscles of its exercises.
 async function workoutPreview(env,ctx,a){
   const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
-  // The library workout named in the answer, at the proposed length; without one the coach picks.
-  const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:{};
+  // The library workout named in the answer, at the proposed length; without one
+  // the kind the answer recommends, and only without that the coach picks.
+  const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:a.sport!=='gym'&&FOCUS_OF[a.kind]?{focus:FOCUS_OF[a.kind]}:{};
   const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:'auto',preview:true,userInitiated:true,...exact})}),env,ctx,internalUrl,{signedIn:true});
   const result=await response.json();if(!response.ok||result.status!=='ok')throw new Error(result.message||L('Trénink se nepodařilo připravit.', 'The workout couldn\'t be prepared.'));
   if(a.sport==='gym'&&result.plan?.rows)result.muscles=Object.fromEntries([...new Set(result.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
