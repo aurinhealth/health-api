@@ -696,7 +696,7 @@ final class APIClient: @unchecked Sendable {
             let message = json?["message"] as? String
             if http.statusCode == 426 {
                 onUpdateRequired?()
-                throw APIError.updateRequired(message ?? L10n.tr("Tahle verze aplikace je zastaralá. Nainstaluj novou."))
+                throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
             }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))

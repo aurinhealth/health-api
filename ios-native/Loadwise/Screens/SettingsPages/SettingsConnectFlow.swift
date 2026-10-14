@@ -280,7 +280,7 @@ struct ServiceConnectSheet: View {
             if event == target.id { await finished(); return }
             switch event {
             case "intervals-failed": phase = .key
-            case "expired": error = L10n.tr("Odkaz vypršel, zkus to znovu.")
+            case "expired": error = L10n.tr("Odkaz vypršel. Zkus to znovu.")
             case let cancelled where cancelled.hasSuffix("-cancelled"): break
             default: error = L10n.tr("Připojení se nedokončilo. Zkus to znovu.")
             }

@@ -159,7 +159,7 @@ test('a reply cut off by the token limit keeps its answer and never shows raw JS
     const streamed=await askCoach({OPENAI_API_KEY:'test'},'Naplánuj zimní tréninkový blok',{date:today},{actions:true,onAnswer:a=>seen.push(a)});
     assert.equal(streamed.answer,'Ahoj, dnes\n\n'+TRUNCATED_NOTE);assert.equal(seen.at(-1),'Ahoj, dnes');assert.equal(streamed.incomplete,true);
     globalThis.fetch=async()=>Response.json({status:'incomplete',output:[]});
-    await assert.rejects(askCoach({OPENAI_API_KEY:'test'},'Ahoj',{}),/nevešla/);
+    await assert.rejects(askCoach({OPENAI_API_KEY:'test'},'Ahoj',{}),/moc dlouhá/);
   }finally{globalThis.fetch=original;}
 });
 

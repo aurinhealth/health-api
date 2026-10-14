@@ -356,7 +356,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 export async function googleToken(env, scopes = healthScopes(env)) {
   // Without a connection Google would only answer "missing refresh_token".
   if (!env.GOOGLE_REFRESH_TOKEN) throw new Error(L("Google Health není připojené.", "Google Health isn't connected."));
-  if (!scopes.length) throw new Error(L("Google Health nemá povolené žádné oprávnění. V Nastavení obnov oprávnění Google.", "Google Health has no permissions granted. Renew the Google permissions in Settings."));
+  if (!scopes.length) throw new Error(L("Aurin nemá od Googlu povolená žádná data. Povol je v Nastavení → Zdroje dat → Google Health.", "Aurin has no access to your Google Health data. Allow it in Settings → Data sources → Google Health."));
   const response = await fetchWithTimeout(
     "https://oauth2.googleapis.com/token",
 

@@ -47,6 +47,6 @@ export async function subscriptionStatus(env) {
 export async function assertAIAccess(env){
   const status=await subscriptionStatus(env);
   if(status.aiAccess)return;
-  if(!status.aiConsent){const error=new Error(L('AI funkce posílají tvoje data do OpenAI a k tomu zatím chybí tvůj souhlas.', 'AI features send your data to OpenAI, and your consent to that is still missing.'));error.status=403;error.ai=true;error.consent=true;throw error;}
+  if(!status.aiConsent){const error=new Error(L('AI funkce potřebují tvůj souhlas. Zapneš je v Nastavení → Soukromí a data.', 'AI features need your consent. Turn them on in Settings → Privacy & data.'));error.status=403;error.ai=true;error.consent=true;throw error;}
   const error=new Error(L('Tato AI funkce vyžaduje AI předplatné. Přehled najdeš v Nastavení → Předplatné.', 'This AI feature needs an AI subscription. See Settings → Subscription.'));error.status=402;error.ai=true;error.limit=true;throw error;
 }

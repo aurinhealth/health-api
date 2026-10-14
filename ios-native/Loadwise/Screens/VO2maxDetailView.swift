@@ -14,7 +14,7 @@ struct VO2maxDetailView: View {
                 if let vo2 = training.vo2max {
                     VO2maxContent(vo2: vo2, back: { dismiss() }).padding(.bottom, 100)
                 } else {
-                    Text("VO2max zatím není k dispozici. Hodinky ho odhadují z běhu nebo jízdy s tepovou frekvencí.")
+                    Text("VO2max zatím není k dispozici. Objeví se, až ho pošlou tvoje hodinky nebo připojená služba.")
                         .font(Typo.body).foregroundStyle(Palette.muted).padding(24).padding(.top, 60)
                 }
             }

@@ -58,8 +58,8 @@ test("after a ride the activity says what was done, then recommends stretching",
   assert.equal(best.kind, "rest");
   assert.equal(best.title, "Protažení");
   assert.equal(best.detail, "15 min · večer procházka 30 min");
-  assert.equal(best.reason, "Odjel jsi kolo, 1 h 07, 74 TSS. Doporučuju 15 minut protažení a večer lehkou procházku.");
-  assert.equal(doneSentence([{ kind: "run", minutes: 40 }]), "Odběhl jsi běh, 40 min.");
+  assert.equal(best.reason, "Dnes máš za sebou kolo, 1 h 07, 74 TSS. Doporučuju 15 minut protažení a večer lehkou procházku.");
+  assert.equal(doneSentence([{ kind: "run", minutes: 40 }]), "Dnes máš za sebou běh, 40 min.");
 });
 
 test("Doporučovat méně is kept per athlete and can be undone", async () => {

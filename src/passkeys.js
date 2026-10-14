@@ -11,6 +11,7 @@ import { findUser } from "./tenancy.js";
 import { allowClient } from "./ip-rate-limit.js";
 import { emailConfigured, sendEmail, passkeyAddedEmail } from "./email-sender.js";
 import { requestLanguage } from "./email-login.js";
+import { L } from "./lang.js";
 
 const CHALLENGE_SECONDS = 5 * 60;
 const MAX_OPEN_SIGN_INS = 500;
@@ -18,7 +19,7 @@ const MAX_OPEN_SIGN_INS = 500;
 const CROWDED_SIGN_INS = Math.floor(MAX_OPEN_SIGN_INS * 0.8);
 const ABANDONED_SECONDS = 60;
 const MAX_PASSKEYS = 20;
-const NOT_VERIFIED = "Přístupový klíč se nepodařilo ověřit. Zkus to znovu.";
+const NOT_VERIFIED = () => L("Přístupový klíč se nepodařilo ověřit. Zkus to znovu.", "Couldn't verify the passkey. Try again.");
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 const sameOrigin = request => request.headers.get("Origin") === new URL(request.url).origin;
@@ -98,34 +99,34 @@ async function takeChallenge(db, challenge, purpose) {
 
 export async function handlePasskeyLogin(request, env, pathname) {
   if (pathname !== "/auth/passkey/options" && pathname !== "/auth/passkey/verify") return null;
-  if (request.method !== "POST") return json({ message: "Použij POST." }, 405);
-  if (!sameOrigin(request)) return json({ message: "Neplatný původ požadavku." }, 403);
+  if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
+  if (!sameOrigin(request)) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const db = env.DB, { origin, rpId } = relyingParty(request);
   if (pathname === "/auth/passkey/options") {
-    if (!(await allowClient(db, request, sessionSecret(env), "passkey"))) return json({ message: "Příliš mnoho pokusů o přihlášení. Zkus to za chvíli." }, 429);
+    if (!(await allowClient(db, request, sessionSecret(env), "passkey"))) return json({ message: L("Příliš mnoho pokusů o přihlášení. Zkus to za chvíli.", "Too many sign-in attempts. Try again in a moment.") }, 429);
     const challenge = await issueChallenge(db, "login");
-    if (!challenge) return json({ message: "Právě se přihlašuje moc lidí najednou. Zkus to za pár minut." }, 429);
+    if (!challenge) return json({ message: L("Právě se přihlašuje moc lidí najednou. Zkus to za pár minut.", "Too many people are signing in right now. Try again in a few minutes.") }, 429);
     return json({ challenge, rpId, timeout: CHALLENGE_SECONDS * 1000, userVerification: "required", allowCredentials: [] });
   }
   const credential = (await request.json().catch(() => ({})))?.credential;
   const issued = await takeChallenge(db, clientDataChallenge(credential), "login");
-  if (!issued) return json({ message: "Přihlášení vypršelo. Zkus to znovu." }, 400);
+  if (!issued) return json({ message: L("Přihlášení vypršelo. Zkus to znovu.", "Sign-in expired. Try again.") }, 400);
   const stored = typeof credential?.id === "string" && credential.id.length <= 1400
     ? await db.prepare("SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = ?").bind(credential.id).first()
     : null;
   // unknownCredential lets the browser drop a passkey that no longer exists here.
-  if (!stored) return json({ message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.", unknownCredential: true, rpId }, 401);
+  if (!stored) return json({ message: L("Tenhle přístupový klíč Aurin nezná. Přihlas se jinak, třeba kódem z e-mailu.", "Aurin doesn't recognize this passkey. Sign in another way, for example with an email code."), unknownCredential: true, rpId }, 401);
   // The passkey names the account it belongs to; it has to be the account it is stored with.
-  if (credential.response?.userHandle !== stored.user_handle) return json({ message: NOT_VERIFIED }, 401);
+  if (credential.response?.userHandle !== stored.user_handle) return json({ message: NOT_VERIFIED() }, 401);
   let result;
   try { result = await verifyAuthentication(credential, { challenge: issued.challenge, origin, rpId, stored: { publicKey: JSON.parse(stored.public_key), alg: stored.alg, signCount: stored.sign_count } }); }
   catch (error) {
     if (!(error instanceof WebAuthnError)) throw error;
     console.warn("Passkey sign-in refused", error.message);
-    return json({ message: NOT_VERIFIED }, 401);
+    return json({ message: NOT_VERIFIED() }, 401);
   }
   const user = await findUser(db, stored.user_id, env);
-  if (!user) return json({ message: "Tento účet nemá do aplikace přístup." }, 403);
+  if (!user) return json({ message: L("Tento účet nemá do Aurinu přístup.", "This account doesn't have access to Aurin.") }, 403);
   await db.batch([
     db.prepare("UPDATE user_passkeys SET sign_count = MAX(sign_count, ?), backed_up = ?, last_used_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").bind(result.signCount, result.backedUp ? 1 : 0, stored.id, stored.user_id),
     db.prepare("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?").bind(user.id)
@@ -137,18 +138,18 @@ export async function handlePasskeyLogin(request, env, pathname) {
 // Settings → Account. Needs the browser session (an API key cannot add passkeys).
 export async function handlePasskeyApi(request, env, url, session, ctx) {
   if (url.pathname !== "/app/api/passkeys" && url.pathname !== "/app/api/passkeys/options") return null;
-  if (!session.signedIn || !session.user) return json({ message: "Přihlas se do dashboardu." }, 401);
+  if (!session.signedIn || !session.user) return json({ message: L("Přihlášení vypršelo. Přihlas se znovu.", "Your session has expired. Sign in again.") }, 401);
   const db = env.RAW_DB, user = session.user, { origin, rpId } = relyingParty(request);
   const handleOf = async () => (await db.prepare("SELECT user_handle FROM user_passkeys WHERE user_id = ? LIMIT 1").bind(user.id).first())?.user_handle || null;
   if (request.method === "GET" && url.pathname === "/app/api/passkeys") return json({ status: "ok", rpId, userHandle: await handleOf(), passkeys: await listPasskeys(db, user.id) });
-  if (!sameOrigin(request)) return json({ message: "Neplatný původ požadavku." }, 403);
+  if (!sameOrigin(request)) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   if (request.method === "POST" && url.pathname === "/app/api/passkeys/options") {
     const existing = (await db.prepare("SELECT id, user_handle, transports FROM user_passkeys WHERE user_id = ?").bind(user.id).all()).results || [];
-    if (existing.length >= MAX_PASSKEYS) return json({ message: `Účet už má ${MAX_PASSKEYS} přístupových klíčů. Nejdřív nějaký odeber.` }, 400);
+    if (existing.length >= MAX_PASSKEYS) return json({ message: L(`Účet už má ${MAX_PASSKEYS} přístupových klíčů. Další přidat nejde.`, `This account already has ${MAX_PASSKEYS} passkeys. No more can be added.`) }, 400);
     // One random id per user, never the e-mail or the account number.
     const userHandle = existing[0]?.user_handle || randomChallenge(32);
     const challenge = await issueChallenge(db, "register", { userId: user.id, userHandle });
-    if (!challenge) return json({ message: "Zkus to za pár minut." }, 429);
+    if (!challenge) return json({ message: L("Zkus to za pár minut.", "Try again in a few minutes.") }, 429);
     return json({
       challenge,
       rp: { id: rpId, name: "Aurin" },
@@ -163,19 +164,19 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
   if (request.method === "POST" && url.pathname === "/app/api/passkeys") {
     const credential = (await request.json().catch(() => ({})))?.credential;
     const issued = await takeChallenge(db, clientDataChallenge(credential), "register");
-    if (!issued || Number(issued.user_id) !== user.id) return json({ message: "Přidání vypršelo. Zkus to znovu." }, 400);
+    if (!issued || Number(issued.user_id) !== user.id) return json({ message: L("Přidání vypršelo. Zkus to znovu.", "Adding the passkey expired. Try again.") }, 400);
     let result;
     try { result = await verifyRegistration(credential, { challenge: issued.challenge, origin, rpId }); }
     catch (error) {
       if (!(error instanceof WebAuthnError)) throw error;
       console.warn("Passkey registration refused", error.message);
-      return json({ message: NOT_VERIFIED }, 400);
+      return json({ message: NOT_VERIFIED() }, 400);
     }
     const name = passkeyName(result.aaguid, request.headers.get("User-Agent"));
     const inserted = await db.prepare(`INSERT INTO user_passkeys(id, user_id, user_handle, public_key, alg, sign_count, transports, name, backed_up)
       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM user_passkeys WHERE user_id = ?) < ? ON CONFLICT(id) DO NOTHING`)
       .bind(result.credentialId, user.id, issued.user_handle, JSON.stringify(result.publicKey), result.alg, result.signCount, JSON.stringify(result.transports), name, result.backedUp ? 1 : 0, user.id, MAX_PASSKEYS).run();
-    if (!(Number(inserted.meta?.changes) > 0)) return json({ message: "Tenhle přístupový klíč už v Aurinu je." }, 409);
+    if (!(Number(inserted.meta?.changes) > 0)) return json({ message: L("Tenhle přístupový klíč už v Aurinu je.", "This passkey is already in Aurin.") }, 409);
     // Someone who got into the account cannot add a way back in unnoticed.
     if (emailConfigured(env)) {
       const notice = sendEmail(env, { to: user.email, ...passkeyAddedEmail(requestLanguage(request), name) }).catch(error => console.error("Passkey notice e-mail failed", error?.code || error?.message));
@@ -191,5 +192,5 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
     // Whoever signed in with the removed passkey elsewhere is signed out; this device stays.
     return Number(removed.meta?.changes) > 0 ? signedOutElsewhere(db, user.id, env, response) : response;
   }
-  return json({ message: "Nepodporovaná metoda." }, 405);
+  return json({ message: L("Nepodporovaná metoda.", "Unsupported method.") }, 405);
 }

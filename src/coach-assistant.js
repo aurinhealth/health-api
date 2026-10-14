@@ -465,7 +465,7 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
   await assertAIAccess(env);
-  if (!env.OPENAI_API_KEY) throw new Error(L('AI není připojena.', 'AI is not connected.'));
+  if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
   await assertAiAllowance(env);
   const release=await claimAiSlot(env);
   try{return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs});}
@@ -501,7 +501,7 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
   await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
-  if (!text) throw new Error(incomplete?L('Odpověď AI se nevešla do limitu a nedokončila se. Zkus otázku zúžit.', 'The AI answer didn\'t fit the limit and wasn\'t finished. Try narrowing the question.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
+  if (!text) throw new Error(incomplete?L('Odpověď AI byla moc dlouhá a nedokončila se. Zkus zadání zúžit.', 'The AI answer ran too long and was cut off. Try a narrower request.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
   const citations = (data.output || []).flatMap(item => item.content || []).flatMap(item => item.annotations || []).filter(a => a.type === 'url_citation' && a.url).map(a => ({url:a.url, title:a.title || a.url}));
   return {text, model:data.model, usage:data.usage, citations,incomplete,incompleteReason:incomplete?data.incomplete_details?.reason||null:null};
 }
@@ -523,7 +523,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
 }
 
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null} = {}) {
-  if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI není připojena. Nastav serverový secret OPENAI_API_KEY; předplatné ChatGPT není API klíč.', 'AI is not connected. Set the OPENAI_API_KEY server secret; a ChatGPT subscription isn\'t an API key.')};
+  if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
   const light = task === 'simple' || task === 'quick', chosen = model || (light ? lightModel(env) : complexModel(env));
   const data = task === 'simple' ? {date:context.date,now:context.now,athleteState:context.athleteState,statusNote:context.statusNote,preferenceMemory:context.preferenceMemory} : {...context};

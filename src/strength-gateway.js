@@ -176,7 +176,11 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       intervals,
       nutrition
     });
-  } catch (error) { return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 }); }
+  } catch (error) {
+    // A failed read of the athlete's data stays in the log; the app gets a sentence.
+    if (/^strength_context\./.test(String(error?.message))) { console.error("Strength context failed", error.message); return Response.json({ status: "error", step: "strength_generate_plan", message: L("Trénink se nepodařilo sestavit. Zkus to znovu.", "Couldn't build the workout. Try again.") }, { status: 500 }); }
+    return Response.json({ status: "error", step: "strength_generate_plan", message: error.message }, { status: 500 });
+  }
 }
 
 
