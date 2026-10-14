@@ -2147,6 +2147,7 @@
 "Mobilní data v roamingu jsou vypnutá." = "Data roaming is off.";
 "Server neodpověděl včas. Zkus to za chvíli znovu." = "The server didn't answer in time. Try again in a moment.";
 "Nepodařilo se spojit se serverem Aurinu. Zkontroluj připojení a zkus to znovu." = "Couldn't reach the Aurin server. Check your connection and try again.";
+
 /* Aktivita dne (CoachPick.swift) */
 "Aktivita dne" = "Activity of the day";
 "trenažér" = "trainer";
