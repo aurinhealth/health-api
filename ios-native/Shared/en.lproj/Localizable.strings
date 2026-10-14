@@ -2047,3 +2047,8 @@
 "Zapsáno do odpolední svačiny" = "Logged to the afternoon snack";
 "Zapsáno do večeře" = "Logged to dinner";
 "Zapsáno do druhé večeře" = "Logged to the second dinner";
+
+/* WHOOP in Zdroje dat */
+"Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů." = "The WHOOP data will be deleted and your nights will come from your other sources again.";
+"Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve." = "Sleep and its stages, resting heart rate, HRV, breathing and blood oxygen.";
+"Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";
