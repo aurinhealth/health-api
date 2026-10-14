@@ -74,11 +74,12 @@ enum OutboxRefusal: LocalizedError {
 
 enum Outbox {
     /// The request did not reach the server (no signal, the connection dropped,
-    /// it timed out); a server error is not one of these.
+    /// it timed out, a Wi-Fi that wants a sign-in broke the secure connection);
+    /// a server error is not one of these.
     static func isNoConnection(_ error: Error) -> Bool {
         guard let code = (error as? URLError)?.code else { return false }
         return [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost,
-                .dataNotAllowed, .internationalRoamingOff].contains(code)
+                .dataNotAllowed, .internationalRoamingOff, .secureConnectionFailed].contains(code)
     }
 
     /// A local id for a meal or drink not sent yet (negative, so never a server id).

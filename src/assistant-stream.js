@@ -29,7 +29,7 @@ export async function readOpenAIStream(response,onText){
     // Cut off at max_output_tokens: the part that arrived is kept and marked.
     if(event.type==='response.incomplete')completed={...event.response,status:'incomplete'};
     // A failure after generation started still cost tokens: the usage the event carries goes with the error (coach-assistant.js records it).
-    if(['error','response.failed'].includes(event.type)){const failure=new Error(String(event.error?.message||event.response?.error?.message||event.message||L('odpověď selhala', 'the answer failed')));failure.ai=true;if(event.response?.usage){failure.usage=event.response.usage;failure.model=event.response.model||null;}throw failure;}
+    if(['error','response.failed'].includes(event.type)){const failure=new Error(String(event.error?.message||event.response?.error?.message||event.message||L('služba AI neuvedla důvod', 'the AI service gave no reason')));failure.ai=true;if(event.response?.usage){failure.usage=event.response.usage;failure.model=event.response.model||null;}throw failure;}
   };
   try{
     while(true){const {value,done}=await reader.read();buffer+=decoder.decode(value,{stream:!done});let match;

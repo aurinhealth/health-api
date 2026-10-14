@@ -38,5 +38,17 @@ final class OutboxTests: XCTestCase {
         XCTAssertTrue(Outbox.isNoConnection(URLError(.timedOut)))
         XCTAssertFalse(Outbox.isNoConnection(URLError(.badServerResponse)))
         XCTAssertFalse(Outbox.isNoConnection(APIError.message("400")))
+        // A Wi-Fi that wants a sign-in breaks the secure connection: the write waits too.
+        XCTAssertTrue(Outbox.isNoConnection(URLError(.secureConnectionFailed)))
+    }
+
+    func testConnectionErrorsSayWhatToDo() {
+        let tls = APIClient.readable(URLError(.secureConnectionFailed))
+        XCTAssertEqual((tls as? URLError)?.code, .secureConnectionFailed)
+        XCTAssertTrue(tls.localizedDescription.contains("Wi-Fi"))
+        XCTAssertTrue(Outbox.isNoConnection(APIClient.readable(URLError(.notConnectedToInternet))))
+        // What the app does not word stays as iOS says it.
+        XCTAssertEqual((APIClient.readable(URLError(.badURL)) as? URLError)?.code, .badURL)
+        XCTAssertEqual(APIClient.readable(APIError.unauthorized) as? APIError, .unauthorized)
     }
 }

@@ -79,7 +79,7 @@ final class AppleHealthExport {
     /// A done workout. nil when it went in, else the message for the sheet.
     func saveWorkout(_ activity: ActivityToSync) async -> String? {
         guard isAvailable else { return L10n.tr("Apple Health na tomhle zařízení není.") }
-        guard allowed(HKObjectType.workoutType()) else { return L10n.tr("Apple Zdraví nepovolilo zápis tréninků. Povol ho v Nastavení iPhonu → Zdraví → Přístup k datům.") }
+        guard allowed(HKObjectType.workoutType()) else { return L10n.tr("Aurin nemá povolený zápis tréninků do Apple Zdraví. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin.") }
         let end = (activity.start ?? Self.noon(activity.date)).addingTimeInterval(TimeInterval(activity.minutes * 60))
         let start = end.addingTimeInterval(-TimeInterval(activity.minutes * 60))
         let configuration = HKWorkoutConfiguration()

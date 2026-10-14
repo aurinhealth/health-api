@@ -427,7 +427,7 @@ export function planStart(template, { today, raceDate = null, startDate = null }
   if (template.race && raceDate) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raceDate) || raceDate <= today) throw new Error(L("Datum závodu musí být v budoucnu.", "The race date must be in the future."));
     const start = shift(mondayOf(raceDate), -(template.weeks.length - 1) * 7);
-    if (daysBetween(today, raceDate) > 400) throw new Error(L("Závod je moc daleko, plán začne později.", "The race is too far away; start the plan later."));
+    if (daysBetween(today, raceDate) > 400) throw new Error(L("Závod je moc daleko. Plán založ, až bude méně než rok před ním.", "The race is too far away. Start the plan when it's less than a year away."));
     const firstWeek = start >= thisMonday ? 1 : Math.floor(daysBetween(start, thisMonday) / 7) + 1;
     if (template.weeks.length - firstWeek + 1 < Math.ceil(template.weeks.length * .6)) throw new Error(L("Do závodu je na tento plán málo času.", "There isn't enough time before the race for this plan."));
     return { startDate: start, firstWeek, raceDate };
@@ -705,10 +705,10 @@ export function proposalView(proposal, plan, today) {
       { id: "pick", label: L("Vybrat jiný den", "Pick another day") },
       { id: "skip", label: L("Vynechat", "Skip it"), recommended: !proposal.suggest }
     ];
-    return { type: "missed", title: L("Vynechaný trénink", "Missed session"), text: when + L(" jsi nestihl ", " you missed ") + proposal.label + ".", options, days: proposal.days, button: L("Přesunout", "Move") };
+    return { type: "missed", title: L("Vynechaný trénink", "Missed session"), text: when + L(" zůstal nesplněný trénink: ", " you missed ") + proposal.label + ".", options, days: proposal.days, button: L("Přesunout", "Move") };
   }
   if (proposal.type === "week") {
-    return { type: "week", title: L("Revize plánu", "Plan review"), text: L("Minulý týden jsi stihl ", "Last week you did ") + proposal.done + L(" ze ", " of ") + proposal.total + L(" klíčových tréninků.", " key sessions."), button: L("Použít", "Apply"), options: [
+    return { type: "week", title: L("Revize plánu", "Plan review"), text: L("Minulý týden je hotovo ", "Last week you did ") + proposal.done + L(" ze ", " of ") + proposal.total + L(" klíčových tréninků.", " key sessions."), button: L("Použít", "Apply"), options: [
       { id: "repeat", label: L("Zopakovat týden ", "Repeat week ") + proposal.week, recommended: true },
       { id: "continue", label: L("Pokračovat týdnem ", "Go on with week ") + proposal.next },
       { id: "light", label: L("Odlehčený týden, pak týden ", "A lighter week, then week ") + proposal.week }] };

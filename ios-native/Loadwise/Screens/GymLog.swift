@@ -408,7 +408,7 @@ struct GymExerciseTable: View {
             }
             if missingNote, let missing = exercise.sets.first(where: { !$0.done }) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.f("Série %@ chybí: doplň váhu, nebo ji smaž.", missing.warmup ? "R" : missing.number))
+                    Text(L10n.f("Série %@ není vyplněná: doplň opakování, nebo ji smaž.", missing.warmup ? "R" : missing.number))
                         .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     if let onRemove {

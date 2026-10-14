@@ -134,7 +134,7 @@ test("a failed send is recorded with a message and goes out on 'Zkusit znovu'", 
   assert.match(first.sends[0].message, /Zkus to znovu|Try again/);
   ok = true;
   assert.deepEqual(await retrySend(env, activity.key, "intervals", { fetchImpl }), { destination: "intervals", status: "sent", remoteId: "5" });
-  await assert.rejects(retrySend(env, "nothing:here", "intervals", { fetchImpl }), /nalezeno|found/);
+  await assert.rejects(retrySend(env, "nothing:here", "intervals", { fetchImpl }), /nenašlo|find/);
 });
 
 test("switched off or not connected: nothing is sent", async () => {

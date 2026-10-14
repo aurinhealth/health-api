@@ -106,7 +106,7 @@ export async function nightlyGymSkip(db, date) {
   if (prefs.availability[weekday].minutes === 0) return L('Tento den nemáš čas na aktivitu.', 'You don\'t have time for an activity on this day.');
   if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return L("Podle týdenního plánu není tento den gym.", "The week plan has no gym on this day.");
   const gym = await readGymPlan(db, date);
-  if (gym.cancelled) return L("Gym na tento den jsi zrušil.", "You cancelled the gym for this day.");
+  if (gym.cancelled) return L("Gym na tento den je zrušený.", "You cancelled the gym for this day.");
   if (gym.stored) return L("Na tento den už gym plán je.", "There's already a gym plan for this day.");
   return null;
 }

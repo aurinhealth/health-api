@@ -33,7 +33,8 @@ const round1=value=>Math.round(value*10)/10;
 // amounts by the same ratio; values sent explicitly still win.
 function rescale(row,note,amount){
   const value=Number(amount);
-  if(amount===''||!Number.isFinite(value)||value<=0||value>5000)throw new Error(L('Zadej množství 1–5000.', 'Enter an amount of 1–5000.'));
+  if(Number.isFinite(value)&&value>5000)throw new Error(L('Tohle množství je moc velké.', 'That amount is too large.'));
+  if(amount===''||!Number.isFinite(value)||value<=0)throw new Error(L('Zadej množství.', 'Enter an amount.'));
   const before=loggedAmount(note);
   if(!before)throw new Error(L('U tohoto jídla neznám původní množství, uprav hodnoty ručně.', 'The original amount of this meal is unknown; edit the values by hand.'));
   const ratio=value/before,scaled={};
