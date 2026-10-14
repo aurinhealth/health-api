@@ -56,3 +56,29 @@ test('Intervals.icu curves: the key durations and distances', async () => {
   const fake = async url => ({ ok: true, json: async () => url.includes('power') ? { list: [{ id: '42d', secs: [1200], values: [270] }] } : null });
   assert.deepEqual(await intervalsCurves({ INTERVALS_API_KEY: 'k' }, 'x', fake), { ridePower: { '42d': { '20min': 270 } } });
 });
+
+test("recent intervals keep the work laps of the last two weeks", async () => {
+  const { recentIntervals } = await import("../src/performance-trends.js");
+  const sessions = [
+    { id: "i1", date: "2026-10-12", kind: "ride", minutes: 60 },
+    { id: "i2", date: "2026-10-10", kind: "run", minutes: 45 },
+    { id: "i3", date: "2026-09-20", kind: "ride", minutes: 60 },
+    { id: null, date: "2026-10-11", kind: "ride", minutes: 60 }
+  ];
+  const calls = [];
+  const detail = async id => {
+    calls.push(id);
+    if (id === "i1") return { activity: { name: "FTP test" }, intervals: [
+      { label: "Warmup", type: "RECOVERY", seconds: 900, watts: 150 },
+      { label: "Test", type: "WORK", seconds: 1200, watts: 280, np: 283, hr: 172 },
+      { type: "WORK", seconds: 10, watts: 600 }
+    ] };
+    return { activity: {}, intervals: [{ seconds: 300, speed: 4, hr: 165 }] };
+  };
+  const out = await recentIntervals(sessions, "2026-10-14", detail);
+  assert.deepEqual(calls, ["i1", "i2"]);
+  assert.equal(out[0].name, "FTP test");
+  assert.deepEqual(out[0].efforts, [{ label: "Test", minutes: 20, watts: 280, np: 283, hr: 172 }]);
+  assert.equal(out[1].efforts[0].pace, "4:10/km");
+  assert.equal(await recentIntervals([], "2026-10-14", detail), null);
+});

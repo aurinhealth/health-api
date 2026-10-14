@@ -144,3 +144,36 @@ export async function intervalsCurves(env, authorization, fetchImpl = fetch) {
   const ride = powerCurvePoints(power), run = paceCurvePoints(pace);
   return ride || run ? { ...(ride ? { ridePower: ride } : {}), ...(run ? { runBest: run } : {}) } : null;
 }
+
+// ---- intervals and laps -----------------------------------------------------
+// The work intervals (laps, or the efforts Intervals.icu found) of the last
+// two weeks' rides and runs from Intervals.icu, newest first: what the athlete
+// really held in each effort, e.g. the 20 minutes of an FTP test.
+// `detail(id)` → {intervals} (activity-detail.js rideIntervals).
+const pick = list => {
+  const typed = list.filter(i => i.type);
+  const work = typed.length ? typed.filter(i => String(i.type).toUpperCase() === "WORK") : list;
+  return work.filter(i => i.seconds >= 30);
+};
+export function sessionIntervals(session, intervals, name = null) {
+  const work = pick(intervals || []).slice(0, 20);
+  if (!work.length) return null;
+  return {
+    date: session.date, sport: session.kind, ...(name ? { name: String(name).slice(0, 80) } : {}), minutes: round(session.minutes),
+    efforts: work.map(i => {
+      const pace = session.kind === "run" && i.speed > 0 ? paceText(1000 / i.speed) : null;
+      return Object.fromEntries(Object.entries({ label: i.label, minutes: round(i.seconds / 60, 1), watts: i.watts, np: i.np, hr: i.hr, maxHr: i.maxHr, pace, cadence: i.cadence }).filter(([, v]) => v != null && v !== ""));
+    })
+  };
+}
+export async function recentIntervals(sessions = [], today, detail, limit = 6) {
+  const since = shift(today, -14);
+  const recent = (sessions || []).filter(s => s.id && s.date > since && s.date <= today && s.minutes >= 15).sort((a, b) => b.date.localeCompare(a.date)).slice(0, limit);
+  const out = [];
+  for (const s of recent) {
+    const d = await detail(s.id).catch(() => null);
+    const summary = d ? sessionIntervals(s, d.intervals, d.activity?.name) : null;
+    if (summary) out.push(summary);
+  }
+  return out.length ? out : null;
+}
