@@ -145,7 +145,7 @@ test('passing remarks are not remembered and preferences are saved after the ans
 });
 
 test('a reply cut off by the token limit keeps its answer and never shows raw JSON',async()=>{
-  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[]});
+  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[],memory:{forget:[],update:[]}});
   assert.doesNotMatch(coachAnswerText('{"actions":[{"type":"rest"',{actions:true}).answer,/[{}]/);
   assert.equal(coachAnswerText('Obyčejný text',{actions:true}).answer,'Obyčejný text');
   const original=globalThis.fetch,calls=[];

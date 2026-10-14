@@ -19,6 +19,7 @@ struct CoachView: View {
     @State private var unsent: (bubble: UUID, text: String)?
     @State private var home: CoachesSnapshot?
     @State private var showChats = false
+    @State private var showMemory = false
     @FocusState private var focused: Bool
 
     struct Bubble: Identifiable, Equatable {
@@ -28,6 +29,7 @@ struct CoachView: View {
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
         var visuals: [String] = []
+        var memory: [CoachMemoryChip] = []
     }
 
     var body: some View {
@@ -38,7 +40,9 @@ struct CoachView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty { welcome }
                             ForEach(messages) { bubble in
-                                BubbleView(bubble: bubble, decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } })
+                                BubbleView(bubble: bubble,
+                                           decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
+                                           undoMemory: { chip in Task { await undo(chip, in: bubble.id) } })
                                     .id(bubble.id)
                             }
                             if let progress, sending {
@@ -67,6 +71,7 @@ struct CoachView: View {
                     Menu {
                         Button { newChat() } label: { Label("Nová konverzace", systemImage: "square.and.pencil") }
                         Button { showChats = true } label: { Label("Předchozí konverzace", systemImage: "clock.arrow.circlepath") }
+                        Button { showMemory = true } label: { Label("Co si kouč pamatuje", systemImage: "sparkles") }
                     } label: { Image(systemName: "ellipsis.circle") }
                     // Not while an answer streams in: it writes into the current conversation.
                     .disabled(sending)
@@ -74,6 +79,7 @@ struct CoachView: View {
                 }
             }
             .sheet(isPresented: $showChats) { ChatsSheet { id in Task { await open(id) } } }
+            .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
         }
         .tint(Palette.ink)
         .task {
@@ -199,6 +205,7 @@ struct CoachView: View {
                         if let a = result.answer { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
+                        $0.memory = result.memoryChanges?.chips ?? []
                     }
                     if let chat = result.chatId { chatId = chat }
                 }
@@ -233,6 +240,22 @@ struct CoachView: View {
         }
     }
 
+    /// "Zpět" under an answer: what the coach remembered, forgot or rewrote goes back.
+    private func undo(_ chip: CoachMemoryChip, in bubble: UUID) async {
+        do {
+            switch chip.kind {
+            case .saved: try await model.api.forgetMemory(chip.text)
+            case .forgotten: try await model.api.addMemory(chip.text)
+            case .updated: try await model.api.editMemory(from: chip.text, to: chip.from ?? chip.text)
+            }
+            edit(bubble) { b in
+                if let i = b.memory.firstIndex(where: { $0.id == chip.id }) { b.memory[i].undone = true }
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func newChat() {
         messages = []
         chatId = nil
@@ -259,6 +282,7 @@ struct CoachView: View {
 struct BubbleView: View {
     let bubble: CoachView.Bubble
     var decide: (CoachAction, Bool) -> Void
+    var undoMemory: (CoachMemoryChip) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -279,6 +303,9 @@ struct BubbleView: View {
             }
             ForEach(bubble.visuals, id: \.self) { kind in
                 CoachVisual(kind: kind)
+            }
+            ForEach(bubble.memory) { chip in
+                MemoryChipView(chip: chip) { undoMemory(chip) }
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] }, decide: { decide(action, $0) })

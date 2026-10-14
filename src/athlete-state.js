@@ -19,7 +19,7 @@ export async function getAthleteState(db,{date=localToday()}={}) {
   const row = await db.prepare('SELECT state_json FROM athlete_state WHERE user_id=?').bind(db.userId).first();
   let state = {}; try { state = JSON.parse(row?.state_json || '{}'); } catch { /* defaults */ }
   // `conversation` is no longer written (chats live in assistant_chats); old rows still read.
-  return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], conversation: [], dismissed: [], ...state },date);
+  return effectiveAthleteState({ status: 'active', note: '', statusUntil:null, memories: [], memoryMeta: {}, conversation: [], dismissed: [], ...state },date);
 }
 export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   const state = await getAthleteState(db,{date});
@@ -30,11 +30,52 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     state.status = patch.status; state.note = clean(patch.note); state.changedAt = new Date().toISOString();
     state.statusUntil=patch.status==='active'?null:until;
   }
-  if (patch.memory) state.memories = [...new Set([...state.memories, clean(patch.memory)])].slice(-30);
-  if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));}
+  if (patch.memory) remember(state, clean(patch.memory), date);
+  if (patch.forget != null) {state.memories = state.memories.filter(x => x !== patch.forget);delete state.memoryMeta[patch.forget];state.conversation=state.conversation.filter(t=>!String(t.content).includes(patch.forget));}
+  // An edited memory keeps its place in the list and counts as new.
+  if (patch.edit?.from != null && state.memories.includes(patch.edit.from)) {
+    const to = clean(patch.edit.to);
+    if (!to) throw new Error(L('Napiš, co si má kouč pamatovat.', 'Write what the coach should remember.'));
+    delete state.memoryMeta[patch.edit.from];
+    state.memories = [...new Set(state.memories.map(x => x === patch.edit.from ? to : x))];
+    state.memoryMeta[to] = memoryMeta(to, date);
+  }
+  // "Still true": the coach asks again in two weeks.
+  if (patch.keep != null && state.memoryMeta[patch.keep]?.check) state.memoryMeta[patch.keep].check = shiftDate(date, CHECK_DAYS);
   if (patch.dismiss) state.dismissed = [...new Set([...state.dismissed, clean(patch.dismiss)])].slice(-30);
   await db.prepare('INSERT INTO athlete_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json').bind(db.userId, JSON.stringify(state)).run();
   return state;
+}
+// A pain, an injury or an illness passes: the coach asks after two weeks
+// whether such a memory still holds (memoryCheck), so it does not wait for the
+// athlete to delete it.
+const CHECK_DAYS = 14;
+const shiftDate = (day, days) => new Date(Date.parse(day + 'T12:00:00Z') + days * 864e5).toISOString().slice(0, 10);
+const PASSING = /bol[ií]|bolest|zran|natáh|natah|podvrt|výron|vyron|nateklé|natekl|nemoc|nachlaz|chřip|chrip|těhot|tehot|hurt|pain|sore|injur|sprain|strain|ill\b|sick|cold\b|flu\b|pregnan/i;
+const memoryMeta = (text, date) => ({ at: date, check: PASSING.test(text) ? shiftDate(date, CHECK_DAYS) : null });
+function remember(state, text, date) {
+  if (!text || state.memories.includes(text)) return;
+  state.memories = [...state.memories, text].slice(-30);
+  state.memoryMeta[text] = memoryMeta(text, date);
+  for (const key of Object.keys(state.memoryMeta)) if (!state.memories.includes(key)) delete state.memoryMeta[key];
+}
+// The list for the app: each memory with the day it was saved.
+export const memoryList = state => (state.memories || []).map(text => ({ text, since: state.memoryMeta?.[text]?.at || null, check: state.memoryMeta?.[text]?.check || null }));
+// The oldest passing memory whose check day has come: "Is this still true?"
+export function memoryCheck(state, date = localToday()) {
+  const due = memoryList(state).filter(m => m.check && m.check <= date).sort((a, b) => a.check.localeCompare(b.check))[0];
+  return due ? { id: 'memory:' + due.check + ':' + due.text, kind: 'memory_check', memory: due.text, headline: L('Platí to pořád?', 'Is this still true?'), reasons: [due.text], message: null } : null;
+}
+// What the coach's answer says to forget or rewrite, kept only when it names a
+// memory exactly as it is saved; a rewrite to the same text is no change.
+export function memoryChanges(proposed, memories = []) {
+  const known = new Set(memories), forgotten = [], updated = [];
+  for (const text of Array.isArray(proposed?.forget) ? proposed.forget : []) if (known.has(text) && !forgotten.includes(text)) forgotten.push(text);
+  for (const u of Array.isArray(proposed?.update) ? proposed.update : []) {
+    const to = clean(u?.to);
+    if (known.has(u?.from) && !forgotten.includes(u.from) && to && to !== u.from && !updated.some(x => x.from === u.from)) updated.push({ from: u.from, to });
+  }
+  return { forgotten, updated };
 }
 // A lasting preference ("Nechci běhat"), not a remark about one day or a
 // question: "Nechci dnes nohy" or "Nechci zítra kolo?" are not remembered.

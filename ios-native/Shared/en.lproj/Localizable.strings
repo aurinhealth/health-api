@@ -1971,3 +1971,12 @@
 "upraveno" = "edited";
 "odhad, hodinky %@" = "estimate, watch %@";
 "Kalorie %@ (%@): %@ kcal" = "Calories of %@ (%@): %@ kcal";
+"Co si kouč pamatuje" = "What the coach remembers";
+"Kouč si zatím nic nepamatuje." = "The coach doesn't remember anything yet.";
+"Co si má kouč pamatovat" = "What the coach should remember";
+"Vráceno" = "Undone";
+"Zapamatováno" = "Remembered";
+"Zapomenuto: %@" = "Forgotten: %@";
+"Upraveno: %@" = "Changed: %@";
+"Už neplatí" = "No longer true";
+"Pořád platí" = "Still true";

@@ -29,9 +29,17 @@ struct CoachCheckInCard: View {
                     if let message = advice.message {
                         Text(message).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
-                    HStack(spacing: 10) {
-                        PrimaryButton(title: "Probrat", systemImage: "bubble.left.and.text.bubble.right", action: openCoach)
-                        SecondaryButton(title: "Teď ne") { Task { await dismiss(advice) } }
+                    if advice.kind == "memory_check", let memory = advice.memory {
+                        // A pain or an illness the coach remembers: still true, or forget it.
+                        HStack(spacing: 10) {
+                            PrimaryButton(title: L10n.tr("Už neplatí")) { Task { await settle(memory, keep: false) } }
+                            SecondaryButton(title: "Pořád platí") { Task { await settle(memory, keep: true) } }
+                        }
+                    } else {
+                        HStack(spacing: 10) {
+                            PrimaryButton(title: "Probrat", systemImage: "bubble.left.and.text.bubble.right", action: openCoach)
+                            SecondaryButton(title: "Teď ne") { Task { await dismiss(advice) } }
+                        }
                     }
                 }
             }
@@ -40,6 +48,11 @@ struct CoachCheckInCard: View {
             guard !model.demo else { return }
             advice = try? await model.api.coachCheckIn()
         }
+    }
+
+    private func settle(_ memory: String, keep: Bool) async {
+        withAnimation { advice = nil }
+        if keep { _ = try? await model.api.keepMemory(memory) } else { _ = try? await model.api.forgetMemory(memory) }
     }
 
     private func dismiss(_ advice: CoachCheckIn.Advice) async {

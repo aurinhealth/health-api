@@ -12,6 +12,44 @@ struct AssistantResult: Decodable, Equatable {
     /// Pictures to draw under the answer from the app's own data:
     /// form, recovery, sleep, nutrition, week, training or zones.
     var visuals: [String]? = nil
+    /// What the coach remembered, forgot or rewrote with this answer.
+    var memoryChanges: MemoryChanges? = nil
+
+    struct MemoryChanges: Decodable, Equatable {
+        let saved: String?
+        let forgotten: [String]?
+        let updated: [Update]?
+
+        struct Update: Decodable, Equatable {
+            let from: String
+            let to: String
+        }
+
+        /// One line under the answer per change, each with "Zpět".
+        var chips: [CoachMemoryChip] {
+            (saved.map { [CoachMemoryChip(kind: .saved, text: $0)] } ?? [])
+                + (forgotten ?? []).map { CoachMemoryChip(kind: .forgotten, text: $0) }
+                + (updated ?? []).map { CoachMemoryChip(kind: .updated, text: $0.to, from: $0.from) }
+        }
+    }
+}
+
+/// "Zapamatováno", "Zapomenuto" or "Upraveno" under an answer.
+struct CoachMemoryChip: Identifiable, Equatable {
+    enum Kind { case saved, forgotten, updated }
+    let id = UUID()
+    let kind: Kind
+    let text: String
+    var from: String? = nil
+    var undone = false
+}
+
+/// One thing the coach remembers (GET /app/api/athlete-state, src/athlete-state.js memoryList).
+struct CoachMemory: Decodable, Equatable, Identifiable {
+    let text: String
+    let since: String?
+    let check: String?
+    var id: String { text }
 }
 
 /// A change the coach proposes; nothing happens until it is confirmed
