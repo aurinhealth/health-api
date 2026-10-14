@@ -75,6 +75,12 @@ struct SettingsMenu: View {
                 NavigationLink { ZonesSettingsView(store: store) } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "chart.bar", color: Palette.rust), title: "Zóny")
                 }
+                if !SettingsSectionTiles.cycleTile(store, model) {
+                    SettingsDivider()
+                    NavigationLink { CycleSettingsView() } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.pink), title: "Cyklus")
+                    }
+                }
             }
             .buttonStyle(.plain)
 
