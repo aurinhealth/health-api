@@ -186,6 +186,7 @@ const num=v=>v==null||v===''||!Number.isFinite(Number(v))?null:Number(v);
 const first=(...values)=>values.map(num).find(v=>v!=null)??null;
 const round=(v,digits=0)=>v==null?null:Math.round(v*10**digits)/10**digits;
 const compactObject=o=>Object.fromEntries(Object.entries(o).filter(([,v])=>v!=null&&v!==''&&!(Array.isArray(v)&&!v.length)));
+const filled=o=>{const c=compactObject(o);return Object.keys(c).length?c:null;};
 
 const paceText=s=>{if(!s)return null;const t=Math.round(s);return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')+'/km';};
 // A watch session from Apple Health or Google keeps its numbers in
@@ -234,13 +235,24 @@ export function compactTraining(training){
     matched:(training.matched||[]).map(m=>compactObject({planned:m.planned?compactPlanned(m.planned):null,actualId:m.actualId}))});
 }
 
-// Calorie target, macros, what was eaten and what is left today.
-export function nutritionContext(n){
+// Calorie target, macros, what was eaten and what is left today, with what
+// food advice needs around it: why the target is what it is (a long ride
+// tomorrow), the safe minimum, the weight trend and goal, the deficit, what
+// the day burned, drinks and the last days' eating.
+export function nutritionContext(n,{daily=null,week=null,fluids=null,date=null}={}){
   if(!n||typeof n!=='object')return null;
-  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros||null;
+  const eaten=n.foodLog?.totals||null,target=num(n.calorieTarget),macros=n.macros||null,b=n.calorieBreakdown||{};
   const left=(goal,have)=>num(goal)==null?null:Math.round(num(goal)-(num(have)||0));
+  const w=daily?.weight||{},avg=x=>round(num(x),1);
+  const lastDays=date?(week?.days||[]).filter(d=>d.date<date&&d.date>=shiftDay(date,-7)).map(d=>{const t=d.daily?.nutrition?.foodLog?.totals;return t&&num(t.kcal)>0?compactObject({date:d.date,eatenKcal:round(num(t.kcal)),proteinG:round(num(t.protein_g)),targetKcal:round(num(d.daily?.nutrition?.calorieTarget))}):null;}).filter(Boolean):[];
   return compactObject({calorieTarget:target,macros,eaten,
-    remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)})});
+    remaining:target==null&&!macros?null:compactObject({kcal:left(target,eaten?.kcal),protein_g:left(macros?.protein_g,eaten?.protein_g),carbs_g:left(macros?.carbs_g,eaten?.carbs_g),fat_g:left(macros?.fat_g,eaten?.fat_g)}),
+    targetReason:typeof n.reason==='string'?n.reason.slice(0,400):null,
+    minimumKcal:num(b.minTarget),deficitKcal:num(b.weightLossDeficit),
+    weight:filled({currentKg:avg(w.current??n.currentWeight),average7dKg:avg(w.average7d),average30dKg:avg(w.average30d),goalKg:avg(n.targetWeightKg)}),
+    burned:filled({dayKcal:round(num(daily?.burned?.total)),activityKcal:round(num(daily?.burned?.activity)),activeSoFarKcal:round(num(n.energyBudget?.active))}),
+    drinks:fluids&&num(fluids.target?.ml)!=null?{drunkMl:round(num(fluids.hydrationMl??fluids.totalMl)||0),targetMl:num(fluids.target.ml)}:null,
+    lastDays:lastDays.length?lastDays:null});
 }
 
 // One strength set as the coach reads it; a blank entry means the prescription.
@@ -305,7 +317,14 @@ export function focusGoal(focus){
 export function compactWellnessRow(w={}){
   const ctl=num(w.ctl),atl=num(w.atl),sleepMinutes=w.sleepMinutes!=null?num(w.sleepMinutes):w.sleepSecs!=null?round(num(w.sleepSecs)/60):null;
   return compactObject({date:String(w.id||w.date||'').slice(0,10)||null,ctl:round(ctl,1),atl:round(atl,1),tsb:round(num(w.tsb)??(ctl!=null&&atl!=null?ctl-atl:null),1),
-    hrv:round(num(w.hrv),1),restingHR:round(num(w.restingHR)),sleepMinutes,respiration:round(num(w.respiration),1),skinTempDeviation:round(num(w.skinTempDeviation),2),wristTemp:round(num(w.wristTemp),2),steps:round(num(w.steps)),spO2:round(num(w.spO2),1),vo2max:round(num(w.vo2max),1)});
+    hrv:round(num(w.hrv),1),restingHR:round(num(w.restingHR)),sleepMinutes,respiration:round(num(w.respiration),1),skinTempDeviation:round(num(w.skinTempDeviation),2),wristTemp:round(num(w.wristTemp),2),steps:round(num(w.steps)),spO2:round(num(w.spO2),1),
+    vo2max:round(num(w.vo2max),1),walkingHR:round(num(w.walkingHR)),hrRecovery:round(num(w.hrRecovery)),feelings:feelingsOf(w)});
+}
+// The athlete's own marks in Intervals.icu wellness: 1 is the best, 4 the worst.
+const FEELINGS=['fatigue','soreness','stress','mood','motivation','injury'];
+function feelingsOf(w){
+  const marks=Object.fromEntries(FEELINGS.map(k=>[k,num(w[k])]).filter(([,v])=>v>=1&&v<=4));
+  return Object.keys(marks).length?{...marks,scale:'1 best, 4 worst'}:null;
 }
 // The last `days` rows up to `date` (rows after it are the future).
 export function compactWellness(rows,{date=null,days=14}={}){
@@ -315,10 +334,10 @@ export function compactWellness(rows,{date=null,days=14}={}){
 
 // The long-term facts for the chat, as { trends } or nothing.
 export function coachTrends({date,fitness,health,profile}){
-  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null});
+  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null,sleepGoal:profile?.sleepGoal??null});
   return trends?{trends}:{};
 }
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[]}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -340,7 +359,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     thresholds:thresholdsContext(thresholds),athlete:athleteProfileContext(profile,daily?.weight?.current),
     // Only when the athlete shares it (cycle-model.js cycleForCoach).
     ...(cycle?{cycle}:{}),
-    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition)},
+    today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date})},
     week:days,
     fitness:compactWellness(fitness?.wellness,{date,days:14}),
     sleep:sleepNights(health?.sleep,date),
@@ -356,6 +375,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.
     athleteFeedback,
+    // "Sedělo ti sestavení?": good, ok or bad per session, with the athlete's words.
+    ...(workoutRatings?.length?{howWorkoutsFitted:workoutRatings}:{}),
     coachNotes,
     cyclingCoachV2,
     methodology:CYCLING_COACH_V2_META

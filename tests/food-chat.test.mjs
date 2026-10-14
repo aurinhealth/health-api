@@ -56,3 +56,8 @@ test("English food sentences go to the food draft too; questions and training do
   assert.doesNotMatch(withLang("en", foodParseInstructionsText), /[ěščřžýůňťď]/);
   assert.match(withLang("cs", foodParseInstructionsText), /^Z věty uživatele \(česky\)/);
 });
+
+test("food sentences without 'I had', with an iPhone apostrophe or around a ride still log", () => {
+  for (const m of ["Lunch was chicken and rice", "Dneska k obědu kuře s rýží", "I’ve just had a banana", "Po jízdě jsem snědl banán", "Vypil jsem kolu", "After the ride I ate a bagel"]) assert.ok(isFoodLogMessage(m), m);
+  for (const m of ["K obědu bych si dal něco lehkého", "Na večeři půjdu do restaurace", "Po jízdě jsem měl křeče", "Měl jsem těžký trénink na kole", "I had a hard ride today"]) assert.ok(!isFoodLogMessage(m), m);
+});

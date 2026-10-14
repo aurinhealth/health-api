@@ -5,6 +5,10 @@ import { validDay } from './training-availability.js';
 import { L, plural } from './lang.js';
 import { localToday } from "./user-time.js";
 export { ATHLETE_STATUSES } from './training-status.js';
+// The athlete's lasting wishes the chat remembered (memories below).
+export const MEMORY_RULE = () => L(
+  "\npreferenceMemory jsou trvalá přání sportovce, která si kouč zapamatoval (třeba „žádný běh“, „posilovna jen ráno“). Drž se jich, pokud je jeho současná žádost výslovně nemění.",
+  "\npreferenceMemory are the athlete's lasting wishes the coach remembered (say \"no running\", \"gym only in the morning\"). Keep to them unless the current request explicitly changes them.");
 const clean = v => String(v || '').trim().slice(0, 500);
 // statusUntil is the first calendar day on which the status no longer applies.
 export function effectiveAthleteState(state,date=localToday()){

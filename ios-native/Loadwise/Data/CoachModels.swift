@@ -12,6 +12,9 @@ struct AssistantResult: Decodable, Equatable {
     /// Pictures to draw under the answer from the app's own data:
     /// form, recovery, sleep, nutrition, week, training or zones.
     var visuals: [String]? = nil
+    /// "food_draft": a sentence about food became entries to confirm (src/food-chat.js).
+    var kind: String? = nil
+    var draft: FoodDraft? = nil
     /// What the coach remembered, forgot or rewrote with this answer.
     var memoryChanges: MemoryChanges? = nil
 
@@ -42,6 +45,26 @@ struct CoachMemoryChip: Identifiable, Equatable {
     let text: String
     var from: String? = nil
     var undone = false
+}
+
+/// What the coach read from "K obědu jsem měl kuře s rýží": the day and the
+/// foods with the saved or looked-up product. Nothing is logged until "Zapsat".
+struct FoodDraft: Decodable, Equatable {
+    let date: String
+    var items: [Item]
+
+    struct Item: Decodable, Equatable {
+        let name: String
+        var brand: String? = nil
+        var grams: Double
+        var basis: String? = nil
+        /// breakfast, snack_am, lunch, snack_pm, dinner or "" when not said.
+        var meal: String? = nil
+        var product: FoodProduct? = nil
+
+        /// The amount first offered in the product's unit: a portion product counts portions.
+        var startAmount: Double { product?.perPortion == true ? 1 : grams }
+    }
 }
 
 /// One thing the coach remembers (GET /app/api/athlete-state, src/athlete-state.js memoryList).

@@ -2042,3 +2042,22 @@
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
 "Tréninky naplánované v Aurinu, kalorický cíl, váhu a denní hodnoty z Google Health." = "Workouts planned in Aurin, calorie target, weight and daily values from Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
+
+/* Food from a sentence in the coach (FoodDraftCard.swift) */
+"Zapsat" = "Log";
+"Celkem" = "Total";
+"Nezapsáno." = "Not logged.";
+"bez hodnot" = "no values";
+"Zbývá ti %d kcal." = "%d kcal left.";
+"Zbývá ti %d kcal a %d g bílkovin." = "%1$d kcal and %2$d g of protein left.";
+"Cíl na dnešek je splněný." = "Today's target is reached.";
+"B %d g" = "P %d g";
+"S %d g" = "C %d g";
+"T %d g" = "F %d g";
+"Zapsáno" = "Logged";
+"Zapsáno do snídaně" = "Logged to breakfast";
+"Zapsáno do dopolední svačiny" = "Logged to the morning snack";
+"Zapsáno do oběda" = "Logged to lunch";
+"Zapsáno do odpolední svačiny" = "Logged to the afternoon snack";
+"Zapsáno do večeře" = "Logged to dinner";
+"Zapsáno do druhé večeře" = "Logged to the second dinner";

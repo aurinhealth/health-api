@@ -128,3 +128,22 @@ test("a cancelled session writes the text again at once, even right after the la
   assert.equal(next.text, "Dnes volno, jdi se projít.");
   assert.notEqual(screenFacts("today", today({ plan: [] })).fingerprint, screenFacts("today", today()).fingerprint, "the plan is in the fingerprint");
 });
+
+test("a red or sick morning never keeps 'stick to the plan', and new numbers write a new text", async () => {
+  const { readinessSummary } = await import("../src/app-today.js");
+  const summary = { headline: "Jak dnes začít", text: "Spánek 5 h.", recommendation: "Dnešní plán (VO2max 5×4) můžeš dodržet." };
+  const red = withLang("cs", () => readinessSummary(summary, { zone: "red", flags: [] }, null, true));
+  assert.equal(red.text, "Spánek 5 h.");
+  assert.doesNotMatch(red.recommendation, /dodržet|VO2/);
+  assert.match(withLang("cs", () => readinessSummary(summary, { zone: "green", flags: ["respiration_elevated"] }, null, true)).recommendation, /bez intenzity/);
+  assert.equal(readinessSummary(summary, { zone: "green", flags: [] }, null, true), summary);
+  // The AI's text on a red day that still pushes the plan is not shown.
+  const env = owner();
+  const r = await screenText(env, { screen: "today", load: async () => today({ readiness: { score: 25, zone: "red", flags: [] } }), ask: reply("Klidně se drž plánu, VO2max zvládneš.", "Jeď intervaly.") });
+  assert.equal(r.source, "rules");
+  const ok = await screenText(owner(), { screen: "today", load: async () => today({ readiness: { score: 25, zone: "red", flags: [] } }), ask: reply("Připravenost 25, tělo potřebuje klid.", "Dnes jen procházka.") });
+  assert.equal(ok.source, "ai");
+  // Readiness 70 → 88 in the same zone is a new state.
+  assert.notEqual(screenFacts("today", today({ readiness: { score: 70, zone: "green" } })).fingerprint, screenFacts("today", today({ readiness: { score: 88, zone: "green" } })).fingerprint);
+  assert.equal(screenFacts("today", today({ readiness: { score: 70, zone: "green" } })).fingerprint, screenFacts("today", today({ readiness: { score: 71, zone: "green" } })).fingerprint);
+});
