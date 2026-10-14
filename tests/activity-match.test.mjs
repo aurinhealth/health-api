@@ -43,6 +43,24 @@ test("another sport or a different session at the same time stays separate", () 
   assert.equal(sameSession(local, watchRide), false);
 });
 
+// Petr's ride of 13 Oct 2026: Wahoo → Intervals.icu 19:08–20:08 local, and
+// the Fitbit's automatic "stationary bike" that began earlier and ran on.
+const wahooRide = { source_family: "intervals", external_id: "i196923325", start_time: "2026-10-13T19:08:34", payload_json: JSON.stringify({ id: "i196923325", type: "VirtualRide", start_date_local: "2026-10-13T19:08:34", start_date: "2026-10-13T17:08:34Z", moving_time: 3453, elapsed_time: 3604, calories: 574 }) };
+const fitbitBike = { source_family: "google-wearables", external_id: "g-bike", start_time: "2026-10-13T16:58:00Z", end_time: "2026-10-13T18:22:00Z", payload_json: JSON.stringify({ exercise: { exerciseType: "STATIONARY_BIKING", metricsSummary: { caloriesKcal: 772 } } }) };
+
+test("a watch's automatic detection around a ride is the same ride; Intervals.icu stays", () => {
+  assert.equal(sameSession(wahooRide, fitbitBike), true);
+  assert.deepEqual(pairSessions([wahooRide, fitbitBike]).map(p => [p.keep.external_id, p.drop.external_id]), [["i196923325", "g-bike"]]);
+  // Called another sport over nearly the same window: still the ride.
+  const asWalk = { ...fitbitBike, start_time: "2026-10-13T17:06:00Z", end_time: "2026-10-13T18:12:00Z", payload_json: JSON.stringify({ exercise: { exerciseType: "WALKING" } }) };
+  assert.deepEqual(pairSessions([wahooRide, asWalk]).map(p => [p.keep.external_id, p.drop.external_id]), [["i196923325", "g-bike"]]);
+  // A walk in the last half hour of it, or a session that only touches it, is not.
+  const lateWalk = { ...asWalk, start_time: "2026-10-13T17:40:00Z", end_time: "2026-10-13T18:20:00Z" };
+  assert.equal(sameSession(wahooRide, lateWalk), false);
+  const after = { ...fitbitBike, start_time: "2026-10-13T17:50:00Z", end_time: "2026-10-13T19:10:00Z" };
+  assert.equal(sameSession(wahooRide, after), false);
+});
+
 test("the coach's activity list keeps the ride once", () => {
   const list = dedupeActivities([watchRide, ride].map(activityFromRow));
   assert.equal(list.length, 1);

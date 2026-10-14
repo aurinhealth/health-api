@@ -4,6 +4,8 @@ import { googleToken } from "./index.js";
 import { syncOverview, DESTINATIONS, saveSyncPrefs, googleMissingScopes, sendActivity, activitySends, retrySend } from "./sync-destinations.js";
 import { L } from "./lang.js";
 import { activityTypes, changeActivityType } from "./activity-type.js";
+import { setActivityKcal, deleteActivity, deleteOptions } from "./activity-edits.js";
+import { bumpCacheVersion } from "./api-cache.js";
 
 export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
   // Synchronizace (sync-destinations.js): where the user sends data, and the
@@ -32,6 +34,21 @@ export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
     if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{return Response.json(await changeActivityType(env,await request.json().catch(()=>({})),{googleToken}),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:error.status||400});}
+  }
+  // A done activity's calories set in Aurin, and deleting it (activity-edits.js).
+  if(url.pathname==='/app/api/activity/delete'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{return Response.json({status:'ok',...await deleteOptions(env,url.searchParams.get('id'))},{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400});}
+  }
+  if((url.pathname==='/app/api/activity/delete'||url.pathname==='/app/api/activity/kcal')&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({}));
+      const result=url.pathname.endsWith('/kcal')?await setActivityKcal(env,body):await deleteActivity(env,{id:body.id,everywhere:body.everywhere===true});
+      await bumpCacheVersion(env.DB);
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:error.status||400});}
   }
   if(url.pathname==='/app/api/sync/sends'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
