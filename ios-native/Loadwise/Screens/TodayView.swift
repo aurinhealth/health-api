@@ -280,38 +280,55 @@ struct DayBar: View {
     var ahead = false
 
     var body: some View {
-        let forward = DayNavigator.canGoForward(model: model, date: date, ahead: ahead)
+        DayCapsule(date: date, today: AppModel.localDate(Date()),
+                   canGoForward: DayNavigator.canGoForward(model: model, date: date, ahead: ahead),
+                   move: { offset in Task { await model.showDay(offset: offset, ahead: ahead) } },
+                   showToday: { Task { await model.showToday() } })
+            .disabled(model.demo || model.loading)
+    }
+}
+
+/// The glass "‹ Po 12. 10. ›" of the tabs' pinned bars, with "Dnes" next to
+/// it on another day (DayBar, and the calendar's day on Trénink).
+struct DayCapsule: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    let today: String
+    var canGoForward = true
+    let move: (Int) -> Void
+    let showToday: () -> Void
+
+    var body: some View {
         HStack(spacing: 8) {
             HStack(spacing: 0) {
-                Button { Task { await model.showDay(offset: -1) } } label: {
+                Button { move(-1) } label: {
                     Image(systemName: "chevron.left").frame(width: 30, height: 40).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Předchozí den")
-                Text(verbatim: Fmt.dayShort(date, today: AppModel.localDate(Date())))
+                Text(verbatim: Fmt.dayShort(date, today: today))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
-                Button { Task { await model.showDay(offset: 1, ahead: ahead) } } label: {
+                Button { move(1) } label: {
                     Image(systemName: "chevron.right").frame(width: 30, height: 40).contentShape(Rectangle())
                 }
-                .opacity(forward ? 1 : 0.25)
-                .disabled(!forward)
+                .opacity(canGoForward ? 1 : 0.25)
+                .disabled(!canGoForward)
                 .accessibilityLabel("Další den")
             }
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(Palette.muted)
             .buttonStyle(.plain)
             .padding(.horizontal, 2)
-            .background(model.selectedDate == nil ? Color.clear : Palette.amberSoft.opacity(0.85), in: Capsule())
+            .background(date == today ? Color.clear : Palette.amberSoft.opacity(0.85), in: Capsule())
             .chromeGlass(in: Capsule())
             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-            if model.selectedDate != nil {
-                ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes") { Task { await model.showToday() } }
+            if date != today {
+                ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes", action: showToday)
             }
         }
         // While the sync pill shows (RootView), it takes the day's place.
         .opacity(model.syncStatus == nil ? 1 : 0)
-        .disabled(model.demo || model.loading)
     }
 }
 

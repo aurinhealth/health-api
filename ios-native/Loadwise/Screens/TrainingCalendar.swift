@@ -9,6 +9,8 @@ struct TrainingCalendarCard: View {
     let today: String
     /// The chosen day, for the pinned bar of Trénink.
     var onPick: (String) -> Void = { _ in }
+    /// A day chosen in the pinned bar (its arrows and "Dnes").
+    var jump: DayJump? = nil
     @State private var selected: String?
     @State private var centered: String?
     @State private var expanded = false
@@ -28,7 +30,9 @@ struct TrainingCalendarCard: View {
     }
 
     private var day: String { selected ?? today }
-    private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, 30)) }
+    /// How far the strip (and the pinned bar's arrow) goes ahead.
+    static let daysAhead = 30
+    private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, Self.daysAhead)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -61,6 +65,16 @@ struct TrainingCalendarCard: View {
                 if value.translation.height < -40 && expanded { toggle() }
             }
         )
+        .onChange(of: day) { _, date in onPick(date) }
+        .onChange(of: jump) { _, jump in
+            guard let date = jump?.date, date != day else { return }
+            selected = date
+            centered = date
+            if expanded {
+                month = ISODay.monthStart(date)
+                Task { await model.loadCalendar(from: ISODay.monthStart(date), to: ISODay.monthEnd(ISODay.monthStart(date))) }
+            }
+        }
         .task { await model.loadCalendar(from: stripDays.first ?? today, to: stripDays.last ?? today) }
     }
 
@@ -119,7 +133,6 @@ struct TrainingCalendarCard: View {
 
     private func pick(_ date: String, scroll: Bool, proxy: ScrollViewProxy? = nil) {
         selected = date
-        onPick(date)
         if scroll, let proxy { withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(date, anchor: .center) } }
         else { centered = date }
     }
@@ -129,6 +142,12 @@ struct TrainingCalendarCard: View {
         month = next
         Task { await model.loadCalendar(from: next, to: ISODay.monthEnd(next)) }
     }
+}
+
+/// A day set from Trénink's pinned bar; each tap is new, even to the same day.
+struct DayJump: Equatable {
+    let date: String
+    let id = UUID()
 }
 
 /// One day of the strip: "P", the main sport in a circle in the plan's colour

@@ -267,7 +267,7 @@ extension View {
 }
 
 /// The pinned bar of a tab (Dnes, Zdraví, Trénink, Jídlo): once the page's
-/// own header has scrolled away, the day (DayBar) or the section's name stays
+/// own header has scrolled away, the day (DayCapsule) stays
 /// on top in glass with the header's buttons. Put on the tab's PageScroll, so
 /// the pages it opens keep their own bar.
 private struct TabTopBar<Bar: View>: ViewModifier {
@@ -303,25 +303,6 @@ extension View {
     /// Keeps the tab's day or name on top once its header scrolls away.
     func tabTopBar<Bar: View>(@ViewBuilder _ bar: () -> Bar) -> some View {
         modifier(TabTopBar(bar: bar()))
-    }
-}
-
-/// The section's name in a tab's pinned bar (Trénink, which shows a week).
-struct TabBarTitle: View {
-    let text: String
-    /// Another day than today, as DayBar.
-    var tinted = false
-
-    var body: some View {
-        Text(verbatim: text)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(Palette.ink)
-            .lineLimit(1)
-            .padding(.horizontal, 16)
-            .frame(height: 40)
-            .background(tinted ? Palette.amberSoft.opacity(0.85) : Color.clear, in: Capsule())
-            .chromeGlass(in: Capsule())
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
     }
 }
 
