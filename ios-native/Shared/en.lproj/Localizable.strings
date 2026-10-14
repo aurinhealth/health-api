@@ -1997,3 +1997,7 @@
 "Vyměněno" = "Swapped";
 "Trénink zůstal, jak byl" = "The session stayed as it was";
 "%@ min" = "%@ min";
+
+/* The coach's changes to done activities in the chat */
+"Sloučit 2 aktivity" = "Merge 2 activities";
+"Upravit čas" = "Change the time";

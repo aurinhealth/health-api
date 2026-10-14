@@ -126,6 +126,7 @@ import { handleCycleApi } from "./routes-cycle.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
+import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
 
@@ -1173,6 +1174,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const chat=await readChat(env.DB,chatPath[1]);
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
   }
+  // "Vrátit" under a confirmed delete, merge or time change of a done activity.
+  if(url.pathname==='/app/api/activity/undo'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{const body=await request.json().catch(()=>({}));const r=await undoActivityChange(env,body.token);await bumpCacheVersion(env.DB);return Response.json(r,{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:error.status||400})}
+  }
   if(url.pathname==='/app/api/assistant/action'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -1202,6 +1210,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           result={date:a.date,prefs:await addWeekSport(env.DB,a.date,a.sport)};
         }
         else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal});await bumpCacheVersion(env.DB);}
+        // Done activities in Aurin only; the result carries the "Vrátit" token (activity-chat-edits.js).
+        else if(a.type==='activity_delete'){result=await hideActivity(env,a.activityId);await bumpCacheVersion(env.DB);}
+        else if(a.type==='activity_merge'){result=await mergeActivities(env,[a.activityId,a.otherActivityId]);await bumpCacheVersion(env.DB);}
+        else if(a.type==='activity_time'){result=await setActivityTime(env,a.activityId,a.time);await bumpCacheVersion(env.DB);}
         else if(a.type==='workout'){
           // The workout the chat showed is the one that gets planned: the ride
           // or run goes to the calendar (and Intervals.icu), the gym draft is saved.
@@ -1231,7 +1243,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         }
       }
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result},{headers:{'Cache-Control':'no-store'}});
+      const done={activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
   {const r=await handleFoodApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}

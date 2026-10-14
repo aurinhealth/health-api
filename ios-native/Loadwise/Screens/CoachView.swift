@@ -28,6 +28,8 @@ struct CoachView: View {
         var text: String
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
+        /// A confirmed change of a done activity that "Vrátit" can take back.
+        var undo: [Int: String] = [:]
         var visuals: [String] = []
         var memory: [CoachMemoryChip] = []
     }
@@ -42,7 +44,8 @@ struct CoachView: View {
                             ForEach(messages) { bubble in
                                 BubbleView(bubble: bubble,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
-                                           undoMemory: { chip in Task { await undo(chip, in: bubble.id) } })
+                                           undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
+                                           undoAction: { action in Task { await undo(action, in: bubble.id) } })
                                     .id(bubble.id)
                             }
                             if let progress, sending {
@@ -232,11 +235,26 @@ struct CoachView: View {
     private func decide(_ action: CoachAction, confirm: Bool, in bubble: UUID) async {
         guard let draftId = action.draftId else { return }
         do {
-            let message = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
-            edit(bubble) { $0.decided[draftId] = message ?? (confirm ? "Hotovo." : "Zamítnuto.") }
+            let answer = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
+            edit(bubble) {
+                $0.decided[draftId] = answer.message ?? (confirm ? "Hotovo." : "Zamítnuto.")
+                if let token = answer.undo { $0.undo[draftId] = token }
+            }
             if confirm { await model.refreshTraining(); await model.refresh() }
         } catch {
             edit(bubble) { $0.decided[draftId] = error.localizedDescription }
+        }
+    }
+
+    /// "Vrátit" under a confirmed change of a done activity.
+    private func undo(_ action: CoachAction, in bubble: UUID) async {
+        guard let draftId = action.draftId, let token = messages.first(where: { $0.id == bubble })?.undo[draftId] else { return }
+        do {
+            try await model.api.undoActivityChange(token: token)
+            edit(bubble) { $0.undo[draftId] = nil; $0.decided[draftId] = L10n.tr("Vráceno") }
+            await model.refreshTraining(); await model.refresh()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
@@ -283,6 +301,7 @@ struct BubbleView: View {
     let bubble: CoachView.Bubble
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
+    var undoAction: (CoachAction) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -308,7 +327,9 @@ struct BubbleView: View {
                 MemoryChipView(chip: chip) { undoMemory(chip) }
             }
             ForEach(bubble.actions) { action in
-                ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] }, decide: { decide(action, $0) })
+                ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
+                           canUndo: action.draftId.map { bubble.undo[$0] != nil } ?? false,
+                           decide: { decide(action, $0) }, undo: { undoAction(action) })
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.mine ? .trailing : .leading)
@@ -320,14 +341,28 @@ struct BubbleView: View {
 struct ActionCard: View {
     let action: CoachAction
     let result: String?
+    var canUndo = false
     var decide: (Bool) -> Void
+    var undo: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(action.title, systemImage: "wand.and.stars").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            if let detail = action.detail, !detail.isEmpty {
+                Text(detail).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             if let reason = action.reason { Text(reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
             if let result {
-                Text(result).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.green)
+                HStack(spacing: 6) {
+                    if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
+                    Text(result).font(Typo.caption.weight(.medium))
+                    if canUndo {
+                        Text("·")
+                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .foregroundStyle(Palette.green)
             } else if action.draftId != nil {
                 HStack(spacing: 8) {
                     Button { decide(true) } label: {
