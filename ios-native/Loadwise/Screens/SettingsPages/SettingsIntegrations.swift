@@ -59,11 +59,16 @@ struct IntegrationCard: View {
         case "apple": return L10n.tr("spánek, tréninky, srdce, pohyb")
         case "intervals": return L10n.tr("tréninky, plán, zóny")
         case "google": return L10n.tr("spánek, tep, kroky")
+        case "ultrahuman": return L10n.tr("spánek, HRV, klidový tep, teplota")
         default: return L10n.tr("tréninky")
         }
     }
 }
 
+/// The services' own logos, unchanged: Apple and Google allow their marks only
+/// as published (no added tile, border or recolouring). Ultrahuman's mark is
+/// white, so it sits on black as in Ultrahuman's own app icon; WHOOP's puck has
+/// a black and a white version for light and dark mode.
 struct IntegrationIcon: View {
     let id: String
     var size: CGFloat = 40
@@ -72,31 +77,16 @@ struct IntegrationIcon: View {
         let shape = RoundedRectangle(cornerRadius: size * 0.26, style: .continuous)
         ZStack {
             switch id {
-            case "apple":
-                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
-                Image(systemName: "heart.fill").font(.system(size: size * 0.46, weight: .semibold))
-                    .foregroundStyle(LinearGradient(colors: [Color(light: 0xFF5E7E, dark: 0xFF5E7E), Color(light: 0xF0283C, dark: 0xF0283C)], startPoint: .top, endPoint: .bottom))
-            case "google":
-                shape.fill(Color.white).overlay(shape.stroke(Color.black.opacity(0.08), lineWidth: 1))
-                Image(systemName: "heart.fill").font(.system(size: size * 0.46, weight: .semibold))
-                    .foregroundStyle(AngularGradient(colors: [Color(light: 0x4285F4, dark: 0x4285F4), Color(light: 0x34A853, dark: 0x34A853), Color(light: 0xFBBC04, dark: 0xFBBC04), Color(light: 0xEA4335, dark: 0xEA4335), Color(light: 0x4285F4, dark: 0x4285F4)], center: .center))
-            case "intervals":
-                shape.fill(Color(light: 0x1E2A3B, dark: 0x1E2A3B))
-                HStack(alignment: .bottom, spacing: size * 0.05) {
-                    bar(0x3B8FE0, 0.18)
-                    bar(0xE5533D, 0.30)
-                    bar(0xF2B33D, 0.24)
-                    bar(0xE5533D, 0.38)
-                }
+            case "apple": logo("AppleHealthLogo")
+            case "google": logo("GoogleHealthLogo").padding(size * 0.04)
+            case "intervals": logo("IntervalsLogo")
+            case "whoop": logo("WhoopLogo")
+            case "ultrahuman":
+                shape.fill(Color(light: 0x000000, dark: 0x000000))
+                logo("UltrahumanMark").frame(width: size * 0.56)
             case "strava":
                 shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
                 Image(systemName: "chevron.up").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
-            case "garmin":
-                shape.fill(Color(light: 0x111111, dark: 0x111111))
-                Image(systemName: "triangle.fill").font(.system(size: size * 0.38, weight: .bold)).foregroundStyle(.white)
-            case "wahoo":
-                shape.fill(Color(light: 0x0B6FE0, dark: 0x0B6FE0))
-                Text(verbatim: "W").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
             default:
                 shape.fill(Palette.indigo)
                 Image(systemName: "watch.analog").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
@@ -106,8 +96,8 @@ struct IntegrationIcon: View {
         .accessibilityHidden(true)
     }
 
-    private func bar(_ hex: UInt32, _ height: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: size * 0.03).fill(Color(light: hex, dark: hex)).frame(width: size * 0.09, height: size * height)
+    private func logo(_ name: String) -> some View {
+        Image(name).resizable().interpolation(.high).scaledToFit()
     }
 }
 
@@ -214,7 +204,7 @@ struct IntegrationDetailView: View {
 
             SettingsGroup {
                 Button { flow.disconnecting = current } label: {
-                    SettingsRow(title: "Odpojit", chevron: false, titleColor: Palette.rust)
+                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : "Odpojit", chevron: false, titleColor: Palette.rust)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.demo)
@@ -261,10 +251,10 @@ struct AddIntegrationSheet: View {
                         }
                     }
                 }
-                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Aurin jejich data dostane odtamtud.") {
+                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo nebo Oura připoj v Intervals.icu. Aurin jejich data dostane odtamtud.") {
                     Link(destination: URL(string: "https://intervals.icu/settings")!) {
                         SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.indigo), title: "Přes Intervals.icu",
-                                    subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura, Strava")
+                                    subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura")
                     }
                     .buttonStyle(.plain)
                 }
