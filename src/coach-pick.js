@@ -37,7 +37,7 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
   const options = [
     endurance("ride", ride),
     endurance("run", run),
-    { kind: "gym", title: lowerTired ? L("Posilovna · horní polovina", "Gym · upper body") : L("Posilovna · celé tělo", "Gym · full body"), detail: lowerTired ? L("50 min · nohy nech odpočinout", "50 min · let the legs rest") : L("50 min", "50 min") },
+    { kind: "gym", title: lowerTired ? L("Posilovna · horní polovina", "Gym · upper body") : L("Posilovna · celé tělo", "Gym · full body"), detail: lowerTired ? L("60 min · nohy nech odpočinout", "60 min · let the legs rest") : L("60 min", "60 min") },
     { kind: "swim", title: L("Plavání · technika", "Swim · technique"), detail: L("45 min · lehce", "45 min · easy") },
     { kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min · po tréninku nebo místo něj", "3 × 12 min · after training or instead of it") },
     { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka a protažení", "A walk and stretching") }
