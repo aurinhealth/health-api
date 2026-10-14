@@ -178,7 +178,7 @@ struct IntegrationDetailView: View {
                         .padding(.horizontal, 16).frame(minHeight: 46)
                     }
                     SettingsDivider()
-                    Button { flow.start("google", actions: actions, model: model, store: store, askKey: {}) } label: {
+                    Button { flow.start("google") } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.blue),
                                     title: missing.isEmpty ? "Upravit oprávnění" : "Povolit chybějící", chevron: false)
                     }
@@ -189,7 +189,7 @@ struct IntegrationDetailView: View {
                 AppleHealthSettings(store: store)
             } else if current.id == "intervals" {
                 SettingsGroup(title: "Přístup", footer: "Klíč najdeš v Intervals.icu v Settings → Developer Settings.") {
-                    Button { flow.start("intervals", actions: actions, model: model, store: store, askKey: { flow.intervalsKey = true }) } label: {
+                    Button { flow.start("intervals") } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.rust), title: "Připojit znovu", chevron: false)
                     }
                     .buttonStyle(.plain)
