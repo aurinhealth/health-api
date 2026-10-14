@@ -36,7 +36,17 @@ struct AppIconChoice: Identifiable, Equatable {
     var iconName: String? { id == "default" ? nil : "AppIcon-" + id }
     var preview: String { "IconPreview/" + id }
 
-    static let aurin = AppIconChoice(id: "default", name: "Aurin", rule: .free)
+    static let aurin = AppIconChoice(id: "default", name: "Tmavá", rule: .free)
+
+    /// Výchozí: the logo dark, white, switching with the phone's light and
+    /// dark mode, and in glass (white by day, dark in dark mode). Each set has
+    /// a tinted image, so iOS can also show it tinted and clear.
+    static let defaults: [AppIconChoice] = [
+        aurin,
+        AppIconChoice(id: "white", name: "Bílá", rule: .free),
+        AppIconChoice(id: "auto", name: "Automaticky", rule: .free),
+        AppIconChoice(id: "glass", name: "Sklo", rule: .free)
+    ]
 
     /// Odznak, Zlatý odznak, Dráha, Zlatá dráha of one sport.
     static func sport(_ key: String, base: Rule, gold: Rule) -> [AppIconChoice] {
@@ -146,7 +156,7 @@ struct AppIconSettingsView: View {
 
     var body: some View {
         SettingsPage(title: "Ikona aplikace") {
-            SettingsGroup(title: "Výchozí") { grid([.aurin]) }
+            SettingsGroup(title: "Výchozí") { grid(AppIconChoice.defaults) }
             ForEach(AppIconChoice.sections) { section in
                 SettingsGroup(title: section.title) { grid(section.icons) }
             }
