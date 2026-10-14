@@ -163,3 +163,10 @@ test("the plan's key days hold, and hard days in the calendar, deep fatigue and 
     assert.match(d.reason, opts.tsb ? /TSB/ : /odpočinkový/);
   }
 });
+
+test("Upravit s AI counts the day's other sessions against its free time", async () => {
+  const ask = async () => ({ text: JSON.stringify({ date: "2026-10-13", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance", note: "Přesunul jsem to na úterý." }) });
+  const weekDays = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
+  const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance" }, request: "Dej to na úterý", weekDays, otherSessions: [{ date: "2026-10-13", sport: "run", kind: "endurance", minutes: 45 }], prefs, today }, { ask });
+  assert.deepEqual([r.date, r.minutes], ["2026-10-13", 45]);
+});
