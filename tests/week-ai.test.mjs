@@ -2,6 +2,7 @@
 // answer is checked before the app shows it.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { sanitizeWeekDays, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
 
 const start = "2026-10-12", today = "2026-10-13";
@@ -107,4 +108,13 @@ test("the AI can change one session's sport; gym is always indoor gym", async ()
   const weekDays = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
   const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "run", minutes: 45, environment: "outdoor", kind: "endurance" }, request: "Chci posilovnu", weekDays, prefs, today }, { ask });
   assert.deepEqual([r.sport, r.environment, r.kind, r.minutes], ["gym", "indoor", "gym", 60]);
+});
+
+test("the athlete's remembered wishes reach the week plan and the change of a session", async () => {
+  const calls = [];
+  const ask = async (env, p) => { calls.push(p); return { text: JSON.stringify({ date: "2026-10-17", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance", note: "" }) }; };
+  await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 70, environment: "outdoor", kind: "endurance" }, request: "Kratší", weekDays: ["2026-10-17"], prefs, today, preferenceMemory: ["žádný běh"] }, { ask });
+  assert.match(calls[0].input, /žádný běh/);
+  assert.match(calls[0].instructions, /preferenceMemory/);
+  assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /preferenceMemory:state\.memories\?\.length/);
 });

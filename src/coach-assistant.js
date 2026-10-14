@@ -273,7 +273,14 @@ export function focusGoal(focus){
 export function compactWellnessRow(w={}){
   const ctl=num(w.ctl),atl=num(w.atl),sleepMinutes=w.sleepMinutes!=null?num(w.sleepMinutes):w.sleepSecs!=null?round(num(w.sleepSecs)/60):null;
   return compactObject({date:String(w.id||w.date||'').slice(0,10)||null,ctl:round(ctl,1),atl:round(atl,1),tsb:round(num(w.tsb)??(ctl!=null&&atl!=null?ctl-atl:null),1),
-    hrv:round(num(w.hrv),1),restingHR:round(num(w.restingHR)),sleepMinutes,respiration:round(num(w.respiration),1),skinTempDeviation:round(num(w.skinTempDeviation),2),wristTemp:round(num(w.wristTemp),2),steps:round(num(w.steps)),spO2:round(num(w.spO2),1)});
+    hrv:round(num(w.hrv),1),restingHR:round(num(w.restingHR)),sleepMinutes,respiration:round(num(w.respiration),1),skinTempDeviation:round(num(w.skinTempDeviation),2),wristTemp:round(num(w.wristTemp),2),steps:round(num(w.steps)),spO2:round(num(w.spO2),1),
+    vo2max:round(num(w.vo2max),1),walkingHR:round(num(w.walkingHR)),hrRecovery:round(num(w.hrRecovery)),feelings:feelingsOf(w)});
+}
+// The athlete's own marks in Intervals.icu wellness: 1 is the best, 4 the worst.
+const FEELINGS=['fatigue','soreness','stress','mood','motivation','injury'];
+function feelingsOf(w){
+  const marks=Object.fromEntries(FEELINGS.map(k=>[k,num(w[k])]).filter(([,v])=>v>=1&&v<=4));
+  return Object.keys(marks).length?{...marks,scale:'1 best, 4 worst'}:null;
 }
 // The last `days` rows up to `date` (rows after it are the future).
 export function compactWellness(rows,{date=null,days=14}={}){
@@ -286,7 +293,7 @@ export function coachTrends({date,fitness,health,profile}){
   const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null});
   return trends?{trends}:{};
 }
-export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null}) {
+export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,workoutRatings=[]}) {
   const strengthSince=shiftDay(date,-14);
   const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
@@ -324,6 +331,8 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.
     athleteFeedback,
+    // "Sedělo ti sestavení?": good, ok or bad per session, with the athlete's words.
+    ...(workoutRatings?.length?{howWorkoutsFitted:workoutRatings}:{}),
     coachNotes,
     cyclingCoachV2,
     methodology:CYCLING_COACH_V2_META

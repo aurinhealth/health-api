@@ -1,6 +1,7 @@
 // A gym plan changed by the athlete's words ("bez nohou", "kratší") and the
 // rows a proposal is confirmed with: only exercises from the gym's catalog
 // (or already in the plan), the plan's own columns, no logged results.
+import { MEMORY_RULE } from './athlete-state.js';
 import { L } from './lang.js';
 import { callOpenAI, lightModel } from './coach-assistant.js';
 import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
@@ -91,8 +92,8 @@ export async function adjustGymPlan(env, { rows, request, history = [], taste = 
   const items = gymExerciseCatalog(), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
-  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [] });
-  const r = await callOpenAI(env, { feature: "gym-adjust", instructions: adjustInstructions(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
+  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], ...(taste.memories?.length ? { preferenceMemory: taste.memories } : {}) });
+  const r = await callOpenAI(env, { feature: "gym-adjust", instructions: adjustInstructions() + MEMORY_RULE(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) });
   const data = JSON.parse(r.text), out = fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history);
   if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));
   return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };

@@ -108,8 +108,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       const body=await request.json().catch(()=>({})),text=String(body.request||'').trim().slice(0,300);
       if(!text)throw new Error(L('Napiš, co v tréninku změnit.', 'Write what to change in the workout.'));
       const rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(Array.isArray(body.rows)?body.rows:[]).map(r=>String(r?.[1]??'').trim()).filter(Boolean)]));
-      const [history,taste]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB)]);
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste});
+      // The athlete's lasting wishes the chat remembered ("no squats") count as their taste.
+      const [history,taste,state]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB),getAthleteState(env.DB).catch(()=>({}))]);
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]}});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}

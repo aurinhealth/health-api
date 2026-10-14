@@ -56,8 +56,8 @@ const SCHEMA = {
 
 function instructions() {
   return L(
-    "Jsi trenér vytrvalostního sportu. Z nabídnutých tréninků z knihovny vyber jeden, který nejlépe sedí na dnešní ráno sportovce (připravenost, spánek, ranní pocit, únava a forma, poslední dny). Nevymýšlej jiný trénink ani intervaly, vrať jen id jednoho z kandidátů. Do reason napiš česky jednu až dvě krátké věty, proč právě tento, s konkrétním číslem z dat (např. připravenost 64). Bez úvodu a bez opakování názvu.",
-    "You are an endurance coach. From the library workouts offered pick the one that fits the athlete's morning best (readiness, sleep, morning feeling, fatigue and form, the last days). Do not invent another workout or intervals; return only the id of one candidate. In reason write in English one or two short sentences on why this one, with a specific number from the data (e.g. readiness 64). No intro and no repeating the name."
+    "Jsi trenér vytrvalostního sportu. Z nabídnutých tréninků z knihovny vyber jeden, který nejlépe sedí na dnešní ráno sportovce (připravenost, spánek, ranní pocit, únava a forma, poslední dny). Nevymýšlej jiný trénink ani intervaly, vrať jen id jednoho z kandidátů. Do reason napiš česky jednu až dvě krátké věty, proč právě tento, s konkrétním číslem z dat (např. připravenost 64). Bez úvodu a bez opakování názvu. recentRatings říká, jak sportovci sedělo sestavení posledních tréninků tohoto sportu (good, ok, bad a jeho slova): nevybírej trénink podobný tomu, který mu neseděl.",
+    "You are an endurance coach. From the library workouts offered pick the one that fits the athlete's morning best (readiness, sleep, morning feeling, fatigue and form, the last days). Do not invent another workout or intervals; return only the id of one candidate. In reason write in English one or two short sentences on why this one, with a specific number from the data (e.g. readiness 64). No intro and no repeating the name. recentRatings says how the last workouts of this sport fitted the athlete (good, ok, bad and their words): do not pick one like a workout that did not fit."
   );
 }
 
@@ -81,6 +81,7 @@ export async function aiWorkoutPick(env, generated, { sport = "ride", minutes = 
     sleep: today.sleep || null,
     form: { tsb: num(coach.readiness?.tsb), hardDaysLast7: num(coach.load?.hardBikeDaysRolling7d) },
     coach: { type: coach.recommendation?.session?.kind || null, minutes: num(coach.recommendation?.session?.durationMinutes) },
+    ...(Array.isArray(today.ratings) && today.ratings.length ? { recentRatings: today.ratings } : {}),
     candidates
   };
   try {

@@ -1,7 +1,7 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { qualityDomain } from './session-intensity.js';
-import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown } from './week-planner.js';
+import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
@@ -323,7 +323,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // The same rule as the week plan and the gym (all sports from the Intervals.icu
   // wellness; this sport's rides when the wellness has no loads).
   const wellnessLoads=weekLoadsBefore(fitness?.wellness,monday),weekLoads=wellnessLoads.length?wellnessLoads:[lastWeekLoad];
-  const rule=recoveryWeek_({base:ctl!=null&&ctl>0?ctl*7:null,weekLoads,hrvDown:hrvWeekTrendDown(fitness?.wellness,monday)});
+  const rule=recoveryWeek_({base:ctl!=null&&ctl>0?ctl*7:null,weekLoads,hrvDown:hrvWeekTrendDown(hrvSourceRows(fitness?.wellness,health?.wellness,monday),monday)});
   // A beginner's load is always well above a CTL that is still catching up, so
   // the load rule would call every week a recovery week.
   const recoveryWeek=!tapering&&(namedRecovery||rule.recovery&&!novice);

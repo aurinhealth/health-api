@@ -185,3 +185,13 @@ test('the coach picks at most two known pictures for an answer',()=>{
   assert.deepEqual(r.visuals,['form','sleep']);
   assert.deepEqual(coachAnswerText('Obyčejný text',{actions:true}).visuals,[]);
 });
+
+test('the coach sees VO2max, walking heart rate, heart rate recovery and the athlete\'s own wellness marks', async () => {
+  const { compactWellnessRow } = await import('../src/coach-assistant.js');
+  const row = compactWellnessRow({ id: '2026-10-13', vo2max: 52.34, walkingHR: 96.4, hrRecovery: 31, fatigue: 3, soreness: 2, mood: null, stress: 9 });
+  assert.equal(row.vo2max, 52.3);
+  assert.equal(row.walkingHR, 96);
+  assert.equal(row.hrRecovery, 31);
+  assert.deepEqual(row.feelings, { fatigue: 3, soreness: 2, scale: '1 best, 4 worst' });
+  assert.equal(compactWellnessRow({ id: '2026-10-13' }).feelings, undefined);
+});
