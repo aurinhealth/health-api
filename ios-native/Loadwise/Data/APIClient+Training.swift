@@ -28,6 +28,13 @@ extension APIClient {
         return try await send("/app/api/gym/equipment/detect", method: "POST", body: body, timeout: 180)
     }
 
+    // MARK: Muscles
+
+    /// Trénink → Svaly: how tired each muscle is and when it is rested (src/muscle-fatigue.js).
+    func muscles() async throws -> MuscleFatigue {
+        try await get("/app/api/muscles")
+    }
+
     // MARK: Activity type
 
     /// Every sport a done activity can be (src/activity-type.js).
