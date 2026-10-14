@@ -30,17 +30,16 @@ struct SettingsProfileCard: View {
     /// Age, height and the latest weight, whichever are known.
     private var details: String? {
         let p = store.profile
-        let years: Int? = {
-            if let text = p["birthDate"]?.string, let date = ProfileSettingsView.dayFormat.date(from: text) {
-                return ProfileSettingsView.years(from: date)
-            }
-            return (p["age"]?.number).map { Int($0) }
-        }()
-        let parts = [
-            years.flatMap { $0 > 0 ? L10n.f("%@ let", String($0)) : nil },
-            (p["height"]?.number).flatMap { $0 > 0 ? Units.lengthText($0) : nil },
-            model.today?.weight?.latest.flatMap { $0 > 0 ? Units.weightText($0) : nil }
-        ].compactMap { $0 }
+        var years: Int? = nil
+        if let text = p["birthDate"]?.string, let date = ProfileSettingsView.dayFormat.date(from: text) {
+            years = ProfileSettingsView.years(from: date)
+        } else if let age = p["age"]?.number {
+            years = Int(age)
+        }
+        var parts: [String] = []
+        if let years, years > 0 { parts.append(L10n.f("%@ let", String(years))) }
+        if let height = p["height"]?.number, height > 0 { parts.append(Units.lengthText(height)) }
+        if let weight = model.today?.weight?.latest, weight > 0 { parts.append(Units.weightText(weight)) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -65,7 +64,7 @@ struct SettingsProfileCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr("Účet") + ", " + name + (details.map { ", " + $0 } ?? ""))
+        .accessibilityLabel([L10n.tr("Účet"), name, details ?? ""].filter { !$0.isEmpty }.joined(separator: ", "))
     }
 }
 
