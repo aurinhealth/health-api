@@ -21,6 +21,7 @@ const num = (v, lo, hi) => { const n = Number(v); return v !== null && v !== "" 
 const round = (v, d = 1) => v == null ? null : Math.round(v * 10 ** d) / 10 ** d;
 const cleanId = v => { const s = String(v ?? "").trim(); return s && s.length <= 120 && /^[A-Za-z0-9:._+-]+$/.test(s) ? s : null; };
 const text = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+const minutesOf = at => { const m = /T(\d{2}):(\d{2})/.exec(String(at)); return m ? Number(m[1]) * 60 + Number(m[2]) : 0; };
 
 async function ensureHidden(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS apple_food_hidden (user_id INTEGER NOT NULL, kind TEXT NOT NULL, external_id TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, kind, external_id))").run();
@@ -96,7 +97,19 @@ export async function saveAppleFood(db, userId, input = {}, { source = FOOD_SOUR
   await ensureHidden(db);
   const hidden = new Set(((await db.prepare("SELECT kind || ':' || external_id AS k FROM apple_food_hidden WHERE user_id=?").bind(userId).all()).results || []).map(r => r.k));
   const shown = kind => item => !hidden.has(kind + ":" + item.id);
-  const meals = mealsIn.filter(shown("meal")), drinks = drinksIn.filter(shown("drink"));
+  // An app that writes to both Apple Health and Google Health would count
+  // twice: an item the other source already brought (the same day, name and
+  // energy, or the same amount of water, within half an hour) is left out.
+  const other = OTHER_APP_SOURCES.find(s => s !== source);
+  const [otherMeals, otherDrinks] = await Promise.all([
+    db.prepare("SELECT consumed_at AS at, recipe_title AS name, kcal FROM food_logs WHERE user_id=? AND source=? AND consumed_date>=? AND consumed_date<=?").bind(userId, other, from, to).all(),
+    db.prepare("SELECT consumed_at AS at, ml FROM fluid_log WHERE user_id=? AND source=? AND date>=? AND date<=?").bind(userId, other, from, to).all()
+  ]).then(r => r.map(x => x.results || []));
+  const near = (a, b) => String(a).slice(0, 10) === String(b).slice(0, 10) && Math.abs(minutesOf(a) - minutesOf(b)) <= 30;
+  const sameName = (a, b) => text(a, 120).toLowerCase() === text(b, 120).toLowerCase();
+  const fresh = (list, same) => item => !list.some(o => near(o.at, item.consumed_at) && same(o, item));
+  const meals = mealsIn.filter(shown("meal")).filter(fresh(otherMeals, (o, m) => sameName(o.name, m.name) && Math.abs(Number(o.kcal) - m.kcal) <= 2));
+  const drinks = drinksIn.filter(shown("drink")).filter(fresh(otherDrinks, (o, d) => Math.abs(Number(o.ml) - d.ml) <= 5));
 
   const statements = [];
   const known = new Map(((await db.prepare(`SELECT id, json_extract(note,'$.external_id') AS ext FROM food_logs
