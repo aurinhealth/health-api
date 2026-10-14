@@ -50,7 +50,7 @@ function readSession(row) {
   const type = p.type || p.category || row.type || null;
   const elapsed = seconds(p.elapsed_time) ?? seconds(p.moving_time);
   const stub = !elapsed && !utc;
-  return { at, alt: (stub || /strava/i.test(String(p.source || ""))) && !utc && !ZONED.test(String(local)) ? Date.parse(String(local) + "Z") : null, kind: type ? activityKindOf(type) : null, minutes: elapsed ? elapsed / 60 : row.minutes || row.durationHours * 60 || null, stub, source: "intervals" };
+  return { at, alt: (stub || /strava/i.test(String(p.source || ""))) && !utc && !ZONED.test(String(local)) ? Date.parse(String(local) + "Z") : null, kind: type ? activityKindOf(type) : null, minutes: elapsed ? elapsed / 60 : row.minutes || row.durationHours * 60 || null, stub, source: row.source_family === "wahoo" ? "wahoo" : "intervals" };
 }
 
 const START_WINDOW = 20 * 60000, STUB_WINDOW = 2 * 60000;
@@ -96,10 +96,11 @@ function overlapping(x, y) {
 }
 export const sameSession = (x, y) => sessionGap(x, y) != null || coversSession(x, y) || coversSession(y, x) || overlapping(x, y);
 
-// Which of the two records to keep: a full Intervals.icu activity, then the
-// watch's Google exercise, then an Intervals.icu stub.
+// Which of the two records to keep: a full Intervals.icu activity, then
+// Wahoo's (power and TSS), then the watch's Google exercise, then an
+// Intervals.icu stub.
 export function richerSession(x, y) {
-  const rank = r => { const s = sessionOf(r); return !s ? 9 : s.source === "intervals" && !s.stub ? 0 : s.source === "google" ? 1 : 2; };
+  const rank = r => { const s = sessionOf(r); return !s ? 9 : s.source === "intervals" && !s.stub ? 0 : s.source === "wahoo" ? 1 : s.source === "google" ? 2 : 3; };
   return rank(y) < rank(x) ? y : x;
 }
 
@@ -107,11 +108,30 @@ export function richerSession(x, y) {
 // the nearest start first; a Google piece inside a longer activity goes with
 // it too (inside: true). Returns [{keep, drop, inside}] of the given rows.
 export function pairSessions(rows) {
-  const google = [], other = [];
-  for (const row of rows) { const s = sessionOf(row); if (s) (s.source === "google" ? google : other).push(row); }
+  const google = [], app = [], wahoo = [];
+  for (const row of rows) { const s = sessionOf(row); if (s) (s.source === "google" ? google : s.source === "wahoo" ? wahoo : app).push(row); }
+  // A Wahoo ride that also came through Intervals.icu (Wahoo uploads there) or
+  // was typed in the app: one record stays, Intervals.icu's full activity over
+  // Wahoo's, Wahoo's over a typed one or a stub. The kept one then pairs with
+  // the watch below like any other.
+  const copies = [], dropped = new Set(), taken = new Set(), pairs = [];
+  for (const w of wahoo) for (const o of app) {
+    const gap = sessionGap(w, o);
+    if (gap != null) copies.push({ w, o, gap });
+    else if (overlapping(w, o)) copies.push({ w, o, gap: START_WINDOW + 1 });
+  }
+  for (const c of copies.sort((a, b) => a.gap - b.gap)) {
+    if (taken.has(c.w) || taken.has(c.o)) continue;
+    taken.add(c.w); taken.add(c.o);
+    const keep = c.o.source_family === "intervals" && !sessionOf(c.o).stub ? c.o : c.w;
+    const drop = keep === c.o ? c.w : c.o;
+    dropped.add(drop);
+    pairs.push({ keep, drop, inside: false });
+  }
+  const other = [...app, ...wahoo].filter(row => !dropped.has(row));
   const candidates = [];
   for (const g of google) for (const o of other) { const gap = sessionGap(g, o); if (gap != null) candidates.push({ g, o, gap }); }
-  const used = new Set(), pairs = [];
+  const used = new Set();
   for (const c of candidates.sort((a, b) => a.gap - b.gap)) {
     if (used.has(c.g) || used.has(c.o)) continue;
     used.add(c.g); used.add(c.o);

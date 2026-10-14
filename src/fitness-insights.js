@@ -269,7 +269,7 @@ export async function loadFitnessInsights(db, today) {
   const since = "2000-01-01";
   const [setRows, activityRows] = await Promise.all([
     db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' ORDER BY workout_date").bind(db.userId).all().catch(() => ({ results: [] })),
-    db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family='intervals' AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
+    db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','wahoo') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
   ]);
   return fitnessInsights({ sets: setRows.results || [], activities: storedActivities(activityRows.results || []), today });
 }

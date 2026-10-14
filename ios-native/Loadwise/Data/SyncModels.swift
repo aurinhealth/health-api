@@ -101,7 +101,7 @@ struct ManualWorkoutResult: Decodable {
 
 /// The destinations as the app shows them: name, the tile, the health data names.
 enum SyncApp {
-    static let order = ["apple", "google", "intervals", "strava"]
+    static let order = ["apple", "google", "intervals", "wahoo", "strava"]
 
     static func name(_ id: String) -> String {
         switch id {
@@ -109,6 +109,7 @@ enum SyncApp {
         case "google": return "Google Health"
         case "intervals": return "Intervals.icu"
         case "strava": return "Strava"
+        case "wahoo": return "Wahoo"
         default: return id
         }
     }
