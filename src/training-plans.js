@@ -232,6 +232,8 @@ export function minutesFor(sport, { family, level = null }, shiftBy = 0) {
 }
 const systemOf = (sport, family) => CATALOGUE[sport].find(w => w.family === family)?.primary_system || null;
 export { systemOf };
+// The cycling catalogue names its sessions in English; in Czech the plan says Práh, Nad/pod prahem.
+export const planName = name => name == null ? name : L(String(name).replace(/ \(\d+\/\d+\)/, "").replace("Threshold Over-Under", "Nad/pod prahem").replace("Over-Under", "Nad/pod prahem").replace("Sub-threshold", "Pod prahem").replace("Threshold", "Práh").replace("Sweet Spot", "Sweet spot"), String(name));
 const baseName = id => { const w = Object.values(CATALOGUE).flat().find(x => x.id === String(id).replace(/~\d+$/, "")); return w ? w.name.replace(/ · \d+ min$/, "") : null; };
 
 // ---- race day ----------------------------------------------------------------
@@ -275,7 +277,8 @@ export function planWeek(plan, date) {
 // The quality days the week planner should make for the plan's week.
 export const planQuality = pw => pw ? pw.spec.q.length : null;
 
-const phaseLabel = phase => ({ base: L("základ", "base"), build: L("rozvoj", "build"), peak: L("vrchol", "peak"), recovery: L("lehčí týden", "lighter week"), taper: L("ladění formy", "taper"), race: L("závod", "race"), test: L("test", "test") })[phase] || phase;
+// The phase as a heading: a test week of a ride plan is the FTP test.
+const phaseLabel = (phase, sport = null) => ({ base: L("Základ", "Base"), build: L("Budování", "Build"), peak: L("Vrchol", "Peak"), recovery: L("Odpočinek", "Recovery"), taper: L("Ladění", "Taper"), race: L("Závod", "Race"), test: sport === "ride" ? L("Test FTP", "FTP test") : sport === "run" ? L("Běžecký test", "Run test") : L("Test", "Test") })[phase] || phase;
 export { phaseLabel };
 
 // The plan on the week's load targets (week-planner.js weekTargets items):
@@ -293,7 +296,24 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
   const { template, spec } = pw, sport = template.sport;
   const race = template.race && plan.raceDate && plan.raceDate >= weekStart && plan.raceDate <= shift(weekStart, 6) ? plan.raceDate : null;
   const raceKm = Number(plan.raceKm) || template.race?.km;
+  const weekEnd = shift(weekStart, 7), inWeek = d => d >= weekStart && d < weekEnd;
+  // Started mid-week: nothing of the plan before its first day.
   let items = targets.items.map(x => ({ ...x }));
+  if (plan.firstDay && plan.firstDay > weekStart && plan.firstDay < shift(weekStart, 7)) {
+    const before = x => x.sport === sport && x.date < plan.firstDay;
+    // Its key sessions go to the days left, not next to each other.
+    let lost = items.filter(x => before(x) && x.role === "quality").length;
+    items = items.filter(x => !before(x));
+    for (const x of items) {
+      if (!lost || x.sport !== sport || (x.slot || 0) !== 0 || ["quality", "long"].includes(x.role)) continue;
+      if (items.some(y => y.sport === sport && y.role === "quality" && Math.abs(daysBetween(y.date, x.date)) === 1)) continue;
+      x.role = "quality"; lost--;
+    }
+  }
+  // The athlete's own changes this week: a session moved to another day, shortened or skipped.
+  const edits = Object.entries(plan.edits || {}).filter(([d]) => inWeek(d)), ownAt = d => items.find(x => x.sport === sport && (x.slot || 0) === 0 && x.date === d);
+  const swaps = edits.filter(([d, e]) => e.to && inWeek(e.to) && ownAt(d)).map(([d, e]) => ({ from: d, to: e.to, swap: Boolean(ownAt(e.to)) }));
+  for (const m of swaps) if (!m.swap) items.push({ date: m.to, sport, slot: 0, role: "endurance", minutes: ownAt(m.from).minutes, tss: 0, intensity: .7 });
   // A missed key session moved to another day (the athlete's choice, planChoice):
   // the day gets a session of the sport if it has none.
   const moves = (plan.moves || []).filter(m => m.to && m.from >= weekStart && m.from < shift(weekStart, 7) && m.to >= weekStart && m.to < shift(weekStart, 7));
@@ -323,23 +343,37 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
     if (stridesLeft && sport === "run" && !spec.easy) { stridesLeft--; return { kind: "easy", family: "run-easy-strides" }; }
     return { kind: "easy", family: spec.easy?.family || (sport === "run" ? "run-easy" : "z2"), level: spec.easy?.level ?? null, minutes: spec.easy?.minutes ?? null };
   };
-  const moved = new Map();
-  if (moves.length) {
+  const moved = new Map(), dropped = new Set(edits.filter(([, e]) => e.skip).map(([d]) => d));
+  if (moves.length || swaps.length) {
     const planned = new Map(own.map(x => [x.date, sessionFor(x)]));
     stridesLeft = spec.strides ? 1 : 0;
     for (const m of moves) { const s = planned.get(m.from), to = own.find(x => x.date === m.to); if (s && to) moved.set(to, { ...s, movedFrom: m.from }); }
+    for (const m of swaps) {
+      const a = planned.get(m.from), b = planned.get(m.to), from = own.find(x => x.date === m.from), to = own.find(x => x.date === m.to);
+      if (a && to) moved.set(to, { ...a, movedFrom: m.from });
+      if (m.swap && b && from) moved.set(from, { ...b, movedFrom: m.to }); else dropped.add(m.from);
+    }
   }
+  const shortened = Object.fromEntries(edits.filter(([, e]) => Number(e.minutes) > 0).map(([d, e]) => [d, Math.round(Number(e.minutes))]));
   const roleOf = s => s.kind === "quality" || s.kind === "test" ? "quality" : s.kind === "long" ? "long" : s.kind === "race" ? "race" : s.kind === "recovery" ? "recovery" : "endurance";
   const out = items.map(x => {
     if (x.sport !== sport || (x.slot || 0) !== 0) return x;
     const s = moved.get(x) || sessionFor(x), shiftBy = s.kind === "quality" ? levelShift(shifts[systemOf(sport, s.family)]) : 0;
-    const minutes = s.minutes ?? (s.kind === "race" ? raceMinutes(raceKm, thresholdPace) : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes);
+    const minutes = (s.kind !== "race" && shortened[x.date]) || (s.minutes ?? (s.kind === "race" ? raceMinutes(raceKm, thresholdPace) : s.kind === "quality" ? Math.max(x.minutes, minutesFor(sport, s, shiftBy) || 0) : s.kind === "test" ? Math.max(x.minutes, 60) : x.minutes));
     const workoutId = s.workoutId || (s.family ? planWorkoutId(sport, s, minutes, shiftBy) : null);
-    const label = s.kind === "test" ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : s.label || (workoutId && baseName(workoutId)) || x.label;
+    const label = s.kind === "test" ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : s.label || (workoutId && planName(baseName(workoutId))) || x.label;
     const role = roleOf(s), intensity = x.intensity || .7;
     return { ...x, role, label, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), plan: { templateId: template.id, week: pw.week, weeks: pw.weeks, phase: spec.phase, kind: s.kind, family: s.family || null, level: s.level ?? null, workoutId, ...(s.movedFrom ? { movedFrom: s.movedFrom } : {}) } };
   });
-  return { ...targets, items: out, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase), load: spec.load, returning: Boolean(spec.returning) } };
+  let kept = out.filter(x => !(x.sport === sport && (x.slot || 0) === 0 && dropped.has(x.date)));
+  // Time for fewer days this week: the easy sessions go first, then the long one; key sessions stay.
+  const days = Number(plan.weekDays?.[weekStart]);
+  if (days > 0) {
+    const mine = kept.filter(x => x.sport === sport && (x.slot || 0) === 0 && x.plan), rank = x => ({ recovery: 0, easy: 1, long: 2 })[x.plan.kind] ?? 9;
+    const drop = new Set([...mine].sort((a, b) => rank(a) - rank(b) || b.date.localeCompare(a.date)).filter(x => rank(x) < 9).slice(0, Math.max(0, mine.length - days)));
+    kept = kept.filter(x => !drop.has(x));
+  }
+  return { ...targets, items: kept, plan: { templateId: template.id, name: template.name, week: pw.week, weeks: pw.weeks, phase: spec.phase, phaseLabel: phaseLabel(spec.phase, sport), load: spec.load, returning: Boolean(spec.returning) } };
 }
 
 const KEY_KINDS = ["quality", "test", "long"];
@@ -388,7 +422,7 @@ export function gymPhaseFor(plan, date, days = []) {
 // A race plan ends on race day: it starts the Monday (weeks − 1) before the
 // race week; a race too close starts the plan later (shorter), down to 60 %
 // of it. Other plans start this Monday until Tuesday, else next Monday.
-export function planStart(template, { today, raceDate = null }) {
+export function planStart(template, { today, raceDate = null, startDate = null }) {
   const thisMonday = mondayOf(today);
   if (template.race && raceDate) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(raceDate) || raceDate <= today) throw new Error(L("Datum závodu musí být v budoucnu.", "The race date must be in the future."));
@@ -397,6 +431,13 @@ export function planStart(template, { today, raceDate = null }) {
     const firstWeek = start >= thisMonday ? 1 : Math.floor(daysBetween(start, thisMonday) / 7) + 1;
     if (template.weeks.length - firstWeek + 1 < Math.ceil(template.weeks.length * .6)) throw new Error(L("Do závodu je na tento plán málo času.", "There isn't enough time before the race for this plan."));
     return { startDate: start, firstWeek, raceDate };
+  }
+  // A day the athlete chose: the plan's weeks run Monday to Sunday, the first
+  // one from that day (its key sessions on the days left).
+  if (startDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || startDate < today || daysBetween(today, startDate) > 120) throw new Error(L("Vyber začátek v příštích 4 měsících.", "Pick a start within the next 4 months."));
+    const monday = mondayOf(startDate);
+    return { startDate: monday, firstWeek: 1, firstDay: startDate > monday ? startDate : null, raceDate: template.race ? shift(monday, template.weeks.length * 7 - 1) : null };
   }
   const weekday = (new Date(today + "T12:00:00Z").getUTCDay() + 6) % 7;
   const start = weekday <= 1 ? thisMonday : shift(thisMonday, 7);
@@ -435,7 +476,12 @@ const parseState = text => { try { return JSON.parse(text || "{}") || {}; } catc
 // (weeks the plan moved later), returnFrom/returnWeeks (lighter weeks after a
 // break in a race plan) and reviewed (the last week checked for missed sessions).
 const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, startDate: r.start_date, raceDate: r.race_date || null, raceKm: r.race_km ?? null, status: r.status, ...parseState(r.state_json) } : null;
-const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo"];
+// firstDay: the plan started mid-week (its first week from that day); edits:
+// the athlete's own changes by day ({ to } moved, { minutes } shortened,
+// { skip }); weekDays: fewer training days in a week ({ monday: days });
+// start: FTP, fitness and the estimate when the plan started (its result);
+// seen: the finished plan's result was closed.
+const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen"];
 async function savePlan(db, plan) {
   const state = Object.fromEntries(STATE_KEYS.filter(k => plan[k] != null).map(k => [k, plan[k]]));
   await db.prepare("UPDATE training_plans SET start_date=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(plan.startDate, JSON.stringify(state), db.userId, plan.id).run();
@@ -530,13 +576,14 @@ export async function reviewPlan(db, plan, weekStart, data) {
   return r;
 }
 export async function savePlanState(db, plan) { await savePlan(db, plan); return plan; }
-export async function startPlan(db, { templateId, startDate, raceDate = null, raceKm = null }) {
+export async function startPlan(db, { templateId, startDate, raceDate = null, raceKm = null, state = {} }) {
   const template = getTemplate(templateId);
   if (!template) throw new Error(L("Neznámý plán.", "Unknown plan."));
   await ensure(db);
   await stopPlan(db, { gym: template.sport === "gym" });
   const km = template.race ? (template.race.options?.includes(Number(raceKm)) ? Number(raceKm) : template.race.km) : null;
-  await db.prepare("INSERT INTO training_plans(user_id,template_id,sport,start_date,race_date,race_km,status) VALUES(?,?,?,?,?,?,'active')").bind(db.userId, template.id, template.sport, startDate, raceDate, km).run();
+  const saved = Object.fromEntries(STATE_KEYS.filter(k => state[k] != null).map(k => [k, state[k]]));
+  await db.prepare("INSERT INTO training_plans(user_id,template_id,sport,start_date,race_date,race_km,status,state_json) VALUES(?,?,?,?,?,?,'active',?)").bind(db.userId, template.id, template.sport, startDate, raceDate, km, JSON.stringify(saved)).run();
   return activePlan(db, null, { gym: template.sport === "gym" });
 }
 export async function stopPlan(db, { gym = false } = {}) {
@@ -544,20 +591,102 @@ export async function stopPlan(db, { gym = false } = {}) {
   await db.prepare(`UPDATE training_plans SET status='stopped',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active' AND sport${gym ? "=" : "<>"}'gym'`).bind(db.userId).run();
 }
 
+// The ride or run plan finished in the last 3 weeks whose result was not closed.
+export async function finishedPlan(db, today) {
+  await ensure(db);
+  const plan = fromRow(await db.prepare("SELECT * FROM training_plans WHERE user_id=? AND status='done' AND sport<>'gym' ORDER BY id DESC LIMIT 1").bind(db.userId).first());
+  const template = plan && getTemplate(plan.templateId);
+  if (!template || plan.seen) return null;
+  const end = shift(plan.startDate, template.weeks.length * 7 - 1);
+  return daysBetween(end, today) <= 21 ? { ...plan, endDate: end } : null;
+}
+export async function closePlanResult(db, id) {
+  await ensure(db);
+  const plan = fromRow(await db.prepare("SELECT * FROM training_plans WHERE user_id=? AND id=?").bind(db.userId, Number(id) || 0).first());
+  if (plan) await savePlan(db, { ...plan, seen: true });
+}
+// The athlete's own change of a session of this week (the plan's week view):
+// { date, op: "move", to } | { date, op: "minutes", minutes } | { date, op: "skip" } | { date, op: "reset" }.
+export function planEdit(plan, { date, op, to = null, minutes = null }, today) {
+  const valid = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || ""));
+  if (!valid(date) || date < today) throw new Error(L("Tento trénink už nejde změnit.", "This session can no longer be changed."));
+  const edits = Object.fromEntries(Object.entries(plan.edits || {}).filter(([d]) => d >= shift(mondayOf(today), -7)));
+  if (op === "move") {
+    if (!valid(to) || to < today || mondayOf(to) !== mondayOf(date) || to === date) throw new Error(L("Vyber jiný den tohoto týdne.", "Pick another day of this week."));
+    edits[date] = { to };
+  } else if (op === "minutes") {
+    const m = Math.round(Number(minutes));
+    if (!(m >= 20 && m <= 360)) throw new Error(L("Délka musí být 20–360 minut.", "The length must be 20–360 minutes."));
+    edits[date] = { ...(edits[date]?.to ? {} : edits[date]), minutes: m };
+  } else if (op === "skip") edits[date] = { skip: true };
+  else if (op === "reset") delete edits[date];
+  else throw new Error(L("Neznámá změna.", "Unknown change."));
+  return { ...plan, edits };
+}
+// Training days this week only (2–7), or null for the usual week.
+export function planWeekDays(plan, monday, days) {
+  const weekDays = Object.fromEntries(Object.entries(plan.weekDays || {}).filter(([m]) => m >= shift(monday, -7)));
+  if (days == null) delete weekDays[monday];
+  else { const n = Math.round(Number(days)); if (!(n >= 1 && n <= 7)) throw new Error(L("Vyber 1–7 dní.", "Pick 1–7 days.")); weekDays[monday] = n; }
+  return { ...plan, weekDays };
+}
+
+// ---- what the plan will look like ---------------------------------------------
+// An estimate for the plan's weeks before it starts: the sessions on the
+// athlete's days of the sport (the plan's range), the time from the usual
+// load (fitness × 7) times the week's load, at the plan sport's typical
+// intensity, and no more than the days' free time. The week planner makes the
+// real week from the same load, so the numbers are close but not exact.
+export function planPreview(template, { ctl = null, days = [], firstDay = null, startDate, availability = [] } = {}) {
+  const sport = template.sport, n = clamp(days.length || template.days[0], template.days[0], template.days[1]);
+  const weekly = Math.max(Number(ctl) || 35, 20) * 7, intensity = sport === "run" ? .75 : .72, perTss = 60 / (intensity * intensity * 100);
+  // Days without a set time do not limit the week.
+  const free = days.length ? days.reduce((sum, i) => sum + (Number(availability?.[i]?.minutes) > 0 ? Number(availability[i].minutes) : Infinity), 0) : Infinity;
+  const firstFrom = firstDay ? (new Date(firstDay + "T12:00:00Z").getUTCDay() + 6) % 7 : 0;
+  const summary = templateSummary(template);
+  const weeks = template.weeks.map((w, i) => {
+    const left = i === 0 && firstFrom ? days.filter(d => d >= firstFrom).length : days.length;
+    const sessions = template.sport === "gym" ? w.gym.sessions : i === 0 && firstFrom ? Math.min(n, Math.max(left, Math.min(n, w.q.length))) : n;
+    const share = sessions / n, tss = Math.round(weekly * w.load * share);
+    const minutes = Math.round(Math.min(tss * perTss, free * share) / 5) * 5;
+    return { week: i + 1, phase: w.phase, phaseLabel: summary.weeks[i].phaseLabel, keys: summary.weeks[i].keys, race: Boolean(w.race), sessions, minutes, tss: Math.round(minutes / perTss) };
+  });
+  const sum = k => weeks.reduce((a, w) => a + w[k], 0);
+  return { startDate, firstDay, endDate: shift(startDate, template.weeks.length * 7 - 1), days, weeks, totals: { sessions: sum("sessions"), minutes: sum("minutes"), tss: sum("tss") } };
+}
+// How much of each past week was done, in %: days with a session of the
+// sport against the sessions the week had (the usual days, fewer when the
+// athlete asked for fewer, without skipped ones and days before the start).
+export function planCompletion(plan, { days = [], doneDates = [], today }) {
+  const template = getTemplate(plan.templateId);
+  if (!template || template.sport === "gym") return {};
+  const n = clamp(days.length || template.days[0], template.days[0], template.days[1]), done = new Set(doneDates), out = {};
+  for (let i = 0; i < template.weeks.length; i++) {
+    const monday = shift(plan.startDate, i * 7), end = shift(monday, 7);
+    if (end > today) break;
+    let planned = Number(plan.weekDays?.[monday]) || n;
+    if (plan.firstDay && monday === mondayOf(plan.firstDay)) planned = Math.min(planned, Math.max(1, days.filter(d => shift(monday, d) >= plan.firstDay).length));
+    planned -= Object.entries(plan.edits || {}).filter(([d, e]) => e.skip && d >= monday && d < end).length;
+    const did = [...done].filter(d => d >= monday && d < end).length;
+    out[i + 1] = planned > 0 ? Math.round(Math.min(did, planned) / planned * 100) : 100;
+  }
+  return out;
+}
+
 // ---- what the app shows ----------------------------------------------------------
-const keyLabel = (sport, k) => k.test ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : baseName(planWorkoutId(sport, k, sport === "run" ? 60 : 90)) || k.family;
+const keyLabel = (sport, k) => k.test ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : planName(baseName(planWorkoutId(sport, k, sport === "run" ? 60 : 90))) || k.family;
 export function templateSummary(t) {
   return {
     id: t.id, sport: t.sport, name: t.name, goal: t.goal, description: t.description, level: t.level, weeksCount: t.weeks.length, days: t.days,
     race: t.race ? { km: t.race.km, options: t.race.options || null } : null, tests: Boolean(t.tests),
-    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase), load: w.load, keys: w.gym ? [L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`), `${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : w.q.map(k => keyLabel(t.sport, k)), longMinutes: w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race) }))
+    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase, t.sport), load: w.load, keys: w.gym ? [L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`), `${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : w.q.map(k => keyLabel(t.sport, k)), longMinutes: w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race) }))
   };
 }
 export function planSummary(plan, today) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return null;
   const pw = planWeek(plan, today), started = today >= plan.startDate;
-  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning || pw?.spec.light), template: templateSummary(template) };
+  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, firstDay: plan.firstDay || null, endDate: shift(plan.startDate, template.weeks.length * 7 - 1), weekDays: plan.weekDays?.[mondayOf(today)] ?? null, raceDate: plan.raceDate, raceKm: plan.raceKm, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase, template.sport) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning || pw?.spec.light), template: templateSummary(template) };
 }
 
 // ---- a proposal in words (Today's plan card) -----------------------------------
