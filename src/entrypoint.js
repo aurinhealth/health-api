@@ -1723,11 +1723,18 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
       await cached(env,ctx,'reconcile:'+localToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
       const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):localToday();
-      const coach=buildCyclingCoachV2({...await loadCoachInputs(env,ctx,internalAuth,date),capabilities:await getCapabilities(env.DB,sport),sport});
+      // The same coach as the library's Návrh kouče (the week plan's role and
+      // the day's time), so the list ranks what the proposal above it says.
+      const prefs=await getWeekPlan(env.DB,date).catch(()=>null),plan=prefs?await planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null):null;
+      const week={prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null};
+      const coach=await defaultDayCoach(env,await loadCoachInputs(env,ctx,internalAuth,date),date,sport,week);
       const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
-      // Without a length the list is ranked by the length the coach would pick
-      // for the day (50 min or 4 h alike); no length is filtered out.
-      const filters=parseWorkoutSearchFilters(url.searchParams),autoDuration=filters.durationMinutes==null&&Number(coach.constraints?.availableMinutes)>0?{durationMinutes:Number(coach.constraints.availableMinutes)}:null;
+      // Without a length the list is ranked by the length of the coach's
+      // session (the free time is only its limit), indoors shorter, as the
+      // proposal is; no length is filtered out.
+      const filters=parseWorkoutSearchFilters(url.searchParams),free=Number(coach.constraints?.availableMinutes)||null,coachMinutes=Number(coach.recommendation?.session?.durationMinutes)||null;
+      const freeMinutes=free&&filters.environment==='indoor'?indoorMinutes(sport,free):free,dayMinutes=coachMinutes&&freeMinutes?Math.min(coachMinutes,freeMinutes):coachMinutes||freeMinutes;
+      const autoDuration=filters.durationMinutes==null&&dayMinutes>0?{durationMinutes:dayMinutes}:null;
       if(autoDuration)Object.assign(filters,{durationMinutes:autoDuration.durationMinutes,durationSoft:true});
       // With no type chosen, the type the coach recommends for the day ranks first.
       const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
