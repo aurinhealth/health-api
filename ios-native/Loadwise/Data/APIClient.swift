@@ -137,7 +137,7 @@ final class APIClient: @unchecked Sendable {
                     }
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.finish(throwing: Self.readable(error))
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -634,8 +634,34 @@ final class APIClient: @unchecked Sendable {
             if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
                 ErrorLog.add(request, status: nil, message: error.localizedDescription)
             }
-            throw error
+            throw Self.readable(error)
         }
+    }
+
+    /// iOS words connection failures for engineers ("Chyba TLS způsobila
+    /// selhání zabezpečeného připojení"). This keeps the URLError and its code,
+    /// so Outbox and the offline notice still see it, and says what to do.
+    static func readable(_ error: Error) -> Error {
+        guard let url = error as? URLError else { return error }
+        let text: String
+        switch url.code {
+        case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+             .serverCertificateHasBadDate, .serverCertificateNotYetValid, .clientCertificateRejected:
+            text = L10n.tr("Síť, ke které je telefon připojený, nepustila zabezpečené spojení s Aurinem. Veřejná Wi-Fi často vyžaduje nejdřív přihlášení. Přihlas se v ní, nebo přepni na mobilní data.")
+        case .notConnectedToInternet, .dataNotAllowed:
+            text = L10n.tr("Telefon není připojený k internetu.")
+        case .internationalRoamingOff:
+            text = L10n.tr("Mobilní data v roamingu jsou vypnutá.")
+        case .timedOut:
+            text = L10n.tr("Server neodpověděl včas. Zkus to za chvíli znovu.")
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost:
+            text = L10n.tr("Nepodařilo se spojit se serverem Aurinu. Zkontroluj připojení a zkus to znovu.")
+        default:
+            return error
+        }
+        var info = url.userInfo
+        info[NSLocalizedDescriptionKey] = text
+        return URLError(url.code, userInfo: info)
     }
 
     private func makeRequest(_ path: String, method: String = "GET") -> URLRequest {
