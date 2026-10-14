@@ -14,8 +14,9 @@ struct SettingsTitle: View {
     }
 }
 
-/// The photo and the name; opens Účet.
+/// The photo, the name and "34 let · 182 cm · 81,4 kg" under it; opens Účet.
 struct SettingsProfileCard: View {
+    @Environment(AppModel.self) private var model
     let store: SettingsStore
     var signOut: () -> Void = {}
     @AppStorage(AppModel.displayNameKey) private var shownName = ""
@@ -26,11 +27,33 @@ struct SettingsProfileCard: View {
             ?? shownName.nilIfBlank ?? accountName.nilIfBlank ?? L10n.tr("Účet")
     }
 
+    /// Age, height and the latest weight, whichever are known.
+    private var details: String? {
+        let p = store.profile
+        let years: Int? = {
+            if let text = p["birthDate"]?.string, let date = ProfileSettingsView.dayFormat.date(from: text) {
+                return ProfileSettingsView.years(from: date)
+            }
+            return (p["age"]?.number).map { Int($0) }
+        }()
+        let parts = [
+            years.flatMap { $0 > 0 ? L10n.f("%@ let", String($0)) : nil },
+            (p["height"]?.number).flatMap { $0 > 0 ? Units.lengthText($0) : nil },
+            model.today?.weight?.latest.flatMap { $0 > 0 ? Units.weightText($0) : nil }
+        ].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     var body: some View {
         NavigationLink { ProfileSettingsView(store: store, signOut: signOut) } label: {
             HStack(spacing: 14) {
                 AvatarView(size: 54)
-                Text(name).font(Typo.number(28)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(name).font(Typo.number(28)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    if let details {
+                        Text(verbatim: details).font(.footnote).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
                     .accessibilityHidden(true)
@@ -42,7 +65,7 @@ struct SettingsProfileCard: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr("Účet") + ", " + name)
+        .accessibilityLabel(L10n.tr("Účet") + ", " + name + (details.map { ", " + $0 } ?? ""))
     }
 }
 
