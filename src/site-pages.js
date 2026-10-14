@@ -75,9 +75,11 @@ p{margin:0}
 .next .t{font-weight:600;display:flex;align-items:center;gap:5px}
 .next .t .icon{width:12px;height:12px;color:var(--amber)}
 .next .s{font-size:12px;color:var(--muted)}
-.tabbar{position:absolute;left:12px;right:12px;bottom:12px;height:54px;border-radius:27px;background:var(--panel);display:flex;justify-content:space-around;align-items:center;box-shadow:0 4px 20px rgba(60,45,20,.10);color:var(--muted)}
+.tabbar{position:absolute;left:12px;right:12px;bottom:12px;height:54px;border-radius:27px;background:color-mix(in srgb,var(--panel) 82%,transparent);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);display:flex;justify-content:space-around;align-items:center;box-shadow:0 8px 24px rgba(60,45,20,.12);color:var(--muted)}
 .tabbar .icon{width:21px;height:21px}
 .tabbar .on{color:var(--text)}
+.tabbar .add{width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button);display:grid;place-items:center}
+.tabbar .add .icon{width:18px;height:18px;stroke-width:2.4}
 
 /* Sections: text on one side, the picture on the other; stacked on phones. */
 section{padding:120px 0 0}
@@ -341,7 +343,7 @@ export function overviewPage(request) {
 <div><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div></div>
 <div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">${t('1 h 25 min · dnes v 17:30', '1h 25m · today at 5:30 pm')}</div></div></div>
 <div class="pc"><div class="s" style="color:var(--muted);font-size:12px">${t('Kouč', 'Coach')}</div><div style="margin-top:3px">${t('Spal jsi dobře a HRV je nad normálem. Dnešní intervaly dej naplno.', 'You slept well and your HRV is above normal. Go all in on today’s intervals.')}</div></div>
-<div class="tabbar"><span class="on">${icon('today')}</span><span>${icon('heart')}</span><span>${icon('training')}</span><span>${icon('meal')}</span></div>
+<div class="tabbar"><span class="on">${icon('today')}</span><span>${icon('training')}</span><span class="add">${icon('plus')}</span><span>${icon('meal')}</span><span>${icon('heart')}</span></div>
 </div></div>`;
   const graph = [[9,34,'easy'],[15,74,'hard'],[4,34,'easy'],[15,74,'hard'],[4,34,'easy'],[15,74,'hard'],[9,28,'easy']]
     .map(([w, h, k]) => `<i class="${k}" style="width:${w}%;height:${h}%"></i>`).join('');
