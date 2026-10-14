@@ -2,7 +2,7 @@
 // answer is checked before the app shows it.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeWeekDays, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
+import { sanitizeWeekDays, gymNote, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
 
 const start = "2026-10-12", today = "2026-10-13";
 const prefs = { availability: [60, 90, 60, 90, 0, 240, 60].map(minutes => ({ minutes, window: "", preferredSports: [] })) };
@@ -107,4 +107,13 @@ test("the AI can change one session's sport; gym is always indoor gym", async ()
   const weekDays = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
   const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "run", minutes: 45, environment: "outdoor", kind: "endurance" }, request: "Chci posilovnu", weekDays, prefs, today }, { ask });
   assert.deepEqual([r.sport, r.environment, r.kind, r.minutes], ["gym", "indoor", "gym", 60]);
+});
+
+test("a gym day's note never names exercises the generator may not pick", () => {
+  const [gym] = sanitizeWeekDays([{ date: "2026-10-18", sport: "gym", minutes: 60, kind: "gym", reason: "Lehčí celé tělo: rumunský mrtvý tah, bulharský dřep a addukce doplněné cvikem na vršek těla. Nohy necvič do selhání." }], { start, today, prefs });
+  assert.equal(gym.reason, null);
+  assert.equal(gymNote("V sobotu jedeš dlouho, posilovna je proto v neděli. Dej dřep a bench."), "V sobotu jedeš dlouho, posilovna je proto v neděli.");
+  assert.equal(gymNote("Sunday keeps the legs fresh for Tuesday's intervals. Keep 2 reps in reserve."), "Sunday keeps the legs fresh for Tuesday's intervals.");
+  const [ride] = sanitizeWeekDays([{ date: "2026-10-18", sport: "ride", minutes: 60, kind: "endurance", reason: "Klidná jízda, žádné série." }], { start, today, prefs });
+  assert.equal(ride.reason, "Klidná jízda, žádné série.");
 });
