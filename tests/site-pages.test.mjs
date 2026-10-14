@@ -31,20 +31,20 @@ test('the overview follows the app section by section and every file it loads ex
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  assert.doesNotMatch(html,/\.webp"/,'the phone is drawn in HTML, not a screenshot');
+  for(const name of ['today','readiness','strain','training','gym','food','coach'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
 });
 
-// The phone in the hero is the Today screen: its key numbers carry the app's own labels
-// (TodayView.swift, English from Localizable.strings), so a rename in the app fails here.
-test('the phone in the hero labels the key numbers like the app’s Today screen',async()=>{
-  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
-  const labels=[...read('Loadwise/Screens/TodayView.swift').matchAll(/\bcell\("([^"]+)"/g)].map(m=>m[1]);
-  assert.ok(labels.length>=3,'KeyNumbers cells');
-  const strings=read('Shared/en.lproj/Localizable.strings');
-  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1]||label;
+// The phones show the app's sample morning (screenshots from ios-native.yml), so the numbers floating
+// around the hero phone come from the same sample day (DemoData.swift) and change with it.
+test('the numbers around the hero phone are the sample morning its screenshot shows',async()=>{
+  const demo=readFileSync(new URL('../ios-native/Loadwise/Data/DemoData.swift',import.meta.url),'utf8');
+  const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
   const html=await overviewPage().text();
-  for(const label of labels)assert.match(html,new RegExp('<div class="k">'+en(label)+'</div>'),label);
+  const clock=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
+  assert.match(html,new RegExp('readiness '+today.readiness.score+','));
+  assert.match(html,new RegExp('<div class="k">HRV</div><div class="v">'+today.hrv.value+' ms</div><div class="d up">↑ '+(today.hrv.value-today.hrv.baseline)+' ms above normal'));
+  assert.match(html,new RegExp('<div class="k">Sleep</div><div class="v">'+clock(today.sleep.minutes)+'</div><div class="d sleep">score '+today.sleep.index+'<'));
 });
 
 const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
@@ -175,16 +175,17 @@ test('the connections use the app’s own logos and only the services the app of
   const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
   const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
-  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg']]){
+  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg']]){
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
     assert.ok(section.includes('/site/logos/'+file),file);
   }
-  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman']);
-  assert.doesNotMatch(section,/whoop|strava|garmin|wahoo|oura/i,'only services the app offers');
+  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop']);
+  assert.doesNotMatch(section,/strava|garmin|wahoo|oura/i,'only services the app offers');
   const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
   for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
-  assert.doesNotMatch(sync,/SyncDestination\(id: "ultrahuman"/);
+  for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
   assert.match(section,/nothing, Aurin only reads the ring/);
+  assert.match(section,/nothing, Aurin only reads WHOOP/);
 });
 
 test('the questions open without JS and name the app’s real Settings paths',async()=>{
