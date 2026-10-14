@@ -3,6 +3,7 @@ import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { importGoogleFood, googleMeal, googleLocal } from "../src/google-food.js";
+import { HEALTH_PERMISSIONS } from "../src/google-scopes.js";
 import { saveAppleFood } from "../src/apple-food.js";
 import { listFluids } from "../src/fluids.js";
 import { deleteFoodEntry } from "../src/food-entry-management.js";
@@ -75,4 +76,29 @@ test("without hydration in Google Health the drinks stay as they are; without th
   const none = google({});
   assert.deepEqual(await importGoogleFood({ DB: db, USER_ID: 7, GOOGLE_SCOPES: ["x"] }, { token: "t", fetcher: none.fetcher }), { status: "skipped" });
   assert.equal(none.calls.length, 0);
+});
+
+test("Fitbit's day totals at midnight are not meals", () => {
+  const point = (id, log) => ({ name: "users/1/dataTypes/nutrition-log/dataPoints/" + id, dataSource: {}, nutritionLog: { interval: { startTime: at("00:00"), startUtcOffset: "0s" }, ...log } });
+  assert.equal(googleMeal(point("a", { foodDisplayName: "Výchozí potraviny", energy: { kcal: 1753 } })), null);
+  assert.equal(googleMeal(point("b", { totalCarbohydrate: { grams: 180 } })), null);
+  assert.equal(googleMeal(point("c", { nutrients: [{ nutrient: "PROTEIN", quantity: { grams: 97 } }] })), null);
+  assert.equal(googleMeal(point("d", { foodDisplayName: "Den", energy: { kcal: 2000 }, totalFat: { grams: 60 }, interval: { startTime: at("00:00"), endTime: new Date(Date.parse(at("00:00")) + 86400000).toISOString() } })), null);
+  // A real snack at midnight, with its macros, stays.
+  assert.equal(googleMeal(point("e", { foodDisplayName: "Jogurt", energy: { kcal: 150 }, totalCarbohydrate: { grams: 12 }, totalFat: { grams: 5 } })).name, "Jogurt");
+  assert.equal(googleMeal(meal("f", "08:10", "Ovesná kaše")).name, "Ovesná kaše");
+});
+
+test("day totals imported earlier are removed on the next sync", async () => {
+  const raw = createD1(); diary(raw);
+  const env = { DB: scopedDb(raw, 1), USER_ID: 1, GOOGLE_SCOPES: [HEALTH_PERMISSIONS.nutritionRead] };
+  raw.sqlite.exec(`INSERT INTO food_logs (user_id,consumed_date,consumed_at,recipe_title,kcal,protein_g,carbs_g,fat_g,source) VALUES
+    (1,'2026-09-01','2026-09-01T00:00:00','Výchozí potraviny',1753,0,0,0,'google-health'),
+    (1,'2026-09-01','2026-09-01T00:00:00','Google Health',0,97,0,0,'google-health'),
+    (1,'2026-09-01','2026-09-01T08:00:00','Kaše',300,10,40,5,'google-health'),
+    (1,'2026-09-01','2026-09-01T00:00:00','Breakfast',334,20,36,9.6,'manual')`);
+  const { fetcher } = google({});
+  await importGoogleFood(env, { token: "t", fetcher });
+  const left = raw.sqlite.prepare("SELECT recipe_title FROM food_logs ORDER BY id").all().map(r => r.recipe_title);
+  assert.deepEqual(left, ["Kaše", "Breakfast"]);
 });
