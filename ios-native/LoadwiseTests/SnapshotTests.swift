@@ -50,7 +50,7 @@ final class SnapshotTests: XCTestCase {
 
     func testHealthAndFoodDecode() throws {
         let h = DemoData.health
-        XCTAssertEqual(h.readiness.score, 89)
+        XCTAssertEqual(h.readiness.score, 78, "the same morning as Today")
         XCTAssertEqual(h.readiness.parts.map(\.key), ["hrv", "restingHR", "sleep"])
         XCTAssertEqual(h.sleep.night?.stages?.deep, 83)
         let f = DemoData.food
