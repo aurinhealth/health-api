@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { loadFitnessInsights } from "../src/fitness-insights.js";
+import { loadMuscleFatigue } from "../src/muscle-fatigue.js";
 
 // health_datapoints holds about a million heart-rate rows per user: a read
 // that SQLite can't serve from an index reads all of them (0.3 s and more).
@@ -52,4 +53,11 @@ test("fitness insights match each activity's session once, not per comparison", 
   try { await loadFitnessInsights(db, "2026-10-08"); } finally { JSON.parse = parse; }
   // 400 rows: a parse per row, not one per comparison (300 × 100 pairs).
   assert.ok(parses < 2000, `${parses} JSON parses`);
+});
+
+test("Trénink → Svaly reads the last week's activities through an index", async () => {
+  const { db, plans } = datapoints();
+  await loadMuscleFatigue(db, { now: Date.parse("2026-10-08T08:00:00Z") });
+  assert.equal(plans.length, 1);
+  assert.deepEqual(scans(plans), []);
 });

@@ -136,7 +136,7 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 .muscle .m{width:104px;font-weight:500}
 .muscle .bar{flex:1;height:8px;border-radius:4px;background:var(--track);overflow:hidden}
 .muscle .bar i{display:block;height:100%;border-radius:4px}
-.muscle .p{width:46px;text-align:right;color:var(--muted);font-size:15px}
+.muscle .p{min-width:46px;text-align:right;color:var(--muted);font-size:15px;white-space:nowrap}
 .live{display:flex;align-items:center;gap:14px}
 .live .t{font-size:17px;font-weight:600}
 .live .s{font-size:14px;color:var(--muted)}
@@ -338,8 +338,9 @@ export function overviewPage(request) {
   const cal = [['12','today'],['13','gym'],['14','run'],['15',''],['16','ride'],['17','run'],['18','']]
     .map(([n, k], i) => `<div>${days[i]}<b class="${k}">${n}</b></div>`).join('');
   const week = [30,55,20,70,45,15,62].map((h, i) => `<i class="${[1,3,4,6].includes(i) ? 'on' : ''}" style="height:${h}%"></i>`).join('');
-  const muscles = [[t('Hrudník', 'Chest'),92,'green'],[t('Záda', 'Back'),81,'green'],[t('Nohy', 'Legs'),54,'amber-bar'],[t('Ramena', 'Shoulders'),38,'rust']]
-    .map(([m, p, c]) => `<div class="muscle"><span class="m">${m}</span><span class="bar"><i style="width:${p}%;background:var(--${c})"></i></span><span class="p">${p} %</span></div>`).join('');
+  // Trénink → Svaly: how tired each muscle is and when it is rested (MuscleViews.swift).
+  const muscles = [[t('Hýždě', 'Glutes'),74,'rust','rust',t('pozítří', 'in 2 days')],[t('Lýtka', 'Calves'),53,'rust','rust',t('zítra', 'tomorrow')],[t('Hrudník', 'Chest'),39,'amber-bar','amber',t('dnes', 'today')],[t('Záda', 'Back'),8,'green','green',t('odpočaté', 'rested')]]
+    .map(([m, p, c, tc, when]) => `<div class="muscle"><span class="m">${m}</span><span class="bar"><i style="width:${p}%;background:var(--${c})"></i></span><span class="p" style="color:var(--${tc})">${when}</span></div>`).join('');
   const sources = [['Apple Zdraví', 'Apple Health', `<span class="logo-tile health-red">${icon('heart')}</span>`],
     ['Google Health', 'Google Health', '<span class="logo-tile google">G</span>'],
     ['Intervals.icu', 'Intervals.icu', '<span class="logo-tile icu">i.icu</span>'],
@@ -403,7 +404,7 @@ ${today}
 <div class="visual reveal">
 <div class="card">${muscles}</div>
 <div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">${t('Série 3 ze 4 · 80 kg × 8', 'Set 3 of 4 · 80 kg × 8')}</div></div><span class="clock">1:30</span></div>
-<div class="chips"><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span><span>${t('Síla, svaly nebo kondice', 'Strength, muscle or fitness')}</span><span>${t('Rozcvička a protažení', 'Warm-up and stretching')}</span></div>
+<div class="chips"><span>${t('Únava svalů z posilovny i běhu', 'Muscle fatigue from the gym and runs')}</span><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span><span>${t('Síla, svaly nebo kondice', 'Strength, muscle or fitness')}</span><span>${t('Rozcvička a protažení', 'Warm-up and stretching')}</span></div>
 </div>
 </div></section>
 
@@ -425,7 +426,7 @@ ${today}
 </div></section>
 
 <section id="kouc" class="glow-today"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">${t('AI kouč', 'AI coach')}</div><h2>${t('Ptej se. Zná tvoje data.', 'Just ask. It knows your data.')}</h2><p class="free">${t('Zdarma pro všechny.', 'Free for everyone.')}</p></div>
+<div class="text reveal"><div class="eyebrow">${t('AI kouč', 'AI coach')}</div><h2>${t('Ptej se. Zná tvoje data.', 'Just ask. It knows your data.')}</h2><p>${t('Pamatuje si, co mu řekneš, a co si pamatuje, vidíš a upravíš. Na požádání sloučí rozdělenou aktivitu, smaže omyl nebo posune čas. Ozve se i sám, nejvýš jednou denně: když na tebe něco leze, po krátkých nocích před tvrdým tréninkem nebo večer před dlouhým.', 'It remembers what you tell it, and you can see and edit what it remembers. Ask it to merge a split activity, delete a mistake or move a time. It also speaks up on its own, at most once a day: when something may be coming on, after short nights before a hard session, or the evening before a long one.')}</p><p class="free">${t('Zdarma pro všechny.', 'Free for everyone.')}</p></div>
 <div class="visual chat reveal">
 <div class="me">${t('Spal jsem jen 6 hodin. Mám jet ty intervaly?', 'I only slept 6 hours. Should I still do the intervals?')}</div>
 <div class="ai">${t('HRV máš v normálu, ale spánkový dluh roste. Zkrátil bych to na 2×12 a dnes šel spát o 30 minut dřív.', 'Your HRV is normal, but your sleep debt is growing. I’d cut it to 2×12 and go to bed 30 minutes earlier tonight.')}

@@ -66,6 +66,8 @@ targets:
         PRODUCT_NAME: Loadwise
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # The icons of Settings → Ikona aplikace (AppIcon-*.appiconset), for setAlternateIconName.
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         ENABLE_PREVIEWS: YES
     info:
       path: Loadwise/Info.plist
