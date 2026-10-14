@@ -184,10 +184,15 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 .final h2{font-size:clamp(52px,7vw,84px);margin-top:22px}
 .final .store{margin-top:30px}
 
-.site-foot{border-top:1px solid var(--line);padding:30px 0 40px;color:var(--muted);font-size:14px}
-.site-foot .wrap{display:flex;gap:20px;flex-wrap:wrap;align-items:center}
-.site-foot nav{display:flex;gap:20px;margin-left:auto}
-.site-foot a{color:var(--muted);text-decoration:none}.site-foot a:hover{color:var(--text)}
+/* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
+.site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:14px}
+.site-foot .top{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:32px}
+.site-foot .brand{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.site-foot .brand p{font:400 22px/1.2 Newsreader,"New York",Georgia,serif;color:var(--text);letter-spacing:-.01em;max-width:320px}
+.site-foot h3{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.site-foot ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.site-foot a{color:var(--sec);text-decoration:none}.site-foot a:hover{color:var(--text)}
+.site-foot .base{display:flex;flex-wrap:wrap;gap:6px 24px;justify-content:space-between;margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:13px}
 
 .doc{max-width:760px;padding:72px 24px 96px}
 .doc h1{font-size:52px;margin:0 0 24px}
@@ -220,7 +225,7 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
   .big{font-size:124px}
   .food{gap:18px}.ring{width:104px;height:104px}.food .kcal{font-size:32px}
   .muscle .m{width:84px}
-  .site-foot nav{margin-left:0}
+  .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
 
@@ -286,8 +291,13 @@ ${langSwitch(lang)}
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
-<span>© 2026 Aurin · aurin.health</span>
-<nav aria-label="${t('Dokumenty', 'Documents')}"><a href="/privacy">${t('Ochrana soukromí', 'Privacy Policy')}</a><a href="/terms">${t('Podmínky', 'Terms')}</a><a href="/support">${t('Podpora', 'Support')}</a></nav>
+<div class="top">
+<div class="brand">${mark(40)}<p>${t('Trénuj podle toho, jak se dnes máš.', 'Train for how you feel today.')}</p></div>
+<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">${t('Funkce', 'Features')}</a></li><li><a href="/#kouc">${t('AI kouč', 'AI coach')}</a></li><li><a href="/#propojeni">${t('Propojení', 'Connections')}</a></li></ul></nav>
+<nav aria-label="${t('Pomoc', 'Help')}"><h3>${t('Pomoc', 'Help')}</h3><ul><li><a href="/support">${t('Podpora', 'Support')}</a></li><li><a href="/support#problem">${t('Nahlásit problém', 'Report a problem')}</a></li><li><a href="mailto:${CONTACT_EMAIL}">${t('Napsat nám', 'Write to us')}</a></li></ul></nav>
+<nav aria-label="${t('Dokumenty', 'Documents')}"><h3>${t('Dokumenty', 'Documents')}</h3><ul><li><a href="/privacy">${t('Ochrana soukromí', 'Privacy Policy')}</a></li><li><a href="/terms">${t('Podmínky', 'Terms')}</a></li></ul></nav>
+</div>
+<div class="base"><span>© 2026 Aurin · ${t('provozuje Petr Bouma, Česká republika', 'run by Petr Bouma, Czech Republic')}</span><span>${t('Aurin není zdravotnický prostředek.', 'Aurin is not a medical device.')}</span></div>
 </div></footer>
 ${langSwitchScript}${revealScript}
 </body></html>`;
@@ -666,16 +676,159 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
   });
 }
 
+// Terms of Use. The English text is the reference version; the Czech one says the same.
+const TERMS_UPDATED = {cs: '14. října 2026', en: '14 October 2026'};
+const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+
 export function termsPage(request) {
   return doc(request, '/terms', {cs: 'Podmínky použití', en: 'Terms of Use'}, {
-    en: `<p>Aurin is provided for personal training organization and planning. You are responsible for the accuracy of connected data and for deciding whether a generated workout is appropriate for you. The app does not provide medical diagnosis or emergency care. Use of the app requires authorization to the connected health-api service.</p>`,
-    cs: `<p>Aurin slouží k organizaci a plánování osobního tréninku. Za správnost propojených dat a za rozhodnutí, jestli je vygenerovaný trénink pro tebe vhodný, odpovídáš ty. Aplikace neposkytuje lékařskou diagnózu ani pomoc v nouzi. Používání aplikace vyžaduje přístup k propojené službě health-api.</p><p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
+    en: `<p class="muted">Last updated: ${TERMS_UPDATED.en}</p>
+<p>These terms are the agreement between you and the operator of Aurin when you use the Aurin iPhone app and aurin.health. Aurin is run by Petr Bouma, a private individual in the Czech Republic (“we” below), reachable at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. By creating an account or using Aurin you agree to them. How we handle your personal data is described in the <a href="/privacy">Privacy Policy</a>.</p>
+<h2>What Aurin does</h2>
+<ul>
+<li>Aurin reads the data you connect (Apple Health, Google Health, Intervals.icu, Ultrahuman Ring), evaluates your recovery and training load, and suggests workouts, training plans and nutrition targets.</li>
+<li>Readiness, strain, calories, zones and similar numbers are estimates calculated from your devices’ measurements. They depend on the quality of that data and can be wrong.</li>
+</ul>
+<h2>Aurin is not medical care</h2>
+<ul>
+<li>Aurin is not a medical device. It does not diagnose, treat or prevent any disease and does not replace a doctor, physiotherapist or nutrition specialist.</li>
+<li>Talk to a doctor before you start a new training programme or change your diet, especially if you have a health condition, are pregnant or take medication.</li>
+<li>Stop exercising and get help if you feel pain, dizziness, chest pressure or unusual shortness of breath. In an emergency call 112 (in the Czech Republic also 155).</li>
+<li>Cycle tracking is not contraception. Do not use it to prevent or plan a pregnancy.</li>
+<li>You decide whether a suggested workout or meal suits you, and you train at your own risk.</li>
+</ul>
+<h2>Your account</h2>
+<ul>
+<li>You must be at least 16 years old.</li>
+<li>An account is for one person. Keep your sign-in (Apple, Google, e-mail or passkey) to yourself and tell us if you think someone else has access.</li>
+<li>Fill in your profile truthfully. Calorie targets, zones and other estimates are based on it.</li>
+</ul>
+<h2>Your data</h2>
+<ul>
+<li>Your data remains yours. You allow us to store and process it only to run Aurin for you, as the Privacy Policy describes. We do not sell it or use it for advertising.</li>
+<li>You can download a copy or delete everything at any time in <strong>Settings → Privacy &amp; data</strong>.</li>
+</ul>
+<h2>Connected services</h2>
+<ul>
+<li>Apple Health, Google Health, Intervals.icu and Ultrahuman are run by other companies under their own terms. We are not responsible for their availability, for the accuracy of the data they provide or for changes on their side, and a connection can stop working if a service changes or withdraws access.</li>
+<li>Names and logos of these services belong to their owners. Aurin shows them only so you can see which service you are connecting. Aurin is not made, endorsed or sponsored by those companies.</li>
+</ul>
+<h2>AI features</h2>
+<ul>
+<li>The coach, reading food photos and looking up foods use artificial intelligence and work only with your consent, which you can withdraw in <strong>Settings → Privacy &amp; data → AI features</strong>. The rest of Aurin works without them.</li>
+<li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
+</ul>
+<h2>Price</h2>
+<p>Aurin is currently free. If we introduce paid features, we will tell you in advance, show the price and conditions before you buy, and sell them only through the App Store, where Apple handles payment, cancellation and refunds. We never charge you without your purchase.</p>
+<h2>Fair use</h2>
+<p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
+<h2>Availability and changes</h2>
+<ul>
+<li>We develop Aurin continuously, so features can change, move or be removed. We do our best to keep it running, but we cannot promise it will always be available or free of errors.</li>
+<li>If we ever shut Aurin down, we will tell you at least 30 days ahead in the app or by e-mail, so you can download your data.</li>
+</ul>
+<h2>Liability</h2>
+<ul>
+<li>Aurin is provided as it is. As far as the law allows, we are not liable for indirect damage, for data in connected services or for decisions you make based on Aurin’s estimates and suggestions.</li>
+<li>Nothing in these terms limits liability that the law does not allow to be limited, in particular for harm to life or health or for damage caused intentionally or through gross negligence, and nothing limits your rights as a consumer.</li>
+</ul>
+<h2>Ending your use</h2>
+<ul>
+<li>You can stop at any time by deleting your account in <strong>Settings → Privacy &amp; data → Delete account</strong>.</li>
+<li>We may suspend or close an account that seriously or repeatedly breaks these terms. Unless the law prevents it, we tell you by e-mail why.</li>
+<li>An account nobody has signed in to for two years is deleted, as the Privacy Policy describes.</li>
+</ul>
+<h2>Aurin’s name and content</h2>
+<p>The app, this website, the name Aurin, its logo, texts and graphics belong to the operator. You may use the app for your own personal, non-commercial purposes.</p>
+<h2>App Store</h2>
+<p>If you got Aurin from the App Store, Apple’s <a href="${APPLE_EULA}">Licensed Application End User License Agreement</a> applies as well. These terms are between you and us, not Apple, and Apple is not responsible for Aurin or its support.</p>
+<h2>Changes to these terms</h2>
+<p>We publish every change on this page with its date. Before a significant change takes effect, we tell you at least 30 days ahead in the app or by e-mail. If you do not agree, you can delete your account before then.</p>
+<h2>Law and disputes</h2>
+<p>These terms are governed by Czech law. If you are a consumer living in another country, you keep the protection that the mandatory law of that country gives you. If something goes wrong, write to us first and we will try to put it right.</p>
+<h2>Contact</h2>
+<p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`,
+    cs: `<p class="muted">Poslední změna: ${TERMS_UPDATED.cs}</p>
+<p>Tyto podmínky jsou dohodou mezi tebou a provozovatelem Aurinu, když používáš aplikaci Aurin pro iPhone a web aurin.health. Aurin provozuje Petr Bouma, soukromá osoba v České republice (dál „my“), na adrese <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Založením účtu nebo používáním Aurinu s nimi souhlasíš. Jak zacházíme s tvými osobními údaji, popisují <a href="/privacy">Zásady ochrany soukromí</a>.</p>
+<h2>Co Aurin dělá</h2>
+<ul>
+<li>Aurin čte data, která propojíš (Apple Zdraví, Google Health, Intervals.icu, prsten Ultrahuman), vyhodnocuje tvou regeneraci a tréninkovou zátěž a navrhuje tréninky, tréninkové plány a cíle výživy.</li>
+<li>Připravenost, námaha, kalorie, zóny a podobná čísla jsou odhady spočítané z měření tvých zařízení. Závisí na kvalitě těchto dat a můžou být nepřesné.</li>
+</ul>
+<h2>Aurin není zdravotní péče</h2>
+<ul>
+<li>Aurin není zdravotnický prostředek. Nediagnostikuje, neléčí ani nepředchází nemocem a nenahrazuje lékaře, fyzioterapeuta ani odborníka na výživu.</li>
+<li>Než začneš nový tréninkový program nebo změníš jídelníček, poraď se s lékařem, hlavně když máš zdravotní potíže, jsi těhotná nebo užíváš léky.</li>
+<li>Když při cvičení cítíš bolest, závrať, tlak na hrudi nebo nezvyklou dušnost, přestaň a vyhledej pomoc. V nouzi volej 112 nebo 155.</li>
+<li>Sledování cyklu není antikoncepce. Nepoužívej ho k zabránění ani plánování těhotenství.</li>
+<li>Jestli ti navržený trénink nebo jídlo sedí, rozhoduješ ty a trénuješ na vlastní odpovědnost.</li>
+</ul>
+<h2>Tvůj účet</h2>
+<ul>
+<li>Musí ti být aspoň 16 let.</li>
+<li>Účet je pro jednoho člověka. Přihlášení (Apple, Google, e-mail nebo přístupový klíč) si nech pro sebe, a když máš podezření, že k účtu má přístup někdo jiný, dej nám vědět.</li>
+<li>Profil vyplň pravdivě. Vychází z něj cíl kalorií, zóny i další odhady.</li>
+</ul>
+<h2>Tvoje data</h2>
+<ul>
+<li>Data zůstávají tvoje. Dovoluješ nám je ukládat a zpracovávat jen proto, abychom ti mohli Aurin provozovat, tak jak to popisují Zásady ochrany soukromí. Neprodáváme je ani je nepoužíváme k reklamě.</li>
+<li>Kopii si stáhneš nebo všechno smažeš kdykoli v <strong>Nastavení → Soukromí a data</strong>.</li>
+</ul>
+<h2>Propojené služby</h2>
+<ul>
+<li>Apple Zdraví, Google Health, Intervals.icu a Ultrahuman provozují jiné firmy podle svých podmínek. Neodpovídáme za jejich dostupnost, za správnost dat, která poskytují, ani za změny na jejich straně a propojení může přestat fungovat, když služba něco změní nebo přístup odebere.</li>
+<li>Názvy a loga těchto služeb patří jejich vlastníkům. Aurin je ukazuje jen proto, aby bylo vidět, kterou službu propojuješ. Aurin tyto firmy nevytvořily, nedoporučují ani nesponzorují.</li>
+</ul>
+<h2>AI funkce</h2>
+<ul>
+<li>Kouč, čtení fotek jídla a dohledání potravin používají umělou inteligenci a fungují jen s tvým souhlasem, který odvoláš v <strong>Nastavení → Soukromí a data → AI funkce</strong>. Zbytek Aurinu funguje i bez nich.</li>
+<li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
+</ul>
+<h2>Cena</h2>
+<p>Aurin je zatím zdarma. Pokud zavedeme placené funkce, dáme ti vědět předem, cenu a podmínky uvidíš před nákupem a prodávat je budeme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
+<h2>Férové používání</h2>
+<p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
+<h2>Dostupnost a změny</h2>
+<ul>
+<li>Aurin průběžně vyvíjíme, takže se funkce můžou měnit, přesouvat nebo zmizet. Snažíme se, aby fungoval, ale nemůžeme slíbit, že bude vždy dostupný a bez chyb.</li>
+<li>Kdybychom Aurin někdy ukončili, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem, ať máš čas si stáhnout data.</li>
+</ul>
+<h2>Odpovědnost</h2>
+<ul>
+<li>Aurin poskytujeme tak, jak je. V rozsahu, který zákon dovoluje, neodpovídáme za nepřímé škody, za data v propojených službách ani za rozhodnutí, která uděláš podle odhadů a návrhů Aurinu.</li>
+<li>Nic v těchto podmínkách neomezuje odpovědnost, kterou zákon omezit nedovoluje, hlavně za újmu na životě nebo zdraví a za škodu způsobenou úmyslně nebo z hrubé nedbalosti, a nic neomezuje tvoje práva spotřebitele.</li>
+</ul>
+<h2>Konec používání</h2>
+<ul>
+<li>Přestat můžeš kdykoli smazáním účtu v <strong>Nastavení → Soukromí a data → Smazat účet</strong>.</li>
+<li>Účet, který vážně nebo opakovaně porušuje tyto podmínky, můžeme pozastavit nebo zrušit. Pokud to zákon nezakazuje, napíšeme ti e-mailem proč.</li>
+<li>Účet, do kterého se dva roky nikdo nepřihlásil, smažeme, jak popisují Zásady ochrany soukromí.</li>
+</ul>
+<h2>Název a obsah Aurinu</h2>
+<p>Aplikace, tento web, název Aurin, jeho logo, texty a grafika patří provozovateli. Aplikaci smíš používat pro vlastní osobní a nekomerční potřebu.</p>
+<h2>App Store</h2>
+<p>Pokud máš Aurin z App Storu, platí navíc <a href="${APPLE_EULA}">licenční smlouva Apple pro koncové uživatele</a> (Licensed Application End User License Agreement). Tyto podmínky jsou mezi tebou a námi, ne Applem, a Apple za Aurin ani jeho podporu neodpovídá.</p>
+<h2>Změny podmínek</h2>
+<p>Každou změnu zveřejníme na této stránce s datem. Než začne platit podstatná změna, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem. Když nesouhlasíš, můžeš do té doby účet smazat.</p>
+<h2>Právo a spory</h2>
+<p>Tyto podmínky se řídí českým právem. Pokud jsi spotřebitel s bydlištěm v jiné zemi, zůstává ti ochrana, kterou ti dávají kogentní předpisy té země. Když se něco pokazí, napiš nám nejdřív a pokusíme se to napravit.</p>
+<h2>Kontakt</h2>
+<p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
+<p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
   });
 }
 
 export function supportPage(request, {apple = false, email = false, open = false} = {}) {
   return doc(request, '/support', {cs: 'Podpora', en: 'Support'}, {
-    en: `<p>${open ? '' : 'Aurin is currently available only by personal invitation. '}If something does not work, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, and the error message the app showed. Never send passwords, API keys or other secrets.</p>
+    en: `<p>${open ? '' : 'Aurin is currently available only by personal invitation. '}If something does not work, report it in the app or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Never send passwords, API keys or other secrets.</p>
+<h2 id="problem">Reporting a problem</h2>
+<ol>
+<li>In the app, open <strong>Settings → Help → Report a problem</strong>.</li>
+<li>Under <strong>What happened</strong>, describe the problem and roughly when it happened. Add a screenshot if it helps.</li>
+<li>Leave <strong>Attach diagnostics</strong> on: the report then carries technical details about the app, syncing and recent errors, so the cause is easier to find. You can read them first under <strong>View diagnostics</strong>, or turn them off.</li>
+<li>Choose <strong>Send</strong>.</li>
+</ol>
+<p>If you cannot open the app, e-mail <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, the error message the app showed and your iPhone model and iOS version. For anything else, <strong>Settings → Help → Contact us</strong> opens an e-mail with your app version already filled in.</p>
 <h2>Signing in</h2>
 <p>In the iPhone app, choose ${apple ? '<strong>Continue with Apple</strong>, ' : ''}<strong>Continue with Google</strong>${email ? ' or <strong>Continue with e-mail</strong>: you get a six-digit code that is valid for 10 minutes' : ''}. Use the same way each time, so you land in the same account.${open ? '' : ' If the app says your account is not invited, ask the operator to invite the address you use.'}</p>
 <h2>Passkeys</h2>
@@ -686,25 +839,36 @@ export function supportPage(request, {apple = false, email = false, open = false
 </ul>
 <h2>Connecting and disconnecting services</h2>
 <ul>
-<li>In the app, open <strong>Settings → Connections</strong>. Google Health and Intervals.icu each have a card with a button to connect them and, once connected, to disconnect them.</li>
+<li>In the app, open <strong>Settings → Data sources</strong>. Tap <strong>+</strong> to connect Apple Health, Google Health, Intervals.icu or the Ultrahuman Ring. Each connected service has its own page, with <strong>Disconnect</strong> at the bottom.</li>
+<li>For Apple Health, your iPhone asks which data Aurin may read. You change that later in the iPhone Settings → Health → Data Access &amp; Devices → Aurin.</li>
 <li>Before sending you to Google, Aurin shows what it reads from Google Health, what it writes there and who receives the data, and asks for your consent.</li>
-<li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google.</li>
+<li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google. Disconnecting the Ultrahuman Ring also deletes the data Aurin got from the ring.</li>
 <li>You can also remove Aurin’s access in your Google Account: open <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>, choose Aurin and remove its access.</li>
+<li>When two of your devices measure the same thing, <strong>Where to take data from</strong> in Data sources decides which one Aurin uses for your nights and your days. <strong>Automatic</strong> picks it for you.</li>
 </ul>
 <h2>Managing your data</h2>
 <ul>
 <li>You can edit or delete food, drinks and weight entries where you see them in the app, and change your profile in Settings.</li>
-<li>Data that Aurin copied to Intervals.icu or Google Health can be edited or deleted in those services.</li>
-<li>To get a copy of everything Aurin stores about you, open <strong>Settings → Account</strong> and choose <strong>Download my data</strong> (a JSON Lines file, one record per line).</li>
+<li>Data that Aurin copied to Apple Health, Intervals.icu or Google Health can be edited or deleted in those services.</li>
+<li><strong>Settings → Privacy &amp; data → AI features</strong> turns sending data to AI on or off. Without it, the coach, food photos and food lookup stop and the rest of the app keeps working.</li>
+<li>To get a copy of everything Aurin stores about you, open <strong>Settings → Privacy &amp; data</strong> and choose <strong>Download my data</strong> (a JSON Lines file, one record per line).</li>
 </ul>
 <h2>Deleting your account and data</h2>
 <ol>
-<li>Open <strong>Settings → Account</strong>.</li>
+<li>Open <strong>Settings → Privacy &amp; data</strong>.</li>
 <li>If you want to keep a copy, first choose <strong>Download my data</strong>.</li>
-<li>Choose <strong>Delete account</strong>, type SMAZAT to confirm and choose <strong>Delete account permanently</strong>.</li>
+<li>Choose <strong>Delete account</strong>, type DELETE to confirm and choose <strong>Delete</strong>.</li>
 </ol>
-<p>Aurin immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`,
-    cs: `<p>${open ? '' : 'Aurin je zatím dostupný jen na osobní pozvánku. '}Když něco nefunguje, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy to bylo a jakou chybu aplikace ukázala. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
+<p>Aurin immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Apple Health, Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`,
+    cs: `<p>${open ? '' : 'Aurin je zatím dostupný jen na osobní pozvánku. '}Když něco nefunguje, nahlas to v aplikaci nebo napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
+<h2 id="problem">Nahlášení problému</h2>
+<ol>
+<li>V aplikaci otevři <strong>Nastavení → Pomoc → Nahlásit problém</strong>.</li>
+<li>Do <strong>Co se stalo</strong> popiš, co nefungovalo a přibližně kdy. Když to pomůže, přidej snímek obrazovky.</li>
+<li>Nech zapnuté <strong>Přiložit diagnostiku</strong>: hlášení pak nese technické údaje o aplikaci, synchronizaci a posledních chybách, takže se příčina najde rychleji. Přes <strong>Zobrazit diagnostiku</strong> si je můžeš nejdřív přečíst, nebo je vypnout.</li>
+<li>Zvol <strong>Odeslat</strong>.</li>
+</ol>
+<p>Když aplikaci nemůžeš otevřít, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy, jakou chybu aplikace ukázala a jaký máš iPhone a verzi iOS. S čímkoli jiným ti <strong>Nastavení → Pomoc → Kontaktovat nás</strong> otevře e-mail s vyplněnou verzí aplikace.</p>
 <h2>Přihlášení</h2>
 <p>V aplikaci pro iPhone zvol ${apple ? '<strong>Pokračovat přes Apple</strong>, ' : ''}<strong>Pokračovat přes Google</strong>${email ? ' nebo <strong>Pokračovat e-mailem</strong>: přijde ti šestimístný kód, který platí 10 minut' : ''}. Přihlašuj se pokaždé stejně, ať se dostaneš do stejného účtu.${open ? '' : ' Když aplikace hlásí, že účet není pozvaný, požádej provozovatele, ať pozve adresu, kterou používáš.'}</p>
 <h2>Přístupové klíče (passkeys)</h2>
@@ -715,23 +879,26 @@ export function supportPage(request, {apple = false, email = false, open = false
 </ul>
 <h2>Připojení a odpojení služeb</h2>
 <ul>
-<li>V aplikaci otevři <strong>Nastavení → Propojení</strong>. Google Health i Intervals.icu tam mají kartu s tlačítkem pro připojení a po připojení i pro odpojení.</li>
+<li>V aplikaci otevři <strong>Nastavení → Zdroje dat</strong>. Přes <strong>+</strong> připojíš Apple Zdraví, Google Health, Intervals.icu nebo prsten Ultrahuman. Každá připojená služba má vlastní stránku a dole na ní <strong>Odpojit</strong>.</li>
+<li>U Apple Zdraví se iPhone zeptá, která data smí Aurin číst. Později to změníš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin.</li>
 <li>Než tě Aurin pošle na Google, ukáže, co z Google Health čte, co tam zapisuje a kdo data dostane, a požádá tě o souhlas.</li>
-<li>Odpojení zastaví čtení i zápis dat v dané službě. U Googlu se Aurin vzdá přístupu i přímo u Googlu.</li>
+<li>Odpojení zastaví čtení i zápis dat v dané službě. U Googlu se Aurin vzdá přístupu i přímo u Googlu. Odpojení prstenu Ultrahuman smaže i data, která Aurin z prstenu získal.</li>
 <li>Přístup Aurinu můžeš odebrat i ve svém účtu Google: otevři <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>, vyber Aurin a přístup odeber.</li>
+<li>Když totéž měří dvě tvoje zařízení, rozhodne <strong>Odkud brát data</strong> ve Zdrojích dat, ze kterého Aurin bere noci a ze kterého dny. <strong>Automaticky</strong> to vybere za tebe.</li>
 </ul>
 <h2>Správa dat</h2>
 <ul>
 <li>Záznamy jídla, pití a váhy upravíš nebo smažeš tam, kde je v aplikaci vidíš, a profil změníš v Nastavení.</li>
-<li>Co Aurin zkopíroval do Intervals.icu nebo Google Health, upravíš nebo smažeš v těchto službách.</li>
-<li>Kopii všeho, co o tobě Aurin ukládá, si stáhneš v <strong>Nastavení → Účet</strong> tlačítkem <strong>Stáhnout moje data</strong> (soubor JSON Lines, jeden záznam na řádek).</li>
+<li>Co Aurin zkopíroval do Apple Zdraví, Intervals.icu nebo Google Health, upravíš nebo smažeš v těchto službách.</li>
+<li><strong>Nastavení → Soukromí a data → AI funkce</strong> zapíná a vypíná posílání dat k AI. Bez něj přestane fungovat kouč, fotky jídla a dohledání potravin, zbytek aplikace jede dál.</li>
+<li>Kopii všeho, co o tobě Aurin ukládá, si stáhneš v <strong>Nastavení → Soukromí a data</strong> tlačítkem <strong>Stáhnout moje data</strong> (soubor JSON Lines, jeden záznam na řádek).</li>
 </ul>
 <h2>Smazání účtu a dat</h2>
 <ol>
-<li>Otevři <strong>Nastavení → Účet</strong>.</li>
+<li>Otevři <strong>Nastavení → Soukromí a data</strong>.</li>
 <li>Jestli si chceš data nechat, nejdřív zvol <strong>Stáhnout moje data</strong>.</li>
-<li>Zvol <strong>Smazat účet</strong>, pro potvrzení napiš SMAZAT a zvol <strong>Smazat účet natrvalo</strong>.</li>
+<li>Zvol <strong>Smazat účet</strong>, pro potvrzení napiš SMAZAT a zvol <strong>Smazat</strong>.</li>
 </ol>
-<p>Aurin okamžitě a natrvalo smaže tvůj účet a všechna data: profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Zároveň se vzdá přístupu k tvému účtu Google a smaže svou kopii ve tvém zařízení. Zálohy databáze se přepíšou do 30 dní. Co už je v Intervals.icu nebo Google Health, tam zůstane. Víc v <a href="/privacy">Zásadách ochrany soukromí</a>.</p>`
+<p>Aurin okamžitě a natrvalo smaže tvůj účet a všechna data: profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Zároveň se vzdá přístupu k tvému účtu Google a smaže svou kopii ve tvém zařízení. Zálohy databáze se přepíšou do 30 dní. Co už je v Apple Zdraví, Intervals.icu nebo Google Health, tam zůstane. Víc v <a href="/privacy">Zásadách ochrany soukromí</a>.</p>`
   });
 }

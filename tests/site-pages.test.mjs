@@ -132,3 +132,30 @@ test('with open sign-up the privacy policy and support page no longer speak of i
   assert.match(support,/<strong>Pokračovat přes Apple<\/strong>, <strong>Pokračovat přes Google<\/strong> nebo <strong>Pokračovat e-mailem<\/strong>/);
   assert.match(support,/Příště přes Face ID/);
 });
+
+test('the terms say who runs Aurin, that it is not medical care, and name no internal service',async()=>{
+  for(const lang of ['en','cs']){
+    const html=await termsPage(new Request('https://aurin.health/terms?lang='+lang)).text();
+    assert.doesNotMatch(html,/health-api/);
+    assert.match(html,lang==='en'?/Aurin is run by Petr Bouma/:/Aurin provozuje Petr Bouma/);
+    assert.match(html,lang==='en'?/Aurin is not a medical device/:/Aurin není zdravotnický prostředek/);
+    assert.match(html,lang==='en'?/Cycle tracking is not contraception/:/Sledování cyklu není antikoncepce/);
+    assert.match(html,/apple\.com\/legal\/internet-services\/itunes\/dev\/stdeula/);
+  }
+});
+
+test('the support page follows the app’s Settings and every page has the footer groups',async()=>{
+  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
+  const settings=read('Loadwise/Screens/SettingsView.swift');
+  for(const title of ['Zdroje dat','Soukromí a data','Nahlásit problém','Kontaktovat nás'])assert.match(settings,new RegExp('title: "'+title+'"'),title);
+  const cs=await supportPage(new Request('https://aurin.health/support?lang=cs')).text(),en=await supportPage(new Request('https://aurin.health/support?lang=en')).text();
+  for(const label of ['Nastavení → Zdroje dat','Nastavení → Soukromí a data','Nastavení → Pomoc → Nahlásit problém','Ultrahuman'])assert.ok(cs.includes(label),label);
+  for(const label of ['Settings → Data sources','Settings → Privacy &amp; data','Settings → Help → Report a problem','Ultrahuman'])assert.ok(en.includes(label),label);
+  assert.doesNotMatch(cs+en,/Nastavení → Účet|Settings → Account|Nastavení → Propojení|Settings → Connections/);
+  for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
+    const html=await page().text();
+    for(const href of ['/#pripravenost','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
+    assert.match(html,/Aurin není zdravotnický prostředek\./);
+  }
+  assert.match(cs,/<h2 id="problem">/);
+});
