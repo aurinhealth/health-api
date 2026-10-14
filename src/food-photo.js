@@ -74,6 +74,8 @@ export function photoResultFromAnswer(answer, mode = "label") {
   const portion = mode === "portion" || r.basis === "portion" || r.kind === "meal_photo";
   // Per 100 g nothing can exceed 100 g, and energy stays below pure fat.
   if (!portion && (values.calories_100g > 950 || ["protein_100g", "carbs_100g", "fat_100g", "sugars_100g", "fiber_100g", "salt_100g"].some(k => values[k] > 100))) return null;
+  // One plate or one portion: no meal on a photo reaches 5000 kcal or 500 g of a nutrient.
+  if (portion && (values.calories_100g > 5000 || ["protein_100g", "carbs_100g", "fat_100g", "sugars_100g", "fiber_100g"].some(k => values[k] > 500) || values.salt_100g > 50)) return null;
   const basis = portion ? "portion" : r.basis === "100ml" ? "100ml" : "100g";
   const name = String(r.name || "").trim().slice(0, 120);
   const unit = basis === "100ml" ? "ml" : "g";

@@ -132,12 +132,20 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
     };
   });
 
+  const weight = daily.weight || {};
   return {
     status: "ok",
     date,
     kcal: eaten.kcal,
     target,
     trainingBonus: bonus,
+    // For the coach's text (screen-texts.js): the hour, the safe minimum and the weight goal.
+    hour,
+    minimumKcal: num(breakdown.minTarget),
+    goal: {
+      weightKg: num(weight.current ?? nutrition.currentWeight), average7dKg: num(weight.average7d), average30dKg: num(weight.average30d),
+      targetWeightKg: num(nutrition.targetWeightKg), deficitKcal: num(breakdown.weightLossDeficit)
+    },
     sentence: sentence({ eaten: eaten.kcal || 0, target, bonus, left, next: meals.find(m => m.suggestion) }),
     macros: {
       carbs: { eaten: eaten.carbs, target: num(macros.carbs_g) },
