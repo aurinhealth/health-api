@@ -1598,7 +1598,7 @@ export function heartRateFromSamples(activity, samples) {
   return values.length >= 3 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
-function googleExerciseActivity(row) {
+export function googleExerciseActivity(row) {
   const payload = JSON.parse(row.payload_json || "{}");
   const exercise = payload.exercise || {};
   const metrics = exercise.metricsSummary || {};
@@ -2538,7 +2538,7 @@ async function healthSleep(env, url) {
     SELECT external_id, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'sleep'
-      AND source_family IN ('google-wearables','apple-health','ultrahuman')
+      AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop')
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
     LIMIT 5000

@@ -25,6 +25,8 @@ export function sleepSessionFromRow(row) {
       stageMinutes[type] = (stageMinutes[type] || 0) + (b-a)/60000;
     }
   }
+  // WHOOP gives the night's stage totals, not the timeline (whoop.js).
+  if (!stages.length && sleep.stageTotals) for (const [type, min] of Object.entries(sleep.stageTotals)) if (Number(min) > 0) stageMinutes[type] = Number(min);
   const startTime = row.start_time || interval.startTime || interval.civilStartTime || null;
   const endTime = row.end_time || interval.endTime || interval.civilEndTime || null;
   const durationMin = hoursBetween(startTime,endTime) * 60;

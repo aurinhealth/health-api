@@ -1,6 +1,6 @@
 // Where the user lands after connecting a service on the provider's own page:
 // the iPhone app, through loadwise://connected?event=…, which closes its browser sheet.
-const EVENTS = new Set(["google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed", "strava", "strava-cancelled", "strava-failed", "strava-full", "ultrahuman", "ultrahuman-cancelled", "ultrahuman-failed"]);
+const EVENTS = new Set(["google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed", "strava", "strava-cancelled", "strava-failed", "strava-full", "ultrahuman", "ultrahuman-cancelled", "ultrahuman-failed", "whoop", "whoop-cancelled", "whoop-failed"]);
 
 // Only the iPhone app starts a connection (return=native); kept with the OAuth state.
 export function connectReturn() {

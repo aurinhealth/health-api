@@ -80,6 +80,7 @@ export const PERSONAL_TABLES = {
   // The app's push device tokens and the once-a-day guard of the pushes (push.js).
   push_tokens: { pk: ["user_id", "token"] },
   push_log: { pk: ["user_id", "kind", "local_date"] },
+  activity_undo: { pk: ["user_id", "token"] },
   // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
   saved_workouts: { pk: ["user_id", "id"] },
   workout_shares: {}
