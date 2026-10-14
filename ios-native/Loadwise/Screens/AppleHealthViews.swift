@@ -115,7 +115,14 @@ struct AppleHealthSettings: View {
                     .disabled(health.syncing || store.demo)
             }
             .onChange(of: chosen) { _, value in
-                guard health.enabled, value != health.categories else { return }
+                guard !value.isEmpty else { return }
+                // Switched off on this iPhone (another sign-in, Synchronizace): a switch turned
+                // here means reading again, so it asks iOS and starts, instead of being forgotten.
+                if !health.enabled {
+                    Task { _ = await health.connect(value, api: model.api); await store.load() }
+                    return
+                }
+                guard value != health.categories else { return }
                 Task { await health.update(value, api: model.api); await store.load() }
             }
             if health.enabled {
