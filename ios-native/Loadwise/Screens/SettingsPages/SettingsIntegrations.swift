@@ -69,6 +69,8 @@ struct IntegrationIcon: View {
             case "google": logo("GoogleHealthLogo").padding(size * 0.04)
             case "intervals": logo("IntervalsLogo")
             case "whoop": logo("WhoopLogo")
+            // Wahoo's own logo once it is in the assets (WahooLogo); until then the plain tile.
+            case "wahoo" where UIImage(named: "WahooLogo") != nil: logo("WahooLogo")
             case "ultrahuman":
                 shape.fill(Color(light: 0x000000, dark: 0x000000))
                 logo("UltrahumanMark").frame(width: size * 0.56)
@@ -192,7 +194,7 @@ struct IntegrationDetailView: View {
 
             SettingsGroup {
                 Button { flow.disconnecting = current } label: {
-                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : current.id == "whoop" ? "Odpojit a smazat data z WHOOPu" : "Odpojit", chevron: false, titleColor: Palette.rust)
+                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : current.id == "whoop" ? "Odpojit a smazat data z WHOOPu" : current.id == "wahoo" ? "Odpojit a smazat jízdy z Wahoo" : "Odpojit", chevron: false, titleColor: Palette.rust)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.demo)
