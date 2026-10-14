@@ -1,8 +1,8 @@
 import Foundation
 
 /// GET /app/api/cycle (src/routes-cycle.js, src/cycle-model.js): the cycle
-/// settings, where today is in the cycle and the calendar month. Only for a
-/// profile whose sex is female (`available`).
+/// settings, where today is in the cycle and the calendar month. `available`
+/// is false only from an older server that limited it to women.
 struct CycleResponse: Decodable, Equatable {
     let available: Bool
     var settings: CycleSettings? = nil

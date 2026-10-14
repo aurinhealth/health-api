@@ -1,0 +1,25 @@
+{
+  "images": [
+    {
+      "idiom": "universal",
+      "filename": "whoop-black.svg"
+    },
+    {
+      "idiom": "universal",
+      "filename": "whoop-white.svg",
+      "appearances": [
+        {
+          "appearance": "luminosity",
+          "value": "dark"
+        }
+      ]
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "properties": {
+    "preserves-vector-representation": true
+  }
+}

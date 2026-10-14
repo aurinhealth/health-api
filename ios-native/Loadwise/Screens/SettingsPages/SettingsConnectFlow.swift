@@ -19,6 +19,10 @@ final class SourceActions {
             switch event {
             case "google", "intervals":
                 message = L10n.f("%@ je připojené, data se začínají stahovat.", provider == "google" ? "Google" : "Intervals.icu")
+            case "ultrahuman":
+                message = L10n.tr("Ultrahuman je připojený, noci z prstenu se začínají stahovat.")
+            case "ultrahuman-failed":
+                message = L10n.tr("Připojení Ultrahumanu se nepovedlo, zkus to znovu.")
             case "intervals-failed":
                 message = L10n.tr("Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč.")
                 askKey = true
@@ -126,7 +130,8 @@ struct ConnectFlowSheets: ViewModifier {
                     }
                 }
             } message: {
-                Text("Data, která už Aurin má, zůstanou. Nová přestanou chodit.")
+                // Ultrahuman's data is deleted on disconnecting (src/ultrahuman.js).
+                Text(flow.disconnecting?.id == "ultrahuman" ? "Data z prstenu se smažou a noc se zase bude brát z hodinek." : "Data, která už Aurin má, zůstanou. Nová přestanou chodit.")
             }
     }
 }

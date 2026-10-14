@@ -1,9 +1,9 @@
 import SwiftUI
 
 // Cycle tracking (src/cycle-model.js): Settings → Cyklus, the Health card,
-// the calendar, the sheet that logs a day and the Today card. Only for a
-// profile whose sex is female; with hormonal contraception there are no
-// phases, ovulation or forecast, only what was logged and the pill.
+// the calendar, the sheet that logs a day and the Today card. Open to
+// everyone; with hormonal contraception there are no phases, ovulation or
+// forecast, only what was logged and the pill.
 
 // MARK: - The ring
 

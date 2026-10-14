@@ -11,6 +11,8 @@ struct ProfileResponse: Decodable {
 /// GET /app/api/connections (src/connections.js).
 struct ConnectionsResponse: Decodable, Equatable {
     let providers: [Provider]
+    /// Which device the night and the day come from (src/source-priority.js).
+    var priority: SourcePriority? = nil
 
     struct Provider: Decodable, Equatable, Identifiable {
         let id: String
@@ -135,4 +137,12 @@ struct TrainingProfileResponse: Decodable, Equatable {
         let id: String
         let label: String
     }
+}
+
+/// "auto" or a provider id ("apple", "google", "ultrahuman") for the night and the day.
+struct SourcePriority: Codable, Equatable {
+    var night: String
+    var day: String
+
+    static let auto = SourcePriority(night: "auto", day: "auto")
 }

@@ -11,11 +11,12 @@ import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { connectionStatus } from "./connections.js";
+import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
 import { withIntervalsSleep } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
-import { activityDetail } from './activity-detail.js';
+import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
 import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
@@ -88,6 +89,7 @@ import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { handleIntervalsOAuth } from "./intervals-oauth.js";
 import { handleStravaOAuth, disconnectStrava, syncStravaWeight } from "./strava.js";
+import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, openSignup } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
@@ -121,6 +123,8 @@ import { handleCycleApi } from "./routes-cycle.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
+import { loadThresholdSessions } from "./threshold-check-state.js";
+import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
 
 
 // Requests that read or preview only and so keep the cache.
@@ -197,6 +201,8 @@ const worker = {
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],async scoped=>{await retryWorkoutExports(scoped);});
     // Done activities whose send to Google Health, Intervals.icu or Strava did not go through (sync-destinations.js).
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google','intervals','strava'],scoped=>retrySyncSends(scoped,{googleToken}));
+    // Every hour at :20: the ring's last three days from Ultrahuman (the night lands in the morning).
+    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===20)await forEachUser(env,['ultrahuman'],async scoped=>{const r=await syncUltrahuman(scoped,{days:3});if(r.saved)await bumpCacheVersion(scoped.DB);return r;});
     // Hourly: the latest weight to Strava when it changed and the user sends it there.
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===30)await forEachUser(env,['strava'],async scoped=>syncStravaWeight(scoped,{allowed:healthAllowed(await readSyncPrefs(scoped.DB,scoped.USER_ID,'strava'),'weight')}).catch(error=>({error:error.message})));
     if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],scoped=>legacyHealthApi.fetch(new Request('https://internal/sync/intervals/recent',{method:'POST'}),scoped,ctx));
@@ -296,7 +302,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     const demoRefusal = reviewRefusal(rawEnv, user, request.method, url.pathname);
     if (demoRefusal) return demoRefusal;
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
-    if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
+    if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava') || url.pathname.startsWith('/oauth/ultrahuman')) && !signedIn) return new Response(L('Připojení vyžaduje přihlášení do dashboardu.', 'Connecting requires signing in to the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
@@ -305,6 +311,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Strava is only a destination (Synchronizace): nothing to import after connecting.
     const stravaOAuth = await handleStravaOAuth(request, env, url.pathname);
     if (stravaOAuth) return stravaOAuth;
+    // A new Ultrahuman connection imports the ring's last two months (readiness's baseline).
+    const ultrahumanOAuth = await handleUltrahumanOAuth(request, env, url.pathname);
+    if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback"&&env.ULTRAHUMAN_TOKEN)ctx.waitUntil(syncUltrahuman(env,{days:FIRST_IMPORT_DAYS}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Ultrahuman first import failed",error.message)));return ultrahumanOAuth;}
     if (url.pathname === "/app/logout" && request.method === "POST") return handleDashboardLogout();
     const nativeConnect = await handleNativeConnect(request, rawEnv, url, { user, signedIn });
     if (nativeConnect) return nativeConnect;
@@ -455,6 +464,18 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{})};
 }
 function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
+// Runs and rides for the coach: six weeks of trends, the Intervals.icu curves
+// and the laps of the last two weeks (performance-trends.js).
+async function coachPerformance(env,ctx,date){
+  const loaded=await loadThresholdSessions(env,ctx,date).catch(()=>null);
+  const [curves,intervals]=await Promise.all([
+    cached(env,ctx,'curves:'+date,()=>intervalsCurves(env,intervalsAuthorization(env.INTERVALS_API_KEY))).catch(()=>null),
+    env.INTERVALS_API_KEY&&loaded?cached(env,ctx,'laps:'+date,()=>recentIntervals(loaded.sessions,date,id=>rideIntervals(env,id))).catch(()=>null):null
+  ]);
+  const trends=loaded?performanceTrends(loaded.sessions,loaded.athlete,date):null;
+  const out={...(trends||{}),...(curves?{curves}:{}),...(intervals?{intervals}:{})};
+  return Object.keys(out).length?out:null;
+}
 async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
@@ -474,7 +495,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
   const [daily,fitness,gym,sleep,profile]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env)]);
   applyEnergyBudget(daily,profile,health);
-  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null)};
+  return {date,daily,fitness,gym,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin:await getCheckin(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),performance:await coachPerformance(env,ctx,date)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -1094,12 +1115,21 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if (url.pathname === "/app/api/connections" && request.method === "GET") {
     return Response.json(await connectionStatus(env), {headers:{"Cache-Control":"no-store"}});
   }
+  // Which device the night and the day come from (source-priority.js); GET is connections' priority.
+  if (url.pathname === '/app/api/sources/priority' && request.method === 'POST') {
+    if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    const result=await saveSourcePriority(env.DB,env.USER_ID,{night:body.night,day:body.day});
+    return Response.json(result,{status:result.code||200,headers:{'Cache-Control':'no-store'}});
+  }
   if (url.pathname === '/app/api/connections' && (request.method === 'POST' || request.method === 'DELETE')) {
     if (!session.signedIn) return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if (request.headers.get('Origin') !== url.origin) return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     const body=await request.json().catch(()=>({}));
     if (request.method === 'DELETE') {
       if(body.provider==='apple'){await disconnectAppleHealth(env.DB,env.USER_ID);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
+      if(body.provider==='ultrahuman'){await disconnectUltrahuman(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z prstenu smazaná.', 'The connection has been removed and the ring\'s data deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.provider==='strava'){await disconnectStrava(env);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
@@ -1392,7 +1422,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.method==='GET')return Response.json(await dashboardSyncStatus(env.DB),{headers:{'Cache-Control':'no-store'}});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    if(missingProviders(env).length===2)return Response.json({status:'idle',message:L('Žádná služba není propojená.', 'No service is connected.')});
+    if(missingProviders(env).length===2&&!(env.CONNECTED_PROVIDERS||[]).includes('ultrahuman'))return Response.json({status:'idle',message:L('Žádná služba není propojená.', 'No service is connected.')});
     await initialImport(env,ctx);
     const run=await startDashboardSync(env.DB,ctx,()=>recentDashboardImport(env,ctx));
     return Response.json({...run,status:'accepted'},{status:202,headers:{'Cache-Control':'no-store'}});

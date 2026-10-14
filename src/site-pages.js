@@ -166,6 +166,7 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 .source .ok{margin-left:auto;color:var(--green)}
 .health-red{color:var(--health-red)}.google{color:var(--google-blue);font-size:21px;font-weight:700}
 .icu{background:var(--button)!important;color:var(--on-button);font-size:12px;font-weight:700}
+.uh{background:var(--button)!important;color:var(--on-button);font-size:20px;font-weight:700}
 
 .center{text-align:center;max-width:760px;margin:0 auto}
 .center .lock{width:32px;height:32px;color:var(--muted);margin-bottom:18px}
@@ -341,7 +342,8 @@ export function overviewPage(request) {
     .map(([m, p, c]) => `<div class="muscle"><span class="m">${m}</span><span class="bar"><i style="width:${p}%;background:var(--${c})"></i></span><span class="p">${p} %</span></div>`).join('');
   const sources = [['Apple Zdraví', 'Apple Health', `<span class="logo-tile health-red">${icon('heart')}</span>`],
     ['Google Health', 'Google Health', '<span class="logo-tile google">G</span>'],
-    ['Intervals.icu', 'Intervals.icu', '<span class="logo-tile icu">i.icu</span>']]
+    ['Intervals.icu', 'Intervals.icu', '<span class="logo-tile icu">i.icu</span>'],
+    ['Prsten Ultrahuman', 'Ultrahuman Ring', '<span class="logo-tile uh">U</span>']]
     .map(([cs, en, logo]) => `<div class="source">${logo}<span>${t(cs, en)}</span><span class="ok">${icon('check')}</span></div>`).join('');
   return sitePage({lang, device, origin, path: '/',
     title: t('Aurin · trénuj podle toho, jak se dnes máš', 'Aurin · train for how you feel today'),
@@ -431,7 +433,7 @@ ${today}
 </div></section>
 
 <section id="propojeni"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">${t('Propojení', 'Connections')}</div><h2>${t('Data odtud, tréninky tam.', 'Data in, workouts out.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">${t('Propojení', 'Connections')}</div><h2>${t('Data odtud, tréninky tam.', 'Data in, workouts out.')}</h2><p>${t('Nosíš víc zařízení? Noc i den bere Aurin z toho, které nosíš nejvíc, nebo si zdroj vybereš sám.', 'Wear more than one device? Aurin takes the night and the day from the one you wear most, or you pick the source yourself.')}</p></div>
 <div class="visual sources reveal">${sources}</div>
 </div></section>
 
@@ -495,6 +497,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 </ul>
 <p>Two optional permissions are asked for separately: reading your date of birth from your Google Account, to fill in your age, and writing your weight to Google Health.</p>
 <p><strong>Intervals.icu</strong>, only if you connect it with your API key: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
+<p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect the ring.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, and your conversations with the assistant.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
@@ -522,7 +525,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <h2>How Apple Health data is used</h2>
 <ul>
 <li>On iPhone, Aurin reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max, weight, and food and water logged in other apps. It uses them only to show and evaluate your recovery, training load, workouts, food diary and calorie target.</li>
-<li>Cycle tracking, only if you turn it on (Settings → Cycle; offered when your profile's sex is female): the periods, their strength, symptoms, contraception, the pill you mark as taken and the dates you enter, plus menstrual flow and ovulation tests from Apple Health if you allow them. They are used to show your cycle, to judge your readiness against your own normal for each phase and to ease a hard training day. They go to the AI coach only if you turn on "Coach knows my cycle", and then only today's phase, cycle day, bleeding and symptoms, never dates or history. They are not sent to any connected service, and turning the tracking off keeps them until you delete your account.</li>
+<li>Cycle tracking, only if you turn it on (Settings → Cycle): the periods, their strength, symptoms, contraception, the pill you mark as taken and the dates you enter, plus menstrual flow and ovulation tests from Apple Health if you allow them. They are used to show your cycle, to judge your readiness against your own normal for each phase and to ease a hard training day. They go to the AI coach only if you turn on "Coach knows my cycle", and then only today's phase, cycle day, bleeding and symptoms, never dates or history. They are not sent to any connected service, and turning the tracking off keeps them until you delete your account.</li>
 <li>Apple Health data goes only to our server and, for features you use, to the services under “Who receives your data”. We do not sell it, do not use or share it for advertising, and do not give it to data brokers.</li>
 <li>You change or remove access in the iPhone Settings → Health → Data Access & Devices → Aurin. Data already synced is deleted with your account.</li>
 </ul>
@@ -587,6 +590,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 </ul>
 <p>Dvě oprávnění jsou nepovinná a žádáme o ně zvlášť: čtení data narození z tvého účtu Google, aby se doplnil věk, a zápis váhy do Google Health.</p>
 <p><strong>Intervals.icu</strong>, jen když ho připojíš svým klíčem API: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
+<p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení prstenu je smaže.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky a konverzace s asistentem.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
@@ -614,7 +618,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Jak používáme data z Apple Health</h2>
 <ul>
 <li>Na iPhonu Aurin čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max, váhu a jídlo a pití zapsané v jiných aplikacích. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky, jídelníček a kalorický cíl.</li>
-<li>Sledování cyklu, jen když ho zapneš (Nastavení → Cyklus; nabízí se, když máš v profilu pohlaví žena): menstruace, jejich síla, potíže, antikoncepce, prášky, které odklikneš, a data, která zadáš, a z Apple Health menstruace a ovulační testy, pokud je povolíš. Slouží k zobrazení cyklu, k hodnocení připravenosti proti tvému normálu v dané fázi a ke zlehčení náročného tréninku. AI kouč je dostane jen po zapnutí „Kouč ví o cyklu“, a to jen dnešní fázi, den cyklu, krvácení a potíže, nikdy data ani historii. Žádné připojené službě je neposíláme a po vypnutí sledování zůstanou uložené, dokud nesmažeš účet.</li>
+<li>Sledování cyklu, jen když ho zapneš (Nastavení → Cyklus): menstruace, jejich síla, potíže, antikoncepce, prášky, které odklikneš, a data, která zadáš, a z Apple Health menstruace a ovulační testy, pokud je povolíš. Slouží k zobrazení cyklu, k hodnocení připravenosti proti tvému normálu v dané fázi a ke zlehčení náročného tréninku. AI kouč je dostane jen po zapnutí „Kouč ví o cyklu“, a to jen dnešní fázi, den cyklu, krvácení a potíže, nikdy data ani historii. Žádné připojené službě je neposíláme a po vypnutí sledování zůstanou uložené, dokud nesmažeš účet.</li>
 <li>Data z Apple Health jdou jen na náš server a kvůli funkcím, které používáš, ke službám z části Kdo data dostává. Neprodáváme je, nepoužíváme ani nepředáváme k reklamě a nedáváme je obchodníkům s daty.</li>
 <li>Přístup změníš nebo zrušíš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Už synchronizovaná data se smažou s účtem.</li>
 </ul>
