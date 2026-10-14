@@ -702,6 +702,7 @@
 "Uložit" = "Save";
 "Uložit %@" = "Save %@";
 "Uložit %@ jako předvolbu" = "Save %@ as preset";
+"Uložit délku jako předvolbu" = "Save the length as a preset";
 "Uložit do plánu" = "Save to plan";
 "Uložit recept" = "Save recipe";
 "Uložit vybavení" = "Save equipment";
