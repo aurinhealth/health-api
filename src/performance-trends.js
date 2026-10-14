@@ -5,6 +5,7 @@
 // data say the threshold is now (threshold-check.js). Sessions come from
 // loadThresholdSessions (threshold-check-state.js).
 import { estimateRideFtp, estimateRunPace } from "./threshold-check.js";
+import { L } from "./lang.js";
 
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const round = (v, d = 0) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -25,7 +26,7 @@ function change(points, today) {
   if (recent.length < 2 || before.length < 2) return null;
   return round((mean(recent) / mean(before) - 1) * 100, 1);
 }
-const direction = pct => (pct == null ? null : pct > 2 ? "zlepšuje se" : pct < -2 ? "zhoršuje se" : "stabilní");
+const direction = pct => (pct == null ? null : pct > 2 ? L("zlepšuje se", "improving") : pct < -2 ? L("zhoršuje se", "getting worse") : L("stabilní", "stable"));
 
 function weeks(list, today, summarize) {
   const out = [];

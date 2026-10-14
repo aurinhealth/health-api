@@ -35,3 +35,21 @@ test('the model\'s numbers are checked: a load within 0–500 kg or none, reps a
   const rows = rowsFromModel([{ name: 'Bench', sets: [{ type: 'WARMUP', kg: -5, reps: 'a few' }, { type: 'WORK', kg: 900, reps: 'lots' }, { type: 'WORK', kg: 42.5, reps: '8–10' }, { type: 'WORK', kg: 500, reps: '12' }] }], original, new Map());
   assert.deepEqual(rows.map(r => [r[0], r[3], r[4]]), [['WARMUP', '', '6'], ['WORK', '', '8-10'], ['WORK', '42,5', '8-10'], ['WORK', '500', '12']]);
 });
+
+test('after an AI change the old "+2,5 kg" goes, the session fits its minutes and dumbbells are ones the athlete has', async () => {
+  const { fitGymMinutes, snapGymDumbbells, adjustGymPlan } = await import('../src/gym-adjust.js');
+  const original = [['WORK', 'Lat pulldown', '1', '50', '8-10', '', '', '', 'FALSE', 'Laty; ↑ minule 3× 10 op. @ 47,5 kg → +2,5 kg [Pauza 120 s]', '', 'FALSE', '']];
+  const [changed] = rowsFromModel([{ name: 'Lat pulldown', sets: [{ type: 'WORK', kg: 45, reps: '10' }] }], original, new Map());
+  assert.equal(changed[9], 'Laty [Pauza 120 s]');
+  const [same] = rowsFromModel([{ name: 'Lat pulldown', sets: [{ type: 'WORK', kg: 50, reps: '10' }] }], original, new Map());
+  assert.match(same[9], /\+2,5 kg/);
+  const many = ['Lat pulldown', 'Leg press', 'DB bench press', 'Low row', 'DB shoulder press', 'Cable curl'].flatMap(name => [1, 2, 3, 4, 5].map(n => ['WORK', name, String(n), '20', '8-10', '', '', '', 'FALSE', '[Pauza 120 s]', '', 'FALSE', '']));
+  const fitted = fitGymMinutes(many, 45);
+  assert.ok(fitted.length < many.length);
+  assert.ok(new Set(fitted.map(r => r[1])).size === 6, 'every exercise keeps a set');
+  assert.equal(snapGymDumbbells([['WORK', 'DB bench press', '1', '22,5', '8']], [10, 20, 25])[0][3], '20');
+  // The AI only sees exercises the athlete's equipment allows.
+  let seen = null;
+  await adjustGymPlan({}, { rows: original, request: 'víc zad', equipment: name => name === 'Low row', ask: async (_e, req) => { seen = JSON.parse(req.input); return { text: JSON.stringify({ answer: 'Přidal jsem low row.', exercises: [{ name: 'Low row', sets: [{ type: 'WORK', kg: 40, reps: '10' }] }] }) }; } });
+  assert.deepEqual(seen.catalog.map(e => e.name).sort(), ['Lat pulldown', 'Low row']);
+});
