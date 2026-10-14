@@ -1146,7 +1146,7 @@
 "Tréninky" = "Workouts";
 "aktivity, plán tréninků, forma a wellness" = "activities, training plan, form and wellness";
 "Hodinky a další aplikace" = "Watches and other apps";
-"Garmin, Polar, Suunto, Coros, Wahoo, Oura nebo Strava připoj v Intervals.icu. Aurin jejich data dostane odtamtud." = "Connect Garmin, Polar, Suunto, Coros, Wahoo, Oura or Strava in Intervals.icu. Aurin gets their data from there.";
+"Garmin, Polar, Suunto, Coros, Wahoo nebo Oura připoj v Intervals.icu. Aurin jejich data dostane odtamtud." = "Connect Garmin, Polar, Suunto, Coros, Wahoo or Oura in Intervals.icu. Aurin gets their data from there.";
 "Přes Intervals.icu" = "Through Intervals.icu";
 "Profil se nepodařilo načíst, takže ho teď nejde uložit. Zkus to znovu za chvíli." = "The profile couldn't be loaded, so it can't be saved right now. Try again in a moment.";
 "zítra" = "tomorrow";
@@ -1902,7 +1902,42 @@
 "Co to je? Třeba „tyčinka Margot“" = "What is it? E.g. \"Snickers bar\"";
 "Odhadnout AI" = "Estimate with AI";
 "AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";
+"Trénink na míru" = "Tailored training";
+"Zkušenost" = "Experience";
+"Protažení na konci" = "Stretching at the end";
+"Protažení" = "Stretching";
+"Svaly" = "Muscle";
+"začátečník" = "beginner";
+"pravidelně" = "regular";
+"zkušený" = "experienced";
+"Síla a svaly" = "Strength and muscle";
+"Svaly a kondice" = "Muscle and fitness";
+"podle sportu" = "from your sport";
+"na stranu" = "per side";
+"levá" = "left";
+"pravá" = "right";
+"Spustit" = "Start";
+"Protažení hotovo" = "Stretching done";
+"Připrav se" = "Get ready";
+"Drž" = "Hold";
+"Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet." = "Move calmly and without pain; it should pull, not hurt.";
+"Rozcvička hotová" = "Warm-up done";
+"Cvič" = "Go";
+"Rozcvička" = "Warm-up";
+"s kardiem" = "with cardio";
+"bez kardia" = "without cardio";
+"+%@ min navíc" = "+%@ min extra";
+"Celkem %@ min" = "%@ min in total";
+"%@ + %@ navíc" = "%@ + %@ extra";
+"+ %@ min rozcvička" = "+ %@ min warm-up";
+"+ %@ min protažení" = "+ %@ min stretching";
+"Posilování" = "Lifting";
 
+"Ultrahuman je připojený, noci z prstenu se začínají stahovat." = "Ultrahuman is connected; the ring's nights are starting to download.";
+"Připojení Ultrahumanu se nepovedlo, zkus to znovu." = "Connecting Ultrahuman didn't work. Try again.";
+"Data z prstenu se smažou a noc se zase bude brát z hodinek." = "The ring's data will be deleted and your nights will come from your watch again.";
+"spánek, HRV, klidový tep, teplota" = "sleep, HRV, resting heart rate, temperature";
+"Odpojit a smazat data z prstenu" = "Disconnect and delete the ring's data";
 /* Vybrat: several foods or drinks at once */
 "Vybrat" = "Select";
 "Vybráno %@" = "%@ selected";
@@ -1914,6 +1949,11 @@
 "Opravit návrh" = "Fix the proposal";
 "Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
 "Opravuji…" = "Fixing…";
+/* Zdroje dat: Odkud brát data */
+"Spánek a noc" = "Sleep and night";
+"Pohyb přes den" = "Movement during the day";
+"Automaticky" = "Automatic";
+"Automaticky bere zdroj s nejúplnějšími a nejstabilnějšími daty." = "Automatic takes the source with the most complete and steady data.";
 
 /* A done activity: Upravit kalorie, Smazat aktivitu (ActivityEditing.swift) */
 "Upravit kalorie" = "Edit calories";

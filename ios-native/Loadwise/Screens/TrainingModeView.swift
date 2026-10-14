@@ -65,6 +65,10 @@ struct TrainingModeView: View {
                                 if live.running {
                                     LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                                 }
+                                // The warm-up until the first set is done.
+                                if let warmup = day.warmup, restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                                    StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
                                 } else {
@@ -434,6 +438,8 @@ struct TrainingModeView: View {
             if totals?.saved == true { healthCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if !finishedSession { addExerciseButton }
+            // Stretching before the session is closed (src/stretching.js).
+            if !finishedSession, let stretching = day.stretching { StretchingCard(stretching: stretching, date: date) }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
                 Button(role: .destructive) { confirmDiscard = true } label: {

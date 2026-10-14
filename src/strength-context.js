@@ -216,14 +216,14 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // The morning check-in lowers the readiness (morning-checkin.js).
   try { const { getCheckin } = await import("./morning-checkin.js"); context.checkin = await getCheckin(env.DB, date); } catch { context.checkin = null; }
   // The sleep goal sets the sleep need, as on Today (readiness.js).
-  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null }; } catch { context.profile = { sex: "" }; }
+  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null, mainSport: profile?.mainSport && profile.mainSport !== "auto" ? profile.mainSport : "" }; } catch { context.profile = { sex: "" }; }
   // The last 30 days of Google Health and Apple Health sleep (nights and
   // naps) with the Intervals.icu nights they miss, as Today has them: the
   // recovery score's sleep part and the sleep need.
   try {
     const { sleepSessionFromRow } = await import("./sleep-sessions.js"), { mergeIntervalsSleep } = await import("./intervals-sleep.js");
     const since = new Date(Date.parse(date + "T12:00:00Z") - 30 * 86400000).toISOString().slice(0, 10), until = new Date(Date.parse(date + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
-    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
+    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
     const seen = new Set();
     const own = rows.map(sleepSessionFromRow).filter(s => { const k = s.startTime + "|" + s.endTime; if (seen.has(k)) return false; seen.add(k); return s.durationMin > 0; });
     context.sleepSessions = mergeIntervalsSleep(own, intervalsWellness, { start: since, end: until });

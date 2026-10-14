@@ -176,11 +176,13 @@ struct SettingsSectionTiles: View {
     }
 }
 
-/// Posilovna: the rests and the heart-rate strap. The equipment stays in
-/// Trénink, where the workouts are made from it.
+/// Posilovna: what the workouts are made for (goal, experience, stretching),
+/// the rests and the heart-rate strap. The equipment stays in Trénink, where
+/// the workouts are made from it.
 struct GymSettingsView: View {
     var body: some View {
         SettingsPage(title: "Posilovna") {
+            GymPreferencesGroup()
             GymRestGroup()
             SettingsGroup {
                 NavigationLink { HeartRateSensorView() } label: {

@@ -159,7 +159,20 @@ final class SnapshotTests: XCTestCase {
         try render("settings-sources", height: 900) { NavigationStack { SourcesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
-        try render("settings-gym", height: 500) { NavigationStack { GymSettingsView() } }
+        try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
+        try render("gym-stretching", height: 520) {
+            StretchingCard(stretching: GymStretching(minutes: 5, items: [
+                .init(id: "hip_flexor", name: "Kyčelní flexory v kleku", seconds: 30, sides: true, rounds: 2, steps: ["Klekni si na jedno koleno."]),
+                .init(id: "hamstring", name: "Zadní strana stehen v sedu", seconds: 30, sides: true, rounds: 2, steps: ["Sedni si."]),
+                .init(id: "chest", name: "Hrudník: lokty dozadu", seconds: 30, sides: false, steps: ["Postav se rovně."]),
+                .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false)
+            ]), date: "2026-10-14").padding(20)
+        }
+        try render("gym-time", height: 200) { GymTimeCard(minutes: 60, warmup: 6, stretching: 5).padding(20) }
+        try render("gym-stretch-info", height: 700) {
+            StretchInfoSheet(item: .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false,
+                                         steps: ["Z pozice na všech čtyřech si sedni hýžděmi na paty.", "Paže nech natažené před sebou na zemi a čelo polož na podložku.", "Zhluboka dýchej a s každým výdechem povol záda."]))
+        }
     }
 
     func testJSONValueKeepsUnknownKeys() throws {

@@ -150,6 +150,8 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       planName: plan.planName,
       rationale: plan.rationale,
       timing: plan.timing,
+      warmup: plan.warmup,
+      stretching: plan.stretching,
       protectedLegs: plan.protectedLegs,
       loadFactor: plan.loadFactor
     });
