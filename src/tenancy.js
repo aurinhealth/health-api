@@ -82,7 +82,11 @@ export const PERSONAL_TABLES = {
   push_log: { pk: ["user_id", "kind", "local_date"] },
   // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
   saved_workouts: { pk: ["user_id", "id"] },
-  workout_shares: {}
+  workout_shares: {},
+  // Deník, the habit journal (journal-store.js): the pinned and own items, and
+  // the answers per day and item.
+  journal_settings: {},
+  journal_entries: { pk: ["user_id", "date", "item_key"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
