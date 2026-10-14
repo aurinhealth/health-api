@@ -96,3 +96,15 @@ export async function workoutRatings(db, date) {
     return [];
   }
 }
+
+// The last ratings of a sport ("Sedělo ti sestavení?"), newest first, for the
+// AI that builds or changes the next session of it.
+export async function recentWorkoutRatings(db, { sport = null, since = null, limit = 6 } = {}) {
+  try {
+    const rows = (await db.prepare("SELECT workout_date, sport, rating, note FROM workout_ratings WHERE user_id=? AND (? IS NULL OR sport=?) AND (? IS NULL OR workout_date>=?) ORDER BY workout_date DESC LIMIT ?").bind(db.userId, sport, sport, since, since, limit).all()).results || [];
+    return rows.map(r => ({ date: r.workout_date, sport: r.sport, rating: r.rating, text: r.note || null }));
+  } catch (error) {
+    if (!missingTable(error)) console.error('Workout ratings read failed', error.message);
+    return [];
+  }
+}
