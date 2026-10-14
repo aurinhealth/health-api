@@ -155,7 +155,7 @@ final class APIClient: @unchecked Sendable {
 
     /// "Vrátit" under a confirmed delete, merge or time change of a done activity.
     func undoActivityChange(token: String) async throws {
-        let _: JSONValue = try await send("/app/api/activity/undo", method: "POST", body: ["token": .string(token)])
+        let _: JSONValue = try await send("/app/api/activity/undo", method: "POST", body: ["token": JSONValue.string(token)])
     }
 
     func chats() async throws -> [ChatSummary] {

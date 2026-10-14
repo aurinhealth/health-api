@@ -327,7 +327,7 @@ extension APIClient {
     /// Answers the easy session put in its place.
     func answerCoachNudge(date: String, decision: String) async throws -> CoachNudge? {
         struct Response: Decodable { let nudge: CoachNudge? }
-        let r: Response = try await send("/app/api/coach/nudge", method: "POST", body: ["date": .string(date), "decision": .string(decision)])
+        let r: Response = try await send("/app/api/coach/nudge", method: "POST", body: ["date": JSONValue.string(date), "decision": .string(decision)])
         return r.nudge
     }
 

@@ -125,7 +125,8 @@ struct IllnessSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionLabel(text: "Do kdy")
                 HStack(spacing: 8) {
-                    ForEach(Self.lengths, id: \.label) { l in
+                    ForEach(Self.lengths.indices, id: \.self) { i in
+                        let l = Self.lengths[i]
                         Button { days = l.days } label: {
                             Text(L10n.tr(l.label)).font(.subheadline.weight(.medium))
                                 .foregroundStyle(days == l.days ? Palette.onButton : Palette.ink)
