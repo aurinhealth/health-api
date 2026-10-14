@@ -141,15 +141,21 @@ struct SettingsGoalsCard: View {
 
 /// Spánek, Posilovna, Jídlo a pití (and Cyklus): one tile each, opening its settings.
 struct SettingsSectionTiles: View {
+    @Environment(AppModel.self) private var model
     let store: SettingsStore
+
+    /// Cycle tracking is open to everyone; it is a tile for women and for
+    /// anyone who turned it on, otherwise a plain row under Měření.
+    static func cycleTile(_ store: SettingsStore, _ model: AppModel) -> Bool {
+        store.profile["sex"]?.string == "female" || model.cycle?.enabled == true
+    }
 
     var body: some View {
         HStack(spacing: 10) {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
             tile("Posilovna", "dumbbell.fill", Palette.brown) { GymSettingsView() }
             tile("Jídlo a pití", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
-            // Cycle tracking: only with the profile's sex set to female.
-            if store.profile["sex"]?.string == "female" {
+            if Self.cycleTile(store, model) {
                 tile("Cyklus", "calendar", Palette.pink) { CycleSettingsView() }
             }
         }

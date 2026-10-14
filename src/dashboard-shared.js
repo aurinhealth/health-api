@@ -17,7 +17,7 @@ export const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dash
 // every readiness (readiness.js) knows the phase.
 export async function dashboardProfile(env) {
   const [profile, cycle] = await Promise.all([loadEffectiveProfile(env.DB, env.USER_ID), cycleInputs(env.DB, localToday()).catch(() => null)]);
-  return profile && cycle && profile.sex === "female" ? { ...profile, cycle } : profile;
+  return profile && cycle ? { ...profile, cycle } : profile;
 }
 
 export const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
