@@ -139,7 +139,7 @@ final class AppleHealth {
     /// The iOS permission sheet for these categories, then the history.
     func connect(_ chosen: Set<HealthCategory>, api: APIClient) async -> Bool {
         guard isAvailable else { message = L10n.tr("Apple Health na tomhle zařízení není."); return false }
-        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jednu oblast."); return false }
+        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return false }
         do {
             // What Synchronizace writes there stays allowed in the same sheet.
             let export = AppleHealthExport.shared
@@ -200,7 +200,7 @@ final class AppleHealth {
     /// Zdroje dat → Apple Health → Oprávnění: fewer categories only stop
     /// reading; a new one asks iOS and loads its history.
     func update(_ chosen: Set<HealthCategory>, api: APIClient) async {
-        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jednu oblast."); return }
+        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return }
         if chosen.isSubset(of: categories) {
             setCategories(chosen)
             stopObservers()

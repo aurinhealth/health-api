@@ -87,7 +87,7 @@ struct ActivityEditing: ViewModifier {
 
     private func saveKcal(_ value: Int?) async {
         guard !model.demo else { return }
-        if let value, !(1...6000).contains(value) { error = L10n.tr("Zadej kalorie mezi 1 a 6000."); return }
+        if let value, !(1...6000).contains(value) { error = L10n.tr("Zadej hodnotu od 1 do 6 000 kcal."); return }
         do {
             try await model.api.setActivityKcal(id: id, kcal: value)
             await model.refreshTraining()

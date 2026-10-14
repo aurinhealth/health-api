@@ -54,8 +54,8 @@ export function validateReport(body) {
 // A few reports a day per user, not two in a row.
 async function assertAllowed(db) {
   const row = await db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN created_at>=datetime('now',?) THEN 1 ELSE 0 END) AS recent FROM support_reports WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(`-${MIN_GAP_SECONDS} seconds`, db.userId).first();
-  if (Number(row?.n || 0) >= DAILY_REPORTS) throw fail(L("Dnes už jsi poslal několik hlášení. Zkus to zítra, nebo napiš na podporu e-mailem.", "You've already sent several reports today. Try again tomorrow, or email support."), 429);
-  if (Number(row?.recent || 0) > 0) throw fail(L("Hlášení už odešlo. Chvíli počkej.", "The report has already been sent. Wait a moment."), 429);
+  if (Number(row?.n || 0) >= DAILY_REPORTS) throw fail(L("Dnešní limit hlášení je vyčerpaný. Zkus to zítra, nebo napiš na podporu e-mailem.", "You've reached today's report limit. Try again tomorrow, or email support."), 429);
+  if (Number(row?.recent || 0) > 0) throw fail(L("Před chvílí odešlo hlášení. Další pošli za pár sekund.", "A report was sent a moment ago. Send another in a few seconds."), 429);
 }
 
 const cut = (value, length = 300) => value == null ? null : String(value).slice(0, length);
