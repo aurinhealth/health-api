@@ -5,6 +5,10 @@ struct TrainingView: View {
     @State private var addingWorkout = false
     /// A moved or cancelled session with its undo (Tréninky týdne).
     @State private var toast: PlanToast?
+    /// The day chosen in the calendar, shown in the pinned bar.
+    @State private var calendarDay: String?
+    /// A day set from the pinned bar, for the calendar.
+    @State private var jumpDay: DayJump?
 
     var body: some View {
         NavigationStack(path: model.path(.training)) {
@@ -12,10 +16,19 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast)
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay)
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
+                    .tabTopBar {
+                        let day = calendarDay ?? training.date
+                        DayCapsule(date: day, today: training.date,
+                                   canGoForward: day < ISODay.shift(training.date, TrainingCalendarCard.daysAhead),
+                                   move: { jumpDay = DayJump(date: ISODay.shift(day, $0)) },
+                                   showToday: { jumpDay = DayJump(date: training.date) })
+                        Spacer(minLength: 0)
+                        ChromeButton(systemImage: "plus", label: "Zapsat trénink") { addingWorkout = true }
+                    }
                 } else if let message = model.trainingError {
                     VStack(spacing: 16) {
                         Text(message).font(Typo.sentence(20)).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
@@ -61,6 +74,8 @@ struct TrainingContent: View {
     let training: TrainingSnapshot
     var addWorkout: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
+    var pickDay: (String) -> Void = { _ in }
+    var jumpDay: DayJump? = nil
     @State private var editing = false
     @State private var focusSheet = false
 
@@ -79,7 +94,7 @@ struct TrainingContent: View {
                         .padding(.top, 18)
                 }
 
-                TrainingCalendarCard(today: training.date)
+                TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay)
                     .padding(.top, 18)
 
                 StrainHero(training: training)

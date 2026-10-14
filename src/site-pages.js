@@ -56,8 +56,10 @@ p{margin:0}
 .screen{position:relative;height:590px;padding:50px 18px 0;border-radius:42px;overflow:hidden;background:radial-gradient(120% 45% at 50% 0%,var(--glow-today),var(--bg) 70%);font-size:13px;line-height:1.35}
 .screen::before{content:"";position:absolute;top:11px;left:50%;width:92px;height:26px;transform:translateX(-50%);border-radius:14px;background:#000}
 .screen .top{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px}
+.screen .day b{display:block;font:400 24px/1 Newsreader,Georgia,serif}
+.screen .day small{display:block;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--muted)}
 .screen .me{width:28px;height:28px;border-radius:50%;background:var(--button);color:var(--on-button);display:grid;place-items:center;font-size:13px}
-.screen .lbl{margin-top:24px;color:var(--muted)}
+.screen .lbl{margin-top:20px;color:var(--muted)}
 .screen .ready{display:flex;align-items:flex-end;gap:8px}
 .screen .ready b{font:400 92px/.9 Newsreader,Georgia,serif;letter-spacing:-.04em}
 .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
@@ -322,7 +324,7 @@ export function overviewPage(request) {
   const days = t(['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const short = t(['P', 'Ú', 'S', 'Č', 'P', 'S', 'N'], ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
   const today = `<div class="phone" role="img" aria-label="${t('Aurin v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
-<div class="top"><span>${t('Pondělí 12. 10.', 'Monday, Oct 12')}</span><span class="me">P</span></div>
+<div class="top"><span class="day"><b>${t('Dnes', 'Today')}</b><small>${t('pondělí 12. října', 'Monday, October 12')}</small></span><span class="me">P</span></div>
 <div class="lbl">${t('Připravenost', 'Readiness')}</div>
 <div class="ready"><b>78</b><span class="pill good">${t('vysoká', 'high')}</span></div>
 <div class="pc cells">
