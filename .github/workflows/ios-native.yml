@@ -107,8 +107,8 @@ jobs:
             sleep 6
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/$tab.png"
           done
-          # Screens one tap deeper, opened by their link: readiness, strain and the gym session.
-          for route in readiness strain gym/2026-10-08; do
+          # Screens one tap deeper, opened by their link: readiness, strain, muscles and the gym session.
+          for route in readiness strain muscles gym/2026-10-08; do
             xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -AppleLanguages "(en)" -AppleLocale en_US -language en
             sleep 5
             xcrun simctl openurl "$udid" "loadwise://open/$route"
