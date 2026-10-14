@@ -117,6 +117,10 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
                 }
                 SettingsDivider()
+                NavigationLink { AppIconSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "app.badge", color: Palette.amber), title: "Ikona aplikace")
+                }
+                SettingsDivider()
                 NavigationLink { LanguageSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk")
                 }
