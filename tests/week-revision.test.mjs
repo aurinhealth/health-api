@@ -2,7 +2,7 @@
 // next sessions are checked before the athlete sees them.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeChanges, rulesRevision, reviseWeek, revisionSignature } from "../src/week-revision.js";
+import { sanitizeChanges, rulesRevision, reviseWeek, revisionSignature, shownRevision, REVISION_SHOWN_MS } from "../src/week-revision.js";
 
 const upcoming = [
   { eventId: "planned:1", date: "2026-10-15", sport: "ride", name: "Endurance 1 h", minutes: 60, kind: "endurance", environment: "outdoor" },
@@ -66,4 +66,32 @@ test("a harder change the checks undo keeps no reason, and a summary with only d
   const r = await reviseWeek({}, { date: "2026-10-14", done: [], feedback: [], readiness: null, upcoming }, { ask });
   assert.deepEqual(r.changes, []);
   assert.doesNotMatch(r.summary, /Přitlačím/);
+});
+
+test("a note or a plan rating makes a new revision", () => {
+  const a = revisionSignature([{ id: "activity:1" }], [{ rpe: 6 }]);
+  assert.notEqual(a, revisionSignature([{ id: "activity:1" }], [{ rpe: 6, notes: "Těžké nohy" }]));
+  assert.notEqual(a, revisionSignature([{ id: "activity:1" }], [{ rpe: 6 }], [{ rating: "bad", text: "Moc dlouhé" }]));
+});
+
+test("\"Nesedělo\" is never answered with \"went to plan\"", () => {
+  const r = rulesRevision({ date: "2026-10-14", done: [{ kind: "endurance" }], feedback: [], planFit: [{ rating: "bad", text: "naprd" }], upcoming });
+  assert.doesNotMatch(r.summary, /podle plánu/);
+  assert.match(r.summary, /nesedl/);
+});
+
+test("Today shows a card with nothing to decide for 3 hours, never the next day", () => {
+  const now = Date.parse("2026-10-14T15:00:00Z"), today = "2026-10-14";
+  const done = { date: today, status: "pending", changes: [], createdAt: "2026-10-14 13:00:00" };
+  assert.equal(shownRevision(done, { today, now }), done);
+  assert.equal(shownRevision(done, { today, now: now + REVISION_SHOWN_MS }), null);
+  assert.equal(shownRevision({ ...done, date: "2026-10-13" }, { today, now }), null);
+  // Proposed changes wait for "Upravit" or "Nechat", even the next day.
+  const waiting = { ...done, date: "2026-10-13", changes: [{ eventId: "planned:1" }], createdAt: "2026-10-13 18:00:00" };
+  assert.equal(shownRevision(waiting, { today, now }), waiting);
+  // Applied: from the decision; kept: gone.
+  const applied = { ...waiting, date: today, status: "applied", decidedAt: "2026-10-14 14:30:00" };
+  assert.equal(shownRevision(applied, { today, now }), applied);
+  assert.equal(shownRevision({ ...applied, decidedAt: "2026-10-14 11:00:00" }, { today, now }), null);
+  assert.equal(shownRevision({ ...done, status: "kept" }, { today, now }), null);
 });

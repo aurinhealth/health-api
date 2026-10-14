@@ -43,7 +43,7 @@ import { createReflection, listReflections, activityFromRow, dedupeActivities, f
 import { addLoads } from "./training-load.js";
 import { savePersonalFood } from './personal-foods.js';
 import { processFoodGoogle, backfillFoodGoogle } from './food-google-sync.js';
-import { recentWorkoutRatings } from "./exercise-feedback.js";
+import { recentWorkoutRatings, workoutRatings } from "./exercise-feedback.js";
 import { isFoodLogMessage, buildFoodDraft, foodDraftSummary } from "./food-chat.js";
 import { loadRecoveryValidation } from "./recovery-validation.js";
 import { handleGoogleOAuth } from "./google-oauth.js";
@@ -67,7 +67,7 @@ import { getAthleteState, updateAthleteState, explicitPreference, assertTraining
 import { savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS, HARD_KINDS } from './week-ai.js';
-import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision } from './week-revision.js';
+import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { illnessWarning } from './illness-check.js';
 import { readinessFor } from './readiness.js';
@@ -882,15 +882,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const doneOn=d=>(days.find(x=>x.date===d)?.daily?.training?.completed||[]).filter(a=>['ride','run'].includes(sportOf(a)));
       // Today's sessions, else yesterday's when its revision still waits.
       let date=today,done=doneOn(today);
-      if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:stored},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
+      if(!done.length){const y=shiftDate(today,-1),stored=await readRevision(env.DB,y);if(stored?.status==='pending')return Response.json({status:'ok',revision:shownRevision(stored,{today})},{headers:{'Cache-Control':'no-store'}});date=y;done=doneOn(y);if(!done.length||stored)return Response.json({status:'ok',revision:null},{headers:{'Cache-Control':'no-store'}});}
       const feedback=(await recentWorkoutFeedback(env.DB,date).catch(()=>[])).filter(f=>f.date===date);
       // The effort given anywhere counts, not only on a library workout: the
       // "Jak to šlo?" rating (coach_reflections) and the RPE in Intervals.icu.
       for(const r of await listReflections(env.DB,{date}).catch(()=>[]))if((r.rpe!=null||r.notes)&&!feedback.some(f=>r.workoutId&&f.workoutId===r.workoutId))feedback.push({date,workoutId:r.workoutId||null,name:null,system:null,sport:null,rpe:r.rpe,notes:r.notes||null,completedPercent:null});
       for(const a of done){const rpe=Number(a.rpe??a.payload?.icu_rpe??a.payload?.perceived_exertion);if(rpe>0&&!feedback.some(f=>f.rpe!=null))feedback.push({date,workoutId:null,name:a.name||null,system:null,sport:sportOf(a),rpe,notes:null,completedPercent:null});}
-      const signature=revisionSignature(done,feedback),stored=await readRevision(env.DB,date);
+      // "Sedělo ti sestavení tréninku?" of the day's rides and runs: a "Nesedělo" is never "went to plan".
+      const planFit=(await workoutRatings(env.DB,date).catch(()=>[])).filter(r=>['ride','run'].includes(r.sport)).map(r=>({sport:r.sport,rating:r.rating,text:r.text||null}));
+      const signature=revisionSignature(done,feedback,planFit),stored=await readRevision(env.DB,date);
       // A decided revision stays decided; a waiting one is redone when a new session or rating came.
-      if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:stored.status==='kept'?null:stored},{headers:{'Cache-Control':'no-store'}});
+      if(stored&&(stored.signature===signature||stored.status!=='pending'))return Response.json({status:'ok',revision:shownRevision(stored,{today})},{headers:{'Cache-Control':'no-store'}});
       const upcoming=await upcomingSessions(env,days.filter(x=>x.date>date&&x.date>=today&&x.date<=shiftDate(date,6)));
       // The kind of a done session: its library workout, else its name, else its intensity (IF).
       const doneKind=(a,f)=>{if(f?.system)return kindOfSystem(f.system);const named=kindOfSystem(a.name,'');if(named&&named!=='endurance')return named;const p=a.payload||{},raw=Number(a.intensityFactor??p.icu_intensity),fi=raw>3?raw/100:raw;return fi>=.88?'threshold':fi>=.8?'tempo':fi>0?'endurance':named||null;};
@@ -899,7 +901,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const reviews=await rideReviewsForCoach(env,ctx,days.find(x=>x.date===date)?.daily?.training,date,inputs.fitness?.wellness).catch(()=>[]);
       const plans=new Map();const availabilityByDate={};
       for(const u of upcoming){const w=mondayOfDate(u.date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);availabilityByDate[u.date]=p?availabilityOn(p,u.date).minutes??null:null;}
-      const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate};
+      const facts={date,today,done:doneFacts,feedback:feedback.map(f=>({name:f.name,rpe:f.rpe,notes:f.notes,completedPercent:f.completedPercent})),planFit,reviews:reviews.map(r=>({name:r.name,plan:r.plan,verdict:r.verdict,findings:r.findings})),readiness:{score:readiness?.score??null,zone:readiness?.zone||null},upcoming,availabilityByDate};
       const r=upcoming.length?await reviseWeek(env,facts,{focus:inputs.focus}):{...rulesRevision({...facts,upcoming:[]}),source:'rules'};
       // Each change gets its workout now, so the card shows what replaces what.
       const changes=[];
